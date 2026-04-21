@@ -11,7 +11,8 @@ namespace Scout.Llm.Ollama;
 /// </summary>
 public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
 {
-    private readonly OllamaOptions _options;
+    private readonly Uri _endpoint;
+    private readonly string _model;
 
     public OllamaLlmProviderFactory(IOptions<LlmOptions> options)
     {
@@ -32,7 +33,17 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
                 "OllamaOptions.Model must be non-empty.", nameof(options));
         }
 
-        _options = ollama;
+        if (!Uri.TryCreate(ollama.Endpoint, UriKind.Absolute, out var parsed) ||
+            (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException(
+                $"OllamaOptions.Endpoint '{ollama.Endpoint}' is not a valid absolute " +
+                $"http or https URI.",
+                nameof(options));
+        }
+
+        _endpoint = parsed;
+        _model = ollama.Model;
     }
 
     public string Name => "Ollama";
@@ -41,8 +52,6 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.AddOllamaChatCompletion(
-            modelId: _options.Model,
-            endpoint: new Uri(_options.Endpoint));
+        builder.AddOllamaChatCompletion(modelId: _model, endpoint: _endpoint);
     }
 }
