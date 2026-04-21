@@ -21,8 +21,14 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Format check
-        run: dotnet format --verify-no-changes --no-restore
+      # Tracked by #2 — re-enable "Format check" (exact step name) when
+      # `dotnet format --verify-no-changes --no-restore` stops timing out
+      # on the MSBuild build-host pipe (.NET 10 SDK 10.0.106 bug).
+      # Code style is still enforced at compile time via
+      # EnforceCodeStyleInBuild=true + TreatWarningsAsErrors=true in
+      # Directory.Build.props.
+      # - name: Format check
+      #   run: dotnet format --verify-no-changes --no-restore
 
       - name: Build
         run: dotnet build --configuration Release --no-restore
