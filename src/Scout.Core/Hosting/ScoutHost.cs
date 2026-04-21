@@ -24,6 +24,7 @@ public sealed class ScoutHost
     private readonly IServiceProvider _services;
     private readonly ILogger<ScoutHost> _logger;
     private readonly ScoutOptions _options;
+    private readonly IReadOnlyList<IMessageRouter> _routers;
     private readonly Lazy<Kernel> _kernel;
 
     public ScoutHost(
@@ -31,7 +32,8 @@ public sealed class ScoutHost
         ILlmProviderFactory llmFactory,
         IServiceProvider services,
         ILogger<ScoutHost> logger,
-        IOptions<ScoutOptions> options)
+        IOptions<ScoutOptions> options,
+        IEnumerable<IMessageRouter> routers)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _llmFactory = llmFactory ?? throw new ArgumentNullException(nameof(llmFactory));
@@ -43,6 +45,9 @@ public sealed class ScoutHost
             throw new ArgumentNullException(nameof(options));
         }
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+
+        ArgumentNullException.ThrowIfNull(routers);
+        _routers = routers.ToArray();
 
         _kernel = new Lazy<Kernel>(BuildKernel);
     }
@@ -60,14 +65,31 @@ public sealed class ScoutHost
 
         try
         {
-            await Task.Yield();
+            foreach (var router in _routers)
+            {
+                var routed = await router
+                    .RouteAsync(message, cancellationToken)
+                    .ConfigureAwait(false);
 
+                if (routed is not null)
+                {
+                    activity?.SetTag("scout.router", router.GetType().Name);
+                    return routed;
+                }
+            }
+
+            // Fallback: handshake so the host is observably alive even
+            // when no router matched.
             var pluginCount = _registry.Plugins.Count;
             var text =
                 $"Scout is online. {pluginCount} plugin(s) loaded. " +
                 $"Ask me something specific.";
 
             return ChatResponse.Plain(text);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
