@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Scout.Adapter.Discord/Scout.Adapter.Discord.csproj" />
     <Project Path="src/Scout.Core/Scout.Core.csproj" />
+    <Project Path="src/Scout.Host.Worker/Scout.Host.Worker.csproj" />
     <Project Path="src/Scout.Llm.Ollama/Scout.Llm.Ollama.csproj" />
   </Folder>
   <Folder Name="/tests/">
