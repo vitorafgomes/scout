@@ -1,0 +1,65 @@
+using Microsoft.Extensions.Logging;
+using Scout.Core.Chat;
+
+namespace Scout.Adapter.Discord;
+
+/// <summary>
+/// Bridges an inbound Discord payload and a Scout core handler. Isolated
+/// from <see cref="DiscordChatAdapter"/> so the flow (translate -> invoke
+/// handler -> render) can be unit-tested without touching Discord.Net.
+/// </summary>
+public sealed class DiscordMessageHandler
+{
+    private const string GenericErrorReply =
+        "Sorry, something went wrong while answering. Please try again.";
+
+    private readonly DiscordMessageTranslator _translator;
+    private readonly ILogger<DiscordMessageHandler> _logger;
+
+    public DiscordMessageHandler(
+        DiscordMessageTranslator translator,
+        ILogger<DiscordMessageHandler> logger)
+    {
+        _translator = translator ?? throw new ArgumentNullException(nameof(translator));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Process one inbound Discord message. Returns the text to post back to
+    /// Discord, or <c>null</c> if the translator decided the message should
+    /// be ignored (bot author, no mention, empty content after stripping).
+    /// </summary>
+    public async Task<string?> HandleAsync(
+        InboundDiscordMessage inbound,
+        ulong botUserId,
+        Func<ChatMessage, CancellationToken, Task<ChatResponse>> handler,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(inbound);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage))
+        {
+            return null;
+        }
+
+        try
+        {
+            var response = await handler(chatMessage!, cancellationToken).ConfigureAwait(false);
+            return _translator.Render(response);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Handler threw while processing Discord message {MessageId} from user {AuthorId}",
+                inbound.MessageId,
+                inbound.AuthorId);
+            return GenericErrorReply;
+        }
+    }
+}
