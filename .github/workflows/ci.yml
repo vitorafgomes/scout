@@ -21,8 +21,9 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      # TODO: re-enable once upstream bug is fixed — dotnet format on
-      # .NET 10 SDK 10.0.106 times out its MSBuild build-host pipe.
+      # Tracked by #2 — re-enable "Format check" (exact step name) when
+      # `dotnet format --verify-no-changes --no-restore` stops timing out
+      # on the MSBuild build-host pipe (.NET 10 SDK 10.0.106 bug).
       # Code style is still enforced at compile time via
       # EnforceCodeStyleInBuild=true + TreatWarningsAsErrors=true in
       # Directory.Build.props.
