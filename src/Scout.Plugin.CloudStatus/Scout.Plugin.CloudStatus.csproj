@@ -12,6 +12,7 @@
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Azure.ResourceManager" />
     <PackageReference Include="Azure.ResourceManager.ResourceHealth" />
+    <PackageReference Include="AWSSDK.AWSHealth" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />

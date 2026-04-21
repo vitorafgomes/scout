@@ -16,6 +16,7 @@
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Azure.ResourceManager" Version="1.14.0" />
     <PackageVersion Include="Azure.ResourceManager.ResourceHealth" Version="1.0.0" />
+    <PackageVersion Include="AWSSDK.AWSHealth" Version="4.0.5.10" />
     <PackageVersion Include="Discord.Net" Version="3.19.1" />
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.74.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.74.0-alpha" />
