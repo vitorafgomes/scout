@@ -1,0 +1,126 @@
+using Scout.Core.Chat;
+
+namespace Scout.Adapter.Discord.Tests;
+
+public class DiscordMessageTranslatorTests
+{
+    private const ulong BotUserId = 1111;
+    private const ulong HumanUserId = 2222;
+    private const ulong ChannelId = 3333;
+    private static readonly DateTimeOffset FixedTime =
+        new(2026, 4, 21, 10, 0, 0, TimeSpan.Zero);
+
+    private static DiscordMessageTranslator Sut() => new();
+
+    [Fact]
+    public void TryTranslate_Rejects_Messages_From_The_Bot_Itself()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: BotUserId, ChannelId: ChannelId,
+            Content: "<@1111> hi", MentionsSelf: true, Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeFalse();
+        chatMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryTranslate_Rejects_Messages_Without_Mention()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "chatting between humans", MentionsSelf: false,
+            Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeFalse();
+        chatMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryTranslate_Rejects_Messages_That_Are_Only_A_Mention()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111>", MentionsSelf: true, Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeFalse();
+        chatMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public void TryTranslate_Strips_Leading_And_Trailing_Bot_Mention()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111> is prod azure healthy?",
+            MentionsSelf: true, Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeTrue();
+        chatMessage.Should().NotBeNull();
+        chatMessage!.Text.Should().Be("is prod azure healthy?");
+    }
+
+    [Fact]
+    public void TryTranslate_Handles_Nickname_Style_Mention_Exclamation_Mark()
+    {
+        // Discord sometimes renders mentions as <@!ID> when the user has a
+        // server nickname. The translator must accept both forms.
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@!1111> status aws",
+            MentionsSelf: true, Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeTrue();
+        chatMessage!.Text.Should().Be("status aws");
+    }
+
+    [Fact]
+    public void TryTranslate_Populates_User_And_Channel_And_Timestamp()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111> ping",
+            MentionsSelf: true, Timestamp: FixedTime);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .Should().BeTrue();
+        chatMessage!.UserId.Should().Be(HumanUserId.ToString());
+        chatMessage.ChannelId.Should().Be(ChannelId.ToString());
+        chatMessage.Timestamp.Should().Be(FixedTime);
+    }
+
+    [Fact]
+    public void Render_Plain_Response_Returns_Text_Unchanged()
+    {
+        var response = ChatResponse.Plain("scout is online");
+
+        Sut().Render(response).Should().Be("scout is online");
+    }
+
+    [Fact]
+    public void Render_Response_With_Citations_Appends_Sources_Footer()
+    {
+        var response = new ChatResponse(
+            "the checkout flow lives in CheckoutService",
+            ["src/Checkout/CheckoutService.cs:42-120", "docs/checkout.md:1-30"]);
+
+        var rendered = Sut().Render(response);
+
+        rendered.Should().Contain("the checkout flow lives in CheckoutService");
+        rendered.Should().Contain("Sources:");
+        rendered.Should().Contain("- src/Checkout/CheckoutService.cs:42-120");
+        rendered.Should().Contain("- docs/checkout.md:1-30");
+    }
+
+    [Fact]
+    public void Render_Null_Response_Throws()
+    {
+        Action render = () => Sut().Render(null!);
+
+        render.Should().Throw<ArgumentNullException>();
+    }
+}
