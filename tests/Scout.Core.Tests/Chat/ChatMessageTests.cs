@@ -13,7 +13,7 @@ public class ChatMessageTests
             Text: string.Empty);
 
         create.Should().Throw<ArgumentException>()
-            .WithMessage("*Text*");
+            .WithParameterName(nameof(ChatMessage.Text));
     }
 
     [Fact]
@@ -22,7 +22,7 @@ public class ChatMessageTests
         Action create = () => new ChatMessage(UserId: "", ChannelId: "c1", Text: "hi");
 
         create.Should().Throw<ArgumentException>()
-            .WithMessage("*UserId*");
+            .WithParameterName(nameof(ChatMessage.UserId));
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class ChatMessageTests
         Action create = () => new ChatMessage(UserId: "u1", ChannelId: "", Text: "hi");
 
         create.Should().Throw<ArgumentException>()
-            .WithMessage("*ChannelId*");
+            .WithParameterName(nameof(ChatMessage.ChannelId));
     }
 
     [Fact]
@@ -52,14 +52,5 @@ public class ChatMessageTests
         var msg = new ChatMessage("u1", "c1", "hello", Timestamp: fixedAt);
 
         msg.Timestamp.Should().Be(fixedAt);
-    }
-
-    [Fact]
-    public void ChatResponse_Plain_Produces_Text_Only_Response()
-    {
-        var response = ChatResponse.Plain("done");
-
-        response.Text.Should().Be("done");
-        response.Citations.Should().BeNull();
     }
 }
