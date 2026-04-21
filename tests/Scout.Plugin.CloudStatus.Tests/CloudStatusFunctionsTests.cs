@@ -18,7 +18,7 @@ public class CloudStatusFunctionsTests
 
         var reports = await sut.GetAllAsync(CancellationToken.None);
 
-        reports.Should().BeEmpty();
+        reports.ShouldBeEmpty();
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class CloudStatusFunctionsTests
         var reports = await sut.GetAllAsync(CancellationToken.None);
 
         reports.Select(r => r.Provider)
-               .Should().BeEquivalentTo(["Azure", "AWS", "OracleCloud"]);
+               .ShouldBe(["Azure", "AWS", "OracleCloud"]);
     }
 
     [Fact]
@@ -51,13 +51,13 @@ public class CloudStatusFunctionsTests
 
         var reports = await sut.GetAllAsync(CancellationToken.None);
 
-        reports.Should().HaveCount(2);
+        reports.Count().ShouldBe(2);
         var azure = reports.Single(r => r.Provider == "Azure");
-        azure.Overall.Should().Be(HealthLevel.Unknown);
-        azure.Message.Should().Be("simulated");
+        azure.Overall.ShouldBe(HealthLevel.Unknown);
+        azure.Message!.ShouldBe("simulated");
 
         var aws = reports.Single(r => r.Provider == "AWS");
-        aws.Overall.Should().Be(HealthLevel.Healthy);
+        aws.Overall.ShouldBe(HealthLevel.Healthy);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class CloudStatusFunctionsTests
 
         Func<Task> act = () => sut.GetAllAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -94,8 +94,8 @@ public class CloudStatusFunctionsTests
 
         var report = await sut.GetAsync("AWS", CancellationToken.None);
 
-        report.Provider.Should().Be("AWS");
-        report.Overall.Should().Be(HealthLevel.Unhealthy);
+        report.Provider.ShouldBe("AWS");
+        report.Overall.ShouldBe(HealthLevel.Unhealthy);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class CloudStatusFunctionsTests
 
         var report = await sut.GetAsync("aZuRe", CancellationToken.None);
 
-        report.Provider.Should().Be("Azure");
+        report.Provider.ShouldBe("Azure");
     }
 
     [Fact]
@@ -117,9 +117,9 @@ public class CloudStatusFunctionsTests
 
         var report = await sut.GetAsync("Azure", CancellationToken.None);
 
-        report.Provider.Should().Be("Azure");
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("No 'Azure' provider is registered");
+        report.Provider.ShouldBe("Azure");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("No 'Azure' provider is registered");
     }
 
     [Fact]
@@ -129,6 +129,6 @@ public class CloudStatusFunctionsTests
 
         Func<Task> act = () => sut.GetAsync("", CancellationToken.None);
 
-        await act.Should().ThrowAsync<ArgumentException>();
+        await act.ShouldThrowAsync<ArgumentException>();
     }
 }

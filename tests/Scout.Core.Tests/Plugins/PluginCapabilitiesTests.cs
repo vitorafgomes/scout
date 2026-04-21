@@ -9,13 +9,13 @@ public class PluginCapabilitiesTests
     {
         var caps = new PluginCapabilities();
 
-        caps.IsReadOnly.Should().BeTrue();
+        caps.IsReadOnly.ShouldBeTrue();
     }
 
     [Fact]
     public void Static_ReadOnly_Instance_Is_ReadOnly()
     {
-        PluginCapabilities.ReadOnly.IsReadOnly.Should().BeTrue();
+        PluginCapabilities.ReadOnly.IsReadOnly.ShouldBeTrue();
     }
 
     // NOTE: there is no negative "cannot construct write-capable" test here.

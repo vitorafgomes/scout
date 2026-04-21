@@ -13,7 +13,7 @@ public class InMemoryVectorStoreTests
     {
         using var store = new InMemoryVectorStore();
 
-        (await store.CountAsync(CancellationToken.None)).Should().Be(0);
+        (await store.CountAsync(CancellationToken.None)).ShouldBe(0);
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class InMemoryVectorStoreTests
         await store.UpsertAsync([Chunk("a", [1f, 0f])], CancellationToken.None);
         await store.UpsertAsync([Chunk("b", [0f, 1f])], CancellationToken.None);
 
-        (await store.CountAsync(CancellationToken.None)).Should().Be(2);
+        (await store.CountAsync(CancellationToken.None)).ShouldBe(2);
     }
 
     [Fact]
@@ -36,8 +36,8 @@ public class InMemoryVectorStoreTests
         await store.UpsertAsync([Chunk("a", [1f, 0f], "new.cs")], CancellationToken.None);
 
         var results = await store.SearchAsync(new float[] { 1f, 0f }, 1, CancellationToken.None);
-        results.Should().ContainSingle();
-        results[0].Chunk.FilePath.Should().Be("new.cs");
+        results.ShouldHaveSingleItem();
+        results[0].Chunk.FilePath.ShouldBe("new.cs");
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class InMemoryVectorStoreTests
 
         var results = await store.SearchAsync(new float[] { 1f, 0f }, 5, CancellationToken.None);
 
-        results.Should().BeEmpty();
+        results.ShouldBeEmpty();
     }
 
     [Fact]
@@ -66,10 +66,10 @@ public class InMemoryVectorStoreTests
         var results = await store.SearchAsync(new float[] { 1f, 0f }, 3, CancellationToken.None);
 
         results.Select(r => r.Chunk.Id)
-               .Should().Equal("parallel", "orthogonal", "opposite");
-        results[0].Score.Should().BeApproximately(1.0, 1e-6);
-        results[1].Score.Should().BeApproximately(0.0, 1e-6);
-        results[2].Score.Should().BeApproximately(-1.0, 1e-6);
+               .ShouldBe(new[] { "parallel", "orthogonal", "opposite" });
+        results[0].Score.ShouldBe(1.0, 1e-6);
+        results[1].Score.ShouldBe(0.0, 1e-6);
+        results[2].Score.ShouldBe(-1.0, 1e-6);
     }
 
     [Fact]
@@ -88,8 +88,8 @@ public class InMemoryVectorStoreTests
 
         var results = await store.SearchAsync(new float[] { 1f, 0f }, 2, CancellationToken.None);
 
-        results.Should().HaveCount(2);
-        results.Select(r => r.Chunk.Id).Should().Equal("a", "b");
+        results.Count().ShouldBe(2);
+        results.Select(r => r.Chunk.Id).ShouldBe(new[] { "a", "b" });
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class InMemoryVectorStoreTests
 
         var results = await store.SearchAsync(new float[] { 0.01f, 0f, 0f }, 1, CancellationToken.None);
 
-        results[0].Score.Should().BeApproximately(1.0, 1e-6);
+        results[0].Score.ShouldBe(1.0, 1e-6);
     }
 
     [Fact]
@@ -112,8 +112,8 @@ public class InMemoryVectorStoreTests
 
         Func<Task> act = () => store.SearchAsync(new float[] { 1f, 0f }, 1, CancellationToken.None);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
-                 .WithMessage("*different dimensions*");
+        var ex = await act.ShouldThrowAsync<InvalidOperationException>();
+        ex.Message.ShouldContain("different dimensions");
     }
 
     [Fact]
@@ -124,8 +124,8 @@ public class InMemoryVectorStoreTests
         Func<Task> zero = () => store.SearchAsync(new float[] { 1f }, 0, CancellationToken.None);
         Func<Task> neg  = () => store.SearchAsync(new float[] { 1f }, -1, CancellationToken.None);
 
-        await zero.Should().ThrowAsync<ArgumentOutOfRangeException>();
-        await neg.Should().ThrowAsync<ArgumentOutOfRangeException>();
+        await zero.ShouldThrowAsync<ArgumentOutOfRangeException>();
+        await neg.ShouldThrowAsync<ArgumentOutOfRangeException>();
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class InMemoryVectorStoreTests
 
         await store.ClearAsync(CancellationToken.None);
 
-        (await store.CountAsync(CancellationToken.None)).Should().Be(0);
+        (await store.CountAsync(CancellationToken.None)).ShouldBe(0);
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class InMemoryVectorStoreTests
 
         Func<Task> act = () => store.UpsertAsync([Chunk("a", [1f, 0f])], cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -192,8 +192,8 @@ public class InMemoryVectorStoreTests
         }, CancellationToken.None)).ToArray();
 
         Func<Task> act = () => Task.WhenAll(readers.Append(writer));
-        await act.Should().NotThrowAsync();
+        await act.ShouldNotThrowAsync();
 
-        (await store.CountAsync(CancellationToken.None)).Should().BeGreaterThan(50);
+        (await store.CountAsync(CancellationToken.None)).ShouldBeGreaterThan(50);
     }
 }

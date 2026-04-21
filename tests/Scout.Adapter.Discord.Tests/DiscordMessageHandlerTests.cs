@@ -35,7 +35,7 @@ public class DiscordMessageHandlerTests
             handler: (_, _) => throw new InvalidOperationException("must not run"),
             CancellationToken.None);
 
-        reply.Should().BeNull();
+        reply.ShouldBeNull();
     }
 
     [Fact]
@@ -53,11 +53,11 @@ public class DiscordMessageHandlerTests
             },
             CancellationToken.None);
 
-        captured.Should().NotBeNull();
-        captured!.UserId.Should().Be(HumanUserId.ToString());
-        captured.ChannelId.Should().Be(ChannelId.ToString());
-        captured.Text.Should().Be("status");
-        reply.Should().Be("ok");
+        captured.ShouldNotBeNull();
+        captured!.UserId.ShouldBe(HumanUserId.ToString());
+        captured.ChannelId.ShouldBe(ChannelId.ToString());
+        captured.Text.ShouldBe("status");
+        reply.ShouldBe("ok");
     }
 
     [Fact]
@@ -71,9 +71,10 @@ public class DiscordMessageHandlerTests
                 ["src/Checkout.cs:10-50"])),
             CancellationToken.None);
 
-        reply.Should().Contain("checkout lives here");
-        reply.Should().Contain("Sources:");
-        reply.Should().Contain("- src/Checkout.cs:10-50");
+        reply.ShouldNotBeNull();
+        reply.ShouldContain("checkout lives here");
+        reply.ShouldContain("Sources:");
+        reply.ShouldContain("- src/Checkout.cs:10-50");
     }
 
     [Fact]
@@ -85,8 +86,8 @@ public class DiscordMessageHandlerTests
             handler: (_, _) => throw new InvalidOperationException("boom"),
             CancellationToken.None);
 
-        reply.Should().NotBeNullOrWhiteSpace();
-        reply.Should().Contain("something went wrong");
+        reply.ShouldNotBeNullOrWhiteSpace();
+        reply.ShouldContain("something went wrong");
     }
 
     [Fact]
@@ -105,7 +106,7 @@ public class DiscordMessageHandlerTests
             },
             cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -117,6 +118,6 @@ public class DiscordMessageHandlerTests
             handler: null!,
             CancellationToken.None);
 
-        await act.Should().ThrowAsync<ArgumentNullException>();
+        await act.ShouldThrowAsync<ArgumentNullException>();
     }
 }

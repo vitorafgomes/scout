@@ -17,7 +17,7 @@ public class OciHealthSourceTests
 
         var incidents = await sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        incidents.Should().BeEmpty();
+        incidents.ShouldBeEmpty();
     }
 
     [Fact]
@@ -41,12 +41,12 @@ public class OciHealthSourceTests
 
         var incidents = await sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        incidents.Should().ContainSingle();
-        incidents[0].Id.Should().Be("inc-1");
-        incidents[0].Service.Should().Be("Object Storage");
-        incidents[0].Region.Should().Be("eu-london-1");
-        incidents[0].Impact.Should().Be("major");
-        incidents[0].Title.Should().Be("Object Storage latency");
+        incidents.ShouldHaveSingleItem();
+        incidents[0].Id.ShouldBe("inc-1");
+        incidents[0].Service.ShouldBe("Object Storage");
+        incidents[0].Region.ShouldBe("eu-london-1");
+        incidents[0].Impact.ShouldBe("major");
+        incidents[0].Title.ShouldBe("Object Storage latency");
     }
 
     [Fact]
@@ -65,8 +65,8 @@ public class OciHealthSourceTests
 
         var incidents = await sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        incidents.Should().ContainSingle()
-                 .Which.Id.Should().Be("c");
+        incidents.ShouldHaveSingleItem()
+                 .Id.ShouldBe("c");
     }
 
     [Fact]
@@ -86,8 +86,8 @@ public class OciHealthSourceTests
 
         var incidents = await sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        incidents.Should().ContainSingle()
-                 .Which.Region.Should().Be("eu-london-1");
+        incidents.ShouldHaveSingleItem()
+                 .Region.ShouldBe("eu-london-1");
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class OciHealthSourceTests
 
         Func<Task> act = () => sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        await act.Should().ThrowAsync<HttpRequestException>();
+        await act.ShouldThrowAsync<HttpRequestException>();
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public class OciHealthSourceTests
 
         Func<Task> act = () => sut.GetActiveIncidentsAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class OciHealthSourceTests
 
         Func<Task> act = () => sut.GetActiveIncidentsAsync(CancellationToken.None);
 
-        await act.Should().ThrowAsync<System.Text.Json.JsonException>();
+        await act.ShouldThrowAsync<System.Text.Json.JsonException>();
     }
 
     private static OciHealthSource BuildSut(

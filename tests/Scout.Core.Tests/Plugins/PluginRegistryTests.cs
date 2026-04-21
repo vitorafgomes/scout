@@ -16,8 +16,8 @@ public class PluginRegistryTests
 
         registry.Register(new FakeReadOnlyPlugin());
 
-        registry.Plugins.Should().ContainSingle()
-            .Which.Name.Should().Be("fake-read-only");
+        registry.Plugins.ShouldHaveSingleItem()
+            .Name.ShouldBe("fake-read-only");
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class PluginRegistryTests
 
         Action register = () => registry.Register(null!);
 
-        register.Should().Throw<ArgumentNullException>();
+        register.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -38,8 +38,8 @@ public class PluginRegistryTests
 
         Action register = () => registry.Register(plugin);
 
-        register.Should().Throw<ReadOnlyViolationException>()
-            .Which.PluginName.Should().Be("fake-null-caps");
+        register.ShouldThrow<ReadOnlyViolationException>()
+            .PluginName.ShouldBe("fake-null-caps");
     }
 
     [Fact]
@@ -50,8 +50,8 @@ public class PluginRegistryTests
 
         Action register = () => registry.Register(new FakeReadOnlyPlugin());
 
-        register.Should().Throw<InvalidOperationException>()
-            .WithMessage("*already registered*");
+        register.ShouldThrow<InvalidOperationException>()
+            .Message!.ShouldContain("already registered");
     }
 
     [Fact]
@@ -65,8 +65,8 @@ public class PluginRegistryTests
         Action register = () =>
             registry.Register(new FakeReadOnlyPlugin(name: "Cloud-Status"));
 
-        register.Should().NotThrow();
-        registry.Plugins.Should().HaveCount(2);
+        register.ShouldNotThrow();
+        registry.Plugins.Count().ShouldBe(2);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class PluginRegistryTests
 
         var built = registry.BuildAll(EmptyServices());
 
-        built.Select(p => p.Name).Should().Equal("first", "second");
+        built.Select(p => p.Name).ShouldBe(new[] { "first", "second" });
     }
 
     [Fact]
@@ -89,6 +89,6 @@ public class PluginRegistryTests
 
         Action build = () => registry.BuildAll(null!);
 
-        build.Should().Throw<ArgumentNullException>();
+        build.ShouldThrow<ArgumentNullException>();
     }
 }

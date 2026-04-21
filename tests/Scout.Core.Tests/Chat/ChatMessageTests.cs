@@ -12,8 +12,8 @@ public class ChatMessageTests
             ChannelId: "c1",
             Text: string.Empty);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ChatMessage.Text));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ChatMessage.Text));
     }
 
     [Fact]
@@ -21,8 +21,8 @@ public class ChatMessageTests
     {
         Action create = () => new ChatMessage(UserId: "", ChannelId: "c1", Text: "hi");
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ChatMessage.UserId));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ChatMessage.UserId));
     }
 
     [Fact]
@@ -30,8 +30,8 @@ public class ChatMessageTests
     {
         Action create = () => new ChatMessage(UserId: "u1", ChannelId: "", Text: "hi");
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ChatMessage.ChannelId));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ChatMessage.ChannelId));
     }
 
     [Fact]
@@ -41,7 +41,8 @@ public class ChatMessageTests
         var msg = new ChatMessage("u1", "c1", "hello");
         var after = DateTimeOffset.UtcNow;
 
-        msg.Timestamp.Should().BeOnOrAfter(before).And.BeOnOrBefore(after);
+        msg.Timestamp.ShouldBeGreaterThanOrEqualTo(before);
+        msg.Timestamp.ShouldBeLessThanOrEqualTo(after);
     }
 
     [Fact]
@@ -51,6 +52,6 @@ public class ChatMessageTests
 
         var msg = new ChatMessage("u1", "c1", "hello", Timestamp: fixedAt);
 
-        msg.Timestamp.Should().Be(fixedAt);
+        msg.Timestamp.ShouldBe(fixedAt);
     }
 }

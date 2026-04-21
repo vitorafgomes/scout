@@ -10,7 +10,7 @@ public class DiscordChatAdapterTests
     {
         var adapter = BuildAdapter(botToken: "fake-token");
 
-        adapter.Name.Should().Be("Discord");
+        adapter.Name.ShouldBe("Discord");
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public class DiscordChatAdapterTests
                 NullLogger<DiscordMessageHandler>.Instance),
             NullLogger<DiscordChatAdapter>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public class DiscordChatAdapterTests
             messageHandler: null!,
             NullLogger<DiscordChatAdapter>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class DiscordChatAdapterTests
                 NullLogger<DiscordMessageHandler>.Instance),
             logger: null!);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Theory]
@@ -69,8 +69,8 @@ public class DiscordChatAdapterTests
                 NullLogger<DiscordMessageHandler>.Instance),
             NullLogger<DiscordChatAdapter>.Instance);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*BotToken*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("BotToken");
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class DiscordChatAdapterTests
 
         Func<Task> start = () => adapter.StartAsync(null!, CancellationToken.None);
 
-        await start.Should().ThrowAsync<ArgumentNullException>();
+        await start.ShouldThrowAsync<ArgumentNullException>();
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class DiscordChatAdapterTests
 
         Func<Task> stop = () => adapter.StopAsync(CancellationToken.None);
 
-        await stop.Should().NotThrowAsync();
+        await stop.ShouldNotThrowAsync();
     }
 
     private static DiscordChatAdapter BuildAdapter(string botToken)
