@@ -5,11 +5,13 @@
     <Project Path="src/Scout.Host.Worker/Scout.Host.Worker.csproj" />
     <Project Path="src/Scout.Llm.Ollama/Scout.Llm.Ollama.csproj" />
     <Project Path="src/Scout.Plugin.CloudStatus/Scout.Plugin.CloudStatus.csproj" />
+    <Project Path="src/Scout.Plugin.CodeQA/Scout.Plugin.CodeQA.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Adapter.Discord.Tests/Scout.Adapter.Discord.Tests.csproj" />
     <Project Path="tests/Scout.Core.Tests/Scout.Core.Tests.csproj" />
     <Project Path="tests/Scout.Llm.Ollama.Tests/Scout.Llm.Ollama.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CloudStatus.Tests/Scout.Plugin.CloudStatus.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.CodeQA.Tests/Scout.Plugin.CodeQA.Tests.csproj" />
   </Folder>
 </Solution>
