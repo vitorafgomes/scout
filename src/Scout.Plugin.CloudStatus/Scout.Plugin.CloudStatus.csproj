@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scout.Plugin.CloudStatus</RootNamespace>
+    <AssemblyName>Scout.Plugin.CloudStatus</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.SemanticKernel" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
+  </ItemGroup>
+</Project>
