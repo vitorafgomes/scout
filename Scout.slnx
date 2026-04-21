@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Scout.Core/Scout.Core.csproj" />
+    <Project Path="src/Scout.Llm.Ollama/Scout.Llm.Ollama.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Core.Tests/Scout.Core.Tests.csproj" />
+    <Project Path="tests/Scout.Llm.Ollama.Tests/Scout.Llm.Ollama.Tests.csproj" />
   </Folder>
 </Solution>
