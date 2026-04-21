@@ -1,5 +1,5 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Scout.Core.Chat;
 
 namespace Scout.Adapter.Discord.Tests;
 
@@ -16,7 +16,40 @@ public class DiscordChatAdapterTests
     [Fact]
     public void Ctor_Throws_When_Options_Null()
     {
-        Action create = () => new DiscordChatAdapter(null!);
+        Action create = () => new DiscordChatAdapter(
+            null!,
+            new DiscordMessageHandler(
+                new DiscordMessageTranslator(),
+                NullLogger<DiscordMessageHandler>.Instance),
+            NullLogger<DiscordChatAdapter>.Instance);
+
+        create.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_MessageHandler_Null()
+    {
+        var opts = Options.Create(new DiscordOptions { BotToken = "fake-token" });
+
+        Action create = () => new DiscordChatAdapter(
+            opts,
+            messageHandler: null!,
+            NullLogger<DiscordChatAdapter>.Instance);
+
+        create.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_Logger_Null()
+    {
+        var opts = Options.Create(new DiscordOptions { BotToken = "fake-token" });
+
+        Action create = () => new DiscordChatAdapter(
+            opts,
+            new DiscordMessageHandler(
+                new DiscordMessageTranslator(),
+                NullLogger<DiscordMessageHandler>.Instance),
+            logger: null!);
 
         create.Should().Throw<ArgumentNullException>();
     }
@@ -29,7 +62,12 @@ public class DiscordChatAdapterTests
     {
         var opts = Options.Create(new DiscordOptions { BotToken = token! });
 
-        Action create = () => new DiscordChatAdapter(opts);
+        Action create = () => new DiscordChatAdapter(
+            opts,
+            new DiscordMessageHandler(
+                new DiscordMessageTranslator(),
+                NullLogger<DiscordMessageHandler>.Instance),
+            NullLogger<DiscordChatAdapter>.Instance);
 
         create.Should().Throw<ArgumentException>()
             .WithMessage("*BotToken*");
@@ -46,22 +84,23 @@ public class DiscordChatAdapterTests
     }
 
     [Fact]
-    public async Task StartAsync_And_StopAsync_Complete_Without_Throwing_In_Scaffold()
+    public async Task StopAsync_Is_Idempotent_Before_Start()
     {
         var adapter = BuildAdapter(botToken: "fake-token");
-        Func<ChatMessage, CancellationToken, Task<ChatResponse>> handler =
-            (_, _) => Task.FromResult(ChatResponse.Plain("ok"));
 
-        Func<Task> start = () => adapter.StartAsync(handler, CancellationToken.None);
         Func<Task> stop = () => adapter.StopAsync(CancellationToken.None);
 
-        await start.Should().NotThrowAsync();
         await stop.Should().NotThrowAsync();
     }
 
     private static DiscordChatAdapter BuildAdapter(string botToken)
     {
         var opts = Options.Create(new DiscordOptions { BotToken = botToken });
-        return new DiscordChatAdapter(opts);
+        return new DiscordChatAdapter(
+            opts,
+            new DiscordMessageHandler(
+                new DiscordMessageTranslator(),
+                NullLogger<DiscordMessageHandler>.Instance),
+            NullLogger<DiscordChatAdapter>.Instance);
     }
 }
