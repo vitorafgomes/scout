@@ -13,13 +13,13 @@ public class CloudStatusPluginTests
     [Fact]
     public void Name_Is_CloudStatus()
     {
-        new CloudStatusPlugin().Name.Should().Be("CloudStatus");
+        new CloudStatusPlugin().Name.ShouldBe("CloudStatus");
     }
 
     [Fact]
     public void Capabilities_Are_ReadOnly()
     {
-        new CloudStatusPlugin().Capabilities.IsReadOnly.Should().BeTrue();
+        new CloudStatusPlugin().Capabilities.IsReadOnly.ShouldBeTrue();
     }
 
     [Fact]
@@ -36,9 +36,9 @@ public class CloudStatusPluginTests
 
         var kernelPlugin = new CloudStatusPlugin().Build(provider);
 
-        kernelPlugin.Name.Should().Be("CloudStatus");
+        kernelPlugin.Name.ShouldBe("CloudStatus");
         kernelPlugin.Select(f => f.Name)
-                    .Should().BeEquivalentTo(["get_all_cloud_health", "get_cloud_health"]);
+                    .ShouldBe(["get_all_cloud_health", "get_cloud_health"]);
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class CloudStatusPluginTests
     {
         Action build = () => new CloudStatusPlugin().Build(null!);
 
-        build.Should().Throw<ArgumentNullException>();
+        build.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -56,8 +56,8 @@ public class CloudStatusPluginTests
 
         Action register = () => registry.Register(new CloudStatusPlugin());
 
-        register.Should().NotThrow();
-        registry.Plugins.Should().ContainSingle()
-                .Which.Name.Should().Be("CloudStatus");
+        register.ShouldNotThrow();
+        registry.Plugins.ShouldHaveSingleItem()
+                .Name.ShouldBe("CloudStatus");
     }
 }

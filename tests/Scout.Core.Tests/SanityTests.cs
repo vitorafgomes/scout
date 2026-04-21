@@ -6,6 +6,6 @@ public class SanityTests
     public void Solution_Compiles_And_Test_Host_Runs()
     {
         var sut = 1 + 1;
-        sut.Should().Be(2);
+        sut.ShouldBe(2);
     }
 }

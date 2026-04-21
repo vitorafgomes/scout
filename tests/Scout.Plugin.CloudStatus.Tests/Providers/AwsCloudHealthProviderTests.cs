@@ -27,11 +27,11 @@ public class AwsCloudHealthProviderTests
         var report = await Sut(new StubHealthSource(Array.Empty<AwsHealthEvent>()))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Provider.Should().Be("AWS");
-        report.Scope.Should().Be(Region);
-        report.Overall.Should().Be(HealthLevel.Healthy);
-        report.Services.Should().BeEmpty();
-        report.CheckedAt.Should().Be(FixedTime);
+        report.Provider.ShouldBe("AWS");
+        report.Scope.ShouldBe(Region);
+        report.Overall.ShouldBe(HealthLevel.Healthy);
+        report.Services.ShouldBeEmpty();
+        report.CheckedAt.ShouldBe(FixedTime);
     }
 
     [Fact]
@@ -47,9 +47,9 @@ public class AwsCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unhealthy);
-        report.Services.Should().ContainSingle()
-              .Which.Service.Should().Be("EC2");
+        report.Overall.ShouldBe(HealthLevel.Unhealthy);
+        report.Services.ShouldHaveSingleItem()
+              .Service.ShouldBe("EC2");
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class AwsCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class AwsCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public class AwsCloudHealthProviderTests
         var report = await Sut(new ThrowingHealthSource(awsEx))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("Business or Enterprise Support");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("Business or Enterprise Support");
     }
 
     [Fact]
@@ -116,9 +116,9 @@ public class AwsCloudHealthProviderTests
         var report = await Sut(new ThrowingHealthSource(awsEx))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("ThrottlingException");
-        report.Message.Should().Contain("429");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("ThrottlingException");
+        report.Message!.ShouldContain("429");
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public class AwsCloudHealthProviderTests
         var report = await Sut(new ThrowingHealthSource(new InvalidOperationException("boom")))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Be("boom");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldBe("boom");
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class AwsCloudHealthProviderTests
         Func<Task> act = () => Sut(new CancellableHealthSource())
             .GetHealthAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -151,8 +151,8 @@ public class AwsCloudHealthProviderTests
             new StubHealthSource(Array.Empty<AwsHealthEvent>()),
             NullLogger<AwsCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*Region*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("Region");
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class AwsCloudHealthProviderTests
             source: null!,
             NullLogger<AwsCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     private sealed class StubHealthSource(IReadOnlyList<AwsHealthEvent> events) : IAwsHealthSource

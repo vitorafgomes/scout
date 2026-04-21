@@ -17,7 +17,7 @@ public class ScoutHostTests
 
         Func<Task> act = () => host.HandleAsync(null!, CancellationToken.None);
 
-        await act.Should().ThrowAsync<ArgumentNullException>();
+        await act.ShouldThrowAsync<ArgumentNullException>();
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "hello"),
             CancellationToken.None);
 
-        response.Text.Should().Contain("Scout is online");
+        response.Text.ShouldContain("Scout is online");
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "hi there"),
             CancellationToken.None);
 
-        response.Text.Should().Contain("2 plugin");
+        response.Text.ShouldContain("2 plugin");
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "whatever"),
             CancellationToken.None);
 
-        response.Text.Should().Be("from first");
+        response.Text.ShouldBe("from first");
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "whatever"),
             CancellationToken.None);
 
-        response.Text.Should().Be("hit second");
+        response.Text.ShouldBe("hit second");
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "boom"),
             CancellationToken.None);
 
-        response.Text.Should().Contain("something went wrong");
+        response.Text.ShouldContain("something went wrong");
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "hi"),
             cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class ScoutHostTests
             options: Options.Create(new ScoutOptions()),
             routers: []);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class ScoutHostTests
             options: Options.Create(new ScoutOptions()),
             routers: []);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class ScoutHostTests
             options: Options.Create(new ScoutOptions()),
             routers: null!);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     private static ScoutHost BuildHost(

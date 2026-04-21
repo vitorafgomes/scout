@@ -12,7 +12,7 @@ public class OllamaLlmProviderFactoryTests
     {
         var factory = new OllamaLlmProviderFactory(Options.Create(new LlmOptions()));
 
-        factory.Name.Should().Be("Ollama");
+        factory.Name.ShouldBe("Ollama");
     }
 
     [Fact]
@@ -20,7 +20,7 @@ public class OllamaLlmProviderFactoryTests
     {
         Action create = () => new OllamaLlmProviderFactory(null!);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -33,8 +33,8 @@ public class OllamaLlmProviderFactoryTests
 
         Action create = () => new OllamaLlmProviderFactory(opts);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*Endpoint*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("Endpoint");
     }
 
     [Fact]
@@ -47,8 +47,8 @@ public class OllamaLlmProviderFactoryTests
 
         Action create = () => new OllamaLlmProviderFactory(opts);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*Model*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("Model");
     }
 
     [Theory]
@@ -66,8 +66,8 @@ public class OllamaLlmProviderFactoryTests
 
         Action create = () => new OllamaLlmProviderFactory(opts);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*not a valid absolute http or https URI*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("not a valid absolute http or https URI");
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public class OllamaLlmProviderFactoryTests
 
         Action create = () => new OllamaLlmProviderFactory(opts);
 
-        create.Should().NotThrow();
+        create.ShouldNotThrow();
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class OllamaLlmProviderFactoryTests
         var kernel = builder.Build();
 
         kernel.GetRequiredService<IChatCompletionService>()
-              .Should().NotBeNull();
+              .ShouldNotBeNull();
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public class OllamaLlmProviderFactoryTests
 
         Action add = () => factory.AddToKernel(null!);
 
-        add.Should().Throw<ArgumentNullException>();
+        add.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -138,6 +138,6 @@ public class OllamaLlmProviderFactoryTests
         var kernel = builder.Build();
 
         kernel.GetRequiredService<IChatCompletionService>()
-              .Should().NotBeNull();
+              .ShouldNotBeNull();
     }
 }

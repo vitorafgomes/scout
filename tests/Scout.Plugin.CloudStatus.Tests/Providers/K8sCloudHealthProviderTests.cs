@@ -34,11 +34,11 @@ public class K8sCloudHealthProviderTests
         var report = await Sut(new StubSource(Array.Empty<K8sHealthIssue>()))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Provider.Should().Be("Kubernetes");
-        report.Scope.Should().Be(Cluster);
-        report.Overall.Should().Be(HealthLevel.Healthy);
-        report.Services.Should().BeEmpty();
-        report.CheckedAt.Should().Be(FixedTime);
+        report.Provider.ShouldBe("Kubernetes");
+        report.Scope.ShouldBe(Cluster);
+        report.Overall.ShouldBe(HealthLevel.Healthy);
+        report.Services.ShouldBeEmpty();
+        report.CheckedAt.ShouldBe(FixedTime);
     }
 
     [Fact]
@@ -51,9 +51,9 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unhealthy);
-        report.Services.Should().HaveCount(2);
-        report.Services.Should().Contain(s =>
+        report.Overall.ShouldBe(HealthLevel.Unhealthy);
+        report.Services.Count().ShouldBe(2);
+        report.Services.ShouldContain(s =>
             s.Service == "Pod" && s.Region == "prod" && s.Level == HealthLevel.Unhealthy);
     }
 
@@ -66,7 +66,7 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -90,9 +90,9 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Services.Should().ContainSingle()
-              .Which.Message.Should().Contain("worker-xyz")
-              .And.Contain("ImagePullBackOff");
+        var single = report.Services.ShouldHaveSingleItem();
+        single.Message!.ShouldContain("worker-xyz");
+        single.Message!.ShouldContain("ImagePullBackOff");
     }
 
     [Fact]
@@ -102,8 +102,8 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("RBAC");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("RBAC");
     }
 
     [Fact]
@@ -113,8 +113,8 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("RBAC");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("RBAC");
     }
 
     [Fact]
@@ -124,8 +124,8 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("HTTP 500");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("HTTP 500");
     }
 
     [Fact]
@@ -135,8 +135,8 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("unreachable");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("unreachable");
     }
 
     [Fact]
@@ -146,8 +146,8 @@ public class K8sCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Be("boom");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldBe("boom");
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class K8sCloudHealthProviderTests
 
         Func<Task> act = () => Sut(new CancellableSource()).GetHealthAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -169,8 +169,8 @@ public class K8sCloudHealthProviderTests
             new StubSource(Array.Empty<K8sHealthIssue>()),
             NullLogger<K8sCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*ClusterName*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("ClusterName");
     }
 
     [Fact]
@@ -181,7 +181,7 @@ public class K8sCloudHealthProviderTests
             source: null!,
             NullLogger<K8sCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     private sealed class StubSource(IReadOnlyList<K8sHealthIssue> issues) : IK8sHealthSource

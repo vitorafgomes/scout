@@ -17,7 +17,7 @@ public class InMemoryCloudHealthProviderTests
 
         var sut = new InMemoryCloudHealthProvider(report);
 
-        sut.Name.Should().Be("Azure");
+        sut.Name.ShouldBe("Azure");
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class InMemoryCloudHealthProviderTests
         var actual = await new InMemoryCloudHealthProvider(expected)
             .GetHealthAsync(CancellationToken.None);
 
-        actual.Should().BeSameAs(expected);
+        actual.ShouldBeSameAs(expected);
     }
 
     [Fact]
@@ -39,6 +39,6 @@ public class InMemoryCloudHealthProviderTests
     {
         Action create = () => new InMemoryCloudHealthProvider(null!);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 }

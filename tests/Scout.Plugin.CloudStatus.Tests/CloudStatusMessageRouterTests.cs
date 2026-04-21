@@ -30,8 +30,8 @@ public class CloudStatusMessageRouterTests
             new ChatMessage("u1", "c1", text),
             CancellationToken.None);
 
-        response.Should().NotBeNull();
-        response!.Text.Should().Contain("Azure");
+        response.ShouldNotBeNull();
+        response!.Text.ShouldContain("Azure");
     }
 
     [Theory]
@@ -46,7 +46,7 @@ public class CloudStatusMessageRouterTests
             new ChatMessage("u1", "c1", text),
             CancellationToken.None);
 
-        response.Should().BeNull();
+        response.ShouldBeNull();
     }
 
     [Fact]
@@ -58,8 +58,8 @@ public class CloudStatusMessageRouterTests
             new ChatMessage("u1", "c1", "status"),
             CancellationToken.None);
 
-        response!.Text.Should().Contain("Cloud health:");
-        response.Text.Should().Contain("- Azure (sub-1): Degraded");
+        response!.Text.ShouldContain("Cloud health:");
+        response.Text.ShouldContain("- Azure (sub-1): Degraded");
     }
 
     [Fact]
@@ -69,6 +69,6 @@ public class CloudStatusMessageRouterTests
 
         Func<Task> act = () => router.RouteAsync(null!, CancellationToken.None);
 
-        await act.Should().ThrowAsync<ArgumentNullException>();
+        await act.ShouldThrowAsync<ArgumentNullException>();
     }
 }

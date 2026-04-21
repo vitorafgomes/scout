@@ -20,8 +20,8 @@ public class DiscordMessageTranslatorTests
             Content: "<@1111> hi", MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeFalse();
-        chatMessage.Should().BeNull();
+             .ShouldBeFalse();
+        chatMessage.ShouldBeNull();
     }
 
     [Fact]
@@ -33,8 +33,8 @@ public class DiscordMessageTranslatorTests
             Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeFalse();
-        chatMessage.Should().BeNull();
+             .ShouldBeFalse();
+        chatMessage.ShouldBeNull();
     }
 
     [Fact]
@@ -45,8 +45,8 @@ public class DiscordMessageTranslatorTests
             Content: "<@1111>", MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeFalse();
-        chatMessage.Should().BeNull();
+             .ShouldBeFalse();
+        chatMessage.ShouldBeNull();
     }
 
     [Fact]
@@ -58,9 +58,9 @@ public class DiscordMessageTranslatorTests
             MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeTrue();
-        chatMessage.Should().NotBeNull();
-        chatMessage!.Text.Should().Be("is prod azure healthy?");
+             .ShouldBeTrue();
+        chatMessage.ShouldNotBeNull();
+        chatMessage!.Text.ShouldBe("is prod azure healthy?");
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public class DiscordMessageTranslatorTests
             MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeTrue();
-        chatMessage!.Text.Should().Be("status aws");
+             .ShouldBeTrue();
+        chatMessage!.Text.ShouldBe("status aws");
     }
 
     [Fact]
@@ -87,10 +87,10 @@ public class DiscordMessageTranslatorTests
             MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
-             .Should().BeTrue();
-        chatMessage!.UserId.Should().Be(HumanUserId.ToString());
-        chatMessage.ChannelId.Should().Be(ChannelId.ToString());
-        chatMessage.Timestamp.Should().Be(FixedTime);
+             .ShouldBeTrue();
+        chatMessage!.UserId.ShouldBe(HumanUserId.ToString());
+        chatMessage.ChannelId.ShouldBe(ChannelId.ToString());
+        chatMessage.Timestamp.ShouldBe(FixedTime);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class DiscordMessageTranslatorTests
     {
         var response = ChatResponse.Plain("scout is online");
 
-        Sut().Render(response).Should().Be("scout is online");
+        Sut().Render(response).ShouldBe("scout is online");
     }
 
     [Fact]
@@ -110,10 +110,10 @@ public class DiscordMessageTranslatorTests
 
         var rendered = Sut().Render(response);
 
-        rendered.Should().Contain("the checkout flow lives in CheckoutService");
-        rendered.Should().Contain("Sources:");
-        rendered.Should().Contain("- src/Checkout/CheckoutService.cs:42-120");
-        rendered.Should().Contain("- docs/checkout.md:1-30");
+        rendered.ShouldContain("the checkout flow lives in CheckoutService");
+        rendered.ShouldContain("Sources:");
+        rendered.ShouldContain("- src/Checkout/CheckoutService.cs:42-120");
+        rendered.ShouldContain("- docs/checkout.md:1-30");
     }
 
     [Fact]
@@ -121,6 +121,6 @@ public class DiscordMessageTranslatorTests
     {
         Action render = () => Sut().Render(null!);
 
-        render.Should().Throw<ArgumentNullException>();
+        render.ShouldThrow<ArgumentNullException>();
     }
 }

@@ -17,9 +17,9 @@ public class CloudStatusServiceCollectionExtensionsTests
 
         services.AddCloudStatusPlugin();
 
-        services.Should().Contain(d => d.ServiceType == typeof(CloudStatusFunctions));
-        services.Should().Contain(d => d.ServiceType == typeof(IScoutPlugin));
-        services.Should().Contain(d => d.ServiceType == typeof(IMessageRouter));
+        services.ShouldContain(d => d.ServiceType == typeof(CloudStatusFunctions));
+        services.ShouldContain(d => d.ServiceType == typeof(IScoutPlugin));
+        services.ShouldContain(d => d.ServiceType == typeof(IMessageRouter));
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public class CloudStatusServiceCollectionExtensionsTests
         Action act = () =>
             CloudStatusServiceCollectionExtensions.AddCloudStatusPlugin(null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public class CloudStatusServiceCollectionExtensionsTests
 
         services.AddCloudStatusPlugin(BuildConfig(new Dictionary<string, string?>()));
 
-        services.Should().Contain(d => d.ServiceType == typeof(CloudStatusFunctions));
-        services.Should().Contain(d => d.ServiceType == typeof(IScoutPlugin));
-        services.Should().Contain(d => d.ServiceType == typeof(IMessageRouter));
+        services.ShouldContain(d => d.ServiceType == typeof(CloudStatusFunctions));
+        services.ShouldContain(d => d.ServiceType == typeof(IScoutPlugin));
+        services.ShouldContain(d => d.ServiceType == typeof(IMessageRouter));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class CloudStatusServiceCollectionExtensionsTests
 
         services.AddCloudStatusPlugin(BuildConfig(new Dictionary<string, string?>()));
 
-        services.Should().NotContain(d => d.ServiceType == typeof(ICloudHealthProvider));
+        services.ShouldNotContain(d => d.ServiceType == typeof(ICloudHealthProvider));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Azure:SubscriptionId"] = "00000000-0000-0000-0000-000000000001",
         }));
 
-        ProviderCount(services).Should().Be(1);
+        ProviderCount(services).ShouldBe(1);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Aws:Region"] = "eu-west-1",
         }));
 
-        ProviderCount(services).Should().Be(1);
+        ProviderCount(services).ShouldBe(1);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:OracleCloud:Enabled"] = "true",
         }));
 
-        ProviderCount(services).Should().Be(1);
+        ProviderCount(services).ShouldBe(1);
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:OracleCloud:Enabled"] = "false",
         }));
 
-        ProviderCount(services).Should().Be(0);
+        ProviderCount(services).ShouldBe(0);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Kubernetes:UseInClusterConfig"] = "true",
         }));
 
-        ProviderCount(services).Should().Be(1);
+        ProviderCount(services).ShouldBe(1);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Kubernetes:KubeconfigPath"] = "/tmp/kubeconfig",
         }));
 
-        ProviderCount(services).Should().Be(1);
+        ProviderCount(services).ShouldBe(1);
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Kubernetes:ClusterName"] = "anything",
         }));
 
-        ProviderCount(services).Should().Be(0);
+        ProviderCount(services).ShouldBe(0);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class CloudStatusServiceCollectionExtensionsTests
             ["Scout:Plugins:CloudStatus:Kubernetes:UseInClusterConfig"] = "true",
         }));
 
-        ProviderCount(services).Should().Be(4);
+        ProviderCount(services).ShouldBe(4);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public class CloudStatusServiceCollectionExtensionsTests
 
         Action act = () => services.AddCloudStatusPlugin((IConfiguration)null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 
     private static int ProviderCount(IServiceCollection services) =>

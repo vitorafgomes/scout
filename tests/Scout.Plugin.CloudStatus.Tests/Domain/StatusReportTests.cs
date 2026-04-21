@@ -17,8 +17,8 @@ public class StatusReportTests
             Services: Array.Empty<ServiceStatus>(),
             CheckedAt: FixedTime);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(StatusReport.Provider));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(StatusReport.Provider));
     }
 
     [Fact]
@@ -31,8 +31,8 @@ public class StatusReportTests
             Services: Array.Empty<ServiceStatus>(),
             CheckedAt: FixedTime);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(StatusReport.Scope));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(StatusReport.Scope));
     }
 
     [Fact]
@@ -45,8 +45,8 @@ public class StatusReportTests
             Services: null!,
             CheckedAt: FixedTime);
 
-        create.Should().Throw<ArgumentNullException>()
-            .WithParameterName(nameof(StatusReport.Services));
+        create.ShouldThrow<ArgumentNullException>()
+            .ParamName.ShouldBe(nameof(StatusReport.Services));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class StatusReportTests
             "AWS", "account-1", HealthLevel.Unknown,
             Array.Empty<ServiceStatus>(), FixedTime);
 
-        report.Services.Should().BeEmpty();
+        report.Services.ShouldBeEmpty();
     }
 
     [Fact]
@@ -64,12 +64,12 @@ public class StatusReportTests
     {
         var report = StatusReport.Unknown("OracleCloud", "eu-london-1", FixedTime, "missing-cred");
 
-        report.Provider.Should().Be("OracleCloud");
-        report.Scope.Should().Be("eu-london-1");
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Services.Should().BeEmpty();
-        report.Message.Should().Be("missing-cred");
-        report.CheckedAt.Should().Be(FixedTime);
+        report.Provider.ShouldBe("OracleCloud");
+        report.Scope.ShouldBe("eu-london-1");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Services.ShouldBeEmpty();
+        report.Message!.ShouldBe("missing-cred");
+        report.CheckedAt.ShouldBe(FixedTime);
     }
 }
 
@@ -84,8 +84,8 @@ public class ServiceStatusTests
             Level: HealthLevel.Healthy,
             Message: null);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ServiceStatus.Service));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ServiceStatus.Service));
     }
 
     [Fact]
@@ -97,8 +97,8 @@ public class ServiceStatusTests
             Level: HealthLevel.Healthy,
             Message: null);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ServiceStatus.Region));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ServiceStatus.Region));
     }
 
     [Fact]
@@ -106,6 +106,6 @@ public class ServiceStatusTests
     {
         var status = new ServiceStatus("SQL", "eu-west", HealthLevel.Healthy, null);
 
-        status.Message.Should().BeNull();
+        status.Message.ShouldBeNull();
     }
 }

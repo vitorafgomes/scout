@@ -17,8 +17,8 @@ public class OllamaServiceCollectionExtensionsTests
         using var provider = services.BuildServiceProvider();
         var factory = provider.GetRequiredService<ILlmProviderFactory>();
 
-        factory.Should().BeOfType<OllamaLlmProviderFactory>();
-        factory.Name.Should().Be("Ollama");
+        factory.ShouldBeOfType<OllamaLlmProviderFactory>();
+        factory.Name.ShouldBe("Ollama");
     }
 
     [Fact]
@@ -27,6 +27,6 @@ public class OllamaServiceCollectionExtensionsTests
         Action act = () =>
             OllamaServiceCollectionExtensions.AddOllamaLlmProvider(null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 }

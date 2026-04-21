@@ -27,11 +27,11 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Provider.Should().Be("Azure");
-        report.Scope.Should().Be(SubscriptionId);
-        report.Overall.Should().Be(HealthLevel.Healthy);
-        report.Services.Should().BeEmpty();
-        report.CheckedAt.Should().Be(FixedTime);
+        report.Provider.ShouldBe("Azure");
+        report.Scope.ShouldBe(SubscriptionId);
+        report.Overall.ShouldBe(HealthLevel.Healthy);
+        report.Services.ShouldBeEmpty();
+        report.CheckedAt.ShouldBe(FixedTime);
     }
 
     [Fact]
@@ -44,11 +44,11 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unhealthy);
-        report.Services.Should().HaveCount(2);
-        report.Services.Should().Contain(s =>
+        report.Overall.ShouldBe(HealthLevel.Unhealthy);
+        report.Services.Count().ShouldBe(2);
+        report.Services.ShouldContain(s =>
             s.Service == "Azure SQL" && s.Region == "westeurope" && s.Level == HealthLevel.Unhealthy);
-        report.Services.Should().Contain(s =>
+        report.Services.ShouldContain(s =>
             s.Service == "App Service" && s.Region == "northeurope" && s.Level == HealthLevel.Degraded);
     }
 
@@ -61,7 +61,7 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Degraded);
+        report.Overall.ShouldBe(HealthLevel.Degraded);
     }
 
     [Fact]
@@ -86,8 +86,8 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("Access denied");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("Access denied");
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("Access denied");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("Access denied");
     }
 
     [Fact]
@@ -110,8 +110,8 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("HTTP 503");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("HTTP 503");
     }
 
     [Fact]
@@ -121,8 +121,8 @@ public class AzureCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Be("boom");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldBe("boom");
     }
 
     [Fact]
@@ -134,7 +134,7 @@ public class AzureCloudHealthProviderTests
 
         Func<Task> act = () => Sut(source).GetHealthAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -145,8 +145,8 @@ public class AzureCloudHealthProviderTests
             new StubHealthSource(Array.Empty<AzureHealthEvent>()),
             NullLogger<AzureCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentException>()
-            .WithMessage("*SubscriptionId*");
+        create.ShouldThrow<ArgumentException>()
+            .Message!.ShouldContain("SubscriptionId");
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class AzureCloudHealthProviderTests
             source: null!,
             NullLogger<AzureCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     private sealed class StubHealthSource(IReadOnlyList<AzureHealthEvent> events) : IAzureHealthSource

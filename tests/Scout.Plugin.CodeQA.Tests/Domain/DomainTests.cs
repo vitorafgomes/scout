@@ -13,11 +13,11 @@ public class CodeChunkTests
             Id: "id-1", FilePath: "src/Foo.cs", StartLine: 10, EndLine: 20,
             Content: "public class Foo {}", Embedding: SampleEmbedding);
 
-        chunk.Id.Should().Be("id-1");
-        chunk.FilePath.Should().Be("src/Foo.cs");
-        chunk.StartLine.Should().Be(10);
-        chunk.EndLine.Should().Be(20);
-        chunk.Content.Should().Be("public class Foo {}");
+        chunk.Id.ShouldBe("id-1");
+        chunk.FilePath.ShouldBe("src/Foo.cs");
+        chunk.StartLine.ShouldBe(10);
+        chunk.EndLine.ShouldBe(20);
+        chunk.Content.ShouldBe("public class Foo {}");
     }
 
     [Theory]
@@ -26,30 +26,30 @@ public class CodeChunkTests
     public void Ctor_Rejects_Empty_Id(string id)
     {
         Action act = () => new CodeChunk(id, "p", 1, 1, "c", SampleEmbedding);
-        act.Should().Throw<ArgumentException>().WithParameterName(nameof(CodeChunk.Id));
+        act.ShouldThrow<ArgumentException>().ParamName.ShouldBe(nameof(CodeChunk.Id));
     }
 
     [Fact]
     public void Ctor_Rejects_StartLine_Below_One()
     {
         Action act = () => new CodeChunk("id", "p", 0, 10, "c", SampleEmbedding);
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName(nameof(CodeChunk.StartLine));
+        act.ShouldThrow<ArgumentOutOfRangeException>()
+            .ParamName.ShouldBe(nameof(CodeChunk.StartLine));
     }
 
     [Fact]
     public void Ctor_Rejects_EndLine_Before_StartLine()
     {
         Action act = () => new CodeChunk("id", "p", 10, 5, "c", SampleEmbedding);
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName(nameof(CodeChunk.EndLine));
+        act.ShouldThrow<ArgumentOutOfRangeException>()
+            .ParamName.ShouldBe(nameof(CodeChunk.EndLine));
     }
 
     [Fact]
     public void Ctor_Rejects_Empty_Content()
     {
         Action act = () => new CodeChunk("id", "p", 1, 1, "", SampleEmbedding);
-        act.Should().Throw<ArgumentException>().WithParameterName(nameof(CodeChunk.Content));
+        act.ShouldThrow<ArgumentException>().ParamName.ShouldBe(nameof(CodeChunk.Content));
     }
 }
 
@@ -60,8 +60,8 @@ public class CitationTests
     {
         var cit = new Citation("src/Foo.cs", 10, 20, 0.85);
 
-        cit.ToString().Should().Be("src/Foo.cs:10-20");
-        cit.RelevanceScore.Should().Be(0.85);
+        cit.ToString().ShouldBe("src/Foo.cs:10-20");
+        cit.RelevanceScore.ShouldBe(0.85);
     }
 
     [Theory]
@@ -70,8 +70,8 @@ public class CitationTests
     public void Rejects_Score_Outside_Cosine_Range(double score)
     {
         Action act = () => new Citation("p", 1, 1, score);
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName(nameof(Citation.RelevanceScore));
+        act.ShouldThrow<ArgumentOutOfRangeException>()
+            .ParamName.ShouldBe(nameof(Citation.RelevanceScore));
     }
 }
 
@@ -86,29 +86,29 @@ public class CodeAnswerTests
             "llama3.1",
             TimeSpan.FromMilliseconds(250));
 
-        answer.Citations.Should().HaveCount(1);
-        answer.ModelUsed.Should().Be("llama3.1");
+        answer.Citations.Count().ShouldBe(1);
+        answer.ModelUsed.ShouldBe("llama3.1");
     }
 
     [Fact]
     public void Rejects_Empty_Text()
     {
         Action act = () => new CodeAnswer("", [], "m", TimeSpan.Zero);
-        act.Should().Throw<ArgumentException>().WithParameterName(nameof(CodeAnswer.Text));
+        act.ShouldThrow<ArgumentException>().ParamName.ShouldBe(nameof(CodeAnswer.Text));
     }
 
     [Fact]
     public void Rejects_Null_Citations()
     {
         Action act = () => new CodeAnswer("t", null!, "m", TimeSpan.Zero);
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
     public void Rejects_Negative_Latency()
     {
         Action act = () => new CodeAnswer("t", [], "m", TimeSpan.FromMilliseconds(-1));
-        act.Should().Throw<ArgumentOutOfRangeException>()
-            .WithParameterName(nameof(CodeAnswer.Latency));
+        act.ShouldThrow<ArgumentOutOfRangeException>()
+            .ParamName.ShouldBe(nameof(CodeAnswer.Latency));
     }
 }

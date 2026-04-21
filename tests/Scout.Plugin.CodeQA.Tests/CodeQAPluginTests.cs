@@ -8,13 +8,13 @@ public class CodeQAPluginTests
     [Fact]
     public void Name_Is_CodeQA()
     {
-        new CodeQAPlugin().Name.Should().Be("CodeQA");
+        new CodeQAPlugin().Name.ShouldBe("CodeQA");
     }
 
     [Fact]
     public void Capabilities_Are_ReadOnly()
     {
-        new CodeQAPlugin().Capabilities.IsReadOnly.Should().BeTrue();
+        new CodeQAPlugin().Capabilities.IsReadOnly.ShouldBeTrue();
     }
 
     [Fact]
@@ -24,8 +24,8 @@ public class CodeQAPluginTests
 
         var kp = new CodeQAPlugin().Build(services);
 
-        kp.Name.Should().Be("CodeQA");
-        kp.FunctionCount.Should().Be(0);
+        kp.Name.ShouldBe("CodeQA");
+        kp.FunctionCount.ShouldBe(0);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class CodeQAPluginTests
     {
         Action act = () => new CodeQAPlugin().Build(null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -43,8 +43,8 @@ public class CodeQAPluginTests
 
         Action act = () => registry.Register(new CodeQAPlugin());
 
-        act.Should().NotThrow();
-        registry.Plugins.Should().ContainSingle()
-                .Which.Name.Should().Be("CodeQA");
+        act.ShouldNotThrow();
+        registry.Plugins.ShouldHaveSingleItem()
+                .Name.ShouldBe("CodeQA");
     }
 }

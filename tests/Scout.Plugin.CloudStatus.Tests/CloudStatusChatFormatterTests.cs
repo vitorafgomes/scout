@@ -12,7 +12,7 @@ public class CloudStatusChatFormatterTests
     {
         var text = CloudStatusChatFormatter.Format(Array.Empty<StatusReport>());
 
-        text.Should().Be("No cloud providers are configured.");
+        text.ShouldBe("No cloud providers are configured.");
     }
 
     [Fact]
@@ -27,9 +27,9 @@ public class CloudStatusChatFormatterTests
 
         var text = CloudStatusChatFormatter.Format(reports);
 
-        text.Should().Contain("Cloud health:");
-        text.Should().Contain("- Azure (sub-1): Healthy");
-        text.Should().Contain("- AWS (acc-1): Degraded — elevated latency in eu-west-1");
+        text.ShouldContain("Cloud health:");
+        text.ShouldContain("- Azure (sub-1): Healthy");
+        text.ShouldContain("- AWS (acc-1): Degraded — elevated latency in eu-west-1");
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public class CloudStatusChatFormatterTests
 
         var text = CloudStatusChatFormatter.Format(report);
 
-        text.Should().Be("- OracleCloud (eu-london-1): Unknown — missing credential");
+        text.ShouldBe("- OracleCloud (eu-london-1): Unknown — missing credential");
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class CloudStatusChatFormatterTests
     {
         Action act = () => CloudStatusChatFormatter.Format((IReadOnlyList<StatusReport>)null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 
     [Fact]
@@ -58,6 +58,6 @@ public class CloudStatusChatFormatterTests
     {
         Action act = () => CloudStatusChatFormatter.Format((StatusReport)null!);
 
-        act.Should().Throw<ArgumentNullException>();
+        act.ShouldThrow<ArgumentNullException>();
     }
 }

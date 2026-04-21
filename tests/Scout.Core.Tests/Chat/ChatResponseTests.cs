@@ -9,8 +9,8 @@ public class ChatResponseTests
     {
         Action create = () => new ChatResponse(Text: string.Empty);
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ChatResponse.Text));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ChatResponse.Text));
     }
 
     [Fact]
@@ -18,8 +18,8 @@ public class ChatResponseTests
     {
         Action create = () => new ChatResponse(Text: "   ");
 
-        create.Should().Throw<ArgumentException>()
-            .WithParameterName(nameof(ChatResponse.Text));
+        create.ShouldThrow<ArgumentException>()
+            .ParamName.ShouldBe(nameof(ChatResponse.Text));
     }
 
     [Fact]
@@ -27,8 +27,8 @@ public class ChatResponseTests
     {
         var response = new ChatResponse("hello");
 
-        response.Citations.Should().NotBeNull();
-        response.Citations.Should().BeEmpty();
+        response.Citations.ShouldNotBeNull();
+        response.Citations.ShouldBeEmpty();
     }
 
     [Fact]
@@ -36,8 +36,8 @@ public class ChatResponseTests
     {
         var response = ChatResponse.Plain("done");
 
-        response.Text.Should().Be("done");
-        response.Citations.Should().BeEmpty();
+        response.Text.ShouldBe("done");
+        response.Citations.ShouldBeEmpty();
     }
 
     [Fact]
@@ -47,6 +47,6 @@ public class ChatResponseTests
 
         var response = new ChatResponse("look here", sources);
 
-        response.Citations.Should().Equal(sources);
+        response.Citations.ShouldBe(sources);
     }
 }

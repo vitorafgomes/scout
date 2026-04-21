@@ -21,10 +21,10 @@ public class OciCloudHealthProviderTests
         var report = await Sut(new StubSource(Array.Empty<OciHealthIncident>()))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Provider.Should().Be("OracleCloud");
-        report.Overall.Should().Be(HealthLevel.Healthy);
-        report.Services.Should().BeEmpty();
-        report.CheckedAt.Should().Be(FixedTime);
+        report.Provider.ShouldBe("OracleCloud");
+        report.Overall.ShouldBe(HealthLevel.Healthy);
+        report.Services.ShouldBeEmpty();
+        report.CheckedAt.ShouldBe(FixedTime);
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public class OciCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(expected);
+        report.Overall.ShouldBe(expected);
     }
 
     [Fact]
@@ -53,8 +53,8 @@ public class OciCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unhealthy);
-        report.Services.Should().HaveCount(2);
+        report.Overall.ShouldBe(HealthLevel.Unhealthy);
+        report.Services.Count().ShouldBe(2);
     }
 
     [Fact]
@@ -65,8 +65,8 @@ public class OciCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("HTTP 500");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("HTTP 500");
     }
 
     [Fact]
@@ -76,8 +76,8 @@ public class OciCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("unreachable");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("unreachable");
     }
 
     [Fact]
@@ -89,8 +89,8 @@ public class OciCloudHealthProviderTests
 
         var report = await Sut(source).GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Contain("timed out");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldContain("timed out");
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public class OciCloudHealthProviderTests
         var report = await Sut(new ThrowingSource(new InvalidOperationException("boom")))
             .GetHealthAsync(CancellationToken.None);
 
-        report.Overall.Should().Be(HealthLevel.Unknown);
-        report.Message.Should().Be("boom");
+        report.Overall.ShouldBe(HealthLevel.Unknown);
+        report.Message!.ShouldBe("boom");
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class OciCloudHealthProviderTests
 
         Func<Task> act = () => Sut(new CancellableSource()).GetHealthAsync(cts.Token);
 
-        await act.Should().ThrowAsync<OperationCanceledException>();
+        await act.ShouldThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class OciCloudHealthProviderTests
             source: null!,
             NullLogger<OciCloudHealthProvider>.Instance);
 
-        create.Should().Throw<ArgumentNullException>();
+        create.ShouldThrow<ArgumentNullException>();
     }
 
     private sealed class StubSource(IReadOnlyList<OciHealthIncident> incidents) : IOciHealthSource
