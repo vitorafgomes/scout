@@ -18,12 +18,8 @@ public class PluginCapabilitiesTests
         PluginCapabilities.ReadOnly.IsReadOnly.Should().BeTrue();
     }
 
-    [Fact]
-    public void Cannot_Construct_With_Write_Declaration()
-    {
-        Action create = () => new PluginCapabilities(isReadOnly: false);
-
-        create.Should().Throw<InvalidOperationException>()
-            .WithMessage("*read-only*");
-    }
+    // NOTE: there is no negative "cannot construct write-capable" test here.
+    // The type is designed so that write capabilities are unrepresentable —
+    // the compiler forbids it, not runtime. The registry-level defense
+    // against null / non-read-only capabilities is tested in PluginRegistryTests.
 }
