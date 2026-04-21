@@ -14,6 +14,7 @@
     <PackageReference Include="Azure.ResourceManager.ResourceHealth" />
     <PackageReference Include="AWSSDK.AWSHealth" />
     <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="KubernetesClient" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
