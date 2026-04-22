@@ -1,5 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Scout.Core.Plugins;
+using Scout.Plugin.CodeQA.Composing;
+using Scout.Plugin.CodeQA.Functions;
+using Scout.Plugin.CodeQA.Retrieval;
 
 namespace Scout.Plugin.CodeQA.Tests;
 
@@ -18,14 +21,19 @@ public class CodeQAPluginTests
     }
 
     [Fact]
-    public void Build_Returns_An_Empty_KernelPlugin_In_Scaffold_Phase()
+    public void Build_Exposes_CodeQAFunctions()
     {
-        var services = new ServiceCollection().BuildServiceProvider();
+        var services = new ServiceCollection();
+        services.AddSingleton(Substitute.For<IRetriever>());
+        services.AddSingleton(Substitute.For<IComposer>());
+        services.AddSingleton<CodeQAFunctions>();
+        using var provider = services.BuildServiceProvider();
 
-        var kp = new CodeQAPlugin().Build(services);
+        var kp = new CodeQAPlugin().Build(provider);
 
         kp.Name.ShouldBe("CodeQA");
-        kp.FunctionCount.ShouldBe(0);
+        kp.FunctionCount.ShouldBe(2);
+        kp.Select(f => f.Name).ShouldBe(new[] { "ask_code", "search_code" }, ignoreOrder: true);
     }
 
     [Fact]
@@ -34,6 +42,16 @@ public class CodeQAPluginTests
         Action act = () => new CodeQAPlugin().Build(null!);
 
         act.ShouldThrow<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Build_Throws_When_CodeQAFunctions_Missing_From_DI()
+    {
+        var provider = new ServiceCollection().BuildServiceProvider();
+
+        Action act = () => new CodeQAPlugin().Build(provider);
+
+        act.ShouldThrow<InvalidOperationException>();
     }
 
     [Fact]
