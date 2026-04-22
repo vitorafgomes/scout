@@ -38,6 +38,16 @@ public sealed class EmbeddingOptions
 {
     public string Provider { get; set; } = "Ollama";
     public string Model { get; set; } = "nomic-embed-text";
+    public string BaseUrl { get; set; } = "http://localhost:11434";
+    public int HttpTimeoutSeconds { get; set; } = 30;
+    public int MaxBatchSize { get; set; } = 32;
+
+    /// <summary>
+    /// When positive, the embedder asserts every returned vector has this length.
+    /// Guards against silent re-index drift when an operator swaps the model
+    /// without clearing the vector store. Zero (default) disables the check.
+    /// </summary>
+    public int ExpectedDimensions { get; set; }
 }
 
 public sealed class VectorStoreOptions

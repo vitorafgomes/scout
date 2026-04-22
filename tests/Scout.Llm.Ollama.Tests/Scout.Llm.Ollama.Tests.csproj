@@ -9,9 +9,11 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="NSubstitute" />
     <PackageReference Include="coverlet.collector" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Scout.Llm.Ollama\Scout.Llm.Ollama.csproj" />
+    <ProjectReference Include="..\..\src\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />
   </ItemGroup>
 </Project>
