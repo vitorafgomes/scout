@@ -12,6 +12,23 @@ public sealed class CodeQAOptions
     public RetrievalOptions Retrieval { get; set; } = new();
     public IngestionOptions Ingestion { get; set; } = new();
     public ChunkingOptions Chunking { get; set; } = new();
+    public ComposerOptions Composer { get; set; } = new();
+}
+
+public sealed class ComposerOptions
+{
+    /// <summary>
+    /// Chat model identifier. Empty means "use whatever the registered
+    /// <c>IChatCompletionService</c> considers its default" — useful when
+    /// the provider pins a single model at configuration time.
+    /// </summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Upper bound on tokens the LLM may emit per answer.</summary>
+    public int MaxOutputTokens { get; set; } = 512;
+
+    /// <summary>Sampling temperature; low by default for grounded answers.</summary>
+    public double Temperature { get; set; } = 0.2;
 }
 
 public sealed class ChunkingOptions
