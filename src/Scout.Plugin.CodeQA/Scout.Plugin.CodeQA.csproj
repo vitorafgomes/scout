@@ -8,9 +8,17 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="Microsoft.SemanticKernel" />
+    <PackageReference Include="Octokit" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Plugin.CodeQA.Tests" />
+    <!-- Castle DynamicProxy (used by NSubstitute) needs access to proxy
+         internal interfaces like IGitHubTreeClient in test builds. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
 </Project>
