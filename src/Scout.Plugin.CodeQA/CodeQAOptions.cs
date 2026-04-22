@@ -11,6 +11,14 @@ public sealed class CodeQAOptions
     public VectorStoreOptions VectorStore { get; set; } = new();
     public RetrievalOptions Retrieval { get; set; } = new();
     public IngestionOptions Ingestion { get; set; } = new();
+    public ChunkingOptions Chunking { get; set; } = new();
+}
+
+public sealed class ChunkingOptions
+{
+    public int ChunkTokens { get; set; } = 500;
+    public int OverlapTokens { get; set; } = 50;
+    public int ApproxBytesPerToken { get; set; } = 4;
 }
 
 public sealed class RepositoryOptions
