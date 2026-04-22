@@ -3,17 +3,28 @@
     <RootNamespace>Scout.Llm.Ollama</RootNamespace>
     <AssemblyName>Scout.Llm.Ollama</AssemblyName>
     <IsPackable>false</IsPackable>
-    <!-- SKEXP0070 is the experimental attribute on the Ollama connector.
-         Suppressing it here keeps TreatWarningsAsErrors true everywhere else
-         and isolates the alpha surface to this project only. -->
+    <!-- SKEXP0070 is the experimental attribute on the Ollama connector
+         (still needed because the Connectors.Ollama package itself is
+         alpha-tagged via the experimental attribute). The embedder surface
+         used here (Microsoft.Extensions.AI.IEmbeddingGenerator) is stable,
+         so SKEXP0001 is no longer required. -->
     <NoWarn>$(NoWarn);SKEXP0070</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
     <PackageReference Include="Microsoft.SemanticKernel" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" />
+    <PackageReference Include="OllamaSharp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Llm.Ollama.Tests" />
+    <InternalsVisibleTo Include="Scout.Host.Worker" />
   </ItemGroup>
 </Project>
