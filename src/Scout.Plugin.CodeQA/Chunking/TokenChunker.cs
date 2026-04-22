@@ -37,8 +37,21 @@ public sealed class TokenChunker : IChunker
                 nameof(options));
         }
 
-        _chunkBytes = chunking.ChunkTokens * chunking.ApproxBytesPerToken;
-        _overlapBytes = chunking.OverlapTokens * chunking.ApproxBytesPerToken;
+        try
+        {
+            checked
+            {
+                _chunkBytes = chunking.ChunkTokens * chunking.ApproxBytesPerToken;
+                _overlapBytes = chunking.OverlapTokens * chunking.ApproxBytesPerToken;
+            }
+        }
+        catch (OverflowException ex)
+        {
+            throw new ArgumentException(
+                "ChunkTokens multiplied by ApproxBytesPerToken overflows Int32.",
+                nameof(options),
+                ex);
+        }
     }
 
     public IReadOnlyList<CodeChunk> Chunk(string content, string filePath, CancellationToken cancellationToken)
@@ -172,12 +185,6 @@ public sealed class TokenChunker : IChunker
             {
                 contentEndExclusive = i;
                 terminatorEndExclusive = i;
-            }
-
-            // Skip a final phantom empty line produced by a trailing newline.
-            if (start == contentEndExclusive && terminatorEndExclusive == content.Length && lines.Count > 0)
-            {
-                break;
             }
 
             var raw = content.Substring(start, terminatorEndExclusive - start);

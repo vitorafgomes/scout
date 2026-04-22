@@ -88,6 +88,17 @@ public class TokenChunkerTests
     }
 
     [Fact]
+    public void Ctor_ChunkBytesOverflow_Throws()
+    {
+        var options = new CodeQAOptions();
+        options.Chunking.ChunkTokens = int.MaxValue;
+        options.Chunking.ApproxBytesPerToken = 2;
+        options.Chunking.OverlapTokens = 0;
+
+        Should.Throw<ArgumentException>(() => new TokenChunker(Options.Create(options)));
+    }
+
+    [Fact]
     public void Chunk_EmptyContent_ReturnsEmptyList()
     {
         var chunker = BuildChunker();
@@ -332,6 +343,19 @@ public class TokenChunkerTests
     }
 
     [Fact]
+    public void Chunk_TrailingBlankLine_IsPreserved()
+    {
+        var chunker = BuildChunker();
+        var content = "a\n\n";
+
+        var result = chunker.Chunk(content, "file.cs", CancellationToken.None);
+
+        result.Count.ShouldBe(1);
+        result[0].StartLine.ShouldBe(1);
+        result[0].EndLine.ShouldBe(2);
+    }
+
+    [Fact]
     public void Chunk_MultiByteCharacters_RespectsByteBudgetNotCharCount()
     {
         var options = new CodeQAOptions();
@@ -340,17 +364,16 @@ public class TokenChunkerTests
         options.Chunking.ApproxBytesPerToken = 4;
         var chunker = BuildChunker(options);
 
-        // Each "日本語の行です" line is 7 chars but 21 UTF-8 bytes + \n = 22 bytes.
+        // Each Japanese line is 21 UTF-8 bytes + newline = 22 bytes, well under the 200-byte budget.
         var content = BuildLines(500, "日本語の行です");
 
         var result = chunker.Chunk(content, "file.cs", CancellationToken.None);
 
+        var budget = options.Chunking.ChunkTokens * options.Chunking.ApproxBytesPerToken;
         foreach (var chunk in result)
         {
             var chunkBytes = Encoding.UTF8.GetByteCount(chunk.Content);
-            // Every chunk respects the 200-byte window, except when a single
-            // line alone already exceeds it. None does here (22 bytes < 200).
-            chunkBytes.ShouldBeLessThanOrEqualTo(220);
+            chunkBytes.ShouldBeLessThanOrEqualTo(budget);
         }
     }
 
