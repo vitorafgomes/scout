@@ -15,7 +15,7 @@ internal sealed class FakeIngestor : IIngestor
     public FakeIngestor(IEnumerable<RawFile> files)
     {
         ArgumentNullException.ThrowIfNull(files);
-        _files = files.ToArray();
+        _files = Array.AsReadOnly(files.ToArray());
     }
 
     public Task<IReadOnlyList<RawFile>> IngestAsync(CancellationToken cancellationToken)
