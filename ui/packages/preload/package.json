@@ -5,8 +5,8 @@
   "main": "./src/preload.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "exit 0",
-    "test": "exit 0",
+    "build": "echo \"noop — implemented in a later PR\" && exit 0",
+    "test": "echo \"noop — implemented in a later PR\" && exit 0",
     "dev": "echo 'not yet'"
   },
   "dependencies": {
@@ -16,7 +16,7 @@
     "electron": "^41.3.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "typescript": "^6.0.3"
   }
 }

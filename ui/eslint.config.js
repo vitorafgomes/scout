@@ -11,7 +11,7 @@ export default tseslint.config(
   },
   ...tseslint.configs.recommended,
   {
-    files: ["packages/**/*.ts", "packages/**/*.mts", "e2e/**/*.ts"],
+    files: ["packages/**/*.ts", "packages/**/*.mts", "e2e/**/*.ts", "e2e/**/*.mts"],
     languageOptions: {
       parserOptions: {
         projectService: true,

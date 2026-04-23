@@ -33,11 +33,17 @@ bun install
 bun install          # install all workspace deps
 bun run lint         # ESLint across packages/
 bun run typecheck    # tsc --noEmit per package
-bun run test         # run all tests
-bun run format       # Prettier check
+bun run test         # no-op placeholder — real behaviour lands in a later PR
+bun run build        # no-op placeholder — real behaviour lands in a later PR
+bun run format       # Prettier check (validates formatting; no code generated yet)
 bun run format:write # Prettier write
 bun run clean        # remove dist/ and node_modules/
 ```
+
+Bun is the runtime for all workspace commands. Node is only required on the host
+for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
+if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
+do not need Node at all.
 
 ## Architecture
 

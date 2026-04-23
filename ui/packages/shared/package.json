@@ -9,8 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "bun build src/index.ts --outdir dist --target=node",
-    "test": "exit 0"
+    "test": "echo \"noop — implemented in a later PR\" && exit 0"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

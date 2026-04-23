@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "typecheck": "exit 0",
-    "build": "exit 0",
-    "test": "exit 0",
-    "lint": "exit 0"
+    "typecheck": "echo \"noop — implemented in a later PR\" && exit 0",
+    "build": "echo \"noop — implemented in a later PR\" && exit 0",
+    "test": "echo \"noop — implemented in a later PR\" && exit 0",
+    "lint": "echo \"noop — implemented in a later PR\" && exit 0"
   }
 }
