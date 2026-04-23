@@ -19,13 +19,13 @@ bun install
 
 ## Workspace packages
 
-| Package                   | Description                              |
-| ------------------------- | ---------------------------------------- |
-| `@scout/shared`           | Shared TypeScript types and IPC contract |
-| `@scout/desktop-main`     | Electron main process                    |
-| `@scout/desktop-preload`  | Electron preload script (contextBridge)  |
-| `@scout/desktop-renderer` | Angular 21 renderer (added in PR 5)      |
-| `@scout/desktop-e2e`      | Playwright E2E tests (added in PR 13)    |
+| Package                   | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| `@scout/shared`           | Shared TypeScript types and IPC contract            |
+| `@scout/desktop-main`     | Electron main process                               |
+| `@scout/desktop-preload`  | Electron preload script (contextBridge)             |
+| `@scout/desktop-renderer` | Angular 21 renderer (standalone, Signals, zoneless) |
+| `@scout/desktop-e2e`      | Playwright E2E tests (added in PR 13)               |
 
 ## Commands
 
@@ -33,17 +33,27 @@ bun install
 bun install          # install all workspace deps
 bun run lint         # ESLint across packages/
 bun run typecheck    # tsc --noEmit per package
-bun run test         # unit tests across shared, main, preload
-bun run build        # no-op placeholder — real behaviour lands in a later PR
+bun run test         # unit tests across shared, main, preload, renderer
+bun run build        # build shared, preload, renderer, main in order
 bun run format       # Prettier check (validates formatting; no code generated yet)
 bun run format:write # Prettier write
 bun run clean        # remove dist/ and node_modules/
 ```
 
-Build ordering: run `bun run --cwd packages/preload build` before `dev:main`. The
-main process resolves the preload from `packages/preload/dist/preload.cjs` at
-startup; without the built artifact the window opens without the `window.scout`
-bridge (a warning is logged but Electron still launches).
+Build ordering: run `bun run --cwd packages/preload build`, then
+`bun run --cwd packages/renderer build`, then `bun run --cwd packages/main build`
+before `dev:main`. The main process resolves the preload from
+`packages/preload/dist/preload.cjs` and the renderer index from
+`packages/renderer/dist/browser/index.html` at startup; without the built
+artifacts the window opens without the `window.scout` bridge or with a blank
+page (a warning is logged but Electron still launches). `bun run build` at the
+workspace root chains the four builds in the correct order.
+
+The renderer is Angular 21 with standalone components, Signals, zoneless change
+detection, and the new control flow (`@if` / `@for`). Router runs in hash mode
+so the bundled `index.html` loads correctly from the filesystem. Tests use
+Vitest via `@analogjs/vite-plugin-angular`; zone.js is intentionally absent —
+`TestBed` is configured with `provideZonelessChangeDetection()` per test.
 
 Bun is the runtime for all workspace commands. Node is only required on the host
 for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`

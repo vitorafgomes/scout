@@ -11,12 +11,12 @@
     "bun": ">=1.2.0"
   },
   "scripts": {
-    "typecheck": "for pkg in packages/shared packages/main packages/preload; do echo \"--- typechecking $pkg ---\" && bun run --cwd $pkg typecheck; done",
+    "typecheck": "for pkg in packages/shared packages/main packages/preload packages/renderer; do echo \"--- typechecking $pkg ---\" && bun run --cwd $pkg typecheck || exit 1; done",
     "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/*.ts\" \"packages/**/*.mts\"",
     "format": "prettier --check \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
     "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
-    "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test",
-    "build": "echo \"noop — implemented in a later PR\" && exit 0",
+    "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test && bun run --cwd packages/renderer test",
+    "build": "bun run --cwd packages/shared build 2>/dev/null; bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
     "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true"
   },
   "devDependencies": {
