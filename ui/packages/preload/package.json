@@ -2,11 +2,10 @@
   "name": "@scout/desktop-preload",
   "version": "0.0.0",
   "private": true,
-  "main": "./src/preload.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "echo \"noop — implemented in a later PR\" && exit 0",
-    "test": "echo \"noop — implemented in a later PR\" && exit 0",
+    "build": "bun build src/preload.ts --target=node --format=cjs --outfile dist/preload.cjs --external electron",
+    "test": "bun test",
     "dev": "echo 'not yet'"
   },
   "dependencies": {
@@ -16,6 +15,7 @@
     "electron": "^41.3.0"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/node": "^24.0.0",
     "typescript": "^6.0.3"
   }
