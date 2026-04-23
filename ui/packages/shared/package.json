@@ -1,0 +1,18 @@
+{
+  "name": "@scout/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/index.ts --outdir dist --target=node",
+    "test": "exit 0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

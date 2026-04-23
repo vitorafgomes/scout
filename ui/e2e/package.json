@@ -1,0 +1,11 @@
+{
+  "name": "@scout/desktop-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "test": "exit 0",
+    "lint": "exit 0"
+  }
+}

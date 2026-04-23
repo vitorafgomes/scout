@@ -1,0 +1,22 @@
+{
+  "name": "@scout/desktop-preload",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/preload.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "exit 0",
+    "test": "exit 0",
+    "dev": "echo 'not yet'"
+  },
+  "dependencies": {
+    "@scout/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "electron": "^41.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3"
+  }
+}
