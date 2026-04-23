@@ -5,6 +5,7 @@ dist/
 bun.lockb
 .env*
 build/worker/
+build/dist/
 .angular/
 out/
 release/

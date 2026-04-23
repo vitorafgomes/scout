@@ -1,0 +1,79 @@
+# Icons under build/icons/ are placeholders; replace with final Scout logo before 1.0.
+# Builds are UNSIGNED — do not distribute as official releases without code signing.
+
+appId: com.scout.desktop
+productName: Scout Desktop
+copyright: Scout OSS contributors
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+electronVersion: "41.3.0"
+
+extraMetadata:
+  main: packages/main/dist/main.js
+  description: Scout Desktop — provisioning wizard for the Scout bot
+  homepage: https://github.com/vitorafgomes/scout
+  author: Scout OSS contributors
+  license: MIT
+
+directories:
+  output: build/dist
+  buildResources: build
+
+files:
+  - packages/main/dist/**
+  - packages/main/resources/**
+  - packages/preload/dist/**
+  - packages/renderer/dist/**
+  - package.json
+  - "!**/node_modules/**/{test,__tests__,tests,*.md,*.map}"
+  - "!**/*.ts"
+
+asar: true
+asarUnpack:
+  - packages/main/resources/**
+
+extraResources:
+  - from: build/worker
+    to: worker
+    filter:
+      - "**/*"
+
+electronLanguages:
+  - en-US
+
+mac:
+  category: public.app-category.developer-tools
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  icon: build/icons/icon.icns
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icons/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+linux:
+  category: Development
+  maintainer: Scout OSS contributors <noreply@example.com>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: build/icons
