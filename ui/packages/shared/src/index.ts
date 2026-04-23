@@ -1,1 +1,52 @@
-export {};
+export {
+  CLIENT_KINDS,
+  assertNeverClient,
+  type ClientKind,
+  type DetectionMethod,
+  type DetectedClient,
+} from './client-kinds.js';
+
+export {
+  ScoutError,
+  VaultUnavailableError,
+  OAuthStateMismatchError,
+  OAuthUserCancelledError,
+  OAuthLoopbackPortInUseError,
+  DiscordTokenExchangeError,
+  WorkerBinaryMissingError,
+  WorkerSpawnError,
+  ExternalHostNotAllowedError,
+  serializeError,
+  deserializeError,
+  type SerializedScoutError,
+} from './errors.js';
+
+export {
+  CHANNEL,
+  type ChannelName,
+  type VaultKey,
+  type DetectClientsResponse,
+  type DiscordBuildOAuthUrlRequest,
+  type DiscordBuildOAuthUrlResponse,
+  type DiscordStartOAuthInstallRequest,
+  type DiscordStartOAuthInstallResponse,
+  type DiscordOAuthResult,
+  type VaultStoreRequest,
+  type VaultHasRequest,
+  type VaultHasResponse,
+  type VaultDeleteRequest,
+  type VaultDeleteResponse,
+  type WorkerStartRequest,
+  type WorkerStartResponse,
+  type WorkerStopRequest,
+  type WorkerStopResponse,
+  type WorkerStatus,
+  type WorkerStatusResponse,
+  type WorkerEvent,
+  type AppOpenExternalRequest,
+  type AppGetVersionResponse,
+  type AppQuitRequest,
+  type AppQuitResponse,
+  type DiagnosticsExportResponse,
+  type ScoutBridge,
+} from './ipc-contract.js';
