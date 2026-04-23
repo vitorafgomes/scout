@@ -1,0 +1,23 @@
+{
+  "name": "@scout/desktop-main",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/main.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "echo \"noop — implemented in a later PR\" && exit 0",
+    "test": "echo \"noop — implemented in a later PR\" && exit 0",
+    "dev": "echo 'not yet'",
+    "rebuild": "electron-rebuild --only-needed"
+  },
+  "dependencies": {
+    "@scout/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/node": "^24.0.0",
+    "electron": "^41.3.0",
+    "typescript": "^6.0.3"
+  }
+}

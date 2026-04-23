@@ -1,0 +1,27 @@
+{
+  "name": "@scout/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "e2e"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "scripts": {
+    "typecheck": "for pkg in packages/shared packages/main packages/preload; do echo \"--- typechecking $pkg ---\" && bun run --cwd $pkg typecheck; done",
+    "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/*.ts\" \"packages/**/*.mts\"",
+    "format": "prettier --check \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
+    "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
+    "test": "echo \"noop — implemented in a later PR\" && exit 0",
+    "build": "echo \"noop — implemented in a later PR\" && exit 0",
+    "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true"
+  },
+  "devDependencies": {
+    "eslint": "^10.2.1",
+    "prettier": "^3.8.3",
+    "typescript-eslint": "^8.59.0"
+  }
+}

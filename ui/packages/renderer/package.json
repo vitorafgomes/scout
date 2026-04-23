@@ -1,0 +1,11 @@
+{
+  "name": "@scout/desktop-renderer",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "echo 'angular added in PR 5' && exit 0",
+    "build": "exit 0",
+    "test": "exit 0",
+    "lint": "exit 0"
+  }
+}
