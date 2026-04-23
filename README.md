@@ -19,6 +19,36 @@ Pre-alpha. Design in progress.
 - Pluggable chat adapters (Discord first, then Slack, then Teams)
 - Pluggable LLM providers (Ollama local, Azure OpenAI, OpenAI)
 
+## CodeQA plugin (optional)
+
+CodeQA runs retrieval-augmented generation over one configured GitHub
+repository so Scout can answer natural-language questions about the code.
+The pipeline is strictly read-only: Scout pulls file contents, builds an
+in-memory vector index, and composes answers with citations.
+
+Minimum configuration under `Scout:Plugins:CodeQA:`:
+
+- `Repository:Owner`, `Repository:Name`, `Repository:Branch`
+- `Embeddings:Model` (defaults to `nomic-embed-text` on Ollama)
+
+GitHub PAT setup:
+
+- Create a fine-grained personal access token with `Contents: Read` only.
+- Any write-scope token violates Scout's read-only invariant — never use one.
+- Export the token as `SCOUT_GITHUB_TOKEN` before starting the worker.
+
+One-shot reindex (useful for debugging; the worker also auto-indexes on
+startup when configured):
+
+```
+dotnet run --project src/Scout.Host.Worker -- index
+```
+
+Example Discord interaction: `@Scout where is the retriever wired?`
+
+Architecture and design rationale live at
+`obsidian-vault/scout/05-operations/plans/2026-04-21-plugin-code-qa.md`.
+
 ## Install / run / test
 
 Not available yet. See the design docs.
