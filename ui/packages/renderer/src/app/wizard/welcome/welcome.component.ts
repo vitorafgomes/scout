@@ -7,9 +7,11 @@ import {
   OnInit,
   signal,
 } from '@angular/core';
+import { Router } from '@angular/router';
 import { CLIENT_KINDS, ScoutError, type DetectedClient } from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
+import { WizardStore } from '../../core/wizard.store';
 
 @Component({
   selector: 'sc-welcome',
@@ -35,15 +37,25 @@ import { ScoutBridgeService } from '../../core/scout-bridge';
           }
         }
       </section>
+      <div class="cta-row">
+        <button
+          type="button"
+          class="primary-cta"
+          data-test="provision-discord"
+          [disabled]="loading()"
+          (click)="startDiscordProvisioning()"
+        >
+          Provision Discord
+        </button>
+      </div>
     </main>
   `,
   styles: [
     `
       :host {
         display: block;
-        min-height: 100vh;
-        background: #111111;
-        color: #ffffff;
+        background: #0f1117;
+        color: #e4e8f0;
         font-family:
           Inter,
           -apple-system,
@@ -84,11 +96,36 @@ import { ScoutBridgeService } from '../../core/scout-bridge';
       .loading {
         color: #7b8299;
       }
+      .cta-row {
+        margin-top: 32px;
+        display: flex;
+        justify-content: flex-start;
+      }
+      .primary-cta {
+        background: #7c5cff;
+        color: #0f1117;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 20px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .primary-cta:hover:not(:disabled) {
+        background: #9378ff;
+      }
+      .primary-cta:disabled {
+        background: #3d4258;
+        color: #7b8299;
+        cursor: not-allowed;
+      }
     `,
   ],
 })
 export class WelcomeComponent implements OnInit {
   private readonly bridge = inject(ScoutBridgeService);
+  private readonly router = inject(Router);
+  private readonly wizard = inject(WizardStore);
 
   readonly loading = signal<boolean>(true);
   readonly clients = signal<readonly DetectedClient[]>([]);
@@ -101,7 +138,13 @@ export class WelcomeComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.wizard.goTo('welcome');
     void this.runDetection();
+  }
+
+  startDiscordProvisioning(): void {
+    this.wizard.goTo('provision');
+    void this.router.navigateByUrl('/provision');
   }
 
   private async runDetection(): Promise<void> {

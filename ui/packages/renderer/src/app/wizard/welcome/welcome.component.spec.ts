@@ -1,9 +1,11 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { ScoutError, type DetectClientsResponse, type DetectedClient } from '@scout/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
+import { WizardStore } from '../../core/wizard.store';
 import { WelcomeComponent } from './welcome.component';
 
 type ResolvablePromise<T> = {
@@ -38,6 +40,7 @@ async function createComponent(bridge: FakeBridge): Promise<ComponentFixture<Wel
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
+      provideRouter([{ path: 'provision', children: [] }]),
       { provide: ScoutBridgeService, useValue: bridge },
     ],
   });
@@ -123,5 +126,26 @@ describe('WelcomeComponent', () => {
     expect(loadingEl?.textContent?.trim()).toBe('Detecting clients...');
     expect(host.querySelector('.platform-card')).toBeNull();
     expect(host.querySelector('.error')).toBeNull();
+  });
+
+  it('enables Provision Discord button after detection resolves and navigates to /provision on click', async () => {
+    const bridge = new FakeBridge();
+    const fixture = await createComponent(bridge);
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigateByUrl');
+
+    const host = fixture.nativeElement as HTMLElement;
+    const cta = host.querySelector('[data-test="provision-discord"]') as HTMLButtonElement;
+    expect(cta).not.toBeNull();
+    expect(cta.disabled).toBe(true);
+
+    bridge.pending?.resolve({ clients: [] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(cta.disabled).toBe(false);
+
+    cta.click();
+    expect(nav).toHaveBeenCalledWith('/provision');
+    expect(TestBed.inject(WizardStore).currentStep()).toBe('provision');
   });
 });
