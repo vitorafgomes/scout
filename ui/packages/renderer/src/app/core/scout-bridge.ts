@@ -103,6 +103,22 @@ export class ScoutBridgeService {
   async discordCancelOAuthInstall(): Promise<void> {
     return this.bridge.discordCancelOAuthInstall();
   }
+
+  async workerStart(): Promise<WorkerStartResponse> {
+    return this.bridge.workerStart();
+  }
+
+  async workerStop(): Promise<WorkerStopResponse> {
+    return this.bridge.workerStop();
+  }
+
+  async workerStatus(): Promise<WorkerStatusResponse> {
+    return this.bridge.workerStatus();
+  }
+
+  onWorkerEvent(listener: (event: WorkerEvent) => void): () => void {
+    return this.bridge.onWorkerEvent(listener);
+  }
 }
 
 export const SCOUT_BRIDGE_NOT_AVAILABLE_CODE = BRIDGE_NOT_AVAILABLE_CODE;

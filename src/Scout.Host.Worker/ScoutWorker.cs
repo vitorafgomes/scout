@@ -36,6 +36,13 @@ public sealed class ScoutWorker : BackgroundService
         try
         {
             await _adapter.StartAsync(_scoutHost.HandleAsync, stoppingToken).ConfigureAwait(false);
+
+            // Signal operational readiness to the Electron supervisor after the
+            // chat adapter has connected to the gateway. The supervisor waits for
+            // this line on stdout before transitioning the worker state to 'running'.
+            Console.WriteLine("SCOUT_READY");
+            Console.Out.Flush();
+
             await Task.Delay(Timeout.Infinite, stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

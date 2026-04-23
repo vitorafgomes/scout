@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createLogger } from './util/logger.js';
 import { createMainWindow } from './browser-window-factory.js';
@@ -7,10 +8,15 @@ import { registerDetectHandler } from './ipc/detect.js';
 import { registerVaultHandlers } from './ipc/vault.js';
 import { registerAppHandlers } from './ipc/app.js';
 import { registerDiscordHandlers } from './ipc/discord.js';
+import { registerWorkerHandlers, attachBrowserWindow } from './ipc/worker.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
 import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
+import { createSupervisor } from './worker/supervisor.js';
+import { resolveWorkerBinary } from './worker/resolve-binary.js';
+import { VaultUnavailableError } from '@scout/shared';
+import type { Supervisor } from './worker/supervisor.js';
 
 const logger = createLogger('main');
 
@@ -45,10 +51,12 @@ const CSP_DEV = [
 ].join('; ');
 
 let mainWindow: BrowserWindow | null = null;
+let supervisor: Supervisor | null = null;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 let unregisterApp: (() => void) | null = null;
 let unregisterDiscord: (() => void) | null = null;
+let unregisterWorker: (() => void) | null = null;
 
 app
   .whenReady()
@@ -79,6 +87,41 @@ app
         findFreePort,
       },
       logger.child({ module: 'discord' }),
+    );
+
+    supervisor = createSupervisor({
+      spawn,
+      logger: logger.child({ module: 'supervisor' }),
+      resolveBinary: () =>
+        resolveWorkerBinary({
+          app,
+          resourcesPath: process.resourcesPath,
+          platform: process.platform,
+          arch: process.arch,
+          cwd: __dirname,
+        }),
+      buildEnv: async (): Promise<Record<string, string>> => {
+        const token = await vault.get('discord.bot-token');
+        if (token === null) {
+          throw new VaultUnavailableError(
+            'discord.bot-token not found in vault — complete the Discord wizard first',
+          );
+        }
+
+        // env is passed to spawn; never logged
+        return {
+          SCOUT__CHATADAPTER: 'Discord',
+          SCOUT__LLMPROVIDER: 'Ollama',
+          DOTNET_ENVIRONMENT: 'Production',
+          SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
+        };
+      },
+    });
+
+    unregisterWorker = registerWorkerHandlers(
+      ipcMain,
+      supervisor,
+      logger.child({ module: 'worker' }),
     );
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -120,6 +163,8 @@ app
       ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
     });
 
+    attachBrowserWindow(mainWindow, supervisor);
+
     logger.info('main window created', { dev: DEV });
   })
   .catch((err: unknown) => {
@@ -131,12 +176,39 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   logger.info('before-quit');
-  unregisterDiscord?.();
-  unregisterApp?.();
-  unregisterDetect?.();
-  unregisterVault?.();
+
+  const runningWorker = supervisor;
+  if (
+    runningWorker === null ||
+    runningWorker.status.state === 'stopped' ||
+    runningWorker.status.state === 'idle'
+  ) {
+    // No running worker — unregister synchronously and allow the quit.
+    unregisterWorker?.();
+    unregisterDiscord?.();
+    unregisterApp?.();
+    unregisterDetect?.();
+    unregisterVault?.();
+    return;
+  }
+
+  // Worker is running; stop it gracefully before allowing the quit.
+  event.preventDefault();
+  void runningWorker
+    .stop()
+    .catch((err: unknown) => {
+      logger.warn('before-quit: worker stop failed', { err: String(err) });
+    })
+    .finally(() => {
+      unregisterWorker?.();
+      unregisterDiscord?.();
+      unregisterApp?.();
+      unregisterDetect?.();
+      unregisterVault?.();
+      app.exit(0);
+    });
 });
 
 app.on('second-instance', () => {

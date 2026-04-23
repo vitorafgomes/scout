@@ -30,14 +30,17 @@ bun install
 ## Commands
 
 ```sh
-bun install          # install all workspace deps
-bun run lint         # ESLint across packages/
-bun run typecheck    # tsc --noEmit per package
-bun run test         # unit tests across shared, main, preload, renderer
-bun run build        # build shared, preload, renderer, main in order
-bun run format       # Prettier check (validates formatting; no code generated yet)
-bun run format:write # Prettier write
-bun run clean        # remove dist/ and node_modules/
+bun install              # install all workspace deps
+bun run lint             # ESLint across packages/
+bun run typecheck        # tsc --noEmit per package
+bun run test             # unit tests across shared, main, preload, renderer
+bun run build            # build shared, preload, renderer, main in order
+bun run format           # Prettier check
+bun run format:write     # Prettier write
+bun run clean            # remove dist/ and node_modules/
+bun run worker:publish   # dotnet publish Scout.Host.Worker for the current RID
+                         # Output: ui/build/worker/<rid>/Scout.Host.Worker[.exe]
+                         # Windows: use build/scripts/publish-worker.ps1 directly
 ```
 
 Build ordering: run `bun run --cwd packages/preload build`, then
