@@ -40,7 +40,7 @@ GitHub PAT setup:
 One-shot reindex (useful for debugging; the worker also auto-indexes on
 startup when configured):
 
-```
+```bash
 dotnet run --project src/Scout.Host.Worker -- index
 ```
 

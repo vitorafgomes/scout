@@ -12,12 +12,16 @@ namespace Scout.Host.Worker;
 /// any failure — a broken index must never prevent the bot from coming
 /// online. When <see cref="RepositoryOptions.Owner"/> is empty the whole
 /// step is skipped so a vanilla <c>appsettings.json</c> stays inert.
+/// Shutdown cancels the ingest via a dedicated CTS so the background task
+/// stops cleanly instead of running against disposed dependencies.
 /// </summary>
 internal sealed class CodeQAStartupIndexer : IHostedService
 {
     private readonly IndexingService _indexingService;
     private readonly CodeQAOptions _options;
     private readonly ILogger<CodeQAStartupIndexer> _logger;
+    private readonly CancellationTokenSource _cts = new();
+    private Task? _indexTask;
 
     public CodeQAStartupIndexer(
         IndexingService indexingService,
@@ -41,22 +45,50 @@ internal sealed class CodeQAStartupIndexer : IHostedService
         _logger.LogInformation("Starting CodeQA startup index");
 
         // Fire-and-forget so adapter startup is not blocked by a long
-        // ingest. CancellationToken from StartAsync is not honoured past
-        // this point because the ingest should survive host-startup
-        // cancellation windows and run to completion or log failure.
-        _ = Task.Run(RunOnceAsync, CancellationToken.None);
+        // ingest. The task handle is retained so StopAsync can await it
+        // and the dedicated CTS so shutdown can cancel cleanly.
+        _indexTask = Task.Run(() => RunOnceAsync(_cts.Token), CancellationToken.None);
 
         return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            _cts.Cancel();
 
-    private async Task RunOnceAsync()
+            if (_indexTask is { } task)
+            {
+                try
+                {
+                    await Task
+                        .WhenAny(task, Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken))
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Host shutdown timeout elapsed before the ingest
+                    // finished draining; nothing we can do here.
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "CodeQA startup index did not stop cleanly");
+                }
+            }
+        }
+        finally
+        {
+            _cts.Dispose();
+        }
+    }
+
+    private async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
             var summary = await _indexingService
-                .RunAsync(CancellationToken.None)
+                .RunAsync(cancellationToken)
                 .ConfigureAwait(false);
             _logger.LogInformation(
                 "CodeQA startup index completed: files={Files}, chunks={Chunks}, vectors={Vectors}, elapsed={Elapsed}",
@@ -64,6 +96,10 @@ internal sealed class CodeQAStartupIndexer : IHostedService
                 summary.ChunksProduced,
                 summary.VectorsWritten,
                 summary.Elapsed);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("CodeQA startup index cancelled during shutdown.");
         }
         catch (Exception ex)
         {

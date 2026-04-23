@@ -16,13 +16,15 @@ public class OctokitGitHubTreeClientMissingTokenTests
 {
     private const string TokenEnvVar = "SCOUT_GITHUB_TOKEN";
 
-    [Fact]
-    public void Ctor_throws_InvalidOperationException_when_env_var_is_empty()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void Ctor_throws_InvalidOperationException_when_env_var_is_missing_or_empty(string? value)
     {
         var original = Environment.GetEnvironmentVariable(TokenEnvVar);
         try
         {
-            Environment.SetEnvironmentVariable(TokenEnvVar, null);
+            Environment.SetEnvironmentVariable(TokenEnvVar, value);
 
             var options = Options.Create(new CodeQAOptions
             {
