@@ -1,10 +1,13 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { createLogger } from './util/logger.js';
 import { createMainWindow } from './browser-window-factory.js';
 import { registerDetectHandler } from './ipc/detect.js';
 import { registerVaultHandlers } from './ipc/vault.js';
+import { registerAppHandlers } from './ipc/app.js';
+import { registerDiscordHandlers } from './ipc/discord.js';
+import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
 import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
@@ -44,6 +47,8 @@ const CSP_DEV = [
 let mainWindow: BrowserWindow | null = null;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
+let unregisterApp: (() => void) | null = null;
+let unregisterDiscord: (() => void) | null = null;
 
 app
   .whenReady()
@@ -60,6 +65,20 @@ app
       ipcMain,
       createProductionDeps(),
       logger.child({ module: 'detect' }),
+    );
+
+    unregisterApp = registerAppHandlers(ipcMain, shell, app, logger.child({ module: 'app' }));
+
+    unregisterDiscord = registerDiscordHandlers(
+      ipcMain,
+      {
+        awaitCallback,
+        fetch: globalThis.fetch,
+        shell,
+        logger: logger.child({ module: 'discord' }),
+        findFreePort,
+      },
+      logger.child({ module: 'discord' }),
     );
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -114,6 +133,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   logger.info('before-quit');
+  unregisterDiscord?.();
+  unregisterApp?.();
   unregisterDetect?.();
   unregisterVault?.();
 });
