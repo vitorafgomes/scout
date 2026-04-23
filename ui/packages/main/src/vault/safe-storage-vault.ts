@@ -26,6 +26,7 @@ export interface Vault {
   isAvailable(): boolean;
   availability(): VaultAvailability;
   store(key: VaultKey, value: string): Promise<void>;
+  get(key: VaultKey): Promise<string | null>;
   has(key: VaultKey): Promise<boolean>;
   delete(key: VaultKey): Promise<boolean>;
 }
@@ -101,6 +102,19 @@ export function createVault(deps: VaultDeps): Vault {
         entries[key] = encrypted.toString('base64');
         await persistEntries(entries);
         logger.info('vault: stored key', { key });
+      });
+    },
+
+    get(key: VaultKey): Promise<string | null> {
+      if (!safeStorage.isEncryptionAvailable()) {
+        return Promise.reject(new VaultUnavailableError());
+      }
+      return enqueue(async (): Promise<string | null> => {
+        const entries = await loadEntries();
+        const encoded = entries[key];
+        if (encoded === undefined) return null;
+        const decrypted = safeStorage.decryptString(Buffer.from(encoded, 'base64'));
+        return decrypted;
       });
     },
 

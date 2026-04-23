@@ -1,0 +1,84 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Publishes Scout.Host.Worker as a self-contained single-file binary for the
+    requested RID and places the output under ui/build/worker/<RID>/.
+
+.PARAMETER RID
+    Target runtime identifier. Defaults to win-x64 when running on Windows.
+    Supported values: linux-x64, osx-arm64, osx-x64, win-x64.
+#>
+param(
+    [string]$RID = ""
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$SupportedRids = @("linux-x64", "osx-arm64", "osx-x64", "win-x64")
+
+function Detect-Rid {
+    $os = [System.Runtime.InteropServices.RuntimeInformation]::OSDescription
+    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+
+    if ($IsWindows -or $os -like "*Windows*") {
+        return "win-x64"
+    } elseif ($IsMacOS -or $os -like "*Darwin*") {
+        if ($arch -eq "Arm64") { return "osx-arm64" }
+        return "osx-x64"
+    } else {
+        return "linux-x64"
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($RID)) {
+    $RID = Detect-Rid
+}
+
+if ($SupportedRids -notcontains $RID) {
+    Write-Error "Unsupported RID '$RID'. Supported: $($SupportedRids -join ', ')"
+    exit 1
+}
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot  = (Resolve-Path (Join-Path $ScriptDir "../../..")).Path
+$UiRoot    = Join-Path $RepoRoot "ui"
+$Csproj    = Join-Path $RepoRoot "src\Scout.Host.Worker\Scout.Host.Worker.csproj"
+$OutputDir = Join-Path $UiRoot "build\worker\$RID"
+
+Write-Host "publishing Scout.Host.Worker for $RID -> $OutputDir"
+
+& dotnet publish $Csproj `
+    --configuration Release `
+    --runtime $RID `
+    --self-contained true `
+    -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
+    --output $OutputDir
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "dotnet publish failed with exit code $LASTEXITCODE"
+    exit $LASTEXITCODE
+}
+
+if ($RID -eq "win-x64") {
+    $BinaryName = "Scout.Host.Worker.exe"
+} else {
+    $BinaryName = "Scout.Host.Worker"
+}
+
+$Binary = Join-Path $OutputDir $BinaryName
+
+if (-not (Test-Path $Binary)) {
+    Write-Error "Expected binary not found at $Binary"
+    exit 1
+}
+
+$Size = (Get-Item $Binary).Length
+if ($Size -eq 0) {
+    Write-Error "Binary at $Binary has zero size"
+    exit 1
+}
+
+Write-Host "ok: $Binary ($Size bytes)"

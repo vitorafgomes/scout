@@ -17,7 +17,8 @@
     "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
     "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test && bun run --cwd packages/renderer test",
     "build": "bun run --cwd packages/shared build 2>/dev/null; bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
-    "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true"
+    "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true",
+    "worker:publish": "bash build/scripts/publish-worker.sh"
   },
   "devDependencies": {
     "eslint": "^10.2.1",
