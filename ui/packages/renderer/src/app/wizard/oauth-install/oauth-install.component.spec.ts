@@ -9,6 +9,7 @@ import {
 } from '@scout/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PersistentStateService } from '../../core/persistent-state';
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
 import { OAUTH_INSTALL_PERMISSIONS, OAuthInstallComponent } from './oauth-install.component';
@@ -34,11 +35,24 @@ function makeBridge(overrides: Partial<Record<string, unknown>> = {}) {
     discordStartOAuthInstall: vi.fn(),
     discordCancelOAuthInstall: vi.fn().mockResolvedValue(undefined),
     vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
+    vaultStore: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as ScoutBridgeService;
 }
 
-async function setup(bridge: ScoutBridgeService, clientId: string | null) {
+function makePersistentStub() {
+  return {
+    get: vi.fn().mockReturnValue(null),
+    set: vi.fn(),
+    clear: vi.fn(),
+  } as unknown as PersistentStateService;
+}
+
+async function setup(
+  bridge: ScoutBridgeService,
+  clientId: string | null,
+  persistent: PersistentStateService = makePersistentStub(),
+) {
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
@@ -48,6 +62,7 @@ async function setup(bridge: ScoutBridgeService, clientId: string | null) {
         { path: 'launch', children: [] },
       ]),
       { provide: ScoutBridgeService, useValue: bridge },
+      { provide: PersistentStateService, useValue: persistent },
     ],
   });
   const store = TestBed.inject(WizardStore);
@@ -91,6 +106,9 @@ describe('OAuthInstallComponent', () => {
     const nav = vi.spyOn(router, 'navigateByUrl');
 
     gate.resolve({ guildId: 'g42', guildName: 'Scout Dev' });
+    // Drain microtasks: runInstall awaits two vaultStore resolutions before
+    // transitioning to 'success'.
+    for (let i = 0; i < 5; i++) await Promise.resolve();
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -102,6 +120,31 @@ describe('OAuthInstallComponent', () => {
     expect(nav).toHaveBeenCalledWith('/launch');
   });
 
+  it('persists guild-id, guild-name in the vault and mirrors state to PersistentStateService', async () => {
+    const gate = createResolvable<{ guildId: string; guildName: string }>();
+    const bridge = makeBridge({
+      discordStartOAuthInstall: vi.fn().mockReturnValue(gate.promise),
+    });
+    const persistent = makePersistentStub();
+    const fixture = await setup(bridge, '1234567890', persistent);
+
+    gate.resolve({ guildId: 'g42', guildName: 'Scout Dev' });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(bridge.vaultStore).toHaveBeenCalledWith({ key: 'discord.guild-id', value: 'g42' });
+    expect(bridge.vaultStore).toHaveBeenCalledWith({
+      key: 'discord.guild-name',
+      value: 'Scout Dev',
+    });
+    expect(persistent.set).toHaveBeenCalledWith({
+      clientId: '1234567890',
+      guildId: 'g42',
+      guildName: 'Scout Dev',
+    });
+  });
+
   it('redirects to / when no clientId is set in the store', async () => {
     const bridge = makeBridge();
     TestBed.configureTestingModule({
@@ -109,6 +152,7 @@ describe('OAuthInstallComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([{ path: '', children: [] }]),
         { provide: ScoutBridgeService, useValue: bridge },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
       ],
     });
     const router = TestBed.inject(Router);

@@ -91,8 +91,9 @@ function formatUptime(startedAt: string | undefined): string {
             Restart
           </button>
         }
-        <button type="button" class="ghost" data-test="back-home" (click)="backHome()">
-          Back to home
+        <button type="button" class="ghost" data-test="back-home" (click)="backHome()">Home</button>
+        <button type="button" class="destructive" data-test="reprovision" (click)="reprovision()">
+          Reprovision
         </button>
       </div>
     </main>
@@ -254,6 +255,19 @@ function formatUptime(startedAt: string | undefined): string {
         color: #8fa3c0;
         margin: 0;
       }
+      .destructive {
+        background: transparent;
+        color: #f07070;
+        border: 1px solid #3d1a1a;
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .destructive:hover {
+        background: #1e0f0f;
+      }
     `,
   ],
 })
@@ -333,9 +347,17 @@ export class ReadyComponent implements OnInit, OnDestroy {
     this.logStore.copy();
   }
 
-  async backHome(): Promise<void> {
+  backHome(): void {
+    void this.router.navigateByUrl('/');
+  }
+
+  async reprovision(): Promise<void> {
+    const confirmed = window.confirm(
+      'This will disconnect Scout and forget the current Discord app. Continue?',
+    );
+    if (!confirmed) return;
     await this.stopWorker();
-    await this.wizard.reset();
+    await this.wizard.reprovision();
     void this.router.navigateByUrl('/');
   }
 }

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { Router } from '@angular/router';
 import { ScoutError, type DiscordOAuthResult } from '@scout/shared';
 
+import { PersistentStateService } from '../../core/persistent-state';
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
 
@@ -194,6 +195,7 @@ export class OAuthInstallComponent implements OnInit {
   private readonly bridge = inject(ScoutBridgeService);
   private readonly router = inject(Router);
   private readonly wizard = inject(WizardStore);
+  private readonly persistent = inject(PersistentStateService);
 
   readonly state = signal<InstallState>('idle');
   readonly errorMessage = signal<string | null>(null);
@@ -250,11 +252,30 @@ export class OAuthInstallComponent implements OnInit {
       this.state.set('exchanging');
       this.guild.set(result);
       this.wizard.setGuild({ id: result.guildId, name: result.guildName });
+      await this.persistProvisioning(clientId, result.guildId, result.guildName);
       this.state.set('success');
     } catch (err: unknown) {
       this.errorMessage.set(this.describeError(err));
       this.state.set('error');
     }
+  }
+
+  private async persistProvisioning(
+    clientId: string,
+    guildId: string,
+    guildName: string,
+  ): Promise<void> {
+    try {
+      await this.bridge.vaultStore({ key: 'discord.guild-id', value: guildId });
+    } catch {
+      // best-effort
+    }
+    try {
+      await this.bridge.vaultStore({ key: 'discord.guild-name', value: guildName });
+    } catch {
+      // best-effort
+    }
+    this.persistent.set({ clientId, guildId, guildName });
   }
 
   private describeError(err: unknown): string {

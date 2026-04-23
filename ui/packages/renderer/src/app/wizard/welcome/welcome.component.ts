@@ -1,22 +1,36 @@
-import { UpperCasePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  OnInit,
   computed,
   inject,
-  OnInit,
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { CLIENT_KINDS, ScoutError, type DetectedClient } from '@scout/shared';
 
+import { LogStore } from '../../core/log.store';
 import { ScoutBridgeService } from '../../core/scout-bridge';
-import { WizardStore } from '../../core/wizard.store';
+import { WizardStore, type WizardStep } from '../../core/wizard.store';
+import {
+  DiscordPlatformCardComponent,
+  type DiscordCardState,
+} from './discord-platform-card.component';
+
+const DISCORD_DOWNLOAD_URL = 'https://discord.com/download';
+const MAX_WORKER_FAILURES = 5;
+
+const MID_WIZARD_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
+  'provision',
+  'token',
+  'oauth',
+  'launch',
+]);
 
 @Component({
   selector: 'sc-welcome',
   standalone: true,
-  imports: [UpperCasePipe],
+  imports: [DiscordPlatformCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="welcome">
@@ -29,25 +43,17 @@ import { WizardStore } from '../../core/wizard.store';
         @if (loading()) {
           <p class="loading">Detecting clients...</p>
         } @else {
-          @for (client of visibleClients(); track client.kind) {
-            <article class="platform-card" [attr.data-kind]="client.kind">
-              <h2>{{ client.kind | uppercase }}</h2>
-              <p>{{ client.installed ? 'Installed' : 'Not installed' }}</p>
-            </article>
-          }
+          <sc-discord-platform-card
+            kind="discord"
+            [state]="discordCardState()"
+            [guildName]="guildName()"
+            (activate)="onDiscordCardActivate()"
+            (download)="onDiscordDownload()"
+          />
+          <sc-discord-platform-card kind="slack" />
+          <sc-discord-platform-card kind="teams" />
         }
       </section>
-      <div class="cta-row">
-        <button
-          type="button"
-          class="primary-cta"
-          data-test="provision-discord"
-          [disabled]="loading()"
-          (click)="startDiscordProvisioning()"
-        >
-          Provision Discord
-        </button>
-      </div>
     </main>
   `,
   styles: [
@@ -80,44 +86,11 @@ import { WizardStore } from '../../core/wizard.store';
         gap: 16px;
         margin-top: 32px;
       }
-      .platform-card {
-        border: 1px solid #252b3b;
-        border-radius: 10px;
-        padding: 16px;
-        background: #171b26;
-      }
-      .platform-card h2 {
-        font-size: 16px;
-        margin: 0 0 4px;
-      }
       .error {
         color: #d45a5a;
       }
       .loading {
         color: #7b8299;
-      }
-      .cta-row {
-        margin-top: 32px;
-        display: flex;
-        justify-content: flex-start;
-      }
-      .primary-cta {
-        background: #7c5cff;
-        color: #0f1117;
-        border: none;
-        border-radius: 6px;
-        padding: 10px 20px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .primary-cta:hover:not(:disabled) {
-        background: #9378ff;
-      }
-      .primary-cta:disabled {
-        background: #3d4258;
-        color: #7b8299;
-        cursor: not-allowed;
       }
     `,
   ],
@@ -126,25 +99,90 @@ export class WelcomeComponent implements OnInit {
   private readonly bridge = inject(ScoutBridgeService);
   private readonly router = inject(Router);
   private readonly wizard = inject(WizardStore);
+  private readonly logStore = inject(LogStore);
 
   readonly loading = signal<boolean>(true);
   readonly clients = signal<readonly DetectedClient[]>([]);
   readonly error = signal<string | null>(null);
 
-  readonly visibleClients = computed<readonly DetectedClient[]>(() => {
-    const detected = this.clients();
-    if (detected.length > 0) return detected;
-    return CLIENT_KINDS.map((kind) => ({ kind, installed: false, method: 'none' as const }));
+  private readonly discordClient = computed<DetectedClient | null>(() => {
+    const found = this.clients().find((c) => c.kind === 'discord');
+    return found ?? null;
+  });
+
+  readonly guildName = computed<string | null>(() => this.wizard.guild()?.name ?? null);
+
+  readonly discordCardState = computed<DiscordCardState>(() => {
+    const provisioned = this.wizard.hasProvisioning();
+    const step = this.wizard.currentStep();
+    const worker = this.logStore.status();
+    const discord = this.discordClient();
+    const installed = discord?.installed ?? false;
+
+    // Mid-wizard flow trumps everything: reflect that provisioning is in
+    // progress even when worker status is idle.
+    if (MID_WIZARD_STEPS.has(step)) {
+      return 'provisioning';
+    }
+
+    if (!provisioned) {
+      return installed ? 'idle' : 'not-installed';
+    }
+
+    // Provisioned branch: let the supervisor state drive the card badge.
+    const state = worker.state;
+    if (state === 'starting') return 'connecting';
+    if (state === 'running') return 'connected';
+    if (state === 'crashed' && worker.restarts >= MAX_WORKER_FAILURES) return 'error';
+    if (state === 'stopped' || state === 'crashed') return 'disconnected';
+    // state === 'idle' while provisioned: worker will be kicked; show connecting.
+    return 'connecting';
   });
 
   ngOnInit(): void {
     this.wizard.goTo('welcome');
-    void this.runDetection();
+    void this.bootstrap();
   }
 
-  startDiscordProvisioning(): void {
+  onDiscordCardActivate(): void {
+    const state = this.discordCardState();
+    if (state === 'connected' || state === 'error') {
+      void this.router.navigateByUrl('/ready');
+      return;
+    }
+    if (state === 'disconnected') {
+      void this.bridge.workerStart().catch(() => {
+        // Supervisor events drive the badge; nothing to do here.
+      });
+      return;
+    }
+    if (state === 'provisioning') {
+      void this.router.navigateByUrl(resumeUrlFor(this.wizard.currentStep()));
+      return;
+    }
     this.wizard.goTo('provision');
     void this.router.navigateByUrl('/provision');
+  }
+
+  onDiscordDownload(): void {
+    void this.bridge.appOpenExternal({ url: DISCORD_DOWNLOAD_URL }).catch(() => {
+      // Silent: the renderer cannot do better than hand off to the main process.
+    });
+  }
+
+  private async bootstrap(): Promise<void> {
+    // Detection and vault hydration run in parallel; neither gates the other.
+    void this.runDetection();
+    try {
+      const result = await this.wizard.loadFromVault();
+      if (result.hasProvisioning && this.logStore.status().state === 'idle') {
+        void this.bridge.workerStart().catch(() => {
+          // Worker status events will drive the card; nothing more to do.
+        });
+      }
+    } catch {
+      // loadFromVault already swallows internal errors; this is a belt-and-braces.
+    }
   }
 
   private async runDetection(): Promise<void> {
@@ -153,6 +191,9 @@ export class WelcomeComponent implements OnInit {
       this.clients.set(response.clients);
       this.error.set(null);
     } catch (err: unknown) {
+      this.clients.set(
+        CLIENT_KINDS.map((kind) => ({ kind, installed: false, method: 'none' as const })),
+      );
       this.error.set(this.describeError(err));
     } finally {
       this.loading.set(false);
@@ -167,5 +208,23 @@ export class WelcomeComponent implements OnInit {
       return err.message;
     }
     return 'Unknown error while detecting clients.';
+  }
+}
+
+function resumeUrlFor(step: WizardStep): string {
+  switch (step) {
+    case 'provision':
+      return '/provision';
+    case 'token':
+      return '/token';
+    case 'oauth':
+      return '/oauth';
+    case 'launch':
+      return '/launch';
+    case 'ready':
+      return '/ready';
+    case 'welcome':
+    default:
+      return '/provision';
   }
 }

@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { CLIENT_KINDS, assertNeverClient, type ClientKind } from '../src/client-kinds.js';
+import {
+  CLIENT_KINDS,
+  VAULT_KEYS,
+  assertNeverClient,
+  type ClientKind,
+  type VaultKey,
+} from '../src/client-kinds.js';
 
 describe('CLIENT_KINDS', () => {
   test('contains discord, slack, teams in stable order', () => {
@@ -22,6 +28,43 @@ describe('assertNeverClient', () => {
 
   test('throws an Error', () => {
     expect(() => assertNeverClient('x' as never)).toThrow(Error);
+  });
+});
+
+describe('VAULT_KEYS', () => {
+  test('exposes every provisioning key in stable order', () => {
+    expect(VAULT_KEYS).toEqual([
+      'discord.bot-token',
+      'discord.client-id',
+      'discord.guild-id',
+      'discord.guild-name',
+    ]);
+  });
+
+  test('is frozen to prevent mutation at runtime', () => {
+    expect(Object.isFrozen(VAULT_KEYS)).toBe(true);
+  });
+
+  test('exhaustive VaultKey switch (compile-time)', () => {
+    function describeKey(key: VaultKey): string {
+      switch (key) {
+        case 'discord.bot-token':
+          return 'token';
+        case 'discord.client-id':
+          return 'client-id';
+        case 'discord.guild-id':
+          return 'guild-id';
+        case 'discord.guild-name':
+          return 'guild-name';
+        default: {
+          const _exhaustive: never = key;
+          return _exhaustive;
+        }
+      }
+    }
+    expect(describeKey('discord.bot-token')).toBe('token');
+    expect(describeKey('discord.guild-id')).toBe('guild-id');
+    expect(describeKey('discord.guild-name')).toBe('guild-name');
   });
 });
 

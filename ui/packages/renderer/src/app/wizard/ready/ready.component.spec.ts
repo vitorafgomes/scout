@@ -191,19 +191,72 @@ describe('ReadyComponent', () => {
     expect(logStore.copy).toHaveBeenCalled();
   });
 
-  it('back-home stops the worker and navigates to /', async () => {
+  it('back-home only navigates; worker and vault are untouched', async () => {
     const { fixture, bridge } = await setup({ guildName: 'G' });
     const router = TestBed.inject(Router);
     const nav = vi.spyOn(router, 'navigateByUrl');
+    const store = TestBed.inject(WizardStore);
+    const reprovisionSpy = vi.spyOn(store, 'reprovision');
+    const resetSpy = vi.spyOn(store, 'reset');
 
     const backBtn = fixture.nativeElement.querySelector(
       '[data-test="back-home"]',
     ) as HTMLButtonElement;
+    expect(backBtn.textContent?.trim()).toBe('Home');
+
     backBtn.click();
     await fixture.whenStable();
 
-    expect(bridge.workerStop).toHaveBeenCalled();
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(bridge.vaultDelete).not.toHaveBeenCalled();
+    expect(reprovisionSpy).not.toHaveBeenCalled();
+    expect(resetSpy).not.toHaveBeenCalled();
     expect(nav).toHaveBeenCalledWith('/');
+  });
+
+  it('reprovision asks for confirmation; when confirmed, stops worker, reprovisions, navigates', async () => {
+    const { fixture, bridge } = await setup({ guildName: 'G' });
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigateByUrl');
+    const store = TestBed.inject(WizardStore);
+    const reprovisionSpy = vi.spyOn(store, 'reprovision').mockResolvedValue();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const btn = fixture.nativeElement.querySelector(
+      '[data-test="reprovision"]',
+    ) as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    btn.click();
+    await fixture.whenStable();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(reprovisionSpy).toHaveBeenCalledTimes(1);
+    expect(nav).toHaveBeenCalledWith('/');
+
+    confirmSpy.mockRestore();
+  });
+
+  it('reprovision when cancelled does nothing', async () => {
+    const { fixture, bridge } = await setup({ guildName: 'G' });
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigateByUrl');
+    const store = TestBed.inject(WizardStore);
+    const reprovisionSpy = vi.spyOn(store, 'reprovision').mockResolvedValue();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    const btn = fixture.nativeElement.querySelector(
+      '[data-test="reprovision"]',
+    ) as HTMLButtonElement;
+    btn.click();
+    await fixture.whenStable();
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(reprovisionSpy).not.toHaveBeenCalled();
+    expect(nav).not.toHaveBeenCalled();
+
+    confirmSpy.mockRestore();
   });
 
   it('crash banner is shown when state is crashed', async () => {
