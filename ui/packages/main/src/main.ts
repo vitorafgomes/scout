@@ -55,7 +55,15 @@ app
       });
     });
 
-    const indexHtmlPath = path.join(__dirname, '../resources/index.html');
+    const indexHtmlPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'renderer',
+      'dist',
+      'browser',
+      'index.html',
+    );
 
     const candidatePreloadPath = path.join(__dirname, '../../preload/dist/preload.cjs');
     let preloadPath: string | undefined;
