@@ -103,7 +103,13 @@ describe('WelcomeComponent', () => {
     const errorEl = host.querySelector('.error');
     expect(errorEl).not.toBeNull();
     expect(errorEl?.textContent ?? '').toContain('bridge/not-available');
-    expect(host.querySelector('.platform-card')).toBeNull();
+
+    // On error, placeholder cards for all three CLIENT_KINDS remain visible.
+    const cards = host.querySelectorAll('.platform-card');
+    expect(cards.length).toBe(3);
+    expect(host.querySelector('.platform-card[data-kind="discord"]')).not.toBeNull();
+    expect(host.querySelector('.platform-card[data-kind="slack"]')).not.toBeNull();
+    expect(host.querySelector('.platform-card[data-kind="teams"]')).not.toBeNull();
   });
 
   it('renders the loading state before the detection promise settles', async () => {

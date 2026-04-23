@@ -1,8 +1,10 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { createLogger } from './util/logger.js';
 import { createMainWindow } from './browser-window-factory.js';
+import { registerDetectHandler } from './ipc/detect.js';
+import { createProductionDeps } from './detect/deps.js';
 
 const logger = createLogger('main');
 
@@ -37,6 +39,7 @@ const CSP_DEV = [
 ].join('; ');
 
 let mainWindow: BrowserWindow | null = null;
+let unregisterDetect: (() => void) | null = null;
 
 app
   .whenReady()
@@ -45,6 +48,12 @@ app
       app.quit();
       return;
     }
+
+    unregisterDetect = registerDetectHandler(
+      ipcMain,
+      createProductionDeps(),
+      logger.child({ module: 'detect' }),
+    );
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
@@ -98,6 +107,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   logger.info('before-quit');
+  unregisterDetect?.();
 });
 
 app.on('second-instance', () => {

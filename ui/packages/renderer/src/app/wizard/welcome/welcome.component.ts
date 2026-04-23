@@ -1,6 +1,13 @@
 import { UpperCasePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
-import { ScoutError, type DetectedClient } from '@scout/shared';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { CLIENT_KINDS, ScoutError, type DetectedClient } from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
 
@@ -13,13 +20,14 @@ import { ScoutBridgeService } from '../../core/scout-bridge';
     <main class="welcome">
       <h1>Scout Desktop</h1>
       <p>Provision your Scout bot.</p>
+      @if (error(); as errorMessage) {
+        <p class="error">{{ errorMessage }}</p>
+      }
       <section class="platforms">
         @if (loading()) {
           <p class="loading">Detecting clients...</p>
-        } @else if (error(); as errorMessage) {
-          <p class="error">{{ errorMessage }}</p>
         } @else {
-          @for (client of clients(); track client.kind) {
+          @for (client of visibleClients(); track client.kind) {
             <article class="platform-card" [attr.data-kind]="client.kind">
               <h2>{{ client.kind | uppercase }}</h2>
               <p>{{ client.installed ? 'Installed' : 'Not installed' }}</p>
@@ -85,6 +93,12 @@ export class WelcomeComponent implements OnInit {
   readonly loading = signal<boolean>(true);
   readonly clients = signal<readonly DetectedClient[]>([]);
   readonly error = signal<string | null>(null);
+
+  readonly visibleClients = computed<readonly DetectedClient[]>(() => {
+    const detected = this.clients();
+    if (detected.length > 0) return detected;
+    return CLIENT_KINDS.map((kind) => ({ kind, installed: false, method: 'none' as const }));
+  });
 
   ngOnInit(): void {
     void this.runDetection();
