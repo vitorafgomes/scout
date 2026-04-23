@@ -81,6 +81,28 @@ export class ScoutBridgeService {
   async vaultIsAvailable(): Promise<VaultIsAvailableResponse> {
     return this.bridge.vaultIsAvailable();
   }
+
+  async vaultStore(req: VaultStoreRequest): Promise<void> {
+    return this.bridge.vaultStore(req);
+  }
+
+  async vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse> {
+    return this.bridge.vaultDelete(req);
+  }
+
+  async appOpenExternal(req: AppOpenExternalRequest): Promise<void> {
+    return this.bridge.appOpenExternal(req);
+  }
+
+  async discordStartOAuthInstall(
+    req: DiscordStartOAuthInstallRequest,
+  ): Promise<DiscordStartOAuthInstallResponse> {
+    return this.bridge.discordStartOAuthInstall(req);
+  }
+
+  async discordCancelOAuthInstall(): Promise<void> {
+    return this.bridge.discordCancelOAuthInstall();
+  }
 }
 
 export const SCOUT_BRIDGE_NOT_AVAILABLE_CODE = BRIDGE_NOT_AVAILABLE_CODE;
