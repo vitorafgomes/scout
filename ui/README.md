@@ -33,12 +33,17 @@ bun install
 bun install          # install all workspace deps
 bun run lint         # ESLint across packages/
 bun run typecheck    # tsc --noEmit per package
-bun run test         # no-op placeholder — real behaviour lands in a later PR
+bun run test         # unit tests across shared, main, preload
 bun run build        # no-op placeholder — real behaviour lands in a later PR
 bun run format       # Prettier check (validates formatting; no code generated yet)
 bun run format:write # Prettier write
 bun run clean        # remove dist/ and node_modules/
 ```
+
+Build ordering: run `bun run --cwd packages/preload build` before `dev:main`. The
+main process resolves the preload from `packages/preload/dist/preload.cjs` at
+startup; without the built artifact the window opens without the `window.scout`
+bridge (a warning is logged but Electron still launches).
 
 Bun is the runtime for all workspace commands. Node is only required on the host
 for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`

@@ -15,7 +15,7 @@
     "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/*.ts\" \"packages/**/*.mts\"",
     "format": "prettier --check \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
     "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
-    "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test",
+    "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test",
     "build": "echo \"noop — implemented in a later PR\" && exit 0",
     "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true"
   },
