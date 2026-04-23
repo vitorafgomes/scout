@@ -1,5 +1,12 @@
 export type ClientKind = 'discord' | 'slack' | 'teams';
 
+export type VaultKey = 'discord.bot-token' | 'discord.client-id';
+
+export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
+  'discord.bot-token',
+  'discord.client-id',
+] as const);
+
 export const CLIENT_KINDS: readonly ClientKind[] = Object.freeze([
   'discord',
   'slack',

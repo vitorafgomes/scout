@@ -1,4 +1,6 @@
-import type { DetectedClient } from './client-kinds.js';
+import type { DetectedClient, VaultKey } from './client-kinds.js';
+
+export type { VaultKey };
 
 export const CHANNEL = {
   detectClients: 'scout:detect.clients',
@@ -8,6 +10,7 @@ export const CHANNEL = {
   vaultStore: 'scout:vault.store',
   vaultHas: 'scout:vault.has',
   vaultDelete: 'scout:vault.delete',
+  vaultIsAvailable: 'scout:vault.isAvailable',
   workerStart: 'scout:worker.start',
   workerStop: 'scout:worker.stop',
   workerStatus: 'scout:worker.status',
@@ -19,8 +22,6 @@ export const CHANNEL = {
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
-
-export type VaultKey = 'discord.bot-token' | 'discord.client-id';
 
 export interface DetectClientsResponse {
   readonly clients: readonly DetectedClient[];
@@ -68,6 +69,11 @@ export interface VaultDeleteRequest {
 
 export interface VaultDeleteResponse {
   readonly deleted: boolean;
+}
+
+export interface VaultIsAvailableResponse {
+  readonly available: boolean;
+  readonly reason?: 'no-keyring' | 'unknown';
 }
 
 export type WorkerStartRequest = Record<string, never>;
@@ -125,6 +131,7 @@ export interface ScoutBridge {
   vaultStore(req: VaultStoreRequest): Promise<void>;
   vaultHas(req: VaultHasRequest): Promise<VaultHasResponse>;
   vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse>;
+  vaultIsAvailable(): Promise<VaultIsAvailableResponse>;
   workerStart(): Promise<WorkerStartResponse>;
   workerStop(): Promise<WorkerStopResponse>;
   workerStatus(): Promise<WorkerStatusResponse>;

@@ -14,6 +14,7 @@ import {
   type VaultDeleteResponse,
   type VaultHasRequest,
   type VaultHasResponse,
+  type VaultIsAvailableResponse,
   type VaultStoreRequest,
   type WorkerEvent,
   type WorkerStartResponse,
@@ -53,6 +54,7 @@ function createFakeBridge(): ScoutBridge {
     vaultStore: (_req: VaultStoreRequest): Promise<void> => rejectNotAvailable(),
     vaultHas: (_req: VaultHasRequest): Promise<VaultHasResponse> => rejectNotAvailable(),
     vaultDelete: (_req: VaultDeleteRequest): Promise<VaultDeleteResponse> => rejectNotAvailable(),
+    vaultIsAvailable: (): Promise<VaultIsAvailableResponse> => rejectNotAvailable(),
     workerStart: (): Promise<WorkerStartResponse> => rejectNotAvailable(),
     workerStop: (): Promise<WorkerStopResponse> => rejectNotAvailable(),
     workerStatus: (): Promise<WorkerStatusResponse> => rejectNotAvailable(),
@@ -74,6 +76,10 @@ export class ScoutBridgeService {
 
   async detectClients(): Promise<DetectClientsResponse> {
     return this.bridge.detectClients();
+  }
+
+  async vaultIsAvailable(): Promise<VaultIsAvailableResponse> {
+    return this.bridge.vaultIsAvailable();
   }
 }
 
