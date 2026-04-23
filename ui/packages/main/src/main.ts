@@ -4,7 +4,10 @@ import { existsSync } from 'node:fs';
 import { createLogger } from './util/logger.js';
 import { createMainWindow } from './browser-window-factory.js';
 import { registerDetectHandler } from './ipc/detect.js';
+import { registerVaultHandlers } from './ipc/vault.js';
 import { createProductionDeps } from './detect/deps.js';
+import { createVault } from './vault/safe-storage-vault.js';
+import { createProductionVaultDeps } from './vault/deps.js';
 
 const logger = createLogger('main');
 
@@ -39,6 +42,7 @@ const CSP_DEV = [
 ].join('; ');
 
 let mainWindow: BrowserWindow | null = null;
+let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 
 app
@@ -48,6 +52,9 @@ app
       app.quit();
       return;
     }
+
+    const vault = createVault(createProductionVaultDeps(logger.child({ module: 'vault' })));
+    unregisterVault = registerVaultHandlers(ipcMain, vault, logger.child({ module: 'vault' }));
 
     unregisterDetect = registerDetectHandler(
       ipcMain,
@@ -108,6 +115,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   logger.info('before-quit');
   unregisterDetect?.();
+  unregisterVault?.();
 });
 
 app.on('second-instance', () => {

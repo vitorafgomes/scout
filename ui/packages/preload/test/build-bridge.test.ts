@@ -24,6 +24,7 @@ describe('buildBridge', () => {
       'vaultStore',
       'vaultHas',
       'vaultDelete',
+      'vaultIsAvailable',
       'workerStart',
       'workerStop',
       'workerStatus',

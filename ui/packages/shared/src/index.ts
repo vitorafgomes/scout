@@ -1,7 +1,9 @@
 export {
   CLIENT_KINDS,
+  VAULT_KEYS,
   assertNeverClient,
   type ClientKind,
+  type VaultKey,
   type DetectionMethod,
   type DetectedClient,
 } from './client-kinds.js';
@@ -24,7 +26,6 @@ export {
 export {
   CHANNEL,
   type ChannelName,
-  type VaultKey,
   type DetectClientsResponse,
   type DiscordBuildOAuthUrlRequest,
   type DiscordBuildOAuthUrlResponse,
@@ -36,6 +37,7 @@ export {
   type VaultHasResponse,
   type VaultDeleteRequest,
   type VaultDeleteResponse,
+  type VaultIsAvailableResponse,
   type WorkerStartRequest,
   type WorkerStartResponse,
   type WorkerStopRequest,

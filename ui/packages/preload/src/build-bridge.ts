@@ -42,6 +42,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.vaultDelete, req) as ReturnType<ScoutBridge['vaultDelete']>;
     },
 
+    vaultIsAvailable() {
+      return ipc.invoke(CHANNEL.vaultIsAvailable) as ReturnType<ScoutBridge['vaultIsAvailable']>;
+    },
+
     workerStart() {
       return ipc.invoke(CHANNEL.workerStart) as ReturnType<ScoutBridge['workerStart']>;
     },
