@@ -1,129 +1,116 @@
 # Scout Desktop UI
 
-Scout Desktop Electron UI — provisioning wizard for the Scout bot.
+Scout Desktop is the Electron provisioning UI for the Scout read-only
+chatops bot. It detects installed chat clients, runs per-platform
+provisioning wizards, and supervises the local `.NET` worker as a child
+process.
 
-Design doc and plan:
-`obsidian-vault/scout/05-operations/plans/2026-04-23-scout-desktop-m1.md`
+## Stack
 
-## Requirements
+- Bun 1.3+ — workspace toolchain (install, scripts, tests).
+- Electron 41 — desktop shell (main process in ESM, sandboxed preload).
+- Angular 21 — renderer, zoneless change detection, Signals-first,
+  standalone components with the new `@if`/`@for` control flow.
+- .NET 10 — the `Scout.Host.Worker` spawned as a supervised child
+  process.
+- electron-builder — cross-platform packaging (NSIS, DMG, AppImage,
+  deb).
 
-- [Bun](https://bun.sh/) >= 1.2.0
-- Node 24 (Electron 41's bundled runtime; use `.nvmrc` with nvm for CI parity)
+## Prerequisites
+
+- Bun 1.3 or newer — install from `https://bun.sh/` (`curl -fsSL
+  https://bun.sh/install | bash`).
+- .NET SDK matching the version in `../global.json` (currently 10.x).
+- Optional: [Ollama](https://ollama.com/) if you want a local LLM
+  provider without paid credentials.
+
+`.nvmrc` pins the Node major that Electron ships with. It is guidance
+for contributors who also keep Node installed for tooling; Bun drives
+every workspace command, so Node is not required to build or test the
+UI.
 
 ## Install
 
 ```sh
-cd ui/
+cd ui
 bun install
 ```
 
-## Workspace packages
+## Run in dev
 
-| Package                   | Description                                         |
-| ------------------------- | --------------------------------------------------- |
-| `@scout/shared`           | Shared TypeScript types and IPC contract            |
-| `@scout/desktop-main`     | Electron main process                               |
-| `@scout/desktop-preload`  | Electron preload script (contextBridge)             |
-| `@scout/desktop-renderer` | Angular 21 renderer (standalone, Signals, zoneless) |
-| `@scout/desktop-e2e`      | Playwright E2E tests (added in PR 13)               |
-
-## Commands
+Open two terminals from `ui/`:
 
 ```sh
-bun install              # install all workspace deps
-bun run lint             # ESLint across packages/
-bun run typecheck        # tsc --noEmit per package
-bun run test             # unit tests across shared, main, preload, renderer
-bun run build            # build shared, preload, renderer, main in order
-bun run format           # Prettier check
-bun run format:write     # Prettier write
-bun run clean            # remove dist/ and node_modules/
-bun run worker:publish   # dotnet publish Scout.Host.Worker for the current RID
-                         # Output: ui/build/worker/<rid>/Scout.Host.Worker[.exe]
-                         # Windows: use build/scripts/publish-worker.ps1 directly
+# Terminal 1 — Angular dev server with HMR on port 4200
+bun run --cwd packages/renderer dev
 ```
-
-Build ordering: run `bun run --cwd packages/preload build`, then
-`bun run --cwd packages/renderer build`, then `bun run --cwd packages/main build`
-before `dev:main`. The main process resolves the preload from
-`packages/preload/dist/preload.cjs` and the renderer index from
-`packages/renderer/dist/browser/index.html` at startup; without the built
-artifacts the window opens without the `window.scout` bridge or with a blank
-page (a warning is logged but Electron still launches). `bun run build` at the
-workspace root chains the four builds in the correct order.
-
-The renderer is Angular 21 with standalone components, Signals, zoneless change
-detection, and the new control flow (`@if` / `@for`). Router runs in hash mode
-so the bundled `index.html` loads correctly from the filesystem. Tests use
-Vitest via `@analogjs/vite-plugin-angular`; zone.js is intentionally absent —
-`TestBed` is configured with `provideZonelessChangeDetection()` per test.
-
-Bun is the runtime for all workspace commands. Node is only required on the host
-for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
-if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
-do not need Node at all.
-
-## Development
 
 ```sh
-bun run dev:main            # launch Electron in dev mode (requires built preload + renderer)
-bun run worker:publish      # dotnet publish Scout.Host.Worker for the current RID
-                            # Output: ui/build/worker/<rid>/Scout.Host.Worker[.exe]
-                            # Windows: use build/scripts/publish-worker.ps1 directly
+# Terminal 2 — build preload + main, then launch Electron
+bun run --cwd packages/preload build
+bun run --cwd packages/main build
+bun run --cwd packages/main dev:main
 ```
 
-Build ordering: run `bun run --cwd packages/preload build`, then
-`bun run --cwd packages/renderer build`, then `bun run --cwd packages/main build`
-before `dev:main`. The main process resolves the preload from
-`packages/preload/dist/preload.cjs` and the renderer index from
-`packages/renderer/dist/browser/index.html` at startup; without the built
-artifacts the window opens without the `window.scout` bridge or with a blank
-page (a warning is logged but Electron still launches). `bun run build` at the
-workspace root chains the four builds in the correct order.
+The main process resolves the preload from
+`packages/preload/dist/preload.cjs` and the renderer from
+`packages/renderer/dist/browser/index.html` (prod) or from
+`http://localhost:4200` when `NODE_ENV=development`. `bun run build` at
+the workspace root chains `shared → preload → renderer → main` in the
+correct order if you prefer a single command.
 
-The renderer is Angular 21 with standalone components, Signals, zoneless change
-detection, and the new control flow (`@if` / `@for`). Router runs in hash mode
-so the bundled `index.html` loads correctly from the filesystem. Tests use
-Vitest via `@analogjs/vite-plugin-angular`; zone.js is intentionally absent —
-`TestBed` is configured with `provideZonelessChangeDetection()` per test.
+## Test
 
-Bun is the runtime for all workspace commands. Node is only required on the host
-for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
-if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
-do not need Node at all.
+```sh
+bun run test          # shared + main + preload + renderer
+```
+
+.NET tests are separate — run them from the repo root:
+
+```sh
+dotnet test Scout.slnx
+```
+
+## Package
+
+Artifacts land under `ui/build/dist/`.
+
+```sh
+bun run dist          # package for the current host
+bun run dist:linux    # AppImage + .deb, x64
+bun run dist:mac      # DMG, arm64 + x64
+bun run dist:win      # NSIS installer, x64
+```
+
+AppImage is always produced on Linux builds — this is a release
+invariant. All artifacts are **UNSIGNED** in this repo; do not
+distribute them as official releases until signing and notarisation
+are set up.
 
 ## CI
 
-Every PR against `main` that touches `ui/**` or the worker runs the
-UI CI workflow (`.github/workflows/ui-ci.yml`) on Ubuntu, macOS, and
-Windows. It lints, typechecks, tests, publishes the .NET worker, and
-packages unsigned artifacts. Artifacts can be downloaded from the
+Every push to `main` and every PR touching `ui/**` or the .NET worker
+runs `.github/workflows/ui-ci.yml` on Ubuntu, macOS, and Windows. The
+job lints, typechecks, tests, publishes the worker binary, and packages
+unsigned artifacts. Run output and artifacts are available from the
 workflow run page.
 
-## Packaging
+## Troubleshooting
 
-Packaging uses electron-builder. Artifacts are UNSIGNED in this repo —
-do not distribute them as official releases without proper signing.
+- **`SingletonLock` stuck from a previous crash.** The app self-recovers
+  from a dead-PID lock on startup. If it persists, remove
+  `~/.config/@scout/desktop/SingletonLock*` manually and relaunch.
+- **"Preload not found" warning at startup.** Build the preload first:
+  `bun run --cwd packages/preload build`. The renderer and main builds
+  should follow.
+- **Discord: `Invalid OAuth2 redirect_uri`.** Register
+  `http://127.0.0.1:53682/callback` as a redirect URI in your
+  application's Discord Developer Portal.
+- **Bot does not respond to `@scout ping`.** Ensure the bot role has
+  `SEND_MESSAGES` and that the `MESSAGE_CONTENT_INTENT` is enabled in
+  the Discord Developer Portal.
 
-Prerequisites:
+## Where docs live
 
-- Full workspace build: `bun install`, then `bun run package:all`
-- .NET SDK for the worker publish step
-
-Commands:
-
-- `bun run dist` — packages for the current host platform.
-- `bun run dist:linux` — AppImage + .deb, x64.
-- `bun run dist:mac` — DMG, arm64 + x64.
-- `bun run dist:win` — NSIS installer, x64.
-
-Outputs land under `ui/build/dist/`.
-
-AppImage is always produced on Linux builds — this is a release invariant.
-
-Icons under `build/icons/` are placeholders; replace before 1.0.
-
-## Architecture
-
-See the plan document linked above for the full architecture diagram, IPC contract,
-PR breakdown, and security posture.
+Architecture, ADRs, plans, and the design system live in the Scout
+project vault at `obsidian-vault/scout/`.
