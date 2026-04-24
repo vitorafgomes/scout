@@ -63,6 +63,58 @@ for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
 if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
 do not need Node at all.
 
+## Development
+
+```sh
+bun run dev:main            # launch Electron in dev mode (requires built preload + renderer)
+bun run worker:publish      # dotnet publish Scout.Host.Worker for the current RID
+                            # Output: ui/build/worker/<rid>/Scout.Host.Worker[.exe]
+                            # Windows: use build/scripts/publish-worker.ps1 directly
+```
+
+Build ordering: run `bun run --cwd packages/preload build`, then
+`bun run --cwd packages/renderer build`, then `bun run --cwd packages/main build`
+before `dev:main`. The main process resolves the preload from
+`packages/preload/dist/preload.cjs` and the renderer index from
+`packages/renderer/dist/browser/index.html` at startup; without the built
+artifacts the window opens without the `window.scout` bridge or with a blank
+page (a warning is logged but Electron still launches). `bun run build` at the
+workspace root chains the four builds in the correct order.
+
+The renderer is Angular 21 with standalone components, Signals, zoneless change
+detection, and the new control flow (`@if` / `@for`). Router runs in hash mode
+so the bundled `index.html` loads correctly from the filesystem. Tests use
+Vitest via `@analogjs/vite-plugin-angular`; zone.js is intentionally absent —
+`TestBed` is configured with `provideZonelessChangeDetection()` per test.
+
+Bun is the runtime for all workspace commands. Node is only required on the host
+for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
+if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
+do not need Node at all.
+
+## Packaging
+
+Packaging uses electron-builder. Artifacts are UNSIGNED in this repo —
+do not distribute them as official releases without proper signing.
+
+Prerequisites:
+
+- Full workspace build: `bun install`, then `bun run package:all`
+- .NET SDK for the worker publish step
+
+Commands:
+
+- `bun run dist` — packages for the current host platform.
+- `bun run dist:linux` — AppImage + .deb, x64.
+- `bun run dist:mac` — DMG, arm64 + x64.
+- `bun run dist:win` — NSIS installer, x64.
+
+Outputs land under `ui/build/dist/`.
+
+AppImage is always produced on Linux builds — this is a release invariant.
+
+Icons under `build/icons/` are placeholders; replace before 1.0.
+
 ## Architecture
 
 See the plan document linked above for the full architecture diagram, IPC contract,

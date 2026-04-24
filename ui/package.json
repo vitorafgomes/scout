@@ -1,6 +1,7 @@
 {
   "name": "@scout/desktop",
-  "version": "0.0.0",
+  "version": "0.0.1",
+  "main": "packages/main/dist/main.js",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -18,10 +19,18 @@
     "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test && bun run --cwd packages/renderer test",
     "build": "bun run --cwd packages/shared build 2>/dev/null; bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
     "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true",
-    "worker:publish": "bash build/scripts/publish-worker.sh"
+    "worker:publish": "bash build/scripts/publish-worker.sh",
+    "package:all": "bun run worker:publish && bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
+    "dist": "bun run package:all && electron-builder --config build/electron-builder.yml",
+    "dist:linux": "bun run package:all && electron-builder --config build/electron-builder.yml --linux",
+    "dist:mac": "bun run package:all && electron-builder --config build/electron-builder.yml --mac",
+    "dist:win": "bun run package:all && electron-builder --config build/electron-builder.yml --win"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "electron-builder": "^26.8.1",
     "eslint": "^10.2.1",
+    "js-yaml": "^4.1.1",
     "prettier": "^3.8.3",
     "typescript-eslint": "^8.59.0"
   }
