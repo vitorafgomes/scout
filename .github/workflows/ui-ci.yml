@@ -1,0 +1,106 @@
+name: UI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ui/**'
+      - 'src/Scout.Host.Worker/**'
+      - '.github/workflows/ui-ci.yml'
+      - 'global.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ui/**'
+      - 'src/Scout.Host.Worker/**'
+      - '.github/workflows/ui-ci.yml'
+      - 'global.json'
+  workflow_dispatch:
+
+concurrency:
+  group: ui-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ui:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            dist_script: dist:linux
+          - os: macos-latest
+            rid: osx-arm64
+            dist_script: dist:mac
+          - os: windows-latest
+            rid: win-x64
+            dist_script: dist:win
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.12'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Install UI dependencies
+        working-directory: ui
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        working-directory: ui
+        shell: bash
+        run: bun run lint
+
+      - name: Typecheck
+        working-directory: ui
+        shell: bash
+        run: bun run typecheck
+
+      - name: Test (UI)
+        working-directory: ui
+        shell: bash
+        run: bun run test
+
+      - name: Publish worker binary
+        working-directory: ui
+        shell: bash
+        run: bun run worker:publish -- ${{ matrix.rid }}
+
+      - name: Package
+        working-directory: ui
+        shell: bash
+        run: bun run ${{ matrix.dist_script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: scout-desktop-${{ matrix.os }}
+          path: ui/build/dist/
+          retention-days: 14
+          if-no-files-found: error

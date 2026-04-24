@@ -2,6 +2,9 @@ import { describe, it, expect } from 'bun:test';
 import path from 'node:path';
 import { resolveWorkerBinary } from '../src/worker/resolve-binary.js';
 
+// Normalize paths to POSIX so assertions work on both POSIX and Windows runners.
+const posix = (p: string): string => p.replace(/\\/g, '/');
+
 describe('resolveWorkerBinary', () => {
   describe('dev mode (app absent)', () => {
     it('returns repo-relative path for linux-x64', () => {
@@ -10,7 +13,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(result).toContain('build/worker/linux-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Worker');
       expect(result).not.toContain('.exe');
     });
 
@@ -20,7 +23,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'arm64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(result).toContain('build/worker/osx-arm64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/osx-arm64/Scout.Host.Worker');
       expect(result).not.toContain('.exe');
     });
 
@@ -30,7 +33,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(result).toContain('build/worker/osx-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/osx-x64/Scout.Host.Worker');
     });
 
     it('appends .exe on win32', () => {
@@ -39,7 +42,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(result).toContain('build/worker/win-x64/Scout.Host.Worker.exe');
+      expect(posix(result)).toContain('build/worker/win-x64/Scout.Host.Worker.exe');
     });
 
     it('treats isPackaged===false as dev mode', () => {
@@ -49,7 +52,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(result).toContain('build/worker/linux-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Worker');
     });
   });
 
