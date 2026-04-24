@@ -12,7 +12,7 @@
     "bun": ">=1.2.0"
   },
   "scripts": {
-    "typecheck": "for pkg in packages/shared packages/main packages/preload packages/renderer; do echo \"--- typechecking $pkg ---\" && bun run --cwd $pkg typecheck || exit 1; done",
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/main typecheck && bun run --cwd packages/preload typecheck && bun run --cwd packages/renderer typecheck",
     "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/*.ts\" \"packages/**/*.mts\"",
     "format": "prettier --check \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
     "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,json}\" \"*.json\" \"*.md\"",
