@@ -72,14 +72,17 @@ jobs:
 
       - name: Lint
         working-directory: ui
+        shell: bash
         run: bun run lint
 
       - name: Typecheck
         working-directory: ui
+        shell: bash
         run: bun run typecheck
 
       - name: Test (UI)
         working-directory: ui
+        shell: bash
         run: bun run test
 
       - name: Publish worker binary
