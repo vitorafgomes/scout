@@ -86,6 +86,10 @@ export class ScoutBridgeService {
     return this.bridge.vaultStore(req);
   }
 
+  async vaultHas(req: VaultHasRequest): Promise<VaultHasResponse> {
+    return this.bridge.vaultHas(req);
+  }
+
   async vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse> {
     return this.bridge.vaultDelete(req);
   }

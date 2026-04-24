@@ -253,13 +253,10 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
     await this.startWorker();
   }
 
-  async cancel(): Promise<void> {
-    try {
-      await this.bridge.workerStop();
-    } catch {
-      // best-effort
-    }
-    await this.wizard.reset();
+  cancel(): void {
+    // Non-destructive: keep the worker running and the wizard state intact.
+    // If the user returns to Welcome the Discord card will reflect the real
+    // worker status. They can decide to stop/reprovision explicitly later.
     void this.router.navigateByUrl('/');
   }
 }

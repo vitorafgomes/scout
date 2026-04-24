@@ -222,7 +222,7 @@ describe('WorkerLaunchComponent', () => {
     expect(cancel).not.toBeNull();
   });
 
-  it('cancel calls workerStop and navigates home', async () => {
+  it('cancel only navigates; worker state and wizard store are untouched', async () => {
     const { bridge, fire } = makeBridge();
     TestBed.configureTestingModule({
       providers: [
@@ -236,6 +236,7 @@ describe('WorkerLaunchComponent', () => {
     store.setGuild({ id: 'g1', name: 'G' });
     const router = TestBed.inject(Router);
     const nav = vi.spyOn(router, 'navigateByUrl');
+    const resetSpy = vi.spyOn(store, 'reset');
     const fixture = TestBed.createComponent(WorkerLaunchComponent);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -250,7 +251,8 @@ describe('WorkerLaunchComponent', () => {
     cancelBtn.click();
     await fixture.whenStable();
 
-    expect(bridge.workerStop).toHaveBeenCalled();
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(resetSpy).not.toHaveBeenCalled();
     expect(nav).toHaveBeenCalledWith('/');
   });
 });
