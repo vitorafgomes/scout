@@ -31,7 +31,7 @@ export function createMainWindow(deps: CreateMainWindowDeps): BrowserWindow {
   });
 
   window.once('ready-to-show', () => {
-    window.show();
+    if (!window.isDestroyed()) window.show();
   });
 
   window.webContents.setWindowOpenHandler((_details) => ({ action: 'deny' }));

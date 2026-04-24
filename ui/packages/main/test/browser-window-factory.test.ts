@@ -13,6 +13,7 @@ class FakeBrowserWindow {
   loadedFile: string | null = null;
   windowOpenHandlerResult: { action: string } | null = null;
   navigateBlockedUrls: string[] = [];
+  destroyed = false;
 
   private listeners: ListenerMap = new Map();
   private contentsListeners: ListenerMap = new Map();
@@ -35,6 +36,10 @@ class FakeBrowserWindow {
         this.contentsListeners.set(event, arr);
       },
     };
+  }
+
+  isDestroyed(): boolean {
+    return this.destroyed;
   }
 
   show() {
@@ -201,5 +206,25 @@ describe('createMainWindow', () => {
     createMainWindow(deps);
 
     expect(ref.fake.constructorOpts.backgroundColor).toBe('#111111');
+  });
+
+  it('ready-to-show handler does not call show() when window is already destroyed', () => {
+    const { deps, ref } = setup();
+    createMainWindow(deps);
+
+    ref.fake.destroyed = true;
+    ref.fake.triggerReadyToShow();
+
+    expect(ref.fake.shownCount).toBe(0);
+  });
+
+  it('ready-to-show handler calls show() when window is not destroyed', () => {
+    const { deps, ref } = setup();
+    createMainWindow(deps);
+
+    ref.fake.destroyed = false;
+    ref.fake.triggerReadyToShow();
+
+    expect(ref.fake.shownCount).toBe(1);
   });
 });
