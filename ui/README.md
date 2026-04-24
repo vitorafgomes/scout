@@ -92,6 +92,14 @@ for `@electron/rebuild` (native modules); install the version pinned in `.nvmrc`
 if you plan to run `bun run rebuild` locally. Contributors who only touch UI code
 do not need Node at all.
 
+## CI
+
+Every PR against `main` that touches `ui/**` or the worker runs the
+UI CI workflow (`.github/workflows/ui-ci.yml`) on Ubuntu, macOS, and
+Windows. It lints, typechecks, tests, publishes the .NET worker, and
+packages unsigned artifacts. Artifacts can be downloaded from the
+workflow run page.
+
 ## Packaging
 
 Packaging uses electron-builder. Artifacts are UNSIGNED in this repo —
