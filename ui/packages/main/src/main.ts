@@ -2,7 +2,12 @@ import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { readlink as fsReadlink, unlink as fsUnlink } from 'node:fs/promises';
+import os from 'node:os';
 import { createLogger } from './util/logger.js';
+import { tryRecoverStaleLock } from './util/singleton-lock.js';
+import type { SingletonLockDeps } from './util/singleton-lock.js';
+import { isPidAlive } from './util/singleton-lock-deps.js';
 import { createMainWindow } from './browser-window-factory.js';
 import { registerDetectHandler } from './ipc/detect.js';
 import { registerVaultHandlers } from './ipc/vault.js';
@@ -19,6 +24,30 @@ import { VaultUnavailableError } from '@scout/shared';
 import type { Supervisor } from './worker/supervisor.js';
 
 const logger = createLogger('main');
+
+function createProdSingletonLockDeps(log: typeof logger): SingletonLockDeps {
+  return {
+    userDataDir: app.getPath('userData'),
+    hostname: os.hostname(),
+    readlink: async (p) => {
+      try {
+        return await fsReadlink(p);
+      } catch {
+        return null;
+      }
+    },
+    unlink: async (p) => {
+      try {
+        await fsUnlink(p);
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return;
+        throw err;
+      }
+    },
+    isPidAlive,
+    logger: log,
+  };
+}
 
 const __dirname = import.meta.dirname;
 
@@ -60,10 +89,24 @@ let unregisterWorker: (() => void) | null = null;
 
 app
   .whenReady()
-  .then(() => {
-    if (!app.requestSingleInstanceLock()) {
-      app.quit();
-      return;
+  .then(async () => {
+    const gotLock = app.requestSingleInstanceLock();
+    if (!gotLock) {
+      let result;
+      try {
+        result = await tryRecoverStaleLock(createProdSingletonLockDeps(logger));
+      } catch (err: unknown) {
+        logger.warn('singleton-lock recovery failed', { err });
+        app.quit();
+        return;
+      }
+      if (result.cleared && app.requestSingleInstanceLock()) {
+        logger.info('reclaimed lock after cleaning stale entry');
+      } else {
+        logger.info('another instance is running', { reason: result.reason });
+        app.quit();
+        return;
+      }
     }
 
     const vault = createVault(createProductionVaultDeps(logger.child({ module: 'vault' })));
@@ -163,6 +206,10 @@ app
       ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
     });
 
+    mainWindow.on('closed', () => {
+      mainWindow = null;
+    });
+
     attachBrowserWindow(mainWindow, supervisor);
 
     logger.info('main window created', { dev: DEV });
@@ -212,7 +259,7 @@ app.on('before-quit', (event) => {
 });
 
 app.on('second-instance', () => {
-  if (mainWindow != null) {
+  if (mainWindow != null && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
