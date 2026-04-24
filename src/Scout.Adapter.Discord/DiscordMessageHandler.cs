@@ -65,11 +65,9 @@ public sealed class DiscordMessageHandler
         {
             var response = await handler(chatMessage!, cancellationToken).ConfigureAwait(false);
             var rendered = _translator.Render(response);
-            var replyTruncated = (rendered?.Length ?? 0) > LogHelpers.MaxLoggedContentLength;
             _logger.LogInformation(
-                "reply: len={Length} truncated={Truncated}",
-                rendered?.Length ?? 0,
-                replyTruncated);
+                "reply: len={ReplyLength}",
+                rendered?.Length ?? 0);
             return rendered;
         }
         catch (OperationCanceledException)

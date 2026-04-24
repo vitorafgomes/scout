@@ -61,6 +61,10 @@ public class HelpMessageRouterTests
         response.Text.ShouldContain("@scout version");
         response.Text.ShouldContain("- CloudStatus");
         response.Text.ShouldContain("- CodeQA");
+        // Command list is wrapped in a Discord code block so the monospace
+        // font aligns the dash columns; the fence must appear twice.
+        response.Text.ShouldContain("```");
+        Regex.Matches(response.Text, "```").Count.ShouldBe(2);
         // Help plugin itself must not be rendered as a separate bullet -
         // it is already represented by the three built-in command lines.
         Regex.Matches(response.Text, @"(?m)^- Help$").Count.ShouldBe(0);
@@ -120,13 +124,12 @@ public class HelpMessageRouterTests
     }
 
     [Fact]
-    public async Task Whitespace_only_content_is_rejected_by_ChatMessage_contract()
+    public void Whitespace_only_content_is_rejected_by_ChatMessage_contract()
     {
         // The ChatMessage contract forbids blank content; the router never
         // receives such a message. Confirm the boundary lives in ChatMessage.
         Action build = () => _ = new ChatMessage(UserId: "u", ChannelId: "c", Text: "   ");
 
         build.ShouldThrow<ArgumentException>();
-        await Task.CompletedTask;
     }
 }

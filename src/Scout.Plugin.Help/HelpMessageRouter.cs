@@ -78,12 +78,16 @@ public sealed class HelpMessageRouter : IMessageRouter
             .Select(p => $"- {p.Name}")
             .ToArray();
 
-        var lines = new List<string>(capacity: builtIns.Length + others.Length + 2)
+        // Wrap the command list in a triple-backtick code block so Discord
+        // renders it with a monospace font and the dash columns line up.
+        var lines = new List<string>(capacity: builtIns.Length + others.Length + 4)
         {
             "Scout is online. Commands:",
+            "```",
         };
         lines.AddRange(builtIns);
         lines.AddRange(others);
+        lines.Add("```");
 
         return string.Join('\n', lines);
     }

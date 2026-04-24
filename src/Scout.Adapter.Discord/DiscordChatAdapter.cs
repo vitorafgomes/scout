@@ -167,7 +167,14 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     private Task OnDisconnectedAsync(Exception? exception)
     {
         var reason = exception?.Message ?? "unknown";
-        _logger.LogInformation("gateway disconnected: reason={Reason}", reason);
+        if (exception is not null)
+        {
+            _logger.LogWarning(exception, "gateway disconnected: reason={Reason}", reason);
+        }
+        else
+        {
+            _logger.LogInformation("gateway disconnected: reason={Reason}", reason);
+        }
         return Task.CompletedTask;
     }
 
