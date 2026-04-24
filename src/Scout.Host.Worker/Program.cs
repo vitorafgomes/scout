@@ -72,9 +72,17 @@ if (runIndex)
 builder.Services
     .AddDiscordAdapter(builder.Configuration)
     .AddCloudStatusPlugin(builder.Configuration)
-    .AddSingleton<IndexingService>()
-    .AddHostedService<CodeQAStartupIndexer>()
     .AddHostedService<ScoutWorker>();
+
+var codeQAConfigured = !string.IsNullOrWhiteSpace(
+    builder.Configuration["Scout:Plugins:CodeQA:Repository:Owner"]);
+
+if (codeQAConfigured)
+{
+    builder.Services
+        .AddSingleton<IndexingService>()
+        .AddHostedService<CodeQAStartupIndexer>();
+}
 
 await builder.Build().RunAsync().ConfigureAwait(false);
 return 0;
