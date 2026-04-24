@@ -94,6 +94,14 @@ describe('OAuthInstallComponent', () => {
     });
     // Permission integer must be greater than 2^31, exercising BigInt math.
     expect(BigInt(OAUTH_INSTALL_PERMISSIONS)).toBeGreaterThan(2n ** 31n);
+
+    // Flag-by-flag: VIEW_CHANNEL (bit 10), SEND_MESSAGES (bit 11),
+    // READ_MESSAGE_HISTORY (bit 16) and USE_APPLICATION_COMMANDS (bit 31)
+    // must all be set; no other bits leak in.
+    const permBits = BigInt(OAUTH_INSTALL_PERMISSIONS);
+    const expected = (1n << 10n) | (1n << 11n) | (1n << 16n) | (1n << 31n);
+    expect(permBits).toBe(expected);
+    expect((permBits >> 11n) & 1n).toBe(1n);
   });
 
   it('navigates to /launch with guild in the store on success', async () => {

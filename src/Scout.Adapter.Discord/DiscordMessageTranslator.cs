@@ -9,7 +9,7 @@ namespace Scout.Adapter.Discord;
 /// No Discord.Net types cross this boundary, so the translator can be unit-
 /// tested without mocking SDK primitives.
 ///
-/// - <see cref="TryTranslate"/> decides whether an inbound Discord message is
+/// - <c>TryTranslate</c> decides whether an inbound Discord message is
 ///   intended for Scout (the bot was mentioned and the message carries real
 ///   content) and returns the corresponding <see cref="ChatMessage"/>.
 /// - <see cref="Render"/> produces the outbound string that the adapter posts
@@ -25,23 +25,34 @@ public sealed partial class DiscordMessageTranslator
         InboundDiscordMessage inbound,
         ulong botUserId,
         out ChatMessage? chatMessage)
+        => TryTranslate(inbound, botUserId, out chatMessage, out _);
+
+    internal bool TryTranslate(
+        InboundDiscordMessage inbound,
+        ulong botUserId,
+        out ChatMessage? chatMessage,
+        out string reason)
     {
         ArgumentNullException.ThrowIfNull(inbound);
 
         chatMessage = null;
+        reason = string.Empty;
 
         if (inbound.AuthorId == botUserId)
         {
+            reason = "bot-author";
             return false;
         }
         if (!inbound.MentionsSelf)
         {
+            reason = "no-mention";
             return false;
         }
 
         var stripped = StripBotMentions(inbound.Content ?? string.Empty, botUserId);
         if (string.IsNullOrWhiteSpace(stripped))
         {
+            reason = "empty-after-strip";
             return false;
         }
 

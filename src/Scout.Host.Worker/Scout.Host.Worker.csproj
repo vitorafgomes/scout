@@ -15,5 +15,6 @@
     <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CloudStatus\Scout.Plugin.CloudStatus.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Help\Scout.Plugin.Help.csproj" />
   </ItemGroup>
 </Project>

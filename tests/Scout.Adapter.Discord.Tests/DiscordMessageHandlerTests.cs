@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Scout.Core.Chat;
 
@@ -8,6 +9,7 @@ public class DiscordMessageHandlerTests
     private const ulong BotUserId = 1111;
     private const ulong HumanUserId = 2222;
     private const ulong ChannelId = 3333;
+    private const ulong GuildId = 4444;
     private static readonly DateTimeOffset FixedTime =
         new(2026, 4, 21, 10, 0, 0, TimeSpan.Zero);
 
@@ -15,13 +17,17 @@ public class DiscordMessageHandlerTests
         new(new DiscordMessageTranslator(),
             NullLogger<DiscordMessageHandler>.Instance);
 
+    private static DiscordMessageHandler Sut(ILogger<DiscordMessageHandler> logger) =>
+        new(new DiscordMessageTranslator(), logger);
+
     private static InboundDiscordMessage ValidInbound(string content = "<@1111> ping") =>
         new(MessageId: 1,
             AuthorId: HumanUserId,
             ChannelId: ChannelId,
             Content: content,
             MentionsSelf: true,
-            Timestamp: FixedTime);
+            Timestamp: FixedTime,
+            GuildId: GuildId);
 
     [Fact]
     public async Task Returns_Null_When_Translator_Rejects_Message()
@@ -119,5 +125,125 @@ public class DiscordMessageHandlerTests
             CancellationToken.None);
 
         await act.ShouldThrowAsync<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task Successful_Dispatch_Logs_Inbound_Then_Dispatched_Then_Reply()
+    {
+        var logger = new RecordingLogger<DiscordMessageHandler>();
+
+        await Sut(logger).HandleAsync(
+            ValidInbound(),
+            BotUserId,
+            handler: (_, _) => Task.FromResult(ChatResponse.Plain("ok")),
+            CancellationToken.None);
+
+        var infos = logger.MessagesAt(LogLevel.Information);
+
+        infos.Count(m => m.StartsWith("inbound:", StringComparison.Ordinal)).ShouldBe(1);
+        infos.Count(m => m.StartsWith("dispatched:", StringComparison.Ordinal)).ShouldBe(1);
+        infos.Count(m => m.StartsWith("reply:", StringComparison.Ordinal)).ShouldBe(1);
+
+        // Order: inbound precedes dispatched precedes reply.
+        var inboundIdx = infos.FindIndex(m => m.StartsWith("inbound:", StringComparison.Ordinal));
+        var dispatchedIdx = infos.FindIndex(m => m.StartsWith("dispatched:", StringComparison.Ordinal));
+        var replyIdx = infos.FindIndex(m => m.StartsWith("reply:", StringComparison.Ordinal));
+        inboundIdx.ShouldBeLessThan(dispatchedIdx);
+        dispatchedIdx.ShouldBeLessThan(replyIdx);
+    }
+
+    [Fact]
+    public async Task Translator_Skip_Without_Mention_Logs_NoMention_Reason()
+    {
+        var logger = new RecordingLogger<DiscordMessageHandler>();
+        var inbound = ValidInbound() with { MentionsSelf = false };
+
+        var reply = await Sut(logger).HandleAsync(
+            inbound,
+            BotUserId,
+            handler: (_, _) => throw new InvalidOperationException("must not run"),
+            CancellationToken.None);
+
+        reply.ShouldBeNull();
+        var infos = logger.MessagesAt(LogLevel.Information);
+        infos.ShouldContain(m => m.StartsWith("inbound:", StringComparison.Ordinal));
+        infos.ShouldContain(m => m == "skipped: reason=no-mention");
+    }
+
+    [Fact]
+    public async Task Translator_Skip_When_Bot_Is_Author_Logs_BotAuthor_Reason()
+    {
+        var logger = new RecordingLogger<DiscordMessageHandler>();
+        var inbound = ValidInbound() with { AuthorId = BotUserId };
+
+        await Sut(logger).HandleAsync(
+            inbound,
+            BotUserId,
+            handler: (_, _) => throw new InvalidOperationException("must not run"),
+            CancellationToken.None);
+
+        logger.MessagesAt(LogLevel.Information)
+            .ShouldContain(m => m == "skipped: reason=bot-author");
+    }
+
+    [Fact]
+    public async Task Handler_Exception_Logs_Inbound_Before_Error()
+    {
+        var logger = new RecordingLogger<DiscordMessageHandler>();
+
+        await Sut(logger).HandleAsync(
+            ValidInbound(),
+            BotUserId,
+            handler: (_, _) => throw new InvalidOperationException("boom"),
+            CancellationToken.None);
+
+        logger.MessagesAt(LogLevel.Information)
+            .ShouldContain(m => m.StartsWith("inbound:", StringComparison.Ordinal));
+        logger.EntriesAt(LogLevel.Error).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task Dispatched_Log_Truncates_Content_Over_80_Chars()
+    {
+        var logger = new RecordingLogger<DiscordMessageHandler>();
+        // Translator strips the mention prefix, so the effective text has
+        // to exceed 80 chars after stripping.
+        var longBody = new string('a', 120);
+        var content = $"<@{BotUserId}> {longBody}";
+
+        await Sut(logger).HandleAsync(
+            ValidInbound(content),
+            BotUserId,
+            handler: (_, _) => Task.FromResult(ChatResponse.Plain("ok")),
+            CancellationToken.None);
+
+        var dispatched = logger.MessagesAt(LogLevel.Information)
+            .Single(m => m.StartsWith("dispatched:", StringComparison.Ordinal));
+        dispatched.ShouldContain("...");
+        dispatched.ShouldContain("truncated=True");
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public readonly List<(LogLevel Level, string Message, Exception? Exception)> Entries = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception), exception));
+        }
+
+        public List<string> MessagesAt(LogLevel level) =>
+            Entries.Where(e => e.Level == level).Select(e => e.Message).ToList();
+
+        public List<(LogLevel Level, string Message, Exception? Exception)> EntriesAt(LogLevel level) =>
+            Entries.Where(e => e.Level == level).ToList();
     }
 }
