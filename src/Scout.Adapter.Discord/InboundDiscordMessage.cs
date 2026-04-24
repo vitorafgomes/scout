@@ -15,4 +15,5 @@ public sealed record InboundDiscordMessage(
     ulong ChannelId,
     string Content,
     bool MentionsSelf,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp,
+    ulong? GuildId = null);

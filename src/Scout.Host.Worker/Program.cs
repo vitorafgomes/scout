@@ -8,6 +8,7 @@ using Scout.Host.Worker;
 using Scout.Llm.Ollama;
 using Scout.Plugin.CloudStatus;
 using Scout.Plugin.CodeQA;
+using Scout.Plugin.Help;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -17,6 +18,7 @@ builder.Services
     .AddScout(builder.Configuration)
     .AddOllamaLlmProvider()
     .AddOllamaEmbedder()
+    .AddHelpPlugin()
     .AddCodeQAPlugin(builder.Configuration);
 
 if (runIndex)

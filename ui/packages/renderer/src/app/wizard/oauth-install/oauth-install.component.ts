@@ -8,14 +8,23 @@ import { WizardStore } from '../../core/wizard.store';
 
 type InstallState = 'idle' | 'awaiting' | 'exchanging' | 'success' | 'error';
 
-// Read-only Discord permissions Scout requires at install time. Keep the
-// bit positions explicit so reviewers can map each flag to a docs entry.
+// Discord permissions Scout requires at install time. Keep the bit positions
+// explicit so reviewers can map each flag to a docs entry. SEND_MESSAGES is
+// the single write flag the bot needs so it can reply in the channel where
+// it was mentioned; the read-only invariant still holds because plugins
+// never post unprompted.
 const PERM_VIEW_CHANNEL = 1n << 10n;
+const PERM_SEND_MESSAGES = 1n << 11n;
 const PERM_READ_MESSAGE_HISTORY = 1n << 16n;
 const PERM_USE_APPLICATION_COMMANDS = 1n << 31n;
 
 function computePermissions(): string {
-  return (PERM_VIEW_CHANNEL | PERM_READ_MESSAGE_HISTORY | PERM_USE_APPLICATION_COMMANDS).toString();
+  return (
+    PERM_VIEW_CHANNEL |
+    PERM_SEND_MESSAGES |
+    PERM_READ_MESSAGE_HISTORY |
+    PERM_USE_APPLICATION_COMMANDS
+  ).toString();
 }
 
 const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({

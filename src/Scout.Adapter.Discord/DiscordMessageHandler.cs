@@ -38,15 +38,37 @@ public sealed class DiscordMessageHandler
         ArgumentNullException.ThrowIfNull(inbound);
         ArgumentNullException.ThrowIfNull(handler);
 
-        if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage))
+        // Inbound trail: emit before translation so the log captures every
+        // message that reaches the adapter, including ones that get skipped
+        // below. Content itself is not logged - only its length - to keep
+        // PII out of operational logs.
+        _logger.LogInformation(
+            "inbound: guild={GuildId} channel={ChannelId} author={AuthorId} len={ContentLen}",
+            inbound.GuildId,
+            inbound.ChannelId,
+            inbound.AuthorId,
+            inbound.Content?.Length ?? 0);
+
+        if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage, out var reason))
         {
+            _logger.LogInformation("skipped: reason={Reason}", reason);
             return null;
         }
+
+        var dispatched = LogHelpers.Truncate(chatMessage!.Text, out var dispatchedTruncated);
+        _logger.LogInformation(
+            "dispatched: content=\"{Content}\" truncated={Truncated}",
+            dispatched,
+            dispatchedTruncated);
 
         try
         {
             var response = await handler(chatMessage!, cancellationToken).ConfigureAwait(false);
-            return _translator.Render(response);
+            var rendered = _translator.Render(response);
+            _logger.LogInformation(
+                "reply: len={ReplyLength}",
+                rendered?.Length ?? 0);
+            return rendered;
         }
         catch (OperationCanceledException)
         {

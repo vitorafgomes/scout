@@ -76,6 +76,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 
         _client.Log += OnDiscordLogAsync;
         _client.MessageReceived += OnMessageReceivedAsync;
+        _client.Ready += OnReadyAsync;
+        _client.Disconnected += OnDisconnectedAsync;
+        _client.Connected += OnConnectedAsync;
 
         await _client.LoginAsync(TokenType.Bot, _botToken).ConfigureAwait(false);
         await _client.StartAsync().ConfigureAwait(false);
@@ -89,6 +92,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         }
 
         _client.MessageReceived -= OnMessageReceivedAsync;
+        _client.Ready -= OnReadyAsync;
+        _client.Disconnected -= OnDisconnectedAsync;
+        _client.Connected -= OnConnectedAsync;
         _client.Log -= OnDiscordLogAsync;
         _scoutHandler = null;
 
@@ -118,13 +124,15 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 return;
             }
 
+            var guildId = (message.Channel as SocketGuildChannel)?.Guild.Id;
             var inbound = new InboundDiscordMessage(
                 MessageId: message.Id,
                 AuthorId: message.Author.Id,
                 ChannelId: message.Channel.Id,
                 Content: message.Content ?? string.Empty,
                 MentionsSelf: message.MentionedUsers.Any(u => u.Id == botUserId),
-                Timestamp: message.Timestamp);
+                Timestamp: message.Timestamp,
+                GuildId: guildId);
 
             var reply = await _messageHandler
                 .HandleAsync(inbound, botUserId, handler, CancellationToken.None)
@@ -142,6 +150,38 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 "DiscordChatAdapter failed while processing message {MessageId}",
                 message.Id);
         }
+    }
+
+    private Task OnReadyAsync()
+    {
+        var user = _client.CurrentUser;
+        var guildCount = _client.Guilds?.Count ?? 0;
+        _logger.LogInformation(
+            "bot ready: user={BotUsername} id={BotUserId} guilds={GuildCount}",
+            user?.Username ?? string.Empty,
+            user?.Id ?? 0UL,
+            guildCount);
+        return Task.CompletedTask;
+    }
+
+    private Task OnDisconnectedAsync(Exception? exception)
+    {
+        var reason = exception?.Message ?? "unknown";
+        if (exception is not null)
+        {
+            _logger.LogWarning(exception, "gateway disconnected: reason={Reason}", reason);
+        }
+        else
+        {
+            _logger.LogInformation("gateway disconnected: reason={Reason}", reason);
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnConnectedAsync()
+    {
+        _logger.LogInformation("gateway reconnected");
+        return Task.CompletedTask;
     }
 
     private Task OnDiscordLogAsync(LogMessage message)
