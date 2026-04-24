@@ -7,6 +7,7 @@ import os from 'node:os';
 import { createLogger } from './util/logger.js';
 import { tryRecoverStaleLock } from './util/singleton-lock.js';
 import type { SingletonLockDeps } from './util/singleton-lock.js';
+import { isPidAlive } from './util/singleton-lock-deps.js';
 import { createMainWindow } from './browser-window-factory.js';
 import { registerDetectHandler } from './ipc/detect.js';
 import { registerVaultHandlers } from './ipc/vault.js';
@@ -43,14 +44,7 @@ function createProdSingletonLockDeps(log: typeof logger): SingletonLockDeps {
         throw err;
       }
     },
-    isPidAlive: (pid) => {
-      try {
-        process.kill(pid, 0);
-        return true;
-      } catch (err: unknown) {
-        return (err as NodeJS.ErrnoException).code === 'EPERM';
-      }
-    },
+    isPidAlive,
     logger: log,
   };
 }
@@ -98,7 +92,14 @@ app
   .then(async () => {
     const gotLock = app.requestSingleInstanceLock();
     if (!gotLock) {
-      const result = await tryRecoverStaleLock(createProdSingletonLockDeps(logger));
+      let result;
+      try {
+        result = await tryRecoverStaleLock(createProdSingletonLockDeps(logger));
+      } catch (err: unknown) {
+        logger.warn('singleton-lock recovery failed', { err });
+        app.quit();
+        return;
+      }
       if (result.cleared && app.requestSingleInstanceLock()) {
         logger.info('reclaimed lock after cleaning stale entry');
       } else {

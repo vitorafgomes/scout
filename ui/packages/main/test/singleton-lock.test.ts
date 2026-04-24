@@ -134,8 +134,53 @@ describe('tryRecoverStaleLock', () => {
     await expect(tryRecoverStaleLock(deps)).rejects.toThrow('EACCES');
   });
 
-  it('returns other-host when lock target has no dash (unparseable format)', async () => {
-    const deps = makeDeps({ readlink: async () => 'nodashformat' });
+  it('returns invalid-target when lock target has no dash', async () => {
+    const deps = makeDeps({ readlink: async () => 'singleprocess' });
+    const result = await tryRecoverStaleLock(deps);
+
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBe('invalid-target');
+    expect(deps.unlinkCalls).toHaveLength(0);
+  });
+
+  it('returns invalid-target when pid portion has trailing garbage', async () => {
+    const deps = makeDeps({ readlink: async () => 'pop-os-abc' });
+    const result = await tryRecoverStaleLock(deps);
+
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBe('invalid-target');
+    expect(deps.unlinkCalls).toHaveLength(0);
+  });
+
+  it('returns invalid-target when pid portion is empty', async () => {
+    const deps = makeDeps({ readlink: async () => 'pop-os-' });
+    const result = await tryRecoverStaleLock(deps);
+
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBe('invalid-target');
+    expect(deps.unlinkCalls).toHaveLength(0);
+  });
+
+  it('returns invalid-target when target is empty string', async () => {
+    const deps = makeDeps({ readlink: async () => '' });
+    const result = await tryRecoverStaleLock(deps);
+
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBe('invalid-target');
+    expect(deps.unlinkCalls).toHaveLength(0);
+  });
+
+  it('returns invalid-target when host prefix is empty', async () => {
+    const deps = makeDeps({ readlink: async () => '-12345' });
+    const result = await tryRecoverStaleLock(deps);
+
+    expect(result.cleared).toBe(false);
+    expect(result.reason).toBe('invalid-target');
+    expect(deps.unlinkCalls).toHaveLength(0);
+  });
+
+  it('returns other-host (not invalid-target) when parse succeeds but host differs', async () => {
+    const deps = makeDeps({ readlink: async () => 'other-host-1234' });
     const result = await tryRecoverStaleLock(deps);
 
     expect(result.cleared).toBe(false);

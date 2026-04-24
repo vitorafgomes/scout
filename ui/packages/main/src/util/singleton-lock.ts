@@ -11,19 +11,28 @@ export interface SingletonLockDeps {
 
 export interface SingletonLockRecoveryResult {
   cleared: boolean;
-  reason?: 'no-lock' | 'fresh-pid-alive' | 'same-host-dead-pid' | 'other-host';
+  reason?: 'no-lock' | 'fresh-pid-alive' | 'same-host-dead-pid' | 'other-host' | 'invalid-target';
 }
 
-function parseLockTarget(target: string): { host: string; pid: number } | null {
+const STRICT_PID_RE = /^\d+$/;
+
+function parseLockTarget(target: string): { host: string; pid: number } | { invalid: true } | null {
+  if (target.length === 0) return { invalid: true };
+
   const lastDash = target.lastIndexOf('-');
-  if (lastDash === -1) return null;
+  if (lastDash === -1) return { invalid: true };
 
   const rawPid = target.slice(lastDash + 1);
-  const pid = parseInt(rawPid, 10);
-  if (!Number.isFinite(pid) || rawPid.trim() === '') return null;
-
   const host = target.slice(0, lastDash);
-  if (host.length === 0) return null;
+
+  if (rawPid.length === 0 || host.length === 0) return { invalid: true };
+
+  if (!STRICT_PID_RE.test(rawPid)) return { invalid: true };
+
+  if (rawPid.length > 1 && rawPid[0] === '0') return { invalid: true };
+
+  const pid = parseInt(rawPid, 10);
+  if (!Number.isFinite(pid)) return { invalid: true };
 
   return { host, pid };
 }
@@ -41,9 +50,9 @@ export async function tryRecoverStaleLock(
   }
 
   const parsed = parseLockTarget(target);
-  if (parsed === null) {
+  if (parsed === null || 'invalid' in parsed) {
     logger.warn('SingletonLock target has unexpected format; leaving untouched', { target });
-    return { cleared: false, reason: 'other-host' };
+    return { cleared: false, reason: 'invalid-target' };
   }
 
   const { host, pid } = parsed;
