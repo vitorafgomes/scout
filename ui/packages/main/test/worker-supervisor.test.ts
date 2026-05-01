@@ -243,29 +243,32 @@ describe('createSupervisor', () => {
     // The supervisor's Windows shutdown path uses taskkill, not child.kill(SIGKILL),
     // so child.killed stays false. The graceful-stop sequence is covered elsewhere.
     // Skip on win32 to keep cross-OS CI green.
-    it.skipIf(process.platform === 'win32')('kills with SIGKILL when child does not exit within stopTimeout', async () => {
-      const { child, ...deps } = makeDeps({ stopTimeoutMs: 30 });
-      const supervisor = createSupervisor(deps);
+    it.skipIf(process.platform === 'win32')(
+      'kills with SIGKILL when child does not exit within stopTimeout',
+      async () => {
+        const { child, ...deps } = makeDeps({ stopTimeoutMs: 30 });
+        const supervisor = createSupervisor(deps);
 
-      const startPromise = supervisor.start();
-      await Promise.resolve();
-      await Promise.resolve();
-      emitReady(child);
-      await startPromise;
+        const startPromise = supervisor.start();
+        await Promise.resolve();
+        await Promise.resolve();
+        emitReady(child);
+        await startPromise;
 
-      // Do NOT emit exit — supervisor should SIGKILL after timeout
-      const stopPromise = supervisor.stop();
+        // Do NOT emit exit — supervisor should SIGKILL after timeout
+        const stopPromise = supervisor.stop();
 
-      // Wait long enough for the timeout to fire
-      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        // Wait long enough for the timeout to fire
+        await new Promise<void>((resolve) => setTimeout(resolve, 100));
 
-      // Emit exit so stop resolves
-      child.emit('exit', null, 'SIGKILL');
-      await stopPromise;
+        // Emit exit so stop resolves
+        child.emit('exit', null, 'SIGKILL');
+        await stopPromise;
 
-      // Should have attempted SIGKILL (last signal after SIGTERM failed)
-      expect(child.killed).toBe(true);
-    });
+        // Should have attempted SIGKILL (last signal after SIGTERM failed)
+        expect(child.killed).toBe(true);
+      },
+    );
   });
 
   describe('onEvent / getSnapshot', () => {

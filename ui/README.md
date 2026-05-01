@@ -19,7 +19,7 @@ process.
 ## Prerequisites
 
 - Bun 1.3 or newer — install from `https://bun.sh/` (`curl -fsSL
-  https://bun.sh/install | bash`).
+https://bun.sh/install | bash`).
 - .NET SDK matching the version in `../global.json` (currently 10.x).
 - Optional: [Ollama](https://ollama.com/) if you want a local LLM
   provider without paid credentials.
@@ -109,6 +109,21 @@ workflow run page.
 - **Bot does not respond to `@scout ping`.** Ensure the bot role has
   `SEND_MESSAGES` and that the `MESSAGE_CONTENT_INTENT` is enabled in
   the Discord Developer Portal.
+
+## Background mode
+
+Closing the main window hides it to the system tray; Scout keeps
+running. Open the tray icon next to your clock to:
+
+- Open the main window again.
+- See current worker status.
+- Stop the worker.
+- Quit Scout Desktop.
+
+On pure GNOME Shell, install the
+[AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/)
+extension; the tray works out of the box on KDE, XFCE, Cinnamon,
+and Pop!\_OS.
 
 ## Where docs live
 
