@@ -11,6 +11,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Adapter.Discord.Tests/Scout.Adapter.Discord.Tests.csproj" />
     <Project Path="tests/Scout.Core.Tests/Scout.Core.Tests.csproj" />
+    <Project Path="tests/Scout.Host.Worker.Tests/Scout.Host.Worker.Tests.csproj" />
     <Project Path="tests/Scout.Llm.Ollama.Tests/Scout.Llm.Ollama.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CloudStatus.Tests/Scout.Plugin.CloudStatus.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CodeQA.Tests/Scout.Plugin.CodeQA.Tests.csproj" />
