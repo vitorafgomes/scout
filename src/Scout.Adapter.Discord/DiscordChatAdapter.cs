@@ -2,6 +2,7 @@ using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Scout.Adapter.Discord.Streaming;
 using Scout.Core.Chat;
 
 namespace Scout.Adapter.Discord;
@@ -10,15 +11,17 @@ namespace Scout.Adapter.Discord;
 /// Discord implementation of <see cref="IChatAdapter"/>. Owns a single
 /// <see cref="DiscordSocketClient"/> that listens for guild messages that
 /// mention the bot, maps each one into an <see cref="InboundDiscordMessage"/>,
-/// and delegates to <see cref="DiscordMessageHandler"/> for translation and
-/// rendering. Replies are posted back to the originating channel only —
-/// the read-only invariant allows a reply to the inbound message but no
-/// other writes.
+/// and delegates to <see cref="DiscordMessageHandler"/> for translation +
+/// dispatch. The resulting <see cref="ChatResponse"/> (plain or streaming)
+/// is handed to <see cref="IDiscordReplyPoster"/>, which owns posting and
+/// incremental edits. The read-only invariant allows a reply to the inbound
+/// message but no other writes.
 /// </summary>
 public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 {
     private readonly string _botToken;
     private readonly DiscordMessageHandler _messageHandler;
+    private readonly IDiscordReplyPoster _poster;
     private readonly ILogger<DiscordChatAdapter> _logger;
     private readonly DiscordSocketClient _client;
 
@@ -28,11 +31,13 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     public DiscordChatAdapter(
         IOptions<DiscordOptions> options,
         DiscordMessageHandler messageHandler,
+        IDiscordReplyPoster poster,
         ILogger<DiscordChatAdapter> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.Value);
         _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
+        _poster = poster ?? throw new ArgumentNullException(nameof(poster));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         if (string.IsNullOrWhiteSpace(options.Value.BotToken))
@@ -134,14 +139,18 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 Timestamp: message.Timestamp,
                 GuildId: guildId);
 
-            var reply = await _messageHandler
+            var response = await _messageHandler
                 .HandleAsync(inbound, botUserId, handler, CancellationToken.None)
                 .ConfigureAwait(false);
 
-            if (!string.IsNullOrWhiteSpace(reply))
+            if (response is null)
             {
-                await message.Channel.SendMessageAsync(reply).ConfigureAwait(false);
+                return;
             }
+
+            await _poster
+                .PostAsync(message.Channel, response, CancellationToken.None)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {

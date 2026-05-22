@@ -17,8 +17,11 @@ public class CodeQAMessageRouterTests
         return new VectorSearchResult(chunk, 0.7);
     }
 
-    private static CodeQAFunctions FunctionsReturning(
-        CodeAnswer answer,
+    // Builds a real CodeQAFunctions backed by stub retriever + composer so the
+    // router exercises the same StartStreamingAskAsync path the production
+    // wiring uses.
+    private static CodeQAFunctions FunctionsStreaming(
+        string answerText,
         VectorSearchResult[]? hits = null)
     {
         var retriever = Substitute.For<IRetriever>();
@@ -29,13 +32,29 @@ public class CodeQAMessageRouterTests
 
         var composer = Substitute.For<IComposer>();
         composer
-            .ComposeAsync(
+            .ComposeStreamingAsync(
                 Arg.Any<string>(),
                 Arg.Any<IReadOnlyList<VectorSearchResult>>(),
                 Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(answer));
+            .Returns(_ => YieldOne(answerText));
 
         return new CodeQAFunctions(retriever, composer);
+    }
+
+    private static async IAsyncEnumerable<string> YieldOne(string text)
+    {
+        await Task.Yield();
+        yield return text;
+    }
+
+    private static async Task<string> CollectAsync(IAsyncEnumerable<string> stream)
+    {
+        var parts = new List<string>();
+        await foreach (var chunk in stream)
+        {
+            parts.Add(chunk);
+        }
+        return string.Concat(parts);
     }
 
     [Theory]
@@ -47,8 +66,7 @@ public class CodeQAMessageRouterTests
     [InlineData("CODE please")]
     public async Task Matches_Expected_Keywords(string text)
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("answer");
         var router = new CodeQAMessageRouter(functions);
 
         var response = await router.RouteAsync(
@@ -56,7 +74,9 @@ public class CodeQAMessageRouterTests
             CancellationToken.None);
 
         response.ShouldNotBeNull();
-        response!.Text.ShouldContain("answer");
+        response!.IsStreaming.ShouldBeTrue();
+        response.Stream.ShouldNotBeNull();
+        (await CollectAsync(response.Stream!)).ShouldContain("answer");
     }
 
     [Theory]
@@ -66,8 +86,7 @@ public class CodeQAMessageRouterTests
     [InlineData("explaining")]        // must not match "explain" as substring
     public async Task Returns_Null_For_Non_Matching_Text(string text)
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("answer");
         var router = new CodeQAMessageRouter(functions);
 
         var response = await router.RouteAsync(
@@ -80,8 +99,7 @@ public class CodeQAMessageRouterTests
     [Fact]
     public async Task Null_Message_Throws()
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("answer");
         var router = new CodeQAMessageRouter(functions);
 
         await Should.ThrowAsync<ArgumentNullException>(() =>
@@ -96,15 +114,14 @@ public class CodeQAMessageRouterTests
     }
 
     [Fact]
-    public async Task Appends_Sources_Footer_When_Citations_Present()
+    public async Task Exposes_Citations_For_Each_Retrieved_Hit()
     {
-        var citations = new[]
+        var hits = new[]
         {
-            new Citation("a.cs", 1, 2, 0.9),
-            new Citation("b.cs", 10, 12, 0.5),
+            MakeHit("a.cs", 1, 2),
+            MakeHit("b.cs", 10, 12),
         };
-        var functions = FunctionsReturning(
-            new CodeAnswer("the answer", citations, "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("the answer", hits);
         var router = new CodeQAMessageRouter(functions);
 
         var response = await router.RouteAsync(
@@ -112,20 +129,22 @@ public class CodeQAMessageRouterTests
             CancellationToken.None);
 
         response.ShouldNotBeNull();
-        response!.Text.ShouldContain("the answer");
-        response.Text.ShouldContain("Sources:");
-        response.Text.ShouldContain("- a.cs:1-2");
-        response.Text.ShouldContain("- b.cs:10-12");
+        response!.IsStreaming.ShouldBeTrue();
         response.Citations.Count.ShouldBe(2);
-        response.Citations[0].ShouldBe("a.cs:1-2");
-        response.Citations[1].ShouldBe("b.cs:10-12");
+        response.Citations[0].Label.ShouldBe("a.cs:1-2");
+        response.Citations[0].Path.ShouldBe("a.cs");
+        response.Citations[0].Line.ShouldBe(1);
+        response.Citations[1].Label.ShouldBe("b.cs:10-12");
+        response.Citations[1].Path.ShouldBe("b.cs");
+        response.Citations[1].Line.ShouldBe(10);
+
+        (await CollectAsync(response.Stream!)).ShouldBe("the answer");
     }
 
     [Fact]
-    public async Task Omits_Sources_Footer_When_No_Citations()
+    public async Task Empty_Citations_When_No_Hits()
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("plain answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("plain answer");
         var router = new CodeQAMessageRouter(functions);
 
         var response = await router.RouteAsync(
@@ -133,16 +152,15 @@ public class CodeQAMessageRouterTests
             CancellationToken.None);
 
         response.ShouldNotBeNull();
-        response!.Text.ShouldBe("plain answer");
-        response.Text.ShouldNotContain("Sources:");
+        response!.IsStreaming.ShouldBeTrue();
         response.Citations.ShouldBeEmpty();
+        (await CollectAsync(response.Stream!)).ShouldBe("plain answer");
     }
 
     [Fact]
     public async Task Respects_Custom_Keyword_Set()
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("answer");
         var router = new CodeQAMessageRouter(functions, keywords: new[] { "widget" });
 
         var matches = await router.RouteAsync(
@@ -159,8 +177,7 @@ public class CodeQAMessageRouterTests
     [Fact]
     public async Task Null_Keywords_Falls_Back_To_Defaults()
     {
-        var functions = FunctionsReturning(
-            new CodeAnswer("answer", Array.Empty<Citation>(), "m", TimeSpan.Zero));
+        var functions = FunctionsStreaming("answer");
         var router = new CodeQAMessageRouter(functions, keywords: null);
 
         var response = await router.RouteAsync(

@@ -32,16 +32,16 @@ public class DiscordMessageHandlerTests
     [Fact]
     public async Task Returns_Null_When_Translator_Rejects_Message()
     {
-        // Message from the bot itself — translator rejects.
+        // Message from the bot itself - translator rejects.
         var inbound = ValidInbound() with { AuthorId = BotUserId };
 
-        var reply = await Sut().HandleAsync(
+        var response = await Sut().HandleAsync(
             inbound,
             BotUserId,
             handler: (_, _) => throw new InvalidOperationException("must not run"),
             CancellationToken.None);
 
-        reply.ShouldBeNull();
+        response.ShouldBeNull();
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class DiscordMessageHandlerTests
     {
         ChatMessage? captured = null;
 
-        var reply = await Sut().HandleAsync(
+        var response = await Sut().HandleAsync(
             ValidInbound("<@1111> status"),
             BotUserId,
             handler: (msg, _) =>
@@ -63,37 +63,69 @@ public class DiscordMessageHandlerTests
         captured!.UserId.ShouldBe(HumanUserId.ToString());
         captured.ChannelId.ShouldBe(ChannelId.ToString());
         captured.Text.ShouldBe("status");
-        reply.ShouldBe("ok");
+        response.ShouldNotBeNull();
+        response!.IsStreaming.ShouldBeFalse();
+        response.Text.ShouldBe("ok");
     }
 
     [Fact]
-    public async Task Renders_Response_With_Citations_As_Sources_Footer()
+    public async Task Returns_Response_With_Citations_Untouched()
     {
-        var reply = await Sut().HandleAsync(
+        // The handler no longer renders citations into text - it returns the
+        // ChatResponse as-is so the poster can format it.
+        var citations = new[] { new Citation("src/Checkout.cs:10-50") };
+        var response = await Sut().HandleAsync(
             ValidInbound(),
             BotUserId,
             handler: (_, _) => Task.FromResult(new ChatResponse(
                 "checkout lives here",
-                ["src/Checkout.cs:10-50"])),
+                citations)),
             CancellationToken.None);
 
-        reply.ShouldNotBeNull();
-        reply.ShouldContain("checkout lives here");
-        reply.ShouldContain("Sources:");
-        reply.ShouldContain("- src/Checkout.cs:10-50");
+        response.ShouldNotBeNull();
+        response!.IsStreaming.ShouldBeFalse();
+        response.Text.ShouldBe("checkout lives here");
+        response.Citations.Count.ShouldBe(1);
+        response.Citations[0].Label.ShouldBe("src/Checkout.cs:10-50");
     }
 
     [Fact]
-    public async Task Returns_Generic_Error_Reply_When_Handler_Throws()
+    public async Task Returns_Streaming_Response_Untouched()
     {
-        var reply = await Sut().HandleAsync(
+        async IAsyncEnumerable<string> Tokens()
+        {
+            await Task.Yield();
+            yield return "hello ";
+            yield return "world";
+        }
+
+        var streaming = ChatResponse.Streaming(Tokens());
+
+        var response = await Sut().HandleAsync(
+            ValidInbound(),
+            BotUserId,
+            handler: (_, _) => Task.FromResult(streaming),
+            CancellationToken.None);
+
+        response.ShouldNotBeNull();
+        response!.IsStreaming.ShouldBeTrue();
+        response.Stream.ShouldNotBeNull();
+        response.Text.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Returns_Generic_Error_Response_When_Handler_Throws()
+    {
+        var response = await Sut().HandleAsync(
             ValidInbound(),
             BotUserId,
             handler: (_, _) => throw new InvalidOperationException("boom"),
             CancellationToken.None);
 
-        reply.ShouldNotBeNullOrWhiteSpace();
-        reply.ShouldContain("something went wrong");
+        response.ShouldNotBeNull();
+        response!.IsStreaming.ShouldBeFalse();
+        response.Text.ShouldNotBeNullOrWhiteSpace();
+        response.Text!.ShouldContain("something went wrong");
     }
 
     [Fact]
@@ -158,13 +190,13 @@ public class DiscordMessageHandlerTests
         var logger = new RecordingLogger<DiscordMessageHandler>();
         var inbound = ValidInbound() with { MentionsSelf = false };
 
-        var reply = await Sut(logger).HandleAsync(
+        var response = await Sut(logger).HandleAsync(
             inbound,
             BotUserId,
             handler: (_, _) => throw new InvalidOperationException("must not run"),
             CancellationToken.None);
 
-        reply.ShouldBeNull();
+        response.ShouldBeNull();
         var infos = logger.MessagesAt(LogLevel.Information);
         infos.ShouldContain(m => m.StartsWith("inbound:", StringComparison.Ordinal));
         infos.ShouldContain(m => m == "skipped: reason=no-mention");

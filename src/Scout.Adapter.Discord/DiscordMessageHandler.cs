@@ -6,12 +6,15 @@ namespace Scout.Adapter.Discord;
 /// <summary>
 /// Bridges an inbound Discord payload and a Scout core handler. Isolated
 /// from <see cref="DiscordChatAdapter"/> so the flow (translate -> invoke
-/// handler -> render) can be unit-tested without touching Discord.Net.
+/// handler) can be unit-tested without touching Discord.Net. Rendering /
+/// posting is owned by <c>IDiscordReplyPoster</c>; the handler hands the
+/// adapter the raw <see cref="ChatResponse"/> (plain or streaming) and lets
+/// the poster decide how to surface it.
 /// </summary>
 public sealed class DiscordMessageHandler
 {
-    private const string GenericErrorReply =
-        "Sorry, something went wrong while answering. Please try again.";
+    private static readonly ChatResponse GenericErrorResponse =
+        ChatResponse.Plain("Sorry, something went wrong while answering. Please try again.");
 
     private readonly DiscordMessageTranslator _translator;
     private readonly ILogger<DiscordMessageHandler> _logger;
@@ -25,11 +28,12 @@ public sealed class DiscordMessageHandler
     }
 
     /// <summary>
-    /// Process one inbound Discord message. Returns the text to post back to
-    /// Discord, or <c>null</c> if the translator decided the message should
-    /// be ignored (bot author, no mention, empty content after stripping).
+    /// Process one inbound Discord message. Returns the <see cref="ChatResponse"/>
+    /// produced by the Scout host (plain or streaming) for the adapter to post,
+    /// or <c>null</c> if the translator decided the message should be ignored
+    /// (bot author, no mention, empty content after stripping).
     /// </summary>
-    public async Task<string?> HandleAsync(
+    public async Task<ChatResponse?> HandleAsync(
         InboundDiscordMessage inbound,
         ulong botUserId,
         Func<ChatMessage, CancellationToken, Task<ChatResponse>> handler,
@@ -64,11 +68,11 @@ public sealed class DiscordMessageHandler
         try
         {
             var response = await handler(chatMessage!, cancellationToken).ConfigureAwait(false);
-            var rendered = _translator.Render(response);
             _logger.LogInformation(
-                "reply: len={ReplyLength}",
-                rendered?.Length ?? 0);
-            return rendered;
+                "reply: streaming={IsStreaming} citations={CitationCount}",
+                response.IsStreaming,
+                response.Citations.Count);
+            return response;
         }
         catch (OperationCanceledException)
         {
@@ -81,7 +85,7 @@ public sealed class DiscordMessageHandler
                 "Handler threw while processing Discord message {MessageId} from user {AuthorId}",
                 inbound.MessageId,
                 inbound.AuthorId);
-            return GenericErrorReply;
+            return GenericErrorResponse;
         }
     }
 }
