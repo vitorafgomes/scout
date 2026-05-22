@@ -44,4 +44,19 @@ internal sealed class FakeComposer : IComposer
         var text = $"ECHO: {question}";
         return Task.FromResult(new CodeAnswer(text, citations, _modelUsed, _latency));
     }
+
+    public async IAsyncEnumerable<string> ComposeStreamingAsync(
+        string question,
+        IReadOnlyList<VectorSearchResult> context,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(question);
+        ArgumentNullException.ThrowIfNull(context);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Mirror ComposeAsync: yield a single chunk with the echoed text.
+        await Task.Yield();
+        yield return $"ECHO: {question}";
+    }
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Scout.Adapter.Discord.Streaming;
 
 namespace Scout.Adapter.Discord.Tests;
 
@@ -21,6 +22,7 @@ public class DiscordChatAdapterTests
             new DiscordMessageHandler(
                 new DiscordMessageTranslator(),
                 NullLogger<DiscordMessageHandler>.Instance),
+            Substitute.For<IDiscordReplyPoster>(),
             NullLogger<DiscordChatAdapter>.Instance);
 
         create.ShouldThrow<ArgumentNullException>();
@@ -34,6 +36,23 @@ public class DiscordChatAdapterTests
         Action create = () => new DiscordChatAdapter(
             opts,
             messageHandler: null!,
+            Substitute.For<IDiscordReplyPoster>(),
+            NullLogger<DiscordChatAdapter>.Instance);
+
+        create.ShouldThrow<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_Poster_Null()
+    {
+        var opts = Options.Create(new DiscordOptions { BotToken = "fake-token" });
+
+        Action create = () => new DiscordChatAdapter(
+            opts,
+            new DiscordMessageHandler(
+                new DiscordMessageTranslator(),
+                NullLogger<DiscordMessageHandler>.Instance),
+            poster: null!,
             NullLogger<DiscordChatAdapter>.Instance);
 
         create.ShouldThrow<ArgumentNullException>();
@@ -49,6 +68,7 @@ public class DiscordChatAdapterTests
             new DiscordMessageHandler(
                 new DiscordMessageTranslator(),
                 NullLogger<DiscordMessageHandler>.Instance),
+            Substitute.For<IDiscordReplyPoster>(),
             logger: null!);
 
         create.ShouldThrow<ArgumentNullException>();
@@ -67,6 +87,7 @@ public class DiscordChatAdapterTests
             new DiscordMessageHandler(
                 new DiscordMessageTranslator(),
                 NullLogger<DiscordMessageHandler>.Instance),
+            Substitute.For<IDiscordReplyPoster>(),
             NullLogger<DiscordChatAdapter>.Instance);
 
         create.ShouldThrow<ArgumentException>()
@@ -101,6 +122,7 @@ public class DiscordChatAdapterTests
             new DiscordMessageHandler(
                 new DiscordMessageTranslator(),
                 NullLogger<DiscordMessageHandler>.Instance),
+            Substitute.For<IDiscordReplyPoster>(),
             NullLogger<DiscordChatAdapter>.Instance);
     }
 }

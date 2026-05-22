@@ -49,23 +49,11 @@ public sealed class CodeQAMessageRouter : IMessageRouter
             return null;
         }
 
-        var answer = await _functions
-            .AskAsync(message.Text, cancellationToken)
+        var streamingAnswer = await _functions
+            .StartStreamingAskAsync(message.Text, cancellationToken)
             .ConfigureAwait(false);
 
-        string text;
-        if (answer.Citations.Count == 0)
-        {
-            text = answer.Text;
-        }
-        else
-        {
-            var footer = string.Join("\n", answer.Citations.Select(c => $"- {c}"));
-            text = $"{answer.Text}\n\nSources:\n{footer}";
-        }
-
-        var citations = answer.Citations.Select(c => c.ToString()).ToArray();
-        return new ChatResponse(text, citations);
+        return ChatResponse.Streaming(streamingAnswer.Tokens, streamingAnswer.Citations);
     }
 
     private bool MatchesKeyword(string text)

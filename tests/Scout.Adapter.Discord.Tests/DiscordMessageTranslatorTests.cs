@@ -106,7 +106,11 @@ public class DiscordMessageTranslatorTests
     {
         var response = new ChatResponse(
             "the checkout flow lives in CheckoutService",
-            ["src/Checkout/CheckoutService.cs:42-120", "docs/checkout.md:1-30"]);
+            new[]
+            {
+                new Citation("src/Checkout/CheckoutService.cs:42-120"),
+                new Citation("docs/checkout.md:1-30"),
+            });
 
         var rendered = Sut().Render(response);
 

@@ -29,7 +29,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "hello"),
             CancellationToken.None);
 
-        response.Text.ShouldContain("Scout is online");
+        response.Text!.ShouldContain("Scout is online");
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "hi there"),
             CancellationToken.None);
 
-        response.Text.ShouldContain("2 plugin");
+        response.Text!.ShouldContain("2 plugin");
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class ScoutHostTests
             new ChatMessage("u1", "c1", "boom"),
             CancellationToken.None);
 
-        response.Text.ShouldContain("something went wrong");
+        response.Text!.ShouldContain("something went wrong");
     }
 
     [Fact]

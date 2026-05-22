@@ -21,4 +21,18 @@ public interface IComposer
         string question,
         IReadOnlyList<VectorSearchResult> context,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streaming variant of <see cref="ComposeAsync"/>. Yields raw token
+    /// chunks from the underlying chat service as they arrive. Citations
+    /// are not part of the stream — callers compute them from the same
+    /// <paramref name="context"/> the composer consumes.
+    /// </summary>
+    /// <param name="question">Non-null, non-whitespace user question.</param>
+    /// <param name="context">Non-null list of retrieved chunks (may be empty).</param>
+    /// <param name="cancellationToken">Cooperative cancellation token.</param>
+    IAsyncEnumerable<string> ComposeStreamingAsync(
+        string question,
+        IReadOnlyList<VectorSearchResult> context,
+        CancellationToken cancellationToken);
 }

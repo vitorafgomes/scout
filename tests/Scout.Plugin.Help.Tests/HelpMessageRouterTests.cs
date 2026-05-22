@@ -55,19 +55,19 @@ public class HelpMessageRouterTests
             .RouteAsync(Msg("help"), CancellationToken.None);
 
         response.ShouldNotBeNull();
-        response!.Text.ShouldContain("Scout is online");
-        response.Text.ShouldContain("@scout ping");
-        response.Text.ShouldContain("@scout help");
-        response.Text.ShouldContain("@scout version");
-        response.Text.ShouldContain("- CloudStatus");
-        response.Text.ShouldContain("- CodeQA");
+        response!.Text!.ShouldContain("Scout is online");
+        response.Text!.ShouldContain("@scout ping");
+        response.Text!.ShouldContain("@scout help");
+        response.Text!.ShouldContain("@scout version");
+        response.Text!.ShouldContain("- CloudStatus");
+        response.Text!.ShouldContain("- CodeQA");
         // Command list is wrapped in a Discord code block so the monospace
         // font aligns the dash columns; the fence must appear twice.
-        response.Text.ShouldContain("```");
-        Regex.Matches(response.Text, "```").Count.ShouldBe(2);
+        response.Text!.ShouldContain("```");
+        Regex.Matches(response.Text!, "```").Count.ShouldBe(2);
         // Help plugin itself must not be rendered as a separate bullet -
         // it is already represented by the three built-in command lines.
-        Regex.Matches(response.Text, @"(?m)^- Help$").Count.ShouldBe(0);
+        Regex.Matches(response.Text!, @"(?m)^- Help$").Count.ShouldBe(0);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class HelpMessageRouterTests
         var response = await Sut().RouteAsync(Msg("version"), CancellationToken.None);
 
         response.ShouldNotBeNull();
-        Regex.IsMatch(response!.Text, @"^Scout worker v\d+\.\d+\.\d+", RegexOptions.IgnoreCase)
+        Regex.IsMatch(response!.Text!, @"^Scout worker v\d+\.\d+\.\d+", RegexOptions.IgnoreCase)
             .ShouldBeTrue($"actual: {response.Text}");
     }
 
