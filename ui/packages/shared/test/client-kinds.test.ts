@@ -38,6 +38,11 @@ describe('VAULT_KEYS', () => {
       'discord.client-id',
       'discord.guild-id',
       'discord.guild-name',
+      'llm.provider',
+      'llm.model',
+      'llm.endpoint',
+      'stt.provider',
+      'stt.model',
     ]);
   });
 
@@ -56,6 +61,16 @@ describe('VAULT_KEYS', () => {
           return 'guild-id';
         case 'discord.guild-name':
           return 'guild-name';
+        case 'llm.provider':
+          return 'llm-provider';
+        case 'llm.model':
+          return 'llm-model';
+        case 'llm.endpoint':
+          return 'llm-endpoint';
+        case 'stt.provider':
+          return 'stt-provider';
+        case 'stt.model':
+          return 'stt-model';
         default: {
           const _exhaustive: never = key;
           return _exhaustive;

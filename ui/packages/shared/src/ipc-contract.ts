@@ -19,6 +19,22 @@ export const CHANNEL = {
   appGetVersion: 'scout:app.getVersion',
   appQuit: 'scout:app.quit',
   diagnosticsExport: 'scout:diagnostics.export',
+  llmListOllamaModels: 'scout:llm.listOllamaModels',
+  llmPullOllamaModel: 'scout:llm.pullOllamaModel',
+  llmPullOllamaProgress: 'scout:llm.pullOllamaProgress',
+  llmDeleteOllamaModel: 'scout:llm.deleteOllamaModel',
+  llmListLmStudioModels: 'scout:llm.listLmStudioModels',
+  whisperListInstalled: 'scout:whisper.listInstalled',
+  whisperDownloadModel: 'scout:whisper.downloadModel',
+  whisperDownloadProgress: 'scout:whisper.downloadProgress',
+  whisperDeleteModel: 'scout:whisper.deleteModel',
+  llmDetectEnvironment: 'scout:llm.detectEnvironment',
+  shellOpenExternal: 'scout:shell.openExternal',
+  providersList: 'scout:providers.list',
+  providerStatus: 'scout:providers.status',
+  providerStart: 'scout:providers.start',
+  providerRestart: 'scout:providers.restart',
+  providerSetAutostart: 'scout:providers.setAutostart',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -121,6 +137,139 @@ export interface DiagnosticsExportResponse {
   readonly bundle: string;
 }
 
+export interface LlmListOllamaModelsRequest {
+  readonly endpoint: string;
+}
+
+export interface OllamaModelInfo {
+  readonly name: string;
+  readonly modifiedAt: string;
+  readonly sizeBytes: number;
+}
+
+export interface LlmListOllamaModelsResponse {
+  readonly models: readonly OllamaModelInfo[];
+}
+
+export interface LlmPullOllamaModelRequest {
+  readonly endpoint: string;
+  readonly tag: string;
+  readonly requestId: string;
+}
+
+export interface LlmPullOllamaModelResponse {
+  readonly tag: string;
+}
+
+export interface LlmPullOllamaProgressEvent {
+  readonly requestId: string;
+  readonly tag: string;
+  readonly status: string;
+  readonly percent: number;
+  readonly completedBytes: number;
+  readonly totalBytes: number;
+}
+
+export interface LlmDeleteOllamaModelRequest {
+  readonly endpoint: string;
+  readonly tag: string;
+}
+
+export interface LlmDeleteOllamaModelResponse {
+  readonly tag: string;
+}
+
+export type WhisperVariant = 'large-v3' | 'large-v3-turbo';
+
+export interface WhisperListInstalledResponse {
+  readonly installed: readonly WhisperVariant[];
+}
+
+export interface WhisperDownloadModelRequest {
+  readonly variant: WhisperVariant;
+  readonly requestId: string;
+}
+
+export interface WhisperDownloadModelResponse {
+  readonly variant: WhisperVariant;
+  readonly path: string;
+}
+
+export interface WhisperDownloadProgressEvent {
+  readonly requestId: string;
+  readonly variant: WhisperVariant;
+  readonly percent: number;
+  readonly completedBytes: number;
+  readonly totalBytes: number;
+}
+
+export interface WhisperDeleteModelRequest {
+  readonly variant: WhisperVariant;
+}
+
+export interface WhisperDeleteModelResponse {
+  readonly variant: WhisperVariant;
+}
+
+export interface LlmListLmStudioModelsRequest {
+  readonly endpoint: string;
+}
+
+export interface LmStudioModelInfo {
+  readonly id: string;
+}
+
+export interface LlmListLmStudioModelsResponse {
+  readonly models: readonly LmStudioModelInfo[];
+}
+
+export type ProviderId = 'ollama' | 'lm-studio';
+
+export interface ProviderModelDto {
+  readonly name: string;
+  readonly sizeBytes: number;
+  readonly modifiedAt: string;
+}
+
+export interface ProviderErrorDto {
+  readonly code: string;
+  readonly message: string;
+}
+
+export interface ProviderStatusDto {
+  readonly id: ProviderId;
+  readonly installed: boolean;
+  readonly running: boolean;
+  readonly endpoint: string | null;
+  readonly version: string | null;
+  readonly managedByWorker: boolean;
+  readonly autostart: boolean;
+  readonly supportsLifecycle: boolean;
+  readonly lastError: ProviderErrorDto | null;
+  readonly models: readonly ProviderModelDto[];
+}
+
+export interface ProviderStatusRequest {
+  readonly id: ProviderId;
+}
+
+export interface ProviderStartRequest {
+  readonly id: ProviderId;
+}
+
+export interface ProviderRestartRequest {
+  readonly id: ProviderId;
+}
+
+export interface ProviderAutostartRequest {
+  readonly id: ProviderId;
+  readonly enabled: boolean;
+}
+
+export interface ProvidersListResponse {
+  readonly providers: readonly ProviderStatusDto[];
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -140,4 +289,24 @@ export interface ScoutBridge {
   appGetVersion(): Promise<AppGetVersionResponse>;
   appQuit(): Promise<void>;
   diagnosticsExport(): Promise<DiagnosticsExportResponse>;
+  llmListOllamaModels(req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse>;
+  llmPullOllamaModel(req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse>;
+  onLlmPullOllamaProgress(listener: (event: LlmPullOllamaProgressEvent) => void): () => void;
+  llmDeleteOllamaModel(
+    req: LlmDeleteOllamaModelRequest,
+  ): Promise<LlmDeleteOllamaModelResponse>;
+  llmListLmStudioModels(
+    req: LlmListLmStudioModelsRequest,
+  ): Promise<LlmListLmStudioModelsResponse>;
+  whisperListInstalled(): Promise<WhisperListInstalledResponse>;
+  whisperDownloadModel(req: WhisperDownloadModelRequest): Promise<WhisperDownloadModelResponse>;
+  onWhisperDownloadProgress(
+    listener: (event: WhisperDownloadProgressEvent) => void,
+  ): () => void;
+  whisperDeleteModel(req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse>;
+  providersList(): Promise<ProvidersListResponse>;
+  providerStatus(req: ProviderStatusRequest): Promise<ProviderStatusDto>;
+  providerStart(req: ProviderStartRequest): Promise<ProviderStatusDto>;
+  providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
+  providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
 }

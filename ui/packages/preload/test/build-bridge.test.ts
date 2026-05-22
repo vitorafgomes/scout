@@ -33,6 +33,20 @@ describe('buildBridge', () => {
       'appGetVersion',
       'appQuit',
       'diagnosticsExport',
+      'llmListOllamaModels',
+      'llmListLmStudioModels',
+      'llmPullOllamaModel',
+      'onLlmPullOllamaProgress',
+      'llmDeleteOllamaModel',
+      'whisperListInstalled',
+      'whisperDownloadModel',
+      'onWhisperDownloadProgress',
+      'whisperDeleteModel',
+      'providersList',
+      'providerStatus',
+      'providerStart',
+      'providerRestart',
+      'providerSetAutostart',
     ];
 
     const actualKeys = Object.keys(bridge).sort();

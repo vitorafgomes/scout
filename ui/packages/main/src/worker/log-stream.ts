@@ -7,9 +7,11 @@ export interface LogStreamDeps {
   ringBuffer: WorkerEvent[];
   ringLimit: number;
   onReady?: () => void;
+  onHttpEndpoint?: (endpoint: string) => void;
 }
 
 const READY_MARKER = 'SCOUT_READY';
+const HTTP_MARKER_PREFIX = 'SCOUT_HTTP=';
 
 function pushToRing(ring: WorkerEvent[], limit: number, event: WorkerEvent): void {
   ring.push(event);
@@ -26,8 +28,16 @@ export function attachLogStream(child: ChildProcess, deps: LogStreamDeps): void 
     pushToRing(ringBuffer, ringLimit, event);
     emit(event);
 
-    if (kind === 'stdout' && line.trim() === READY_MARKER) {
-      onReady?.();
+    if (kind === 'stdout') {
+      const trimmed = line.trim();
+      if (trimmed === READY_MARKER) {
+        onReady?.();
+      } else if (trimmed.startsWith(HTTP_MARKER_PREFIX)) {
+        const host = trimmed.slice(HTTP_MARKER_PREFIX.length).trim();
+        if (host.length > 0) {
+          deps.onHttpEndpoint?.(`http://${host}`);
+        }
+      }
     }
   }
 

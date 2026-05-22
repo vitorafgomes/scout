@@ -4,13 +4,23 @@ export type VaultKey =
   | 'discord.bot-token'
   | 'discord.client-id'
   | 'discord.guild-id'
-  | 'discord.guild-name';
+  | 'discord.guild-name'
+  | 'llm.provider'
+  | 'llm.model'
+  | 'llm.endpoint'
+  | 'stt.provider'
+  | 'stt.model';
 
 export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
   'discord.bot-token',
   'discord.client-id',
   'discord.guild-id',
   'discord.guild-name',
+  'llm.provider',
+  'llm.model',
+  'llm.endpoint',
+  'stt.provider',
+  'stt.model',
 ] as const);
 
 export const CLIENT_KINDS: readonly ClientKind[] = Object.freeze([

@@ -25,6 +25,22 @@ describe('CHANNEL constant', () => {
         'discordBuildOAuthUrl',
         'discordCancelOAuthInstall',
         'discordStartOAuthInstall',
+        'llmDeleteOllamaModel',
+        'llmDetectEnvironment',
+        'llmListLmStudioModels',
+        'llmListOllamaModels',
+        'llmPullOllamaModel',
+        'llmPullOllamaProgress',
+        'providerRestart',
+        'providerSetAutostart',
+        'providerStart',
+        'providerStatus',
+        'providersList',
+        'shellOpenExternal',
+        'whisperDeleteModel',
+        'whisperDownloadModel',
+        'whisperDownloadProgress',
+        'whisperListInstalled',
         'vaultDelete',
         'vaultHas',
         'vaultIsAvailable',
@@ -59,6 +75,22 @@ describe('ChannelName type', () => {
       'scout:app.getVersion': true,
       'scout:app.quit': true,
       'scout:diagnostics.export': true,
+      'scout:llm.listOllamaModels': true,
+      'scout:llm.pullOllamaModel': true,
+      'scout:llm.pullOllamaProgress': true,
+      'scout:llm.deleteOllamaModel': true,
+      'scout:llm.listLmStudioModels': true,
+      'scout:llm.detectEnvironment': true,
+      'scout:shell.openExternal': true,
+      'scout:whisper.listInstalled': true,
+      'scout:whisper.downloadModel': true,
+      'scout:whisper.downloadProgress': true,
+      'scout:whisper.deleteModel': true,
+      'scout:providers.list': true,
+      'scout:providers.status': true,
+      'scout:providers.start': true,
+      'scout:providers.restart': true,
+      'scout:providers.setAutostart': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });
@@ -70,13 +102,20 @@ describe('no-external-write sanity scan', () => {
   // from Scout's perspective (Discord, GitHub, cloud APIs, etc. are never
   // mutated via IPC; all outbound mutation is blocked by Scout.Core).
   //
-  // - scout:vault.store   -> local safeStorage write, never leaves the machine
-  // - scout:vault.delete  -> local safeStorage delete, never leaves the machine
-  // - scout:worker.stop   -> local child-process signal, not an external API call
+  // - scout:vault.store           -> local safeStorage write, never leaves the machine
+  // - scout:vault.delete          -> local safeStorage delete, never leaves the machine
+  // - scout:worker.stop           -> local child-process signal, not an external API call
+  // - scout:llm.listOllamaModels  -> READ on the user's local Ollama instance (GET /api/tags); no mutation
+  // - scout:llm.deleteOllamaModel -> DELETE on the user's local Ollama (/api/delete); model is on user's
+  //                                  disk, not an external system
   const LOCAL_WRITE_ALLOWLIST: readonly string[] = [
     'scout:vault.store',
     'scout:vault.delete',
     'scout:worker.stop',
+    'scout:llm.listOllamaModels',
+    'scout:llm.deleteOllamaModel',
+    'scout:whisper.downloadModel',
+    'scout:whisper.deleteModel',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new

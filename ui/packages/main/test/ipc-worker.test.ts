@@ -53,6 +53,7 @@ function makeSupervisor(overrides: Partial<Supervisor> = {}): Supervisor {
   const _listeners = new Set<(e: WorkerEvent) => void>();
   return {
     status: IDLE_STATUS,
+    httpEndpoint: null,
     start: mock(async () => ({ pid: 99 })),
     stop: mock(async () => ({ exitCode: 0 })),
     onEvent(listener) {
