@@ -12,6 +12,7 @@ using Scout.Host.Worker;
 using Scout.Host.Worker.Http;
 using Scout.Host.Worker.Providers;
 using Scout.Llm.Ollama;
+using Scout.Plugin.Chat;
 using Scout.Plugin.CloudStatus;
 using Scout.Plugin.CodeQA;
 using Scout.Plugin.Help;
@@ -92,6 +93,10 @@ builder.Services
 builder.Services
     .AddDiscordAdapter(builder.Configuration)
     .AddCloudStatusPlugin(builder.Configuration)
+    // Fallback chat router must come LAST: it streams any unmatched
+    // message through the LLM, so every keyword/regex router needs to
+    // run first.
+    .AddLlmChatPlugin(builder.Configuration)
     .AddHostedService<ScoutWorker>();
 
 var codeQAConfigured = !string.IsNullOrWhiteSpace(
