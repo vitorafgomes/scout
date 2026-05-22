@@ -68,20 +68,30 @@ public sealed partial class DiscordMessageTranslator
     {
         ArgumentNullException.ThrowIfNull(response);
 
+        if (response.IsStreaming)
+        {
+            // Streaming responses are rendered incrementally by the adapter,
+            // not by this synchronous helper.
+            throw new InvalidOperationException(
+                "Streaming responses cannot be rendered as a single string.");
+        }
+
+        var text = response.Text!;
+
         if (response.Citations.Count == 0)
         {
-            return response.Text;
+            return text;
         }
 
         var sb = new StringBuilder();
-        sb.Append(response.Text);
+        sb.Append(text);
         sb.AppendLine();
         sb.AppendLine();
         sb.AppendLine("Sources:");
         foreach (var citation in response.Citations)
         {
             sb.Append("- ");
-            sb.AppendLine(citation);
+            sb.AppendLine(citation.ToString());
         }
         return sb.ToString().TrimEnd();
     }

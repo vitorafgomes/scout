@@ -31,7 +31,7 @@ public class CloudStatusMessageRouterTests
             CancellationToken.None);
 
         response.ShouldNotBeNull();
-        response!.Text.ShouldContain("Azure");
+        response!.Text!.ShouldContain("Azure");
     }
 
     [Theory]
@@ -58,8 +58,8 @@ public class CloudStatusMessageRouterTests
             new ChatMessage("u1", "c1", "status"),
             CancellationToken.None);
 
-        response!.Text.ShouldContain("Cloud health:");
-        response.Text.ShouldContain("- Azure (sub-1): Degraded");
+        response!.Text!.ShouldContain("Cloud health:");
+        response.Text!.ShouldContain("- Azure (sub-1): Degraded");
     }
 
     [Fact]
