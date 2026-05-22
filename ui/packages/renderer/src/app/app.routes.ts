@@ -34,5 +34,32 @@ export const appRoutes: Routes = [
     path: 'ready',
     loadComponent: () => import('./wizard/ready/ready.component').then((m) => m.ReadyComponent),
   },
+  {
+    path: 'status',
+    loadComponent: () => import('./wizard/ready/ready.component').then((m) => m.ReadyComponent),
+  },
+  {
+    path: 'sources',
+    loadComponent: () =>
+      import('./sources/sources.component').then((m) => m.SourcesComponent),
+  },
+  {
+    path: 'sources/local-models',
+    loadComponent: () =>
+      import('./sources/local-models.component').then((m) => m.LocalModelsComponent),
+  },
+  {
+    path: 'llm',
+    loadComponent: () => import('./models/models.component').then((m) => m.ModelsComponent),
+  },
+  {
+    path: 'logs',
+    loadComponent: () => import('./wizard/log-viewer/logs.component').then((m) => m.LogsComponent),
+  },
+  {
+    path: 'settings',
+    loadComponent: () =>
+      import('./wizard/settings/settings.component').then((m) => m.SettingsComponent),
+  },
   { path: '**', redirectTo: '' },
 ];

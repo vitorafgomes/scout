@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkerEvent, WorkerStatus } from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
+import { LlmConfigStore, LLM_CONFIG_STORAGE_KEY } from '../../core/llm-config.store';
 import { LogStore } from '../../core/log.store';
 import { WizardStore } from '../../core/wizard.store';
 import { ReadyComponent } from './ready.component';
@@ -41,6 +42,8 @@ function makeBridge(
     workerStop: vi.fn().mockResolvedValue({ exitCode: 0 }),
     workerStatus: vi.fn().mockResolvedValue({ state: 'running', restarts: 0 }),
     vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
+    vaultStore: vi.fn().mockResolvedValue(undefined),
+    vaultHas: vi.fn().mockResolvedValue({ exists: false }),
     onWorkerEvent: vi.fn((listener: (e: WorkerEvent) => void) => {
       capturedListener = listener;
       if (opts.onWorkerEventImpl) return opts.onWorkerEventImpl(listener);
@@ -95,6 +98,7 @@ async function setup(
 describe('ReadyComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
+    window.localStorage.removeItem(LLM_CONFIG_STORAGE_KEY);
   });
 
   it('renders the running status badge', async () => {
@@ -301,5 +305,22 @@ describe('ReadyComponent', () => {
     });
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('—');
+  });
+
+  it('renders the no-LLM banner when llmConfig is unset', async () => {
+    const { fixture } = await setup();
+    const banner = fixture.nativeElement.querySelector('[data-test="no-llm-banner"]');
+    expect(banner).not.toBeNull();
+    expect((banner?.textContent ?? '').toLowerCase()).toContain('no llm model');
+  });
+
+  it('omits the no-LLM banner once llmConfig is configured', async () => {
+    const { fixture } = await setup();
+    const store = TestBed.inject(LlmConfigStore);
+    await store.setSelection('Ollama', 'llama3.1', 'http://localhost:11434');
+    fixture.detectChanges();
+
+    const banner = fixture.nativeElement.querySelector('[data-test="no-llm-banner"]');
+    expect(banner).toBeNull();
   });
 });

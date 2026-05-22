@@ -110,21 +110,6 @@ workflow run page.
   `SEND_MESSAGES` and that the `MESSAGE_CONTENT_INTENT` is enabled in
   the Discord Developer Portal.
 
-## Background mode
-
-Closing the main window hides it to the system tray; Scout keeps
-running. Open the tray icon next to your clock to:
-
-- Open the main window again.
-- See current worker status.
-- Stop the worker.
-- Quit Scout Desktop.
-
-On pure GNOME Shell, install the
-[AppIndicator and KStatusNotifierItem Support](https://extensions.gnome.org/extension/615/appindicator-support/)
-extension; the tray works out of the box on KDE, XFCE, Cinnamon,
-and Pop!\_OS.
-
 ## Where docs live
 
 Architecture, ADRs, plans, and the design system live in the Scout

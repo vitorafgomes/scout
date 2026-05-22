@@ -1,18 +1,29 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { WizardStore } from '../core/wizard.store';
+import { PostConnectShellComponent } from './post-connect-shell.component';
 import { StepIndicatorComponent } from './step-indicator.component';
 import { VaultAvailabilityBannerComponent } from './vault-availability-banner.component';
 
 @Component({
   selector: 'sc-shell',
   standalone: true,
-  imports: [RouterOutlet, VaultAvailabilityBannerComponent, StepIndicatorComponent],
+  imports: [
+    RouterOutlet,
+    VaultAvailabilityBannerComponent,
+    StepIndicatorComponent,
+    PostConnectShellComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <sc-vault-availability-banner />
-    <sc-step-indicator />
-    <router-outlet />
+    @if (showPostConnectShell()) {
+      <sc-post-connect-shell />
+    } @else {
+      <sc-step-indicator />
+      <router-outlet />
+    }
   `,
   styles: [
     `
@@ -25,4 +36,7 @@ import { VaultAvailabilityBannerComponent } from './vault-availability-banner.co
     `,
   ],
 })
-export class ShellComponent {}
+export class ShellComponent {
+  private readonly wizard = inject(WizardStore);
+  readonly showPostConnectShell = computed<boolean>(() => this.wizard.hasProvisioning());
+}

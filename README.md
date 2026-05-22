@@ -53,6 +53,13 @@ Architecture and design rationale live at
 
 Not available yet. See the design docs.
 
+## Selecting an LLM
+
+After Scout connects to Discord, the left navigation has an **LLM**
+section where you can pick an Ollama model and endpoint. The choice
+is persisted; restart the worker (button on the same page) to apply
+the new model.
+
 ## Documentation
 
 All design documents, ADRs, and specifications live in the Obsidian vault,
