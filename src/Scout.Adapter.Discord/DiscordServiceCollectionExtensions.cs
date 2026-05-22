@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Scout.Adapter.Discord.Streaming;
 using Scout.Core.Chat;
 
 namespace Scout.Adapter.Discord;
@@ -24,8 +26,11 @@ public static class DiscordServiceCollectionExtensions
 
         services.Configure<DiscordOptions>(configuration.GetSection(ConfigSection));
 
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddSingleton<DiscordMessageTranslator>();
         services.AddSingleton<DiscordMessageHandler>();
+        services.AddSingleton<IDiscordReplyPoster, DiscordEmbedReplyPoster>();
         services.AddSingleton<DiscordChatAdapter>();
         services.AddSingleton<IChatAdapter>(
             sp => sp.GetRequiredService<DiscordChatAdapter>());
