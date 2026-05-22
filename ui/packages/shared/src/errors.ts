@@ -70,6 +70,57 @@ export class ExternalHostNotAllowedError extends ScoutError {
   }
 }
 
+export class OllamaUnreachableError extends ScoutError {
+  readonly endpoint: string;
+
+  constructor(endpoint: string, message?: string, options?: ErrorOptions) {
+    super('llm/ollama-unreachable', message ?? `Could not reach Ollama at ${endpoint}`, options);
+    this.endpoint = endpoint;
+  }
+}
+
+export class WorkerHttpUnavailableError extends ScoutError {
+  constructor(message = 'Worker HTTP endpoint not available', options?: ErrorOptions) {
+    super('worker/http-unavailable', message, options);
+  }
+}
+
+export class ProviderUnreachableError extends ScoutError {
+  constructor(message = 'Provider endpoint unreachable', options?: ErrorOptions) {
+    super('providers/unreachable', message, options);
+  }
+}
+
+export class ProviderUnknownError extends ScoutError {
+  constructor(message = 'Unknown provider id', options?: ErrorOptions) {
+    super('providers/unknown', message, options);
+  }
+}
+
+export class ProviderLifecycleUnsupportedError extends ScoutError {
+  constructor(message = 'Provider does not support lifecycle management', options?: ErrorOptions) {
+    super('providers/lifecycle-unsupported', message, options);
+  }
+}
+
+export class ProviderNotManagedError extends ScoutError {
+  constructor(message = 'Provider is not managed by worker', options?: ErrorOptions) {
+    super('providers/not-managed', message, options);
+  }
+}
+
+export class ProviderStartTimeoutError extends ScoutError {
+  constructor(message = 'Provider failed to start within timeout', options?: ErrorOptions) {
+    super('providers/start-timeout', message, options);
+  }
+}
+
+export class ProviderRequestFailedError extends ScoutError {
+  constructor(message = 'Provider request failed', options?: ErrorOptions) {
+    super('providers/request-failed', message, options);
+  }
+}
+
 export interface SerializedScoutError {
   readonly __scoutError: true;
   readonly code: string;
@@ -113,6 +164,24 @@ export function deserializeError(payload: SerializedScoutError): ScoutError {
       const host = readExtraString(payload.extras, 'host') ?? 'unknown';
       return new ExternalHostNotAllowedError(host, payload.message);
     }
+    case 'llm/ollama-unreachable': {
+      const endpoint = readExtraString(payload.extras, 'endpoint') ?? 'unknown';
+      return new OllamaUnreachableError(endpoint, payload.message);
+    }
+    case 'worker/http-unavailable':
+      return new WorkerHttpUnavailableError(payload.message);
+    case 'providers/unreachable':
+      return new ProviderUnreachableError(payload.message);
+    case 'providers/unknown':
+      return new ProviderUnknownError(payload.message);
+    case 'providers/lifecycle-unsupported':
+      return new ProviderLifecycleUnsupportedError(payload.message);
+    case 'providers/not-managed':
+      return new ProviderNotManagedError(payload.message);
+    case 'providers/start-timeout':
+      return new ProviderStartTimeoutError(payload.message);
+    case 'providers/request-failed':
+      return new ProviderRequestFailedError(payload.message);
     default:
       return new ScoutError(payload.code, payload.message);
   }
@@ -124,6 +193,9 @@ function extractExtras(err: ScoutError): Readonly<Record<string, unknown>> | und
   }
   if (err instanceof ExternalHostNotAllowedError) {
     return { host: err.host };
+  }
+  if (err instanceof OllamaUnreachableError) {
+    return { endpoint: err.endpoint };
   }
   return undefined;
 }

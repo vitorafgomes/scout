@@ -11,6 +11,7 @@ import { Router } from '@angular/router';
 import type { WorkerEvent } from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
+import { LlmConfigStore } from '../../core/llm-config.store';
 import { LogStore } from '../../core/log.store';
 import { WizardStore } from '../../core/wizard.store';
 
@@ -37,6 +38,15 @@ function formatUptime(startedAt: string | undefined): string {
         <h1>Scout Worker</h1>
         <span [class]="statusBadgeClass()">{{ logStore.status().state }}</span>
       </div>
+
+      @if (!llmConfig.isConfigured()) {
+        <div class="llm-banner" role="status" data-test="no-llm-banner">
+          <span>No LLM model selected. Pick one to enable Scout's responses.</span>
+          <button type="button" class="banner-action" data-test="choose-llm" (click)="goToLlm()">
+            Choose model
+          </button>
+        </div>
+      }
 
       @if (wizard.guild(); as guild) {
         <p class="guild">
@@ -268,6 +278,29 @@ function formatUptime(startedAt: string | undefined): string {
       .destructive:hover {
         background: #1e0f0f;
       }
+      .llm-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        margin: 0 0 16px;
+        background: #2b2010;
+        border: 1px solid #d4a24a;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #d4a24a;
+      }
+      .banner-action {
+        background: #5a8fd4;
+        color: #0f1117;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
     `,
   ],
 })
@@ -276,6 +309,7 @@ export class ReadyComponent implements OnInit, OnDestroy {
   private readonly bridge = inject(ScoutBridgeService);
   readonly logStore = inject(LogStore);
   readonly wizard = inject(WizardStore);
+  readonly llmConfig = inject(LlmConfigStore);
 
   readonly uptime = signal<string>('—');
 
@@ -301,6 +335,7 @@ export class ReadyComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.wizard.goTo('ready');
+    void this.llmConfig.loadFromVault();
 
     this.uptimeInterval = setInterval(() => {
       this.uptime.set(formatUptime(this.logStore.status().startedAt));
@@ -349,6 +384,10 @@ export class ReadyComponent implements OnInit, OnDestroy {
 
   backHome(): void {
     void this.router.navigateByUrl('/');
+  }
+
+  goToLlm(): void {
+    void this.router.navigateByUrl('/llm');
   }
 
   async reprovision(): Promise<void> {

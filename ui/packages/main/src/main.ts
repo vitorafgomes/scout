@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -14,6 +14,12 @@ import { registerVaultHandlers } from './ipc/vault.js';
 import { registerAppHandlers } from './ipc/app.js';
 import { registerDiscordHandlers } from './ipc/discord.js';
 import { registerWorkerHandlers, attachBrowserWindow } from './ipc/worker.js';
+import { registerLlmHandlers } from './ipc/llm.js';
+import { registerLlmPullHandlers } from './ipc/llm-pull.js';
+import { registerLmStudioHandlers } from './ipc/lm-studio.js';
+import { registerWhisperHandlers } from './ipc/whisper.js';
+import { registerProvidersHandlers } from './ipc/providers.js';
+import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
 import { createVault } from './vault/safe-storage-vault.js';
@@ -22,8 +28,6 @@ import { createSupervisor } from './worker/supervisor.js';
 import { resolveWorkerBinary } from './worker/resolve-binary.js';
 import { VaultUnavailableError } from '@scout/shared';
 import type { Supervisor } from './worker/supervisor.js';
-import { createTrayController } from './tray/tray.js';
-import type { TrayController } from './tray/tray.js';
 
 const logger = createLogger('main');
 
@@ -83,13 +87,16 @@ const CSP_DEV = [
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: Supervisor | null = null;
-let trayController: TrayController | null = null;
-let isQuitting = false;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 let unregisterApp: (() => void) | null = null;
 let unregisterDiscord: (() => void) | null = null;
 let unregisterWorker: (() => void) | null = null;
+let unregisterLlm: (() => void) | null = null;
+let unregisterLlmPull: (() => void) | null = null;
+let unregisterLmStudio: (() => void) | null = null;
+let unregisterWhisper: (() => void) | null = null;
+let unregisterProviders: (() => void) | null = null;
 
 app
   .whenReady()
@@ -155,13 +162,26 @@ app
           );
         }
 
+        // .NET configuration env-var convention: each ":" path segment is
+        // mapped to "__". The worker binds Scout:Llm from configuration, so
+        //   Scout:Llm:Provider          -> SCOUT__LLM__PROVIDER
+        //   Scout:Llm:Ollama:Model      -> SCOUT__LLM__OLLAMA__MODEL
+        //   Scout:Llm:Ollama:Endpoint   -> SCOUT__LLM__OLLAMA__ENDPOINT
+        // Verified against src/Scout.Core/Llm/LlmOptions.cs.
+        const llmProvider = (await vault.get('llm.provider')) ?? 'Ollama';
+        const llmModel = await vault.get('llm.model');
+        const llmEndpoint = await vault.get('llm.endpoint');
+
         // env is passed to spawn; never logged
-        return {
+        const env: Record<string, string> = {
           SCOUT__CHATADAPTER: 'Discord',
-          SCOUT__LLMPROVIDER: 'Ollama',
+          SCOUT__LLM__PROVIDER: llmProvider,
           DOTNET_ENVIRONMENT: 'Production',
           SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
         };
+        if (llmModel !== null) env['SCOUT__LLM__OLLAMA__MODEL'] = llmModel;
+        if (llmEndpoint !== null) env['SCOUT__LLM__OLLAMA__ENDPOINT'] = llmEndpoint;
+        return env;
       },
     });
 
@@ -169,6 +189,35 @@ app
       ipcMain,
       supervisor,
       logger.child({ module: 'worker' }),
+    );
+
+    const workerHttpClient = new WorkerHttpClient({
+      getEndpoint: () => supervisor?.httpEndpoint ?? null,
+      fetch: globalThis.fetch,
+      logger: logger.child({ module: 'worker-http' }),
+    });
+
+    unregisterProviders = registerProvidersHandlers(
+      ipcMain,
+      workerHttpClient,
+      logger.child({ module: 'providers' }),
+    );
+
+    unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
+    unregisterLmStudio = registerLmStudioHandlers(
+      ipcMain,
+      globalThis.fetch,
+      logger.child({ module: 'lm-studio' }),
+    );
+    unregisterLlmPull = registerLlmPullHandlers(
+      ipcMain,
+      globalThis.fetch,
+      logger.child({ module: 'llm-pull' }),
+    );
+    unregisterWhisper = registerWhisperHandlers(
+      ipcMain,
+      globalThis.fetch,
+      logger.child({ module: 'whisper' }),
     );
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -210,46 +259,8 @@ app
       ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
     });
 
-    // Hide instead of closing so the app stays alive in the tray.
-    mainWindow.on('close', (event) => {
-      if (!isQuitting) {
-        event.preventDefault();
-        mainWindow?.hide();
-      }
-    });
-
-    // Null out the reference only when the window is actually destroyed.
     mainWindow.on('closed', () => {
       mainWindow = null;
-    });
-
-    const iconPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'icons', 'icon.png')
-      : path.join(__dirname, '..', '..', '..', 'build', 'icons', 'icon.png');
-
-    trayController = createTrayController({
-      createTray: (p) => new Tray(p),
-      buildContextMenu: (t) => Menu.buildFromTemplate(t),
-      iconPath,
-      onShowWindow: () => {
-        if (mainWindow == null || mainWindow.isDestroyed()) return;
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.show();
-        mainWindow.focus();
-      },
-      onStopWorker: async () => {
-        if (supervisor != null) await supervisor.stop();
-      },
-      onQuit: () => {
-        isQuitting = true;
-        app.quit();
-      },
-      logger: logger.child({ module: 'tray' }),
-    });
-
-    // Keep tray status in sync with supervisor state transitions.
-    supervisor.onEvent((e) => {
-      if (e.kind === 'state') trayController?.setStatus(e.status);
     });
 
     attachBrowserWindow(mainWindow, supervisor);
@@ -261,10 +272,8 @@ app
     app.quit();
   });
 
-// The app stays alive when the window is hidden to the tray.
-// Quit is only triggered via the tray menu or before-quit lifecycle.
 app.on('window-all-closed', () => {
-  // Intentionally empty: do not quit on window close on any platform.
+  if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', (event) => {
@@ -277,8 +286,11 @@ app.on('before-quit', (event) => {
     runningWorker.status.state === 'idle'
   ) {
     // No running worker — unregister synchronously and allow the quit.
-    trayController?.destroy();
-    trayController = null;
+    unregisterProviders?.();
+    unregisterWhisper?.();
+    unregisterLlmPull?.();
+    unregisterLmStudio?.();
+    unregisterLlm?.();
     unregisterWorker?.();
     unregisterDiscord?.();
     unregisterApp?.();
@@ -295,8 +307,11 @@ app.on('before-quit', (event) => {
       logger.warn('before-quit: worker stop failed', { err: String(err) });
     })
     .finally(() => {
-      trayController?.destroy();
-      trayController = null;
+      unregisterProviders?.();
+      unregisterWhisper?.();
+      unregisterLlmPull?.();
+      unregisterLmStudio?.();
+      unregisterLlm?.();
       unregisterWorker?.();
       unregisterDiscord?.();
       unregisterApp?.();
@@ -309,7 +324,6 @@ app.on('before-quit', (event) => {
 app.on('second-instance', () => {
   if (mainWindow != null && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
     mainWindow.focus();
   }
 });

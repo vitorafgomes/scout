@@ -36,10 +36,6 @@ extraResources:
     to: worker
     filter:
       - "**/*"
-  - from: build/icons
-    to: icons
-    filter:
-      - "icon.png"
 
 electronLanguages:
   - en-US

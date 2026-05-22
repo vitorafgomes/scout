@@ -81,5 +81,89 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     diagnosticsExport() {
       return ipc.invoke(CHANNEL.diagnosticsExport) as ReturnType<ScoutBridge['diagnosticsExport']>;
     },
+
+    llmListOllamaModels(req) {
+      return ipc.invoke(CHANNEL.llmListOllamaModels, req) as ReturnType<
+        ScoutBridge['llmListOllamaModels']
+      >;
+    },
+
+    llmListLmStudioModels(req) {
+      return ipc.invoke(CHANNEL.llmListLmStudioModels, req) as ReturnType<
+        ScoutBridge['llmListLmStudioModels']
+      >;
+    },
+
+    llmPullOllamaModel(req) {
+      return ipc.invoke(CHANNEL.llmPullOllamaModel, req) as ReturnType<
+        ScoutBridge['llmPullOllamaModel']
+      >;
+    },
+
+    onLlmPullOllamaProgress(listener) {
+      const handler = (_event: unknown, payload: unknown): void => {
+        listener(payload as Parameters<typeof listener>[0]);
+      };
+      ipc.on(CHANNEL.llmPullOllamaProgress, handler);
+      return (): void => {
+        ipc.removeListener(CHANNEL.llmPullOllamaProgress, handler);
+      };
+    },
+
+    llmDeleteOllamaModel(req) {
+      return ipc.invoke(CHANNEL.llmDeleteOllamaModel, req) as ReturnType<
+        ScoutBridge['llmDeleteOllamaModel']
+      >;
+    },
+
+    whisperListInstalled() {
+      return ipc.invoke(CHANNEL.whisperListInstalled) as ReturnType<
+        ScoutBridge['whisperListInstalled']
+      >;
+    },
+
+    whisperDownloadModel(req) {
+      return ipc.invoke(CHANNEL.whisperDownloadModel, req) as ReturnType<
+        ScoutBridge['whisperDownloadModel']
+      >;
+    },
+
+    onWhisperDownloadProgress(listener) {
+      const handler = (_event: unknown, payload: unknown): void => {
+        listener(payload as Parameters<typeof listener>[0]);
+      };
+      ipc.on(CHANNEL.whisperDownloadProgress, handler);
+      return (): void => {
+        ipc.removeListener(CHANNEL.whisperDownloadProgress, handler);
+      };
+    },
+
+    whisperDeleteModel(req) {
+      return ipc.invoke(CHANNEL.whisperDeleteModel, req) as ReturnType<
+        ScoutBridge['whisperDeleteModel']
+      >;
+    },
+
+    providersList() {
+      return ipc.invoke(CHANNEL.providersList) as ReturnType<ScoutBridge['providersList']>;
+    },
+
+    providerStatus(req) {
+      return ipc.invoke(CHANNEL.providerStatus, req) as ReturnType<ScoutBridge['providerStatus']>;
+    },
+
+    providerStart(req) {
+      return ipc.invoke(CHANNEL.providerStart, req) as ReturnType<ScoutBridge['providerStart']>;
+    },
+
+    providerRestart(req) {
+      return ipc.invoke(CHANNEL.providerRestart, req) as ReturnType<ScoutBridge['providerRestart']>;
+    },
+
+    providerSetAutostart(req) {
+      return ipc.invoke(CHANNEL.providerSetAutostart, req) as ReturnType<
+        ScoutBridge['providerSetAutostart']
+      >;
+    },
   };
 }

@@ -9,6 +9,21 @@ import {
   type DiscordBuildOAuthUrlResponse,
   type DiscordStartOAuthInstallRequest,
   type DiscordStartOAuthInstallResponse,
+  type LlmListOllamaModelsRequest,
+  type LlmListOllamaModelsResponse,
+  type LlmPullOllamaModelRequest,
+  type LlmPullOllamaModelResponse,
+  type LlmPullOllamaProgressEvent,
+  type LlmDeleteOllamaModelRequest,
+  type LlmDeleteOllamaModelResponse,
+  type LlmListLmStudioModelsRequest,
+  type LlmListLmStudioModelsResponse,
+  type WhisperListInstalledResponse,
+  type WhisperDownloadModelRequest,
+  type WhisperDownloadModelResponse,
+  type WhisperDownloadProgressEvent,
+  type WhisperDeleteModelRequest,
+  type WhisperDeleteModelResponse,
   type ScoutBridge,
   type VaultDeleteRequest,
   type VaultDeleteResponse,
@@ -20,6 +35,12 @@ import {
   type WorkerStartResponse,
   type WorkerStatusResponse,
   type WorkerStopResponse,
+  type ProvidersListResponse,
+  type ProviderStatusDto,
+  type ProviderStatusRequest,
+  type ProviderStartRequest,
+  type ProviderRestartRequest,
+  type ProviderAutostartRequest,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -67,6 +88,45 @@ function createFakeBridge(): ScoutBridge {
     appGetVersion: (): Promise<AppGetVersionResponse> => rejectNotAvailable(),
     appQuit: (): Promise<void> => rejectNotAvailable(),
     diagnosticsExport: (): Promise<DiagnosticsExportResponse> => rejectNotAvailable(),
+    llmListOllamaModels: (_req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse> =>
+      rejectNotAvailable(),
+    llmListLmStudioModels: (
+      _req: LlmListLmStudioModelsRequest,
+    ): Promise<LlmListLmStudioModelsResponse> => rejectNotAvailable(),
+    llmPullOllamaModel: (
+      _req: LlmPullOllamaModelRequest,
+    ): Promise<LlmPullOllamaModelResponse> => rejectNotAvailable(),
+    onLlmPullOllamaProgress: (_listener: (event: LlmPullOllamaProgressEvent) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    llmDeleteOllamaModel: (
+      _req: LlmDeleteOllamaModelRequest,
+    ): Promise<LlmDeleteOllamaModelResponse> => rejectNotAvailable(),
+    whisperListInstalled: (): Promise<WhisperListInstalledResponse> => rejectNotAvailable(),
+    whisperDownloadModel: (
+      _req: WhisperDownloadModelRequest,
+    ): Promise<WhisperDownloadModelResponse> => rejectNotAvailable(),
+    onWhisperDownloadProgress: (
+      _listener: (event: WhisperDownloadProgressEvent) => void,
+    ): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    whisperDeleteModel: (
+      _req: WhisperDeleteModelRequest,
+    ): Promise<WhisperDeleteModelResponse> => rejectNotAvailable(),
+    providersList: (): Promise<ProvidersListResponse> => rejectNotAvailable(),
+    providerStatus: (_req: ProviderStatusRequest): Promise<ProviderStatusDto> =>
+      rejectNotAvailable(),
+    providerStart: (_req: ProviderStartRequest): Promise<ProviderStatusDto> =>
+      rejectNotAvailable(),
+    providerRestart: (_req: ProviderRestartRequest): Promise<ProviderStatusDto> =>
+      rejectNotAvailable(),
+    providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> =>
+      rejectNotAvailable(),
   };
 }
 
@@ -122,6 +182,74 @@ export class ScoutBridgeService {
 
   onWorkerEvent(listener: (event: WorkerEvent) => void): () => void {
     return this.bridge.onWorkerEvent(listener);
+  }
+
+  async llmListOllamaModels(req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse> {
+    return this.bridge.llmListOllamaModels(req);
+  }
+
+  async llmListLmStudioModels(
+    req: LlmListLmStudioModelsRequest,
+  ): Promise<LlmListLmStudioModelsResponse> {
+    return this.bridge.llmListLmStudioModels(req);
+  }
+
+  async llmPullOllamaModel(
+    req: LlmPullOllamaModelRequest,
+  ): Promise<LlmPullOllamaModelResponse> {
+    return this.bridge.llmPullOllamaModel(req);
+  }
+
+  onLlmPullOllamaProgress(listener: (event: LlmPullOllamaProgressEvent) => void): () => void {
+    return this.bridge.onLlmPullOllamaProgress(listener);
+  }
+
+  async llmDeleteOllamaModel(
+    req: LlmDeleteOllamaModelRequest,
+  ): Promise<LlmDeleteOllamaModelResponse> {
+    return this.bridge.llmDeleteOllamaModel(req);
+  }
+
+  async whisperListInstalled(): Promise<WhisperListInstalledResponse> {
+    return this.bridge.whisperListInstalled();
+  }
+
+  async whisperDownloadModel(
+    req: WhisperDownloadModelRequest,
+  ): Promise<WhisperDownloadModelResponse> {
+    return this.bridge.whisperDownloadModel(req);
+  }
+
+  onWhisperDownloadProgress(
+    listener: (event: WhisperDownloadProgressEvent) => void,
+  ): () => void {
+    return this.bridge.onWhisperDownloadProgress(listener);
+  }
+
+  async whisperDeleteModel(
+    req: WhisperDeleteModelRequest,
+  ): Promise<WhisperDeleteModelResponse> {
+    return this.bridge.whisperDeleteModel(req);
+  }
+
+  async appGetVersion(): Promise<AppGetVersionResponse> {
+    return this.bridge.appGetVersion();
+  }
+
+  async providerStatus(req: ProviderStatusRequest): Promise<ProviderStatusDto> {
+    return this.bridge.providerStatus(req);
+  }
+
+  async providerStart(req: ProviderStartRequest): Promise<ProviderStatusDto> {
+    return this.bridge.providerStart(req);
+  }
+
+  async providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto> {
+    return this.bridge.providerRestart(req);
+  }
+
+  async providerSetAutostart(req: ProviderAutostartRequest): Promise<void> {
+    return this.bridge.providerSetAutostart(req);
   }
 }
 

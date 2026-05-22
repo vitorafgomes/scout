@@ -5,6 +5,7 @@ import {
   OAuthLoopbackPortInUseError,
   OAuthStateMismatchError,
   OAuthUserCancelledError,
+  OllamaUnreachableError,
   ScoutError,
   VaultUnavailableError,
   WorkerBinaryMissingError,
@@ -82,6 +83,39 @@ describe('serializeError / deserializeError round trip', () => {
     const restored = deserializeError(serialized);
     expect(restored).toBeInstanceOf(ExternalHostNotAllowedError);
     expect((restored as ExternalHostNotAllowedError).host).toBe('evil.example.com');
+  });
+
+  test('OllamaUnreachableError carries endpoint in extras', () => {
+    const original = new OllamaUnreachableError('http://localhost:11434');
+    const serialized = serializeError(original);
+    expect(serialized.code).toBe('llm/ollama-unreachable');
+    expect(serialized.message).toBe('Could not reach Ollama at http://localhost:11434');
+    expect(serialized.extras).toEqual({ endpoint: 'http://localhost:11434' });
+    const restored = deserializeError(serialized);
+    expect(restored).toBeInstanceOf(OllamaUnreachableError);
+    expect((restored as OllamaUnreachableError).endpoint).toBe('http://localhost:11434');
+    expect(restored.code).toBe('llm/ollama-unreachable');
+  });
+
+  test('OllamaUnreachableError preserves custom message override', () => {
+    const original = new OllamaUnreachableError('http://10.0.0.5:11434', 'connection refused');
+    const serialized = serializeError(original);
+    expect(serialized.message).toBe('connection refused');
+    const restored = deserializeError(serialized);
+    expect(restored).toBeInstanceOf(OllamaUnreachableError);
+    expect(restored.message).toBe('connection refused');
+    expect((restored as OllamaUnreachableError).endpoint).toBe('http://10.0.0.5:11434');
+  });
+
+  test('OllamaUnreachableError with missing extras falls back to "unknown" endpoint', () => {
+    const payload: SerializedScoutError = {
+      __scoutError: true,
+      code: 'llm/ollama-unreachable',
+      message: 'unknown reach failure',
+    };
+    const restored = deserializeError(payload);
+    expect(restored).toBeInstanceOf(OllamaUnreachableError);
+    expect((restored as OllamaUnreachableError).endpoint).toBe('unknown');
   });
 });
 

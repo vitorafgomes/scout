@@ -28,6 +28,7 @@ export interface SupervisorDeps {
 
 export interface Supervisor {
   readonly status: WorkerStatus;
+  readonly httpEndpoint: string | null;
   start(): Promise<{ pid: number }>;
   stop(): Promise<{ exitCode: number | null }>;
   onEvent(listener: (e: WorkerEvent) => void): () => void;
@@ -88,6 +89,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
   let _status: WorkerStatus = { state: 'idle', restarts: 0 };
   let _child: ChildProcess | null = null;
   let _startedAt: string | undefined;
+  let _httpEndpoint: string | null = null;
 
   let failureTimes: number[] = [];
   let restartCount = 0;
@@ -206,6 +208,10 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         emit,
         ringBuffer,
         ringLimit,
+        onHttpEndpoint(endpoint) {
+          _httpEndpoint = endpoint;
+          logger.info('supervisor: worker http endpoint registered', { endpoint });
+        },
         onReady() {
           if (settled) return;
           settled = true;
@@ -226,6 +232,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
       });
 
       child.once('exit', (code, signal) => {
+        _httpEndpoint = null;
         emit({ kind: 'exit', code, signal });
         logger.info('supervisor: worker exited', {
           code: code ?? undefined,
@@ -253,6 +260,10 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
       return _status;
     },
 
+    get httpEndpoint(): string | null {
+      return _httpEndpoint;
+    },
+
     async start(): Promise<{ pid: number }> {
       if (_status.state === 'running' || _status.state === 'starting') {
         return { pid: _status.pid ?? 0 };
@@ -260,6 +271,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
       failureTimes = [];
       restartCount = 0;
       _startedAt = undefined;
+      _httpEndpoint = null;
 
       transition(makeStatus('starting', 0));
       return doStart();

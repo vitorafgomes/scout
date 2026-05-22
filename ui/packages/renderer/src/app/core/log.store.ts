@@ -30,6 +30,18 @@ export class LogStore implements OnDestroy {
     this.events.set([]);
   }
 
+  appendDiagnostic(line: string, kind: 'stdout' | 'stderr' = 'stderr'): void {
+    const event: WorkerEvent = {
+      kind,
+      line,
+      ts: new Date().toISOString(),
+    };
+    this.events.update((prev) => {
+      const next = [...prev, event];
+      return next.length > MAX_EVENTS ? next.slice(next.length - MAX_EVENTS) : next;
+    });
+  }
+
   copy(): void {
     const lines = this.events()
       .filter(
