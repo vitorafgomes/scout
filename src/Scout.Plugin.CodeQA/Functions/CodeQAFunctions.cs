@@ -4,6 +4,7 @@ using Microsoft.SemanticKernel;
 using Scout.Plugin.CodeQA.Composing;
 using Scout.Plugin.CodeQA.Domain;
 using Scout.Plugin.CodeQA.Retrieval;
+using CoreCitation = Scout.Core.Chat.Citation;
 
 namespace Scout.Plugin.CodeQA.Functions;
 
@@ -37,6 +38,43 @@ public sealed class CodeQAFunctions
         return await _composer
             .ComposeAsync(question, hits, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Streaming entry point used by the chat router. Runs retrieval eagerly
+    /// so the source citations are known before the first token, then hands
+    /// back the live token stream produced by the composer.
+    /// </summary>
+    /// <remarks>
+    /// Citations are mapped from the full retrieval result. The composer
+    /// may trim further internally to respect the token budget, so this
+    /// can over-cite relative to what the model actually saw — acceptable
+    /// for a footer "Sources:" hint and preferable to under-citing.
+    /// </remarks>
+    public async Task<StreamingAnswer> StartStreamingAskAsync(
+        string question,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(question);
+
+        var hits = await _retriever
+            .RetrieveAsync(question, topKOverride: null, cancellationToken)
+            .ConfigureAwait(false);
+
+        var citations = hits
+            .Select(h =>
+            {
+                var label = $"{h.Chunk.FilePath}:{h.Chunk.StartLine}-{h.Chunk.EndLine}";
+                return new CoreCitation(label)
+                {
+                    Path = h.Chunk.FilePath,
+                    Line = h.Chunk.StartLine,
+                };
+            })
+            .ToArray();
+
+        var tokens = _composer.ComposeStreamingAsync(question, hits, cancellationToken);
+        return new StreamingAnswer(citations, tokens);
     }
 
     /// <summary>

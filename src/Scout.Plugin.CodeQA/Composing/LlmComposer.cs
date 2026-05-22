@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -47,20 +48,7 @@ public sealed class LlmComposer : IComposer
         var opts = _options.Value;
         var composer = opts.Composer;
 
-        var trimmed = TruncateToBudget(context, opts);
-
-        var history = new ChatHistory();
-        history.AddSystemMessage(CodeQAPromptTemplate.SystemPrompt);
-        history.AddUserMessage(CodeQAPromptTemplate.BuildUserPrompt(question, trimmed));
-
-        var settings = new PromptExecutionSettings
-        {
-            ExtensionData = new Dictionary<string, object>
-            {
-                ["temperature"] = composer.Temperature,
-                ["max_tokens"] = composer.MaxOutputTokens,
-            },
-        };
+        var (history, settings, trimmed) = BuildRequest(question, context, opts);
 
         var start = _timeProvider.GetTimestamp();
         var result = await _chat
@@ -94,6 +82,68 @@ public sealed class LlmComposer : IComposer
             citations.Count, elapsed.TotalMilliseconds, model);
 
         return new CodeAnswer(result.Content!, citations, model, elapsed);
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<string> ComposeStreamingAsync(
+        string question,
+        IReadOnlyList<VectorSearchResult> context,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(question);
+        ArgumentNullException.ThrowIfNull(context);
+
+        var opts = _options.Value;
+        var (history, settings, _) = BuildRequest(question, context, opts);
+
+        var start = _timeProvider.GetTimestamp();
+        var chunkCount = 0;
+
+        var stream = _chat.GetStreamingChatMessageContentsAsync(
+            history, settings, kernel: null, cancellationToken);
+
+        await foreach (var chunk in stream.ConfigureAwait(false))
+        {
+            if (!string.IsNullOrEmpty(chunk.Content))
+            {
+                chunkCount++;
+                yield return chunk.Content!;
+            }
+        }
+
+        var elapsed = _timeProvider.GetElapsedTime(start);
+        if (elapsed < TimeSpan.Zero)
+        {
+            elapsed = TimeSpan.Zero;
+        }
+        _logger.LogDebug(
+            "Streaming composer produced {ChunkCount} chunks in {LatencyMs} ms.",
+            chunkCount, elapsed.TotalMilliseconds);
+    }
+
+    private (ChatHistory History, PromptExecutionSettings Settings, List<VectorSearchResult> Trimmed)
+        BuildRequest(
+            string question,
+            IReadOnlyList<VectorSearchResult> context,
+            CodeQAOptions opts)
+    {
+        var composer = opts.Composer;
+        var trimmed = TruncateToBudget(context, opts);
+
+        var history = new ChatHistory();
+        history.AddSystemMessage(CodeQAPromptTemplate.SystemPrompt);
+        history.AddUserMessage(CodeQAPromptTemplate.BuildUserPrompt(question, trimmed));
+
+        var settings = new PromptExecutionSettings
+        {
+            ExtensionData = new Dictionary<string, object>
+            {
+                ["temperature"] = composer.Temperature,
+                ["max_tokens"] = composer.MaxOutputTokens,
+            },
+        };
+
+        return (history, settings, trimmed);
     }
 
     private static List<VectorSearchResult> TruncateToBudget(
