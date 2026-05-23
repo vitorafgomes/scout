@@ -167,6 +167,12 @@ public sealed class OllamaApiClient : IOllamaApiClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
 
+        // The typed HttpClient has Timeout.InfiniteTimeSpan so streaming pulls
+        // are not capped. Delete is a short operation; bound it locally with
+        // the configured ping timeout.
+        using var timeoutCts = new CancellationTokenSource(_options.PingTimeout);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+
         var baseUri = new Uri(_options.Endpoint.TrimEnd('/') + "/", UriKind.Absolute);
         var uri = new Uri(baseUri, "api/delete");
 
@@ -175,13 +181,35 @@ public sealed class OllamaApiClient : IOllamaApiClient
             Content = JsonContent.Create(new { name = modelName }),
         };
 
-        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
-
-        if (!response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            throw new HttpRequestException(
-                $"Ollama /api/delete returned {(int)response.StatusCode}: {body}");
+            response = await _http.SendAsync(request, linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"Ollama /api/delete timed out after {_options.PingTimeout}.");
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                string body;
+                try
+                {
+                    body = await response.Content.ReadAsStringAsync(linked.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"Ollama /api/delete timed out after {_options.PingTimeout}.");
+                }
+
+                throw new HttpRequestException(
+                    $"Ollama /api/delete returned {(int)response.StatusCode}: {body}");
+            }
         }
     }
 

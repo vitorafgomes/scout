@@ -219,6 +219,50 @@ public sealed class LocalRuntimeAutostartServiceTests
     }
 
     [Fact]
+    public async Task StartAsync_UserInitiated_AfterAutostartFailed_RebootsProbeAndSucceeds()
+    {
+        var locator = Substitute.For<IBinaryLocator>();
+        locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(OllamaPath));
+
+        // Autostart phase: every ping returns null so warmup fails.
+        // User phase: pings start returning reachable so the spawn succeeds.
+        var autostartDone = false;
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+            Task.FromResult<OllamaTags?>(
+                autostartDone ? new OllamaTags(Array.Empty<ProviderModel>()) : null));
+
+        var launcher = Substitute.For<IProcessLauncher>();
+        var fakeProc = Substitute.For<ILaunchedProcess>();
+        fakeProc.HasExited.Returns(false);
+        fakeProc.StopAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
+        launcher.Launch(Arg.Any<ProcessLaunchRequest>()).Returns(fakeProc);
+
+        var registry = new InMemoryLocalRuntimeRegistry();
+        var store = Substitute.For<ILocalRuntimeConfigStore>();
+        store.GetAutostartAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
+
+        var probe = new OllamaReadinessProbe();
+        var options = Opts(warmupBudget: TimeSpan.FromMilliseconds(300));
+        var provider = NewProvider(locator, api, launcher, registry, store, probe, options);
+        var sut = new LocalRuntimeAutostartService(
+            provider, store, probe, options, NullLogger<LocalRuntimeAutostartService>.Instance);
+
+        await sut.StartingAsync(CancellationToken.None);
+        probe.Current.ShouldBe(OllamaReadinessState.Failed);
+
+        // User clicks Start: probe must be reset and the spawn must succeed.
+        autostartDone = true;
+        var status = await provider.StartAsync(CancellationToken.None);
+
+        status.Running.ShouldBeTrue();
+        probe.Current.ShouldBe(OllamaReadinessState.Ready);
+    }
+
+    [Fact]
     public async Task StartingAsync_OllamaStartFails_HostStillStarts()
     {
         var locator = Substitute.For<IBinaryLocator>();

@@ -22,4 +22,24 @@ public interface IOllamaReadinessProbe
     /// Never throws unless cancellation is requested via <paramref name="cancellationToken"/>.
     /// </summary>
     Task<bool> WaitReadyAsync(TimeSpan timeout, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Transitions to <see cref="OllamaReadinessState.Starting"/>. From Failed
+    /// the gate is reset so new waiters block again; from Ready or Starting
+    /// this is a no-op.
+    /// </summary>
+    void MarkStarting();
+
+    /// <summary>
+    /// Transitions to <see cref="OllamaReadinessState.Ready"/> and completes
+    /// pending waiters with true. Idempotent.
+    /// </summary>
+    void MarkReady();
+
+    /// <summary>
+    /// Transitions to <see cref="OllamaReadinessState.Failed"/> and completes
+    /// pending waiters with false. Idempotent; can be re-armed via
+    /// <see cref="MarkStarting"/>.
+    /// </summary>
+    void MarkFailed();
 }

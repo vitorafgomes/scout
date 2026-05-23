@@ -64,6 +64,31 @@ public sealed class OllamaApiClientDeleteTests
         ex.Message.ShouldContain("404");
     }
 
+    [Fact]
+    public async Task DeleteModelAsync_WhenServerNeverResponds_ThrowsTimeoutException_AfterPingTimeout()
+    {
+        var handler = new NeverCompletingHandler();
+        var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost:11434"),
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        var options = Options.Create(new OllamaProviderOptions
+        {
+            Endpoint = "http://localhost:11434",
+            PingTimeout = TimeSpan.FromMilliseconds(200),
+        });
+        var client = new OllamaApiClient(http, options, NullLogger<OllamaApiClient>.Instance);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Should.ThrowAsync<TimeoutException>(
+            () => client.DeleteModelAsync("any", CancellationToken.None));
+        sw.Stop();
+
+        // Must trip on the bounded CTS, not on any global HttpClient ceiling.
+        sw.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(1));
+    }
+
     private sealed class CapturingHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _factory;
@@ -74,5 +99,20 @@ public sealed class OllamaApiClientDeleteTests
             HttpRequestMessage request,
             CancellationToken cancellationToken)
             => Task.FromResult(_factory(request));
+    }
+
+    private sealed class NeverCompletingHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            // Honour caller cancellation so the linked CTS can unblock us.
+            var tcs = new TaskCompletionSource<HttpResponseMessage>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = cancellationToken.Register(
+                () => tcs.TrySetCanceled(cancellationToken));
+            return await tcs.Task.ConfigureAwait(false);
+        }
     }
 }

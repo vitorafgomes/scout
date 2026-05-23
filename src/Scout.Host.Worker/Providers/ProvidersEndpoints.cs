@@ -115,6 +115,7 @@ public static class ProvidersEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
         group.MapPost("/{id}/restart", async (string id, OllamaProviderService ollama, CancellationToken ct) =>
@@ -175,6 +176,7 @@ public static class ProvidersEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
             .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
         group.MapPost("/{id}/stop", async (string id, OllamaProviderService ollama, CancellationToken ct) =>
@@ -221,7 +223,8 @@ public static class ProvidersEndpoints
             .Produces<ProviderStatus>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
-            .ProducesProblem(StatusCodes.Status502BadGateway);
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         group.MapPost("/{id}/models/{model}/pull", async (
                 string id,
@@ -342,7 +345,8 @@ public static class ProvidersEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
-            .ProducesProblem(StatusCodes.Status502BadGateway);
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
         group.MapPut("/{id}/autostart", async (string id, AutostartRequest body, ILocalRuntimeConfigStore store, CancellationToken ct) =>
             {

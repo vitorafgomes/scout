@@ -84,4 +84,49 @@ public sealed class OllamaReadinessProbeTests
         var result = await probe.WaitReadyAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None);
         result.ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task MarkStarting_AfterFailed_ResetsToStarting_AndNewWaitersBlockOnNewGate()
+    {
+        var probe = new OllamaReadinessProbe();
+        probe.MarkFailed();
+        probe.Current.ShouldBe(OllamaReadinessState.Failed);
+
+        probe.MarkStarting();
+        probe.Current.ShouldBe(OllamaReadinessState.Starting);
+
+        // New waiter must see an uncompleted gate, not the stale `false`.
+        var waiter = probe.WaitReadyAsync(TimeSpan.FromMilliseconds(100), CancellationToken.None);
+        (await waiter).ShouldBeFalse(); // unblocked by timeout, not by stale completion
+    }
+
+    [Fact]
+    public async Task MarkStarting_AfterReady_IsNoOp()
+    {
+        var probe = new OllamaReadinessProbe();
+        probe.MarkReady();
+        probe.MarkStarting();
+        probe.Current.ShouldBe(OllamaReadinessState.Ready);
+        // Gate must still be completed-true (Ready is absorbing).
+        (await probe.WaitReadyAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None))
+            .ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task MarkFailed_ThenMarkStarting_ThenMarkReady_TransitionsAllWayThrough_AndNewWaitersResolveReady()
+    {
+        var probe = new OllamaReadinessProbe();
+        probe.MarkFailed();
+        (await probe.WaitReadyAsync(TimeSpan.FromMilliseconds(50), CancellationToken.None))
+            .ShouldBeFalse();
+
+        probe.MarkStarting();
+        var waiter = probe.WaitReadyAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+
+        probe.MarkReady();
+
+        (await waiter).ShouldBeTrue();
+        probe.Current.ShouldBe(OllamaReadinessState.Ready);
+        probe.IsReady.ShouldBeTrue();
+    }
 }

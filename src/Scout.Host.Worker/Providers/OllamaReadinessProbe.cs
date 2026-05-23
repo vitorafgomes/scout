@@ -3,11 +3,16 @@ namespace Scout.Host.Worker.Providers;
 /// <summary>
 /// Singleton probe that gates consumers of the local Ollama runtime so they
 /// only ping after <see cref="LocalRuntimeAutostartService"/> has finished
-/// its warmup. Mark transitions are CAS-protected and idempotent.
+/// its warmup. Mark transitions are CAS-protected and idempotent. The probe
+/// is recoverable: a Failed state can be reset to Starting on a user-initiated
+/// lifecycle action without restarting the worker.
 /// </summary>
 public sealed class OllamaReadinessProbe : IOllamaReadinessProbe
 {
-    private readonly TaskCompletionSource<bool> _gate =
+    // Mutable reference: replaced with a fresh, uncompleted TCS each time the
+    // probe is reset out of Failed. Reads in WaitReadyAsync snapshot the field
+    // once so they observe a consistent gate.
+    private volatile TaskCompletionSource<bool> _gate =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private int _state = (int)OllamaReadinessState.Unknown;
@@ -33,15 +38,39 @@ public sealed class OllamaReadinessProbe : IOllamaReadinessProbe
         }
     }
 
-    internal void MarkStarting()
+    public void MarkStarting()
     {
-        Interlocked.CompareExchange(
-            ref _state,
-            (int)OllamaReadinessState.Starting,
-            (int)OllamaReadinessState.Unknown);
+        while (true)
+        {
+            var current = Volatile.Read(ref _state);
+            if (current == (int)OllamaReadinessState.Ready ||
+                current == (int)OllamaReadinessState.Starting)
+            {
+                return;
+            }
+
+            // From Failed we must give new waiters a fresh, uncompleted gate
+            // BEFORE the state transition becomes observable. Otherwise a
+            // waiter that lands between the CAS and the gate swap would
+            // synchronously consume the stale `false` completion.
+            if (current == (int)OllamaReadinessState.Failed)
+            {
+                var fresh = new TaskCompletionSource<bool>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _gate = fresh;
+            }
+
+            if (Interlocked.CompareExchange(
+                    ref _state,
+                    (int)OllamaReadinessState.Starting,
+                    current) == current)
+            {
+                return;
+            }
+        }
     }
 
-    internal void MarkReady()
+    public void MarkReady()
     {
         if (TryAdvanceTo(OllamaReadinessState.Ready))
         {
@@ -49,7 +78,7 @@ public sealed class OllamaReadinessProbe : IOllamaReadinessProbe
         }
     }
 
-    internal void MarkFailed()
+    public void MarkFailed()
     {
         if (TryAdvanceTo(OllamaReadinessState.Failed))
         {

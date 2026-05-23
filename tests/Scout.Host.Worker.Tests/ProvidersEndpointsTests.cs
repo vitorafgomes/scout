@@ -376,17 +376,19 @@ public sealed class ProvidersEndpointsTests
     }
 
     [Fact]
-    public async Task StartProvider_WhenProbeFailed_Returns503()
+    public async Task StartProvider_WhenProbeFailed_RearmsProbeAndAttemptsStart()
     {
+        // After autostart fails, an explicit user-initiated start must NOT be
+        // gated by the stale Failed probe. The endpoint should call into the
+        // spawn path; with a never-responding daemon that surfaces as 504, not
+        // as the previous 503 lockout.
         var probe = FakeReadinessProbes.NeverReady();
         using var factory = NewFactoryWithFakeOllama(probe: probe);
         using var client = factory.CreateClient();
 
         var response = await client.PostAsync("/providers/ollama/start", content: null);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        var body = await response.Content.ReadAsStringAsync();
-        body.ShouldContain("providers/not-ready");
+        response.StatusCode.ShouldNotBe(HttpStatusCode.ServiceUnavailable);
     }
 
     [Fact]

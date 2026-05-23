@@ -113,8 +113,25 @@ public sealed class OllamaProviderService
             Models: models);
     }
 
-    public Task<ProviderStatus> StartAsync(CancellationToken ct) =>
-        StartInternalAsync(ct, skipReadinessCheck: false);
+    public async Task<ProviderStatus> StartAsync(CancellationToken ct)
+    {
+        // User-initiated start: rearm the probe so that a previous Failed
+        // (from autostart) does not lock subsequent calls into 503.
+        // Idempotent against autostart's own MarkStarting via the CAS loop.
+        _probe.MarkStarting();
+
+        try
+        {
+            var status = await StartInternalAsync(ct, skipReadinessCheck: true).ConfigureAwait(false);
+            _probe.MarkReady();
+            return status;
+        }
+        catch
+        {
+            _probe.MarkFailed();
+            throw;
+        }
+    }
 
     internal async Task<ProviderStatus> StartInternalAsync(CancellationToken ct, bool skipReadinessCheck)
     {
