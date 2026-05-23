@@ -53,11 +53,12 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 
         _client = new DiscordSocketClient(new DiscordSocketConfig
         {
-            // Minimum intents Scout needs: listen to messages in guild
-            // channels and read their content. No DMs, no reactions,
-            // no presence. The intent surface stays as narrow as possible.
+            // Listen to messages in guild channels and DMs, and read their
+            // content. No reactions, no presence. The intent surface stays
+            // as narrow as possible.
             GatewayIntents = GatewayIntents.Guilds
                            | GatewayIntents.GuildMessages
+                           | GatewayIntents.DirectMessages
                            | GatewayIntents.MessageContent,
             LogLevel = LogSeverity.Info,
         });

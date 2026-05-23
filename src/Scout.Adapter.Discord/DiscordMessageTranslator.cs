@@ -43,7 +43,12 @@ public sealed partial class DiscordMessageTranslator
             reason = "bot-author";
             return false;
         }
-        if (!inbound.MentionsSelf)
+
+        // In a guild channel the bot must be explicitly @-mentioned so it
+        // does not respond to unrelated traffic. DMs (no GuildId) are
+        // implicitly addressed to the bot and do not require a mention.
+        var isDm = inbound.GuildId is null;
+        if (!isDm && !inbound.MentionsSelf)
         {
             reason = "no-mention";
             return false;
