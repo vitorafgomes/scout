@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_MODELS_STORAGE_KEY, LocalModelsStore } from '../core/local-models.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -241,7 +241,7 @@ describe('LocalModelsComponent', () => {
 
   it('server status reads STOPPED when llmStatus is null and READY when running', async () => {
     const { fixture } = await setup();
-    let status = fixture.nativeElement.querySelector('[data-test="panel-status"]') as HTMLElement;
+    const status = fixture.nativeElement.querySelector('[data-test="panel-status"]') as HTMLElement;
     expect(status.textContent ?? '').toContain('Stopped');
   });
 

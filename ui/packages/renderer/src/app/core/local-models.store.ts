@@ -201,7 +201,7 @@ export class LocalModelsStore {
 
       this.persist();
     } catch (err) {
-      console.debug('[LocalModelsStore] hydrateFromWorker skipped:', err);
+      console.warn('[LocalModelsStore] hydrateFromWorker skipped:', err);
     }
   }
 
@@ -215,7 +215,7 @@ export class LocalModelsStore {
     try {
       await this._bridge.vaultStore({ key: 'llm.model', value: tag });
     } catch (err) {
-      console.debug('[LocalModelsStore] vault write skipped:', err);
+      console.warn('[LocalModelsStore] vault write skipped:', err);
     }
   }
 
