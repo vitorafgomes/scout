@@ -809,6 +809,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
   readonly actionError = signal<string | null>(null);
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.unsubscribeProgress = this.bridge.onLlmPullOllamaProgress((event) => {
@@ -1059,6 +1060,20 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Schedule a single deferred poll-reset, replacing any pending one. The
+  // handle is tracked so ngOnDestroy can cancel it; otherwise the callback
+  // would resurrect polling after the component is gone, leaking HTTP calls.
+  private schedulePollReset(delayMs: number): void {
+    if (this.pollResetTimer !== null) {
+      clearTimeout(this.pollResetTimer);
+      this.pollResetTimer = null;
+    }
+    this.pollResetTimer = setTimeout(() => {
+      this.pollResetTimer = null;
+      this.startPolling(4000);
+    }, delayMs);
+  }
+
   readonly restartDisabledTooltip = computed<string>(() => {
     const status = this.llmStatus();
     if (status === null) return '';
@@ -1090,7 +1105,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       const status = await this.bridge.providerStart({ id: 'ollama' });
       this.llmStatus.set(status);
       this.startPolling(500);
-      setTimeout(() => this.startPolling(4000), 35_000);
+      this.schedulePollReset(35_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {
@@ -1105,7 +1120,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       const status = await this.bridge.providerStop({ id: 'ollama' });
       this.llmStatus.set(status);
       this.startPolling(500);
-      setTimeout(() => this.startPolling(4000), 10_000);
+      this.schedulePollReset(10_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {
@@ -1120,7 +1135,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       const status = await this.bridge.providerRestart({ id: 'ollama' });
       this.llmStatus.set(status);
       this.startPolling(500);
-      setTimeout(() => this.startPolling(4000), 35_000);
+      this.schedulePollReset(35_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {
@@ -1144,6 +1159,10 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
+    if (this.pollResetTimer !== null) {
+      clearTimeout(this.pollResetTimer);
+      this.pollResetTimer = null;
+    }
     for (const handle of this.timers.values()) clearInterval(handle);
     this.timers.clear();
     this.unsubscribeProgress();

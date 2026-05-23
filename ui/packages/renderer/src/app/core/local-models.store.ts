@@ -186,18 +186,25 @@ export class LocalModelsStore {
         current.add(catalogId);
         changed = true;
       }
-      if (!changed) return;
-      this._downloaded.set([...current]);
+      if (changed) {
+        this._downloaded.set([...current]);
+      }
 
       // Auto-pick the first analysis model the daemon already has so the
       // chat completion path has a model name without forcing the user to
-      // visit the LLM wizard.
+      // visit the LLM wizard. Must run even when the worker reports the
+      // same model list as before, since selection may still be null on
+      // first boot (otherwise chat completion ends up with no model name).
       const analysisDownloaded = this.downloadedFor('analysis').map((m) => m.id);
+      let selectionChanged = false;
       if (this._selected().analysis === null && analysisDownloaded.length > 0) {
         const firstAnalysis = analysisDownloaded[0]!;
         this._selected.update((prev) => ({ ...prev, analysis: firstAnalysis }));
         void this.persistAnalysisToVault(firstAnalysis);
+        selectionChanged = true;
       }
+
+      if (!changed && !selectionChanged) return;
 
       this.persist();
     } catch (err) {

@@ -340,4 +340,56 @@ describe('LocalModelsComponent', () => {
     setIntervalSpy.mockRestore();
     clearIntervalSpy.mockRestore();
   });
+
+  it('ngOnDestroy clears the pending poll-reset timer', async () => {
+    vi.useFakeTimers();
+    try {
+      const { fixture } = await setup();
+      const comp = fixture.componentInstance;
+      // Capture startPolling calls on the instance to assert the deferred
+      // callback never fires after destroy.
+      const startPolling = vi.spyOn(
+        comp as unknown as { startPolling: (n: number) => void },
+        'startPolling',
+      );
+
+      await comp.onStart();
+      const callsAfterStart = startPolling.mock.calls.length;
+      expect(callsAfterStart).toBeGreaterThan(0);
+
+      fixture.destroy();
+      vi.advanceTimersByTime(40_000);
+
+      expect(startPolling.mock.calls.length).toBe(callsAfterStart);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('consecutive onStart calls do not stack pending poll-resets', async () => {
+    vi.useFakeTimers();
+    try {
+      const { fixture } = await setup();
+      const comp = fixture.componentInstance;
+      const startPolling = vi.spyOn(
+        comp as unknown as { startPolling: (n: number) => void },
+        'startPolling',
+      );
+
+      await comp.onStart();
+      await comp.onStart();
+      const callsBeforeDeadline = startPolling.mock.calls.length;
+
+      // Advance past the 35s reset window. Only one deferred restart should
+      // fire even though onStart scheduled twice.
+      vi.advanceTimersByTime(36_000);
+
+      const deferredCalls = startPolling.mock.calls.length - callsBeforeDeadline;
+      expect(deferredCalls).toBe(1);
+
+      fixture.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
