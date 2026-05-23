@@ -8,7 +8,13 @@ import { ScoutBridgeService } from './scout-bridge';
 
 function provide(): LocalModelsStore {
   TestBed.configureTestingModule({
-    providers: [provideZonelessChangeDetection()],
+    providers: [
+      provideZonelessChangeDetection(),
+      {
+        provide: ScoutBridgeService,
+        useValue: { vaultStore: vi.fn(async () => undefined) } as unknown as ScoutBridgeService,
+      },
+    ],
   });
   return TestBed.inject(LocalModelsStore);
 }
@@ -133,10 +139,14 @@ describe('LocalModelsStore', () => {
 });
 
 function provideWithBridge(bridgePartial: Partial<ScoutBridgeService>): LocalModelsStore {
+  const bridge = {
+    vaultStore: vi.fn(async () => undefined),
+    ...bridgePartial,
+  } as unknown as ScoutBridgeService;
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
-      { provide: ScoutBridgeService, useValue: bridgePartial as ScoutBridgeService },
+      { provide: ScoutBridgeService, useValue: bridge },
     ],
   });
   return TestBed.inject(LocalModelsStore);
@@ -160,7 +170,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);
@@ -208,7 +218,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);
@@ -246,7 +256,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);

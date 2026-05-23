@@ -19,6 +19,7 @@ import {
 
 import {
   lookupCatalog,
+  ollamaTagForCatalogId,
   type LocalModelBadge,
   type LocalModelCatalogEntry,
   type LocalModelKind,
@@ -29,17 +30,9 @@ import { ScoutBridgeService } from '../core/scout-bridge';
 
 const OLLAMA_ENDPOINT = 'http://localhost:11434';
 
-const CATALOG_TO_OLLAMA_TAG: Readonly<Record<string, string>> = Object.freeze({
-  'qwen-2.5-0.5b-instruct': 'qwen2.5:0.5b',
-  'qwen-2.5-1.5b-instruct': 'qwen2.5:1.5b',
-  'qwen-3-vl-2b': 'qwen2.5:3b',
-  'gemma-3-4b': 'gemma3:4b',
-  'gemma-3-12b': 'gemma3:12b',
-});
-
-function ollamaTagFor(catalogId: string): string | null {
-  return CATALOG_TO_OLLAMA_TAG[catalogId] ?? null;
-}
+// Catalog <-> Ollama tag mapping lives in core/local-models.catalog so the
+// store and the component agree on a single source of truth.
+const ollamaTagFor = ollamaTagForCatalogId;
 
 const CATALOG_TO_WHISPER: Readonly<Record<string, WhisperVariant>> = Object.freeze({
   'whisper-large-v3': 'large-v3',

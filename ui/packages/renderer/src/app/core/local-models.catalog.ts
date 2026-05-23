@@ -90,3 +90,26 @@ export function catalogFor(kind: LocalModelKind): readonly LocalModelCatalogEntr
 export function lookupCatalog(id: string): LocalModelCatalogEntry | null {
   return LOCAL_MODEL_CATALOG.find((m) => m.id === id) ?? null;
 }
+
+// Bridge between Scout's human-friendly catalog IDs and the model names
+// the local Ollama daemon reports through /api/tags. Forward and reverse
+// lookups are kept in sync from a single source.
+const OLLAMA_TAG_BY_CATALOG_ID: Readonly<Record<string, string>> = Object.freeze({
+  'qwen-2.5-0.5b-instruct': 'qwen2.5:0.5b',
+  'qwen-2.5-1.5b-instruct': 'qwen2.5:1.5b',
+  'qwen-3-vl-2b': 'qwen2.5:3b',
+  'gemma-3-4b': 'gemma3:4b',
+  'gemma-3-12b': 'gemma3:12b',
+});
+
+const CATALOG_ID_BY_OLLAMA_TAG: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(Object.entries(OLLAMA_TAG_BY_CATALOG_ID).map(([id, tag]) => [tag, id])),
+);
+
+export function ollamaTagForCatalogId(catalogId: string): string | null {
+  return OLLAMA_TAG_BY_CATALOG_ID[catalogId] ?? null;
+}
+
+export function catalogIdForOllamaTag(tag: string): string | null {
+  return CATALOG_ID_BY_OLLAMA_TAG[tag] ?? null;
+}
