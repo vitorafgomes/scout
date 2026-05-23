@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Scout.Host.Worker.Providers;
+using Scout.Host.Worker.Tests.Helpers;
 using Shouldly;
 
 namespace Scout.Host.Worker.Tests;
@@ -17,13 +18,18 @@ public sealed class ProvidersEndpointsTests
         IProcessLauncher? launcher = null,
         ILocalRuntimeRegistry? registry = null,
         ILocalRuntimeConfigStore? store = null,
-        bool autostartDefault = true)
+        bool autostartDefault = true,
+        IOllamaReadinessProbe? probe = null,
+        IOllamaApiClient? api = null)
     {
         var locator = Substitute.For<IBinaryLocator>();
         locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(binaryPath));
-        var api = Substitute.For<IOllamaApiClient>();
-        api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(tags));
+        if (api is null)
+        {
+            api = Substitute.For<IOllamaApiClient>();
+            api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(tags));
+        }
 
         launcher ??= Substitute.For<IProcessLauncher>();
         registry ??= new InMemoryLocalRuntimeRegistry();
@@ -38,16 +44,22 @@ public sealed class ProvidersEndpointsTests
         var injectedLauncher = launcher;
         var injectedRegistry = registry;
         var injectedStore = store;
+        var injectedApi = api;
+        var injectedProbe = probe;
 
         return new ScoutWorkerWebApplicationFactory
         {
             ConfigureServicesOverride = services =>
             {
                 services.AddSingleton(locator);
-                services.AddSingleton(api);
+                services.AddSingleton(injectedApi);
                 services.AddSingleton(injectedLauncher);
                 services.AddSingleton(injectedRegistry);
                 services.AddSingleton(injectedStore);
+                if (injectedProbe is not null)
+                {
+                    services.AddSingleton(injectedProbe);
+                }
             },
         };
     }
@@ -160,16 +172,154 @@ public sealed class ProvidersEndpointsTests
     }
 
     [Fact]
-    public async Task PostRestart_NotManaged_Returns409()
+    public async Task PostStop_Ollama_Returns200()
+    {
+        // Daemon not running -> StopAsync short-circuits with the current status.
+        using var factory = NewFactoryWithFakeOllama();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync("/providers/ollama/stop", content: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var doc = await response.Content.ReadFromJsonAsync<JsonElement>();
+        doc.GetProperty("id").GetString().ShouldBe("ollama");
+        doc.GetProperty("running").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PostStop_LmStudio_Returns501()
     {
         using var factory = NewFactoryWithFakeOllama();
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsync("/providers/ollama/restart", content: null);
+        var response = await client.PostAsync("/providers/lm-studio/stop", content: null);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        response.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
         var body = await response.Content.ReadAsStringAsync();
-        body.ShouldContain("providers/not-managed");
+        body.ShouldContain("providers/lifecycle-unsupported");
+    }
+
+    [Fact]
+    public async Task PostStop_Failed_Returns502()
+    {
+        // Daemon always reachable; pkill helper "succeeds" but the daemon
+        // never goes away, so the poll boundary trips with ProviderStopFailed.
+        var launcher = Substitute.For<IProcessLauncher>();
+        var killer = Substitute.For<ILaunchedProcess>();
+        killer.HasExited.Returns(true);
+        killer.WaitForExitAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(0));
+        launcher.Launch(Arg.Any<ProcessLaunchRequest>()).Returns(killer);
+
+        using var factory = NewFactoryWithFakeOllama(
+            tags: new OllamaTags(Array.Empty<ProviderModel>()),
+            launcher: launcher);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync("/providers/ollama/stop", content: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("providers/stop-failed");
+    }
+
+    [Fact]
+    public async Task DeleteModel_Ollama_Returns204()
+    {
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<OllamaTags?>(null));
+        api.DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        var locator = Substitute.For<IBinaryLocator>();
+        locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("/usr/local/bin/ollama"));
+
+        var store = Substitute.For<ILocalRuntimeConfigStore>();
+        store.GetAutostartAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
+
+        using var factory = new ScoutWorkerWebApplicationFactory
+        {
+            ConfigureServicesOverride = services =>
+            {
+                services.AddSingleton(locator);
+                services.AddSingleton(api);
+                services.AddSingleton<IProcessLauncher>(Substitute.For<IProcessLauncher>());
+                services.AddSingleton<ILocalRuntimeRegistry>(new InMemoryLocalRuntimeRegistry());
+                services.AddSingleton(store);
+            },
+        };
+        using var client = factory.CreateClient();
+
+        var response = await client.DeleteAsync("/providers/ollama/models/qwen2.5:3b");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        await api.Received(1).DeleteModelAsync("qwen2.5:3b", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteModel_LmStudio_Returns501()
+    {
+        using var factory = NewFactoryWithFakeOllama();
+        using var client = factory.CreateClient();
+
+        var response = await client.DeleteAsync("/providers/lm-studio/models/foo");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("providers/lifecycle-unsupported");
+    }
+
+    [Fact]
+    public async Task PostPull_Ollama_StreamsSseEvents()
+    {
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<OllamaTags?>(null));
+        api.PullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ => YieldPullEvents());
+
+        var locator = Substitute.For<IBinaryLocator>();
+        locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("/usr/local/bin/ollama"));
+
+        var store = Substitute.For<ILocalRuntimeConfigStore>();
+        store.GetAutostartAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true));
+
+        using var factory = new ScoutWorkerWebApplicationFactory
+        {
+            ConfigureServicesOverride = services =>
+            {
+                services.AddSingleton(locator);
+                services.AddSingleton(api);
+                services.AddSingleton<IProcessLauncher>(Substitute.For<IProcessLauncher>());
+                services.AddSingleton<ILocalRuntimeRegistry>(new InMemoryLocalRuntimeRegistry());
+                services.AddSingleton(store);
+            },
+        };
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync("/providers/ollama/models/qwen2.5:3b/pull", content: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.Content.Headers.ContentType!.MediaType.ShouldBe("text/event-stream");
+
+        var body = await response.Content.ReadAsStringAsync();
+        var dataLines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => l.StartsWith("data: ", StringComparison.Ordinal))
+            .ToArray();
+        dataLines.Length.ShouldBe(2);
+        dataLines[0].ShouldContain("pulling manifest");
+        dataLines[1].ShouldContain("success");
+    }
+
+    private static async IAsyncEnumerable<PullProgress> YieldPullEvents()
+    {
+        yield return new PullProgress("pulling manifest", null, null, null);
+        await Task.Yield();
+        yield return new PullProgress("success", null, null, null);
     }
 
     [Fact]
@@ -202,5 +352,63 @@ public sealed class ProvidersEndpointsTests
         var response = await client.PutAsync("/providers/foo/autostart", body);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task GetProviders_WhenProbeFailed_ReturnsStatusWithLastError_AndDoesNotPingHttp()
+    {
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<OllamaTags?>(null));
+        var probe = FakeReadinessProbes.NeverReady();
+
+        using var factory = NewFactoryWithFakeOllama(api: api, probe: probe);
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/providers");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var providers = await response.Content.ReadFromJsonAsync<List<JsonElement>>();
+        providers.ShouldNotBeNull();
+        var ollama = providers!.First(p => p.GetProperty("id").GetString() == "ollama");
+        ollama.GetProperty("running").GetBoolean().ShouldBeFalse();
+        ollama.GetProperty("lastError").GetProperty("code").GetString().ShouldBe("providers/unreachable");
+        await api.DidNotReceiveWithAnyArgs().GetTagsAsync(default);
+    }
+
+    [Fact]
+    public async Task StartProvider_WhenProbeFailed_RearmsProbeAndAttemptsStart()
+    {
+        // After autostart fails, an explicit user-initiated start must NOT be
+        // gated by the stale Failed probe. The endpoint should call into the
+        // spawn path; with a never-responding daemon that surfaces as 504, not
+        // as the previous 503 lockout.
+        var probe = FakeReadinessProbes.NeverReady();
+        using var factory = NewFactoryWithFakeOllama(probe: probe);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync("/providers/ollama/start", content: null);
+
+        response.StatusCode.ShouldNotBe(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
+    public async Task PullProviderModel_WhenProbeFailed_EmitsSseError_AndCloses()
+    {
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<OllamaTags?>(null));
+        var probe = FakeReadinessProbes.NeverReady();
+
+        using var factory = NewFactoryWithFakeOllama(api: api, probe: probe);
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsync(
+            "/providers/ollama/models/qwen2.5:3b/pull",
+            content: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadAsStringAsync();
+        body.ShouldContain("event: error");
+        body.ShouldContain("providers/not-ready");
+        api.DidNotReceiveWithAnyArgs().PullAsync(default!, default);
     }
 }

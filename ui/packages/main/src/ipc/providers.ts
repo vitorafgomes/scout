@@ -6,6 +6,7 @@ import {
   type ProvidersListResponse,
   type ProviderStatusRequest,
   type ProviderStartRequest,
+  type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
 } from '@scout/shared';
@@ -63,6 +64,18 @@ export function registerProvidersHandlers(
   );
 
   ipcMain.handle(
+    CHANNEL.providerStop,
+    async (_event, req: ProviderStopRequest): Promise<ProviderStatusDto> => {
+      try {
+        return await client.post<ProviderStatusDto>(`/providers/${req.id}/stop`);
+      } catch (err: unknown) {
+        logger.warn('providers: stop failed', { id: req.id, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
     CHANNEL.providerRestart,
     async (_event, req: ProviderRestartRequest): Promise<ProviderStatusDto> => {
       try {
@@ -90,6 +103,7 @@ export function registerProvidersHandlers(
     ipcMain.removeHandler(CHANNEL.providersList);
     ipcMain.removeHandler(CHANNEL.providerStatus);
     ipcMain.removeHandler(CHANNEL.providerStart);
+    ipcMain.removeHandler(CHANNEL.providerStop);
     ipcMain.removeHandler(CHANNEL.providerRestart);
     ipcMain.removeHandler(CHANNEL.providerSetAutostart);
     logger.info('providers: IPC handlers unregistered');

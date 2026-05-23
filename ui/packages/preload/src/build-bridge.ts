@@ -156,6 +156,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.providerStart, req) as ReturnType<ScoutBridge['providerStart']>;
     },
 
+    providerStop(req) {
+      return ipc.invoke(CHANNEL.providerStop, req) as ReturnType<ScoutBridge['providerStop']>;
+    },
+
     providerRestart(req) {
       return ipc.invoke(CHANNEL.providerRestart, req) as ReturnType<ScoutBridge['providerRestart']>;
     },

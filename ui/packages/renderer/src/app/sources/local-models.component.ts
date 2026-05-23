@@ -19,6 +19,7 @@ import {
 
 import {
   lookupCatalog,
+  ollamaTagForCatalogId,
   type LocalModelBadge,
   type LocalModelCatalogEntry,
   type LocalModelKind,
@@ -29,17 +30,9 @@ import { ScoutBridgeService } from '../core/scout-bridge';
 
 const OLLAMA_ENDPOINT = 'http://localhost:11434';
 
-const CATALOG_TO_OLLAMA_TAG: Readonly<Record<string, string>> = Object.freeze({
-  'qwen-2.5-0.5b-instruct': 'qwen2.5:0.5b',
-  'qwen-2.5-1.5b-instruct': 'qwen2.5:1.5b',
-  'qwen-3-vl-2b': 'qwen2.5:3b',
-  'gemma-3-4b': 'gemma3:4b',
-  'gemma-3-12b': 'gemma3:12b',
-});
-
-function ollamaTagFor(catalogId: string): string | null {
-  return CATALOG_TO_OLLAMA_TAG[catalogId] ?? null;
-}
+// Catalog <-> Ollama tag mapping lives in core/local-models.catalog so the
+// store and the component agree on a single source of truth.
+const ollamaTagFor = ollamaTagForCatalogId;
 
 const CATALOG_TO_WHISPER: Readonly<Record<string, WhisperVariant>> = Object.freeze({
   'whisper-large-v3': 'large-v3',
@@ -218,6 +211,17 @@ function formatBytes(n: number): string {
               <path d="M8 5v14l11-7Z" fill="currentColor" />
             </svg>
             Start
+          </button>
+          <button
+            type="button"
+            class="btn btn--ghost"
+            data-test="stop-btn"
+            [disabled]="busy() || llmStatus()?.running !== true"
+            (click)="onStop()">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M6 6h12v12H6Z" fill="currentColor" />
+            </svg>
+            Stop
           </button>
           <button
             type="button"
@@ -805,6 +809,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
   readonly actionError = signal<string | null>(null);
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.unsubscribeProgress = this.bridge.onLlmPullOllamaProgress((event) => {
@@ -1055,6 +1060,20 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Schedule a single deferred poll-reset, replacing any pending one. The
+  // handle is tracked so ngOnDestroy can cancel it; otherwise the callback
+  // would resurrect polling after the component is gone, leaking HTTP calls.
+  private schedulePollReset(delayMs: number): void {
+    if (this.pollResetTimer !== null) {
+      clearTimeout(this.pollResetTimer);
+      this.pollResetTimer = null;
+    }
+    this.pollResetTimer = setTimeout(() => {
+      this.pollResetTimer = null;
+      this.startPolling(4000);
+    }, delayMs);
+  }
+
   readonly restartDisabledTooltip = computed<string>(() => {
     const status = this.llmStatus();
     if (status === null) return '';
@@ -1086,7 +1105,22 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       const status = await this.bridge.providerStart({ id: 'ollama' });
       this.llmStatus.set(status);
       this.startPolling(500);
-      setTimeout(() => this.startPolling(4000), 35_000);
+      this.schedulePollReset(35_000);
+    } catch (err) {
+      this.actionError.set(this.describeError(err));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async onStop(): Promise<void> {
+    this.busy.set(true);
+    this.actionError.set(null);
+    try {
+      const status = await this.bridge.providerStop({ id: 'ollama' });
+      this.llmStatus.set(status);
+      this.startPolling(500);
+      this.schedulePollReset(10_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {
@@ -1101,7 +1135,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       const status = await this.bridge.providerRestart({ id: 'ollama' });
       this.llmStatus.set(status);
       this.startPolling(500);
-      setTimeout(() => this.startPolling(4000), 35_000);
+      this.schedulePollReset(35_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {
@@ -1125,6 +1159,10 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopPolling();
+    if (this.pollResetTimer !== null) {
+      clearTimeout(this.pollResetTimer);
+      this.pollResetTimer = null;
+    }
     for (const handle of this.timers.values()) clearInterval(handle);
     this.timers.clear();
     this.unsubscribeProgress();

@@ -22,4 +22,11 @@ public sealed class OllamaProviderOptions
     /// become reachable via <c>/api/tags</c>.
     /// </summary>
     public TimeSpan StartTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Hard cap on how long the autostart hosted service may block host
+    /// startup while waiting for Ollama to come up. Distinct from
+    /// <see cref="StartTimeout"/>, which bounds the lifecycle endpoints.
+    /// </summary>
+    public TimeSpan WarmupBudget { get; set; } = TimeSpan.FromSeconds(5);
 }

@@ -3,7 +3,9 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import {
   LOCAL_MODEL_CATALOG,
   catalogFor,
+  catalogIdForOllamaTag,
   lookupCatalog,
+  ollamaTagForCatalogId,
   type LocalModelCatalogEntry,
   type LocalModelKind,
 } from './local-models.catalog';
@@ -127,6 +129,9 @@ export class LocalModelsStore {
     const entry = lookupCatalog(id);
     if (entry !== null && this._selected()[entry.kind] === null) {
       this._selected.update((prev) => ({ ...prev, [entry.kind]: id }));
+      if (entry.kind === 'analysis') {
+        void this.persistAnalysisToVault(id);
+      }
     }
     this.persist();
   }
@@ -154,6 +159,9 @@ export class LocalModelsStore {
     if (entry === null || entry.kind !== kind) return;
     this._selected.update((prev) => ({ ...prev, [kind]: id }));
     this.persist();
+    if (kind === 'analysis') {
+      void this.persistAnalysisToVault(id);
+    }
   }
 
   deleteUnused(): void {
@@ -169,16 +177,52 @@ export class LocalModelsStore {
       const current = new Set(this._downloaded());
       let changed = false;
       for (const model of status.models) {
-        if (!VALID_IDS.has(model.name)) continue;
-        if (current.has(model.name)) continue;
-        current.add(model.name);
+        // Ollama reports tags like "qwen2.5:3b"; map them back to Scout's
+        // catalog IDs ("qwen-3-vl-2b") so the rest of the UI can keep using
+        // catalog IDs as the single key.
+        const catalogId = catalogIdForOllamaTag(model.name);
+        if (catalogId === null) continue;
+        if (current.has(catalogId)) continue;
+        current.add(catalogId);
         changed = true;
       }
-      if (!changed) return;
-      this._downloaded.set([...current]);
+      if (changed) {
+        this._downloaded.set([...current]);
+      }
+
+      // Auto-pick the first analysis model the daemon already has so the
+      // chat completion path has a model name without forcing the user to
+      // visit the LLM wizard. Must run even when the worker reports the
+      // same model list as before, since selection may still be null on
+      // first boot (otherwise chat completion ends up with no model name).
+      const analysisDownloaded = this.downloadedFor('analysis').map((m) => m.id);
+      let selectionChanged = false;
+      if (this._selected().analysis === null && analysisDownloaded.length > 0) {
+        const firstAnalysis = analysisDownloaded[0]!;
+        this._selected.update((prev) => ({ ...prev, analysis: firstAnalysis }));
+        void this.persistAnalysisToVault(firstAnalysis);
+        selectionChanged = true;
+      }
+
+      if (!changed && !selectionChanged) return;
+
       this.persist();
     } catch (err) {
-      console.debug('[LocalModelsStore] hydrateFromWorker skipped:', err);
+      console.warn('[LocalModelsStore] hydrateFromWorker skipped:', err);
+    }
+  }
+
+  private async persistAnalysisToVault(catalogId: string): Promise<void> {
+    // The .NET worker reads the chat-completion model from vault.llm.model
+    // (forwarded by the supervisor as SCOUT__LLM__OLLAMA__MODEL). Writing
+    // here keeps the Local Analysis selection in sync with the LLM wizard
+    // so both screens point at the same model.
+    const tag = ollamaTagForCatalogId(catalogId);
+    if (tag === null) return;
+    try {
+      await this._bridge.vaultStore({ key: 'llm.model', value: tag });
+    } catch (err) {
+      console.warn('[LocalModelsStore] vault write skipped:', err);
     }
   }
 

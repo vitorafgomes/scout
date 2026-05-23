@@ -25,16 +25,30 @@ public class DiscordMessageTranslatorTests
     }
 
     [Fact]
-    public void TryTranslate_Rejects_Messages_Without_Mention()
+    public void TryTranslate_Rejects_Guild_Messages_Without_Mention()
     {
         var inbound = new InboundDiscordMessage(
             MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
             Content: "chatting between humans", MentionsSelf: false,
-            Timestamp: FixedTime);
+            Timestamp: FixedTime, GuildId: 9999);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
              .ShouldBeFalse();
         chatMessage.ShouldBeNull();
+    }
+
+    [Fact]
+    public void TryTranslate_Accepts_Direct_Messages_Without_Mention()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "hi scout", MentionsSelf: false,
+            Timestamp: FixedTime, GuildId: null);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage)
+             .ShouldBeTrue();
+        chatMessage.ShouldNotBeNull();
+        chatMessage!.Text.ShouldBe("hi scout");
     }
 
     [Fact]

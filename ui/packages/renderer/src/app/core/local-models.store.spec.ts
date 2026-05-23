@@ -8,7 +8,13 @@ import { ScoutBridgeService } from './scout-bridge';
 
 function provide(): LocalModelsStore {
   TestBed.configureTestingModule({
-    providers: [provideZonelessChangeDetection()],
+    providers: [
+      provideZonelessChangeDetection(),
+      {
+        provide: ScoutBridgeService,
+        useValue: { vaultStore: vi.fn(async () => undefined) } as unknown as ScoutBridgeService,
+      },
+    ],
   });
   return TestBed.inject(LocalModelsStore);
 }
@@ -133,10 +139,14 @@ describe('LocalModelsStore', () => {
 });
 
 function provideWithBridge(bridgePartial: Partial<ScoutBridgeService>): LocalModelsStore {
+  const bridge = {
+    vaultStore: vi.fn(async () => undefined),
+    ...bridgePartial,
+  } as unknown as ScoutBridgeService;
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
-      { provide: ScoutBridgeService, useValue: bridgePartial as ScoutBridgeService },
+      { provide: ScoutBridgeService, useValue: bridge },
     ],
   });
   return TestBed.inject(LocalModelsStore);
@@ -160,7 +170,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);
@@ -208,7 +218,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);
@@ -234,6 +244,107 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
     expect(store.downloaded()).toEqual(before);
   });
 
+  it('auto-picks first analysis model when selection is null and models did not change', async () => {
+    // Seed persisted state so worker hydration finds the model already known
+    // but with no selection — the auto-pick must still run.
+    window.localStorage.setItem(
+      LOCAL_MODELS_STORAGE_KEY,
+      JSON.stringify({
+        downloaded: ['qwen-3-vl-2b'],
+        selected: { transcription: null, analysis: null },
+      }),
+    );
+    const vaultStore = vi.fn(async () => undefined);
+    const bridge = {
+      vaultStore,
+      providerStatus: vi.fn(async () => ({
+        id: 'ollama' as const,
+        installed: true,
+        running: true,
+        endpoint: null,
+        version: null,
+        managedByWorker: false,
+        autostart: false,
+        supportsLifecycle: false,
+        lastError: null,
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
+      })),
+    };
+    const store = provideWithBridge(bridge);
+
+    await store.hydrateFromWorker();
+
+    expect(store.selectedFor('analysis')).toBe('qwen-3-vl-2b');
+    expect(vaultStore).toHaveBeenCalledWith({ key: 'llm.model', value: 'qwen2.5:3b' });
+  });
+
+  it('persists selection to vault even when worker model list is identical', async () => {
+    window.localStorage.setItem(
+      LOCAL_MODELS_STORAGE_KEY,
+      JSON.stringify({
+        downloaded: ['qwen-3-vl-2b'],
+        selected: { transcription: null, analysis: null },
+      }),
+    );
+    const vaultStore = vi.fn(async () => undefined);
+    const bridge = {
+      vaultStore,
+      providerStatus: vi.fn(async () => ({
+        id: 'ollama' as const,
+        installed: true,
+        running: true,
+        endpoint: null,
+        version: null,
+        managedByWorker: false,
+        autostart: false,
+        supportsLifecycle: false,
+        lastError: null,
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
+      })),
+    };
+    const store = provideWithBridge(bridge);
+
+    await store.hydrateFromWorker();
+
+    const raw = window.localStorage.getItem(LOCAL_MODELS_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!) as { selected: { analysis: string | null } };
+    expect(parsed.selected.analysis).toBe('qwen-3-vl-2b');
+  });
+
+  it('early-returns when nothing changed and selection is already set', async () => {
+    window.localStorage.setItem(
+      LOCAL_MODELS_STORAGE_KEY,
+      JSON.stringify({
+        downloaded: ['qwen-3-vl-2b'],
+        selected: { transcription: null, analysis: 'qwen-3-vl-2b' },
+      }),
+    );
+    const vaultStore = vi.fn(async () => undefined);
+    const bridge = {
+      vaultStore,
+      providerStatus: vi.fn(async () => ({
+        id: 'ollama' as const,
+        installed: true,
+        running: true,
+        endpoint: null,
+        version: null,
+        managedByWorker: false,
+        autostart: false,
+        supportsLifecycle: false,
+        lastError: null,
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
+      })),
+    };
+    const store = provideWithBridge(bridge);
+
+    await store.hydrateFromWorker();
+
+    expect(store.selectedFor('analysis')).toBe('qwen-3-vl-2b');
+    // No new vault write since selection did not change.
+    expect(vaultStore).not.toHaveBeenCalled();
+  });
+
   it('hydrateFromWorker_persistsToLocalStorage', async () => {
     const bridge = {
       providerStatus: vi.fn(async () => ({
@@ -246,7 +357,7 @@ describe('LocalModelsStore — hydrateFromWorker', () => {
         autostart: false,
         supportsLifecycle: false,
         lastError: null,
-        models: [{ name: 'qwen-3-vl-2b', sizeBytes: 0, modifiedAt: '' }],
+        models: [{ name: 'qwen2.5:3b', sizeBytes: 0, modifiedAt: '' }],
       })),
     };
     const store = provideWithBridge(bridge);

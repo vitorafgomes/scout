@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Logging;
 
 namespace Scout.Host.Worker.Providers;
 
@@ -23,15 +24,22 @@ public static class LocalProvidersServiceCollectionExtensions
 
         services.AddSingleton<IBinaryLocator, PathBinaryLocator>();
 
+        services.AddSingleton<OllamaReadinessProbe>();
+        services.AddSingleton<IOllamaReadinessProbe>(sp =>
+            sp.GetRequiredService<OllamaReadinessProbe>());
+
+        services.AddTransient<OllamaWarmupSuppressingLoggingHandler>();
+
         services
             .AddHttpClient<IOllamaApiClient, OllamaApiClient>((sp, client) =>
             {
-                var opts = sp.GetRequiredService<
-                    Microsoft.Extensions.Options.IOptions<OllamaProviderOptions>>().Value;
-                // Mirror the ping timeout at the HTTP layer so a stuck socket
-                // cannot exceed the documented ceiling.
-                client.Timeout = opts.PingTimeout;
-            });
+                // No global timeout: long-running streams (model pull) must not
+                // be capped here. Short operations (tags ping, delete) apply
+                // their own bounded CTS inside the client.
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .RemoveAllLoggers()
+            .AddHttpMessageHandler<OllamaWarmupSuppressingLoggingHandler>();
 
         services.AddSingleton<OllamaProviderService>();
 

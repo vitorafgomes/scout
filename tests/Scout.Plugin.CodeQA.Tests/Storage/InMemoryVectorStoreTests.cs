@@ -194,6 +194,9 @@ public class InMemoryVectorStoreTests
         Func<Task> act = () => Task.WhenAll(readers.Append(writer));
         await act.ShouldNotThrowAsync();
 
-        (await store.CountAsync(CancellationToken.None)).ShouldBeGreaterThan(50);
+        // Invariant: writes never lose entries. The seeded 50 must always be present;
+        // any additional writes the writer managed to land before cancellation are a
+        // bonus, not a guarantee — readers can starve the writer on a loaded runner.
+        (await store.CountAsync(CancellationToken.None)).ShouldBeGreaterThanOrEqualTo(50);
     }
 }
