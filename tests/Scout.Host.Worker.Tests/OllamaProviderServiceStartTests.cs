@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Scout.Host.Worker.Providers;
+using Scout.Host.Worker.Tests.Helpers;
 using Shouldly;
 
 namespace Scout.Host.Worker.Tests;
@@ -37,7 +38,8 @@ public sealed class OllamaProviderServiceStartTests
         IProcessLauncher launcher,
         ILocalRuntimeRegistry registry,
         ILocalRuntimeConfigStore store,
-        IOptions<OllamaProviderOptions>? options = null) =>
+        IOptions<OllamaProviderOptions>? options = null,
+        IOllamaReadinessProbe? probe = null) =>
         new(
             locator,
             api,
@@ -45,6 +47,7 @@ public sealed class OllamaProviderServiceStartTests
             registry,
             store,
             options ?? Opts(),
+            probe ?? FakeReadinessProbes.AlwaysReady(),
             NullLogger<OllamaProviderService>.Instance);
 
     [Fact]

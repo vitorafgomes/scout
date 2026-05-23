@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Scout.Host.Worker.Providers;
+using Scout.Host.Worker.Tests.Helpers;
 using Shouldly;
 
 namespace Scout.Host.Worker.Tests;
@@ -24,7 +25,8 @@ public sealed class OllamaProviderServiceTests
         IProcessLauncher? launcher = null,
         ILocalRuntimeRegistry? registry = null,
         ILocalRuntimeConfigStore? store = null,
-        IOptions<OllamaProviderOptions>? options = null)
+        IOptions<OllamaProviderOptions>? options = null,
+        IOllamaReadinessProbe? probe = null)
     {
         launcher ??= Substitute.For<IProcessLauncher>();
         registry ??= new InMemoryLocalRuntimeRegistry();
@@ -35,6 +37,7 @@ public sealed class OllamaProviderServiceTests
                 .Returns(Task.FromResult(true));
             store = s;
         }
+        probe ??= FakeReadinessProbes.AlwaysReady();
         return new OllamaProviderService(
             locator,
             api,
@@ -42,6 +45,7 @@ public sealed class OllamaProviderServiceTests
             registry,
             store,
             options ?? Opts(),
+            probe,
             NullLogger<OllamaProviderService>.Instance);
     }
 
@@ -132,6 +136,33 @@ public sealed class OllamaProviderServiceTests
         var status = await service.GetStatusAsync(CancellationToken.None);
 
         status.Autostart.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task GetStatusAsync_WaitsForProbe_BeforePinging()
+    {
+        var locator = Substitute.For<IBinaryLocator>();
+        locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("/usr/local/bin/ollama"));
+        var api = Substitute.For<IOllamaApiClient>();
+        api.GetTagsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<OllamaTags?>(new OllamaTags(Array.Empty<ProviderModel>())));
+
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probe = FakeReadinessProbes.Pending(gate);
+
+        var service = NewService(locator, api, probe: probe);
+
+        var pending = service.GetStatusAsync(CancellationToken.None);
+        await Task.Delay(100);
+        pending.IsCompleted.ShouldBeFalse();
+        await api.DidNotReceiveWithAnyArgs().GetTagsAsync(default);
+
+        gate.SetResult(true);
+
+        var status = await pending;
+        status.Running.ShouldBeTrue();
+        await api.Received(1).GetTagsAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Scout.Host.Worker.Providers;
+using Scout.Host.Worker.Tests.Helpers;
 using Shouldly;
 
 namespace Scout.Host.Worker.Tests;
@@ -23,7 +24,8 @@ public sealed class OllamaProviderServiceRestartTests
         IOllamaApiClient api,
         IProcessLauncher launcher,
         ILocalRuntimeRegistry registry,
-        ILocalRuntimeConfigStore store) =>
+        ILocalRuntimeConfigStore store,
+        IOllamaReadinessProbe? probe = null) =>
         new(
             locator,
             api,
@@ -31,6 +33,7 @@ public sealed class OllamaProviderServiceRestartTests
             registry,
             store,
             Opts(),
+            probe ?? FakeReadinessProbes.AlwaysReady(),
             NullLogger<OllamaProviderService>.Instance);
 
     private static ILocalRuntimeConfigStore DefaultStore()
@@ -39,22 +42,6 @@ public sealed class OllamaProviderServiceRestartTests
         s.GetAutostartAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
         return s;
-    }
-
-    [Fact]
-    public async Task RestartAsync_NotManagedByWorker_ThrowsProviderNotManaged()
-    {
-        var locator = Substitute.For<IBinaryLocator>();
-        locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<string?>(OllamaPath));
-        var api = Substitute.For<IOllamaApiClient>();
-        var launcher = Substitute.For<IProcessLauncher>();
-        var registry = new InMemoryLocalRuntimeRegistry();
-
-        var service = NewService(locator, api, launcher, registry, DefaultStore());
-
-        await Should.ThrowAsync<ProviderNotManagedException>(
-            () => service.RestartAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -71,18 +58,29 @@ public sealed class OllamaProviderServiceRestartTests
         existing.StopAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
 
-        // After Stop+Untrack, StartAsync's GetStatusAsync sees the daemon as
-        // unreachable, spawns a fresh process, and polls until reachable.
+        // Sequence: initial Stop sees running (call 1), poll after kill sees
+        // gone (call 2), refresh status post-stop (call 3, still gone), then
+        // Start re-enters: pre-gate unreachable (4), in-gate unreachable (5),
+        // readiness poll succeeds (6), final status (7+).
         var apiCalls = 0;
         var api = Substitute.For<IOllamaApiClient>();
         api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             apiCalls++;
-            // First two: pre-gate + in-gate status see unreachable.
-            // Subsequent: poll succeeds.
-            return Task.FromResult<OllamaTags?>(apiCalls >= 3
-                ? new OllamaTags(Array.Empty<ProviderModel>())
-                : null);
+            // First call sees the daemon running; everything after is gone
+            // until the spawn brings it back. To keep the test deterministic
+            // we treat call 1 as running and 2-5 as gone (so stop polls find
+            // it gone immediately, then start sees unreachable and spawns),
+            // then 6+ as reachable.
+            if (apiCalls == 1)
+            {
+                return Task.FromResult<OllamaTags?>(new OllamaTags(Array.Empty<ProviderModel>()));
+            }
+            if (apiCalls <= 5)
+            {
+                return Task.FromResult<OllamaTags?>(null);
+            }
+            return Task.FromResult<OllamaTags?>(new OllamaTags(Array.Empty<ProviderModel>()));
         });
 
         var fresh = Substitute.For<ILaunchedProcess>();
@@ -100,49 +98,58 @@ public sealed class OllamaProviderServiceRestartTests
 
         status.Running.ShouldBeTrue();
         await existing.Received(1).StopAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
-        launcher.Received(1).Launch(Arg.Any<ProcessLaunchRequest>());
+        launcher.Received(1).Launch(Arg.Is<ProcessLaunchRequest>(r =>
+            r.FileName == OllamaPath && r.Arguments.Count == 1 && r.Arguments[0] == "serve"));
         registry.GetOwned("ollama").ShouldBeSameAs(fresh);
     }
 
     [Fact]
-    public async Task RestartAsync_StopGraceExpires_LogsAndStillStarts()
+    public async Task RestartAsync_External_StopThenStart()
     {
         var locator = Substitute.For<IBinaryLocator>();
         locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<string?>(OllamaPath));
-
-        var existing = Substitute.For<ILaunchedProcess>();
-        existing.Pid.Returns(111);
-        existing.HasExited.Returns(false);
-        // StopAsync returns false (force-killed) to simulate the grace
-        // window expiring.
-        existing.StopAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(false));
 
         var apiCalls = 0;
         var api = Substitute.For<IOllamaApiClient>();
         api.GetTagsAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
             apiCalls++;
-            return Task.FromResult<OllamaTags?>(apiCalls >= 3
-                ? new OllamaTags(Array.Empty<ProviderModel>())
-                : null);
+            // Stop path: 1 sees running. 2 (poll after pkill) sees gone.
+            // Stop's final refresh: 3 gone.
+            // Start path: 4 gone, 5 gone (in-gate), 6 reachable.
+            if (apiCalls == 1)
+            {
+                return Task.FromResult<OllamaTags?>(new OllamaTags(Array.Empty<ProviderModel>()));
+            }
+            if (apiCalls <= 5)
+            {
+                return Task.FromResult<OllamaTags?>(null);
+            }
+            return Task.FromResult<OllamaTags?>(new OllamaTags(Array.Empty<ProviderModel>()));
         });
+
+        var killer = Substitute.For<ILaunchedProcess>();
+        killer.HasExited.Returns(true);
+        killer.WaitForExitAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(0));
 
         var fresh = Substitute.For<ILaunchedProcess>();
         fresh.HasExited.Returns(false);
+
         var launcher = Substitute.For<IProcessLauncher>();
-        launcher.Launch(Arg.Any<ProcessLaunchRequest>()).Returns(fresh);
+        launcher.Launch(Arg.Any<ProcessLaunchRequest>()).Returns(killer, fresh);
 
         var registry = new InMemoryLocalRuntimeRegistry();
-        registry.Track("ollama", existing);
 
         var service = NewService(locator, api, launcher, registry, DefaultStore());
 
         var status = await service.RestartAsync(CancellationToken.None);
 
         status.Running.ShouldBeTrue();
-        await existing.Received(1).StopAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
-        launcher.Received(1).Launch(Arg.Any<ProcessLaunchRequest>());
+        // First launch should be the pkill/taskkill helper.
+        var expectedKillCmd = OperatingSystem.IsWindows() ? "taskkill" : "pkill";
+        launcher.Received().Launch(Arg.Is<ProcessLaunchRequest>(r => r.FileName == expectedKillCmd));
+        // Second launch should be the daemon itself.
+        launcher.Received().Launch(Arg.Is<ProcessLaunchRequest>(r => r.FileName == OllamaPath));
     }
 }

@@ -47,3 +47,27 @@ public sealed class ProviderStartFailedException : Exception
         ProviderId = id;
     }
 }
+
+/// <summary>Thrown when the daemon refuses to go away after a stop request.</summary>
+public sealed class ProviderStopFailedException : Exception
+{
+    public string ProviderId { get; }
+
+    public ProviderStopFailedException(string id, string message)
+        : base(message)
+    {
+        ProviderId = id;
+    }
+}
+
+/// <summary>Thrown when a lifecycle action is invoked before the readiness probe completes.</summary>
+public sealed class ProviderNotReadyException : Exception
+{
+    public string ProviderId { get; }
+
+    public ProviderNotReadyException(string providerId, string message)
+        : base(message)
+    {
+        ProviderId = providerId;
+    }
+}

@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -95,7 +97,101 @@ public sealed class OllamaApiClient : IOllamaApiClient
         }
     }
 
+    public async IAsyncEnumerable<PullProgress> PullAsync(
+        string modelName,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var baseUri = new Uri(_options.Endpoint.TrimEnd('/') + "/", UriKind.Absolute);
+        var uri = new Uri(baseUri, "api/pull");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, uri)
+        {
+            Content = JsonContent.Create(new { name = modelName, stream = true }),
+        };
+
+        using var response = await _http
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Ollama /api/pull returned {(int)response.StatusCode}: {body}");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+            if (line is null)
+            {
+                yield break;
+            }
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            PullProgressPayload? payload;
+            try
+            {
+                payload = JsonSerializer.Deserialize<PullProgressPayload>(line, JsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Ollama /api/pull yielded malformed JSON line, skipping");
+                continue;
+            }
+
+            if (payload is null || string.IsNullOrEmpty(payload.Status))
+            {
+                continue;
+            }
+
+            yield return new PullProgress(
+                Status: payload.Status,
+                Digest: payload.Digest,
+                Total: payload.Total,
+                Completed: payload.Completed);
+        }
+    }
+
+    public async Task DeleteModelAsync(string modelName, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+
+        var baseUri = new Uri(_options.Endpoint.TrimEnd('/') + "/", UriKind.Absolute);
+        var uri = new Uri(baseUri, "api/delete");
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, uri)
+        {
+            Content = JsonContent.Create(new { name = modelName }),
+        };
+
+        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"Ollama /api/delete returned {(int)response.StatusCode}: {body}");
+        }
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    internal sealed record PullProgressPayload(
+        [property: JsonPropertyName("status")] string? Status,
+        [property: JsonPropertyName("digest")] string? Digest,
+        [property: JsonPropertyName("total")] long? Total,
+        [property: JsonPropertyName("completed")] long? Completed);
 
     internal sealed record OllamaTagsResponse(
         [property: JsonPropertyName("models")] IReadOnlyList<OllamaTagModel>? Models);

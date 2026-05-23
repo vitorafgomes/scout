@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSubstitute;
 using Scout.Host.Worker.Providers;
+using Scout.Host.Worker.Tests.Helpers;
 
 namespace Scout.Host.Worker.Tests;
 
@@ -91,7 +93,9 @@ public sealed class ScoutWorkerWebApplicationFactory : WebApplicationFactory<Pro
                         || d.ServiceType == typeof(IOllamaApiClient)
                         || d.ServiceType == typeof(IProcessLauncher)
                         || d.ServiceType == typeof(ILocalRuntimeRegistry)
-                        || d.ServiceType == typeof(ILocalRuntimeConfigStore))
+                        || d.ServiceType == typeof(ILocalRuntimeConfigStore)
+                        || d.ServiceType == typeof(IOllamaReadinessProbe)
+                        || d.ServiceType == typeof(OllamaReadinessProbe))
                     .ToList();
                 foreach (var descriptor in toRemove)
                 {
@@ -99,6 +103,14 @@ public sealed class ScoutWorkerWebApplicationFactory : WebApplicationFactory<Pro
                 }
 
                 ConfigureServicesOverride(services);
+            }
+
+            // If the test did not register its own readiness probe, default
+            // to a probe that is already Ready so HTTP tests do not hang
+            // waiting for the autostart hosted service (which is stripped).
+            if (!services.Any(d => d.ServiceType == typeof(IOllamaReadinessProbe)))
+            {
+                services.AddSingleton<IOllamaReadinessProbe>(FakeReadinessProbes.AlwaysReady());
             }
         });
 

@@ -11,6 +11,9 @@
     <PackageReference Include="Scalar.AspNetCore" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Host.Worker.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
     <ProjectReference Include="..\Scout.Llm.Ollama\Scout.Llm.Ollama.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />

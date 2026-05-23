@@ -83,6 +83,8 @@ var builder = WebApplication.CreateBuilder(args);
 // IPv6 resolution surprises in the supervisor's port parser.
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 
+builder.Services.AddLocalProviders(builder.Configuration);
+
 builder.Services
     .AddScout(builder.Configuration)
     .AddOllamaLlmProvider()
@@ -108,8 +110,6 @@ if (codeQAConfigured)
         .AddSingleton<IndexingService>()
         .AddHostedService<CodeQAStartupIndexer>();
 }
-
-builder.Services.AddLocalProviders(builder.Configuration);
 
 builder.Services.AddOpenApi("v1", options =>
 {
