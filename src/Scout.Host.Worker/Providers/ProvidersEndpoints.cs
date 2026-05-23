@@ -280,7 +280,7 @@ public static class ProvidersEndpoints
                 catch (HttpRequestException ex)
                 {
                     var errPayload = JsonSerializer.Serialize(
-                        new { error = ex.Message },
+                        new { code = "providers/pull-failed", message = ex.Message },
                         SseJsonOptions);
                     await ctx.Response.WriteAsync($"event: error\ndata: {errPayload}\n\n", ct)
                         .ConfigureAwait(false);
