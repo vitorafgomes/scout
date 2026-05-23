@@ -26,6 +26,7 @@ function makeFakeBridge() {
     workerStatus: vi.fn(async () => ({ state: 'idle', restarts: 0 })),
     providerStatus: vi.fn(async () => makeProviderStatus()),
     providerStart: vi.fn(async () => makeProviderStatus({ running: true })),
+    providerStop: vi.fn(async () => makeProviderStatus({ running: false })),
     providerRestart: vi.fn(async () => makeProviderStatus({ running: true })),
     providerSetAutostart: vi.fn(async () => undefined),
   };

@@ -35,6 +35,7 @@ describe('CHANNEL constant', () => {
         'providerSetAutostart',
         'providerStart',
         'providerStatus',
+        'providerStop',
         'providersList',
         'shellOpenExternal',
         'whisperDeleteModel',
@@ -89,6 +90,7 @@ describe('ChannelName type', () => {
       'scout:providers.list': true,
       'scout:providers.status': true,
       'scout:providers.start': true,
+      'scout:providers.stop': true,
       'scout:providers.restart': true,
       'scout:providers.setAutostart': true,
     };

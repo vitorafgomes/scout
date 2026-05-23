@@ -33,6 +33,7 @@ export const CHANNEL = {
   providersList: 'scout:providers.list',
   providerStatus: 'scout:providers.status',
   providerStart: 'scout:providers.start',
+  providerStop: 'scout:providers.stop',
   providerRestart: 'scout:providers.restart',
   providerSetAutostart: 'scout:providers.setAutostart',
 } as const satisfies Readonly<Record<string, string>>;
@@ -257,6 +258,10 @@ export interface ProviderStartRequest {
   readonly id: ProviderId;
 }
 
+export interface ProviderStopRequest {
+  readonly id: ProviderId;
+}
+
 export interface ProviderRestartRequest {
   readonly id: ProviderId;
 }
@@ -307,6 +312,7 @@ export interface ScoutBridge {
   providersList(): Promise<ProvidersListResponse>;
   providerStatus(req: ProviderStatusRequest): Promise<ProviderStatusDto>;
   providerStart(req: ProviderStartRequest): Promise<ProviderStatusDto>;
+  providerStop(req: ProviderStopRequest): Promise<ProviderStatusDto>;
   providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
 }

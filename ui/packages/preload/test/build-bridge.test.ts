@@ -45,6 +45,7 @@ describe('buildBridge', () => {
       'providersList',
       'providerStatus',
       'providerStart',
+      'providerStop',
       'providerRestart',
       'providerSetAutostart',
     ];

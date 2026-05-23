@@ -215,6 +215,17 @@ function formatBytes(n: number): string {
           <button
             type="button"
             class="btn btn--ghost"
+            data-test="stop-btn"
+            [disabled]="busy() || llmStatus()?.running !== true"
+            (click)="onStop()">
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M6 6h12v12H6Z" fill="currentColor" />
+            </svg>
+            Stop
+          </button>
+          <button
+            type="button"
+            class="btn btn--ghost"
             data-test="restart-btn"
             [disabled]="busy() || llmStatus()?.managedByWorker !== true || llmStatus()?.running !== true"
             [title]="restartDisabledTooltip()"
@@ -1080,6 +1091,21 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
       this.llmStatus.set(status);
       this.startPolling(500);
       setTimeout(() => this.startPolling(4000), 35_000);
+    } catch (err) {
+      this.actionError.set(this.describeError(err));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  async onStop(): Promise<void> {
+    this.busy.set(true);
+    this.actionError.set(null);
+    try {
+      const status = await this.bridge.providerStop({ id: 'ollama' });
+      this.llmStatus.set(status);
+      this.startPolling(500);
+      setTimeout(() => this.startPolling(4000), 10_000);
     } catch (err) {
       this.actionError.set(this.describeError(err));
     } finally {

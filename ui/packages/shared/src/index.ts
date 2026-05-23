@@ -83,6 +83,7 @@ export {
   type ProviderStatusDto,
   type ProviderStatusRequest,
   type ProviderStartRequest,
+  type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
   type ProvidersListResponse,

@@ -39,6 +39,7 @@ import {
   type ProviderStatusDto,
   type ProviderStatusRequest,
   type ProviderStartRequest,
+  type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
 } from '@scout/shared';
@@ -122,6 +123,8 @@ function createFakeBridge(): ScoutBridge {
     providerStatus: (_req: ProviderStatusRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
     providerStart: (_req: ProviderStartRequest): Promise<ProviderStatusDto> =>
+      rejectNotAvailable(),
+    providerStop: (_req: ProviderStopRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
     providerRestart: (_req: ProviderRestartRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
@@ -242,6 +245,10 @@ export class ScoutBridgeService {
 
   async providerStart(req: ProviderStartRequest): Promise<ProviderStatusDto> {
     return this.bridge.providerStart(req);
+  }
+
+  async providerStop(req: ProviderStopRequest): Promise<ProviderStatusDto> {
+    return this.bridge.providerStop(req);
   }
 
   async providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto> {
