@@ -40,6 +40,10 @@ public sealed class LlmFallbackRouter : IMessageRouter
             return Task.FromResult<ChatResponse?>(null);
         }
 
+        _logger.LogInformation(
+            "llm-fallback engaged: textLen={TextLen}",
+            message.Text.Length);
+
         var stream = StreamAsync(message.Text, cancellationToken);
         return Task.FromResult<ChatResponse?>(ChatResponse.Streaming(stream));
     }
@@ -63,7 +67,10 @@ public sealed class LlmFallbackRouter : IMessageRouter
             },
         };
 
+        var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        var firstChunkLogged = false;
         var chunkCount = 0;
+
         var stream = _chat.GetStreamingChatMessageContentsAsync(
             history, settings, kernel: null, cancellationToken);
 
@@ -72,10 +79,24 @@ public sealed class LlmFallbackRouter : IMessageRouter
             if (!string.IsNullOrEmpty(chunk.Content))
             {
                 chunkCount++;
+                if (!firstChunkLogged)
+                {
+                    firstChunkLogged = true;
+                    var firstChunkMs = (long)System.Diagnostics.Stopwatch
+                        .GetElapsedTime(startTimestamp).TotalMilliseconds;
+                    _logger.LogInformation(
+                        "llm-fallback first chunk after {FirstChunkMs}ms",
+                        firstChunkMs);
+                }
                 yield return chunk.Content!;
             }
         }
 
-        _logger.LogDebug("llm-fallback produced {ChunkCount} chunks", chunkCount);
+        var totalMs = (long)System.Diagnostics.Stopwatch
+            .GetElapsedTime(startTimestamp).TotalMilliseconds;
+        _logger.LogInformation(
+            "llm-fallback completed: chunks={ChunkCount} elapsed={TotalMs}ms",
+            chunkCount,
+            totalMs);
     }
 }
