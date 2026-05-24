@@ -87,4 +87,11 @@ export {
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
   type ProvidersListResponse,
+  type FeatureId,
+  FEATURE_IDS,
+  type FeatureStatus,
+  type FeatureDto,
+  type FeaturesListResponse,
+  type FeatureIdRequest,
+  type FeatureSetCredentialsRequest,
 } from './ipc-contract.js';

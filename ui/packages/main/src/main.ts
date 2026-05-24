@@ -19,6 +19,7 @@ import { registerLlmPullHandlers } from './ipc/llm-pull.js';
 import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
+import { registerFeaturesHandlers } from './ipc/features.js';
 import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
@@ -97,6 +98,7 @@ let unregisterLlmPull: (() => void) | null = null;
 let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
+let unregisterFeatures: (() => void) | null = null;
 
 app
   .whenReady()
@@ -203,6 +205,12 @@ app
       logger.child({ module: 'providers' }),
     );
 
+    unregisterFeatures = registerFeaturesHandlers(
+      ipcMain,
+      workerHttpClient,
+      logger.child({ module: 'features' }),
+    );
+
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
     unregisterLmStudio = registerLmStudioHandlers(
       ipcMain,
@@ -286,6 +294,7 @@ app.on('before-quit', (event) => {
     runningWorker.status.state === 'idle'
   ) {
     // No running worker — unregister synchronously and allow the quit.
+    unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
     unregisterLlmPull?.();
@@ -307,6 +316,7 @@ app.on('before-quit', (event) => {
       logger.warn('before-quit: worker stop failed', { err: String(err) });
     })
     .finally(() => {
+      unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();
       unregisterLlmPull?.();

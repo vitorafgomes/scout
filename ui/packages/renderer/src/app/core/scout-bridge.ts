@@ -42,6 +42,10 @@ import {
   type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
+  type FeatureDto,
+  type FeatureIdRequest,
+  type FeatureSetCredentialsRequest,
+  type FeaturesListResponse,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -130,6 +134,13 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> =>
       rejectNotAvailable(),
+    featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
+    featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
+      rejectNotAvailable(),
+    featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> =>
+      rejectNotAvailable(),
+    featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
   };
 }
 
@@ -257,6 +268,26 @@ export class ScoutBridgeService {
 
   async providerSetAutostart(req: ProviderAutostartRequest): Promise<void> {
     return this.bridge.providerSetAutostart(req);
+  }
+
+  async featuresList(): Promise<FeaturesListResponse> {
+    return this.bridge.featuresList();
+  }
+
+  async featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto> {
+    return this.bridge.featureSetCredentials(req);
+  }
+
+  async featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto> {
+    return this.bridge.featureDeleteCredentials(req);
+  }
+
+  async featureEnable(req: FeatureIdRequest): Promise<FeatureDto> {
+    return this.bridge.featureEnable(req);
+  }
+
+  async featureDisable(req: FeatureIdRequest): Promise<FeatureDto> {
+    return this.bridge.featureDisable(req);
   }
 }
 

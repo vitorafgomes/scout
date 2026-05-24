@@ -49,6 +49,11 @@ export const appRoutes: Routes = [
       import('./sources/local-models.component').then((m) => m.LocalModelsComponent),
   },
   {
+    path: 'features',
+    loadComponent: () =>
+      import('./features/features.component').then((m) => m.FeaturesComponent),
+  },
+  {
     path: 'llm',
     loadComponent: () => import('./models/models.component').then((m) => m.ModelsComponent),
   },

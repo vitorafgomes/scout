@@ -36,6 +36,11 @@ export const CHANNEL = {
   providerStop: 'scout:providers.stop',
   providerRestart: 'scout:providers.restart',
   providerSetAutostart: 'scout:providers.setAutostart',
+  featuresList: 'scout:features.list',
+  featureSetCredentials: 'scout:features.setCredentials',
+  featureDeleteCredentials: 'scout:features.deleteCredentials',
+  featureEnable: 'scout:features.enable',
+  featureDisable: 'scout:features.disable',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -275,6 +280,34 @@ export interface ProvidersListResponse {
   readonly providers: readonly ProviderStatusDto[];
 }
 
+export type FeatureId = 'github' | 'kubernetes';
+export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
+export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
+
+export interface FeatureDto {
+  readonly id: FeatureId;
+  readonly displayName: string;
+  readonly description: string;
+  readonly requiresCredentials: boolean;
+  readonly hasCredentials: boolean;
+  readonly enabled: boolean;
+  readonly status: FeatureStatus;
+  readonly lastError: string | null;
+}
+
+export interface FeaturesListResponse {
+  readonly features: readonly FeatureDto[];
+}
+
+export interface FeatureIdRequest {
+  readonly id: FeatureId;
+}
+
+export interface FeatureSetCredentialsRequest {
+  readonly id: FeatureId;
+  readonly body: Readonly<Record<string, string>>;
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -315,4 +348,9 @@ export interface ScoutBridge {
   providerStop(req: ProviderStopRequest): Promise<ProviderStatusDto>;
   providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
+  featuresList(): Promise<FeaturesListResponse>;
+  featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
+  featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto>;
+  featureEnable(req: FeatureIdRequest): Promise<FeatureDto>;
+  featureDisable(req: FeatureIdRequest): Promise<FeatureDto>;
 }
