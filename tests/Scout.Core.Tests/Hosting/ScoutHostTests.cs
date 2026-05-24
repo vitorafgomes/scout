@@ -11,6 +11,18 @@ namespace Scout.Core.Tests.Hosting;
 public class ScoutHostTests
 {
     [Fact]
+    public void ResolvedKernel_ReturnsSameNonNullInstance_OnRepeatedAccess()
+    {
+        var host = BuildHost(registry: new PluginRegistry());
+
+        var first = host.ResolvedKernel;
+        var second = host.ResolvedKernel;
+
+        first.ShouldNotBeNull();
+        second.ShouldBeSameAs(first);
+    }
+
+    [Fact]
     public async Task HandleAsync_Null_Message_Throws()
     {
         var host = BuildHost(registry: new PluginRegistry());

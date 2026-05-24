@@ -52,6 +52,14 @@ public sealed class ScoutHost
         _kernel = new Lazy<Kernel>(BuildKernel);
     }
 
+    /// <summary>
+    /// The runtime Semantic Kernel built lazily on first access. Stable
+    /// reference for the lifetime of the host; safe to retain and mutate
+    /// .Plugins from external callers that own the synchronisation
+    /// (see Scout.Host.Worker.Features.IFeatureKernelRegistrar).
+    /// </summary>
+    public Kernel ResolvedKernel => _kernel.Value;
+
     public async Task<ChatResponse> HandleAsync(
         ChatMessage message,
         CancellationToken cancellationToken)

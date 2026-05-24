@@ -9,6 +9,7 @@ using Scalar.AspNetCore;
 using Scout.Adapter.Discord;
 using Scout.Core.Hosting;
 using Scout.Host.Worker;
+using Scout.Host.Worker.Features;
 using Scout.Host.Worker.Http;
 using Scout.Host.Worker.Providers;
 using Scout.Llm.Ollama;
@@ -95,6 +96,7 @@ builder.Services
 builder.Services
     .AddDiscordAdapter(builder.Configuration)
     .AddCloudStatusPlugin(builder.Configuration)
+    .AddFeatures(builder.Configuration)
     // Fallback chat router must come LAST: it streams any unmatched
     // message through the LLM, so every keyword/regex router needs to
     // run first.
@@ -133,6 +135,7 @@ app.MapScalarApiReference(options =>
     options.Title = "Scout Worker API";
 });
 app.MapProvidersApi();
+app.MapFeaturesApi();
 
 // Start the host explicitly so the SCOUT_HTTP marker can be printed AFTER
 // Kestrel binds and BEFORE ScoutWorker's ExecuteAsync gets the chance to

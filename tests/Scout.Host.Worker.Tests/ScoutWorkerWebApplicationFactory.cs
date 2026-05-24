@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
+using Scout.Host.Worker.Features;
 using Scout.Host.Worker.Providers;
 using Scout.Host.Worker.Tests.Helpers;
 
@@ -34,6 +35,15 @@ public sealed class ScoutWorkerWebApplicationFactory : WebApplicationFactory<Pro
     /// Tests use this to plug in their own substitutes.
     /// </summary>
     public Action<IServiceCollection>? ConfigureServicesOverride { get; set; }
+
+    /// <summary>
+    /// When true the factory also strips <c>ICredentialStore</c> and
+    /// <c>IFeatureStateStore</c> before invoking
+    /// <see cref="ConfigureServicesOverride"/> so feature tests can swap
+    /// in deterministic in-memory backends. Default false to leave the
+    /// providers test suite untouched.
+    /// </summary>
+    public bool SwapFeatureStores { get; set; }
 
     private readonly Dictionary<string, string?> _configOverrides = new(StringComparer.Ordinal);
 
@@ -100,6 +110,18 @@ public sealed class ScoutWorkerWebApplicationFactory : WebApplicationFactory<Pro
                 foreach (var descriptor in toRemove)
                 {
                     services.Remove(descriptor);
+                }
+
+                if (SwapFeatureStores)
+                {
+                    var featureRemovals = services
+                        .Where(d => d.ServiceType == typeof(ICredentialStore)
+                            || d.ServiceType == typeof(IFeatureStateStore))
+                        .ToList();
+                    foreach (var descriptor in featureRemovals)
+                    {
+                        services.Remove(descriptor);
+                    }
                 }
 
                 ConfigureServicesOverride(services);
