@@ -1,4 +1,4 @@
-namespace Scout.Host.Worker.Features;
+namespace Scout.Core.Features;
 
 /// <summary>
 /// Result returned by <see cref="IFeatureCredentialValidator"/>.

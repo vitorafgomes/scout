@@ -7,7 +7,9 @@
     <Project Path="src/Scout.Plugin.Chat/Scout.Plugin.Chat.csproj" />
     <Project Path="src/Scout.Plugin.CloudStatus/Scout.Plugin.CloudStatus.csproj" />
     <Project Path="src/Scout.Plugin.CodeQA/Scout.Plugin.CodeQA.csproj" />
+    <Project Path="src/Scout.Plugin.GitHub/Scout.Plugin.GitHub.csproj" />
     <Project Path="src/Scout.Plugin.Help/Scout.Plugin.Help.csproj" />
+    <Project Path="src/Scout.Plugin.Kubernetes/Scout.Plugin.Kubernetes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Adapter.Discord.Tests/Scout.Adapter.Discord.Tests.csproj" />
@@ -17,6 +19,8 @@
     <Project Path="tests/Scout.Plugin.Chat.Tests/Scout.Plugin.Chat.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CloudStatus.Tests/Scout.Plugin.CloudStatus.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CodeQA.Tests/Scout.Plugin.CodeQA.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.GitHub.Tests/Scout.Plugin.GitHub.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.Help.Tests/Scout.Plugin.Help.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.Kubernetes.Tests/Scout.Plugin.Kubernetes.Tests.csproj" />
   </Folder>
 </Solution>

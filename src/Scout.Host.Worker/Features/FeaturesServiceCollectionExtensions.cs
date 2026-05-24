@@ -1,6 +1,6 @@
+using Scout.Core.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Scout.Host.Worker.Features.Internal;
 
 namespace Scout.Host.Worker.Features;
 
@@ -33,28 +33,8 @@ public static class FeaturesServiceCollectionExtensions
 
         services.AddSingleton<ICredentialStore>(sp => SelectCredentialStore(sp));
 
-        services.AddSingleton<IFeatureCredentialValidator, GitHubPlaceholderValidator>();
-        services.AddSingleton<IFeatureCredentialValidator, KubernetesPlaceholderValidator>();
-
         services.AddHostedService<FeatureBootstrapHostedService>();
 
-        return services;
-    }
-
-    /// <summary>
-    /// Register a feature plugin implementation. Phase 2/3 use this to
-    /// wire their <see cref="IFeaturePlugin"/> in a single line.
-    /// </summary>
-    public static IServiceCollection AddFeaturePlugin<TPlugin>(
-        this IServiceCollection services,
-        string featureId)
-        where TPlugin : class, IFeaturePlugin
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
-
-        services.AddSingleton<TPlugin>();
-        services.AddSingleton(new FeaturePluginFactoryRegistration(featureId, typeof(TPlugin)));
         return services;
     }
 

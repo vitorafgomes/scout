@@ -1,4 +1,4 @@
-namespace Scout.Host.Worker.Features;
+namespace Scout.Core.Features;
 
 /// <summary>
 /// Superset of per-plugin validation outcomes. Each plugin may return

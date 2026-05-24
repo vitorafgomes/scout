@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 namespace Scout.Host.Worker.Features;
 
 /// <summary>

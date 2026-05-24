@@ -20,6 +20,8 @@
     <ProjectReference Include="..\Scout.Plugin.Chat\Scout.Plugin.Chat.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CloudStatus\Scout.Plugin.CloudStatus.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
     <ProjectReference Include="..\Scout.Plugin.Help\Scout.Plugin.Help.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Kubernetes\Scout.Plugin.Kubernetes.csproj" />
   </ItemGroup>
 </Project>

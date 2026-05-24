@@ -16,7 +16,9 @@ using Scout.Llm.Ollama;
 using Scout.Plugin.Chat;
 using Scout.Plugin.CloudStatus;
 using Scout.Plugin.CodeQA;
+using Scout.Plugin.GitHub;
 using Scout.Plugin.Help;
+using Scout.Plugin.Kubernetes;
 
 var runIndex = args.Length > 0 && string.Equals(args[0], "index", StringComparison.OrdinalIgnoreCase);
 
@@ -97,6 +99,8 @@ builder.Services
     .AddDiscordAdapter(builder.Configuration)
     .AddCloudStatusPlugin(builder.Configuration)
     .AddFeatures(builder.Configuration)
+    .AddGitHubFeaturePlugin(builder.Configuration)
+    .AddKubernetesFeaturePlugin(builder.Configuration)
     // Fallback chat router must come LAST: it streams any unmatched
     // message through the LLM, so every keyword/regex router needs to
     // run first.

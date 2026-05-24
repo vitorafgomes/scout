@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using System.Linq;
 using System.Net;
 using Microsoft.AspNetCore.Builder;

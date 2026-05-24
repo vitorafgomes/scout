@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -151,7 +152,20 @@ public sealed class FeaturesEndpointsTests : IDisposable
         // Seed credentials directly so we hit the "no factory" branch.
         await _credentials.StoreAsync("scout/github/pat", "x", CancellationToken.None);
 
-        using var client = _factory.CreateClient();
+        // Real GitHub/Kubernetes plugins now register factories at app
+        // startup; strip them here so we still exercise the 501 branch
+        // for the case where a feature has no factory wired yet.
+        using var stripped = _factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        {
+            for (var i = s.Count - 1; i >= 0; i--)
+            {
+                if (s[i].ServiceType == typeof(FeaturePluginFactoryRegistration))
+                {
+                    s.RemoveAt(i);
+                }
+            }
+        }));
+        using var client = stripped.CreateClient();
         var response = await client.PostAsync("/features/github/enable", content: null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotImplemented);
@@ -200,7 +214,7 @@ public sealed class FeaturesEndpointsTests : IDisposable
     {
         var services = new ServiceCollection();
         services.AddSingleton<IServiceProvider>(_ => services.BuildServiceProvider());
-        FeaturesServiceCollectionExtensions.AddFeaturePlugin<NoopPlugin>(services, "noop");
+        FeaturePluginServiceCollectionExtensions.AddFeaturePlugin<NoopPlugin>(services, "noop");
 
         var provider = services.BuildServiceProvider();
         var registrations = provider.GetServices<FeaturePluginFactoryRegistration>().ToList();

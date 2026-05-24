@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using System.Collections.Concurrent;
 
 namespace Scout.Host.Worker.Features;

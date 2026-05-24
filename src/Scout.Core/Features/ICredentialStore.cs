@@ -1,4 +1,4 @@
-namespace Scout.Host.Worker.Features;
+namespace Scout.Core.Features;
 
 /// <summary>
 /// Opaque key/value secret store. Backed by the OS keyring on supported

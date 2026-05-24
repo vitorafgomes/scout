@@ -1,6 +1,6 @@
 using Microsoft.SemanticKernel;
 
-namespace Scout.Host.Worker.Features;
+namespace Scout.Core.Features;
 
 /// <summary>
 /// Marker abstraction for a Scout feature plugin. Phase 2 and 3 supply

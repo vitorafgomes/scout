@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;

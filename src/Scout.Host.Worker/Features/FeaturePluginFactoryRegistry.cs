@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Scout.Host.Worker.Features;
@@ -6,7 +7,7 @@ namespace Scout.Host.Worker.Features;
 /// Resolves feature ids to <see cref="IFeaturePlugin"/> instances via DI.
 /// Phase 1 ships zero registrations: both endpoints return
 /// <c>501 features/not-yet-implemented</c>. Phase 2/3 add plugins through
-/// <see cref="FeaturesServiceCollectionExtensions.AddFeaturePlugin{TPlugin}"/>.
+/// <see cref="FeaturePluginServiceCollectionExtensions.AddFeaturePlugin{TPlugin}"/>.
 /// </summary>
 public sealed class FeaturePluginFactoryRegistry
 {

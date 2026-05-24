@@ -1,3 +1,4 @@
+using Scout.Core.Features;
 using Scout.Host.Worker.Features;
 
 namespace Scout.Host.Worker.Tests.Features;

@@ -1,4 +1,4 @@
-namespace Scout.Host.Worker.Features;
+namespace Scout.Core.Features;
 
 /// <summary>
 /// Pinned validator contract shared by Phase 1, Phase 2 (GitHub) and
