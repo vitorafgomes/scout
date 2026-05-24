@@ -81,19 +81,20 @@ public static class FeaturesEndpoints
 
                 foreach (var field in metadata.CredentialFields)
                 {
-                    if (!body.TryGetValue(field.Name, out var value)
-                        || (field.Required && string.IsNullOrWhiteSpace(value)))
+                    var required = IsRequired(field);
+                    if (!body.TryGetValue(field.Key, out var value)
+                        || (required && string.IsNullOrWhiteSpace(value)))
                     {
-                        if (field.Required)
+                        if (required)
                         {
                             return InvalidCredentialBody(
-                                $"Missing required field '{field.Name}'.");
+                                $"Missing required field '{field.Key}'.");
                         }
                         continue;
                     }
 
                     await credentials.StoreAsync(
-                        $"scout/{metadata.Id}/{field.Name}",
+                        $"scout/{metadata.Id}/{field.Key}",
                         value,
                         ct).ConfigureAwait(false);
                 }
@@ -127,7 +128,7 @@ public static class FeaturesEndpoints
                 foreach (var field in metadata.CredentialFields)
                 {
                     await credentials.DeleteAsync(
-                        $"scout/{metadata.Id}/{field.Name}",
+                        $"scout/{metadata.Id}/{field.Key}",
                         ct).ConfigureAwait(false);
                 }
 
@@ -169,9 +170,9 @@ public static class FeaturesEndpoints
 
                 if (metadata.RequiresCredentials)
                 {
-                    foreach (var field in metadata.CredentialFields.Where(f => f.Required))
+                    foreach (var field in metadata.CredentialFields.Where(IsRequired))
                     {
-                        var key = $"scout/{metadata.Id}/{field.Name}";
+                        var key = $"scout/{metadata.Id}/{field.Key}";
                         if (!await credentials.ContainsAsync(key, ct).ConfigureAwait(false))
                         {
                             return CredentialsMissing(id);
@@ -263,9 +264,9 @@ public static class FeaturesEndpoints
         var hasCredentials = true;
         if (metadata.RequiresCredentials)
         {
-            foreach (var field in metadata.CredentialFields.Where(f => f.Required))
+            foreach (var field in metadata.CredentialFields.Where(IsRequired))
             {
-                var key = $"scout/{metadata.Id}/{field.Name}";
+                var key = $"scout/{metadata.Id}/{field.Key}";
                 if (!await credentials.ContainsAsync(key, ct).ConfigureAwait(false))
                 {
                     hasCredentials = false;
@@ -284,8 +285,17 @@ public static class FeaturesEndpoints
             HasCredentials: hasCredentials,
             Enabled: state.Enabled,
             Status: status,
-            LastError: state.LastError);
+            LastError: state.LastError,
+            CredentialFields: metadata.CredentialFields,
+            ScopeMatrix: metadata.ScopeMatrix,
+            SetupSteps: metadata.SetupSteps);
     }
+
+    // Plain "text" inputs are treated as optional metadata (e.g. the
+    // Kubernetes context selector); any other kind ("password",
+    // "textarea") is required for the feature to be considered ready.
+    private static bool IsRequired(FeatureCredentialFieldDto field) =>
+        !string.Equals(field.Kind, "text", StringComparison.Ordinal);
 
     private static string ResolveStatus(
         FeatureMetadata metadata,

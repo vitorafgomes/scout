@@ -35,8 +35,7 @@ import { FeatureCardComponent } from './feature-card.component';
 
       @if (activeDialog(); as dlg) {
         <sc-credential-dialog
-          [featureId]="dlg.id"
-          [displayName]="dlg.displayName"
+          [feature]="dlg"
           (submit)="onDialogSubmit(dlg.id, $event)"
           (cancel)="closeDialog()"
         />

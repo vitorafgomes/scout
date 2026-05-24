@@ -111,9 +111,9 @@ public sealed class FeatureBootstrapHostedService : IHostedService
 
     private async Task<bool> HasAllCredentialsAsync(FeatureMetadata metadata, CancellationToken ct)
     {
-        foreach (var field in metadata.CredentialFields.Where(f => f.Required))
+        foreach (var field in metadata.CredentialFields.Where(IsRequired))
         {
-            var key = $"scout/{metadata.Id}/{field.Name}";
+            var key = $"scout/{metadata.Id}/{field.Key}";
             var present = await _credentials.ContainsAsync(key, ct).ConfigureAwait(false);
             if (!present)
             {
@@ -123,4 +123,9 @@ public sealed class FeatureBootstrapHostedService : IHostedService
 
         return true;
     }
+
+    // Mirrors the convention in FeaturesEndpoints: "text" inputs are
+    // optional, everything else gates the feature.
+    private static bool IsRequired(FeatureCredentialFieldDto field) =>
+        !string.Equals(field.Kind, "text", StringComparison.Ordinal);
 }

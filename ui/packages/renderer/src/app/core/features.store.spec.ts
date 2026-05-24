@@ -45,6 +45,9 @@ const githubDisabled: FeatureDto = {
   enabled: false,
   status: 'needs-credentials',
   lastError: null,
+  credentialFields: [],
+  scopeMatrix: null,
+  setupSteps: null,
 };
 
 const githubEnabled: FeatureDto = {

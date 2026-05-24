@@ -284,6 +284,20 @@ export type FeatureId = 'github' | 'kubernetes';
 export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
 export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
 
+export interface FeatureCredentialFieldDto {
+  readonly key: string;
+  readonly kind: 'text' | 'password' | 'textarea';
+  readonly label: string;
+  readonly helperText: string | null;
+  readonly createLinkUrl: string | null;
+  readonly createLinkLabel: string | null;
+}
+
+export interface FeatureScopeRowDto {
+  readonly scope: string;
+  readonly actions: readonly string[];
+}
+
 export interface FeatureDto {
   readonly id: FeatureId;
   readonly displayName: string;
@@ -293,6 +307,9 @@ export interface FeatureDto {
   readonly enabled: boolean;
   readonly status: FeatureStatus;
   readonly lastError: string | null;
+  readonly credentialFields: readonly FeatureCredentialFieldDto[];
+  readonly scopeMatrix: readonly FeatureScopeRowDto[] | null;
+  readonly setupSteps: readonly string[] | null;
 }
 
 export interface FeaturesListResponse {

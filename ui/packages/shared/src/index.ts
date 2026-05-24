@@ -90,6 +90,8 @@ export {
   type FeatureId,
   FEATURE_IDS,
   type FeatureStatus,
+  type FeatureCredentialFieldDto,
+  type FeatureScopeRowDto,
   type FeatureDto,
   type FeaturesListResponse,
   type FeatureIdRequest,

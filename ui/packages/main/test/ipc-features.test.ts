@@ -48,6 +48,9 @@ const githubDto: FeatureDto = {
   enabled: true,
   status: 'enabled',
   lastError: null,
+  credentialFields: [],
+  scopeMatrix: null,
+  setupSteps: null,
 };
 
 interface StubClient {

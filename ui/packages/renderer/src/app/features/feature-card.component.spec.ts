@@ -23,6 +23,9 @@ const base: FeatureViewModel = {
   enabled: false,
   status: 'needs-credentials',
   lastError: null,
+  credentialFields: [],
+  scopeMatrix: null,
+  setupSteps: null,
   busy: false,
 };
 

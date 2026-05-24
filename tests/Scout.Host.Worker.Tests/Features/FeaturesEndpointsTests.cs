@@ -60,6 +60,54 @@ public sealed class FeaturesEndpointsTests : IDisposable
         dtos.Length.ShouldBe(2);
         dtos.ShouldContain(d => d.Id == "github" && d.Status == "needs-credentials");
         dtos.ShouldContain(d => d.Id == "kubernetes" && d.Status == "needs-credentials");
+
+        // Schema-driven dialog inputs travel on every list response so
+        // the UI never has to special-case feature ids.
+        var github = dtos.Single(d => d.Id == "github");
+        github.CredentialFields.ShouldNotBeEmpty();
+        github.ScopeMatrix.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task GET_features_includes_credential_fields_and_scope_matrix_for_github()
+    {
+        using var client = _factory.CreateClient();
+        var response = await client.GetAsync("/features/");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dtos = await response.Content.ReadFromJsonAsync<FeatureDto[]>();
+        dtos.ShouldNotBeNull();
+
+        var github = dtos.Single(d => d.Id == "github");
+
+        github.CredentialFields.Count.ShouldBe(1);
+        var pat = github.CredentialFields[0];
+        pat.Key.ShouldBe("pat");
+        pat.Kind.ShouldBe("password");
+        pat.CreateLinkUrl.ShouldBe(
+            "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Scout");
+
+        github.ScopeMatrix.ShouldNotBeNull();
+        github.ScopeMatrix!.Count.ShouldBe(4);
+        github.ScopeMatrix.Select(r => r.Scope).ShouldBe(
+            new[] { "repo", "public_repo", "read:org", "read:user" });
+    }
+
+    [Fact]
+    public async Task GET_features_includes_setup_steps_for_github()
+    {
+        using var client = _factory.CreateClient();
+        var response = await client.GetAsync("/features/");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dtos = await response.Content.ReadFromJsonAsync<FeatureDto[]>();
+        dtos.ShouldNotBeNull();
+
+        var github = dtos.Single(d => d.Id == "github");
+
+        github.SetupSteps.ShouldNotBeNull();
+        github.SetupSteps!.Count.ShouldBe(4);
+        github.SetupSteps[0].ShouldStartWith("Click 'Create token on GitHub'");
     }
 
     [Fact]

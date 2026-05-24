@@ -244,6 +244,9 @@ describe('buildBridge', () => {
       enabled: false,
       status: 'disabled',
       lastError: null,
+      credentialFields: [],
+      scopeMatrix: null,
+      setupSteps: null,
     };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
 

@@ -18,6 +18,9 @@ const github: FeatureDto = {
   enabled: true,
   status: 'enabled',
   lastError: null,
+  credentialFields: [],
+  scopeMatrix: null,
+  setupSteps: null,
 };
 
 const kubernetes: FeatureDto = {
@@ -29,6 +32,9 @@ const kubernetes: FeatureDto = {
   enabled: false,
   status: 'needs-credentials',
   lastError: null,
+  credentialFields: [],
+  scopeMatrix: null,
+  setupSteps: null,
 };
 
 async function setup(): Promise<{
