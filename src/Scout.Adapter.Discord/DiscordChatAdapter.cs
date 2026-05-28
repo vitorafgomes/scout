@@ -21,9 +21,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     private readonly DiscordMessageTranslator _translator;
     private readonly ILogger<DiscordChatAdapter> _logger;
     private readonly DiscordSocketClient _client;
+    private readonly DiscordAdapterLifecycle _lifecycle = new();
 
     private Func<ChatMessage, IResponseSink, CancellationToken, Task>? _handler;
-    private int _started;
 
     public DiscordChatAdapter(
         IOptions<DiscordOptions> options,
@@ -64,12 +64,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        if (Interlocked.Exchange(ref _started, 1) == 1)
-        {
-            throw new InvalidOperationException(
-                $"{nameof(DiscordChatAdapter)} has already been started.");
-        }
-
+        // Throws if already started or stopped (single-login) and arms the
+        // lifetime token linked to the host's start token.
+        _lifecycle.Start(cancellationToken);
         _handler = handler;
 
         _client.Log += OnDiscordLogAsync;
@@ -84,7 +81,8 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (Interlocked.CompareExchange(ref _started, 0, 1) == 0)
+        // Cancels the lifetime token; returns false if not currently running.
+        if (!await _lifecycle.StopAsync().ConfigureAwait(false))
         {
             return;
         }
@@ -103,16 +101,18 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
+        _lifecycle.Dispose();
         await _client.DisposeAsync().ConfigureAwait(false);
     }
 
     private async Task OnMessageReceivedAsync(SocketMessage message)
     {
         var handler = _handler;
-        if (handler is null)
+        if (handler is null || !_lifecycle.IsRunning)
         {
             return;
         }
+        var lifetimeToken = _lifecycle.LifetimeToken;
 
         try
         {
@@ -123,14 +123,15 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
             }
 
             var guildId = (message.Channel as SocketGuildChannel)?.Guild.Id;
-            var inbound = new InboundDiscordMessage(
-                MessageId: message.Id,
-                AuthorId: message.Author.Id,
-                ChannelId: message.Channel.Id,
-                Content: message.Content ?? string.Empty,
-                MentionsSelf: message.MentionedUsers.Any(u => u.Id == botUserId),
-                Timestamp: message.Timestamp,
-                GuildId: guildId);
+            var mentionsSelf = message.MentionedUsers.Any(u => u.Id == botUserId);
+            var inbound = ProjectInbound(
+                messageId: message.Id,
+                authorId: message.Author.Id,
+                channelId: message.Channel.Id,
+                content: message.Content,
+                mentionsSelf: mentionsSelf,
+                timestamp: message.Timestamp,
+                guildId: guildId);
 
             if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage, out var reason))
             {
@@ -139,9 +140,15 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 return;
             }
 
-            // Bind the sink to the originating channel only.
-            var sink = new DiscordResponseSink(message.Channel, _logger);
-            await handler(chatMessage!, sink, CancellationToken.None).ConfigureAwait(false);
+            // Bind the sink to the originating channel only and pass the
+            // lifetime token so the conversation cancels on host shutdown.
+            var sink = new DiscordResponseSink(message.Channel, logger: _logger);
+            await handler(chatMessage!, sink, lifetimeToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(
+                "Discord message {MessageId} cancelled on shutdown.", message.Id);
         }
         catch (Exception ex)
         {
@@ -149,6 +156,26 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 ex, "DiscordChatAdapter failed while processing message {MessageId}", message.Id);
         }
     }
+
+    // Pure projection of the Discord message fields into the translator DTO.
+    // Extracted so the inbound glue is unit-testable without Discord.Net's
+    // sealed SocketMessage.
+    internal static InboundDiscordMessage ProjectInbound(
+        ulong messageId,
+        ulong authorId,
+        ulong channelId,
+        string? content,
+        bool mentionsSelf,
+        DateTimeOffset timestamp,
+        ulong? guildId)
+        => new(
+            MessageId: messageId,
+            AuthorId: authorId,
+            ChannelId: channelId,
+            Content: content ?? string.Empty,
+            MentionsSelf: mentionsSelf,
+            Timestamp: timestamp,
+            GuildId: guildId);
 
     private Task OnReadyAsync()
     {

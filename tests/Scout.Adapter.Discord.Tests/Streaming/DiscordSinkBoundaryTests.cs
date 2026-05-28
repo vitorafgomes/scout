@@ -1,128 +1,128 @@
-using System.Runtime.CompilerServices;
+using Discord.Net;
 using Microsoft.Extensions.Time.Testing;
 using Scout.Adapter.Discord.Streaming;
 using Scout.Conversation.Abstractions;
-using Scout.Conversation.Streaming;
 
 namespace Scout.Adapter.Discord.Tests.Streaming;
 
 /// <summary>
-/// Drives the real <see cref="DiscordResponseSink"/> through the
-/// <see cref="StreamPump"/> with a fake edit delegate, injecting transport
-/// failures (429, 5xx) on interim edits. Hermetic — no Discord.Net network.
+/// Exercises the Discord sink's OWN transport resilience (Discord.Net 429
+/// backoff-and-retry, 5xx drop on interim) directly, with an injected edit
+/// delegate and a FakeTimeProvider. Hermetic — no Discord.Net network. Rate
+/// limits are the sink's concern now, not the pump's.
 /// </summary>
 public sealed class DiscordSinkBoundaryTests
 {
     private const string Cursor = "▌";
-    private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(750);
 
     private static FakeTimeProvider Clock() =>
         new(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero));
 
-    // Advances the fake clock by one interval before each chunk so every chunk
-    // crosses the edit cadence.
-    private static async IAsyncEnumerable<string> Ticking(
-        FakeTimeProvider time,
-        [EnumeratorCancellation] CancellationToken cancellationToken,
-        params string[] chunks)
-    {
-        foreach (var chunk in chunks)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            time.Advance(Interval);
-            await Task.Yield();
-            yield return chunk;
-        }
-    }
-
-    private static StreamPump Pump(FakeTimeProvider time) => new(new StreamPumpOptions
-    {
-        EditInterval = Interval,
-        Cursor = Cursor,
-        TimeProvider = time,
-    });
-
-    private sealed class FakeRateLimitedException(TimeSpan retryAfter) : Exception("rate limited")
-    {
-        public TimeSpan RetryAfter { get; } = retryAfter;
-    }
+    private static RateLimitedException RateLimited()
+        => new(Substitute.For<IRequest>());
 
     [Fact]
-    public async Task Edit_429_MidStream_Retries_And_Body_Stays_Monotonic()
+    public async Task Update_429_Backs_Off_On_FakeClock_Then_Retries_Once()
     {
         var time = Clock();
         var edits = new List<string>();
-        var editCall = 0;
-        var raised = false;
+        var attempts = 0;
 
-        // The sink's interim edits go through this delegate. The 2nd interim
-        // edit hits a rate limit; the pump must back off and retry.
         var sink = new DiscordResponseSink(
             postInitial: (_, _) => Task.CompletedTask,
             edit: (body, _) =>
             {
-                editCall++;
-                if (editCall == 2 && !raised)
+                attempts++;
+                if (attempts == 1)
                 {
-                    raised = true;
-                    throw new FakeRateLimitedException(TimeSpan.FromMilliseconds(200));
+                    throw RateLimited();
                 }
                 edits.Add(body);
                 return Task.CompletedTask;
-            });
+            },
+            timeProvider: time);
 
-        var response = new ChatResponse(Ticking(time, default, "a", "b", "c"));
+        await sink.BeginAsync(CancellationToken.None);
 
-        var run = Pump(time).RunAsync(response, sink, CancellationToken.None);
-        while (!run.IsCompleted)
+        var update = sink.UpdateAsync("hello", CancellationToken.None);
+        // The retry registers a Task.Delay against the fake clock; advance it.
+        while (!update.IsCompleted)
         {
             await Task.Yield();
-            time.Advance(TimeSpan.FromMilliseconds(50));
+            time.Advance(TimeSpan.FromMilliseconds(250));
         }
-        await run;
+        await update;
 
-        raised.ShouldBeTrue();
-        edits.ShouldNotBeEmpty();
-
-        // The final edit (Complete) carries the full coherent body, no cursor.
-        edits[^1].ShouldBe("abc");
-
-        // Cumulative bodies (cursor stripped) are monotonic.
-        var stripped = edits.Select(e => e.Replace(Cursor, string.Empty)).ToList();
-        for (var i = 1; i < stripped.Count; i++)
-        {
-            stripped[i].ShouldStartWith(stripped[i - 1]);
-        }
+        attempts.ShouldBe(2);
+        edits.ShouldHaveSingleItem();
+        edits[0].ShouldBe("hello" + Cursor);
     }
 
     [Fact]
-    public async Task Edit_5xx_MidStream_Drops_Edit_No_Throw_Finalize_Coherent()
+    public async Task Complete_429_Backs_Off_Then_Retries_So_Terminal_Lands()
     {
         var time = Clock();
         var edits = new List<string>();
-        var editCall = 0;
+        var attempts = 0;
 
         var sink = new DiscordResponseSink(
             postInitial: (_, _) => Task.CompletedTask,
             edit: (body, _) =>
             {
-                editCall++;
-                if (editCall == 2)
+                attempts++;
+                if (attempts == 1)
                 {
-                    // Non-rate-limit 5xx: pump drops this interim edit, keeps
-                    // the buffer, and must not throw into the host.
+                    throw RateLimited();
+                }
+                edits.Add(body);
+                return Task.CompletedTask;
+            },
+            timeProvider: time);
+
+        await sink.BeginAsync(CancellationToken.None);
+
+        var complete = sink.CompleteAsync("done", Array.Empty<Citation>(), CancellationToken.None);
+        while (!complete.IsCompleted)
+        {
+            await Task.Yield();
+            time.Advance(TimeSpan.FromMilliseconds(250));
+        }
+        await complete;
+
+        attempts.ShouldBe(2);
+        edits.ShouldHaveSingleItem();
+        edits[0].ShouldBe("done");
+    }
+
+    [Fact]
+    public async Task Update_5xx_Is_Dropped_Does_Not_Throw_Terminal_Still_Coherent()
+    {
+        var time = Clock();
+        var edits = new List<string>();
+
+        var sink = new DiscordResponseSink(
+            postInitial: (_, _) => Task.CompletedTask,
+            edit: (body, _) =>
+            {
+                if (body.Contains("drop", StringComparison.Ordinal))
+                {
+                    // Non-rate-limit transport error on an interim edit.
                     throw new HttpRequestException("Discord returned 500");
                 }
                 edits.Add(body);
                 return Task.CompletedTask;
-            });
+            },
+            timeProvider: time);
 
-        var response = new ChatResponse(Ticking(time, default, "a", "b", "c"));
+        await sink.BeginAsync(CancellationToken.None);
 
-        await Should.NotThrowAsync(
-            () => Pump(time).RunAsync(response, sink, CancellationToken.None));
+        // This interim edit fails with a 5xx and must be swallowed by the sink.
+        await Should.NotThrowAsync(() => sink.UpdateAsync("drop-me", CancellationToken.None));
 
-        // The dropped interim is absent, but the final edit is coherent.
-        edits[^1].ShouldBe("abc");
+        // A later interim and the terminal still render coherently.
+        await sink.UpdateAsync("kept", CancellationToken.None);
+        await sink.CompleteAsync("final", Array.Empty<Citation>(), CancellationToken.None);
+
+        edits.ShouldBe(["kept" + Cursor, "final"]);
     }
 }

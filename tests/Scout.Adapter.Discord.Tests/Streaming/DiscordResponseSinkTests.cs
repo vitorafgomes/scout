@@ -101,6 +101,29 @@ public sealed class DiscordResponseSinkTests
     }
 
     [Fact]
+    public async Task Complete_OverLimit_Body_Preserves_Head_Not_Just_Footer()
+    {
+        const int max = 4096;
+        var (sink, _, edits) = Create();
+        await sink.BeginAsync(CancellationToken.None);
+
+        // An answer that already fills the budget, plus citations that would
+        // push it over. The head of the answer must survive; the user must not
+        // be left with only the Sources footer.
+        var answer = "HEAD-OF-ANSWER " + new string('a', max);
+        await sink.CompleteAsync(
+            answer,
+            new[] { new Citation("src/A.cs:1") },
+            CancellationToken.None);
+
+        var body = edits[^1];
+        body.Length.ShouldBeLessThanOrEqualTo(max);
+        body.ShouldStartWith("HEAD-OF-ANSWER ");
+        body.ShouldEndWith("... (truncated)\n\n");
+        body.ShouldNotContain("Sources:");
+    }
+
+    [Fact]
     public async Task Lifecycle_Rejects_Update_Before_Begin()
     {
         var (sink, _, _) = Create();
