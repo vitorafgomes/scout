@@ -2,5 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Scout.Llm/Scout.Llm.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
+  <Folder Name="/tests/">
+    <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />
+  </Folder>
 </Solution>
