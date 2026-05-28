@@ -31,4 +31,13 @@ public sealed record RenderCapabilities
     /// own interval governs.
     /// </summary>
     public TimeSpan? EditIntervalFloor { get; init; }
+
+    /// <summary>
+    /// Hard cap on how long the platform allows a single response to remain
+    /// open before it must be finalized (Teams ~2min). Null means the pump's
+    /// own <c>OverallTimeout</c> governs. When both are set the smaller wins,
+    /// so a sink can declare its limit without the host special-casing pump
+    /// options.
+    /// </summary>
+    public TimeSpan? MaxResponseDuration { get; init; }
 }

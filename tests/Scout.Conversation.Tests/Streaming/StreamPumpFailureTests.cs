@@ -7,8 +7,10 @@ using Scout.Conversation.Tests.Fakes;
 namespace Scout.Conversation.Tests.Streaming;
 
 /// <summary>
-/// Boundary failure injection at the stream and sink edges. Hermetic — no real
-/// transport.
+/// Boundary failure injection at the stream and sink edges. The pump is
+/// transport-agnostic: it does not retry; a non-cancellation interim throw is
+/// swallowed (the transport owns its own resilience), the buffer is retained,
+/// and finalize stays coherent. Hermetic — no real transport.
 /// </summary>
 public sealed class StreamPumpFailureTests
 {
@@ -46,63 +48,18 @@ public sealed class StreamPumpFailureTests
         }
     }
 
-    private sealed class FakeRateLimitedException(TimeSpan retryAfter) : Exception("rate limited")
-    {
-        public TimeSpan RetryAfter { get; } = retryAfter;
-    }
-
     [Fact]
-    public async Task Sink_429_MidStream_Retries_And_Stays_Monotonic_And_Completes()
+    public async Task Transient_Interim_Update_Throw_Is_Swallowed_Finalize_Coherent()
     {
         var time = Clock();
-        var raised = false;
-        // Throw a rate-limit on the 2nd interim update; retry must then succeed.
-        var sink = new RecordingResponseSink(FineGrained, onUpdate: (index, _) =>
-        {
-            if (index == 1 && !raised)
-            {
-                raised = true;
-                throw new FakeRateLimitedException(TimeSpan.FromMilliseconds(200));
-            }
-        });
-
-        var response = new ChatResponse(Ticking(time, default, "a", "b", "c"));
-
-        var run = Pump(time).RunAsync(response, sink, CancellationToken.None);
-
-        // Let the retry register its Task.Delay against the fake clock.
-        while (!run.IsCompleted)
-        {
-            await Task.Yield();
-            time.Advance(TimeSpan.FromMilliseconds(50));
-        }
-        await run;
-
-        raised.ShouldBeTrue();
-        sink.Completed.ShouldBeTrue();
-        sink.Failed.ShouldBeFalse();
-        sink.TerminalCount.ShouldBe(1);
-
-        // Cumulative bodies recorded by the sink remain monotonic.
-        var stripped = sink.Updates.Select(u => u.Replace(Cursor, string.Empty)).ToList();
-        for (var i = 1; i < stripped.Count; i++)
-        {
-            stripped[i].ShouldStartWith(stripped[i - 1]);
-        }
-        sink.FinalText.ShouldBe("abc");
-    }
-
-    [Fact]
-    public async Task Sink_5xx_MidStream_Drops_Edit_Does_Not_Throw_Finalize_Coherent()
-    {
-        var time = Clock();
-        // Non-rate-limit failure on the 2nd interim update: pump must swallow it,
-        // keep the buffer, and still finalize coherently.
+        // Any non-cancellation interim failure is dropped by the pump; the
+        // buffer is retained and the final body is still coherent. The pump
+        // itself does not retry — that is the transport's (sink's) job.
         var sink = new RecordingResponseSink(FineGrained, onUpdate: (index, _) =>
         {
             if (index == 1)
             {
-                throw new InvalidOperationException("HTTP 500 from transport");
+                throw new InvalidOperationException("transient transport failure");
             }
         });
 
@@ -113,6 +70,7 @@ public sealed class StreamPumpFailureTests
 
         sink.Completed.ShouldBeTrue();
         sink.Failed.ShouldBeFalse();
+        sink.TerminalCount.ShouldBe(1);
         sink.FinalText.ShouldBe("abc");
     }
 

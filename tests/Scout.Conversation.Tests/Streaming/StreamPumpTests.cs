@@ -177,6 +177,78 @@ public sealed class StreamPumpTests
         sink.FinalCitations[0].Label.ShouldBe("src/A.cs");
     }
 
+    // A stream that yields one chunk then waits past any timeout. The wait is
+    // driven by the same fake clock, so the linked timeout CTS fires first.
+    private static async IAsyncEnumerable<string> HangsAfterFirst(
+        FakeTimeProvider time,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return "partial";
+        await Task.Delay(TimeSpan.FromHours(1), time, cancellationToken).ConfigureAwait(false);
+        yield return "never";
+    }
+
+    [Fact]
+    public async Task RunAsync_Sink_MaxResponseDuration_Finalizes_Before_Global_Timeout()
+    {
+        var time = Clock();
+        // Global timeout is generous; the sink declares a tighter 2s cap, which
+        // must win and trigger finalize.
+        var sink = new RecordingResponseSink(new RenderCapabilities
+        {
+            FineGrainedEdit = true,
+            MaxBodyLength = 4096,
+            MaxResponseDuration = TimeSpan.FromSeconds(2),
+        });
+        var response = new ChatResponse(HangsAfterFirst(time));
+
+        var run = Pump(time, overallTimeout: TimeSpan.FromMinutes(5))
+            .RunAsync(response, sink, CancellationToken.None);
+
+        // Advance just past the sink cap but well short of the global timeout.
+        while (!run.IsCompleted)
+        {
+            await Task.Yield();
+            time.Advance(TimeSpan.FromMilliseconds(500));
+            if (time.GetUtcNow() - new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero)
+                > TimeSpan.FromSeconds(10))
+            {
+                break;
+            }
+        }
+        await run;
+
+        // The sink cap (2s) fired long before the 5min global timeout.
+        sink.Failed.ShouldBeTrue();
+        sink.Completed.ShouldBeFalse();
+        sink.FinalText.ShouldBe("partial");
+        sink.FailReason.ShouldNotBeNull();
+        sink.FailReason!.ShouldContain("timed out");
+    }
+
+    [Fact]
+    public async Task RunAsync_OverallTimeout_Bounds_Run_And_Finalizes_With_Partial()
+    {
+        var time = Clock();
+        var sink = new RecordingResponseSink(FineGrained);
+        var response = new ChatResponse(HangsAfterFirst(time));
+
+        var run = Pump(time, overallTimeout: TimeSpan.FromSeconds(3))
+            .RunAsync(response, sink, CancellationToken.None);
+
+        while (!run.IsCompleted)
+        {
+            await Task.Yield();
+            time.Advance(TimeSpan.FromMilliseconds(500));
+        }
+        await run;
+
+        sink.BeginCount.ShouldBe(1);
+        sink.Failed.ShouldBeTrue();
+        sink.Completed.ShouldBeFalse();
+        sink.FinalText.ShouldBe("partial");
+    }
+
     [Fact]
     public async Task RunAsync_Throws_When_Response_Null()
     {

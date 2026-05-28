@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Routing;
 using Scout.Conversation.Streaming;
@@ -29,6 +30,7 @@ public static class ConversationServiceCollectionExtensions
         services.TryAddSingleton(sp => new StreamPumpOptions
         {
             TimeProvider = sp.GetRequiredService<TimeProvider>(),
+            Logger = sp.GetService<ILoggerFactory>()?.CreateLogger<StreamPump>(),
         });
         services.TryAddSingleton(sp => new StreamPump(sp.GetRequiredService<StreamPumpOptions>()));
         services.TryAddSingleton<IConversationRouter, LlmStreamingRouter>();

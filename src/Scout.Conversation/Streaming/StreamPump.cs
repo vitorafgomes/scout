@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
@@ -11,7 +9,8 @@ namespace Scout.Conversation.Streaming;
 /// opens the sink, accumulates tokens into a cumulative buffer, throttles
 /// interim <see cref="IResponseSink.UpdateAsync"/> calls per the sink's
 /// capabilities, then issues a single terminal Complete or Fail. The sink stays
-/// a thin transport. Cadence and truncation derive from
+/// a thin transport and owns its own transport resilience (rate limits,
+/// retries). Cadence, length, and the overall timeout derive from
 /// <see cref="StreamPumpOptions"/> tightened by <see cref="RenderCapabilities"/>,
 /// so the pump is ignorant of which platform it drives.
 /// </summary>
@@ -53,11 +52,18 @@ public sealed class StreamPump
         var caps = sink.Capabilities;
         var interval = EffectiveInterval(caps);
         var maxLength = EffectiveMaxLength(caps);
-        var interimEdits = caps.FineGrainedEdit || caps.SupportsInterimCitations;
 
-        using var linked = LinkTimeout(cancellationToken, out var pumpToken);
+        // Interim editing is worthwhile only when the sink can either edit the
+        // posted message repeatedly or show citations before the terminal call.
+        // Otherwise the loop accumulates silently and emits a single Complete.
+        var wantsInterim = caps.FineGrainedEdit || caps.SupportsInterimCitations;
 
-        await sink.BeginAsync(cancellationToken).ConfigureAwait(false);
+        // The timeout bounds the whole run, including BeginAsync and the success
+        // CompleteAsync, so non-edit platforms whose only write is the terminal
+        // call are still guarded. FailAsync deliberately stays on a fresh token.
+        using var linked = LinkTimeout(cancellationToken, caps, out var pumpToken);
+
+        await sink.BeginAsync(pumpToken).ConfigureAwait(false);
 
         var buffer = new StringBuilder();
         DateTimeOffset? lastEditAt = null;
@@ -73,7 +79,7 @@ public sealed class StreamPump
                     buffer.Append(token);
                 }
 
-                if (!interimEdits)
+                if (!wantsInterim)
                 {
                     continue;
                 }
@@ -84,7 +90,7 @@ public sealed class StreamPump
                 }
 
                 var body = RenderInterim(buffer.ToString(), maxLength);
-                await UpdateWithRateLimitRetryAsync(sink, body, pumpToken).ConfigureAwait(false);
+                await TryInterimUpdateAsync(sink, body, pumpToken).ConfigureAwait(false);
                 lastEditAt = _options.TimeProvider.GetUtcNow();
             }
         }
@@ -109,13 +115,17 @@ public sealed class StreamPump
             ? _options.EmptyStreamPlaceholder
             : Truncate(buffer.ToString(), maxLength);
 
-        await sink.CompleteAsync(finalText, response.Citations, cancellationToken)
+        await sink.CompleteAsync(finalText, response.Citations, pumpToken)
             .ConfigureAwait(false);
     }
 
-    private IDisposable? LinkTimeout(CancellationToken caller, out CancellationToken pumpToken)
+    private IDisposable? LinkTimeout(
+        CancellationToken caller,
+        RenderCapabilities caps,
+        out CancellationToken pumpToken)
     {
-        if (_options.OverallTimeout is not { } timeout)
+        var timeout = EffectiveTimeout(caps);
+        if (timeout is not { } window)
         {
             pumpToken = caller;
             return null;
@@ -123,10 +133,27 @@ public sealed class StreamPump
 
         // Deterministic timeout via the injected clock: a TimeProvider-backed
         // CTS fires the timeout, linked with the caller token.
-        var timeoutCts = new CancellationTokenSource(timeout, _options.TimeProvider);
+        var timeoutCts = new CancellationTokenSource(window, _options.TimeProvider);
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(caller, timeoutCts.Token);
         pumpToken = linkedCts.Token;
         return new CompositeDisposable(linkedCts, timeoutCts);
+    }
+
+    // Effective timeout = min(options.OverallTimeout, caps.MaxResponseDuration),
+    // mirroring how EditIntervalFloor tightens the interval. Either may be null.
+    private TimeSpan? EffectiveTimeout(RenderCapabilities caps)
+    {
+        var optTimeout = _options.OverallTimeout;
+        var capTimeout = caps.MaxResponseDuration;
+        if (optTimeout is null)
+        {
+            return capTimeout;
+        }
+        if (capTimeout is null)
+        {
+            return optTimeout;
+        }
+        return optTimeout < capTimeout ? optTimeout : capTimeout;
     }
 
     private TimeSpan EffectiveInterval(RenderCapabilities caps)
@@ -173,7 +200,11 @@ public sealed class StreamPump
         return TruncationMarker + body[^keep..];
     }
 
-    private async Task UpdateWithRateLimitRetryAsync(
+    // Interim updates are best-effort. A non-cancellation throw means the
+    // transport (sink) could not render this tick after its own resilience
+    // (rate-limit backoff etc.) was exhausted; retain the buffer for the next
+    // tick or the terminal call. Cancellation propagates.
+    private async Task TryInterimUpdateAsync(
         IResponseSink sink,
         string body,
         CancellationToken cancellationToken)
@@ -181,7 +212,6 @@ public sealed class StreamPump
         try
         {
             await sink.UpdateAsync(body, cancellationToken).ConfigureAwait(false);
-            return;
         }
         catch (OperationCanceledException)
         {
@@ -189,72 +219,9 @@ public sealed class StreamPump
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            var retryAfter = TryExtractRetryAfter(ex);
-            if (retryAfter is null)
-            {
-                // Non-rate-limit transient: drop this interim edit, keep the
-                // buffer for the next tick / finalize. Does not escape.
-                _options.Logger?.LogWarning(
-                    ex, "StreamPump interim update failed; buffer retained for next tick.");
-                return;
-            }
-
-            _options.Logger?.LogInformation(
-                "StreamPump rate-limited; retrying after {RetryAfter}.", retryAfter.Value);
-
-            try
-            {
-                await Task.Delay(retryAfter.Value, _options.TimeProvider, cancellationToken)
-                    .ConfigureAwait(false);
-                await sink.UpdateAsync(body, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception retryEx)
-            {
-                _options.Logger?.LogWarning(
-                    retryEx, "StreamPump interim update retry failed; buffer retained.");
-            }
+            _options.Logger?.LogWarning(
+                ex, "StreamPump interim update failed; buffer retained for next tick.");
         }
-    }
-
-    // Duck-typed extraction. Discord.Net's RateLimitedException carries a
-    // RetryAfter; we avoid a hard reference by reflecting on the type name and a
-    // RetryAfter property, falling back to message text.
-    internal static TimeSpan? TryExtractRetryAfter(Exception ex)
-    {
-        var typeName = ex.GetType().Name;
-        var looksRateLimited =
-            typeName.Contains("RateLimit", StringComparison.OrdinalIgnoreCase)
-            || (ex.Message?.Contains("rate limit", StringComparison.OrdinalIgnoreCase) ?? false);
-
-        if (!looksRateLimited)
-        {
-            return null;
-        }
-
-        var prop = ex.GetType().GetProperty(
-            "RetryAfter", BindingFlags.Instance | BindingFlags.Public);
-        if (prop is null)
-        {
-            return null;
-        }
-
-        var value = prop.GetValue(ex);
-        return value switch
-        {
-            TimeSpan ts when ts > TimeSpan.Zero => ts,
-            double secs when secs > 0 => TimeSpan.FromSeconds(secs),
-            float secs when secs > 0 => TimeSpan.FromSeconds(secs),
-            int secs when secs > 0 => TimeSpan.FromSeconds(secs),
-            long secs when secs > 0 => TimeSpan.FromSeconds(secs),
-            string s when double.TryParse(
-                s, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-                && parsed > 0 => TimeSpan.FromSeconds(parsed),
-            _ => null,
-        };
     }
 
     private sealed class CompositeDisposable(params IDisposable[] disposables) : IDisposable
