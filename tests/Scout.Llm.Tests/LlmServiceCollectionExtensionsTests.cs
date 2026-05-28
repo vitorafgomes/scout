@@ -73,6 +73,14 @@ public sealed class LlmServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddScoutLlm_Resolves_ChatGateway()
+    {
+        using var provider = new ServiceCollection().AddScoutLlm(Config()).BuildServiceProvider();
+
+        provider.GetRequiredService<IChatGateway>().ShouldNotBeNull();
+    }
+
+    [Fact]
     public void AddScoutLlm_Throws_For_Unknown_Provider()
     {
         Should.Throw<InvalidOperationException>(

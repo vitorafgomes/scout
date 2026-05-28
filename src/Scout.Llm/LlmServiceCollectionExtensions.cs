@@ -12,9 +12,9 @@ namespace Scout.Llm;
 
 /// <summary>
 /// Composition root for the Scout LLM gateway. Wires the active provider, a
-/// single shared <see cref="Kernel"/>, and the chat-completion and embedding
-/// services resolved from that kernel so every consumer shares one routing
-/// surface.
+/// single shared <see cref="Kernel"/>, the chat-completion and embedding
+/// services resolved from that kernel, and the streaming-first
+/// <see cref="IChatGateway"/> so every consumer shares one routing surface.
 /// </summary>
 public static class LlmServiceCollectionExtensions
 {
@@ -66,6 +66,9 @@ public static class LlmServiceCollectionExtensions
         services.AddSingleton(sp =>
             sp.GetRequiredService<Kernel>()
               .GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>());
+
+        services.AddSingleton<IChatGateway>(sp =>
+            new ChatGateway(sp.GetRequiredService<IChatCompletionService>()));
 
         return services;
     }
