@@ -17,6 +17,7 @@
     <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
     <ProjectReference Include="..\Scout.Llm.Ollama\Scout.Llm.Ollama.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Agent\Scout.Plugin.Agent.csproj" />
     <ProjectReference Include="..\Scout.Plugin.Chat\Scout.Plugin.Chat.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CloudStatus\Scout.Plugin.CloudStatus.csproj" />
     <ProjectReference Include="..\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />

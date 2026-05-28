@@ -91,8 +91,11 @@ export class FeaturesComponent implements OnInit {
     this.activeDialog.set(null);
   }
 
-  async onDialogSubmit(id: FeatureId, body: Record<string, string>): Promise<void> {
+  async onDialogSubmit(
+    id: FeatureId,
+    payload: { credentials: Record<string, string>; settings: Record<string, string> },
+  ): Promise<void> {
     this.closeDialog();
-    await this.store.storeCredentials(id, body);
+    await this.store.setup(id, payload.credentials, payload.settings);
   }
 }

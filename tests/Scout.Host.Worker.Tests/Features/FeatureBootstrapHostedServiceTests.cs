@@ -19,7 +19,7 @@ public sealed class FeatureBootstrapHostedServiceTests
     {
         var catalog = new FeatureCatalog();
         var stateStore = new InMemoryFeatureStateStore();
-        await stateStore.SetAsync("github", new FeatureState(true, null), CancellationToken.None);
+        await stateStore.SetAsync("github", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
 
         var credentials = new InMemoryCredentialStore(isAvailable: true);
         await credentials.StoreAsync("scout/github/pat", "x", CancellationToken.None);
@@ -50,7 +50,7 @@ public sealed class FeatureBootstrapHostedServiceTests
     {
         var catalog = new FeatureCatalog();
         var stateStore = new InMemoryFeatureStateStore();
-        await stateStore.SetAsync("github", new FeatureState(true, null), CancellationToken.None);
+        await stateStore.SetAsync("github", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
 
         var credentials = new InMemoryCredentialStore(isAvailable: true);
         var plugin = new StubPlugin("github", "GitHub");
@@ -79,7 +79,7 @@ public sealed class FeatureBootstrapHostedServiceTests
     {
         var catalog = new FeatureCatalog();
         var stateStore = new InMemoryFeatureStateStore();
-        await stateStore.SetAsync("github", new FeatureState(true, null), CancellationToken.None);
+        await stateStore.SetAsync("github", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
 
         var credentials = new InMemoryCredentialStore(isAvailable: true);
         await credentials.StoreAsync("scout/github/pat", "x", CancellationToken.None);
@@ -108,8 +108,8 @@ public sealed class FeatureBootstrapHostedServiceTests
     {
         var catalog = new FeatureCatalog();
         var stateStore = new InMemoryFeatureStateStore();
-        await stateStore.SetAsync("github", new FeatureState(true, null), CancellationToken.None);
-        await stateStore.SetAsync("kubernetes", new FeatureState(true, null), CancellationToken.None);
+        await stateStore.SetAsync("github", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
+        await stateStore.SetAsync("kubernetes", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
 
         var credentials = new InMemoryCredentialStore(isAvailable: true);
         await credentials.StoreAsync("scout/github/pat", "x", CancellationToken.None);
@@ -196,7 +196,7 @@ public sealed class FeatureBootstrapHostedServiceTests
         {
             return Task.FromResult(_state.TryGetValue(featureId, out var v)
                 ? v
-                : new FeatureState(false, null));
+                : FeatureStates.EmptyDisabled());
         }
 
         public Task SetAsync(string featureId, FeatureState state, CancellationToken ct)

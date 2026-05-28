@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Octokit;
+using Scout.Core.Features;
 using Scout.Plugin.GitHub.Functions;
 using Scout.Plugin.GitHub.Internal;
 using Scout.Plugin.GitHub.Tests.Internal;
@@ -23,7 +24,11 @@ public class CreateIssueLoggingTests
         var factory = Substitute.For<IGitHubClientFactory>();
         factory.CreateAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(client));
 
-        var sut = new GitHubFunctions(factory, sink, Options.Create(new GitHubPluginOptions()));
+        var settings = Substitute.For<IFeatureSettingsReader>();
+        settings.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(null));
+
+        var sut = new GitHubFunctions(factory, sink, Options.Create(new GitHubPluginOptions()), settings);
 
         var result = await sut.CreateIssueAsync("o", "r", secretTitle, secretBody);
 

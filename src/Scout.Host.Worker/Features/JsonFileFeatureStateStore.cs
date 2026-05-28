@@ -43,8 +43,8 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
 
         var state = await ReadAsync(ct).ConfigureAwait(false);
         return state.TryGetValue(featureId, out var entry)
-            ? new FeatureState(entry.Enabled ?? false, entry.LastError)
-            : new FeatureState(false, null);
+            ? Materialise(entry)
+            : EmptyState();
     }
 
     /// <inheritdoc/>
@@ -57,7 +57,10 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
         try
         {
             var current = await ReadAsync(ct).ConfigureAwait(false);
-            current[featureId] = new FeatureEntry(state.Enabled, state.LastError);
+            current[featureId] = new FeatureEntry(
+                state.Enabled,
+                state.LastError,
+                SerialiseSettings(state.Settings));
             await WriteAsync(current, ct).ConfigureAwait(false);
         }
         finally
@@ -73,11 +76,33 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
         var snapshot = new Dictionary<string, FeatureState>(state.Count, StringComparer.Ordinal);
         foreach (var (id, entry) in state)
         {
-            snapshot[id] = new FeatureState(entry.Enabled ?? false, entry.LastError);
+            snapshot[id] = Materialise(entry);
         }
 
         return snapshot;
     }
+
+    private static FeatureState Materialise(FeatureEntry entry) =>
+        new(
+            entry.Enabled ?? false,
+            entry.LastError,
+            entry.Settings is null
+                ? EmptySettings()
+                : new Dictionary<string, string?>(entry.Settings, StringComparer.Ordinal));
+
+    private static FeatureState EmptyState() =>
+        new(false, null, EmptySettings());
+
+    private static Dictionary<string, string?> EmptySettings() =>
+        new(StringComparer.Ordinal);
+
+    // The dictionary is serialised only when it carries values; an empty
+    // collection is dropped so legacy state files stay byte-identical.
+    private static Dictionary<string, string?>? SerialiseSettings(
+        IReadOnlyDictionary<string, string?> settings) =>
+        settings.Count == 0
+            ? null
+            : new Dictionary<string, string?>(settings, StringComparer.Ordinal);
 
     /// <inheritdoc/>
     public void Dispose() => _gate.Dispose();
@@ -145,5 +170,6 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
 
     private sealed record FeatureEntry(
         [property: JsonPropertyName("enabled")] bool? Enabled,
-        [property: JsonPropertyName("lastError")] string? LastError);
+        [property: JsonPropertyName("lastError")] string? LastError,
+        [property: JsonPropertyName("settings")] Dictionary<string, string?>? Settings);
 }

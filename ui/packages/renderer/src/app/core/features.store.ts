@@ -80,6 +80,27 @@ export class FeaturesStore {
     }
   }
 
+  async setup(
+    id: FeatureId,
+    credentials: Record<string, string>,
+    settings: Record<string, string | null>,
+  ): Promise<void> {
+    this.markBusy(id, true);
+    try {
+      const updated = await this._bridge.featureSetup({ id, credentials, settings });
+      this.replaceOne(updated);
+      this._lastError.set(null);
+    } catch (err: unknown) {
+      this.patchOne(id, {
+        status: 'error',
+        lastError: err instanceof Error ? err.message : String(err),
+      });
+      this._lastError.set(err instanceof Error ? err.message : String(err));
+    } finally {
+      this.markBusy(id, false);
+    }
+  }
+
   async clearCredentials(id: FeatureId): Promise<void> {
     this.markBusy(id, true);
     try {

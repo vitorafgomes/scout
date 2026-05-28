@@ -44,7 +44,7 @@ public sealed class JsonFileFeatureStateStoreTests
         {
             await store.SetAsync(
                 "github",
-                new FeatureState(Enabled: true, LastError: "boom"),
+                FeatureStates.EnabledWithError("boom"),
                 CancellationToken.None);
             store.Dispose();
 
@@ -77,8 +77,8 @@ public sealed class JsonFileFeatureStateStoreTests
         var (store, path) = NewStore();
         try
         {
-            await store.SetAsync("github", new FeatureState(true, null), CancellationToken.None);
-            await store.SetAsync("kubernetes", new FeatureState(false, "k err"), CancellationToken.None);
+            await store.SetAsync("github", FeatureStates.EnabledWithoutSettings(), CancellationToken.None);
+            await store.SetAsync("kubernetes", FeatureStates.DisabledWithError("k err"), CancellationToken.None);
 
             var all = await store.GetAllAsync(CancellationToken.None);
             all.Count.ShouldBe(2);
@@ -101,7 +101,7 @@ public sealed class JsonFileFeatureStateStoreTests
             var tasks = Enumerable.Range(0, 12)
                 .Select(i => Task.Run(() => store.SetAsync(
                     $"feature-{i % 3}",
-                    new FeatureState(i % 2 == 0, null),
+                    new FeatureState(i % 2 == 0, null, FeatureStates.EmptySettings()),
                     CancellationToken.None)))
                 .ToArray();
 

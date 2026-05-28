@@ -13,6 +13,7 @@ using Scout.Host.Worker.Features;
 using Scout.Host.Worker.Http;
 using Scout.Host.Worker.Providers;
 using Scout.Llm.Ollama;
+using Scout.Plugin.Agent;
 using Scout.Plugin.Chat;
 using Scout.Plugin.CloudStatus;
 using Scout.Plugin.CodeQA;
@@ -101,6 +102,10 @@ builder.Services
     .AddFeatures(builder.Configuration)
     .AddGitHubFeaturePlugin(builder.Configuration)
     .AddKubernetesFeaturePlugin(builder.Configuration)
+    // Agentic tool-calling router: runs after every feature so their tools
+    // are in the resolved kernel, but before the fallback so tool-aware
+    // completions win over the read-only stream.
+    .AddAgentRouter(builder.Configuration)
     // Fallback chat router must come LAST: it streams any unmatched
     // message through the LLM, so every keyword/regex router needs to
     // run first.

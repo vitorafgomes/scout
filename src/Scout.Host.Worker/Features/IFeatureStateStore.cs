@@ -2,9 +2,14 @@ namespace Scout.Host.Worker.Features;
 
 /// <summary>
 /// Persistent state for a single feature. <c>LastError</c> is null when
-/// the feature is healthy.
+/// the feature is healthy. <c>Settings</c> carries the non-secret
+/// configuration values the user typed into the feature setup dialog;
+/// empty when the feature has no settings or has never been configured.
 /// </summary>
-public sealed record FeatureState(bool Enabled, string? LastError);
+public sealed record FeatureState(
+    bool Enabled,
+    string? LastError,
+    IReadOnlyDictionary<string, string?> Settings);
 
 /// <summary>
 /// Persists per-feature toggle and last-error state across restarts.

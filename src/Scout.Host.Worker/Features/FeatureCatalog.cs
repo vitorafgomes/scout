@@ -27,6 +27,17 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 CreateLinkUrl: "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Scout",
                 CreateLinkLabel: "Create token on GitHub"),
         },
+        SettingsFields: new[]
+        {
+            new FeatureSettingFieldDto(
+                Key: "default_repo_url",
+                Kind: "text",
+                Label: "Default repository URL",
+                HelperText: "Used when a question doesn't name a repo (e.g. \"list open PRs\"). Paste the full URL - for example https://github.com/octocat/Hello-World.",
+                CreateLinkUrl: null,
+                CreateLinkLabel: null,
+                Required: true),
+        },
         WriteClass: WriteClass.None,
         ScopeMatrix: new[]
         {
@@ -79,6 +90,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 CreateLinkUrl: null,
                 CreateLinkLabel: null),
         },
+        SettingsFields: Array.Empty<FeatureSettingFieldDto>(),
         WriteClass: WriteClass.None,
         ScopeMatrix: null,
         SetupSteps: new[]

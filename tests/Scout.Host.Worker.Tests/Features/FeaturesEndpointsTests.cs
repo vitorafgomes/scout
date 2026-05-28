@@ -38,8 +38,30 @@ public sealed class FeaturesEndpointsTests : IDisposable
                     new JsonFileFeatureStateStore(
                         Options.Create(new FeatureStateStoreOptions { FilePath = _stateFile }),
                         NullLogger<JsonFileFeatureStateStore>.Instance));
+
+                ReplaceWithPassingValidator(services);
             },
         };
+    }
+
+    // The production GitHub validator probes the live API. Swap it for a
+    // deterministic always-valid stub so /setup tests stay offline.
+    private static void ReplaceWithPassingValidator(IServiceCollection services)
+    {
+        var validators = services
+            .Where(d => d.ServiceType == typeof(IFeatureCredentialValidator))
+            .ToList();
+        foreach (var descriptor in validators)
+        {
+            services.Remove(descriptor);
+        }
+
+        var stub = Substitute.For<IFeatureCredentialValidator>();
+        stub.FeatureId.Returns("github");
+        stub.ValidateAsync(Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<CancellationToken>())
+            .Returns(new FeatureCredentialValidationResult(
+                FeatureCredentialValidationOutcome.Valid));
+        services.AddSingleton(stub);
     }
 
     public void Dispose()
@@ -207,6 +229,194 @@ public sealed class FeaturesEndpointsTests : IDisposable
             "scout/github/pat",
             CancellationToken.None);
         present.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Setup_HappyPath_PersistsCredentialAndSettings_Returns200()
+    {
+        using var client = _factory.CreateClient();
+        var body = new
+        {
+            credentials = new Dictionary<string, string> { ["pat"] = "ghp_token" },
+            settings = new Dictionary<string, string?>
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            },
+        };
+        using var content = JsonContent.Create(body);
+        var response = await client.PostAsync("/features/github/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var dto = await response.Content.ReadFromJsonAsync<FeatureDto>();
+        dto.ShouldNotBeNull();
+        dto.HasCredentials.ShouldBeTrue();
+        dto.Settings.ShouldNotBeNull();
+        dto.Settings!["default_repo_url"].ShouldBe("https://github.com/octocat/Hello-World");
+
+        var stored = await _credentials.GetAsync("scout/github/pat", CancellationToken.None);
+        stored.ShouldBe("ghp_token");
+    }
+
+    [Fact]
+    public async Task Setup_MissingRequiredSetting_Returns400_WithDottedPath()
+    {
+        using var client = _factory.CreateClient();
+        var body = new
+        {
+            credentials = new Dictionary<string, string> { ["pat"] = "ghp_token" },
+            settings = new Dictionary<string, string?>(),
+        };
+        using var content = JsonContent.Create(body);
+        var response = await client.PostAsync("/features/github/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var error = await response.Content.ReadFromJsonAsync<FeatureSetupErrorResponse>();
+        error.ShouldNotBeNull();
+        error.Code.ShouldBe("features/validation-failed");
+        error.Errors.ShouldContainKey("settings.default_repo_url");
+
+        // Nothing must have been persisted on a validation failure.
+        var stored = await _credentials.ContainsAsync("scout/github/pat", CancellationToken.None);
+        stored.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Setup_MissingRequiredCredential_Returns400_WithDottedPath()
+    {
+        using var client = _factory.CreateClient();
+        var body = new
+        {
+            credentials = new Dictionary<string, string>(),
+            settings = new Dictionary<string, string?>
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            },
+        };
+        using var content = JsonContent.Create(body);
+        var response = await client.PostAsync("/features/github/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var error = await response.Content.ReadFromJsonAsync<FeatureSetupErrorResponse>();
+        error.ShouldNotBeNull();
+        error.Errors.ShouldContainKey("credentials.pat");
+    }
+
+    [Fact]
+    public async Task Setup_UnknownId_Returns404()
+    {
+        using var client = _factory.CreateClient();
+        using var content = JsonContent.Create(new { credentials = new Dictionary<string, string>() });
+        var response = await client.PostAsync("/features/unknown-feat/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Setup_CredentialStoreUnavailable_Returns500_AndDoesNotMutateSettings()
+    {
+        var failingCredentials = new FailingCredentialStore();
+        using var factory = new ScoutWorkerWebApplicationFactory
+        {
+            SwapFeatureStores = true,
+            ConfigureServicesOverride = services =>
+            {
+                services.AddSingleton(Substitute.For<IBinaryLocator>());
+                services.AddSingleton(Substitute.For<IOllamaApiClient>());
+                services.AddSingleton(Substitute.For<IProcessLauncher>());
+                services.AddSingleton<ILocalRuntimeRegistry>(new InMemoryLocalRuntimeRegistry());
+                services.AddSingleton(Substitute.For<ILocalRuntimeConfigStore>());
+
+                services.AddSingleton<ICredentialStore>(failingCredentials);
+                services.AddSingleton<IFeatureStateStore>(_ =>
+                    new JsonFileFeatureStateStore(
+                        Options.Create(new FeatureStateStoreOptions { FilePath = _stateFile }),
+                        NullLogger<JsonFileFeatureStateStore>.Instance));
+
+                ReplaceWithPassingValidator(services);
+            },
+        };
+
+        using var client = factory.CreateClient();
+        var body = new
+        {
+            credentials = new Dictionary<string, string> { ["pat"] = "ghp_token" },
+            settings = new Dictionary<string, string?>
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            },
+        };
+        using var content = JsonContent.Create(body);
+        var response = await client.PostAsync("/features/github/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+
+        // State store must be untouched: re-fetch shows the feature with no
+        // settings and disabled (credential write never reached settings).
+        var list = await client.GetAsync("/features/");
+        var dtos = await list.Content.ReadFromJsonAsync<FeatureDto[]>();
+        var github = dtos!.Single(d => d.Id == "github");
+        github.Settings.ShouldBeEmpty();
+        github.Enabled.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Setup_StateStoreThrows_Returns500()
+    {
+        var throwingStore = Substitute.For<IFeatureStateStore>();
+        throwingStore.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(FeatureStates.EmptyDisabled());
+        throwingStore.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, FeatureState>());
+        throwingStore.SetAsync(Arg.Any<string>(), Arg.Any<FeatureState>(), Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new IOException("disk full"));
+
+        using var factory = new ScoutWorkerWebApplicationFactory
+        {
+            SwapFeatureStores = true,
+            ConfigureServicesOverride = services =>
+            {
+                services.AddSingleton(Substitute.For<IBinaryLocator>());
+                services.AddSingleton(Substitute.For<IOllamaApiClient>());
+                services.AddSingleton(Substitute.For<IProcessLauncher>());
+                services.AddSingleton<ILocalRuntimeRegistry>(new InMemoryLocalRuntimeRegistry());
+                services.AddSingleton(Substitute.For<ILocalRuntimeConfigStore>());
+
+                services.AddSingleton<ICredentialStore>(new InMemoryCredentialStore(isAvailable: true));
+                services.AddSingleton(throwingStore);
+
+                ReplaceWithPassingValidator(services);
+            },
+        };
+
+        using var client = factory.CreateClient();
+        var body = new
+        {
+            credentials = new Dictionary<string, string> { ["pat"] = "ghp_token" },
+            settings = new Dictionary<string, string?>
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            },
+        };
+        using var content = JsonContent.Create(body);
+        var response = await client.PostAsync("/features/github/setup", content);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+    }
+
+    private sealed class FailingCredentialStore : ICredentialStore
+    {
+        public bool IsAvailable => false;
+
+        public Task<bool> StoreAsync(string key, string value, CancellationToken ct) =>
+            Task.FromResult(false);
+
+        public Task<string?> GetAsync(string key, CancellationToken ct) =>
+            Task.FromResult<string?>(null);
+
+        public Task DeleteAsync(string key, CancellationToken ct) => Task.CompletedTask;
+
+        public Task<bool> ContainsAsync(string key, CancellationToken ct) =>
+            Task.FromResult(false);
     }
 
     [Fact]

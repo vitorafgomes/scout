@@ -49,6 +49,8 @@ const githubDto: FeatureDto = {
   status: 'enabled',
   lastError: null,
   credentialFields: [],
+  settingsFields: [],
+  settings: {},
   scopeMatrix: null,
   setupSteps: null,
 };
@@ -101,6 +103,26 @@ describe('registerFeaturesHandlers', () => {
       const result = await handler(NULL_EVENT, { id: 'github', body: { token: 'abc' } });
 
       expect(client.post).toHaveBeenCalledWith('/features/github/credentials', { token: 'abc' });
+      expect(result).toEqual(githubDto);
+    });
+  });
+
+  describe('case 2b: featureSetup posts to /features/:id/setup with credentials and settings', () => {
+    it('forwards both sections in the request body', async () => {
+      const client = makeClient({ post: mock(async () => githubDto) });
+      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
+
+      const handler = ipcMain.handlers.get(CHANNEL.featureSetup)!;
+      const result = await handler(NULL_EVENT, {
+        id: 'github',
+        credentials: { pat: 'ghp_xxx' },
+        settings: { default_repo_url: 'https://github.com/acme/repo' },
+      });
+
+      expect(client.post).toHaveBeenCalledWith('/features/github/setup', {
+        credentials: { pat: 'ghp_xxx' },
+        settings: { default_repo_url: 'https://github.com/acme/repo' },
+      });
       expect(result).toEqual(githubDto);
     });
   });
@@ -181,7 +203,7 @@ describe('registerFeaturesHandlers', () => {
   });
 
   describe('case 7: returned unregister removes every handler', () => {
-    it('clears all five channels', () => {
+    it('clears all channels', () => {
       const client = makeClient();
       const unregister = registerFeaturesHandlers(
         ipcMain,
@@ -189,7 +211,7 @@ describe('registerFeaturesHandlers', () => {
         logger,
       );
 
-      expect(ipcMain.handlers.size).toBe(5);
+      expect(ipcMain.handlers.size).toBe(6);
       unregister();
       expect(ipcMain.handlers.size).toBe(0);
     });

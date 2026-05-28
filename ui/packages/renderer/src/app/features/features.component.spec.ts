@@ -19,6 +19,8 @@ const github: FeatureDto = {
   status: 'enabled',
   lastError: null,
   credentialFields: [],
+  settingsFields: [],
+  settings: {},
   scopeMatrix: null,
   setupSteps: null,
 };
@@ -33,6 +35,8 @@ const kubernetes: FeatureDto = {
   status: 'needs-credentials',
   lastError: null,
   credentialFields: [],
+  settingsFields: [],
+  settings: {},
   scopeMatrix: null,
   setupSteps: null,
 };
@@ -44,6 +48,7 @@ async function setup(): Promise<{
     featureEnable: ReturnType<typeof vi.fn>;
     featureDisable: ReturnType<typeof vi.fn>;
     featureSetCredentials: ReturnType<typeof vi.fn>;
+    featureSetup: ReturnType<typeof vi.fn>;
     featureDeleteCredentials: ReturnType<typeof vi.fn>;
   };
 }> {
@@ -52,6 +57,7 @@ async function setup(): Promise<{
     featureEnable: vi.fn(async () => github),
     featureDisable: vi.fn(async () => ({ ...github, enabled: false, status: 'disabled' as const })),
     featureSetCredentials: vi.fn(async () => github),
+    featureSetup: vi.fn(async () => github),
     featureDeleteCredentials: vi.fn(async () => kubernetes),
   };
 
@@ -94,7 +100,7 @@ describe('FeaturesComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="credential-dialog"]')).not.toBeNull();
   });
 
-  it('forwards dialog submit to store.storeCredentials and closes the dialog', async () => {
+  it('forwards dialog submit to store.setup and closes the dialog', async () => {
     const { fixture, bridge } = await setup();
 
     (fixture.nativeElement.querySelector('[data-test="cta-github"]') as HTMLButtonElement).click();
@@ -116,9 +122,10 @@ describe('FeaturesComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(bridge.featureSetCredentials).toHaveBeenCalledWith({
+    expect(bridge.featureSetup).toHaveBeenCalledWith({
       id: 'github',
-      body: { raw: '{"token":"abc"}' },
+      credentials: { raw: '{"token":"abc"}' },
+      settings: {},
     });
     expect(fixture.nativeElement.querySelector('[data-test="credential-dialog"]')).toBeNull();
   });

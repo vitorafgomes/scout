@@ -42,6 +42,10 @@ public sealed record FeatureScopeRowDto(
 /// <summary>
 /// Wire shape returned by <c>/features</c>. Mirrors the Angular
 /// <c>FeatureDto</c> contract in <c>ui/packages/shared</c>.
+/// <c>SettingsFields</c> is the schema for the non-secret configuration
+/// inputs rendered alongside the credential fields (empty when the
+/// feature has no settings); <c>Settings</c> carries their current
+/// values in clear (empty when never configured).
 /// </summary>
 public sealed record FeatureDto(
     string Id,
@@ -53,5 +57,7 @@ public sealed record FeatureDto(
     string Status,
     string? LastError,
     IReadOnlyList<FeatureCredentialFieldDto> CredentialFields,
+    IReadOnlyList<FeatureSettingFieldDto> SettingsFields,
+    IReadOnlyDictionary<string, string?> Settings,
     IReadOnlyList<FeatureScopeRowDto>? ScopeMatrix,
     IReadOnlyList<string>? SetupSteps);

@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Octokit;
+using Scout.Core.Features;
 using Scout.Plugin.GitHub.Functions;
 using Scout.Plugin.GitHub.Internal;
 using Scout.Plugin.GitHub.Tests.Internal;
@@ -255,13 +256,77 @@ public class GitHubFunctionsTests
         capturedTitle.ShouldBe("bug");
     }
 
-    private static GitHubFunctions BuildSut(IGitHubClient client)
+    private static GitHubFunctions BuildSut(
+        IGitHubClient client,
+        IFeatureSettingsReader? settings = null)
     {
         var factory = Substitute.For<IGitHubClientFactory>();
         factory.CreateAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(client));
         return new GitHubFunctions(
             factory,
             NullLogger<GitHubFunctions>.Instance,
-            Options.Create(new GitHubPluginOptions()));
+            Options.Create(new GitHubPluginOptions()),
+            settings ?? NoSettings());
+    }
+
+    private static IFeatureSettingsReader NoSettings()
+    {
+        var reader = Substitute.For<IFeatureSettingsReader>();
+        reader.GetAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(null));
+        return reader;
+    }
+
+    [Fact]
+    public async Task ListPullRequests_Falls_Back_To_Default_Repo_Url_When_Owner_Repo_Blank()
+    {
+        var client = Substitute.For<IGitHubClient>();
+        client.PullRequest
+            .GetAllForRepository("octocat", "Hello-World", Arg.Any<PullRequestRequest>())
+            .Returns(Task.FromResult<IReadOnlyList<PullRequest>>(Array.Empty<PullRequest>()));
+
+        var settings = Substitute.For<IFeatureSettingsReader>();
+        settings.GetAsync("github", "default_repo_url", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("https://github.com/octocat/Hello-World"));
+
+        var sut = BuildSut(client, settings);
+
+        var result = await sut.ListPullRequestsAsync(owner: "", repo: "");
+
+        result.Success.ShouldBeTrue();
+        await client.PullRequest.Received(1).GetAllForRepository(
+            "octocat",
+            "Hello-World",
+            Arg.Any<PullRequestRequest>());
+    }
+
+    [Fact]
+    public async Task CreateIssue_Falls_Back_To_Default_Repo_Url_When_Owner_Repo_Blank()
+    {
+        var client = Substitute.For<IGitHubClient>();
+        client.Issue.Create("octocat", "Hello-World", Arg.Any<NewIssue>())
+            .Returns(Task.FromResult(OctokitFakes.Issue(number: 9)));
+
+        var settings = Substitute.For<IFeatureSettingsReader>();
+        settings.GetAsync("github", "default_repo_url", Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("octocat/Hello-World"));
+
+        var sut = BuildSut(client, settings);
+
+        var result = await sut.CreateIssueAsync(owner: "", repo: "", "bug", "body");
+
+        result.Success.ShouldBeTrue();
+        await client.Issue.Received(1).Create("octocat", "Hello-World", Arg.Any<NewIssue>());
+    }
+
+    [Fact]
+    public async Task ListIssues_Fails_With_MissingRepo_When_No_Owner_Repo_And_No_Default()
+    {
+        var sut = BuildSut(Substitute.For<IGitHubClient>());
+
+        var result = await sut.ListIssuesAsync(owner: "", repo: "");
+
+        result.Success.ShouldBeFalse();
+        result.Error.ShouldBe(GitHubFunctions.ErrorMissingRepo);
     }
 }

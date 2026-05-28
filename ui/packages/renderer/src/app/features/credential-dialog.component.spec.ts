@@ -4,7 +4,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { FeatureDto } from '@scout/shared';
 
-import { CredentialDialogComponent } from './credential-dialog.component';
+import {
+  CredentialDialogComponent,
+  type CredentialDialogSubmit,
+} from './credential-dialog.component';
 
 function baseFeature(overrides: Partial<FeatureDto> = {}): FeatureDto {
   return {
@@ -17,6 +20,8 @@ function baseFeature(overrides: Partial<FeatureDto> = {}): FeatureDto {
     status: 'needs-credentials',
     lastError: null,
     credentialFields: [],
+    settingsFields: [],
+    settings: {},
     scopeMatrix: null,
     setupSteps: null,
     ...overrides,
@@ -36,6 +41,19 @@ function create(feature: FeatureDto): ComponentFixture<CredentialDialogComponent
 function setInput(fixture: ComponentFixture<CredentialDialogComponent>, key: string, value: string): void {
   const input = fixture.nativeElement.querySelector(
     `[data-test="input-${key}"]`,
+  ) as HTMLInputElement | HTMLTextAreaElement;
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+  fixture.detectChanges();
+}
+
+function setSettingInput(
+  fixture: ComponentFixture<CredentialDialogComponent>,
+  key: string,
+  value: string,
+): void {
+  const input = fixture.nativeElement.querySelector(
+    `[data-test="setting-input-${key}"]`,
   ) as HTMLInputElement | HTMLTextAreaElement;
   input.value = value;
   input.dispatchEvent(new Event('input'));
@@ -284,8 +302,8 @@ describe('CredentialDialogComponent', () => {
       }),
     );
 
-    const emissions: Record<string, string>[] = [];
-    fixture.componentInstance.submit.subscribe((v: Record<string, string>) => emissions.push(v));
+    const emissions: CredentialDialogSubmit[] = [];
+    fixture.componentInstance.submit.subscribe((v: CredentialDialogSubmit) => emissions.push(v));
 
     setInput(fixture, 'pat', 'ghp_abc');
     setInput(fixture, 'org', 'acme');
@@ -294,7 +312,131 @@ describe('CredentialDialogComponent', () => {
       fixture.nativeElement.querySelector('[data-test="credential-submit"]') as HTMLButtonElement
     ).click();
 
-    expect(emissions).toEqual([{ pat: 'ghp_abc', org: 'acme' }]);
+    expect(emissions).toEqual([{ credentials: { pat: 'ghp_abc', org: 'acme' }, settings: {} }]);
+  });
+
+  it('renders settings fields above the credential fields (PAT) in the DOM', () => {
+    const fixture = create(
+      baseFeature({
+        credentialFields: [
+          {
+            key: 'pat',
+            kind: 'password',
+            label: 'Personal Access Token',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+          },
+        ],
+        settingsFields: [
+          {
+            key: 'default_repo_url',
+            kind: 'text',
+            label: 'Default repository URL',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+            required: false,
+          },
+        ],
+      }),
+    );
+
+    const settingInput = fixture.nativeElement.querySelector(
+      '[data-test="setting-input-default_repo_url"]',
+    ) as HTMLElement;
+    const patInput = fixture.nativeElement.querySelector(
+      '[data-test="input-pat"]',
+    ) as HTMLElement;
+
+    expect(settingInput).not.toBeNull();
+    expect(patInput).not.toBeNull();
+
+    const position = settingInput.compareDocumentPosition(patInput);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('disables Save while a required setting is blank', () => {
+    const fixture = create(
+      baseFeature({
+        credentialFields: [
+          {
+            key: 'pat',
+            kind: 'password',
+            label: 'Personal Access Token',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+          },
+        ],
+        settingsFields: [
+          {
+            key: 'default_repo_url',
+            kind: 'text',
+            label: 'Default repository URL',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+            required: true,
+          },
+        ],
+      }),
+    );
+
+    const submit = fixture.nativeElement.querySelector(
+      '[data-test="credential-submit"]',
+    ) as HTMLButtonElement;
+
+    setInput(fixture, 'pat', 'ghp_abc');
+    expect(submit.disabled).toBe(true);
+
+    setSettingInput(fixture, 'default_repo_url', 'https://github.com/acme/repo');
+    expect(submit.disabled).toBe(false);
+  });
+
+  it('emits submit with separate credentials and settings sections', () => {
+    const fixture = create(
+      baseFeature({
+        credentialFields: [
+          {
+            key: 'pat',
+            kind: 'password',
+            label: 'Personal Access Token',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+          },
+        ],
+        settingsFields: [
+          {
+            key: 'default_repo_url',
+            kind: 'text',
+            label: 'Default repository URL',
+            helperText: null,
+            createLinkUrl: null,
+            createLinkLabel: null,
+            required: false,
+          },
+        ],
+      }),
+    );
+
+    const emissions: CredentialDialogSubmit[] = [];
+    fixture.componentInstance.submit.subscribe((v: CredentialDialogSubmit) => emissions.push(v));
+
+    setSettingInput(fixture, 'default_repo_url', 'https://github.com/acme/repo');
+    setInput(fixture, 'pat', 'ghp_abc');
+
+    (
+      fixture.nativeElement.querySelector('[data-test="credential-submit"]') as HTMLButtonElement
+    ).click();
+
+    expect(emissions).toEqual([
+      {
+        credentials: { pat: 'ghp_abc' },
+        settings: { default_repo_url: 'https://github.com/acme/repo' },
+      },
+    ]);
   });
 
   it('emits cancel when the cancel button is clicked', () => {
@@ -390,8 +532,8 @@ describe('CredentialDialogComponent', () => {
 
     it('emits { raw } from the legacy textarea', () => {
       const fixture = create(baseFeature({ credentialFields: [] }));
-      const emissions: Record<string, string>[] = [];
-      fixture.componentInstance.submit.subscribe((v: Record<string, string>) => emissions.push(v));
+      const emissions: CredentialDialogSubmit[] = [];
+      fixture.componentInstance.submit.subscribe((v: CredentialDialogSubmit) => emissions.push(v));
 
       const ta = fixture.nativeElement.querySelector(
         '[data-test="credential-textarea"]',
@@ -406,7 +548,7 @@ describe('CredentialDialogComponent', () => {
       expect(submit.disabled).toBe(false);
       submit.click();
 
-      expect(emissions).toEqual([{ raw: '{"token":"abc"}' }]);
+      expect(emissions).toEqual([{ credentials: { raw: '{"token":"abc"}' }, settings: {} }]);
     });
   });
 });

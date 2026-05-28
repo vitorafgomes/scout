@@ -50,6 +50,7 @@ describe('buildBridge', () => {
       'providerSetAutostart',
       'featuresList',
       'featureSetCredentials',
+      'featureSetup',
       'featureDeleteCredentials',
       'featureEnable',
       'featureDisable',
@@ -245,6 +246,8 @@ describe('buildBridge', () => {
       status: 'disabled',
       lastError: null,
       credentialFields: [],
+      settingsFields: [],
+      settings: {},
       scopeMatrix: null,
       setupSteps: null,
     };
@@ -254,6 +257,37 @@ describe('buildBridge', () => {
     const result = await bridge.featureSetCredentials(req);
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureSetCredentials, req);
+    expect(result).toBe(expected);
+  });
+
+  it('featureSetup forwards the credentials and settings to the matching channel', async () => {
+    const ipc = makeFakeIpc();
+    const req = {
+      id: 'github' as const,
+      credentials: { pat: 'ghp_xxx' },
+      settings: { default_repo_url: 'https://github.com/acme/repo' },
+    };
+    const expected: FeatureDto = {
+      id: 'github',
+      displayName: 'GitHub',
+      description: '',
+      requiresCredentials: true,
+      hasCredentials: true,
+      enabled: false,
+      status: 'disabled',
+      lastError: null,
+      credentialFields: [],
+      settingsFields: [],
+      settings: {},
+      scopeMatrix: null,
+      setupSteps: null,
+    };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.featureSetup(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureSetup, req);
     expect(result).toBe(expected);
   });
 

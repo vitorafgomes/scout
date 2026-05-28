@@ -38,6 +38,7 @@ export const CHANNEL = {
   providerSetAutostart: 'scout:providers.setAutostart',
   featuresList: 'scout:features.list',
   featureSetCredentials: 'scout:features.setCredentials',
+  featureSetup: 'scout:features.setup',
   featureDeleteCredentials: 'scout:features.deleteCredentials',
   featureEnable: 'scout:features.enable',
   featureDisable: 'scout:features.disable',
@@ -293,6 +294,16 @@ export interface FeatureCredentialFieldDto {
   readonly createLinkLabel: string | null;
 }
 
+export interface FeatureSettingFieldDto {
+  readonly key: string;
+  readonly kind: 'text' | 'password' | 'textarea';
+  readonly label: string;
+  readonly helperText: string | null;
+  readonly createLinkUrl: string | null;
+  readonly createLinkLabel: string | null;
+  readonly required: boolean;
+}
+
 export interface FeatureScopeRowDto {
   readonly scope: string;
   readonly actions: readonly string[];
@@ -308,6 +319,8 @@ export interface FeatureDto {
   readonly status: FeatureStatus;
   readonly lastError: string | null;
   readonly credentialFields: readonly FeatureCredentialFieldDto[];
+  readonly settingsFields: readonly FeatureSettingFieldDto[];
+  readonly settings: Readonly<Record<string, string | null>>;
   readonly scopeMatrix: readonly FeatureScopeRowDto[] | null;
   readonly setupSteps: readonly string[] | null;
 }
@@ -323,6 +336,12 @@ export interface FeatureIdRequest {
 export interface FeatureSetCredentialsRequest {
   readonly id: FeatureId;
   readonly body: Readonly<Record<string, string>>;
+}
+
+export interface FeatureSetupRequest {
+  readonly id: FeatureId;
+  readonly credentials: Readonly<Record<string, string>>;
+  readonly settings: Readonly<Record<string, string | null>>;
 }
 
 export interface ScoutBridge {
@@ -367,6 +386,7 @@ export interface ScoutBridge {
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
   featuresList(): Promise<FeaturesListResponse>;
   featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
+  featureSetup(req: FeatureSetupRequest): Promise<FeatureDto>;
   featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto>;
   featureEnable(req: FeatureIdRequest): Promise<FeatureDto>;
   featureDisable(req: FeatureIdRequest): Promise<FeatureDto>;

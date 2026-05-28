@@ -91,9 +91,11 @@ export {
   FEATURE_IDS,
   type FeatureStatus,
   type FeatureCredentialFieldDto,
+  type FeatureSettingFieldDto,
   type FeatureScopeRowDto,
   type FeatureDto,
   type FeaturesListResponse,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
+  type FeatureSetupRequest,
 } from './ipc-contract.js';

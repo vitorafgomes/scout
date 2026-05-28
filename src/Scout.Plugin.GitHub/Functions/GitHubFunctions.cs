@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Octokit;
+using Scout.Core.Features;
 using Scout.Plugin.GitHub.Contracts;
 using Scout.Plugin.GitHub.Internal;
 
@@ -25,20 +26,26 @@ public sealed class GitHubFunctions
     internal const string ErrorRateLimited = "rate-limited";
     internal const string ErrorMissingScopes = "missing-scopes";
     internal const string ErrorGitHubApi = "github-api-error";
+    internal const string ErrorMissingRepo = "missing-repo";
+
+    private const string DefaultRepoSettingKey = "default_repo_url";
 
     private readonly IGitHubClientFactory _factory;
     private readonly ILogger<GitHubFunctions> _logger;
     private readonly IOptions<GitHubPluginOptions> _options;
+    private readonly IFeatureSettingsReader _settings;
 
     /// <summary>Construct the function surface.</summary>
     public GitHubFunctions(
         IGitHubClientFactory factory,
         ILogger<GitHubFunctions> logger,
-        IOptions<GitHubPluginOptions> options)
+        IOptions<GitHubPluginOptions> options,
+        IFeatureSettingsReader settings)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
     }
 
     /// <summary>List repositories visible to the authenticated user.</summary>
@@ -90,15 +97,14 @@ public sealed class GitHubFunctions
         string? state = "open",
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repo);
-
-        return InvokeAsync<IReadOnlyList<GitHubPullRequestSummary>>(
-            async client =>
+        return InvokeWithRepoAsync<IReadOnlyList<GitHubPullRequestSummary>>(
+            owner,
+            repo,
+            async (client, o, r) =>
             {
                 var request = new PullRequestRequest { State = ParseItemStateFilter(state) };
                 var prs = await client.PullRequest
-                    .GetAllForRepository(owner, repo, request)
+                    .GetAllForRepository(o, r, request)
                     .ConfigureAwait(false);
 
                 var mapped = new List<GitHubPullRequestSummary>(prs.Count);
@@ -111,6 +117,47 @@ public sealed class GitHubFunctions
             cancellationToken);
     }
 
+    private async Task<GitHubResult<T>> InvokeWithRepoAsync<T>(
+        string? owner,
+        string? repo,
+        Func<IGitHubClient, string, string, Task<T>> call,
+        CancellationToken cancellationToken)
+    {
+        var resolved = await ResolveOwnerRepoAsync(owner, repo, cancellationToken)
+            .ConfigureAwait(false);
+        if (resolved is not (string o, string r))
+        {
+            return GitHubResult<T>.Fail(
+                ErrorMissingRepo,
+                "No owner/repo supplied and no usable 'default_repo_url' setting is configured for the GitHub feature.");
+        }
+
+        return await InvokeAsync<T>(client => call(client, o, r), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    // When owner/repo arrive blank, fall back to the GitHub feature's
+    // 'default_repo_url' setting and parse it. Returns null when neither an
+    // explicit pair nor a parseable default is available.
+    private async Task<(string Owner, string Repo)?> ResolveOwnerRepoAsync(
+        string? owner,
+        string? repo,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(owner) && !string.IsNullOrWhiteSpace(repo))
+        {
+            return (owner.Trim(), repo.Trim());
+        }
+
+        var defaultUrl = await _settings
+            .GetAsync(GitHubPlugin.FeatureIdValue, DefaultRepoSettingKey, cancellationToken)
+            .ConfigureAwait(false);
+
+        return GitHubRepoUrlParser.TryParse(defaultUrl, out var o, out var r)
+            ? (o, r)
+            : null;
+    }
+
     /// <summary>Get detailed information about a single pull request, including changed files.</summary>
     [KernelFunction("get_pull_request_details")]
     [Description("Read-only: fetch full details for one pull request including changed file list, additions and deletions.")]
@@ -120,18 +167,18 @@ public sealed class GitHubFunctions
         [Description("Pull request number (positive integer).")] int number,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repo);
         if (number <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(number), "Pull request number must be positive.");
         }
 
-        return InvokeAsync<GitHubPullRequestDetails>(
-            async client =>
+        return InvokeWithRepoAsync<GitHubPullRequestDetails>(
+            owner,
+            repo,
+            async (client, o, r) =>
             {
-                var pr = await client.PullRequest.Get(owner, repo, number).ConfigureAwait(false);
-                var files = await client.PullRequest.Files(owner, repo, number).ConfigureAwait(false);
+                var pr = await client.PullRequest.Get(o, r, number).ConfigureAwait(false);
+                var files = await client.PullRequest.Files(o, r, number).ConfigureAwait(false);
 
                 var mappedFiles = new List<GitHubChangedFile>(files.Count);
                 foreach (var f in files)
@@ -154,15 +201,14 @@ public sealed class GitHubFunctions
         string? state = "open",
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repo);
-
-        return InvokeAsync<IReadOnlyList<GitHubIssueSummary>>(
-            async client =>
+        return InvokeWithRepoAsync<IReadOnlyList<GitHubIssueSummary>>(
+            owner,
+            repo,
+            async (client, o, r) =>
             {
                 var request = new RepositoryIssueRequest { State = ParseItemStateFilter(state) };
                 var issues = await client.Issue
-                    .GetAllForRepository(owner, repo, request)
+                    .GetAllForRepository(o, r, request)
                     .ConfigureAwait(false);
 
                 var mapped = new List<GitHubIssueSummary>(issues.Count);
@@ -188,17 +234,17 @@ public sealed class GitHubFunctions
         [Description("Issue number (positive integer).")] int number,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repo);
         if (number <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(number), "Issue number must be positive.");
         }
 
-        return InvokeAsync<GitHubIssueDetails>(
-            async client =>
+        return InvokeWithRepoAsync<GitHubIssueDetails>(
+            owner,
+            repo,
+            async (client, o, r) =>
             {
-                var issue = await client.Issue.Get(owner, repo, number).ConfigureAwait(false);
+                var issue = await client.Issue.Get(o, r, number).ConfigureAwait(false);
                 return GitHubMappers.MapDetails(issue);
             },
             cancellationToken);
@@ -219,13 +265,13 @@ public sealed class GitHubFunctions
         IReadOnlyList<string>? labels = null,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(owner);
-        ArgumentException.ThrowIfNullOrWhiteSpace(repo);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentNullException.ThrowIfNull(body);
 
-        return InvokeAsync<GitHubCreatedIssue>(
-            async client =>
+        return InvokeWithRepoAsync<GitHubCreatedIssue>(
+            owner,
+            repo,
+            async (client, o, r) =>
             {
                 var newIssue = new NewIssue(title)
                 {
@@ -242,14 +288,14 @@ public sealed class GitHubFunctions
                     }
                 }
 
-                var created = await client.Issue.Create(owner, repo, newIssue).ConfigureAwait(false);
+                var created = await client.Issue.Create(o, r, newIssue).ConfigureAwait(false);
 
                 // Audit log: never include the title text or body. The
                 // SHA256 prefix lets us correlate without leaking content.
                 _logger.LogInformation(
                     "github.create_issue: owner={Owner} repo={Repo} number={Number} titleSha256First8={TitleSha256First8}",
-                    owner,
-                    repo,
+                    o,
+                    r,
                     created.Number,
                     Sha256First8(title));
 

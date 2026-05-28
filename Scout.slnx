@@ -4,6 +4,7 @@
     <Project Path="src/Scout.Core/Scout.Core.csproj" />
     <Project Path="src/Scout.Host.Worker/Scout.Host.Worker.csproj" />
     <Project Path="src/Scout.Llm.Ollama/Scout.Llm.Ollama.csproj" />
+    <Project Path="src/Scout.Plugin.Agent/Scout.Plugin.Agent.csproj" />
     <Project Path="src/Scout.Plugin.Chat/Scout.Plugin.Chat.csproj" />
     <Project Path="src/Scout.Plugin.CloudStatus/Scout.Plugin.CloudStatus.csproj" />
     <Project Path="src/Scout.Plugin.CodeQA/Scout.Plugin.CodeQA.csproj" />
@@ -16,6 +17,7 @@
     <Project Path="tests/Scout.Core.Tests/Scout.Core.Tests.csproj" />
     <Project Path="tests/Scout.Host.Worker.Tests/Scout.Host.Worker.Tests.csproj" />
     <Project Path="tests/Scout.Llm.Ollama.Tests/Scout.Llm.Ollama.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.Agent.Tests/Scout.Plugin.Agent.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.Chat.Tests/Scout.Plugin.Chat.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CloudStatus.Tests/Scout.Plugin.CloudStatus.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.CodeQA.Tests/Scout.Plugin.CodeQA.Tests.csproj" />

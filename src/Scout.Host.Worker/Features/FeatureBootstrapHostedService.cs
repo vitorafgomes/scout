@@ -93,7 +93,7 @@ public sealed class FeatureBootstrapHostedService : IHostedService
                 {
                     await _stateStore.SetAsync(
                         metadata.Id,
-                        new FeatureState(Enabled: true, LastError: ex.Message),
+                        FeatureStates.EnabledWithError(ex.Message),
                         cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception persistEx)

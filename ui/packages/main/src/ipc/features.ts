@@ -8,6 +8,7 @@ import {
   type FeatureId,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
+  type FeatureSetupRequest,
   type FeaturesListResponse,
 } from '@scout/shared';
 import type { WorkerHttpClient } from '../worker/http-client.js';
@@ -47,6 +48,22 @@ export function registerFeaturesHandlers(
         return await client.post<FeatureDto>(`/features/${req.id}/credentials`, req.body);
       } catch (err: unknown) {
         logger.warn('features: setCredentials failed', { id: req.id, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.featureSetup,
+    async (_event, req: FeatureSetupRequest): Promise<FeatureDto> => {
+      try {
+        assertFeatureId(req.id);
+        return await client.post<FeatureDto>(`/features/${req.id}/setup`, {
+          credentials: req.credentials,
+          settings: req.settings,
+        });
+      } catch (err: unknown) {
+        logger.warn('features: setup failed', { id: req.id, err: String(err) });
         throwSerialized(err);
       }
     },
@@ -94,6 +111,7 @@ export function registerFeaturesHandlers(
   return () => {
     ipcMain.removeHandler(CHANNEL.featuresList);
     ipcMain.removeHandler(CHANNEL.featureSetCredentials);
+    ipcMain.removeHandler(CHANNEL.featureSetup);
     ipcMain.removeHandler(CHANNEL.featureDeleteCredentials);
     ipcMain.removeHandler(CHANNEL.featureEnable);
     ipcMain.removeHandler(CHANNEL.featureDisable);

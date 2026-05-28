@@ -12,6 +12,7 @@ interface BridgeStub {
   featureEnable: ReturnType<typeof vi.fn>;
   featureDisable: ReturnType<typeof vi.fn>;
   featureSetCredentials: ReturnType<typeof vi.fn>;
+  featureSetup: ReturnType<typeof vi.fn>;
   featureDeleteCredentials: ReturnType<typeof vi.fn>;
 }
 
@@ -21,6 +22,7 @@ function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
     featureEnable: vi.fn(),
     featureDisable: vi.fn(),
     featureSetCredentials: vi.fn(),
+    featureSetup: vi.fn(),
     featureDeleteCredentials: vi.fn(),
     ...overrides,
   };
@@ -46,6 +48,8 @@ const githubDisabled: FeatureDto = {
   status: 'needs-credentials',
   lastError: null,
   credentialFields: [],
+  settingsFields: [],
+  settings: {},
   scopeMatrix: null,
   setupSteps: null,
 };
@@ -128,6 +132,32 @@ describe('FeaturesStore', () => {
     expect(bridge.featureSetCredentials).toHaveBeenCalledWith({
       id: 'github',
       body: { raw: '{}' },
+    });
+    expect(store.features()[0]!.hasCredentials).toBe(true);
+  });
+
+  it('setup forwards credentials and settings to the bridge and replaces the feature', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+      featureSetup: vi.fn(async () => ({
+        ...githubDisabled,
+        hasCredentials: true,
+        status: 'disabled' as const,
+      })),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.setup(
+      'github',
+      { pat: 'ghp_abc' },
+      { default_repo_url: 'https://github.com/acme/repo' },
+    );
+
+    expect(bridge.featureSetup).toHaveBeenCalledWith({
+      id: 'github',
+      credentials: { pat: 'ghp_abc' },
+      settings: { default_repo_url: 'https://github.com/acme/repo' },
     });
     expect(store.features()[0]!.hasCredentials).toBe(true);
   });

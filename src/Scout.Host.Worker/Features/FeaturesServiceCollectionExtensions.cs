@@ -28,6 +28,7 @@ public static class FeaturesServiceCollectionExtensions
 
         services.AddSingleton<IFeatureCatalog, FeatureCatalog>();
         services.AddSingleton<IFeatureStateStore, JsonFileFeatureStateStore>();
+        services.AddSingleton<IFeatureSettingsReader, FeatureStateSettingsReader>();
         services.AddSingleton<FeaturePluginFactoryRegistry>();
         services.AddSingleton<IFeatureKernelRegistrar, FeatureKernelRegistrar>();
 

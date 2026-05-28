@@ -8,7 +8,12 @@ import {
   signal,
 } from '@angular/core';
 
-import type { FeatureDto } from '@scout/shared';
+import type { FeatureDto, FeatureSettingFieldDto } from '@scout/shared';
+
+export interface CredentialDialogSubmit {
+  readonly credentials: Record<string, string>;
+  readonly settings: Record<string, string>;
+}
 
 // Schema-driven credential dialog. The shape of the form is driven entirely by
 // `feature.credentialFields` and `feature.scopeMatrix` returned by the worker.
@@ -37,6 +42,59 @@ import type { FeatureDto } from '@scout/shared';
         </header>
 
         @if (useSchemaForm()) {
+          @for (field of settingsFields(); track field.key) {
+            <label class="field" [attr.data-test]="'setting-field-' + field.key">
+              <span class="label">{{ field.label }}</span>
+
+              @switch (field.kind) {
+                @case ('textarea') {
+                  <textarea
+                    rows="6"
+                    [attr.data-test]="'setting-input-' + field.key"
+                    [value]="settingValueOf(field.key)"
+                    (input)="onSettingInput(field.key, $any($event.target).value)"
+                  ></textarea>
+                }
+                @case ('password') {
+                  <input
+                    type="password"
+                    autocomplete="off"
+                    [attr.data-test]="'setting-input-' + field.key"
+                    [value]="settingValueOf(field.key)"
+                    (input)="onSettingInput(field.key, $any($event.target).value)"
+                  />
+                }
+                @default {
+                  <input
+                    type="text"
+                    [attr.data-test]="'setting-input-' + field.key"
+                    [value]="settingValueOf(field.key)"
+                    (input)="onSettingInput(field.key, $any($event.target).value)"
+                  />
+                }
+              }
+
+              @if (field.helperText !== null) {
+                <p class="helper" [attr.data-test]="'setting-helper-' + field.key">
+                  {{ field.helperText }}
+                </p>
+              }
+
+              @if (field.createLinkUrl !== null) {
+                <a
+                  class="link-btn"
+                  target="_blank"
+                  rel="noopener"
+                  [attr.href]="field.createLinkUrl"
+                  [attr.data-test]="'setting-link-' + field.key"
+                  (click)="onCreateLinkClick(field.createLinkUrl, $event)"
+                >
+                  {{ field.createLinkLabel ?? 'Open' }}
+                </a>
+              }
+            </label>
+          }
+
           @for (field of feature.credentialFields; track field.key) {
             <label class="field" [attr.data-test]="'field-' + field.key">
               <span class="label">{{ field.label }}</span>
@@ -316,11 +374,14 @@ import type { FeatureDto } from '@scout/shared';
 export class CredentialDialogComponent {
   @Input({ required: true }) feature!: FeatureDto;
 
-  @Output() readonly submit = new EventEmitter<Record<string, string>>();
+  @Output() readonly submit = new EventEmitter<CredentialDialogSubmit>();
   @Output() readonly cancel = new EventEmitter<void>();
 
   // Schema form state: one entry per credential field key.
   private readonly _values = signal<Readonly<Record<string, string>>>({});
+
+  // Separate state for settings field values; keys never collide with credentials.
+  private readonly _settingValues = signal<Readonly<Record<string, string>>>({});
 
   // Legacy single-textarea fallback (when worker has no schema yet).
   readonly legacyValue = signal<string>('');
@@ -328,6 +389,11 @@ export class CredentialDialogComponent {
   readonly useSchemaForm = computed<boolean>(() => {
     const fields = this.feature?.credentialFields;
     return Array.isArray(fields) && fields.length > 0;
+  });
+
+  // Guard against a stale worker that predates settingsFields on the DTO.
+  readonly settingsFields = computed<readonly FeatureSettingFieldDto[]>(() => {
+    return this.feature?.settingsFields ?? [];
   });
 
   readonly canSubmit = computed<boolean>(() => {
@@ -340,6 +406,12 @@ export class CredentialDialogComponent {
       const v = values[field.key];
       if (v === undefined || v.trim().length === 0) return false;
     }
+    const settingValues = this._settingValues();
+    for (const field of this.settingsFields()) {
+      if (!field.required) continue;
+      const v = settingValues[field.key];
+      if (v === undefined || v.trim().length === 0) return false;
+    }
     return true;
   });
 
@@ -349,6 +421,14 @@ export class CredentialDialogComponent {
 
   onFieldInput(key: string, next: string): void {
     this._values.set({ ...this._values(), [key]: next });
+  }
+
+  settingValueOf(key: string): string {
+    return this._settingValues()[key] ?? '';
+  }
+
+  onSettingInput(key: string, next: string): void {
+    this._settingValues.set({ ...this._settingValues(), [key]: next });
   }
 
   onLegacyInput(next: string): void {
@@ -367,19 +447,28 @@ export class CredentialDialogComponent {
   onSubmit(): void {
     if (!this.canSubmit()) return;
     if (!this.useSchemaForm()) {
-      this.submit.emit({ raw: this.legacyValue().trim() });
+      this.submit.emit({ credentials: { raw: this.legacyValue().trim() }, settings: {} });
       return;
     }
     const values = this._values();
-    const payload: Record<string, string> = {};
+    const credentials: Record<string, string> = {};
     for (const field of this.feature.credentialFields) {
       const v = values[field.key];
       if (v === undefined) continue;
       const trimmed = v.trim();
       if (trimmed.length === 0) continue;
-      payload[field.key] = trimmed;
+      credentials[field.key] = trimmed;
     }
-    this.submit.emit(payload);
+    const settingValues = this._settingValues();
+    const settings: Record<string, string> = {};
+    for (const field of this.settingsFields()) {
+      const v = settingValues[field.key];
+      if (v === undefined) continue;
+      const trimmed = v.trim();
+      if (trimmed.length === 0) continue;
+      settings[field.key] = trimmed;
+    }
+    this.submit.emit({ credentials, settings });
   }
 }
 

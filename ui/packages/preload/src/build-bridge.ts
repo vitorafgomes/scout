@@ -180,6 +180,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    featureSetup(req) {
+      return ipc.invoke(CHANNEL.featureSetup, req) as ReturnType<ScoutBridge['featureSetup']>;
+    },
+
     featureDeleteCredentials(req) {
       return ipc.invoke(CHANNEL.featureDeleteCredentials, req) as ReturnType<
         ScoutBridge['featureDeleteCredentials']

@@ -45,6 +45,7 @@ import {
   type FeatureDto,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
+  type FeatureSetupRequest,
   type FeaturesListResponse,
 } from '@scout/shared';
 
@@ -137,6 +138,7 @@ function createFakeBridge(): ScoutBridge {
     featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
     featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
       rejectNotAvailable(),
+    featureSetup: (_req: FeatureSetupRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> =>
       rejectNotAvailable(),
     featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
@@ -276,6 +278,10 @@ export class ScoutBridgeService {
 
   async featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto> {
     return this.bridge.featureSetCredentials(req);
+  }
+
+  async featureSetup(req: FeatureSetupRequest): Promise<FeatureDto> {
+    return this.bridge.featureSetup(req);
   }
 
   async featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto> {

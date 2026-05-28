@@ -91,6 +91,7 @@ public class GitHubPluginTests
             Options.Create(new GitHubPluginOptions()));
         services.AddSingleton<Microsoft.Extensions.Logging.ILogger<GitHubFunctions>>(
             NullLogger<GitHubFunctions>.Instance);
+        services.AddSingleton(Substitute.For<IFeatureSettingsReader>());
         services.AddSingleton<GitHubFunctions>();
         return services.BuildServiceProvider();
     }
