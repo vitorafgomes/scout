@@ -3,12 +3,14 @@
     <Project Path="src/Scout.Llm/Scout.Llm.csproj" />
     <Project Path="src/Scout.Conversation/Scout.Conversation.csproj" />
     <Project Path="src/Scout.Adapter.Discord/Scout.Adapter.Discord.csproj" />
+    <Project Path="src/Scout.Adapter.Slack/Scout.Adapter.Slack.csproj" />
     <Project Path="src/Scout.Host.Console/Scout.Host.Console.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />
     <Project Path="tests/Scout.Conversation.Tests/Scout.Conversation.Tests.csproj" />
     <Project Path="tests/Scout.Adapter.Discord.Tests/Scout.Adapter.Discord.Tests.csproj" />
+    <Project Path="tests/Scout.Adapter.Slack.Tests/Scout.Adapter.Slack.Tests.csproj" />
     <Project Path="tests/Scout.Host.Console.Tests/Scout.Host.Console.Tests.csproj" />
   </Folder>
 </Solution>
