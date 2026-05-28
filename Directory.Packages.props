@@ -26,6 +26,9 @@
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.8" />
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="Discord.Net" Version="3.19.1" />
+    <PackageVersion Include="Microsoft.Bot.Builder" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Builder.Integration.AspNet.Core" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Schema" Version="4.23.1" />
     <PackageVersion Include="Octokit" Version="14.0.0" />
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.77.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.74.0-alpha" />
