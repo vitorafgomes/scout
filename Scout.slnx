@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Scout.Llm/Scout.Llm.csproj" />
+    <Project Path="src/Scout.Conversation/Scout.Conversation.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />

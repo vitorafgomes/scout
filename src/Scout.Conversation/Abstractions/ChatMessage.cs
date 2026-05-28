@@ -1,4 +1,4 @@
-namespace Scout.Llm.Abstractions;
+namespace Scout.Conversation.Abstractions;
 
 /// <summary>
 /// Inbound message received by a chat adapter and handed to the Scout core.

@@ -1,4 +1,4 @@
-namespace Scout.Llm.Abstractions;
+namespace Scout.Conversation.Abstractions;
 
 /// <summary>
 /// Adapter-agnostic citation that backs a <see cref="ChatResponse"/>. The
