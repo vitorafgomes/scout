@@ -20,38 +20,46 @@ if (ControlPlaneEndpoint.UseNamedPipe && OperatingSystem.IsWindows())
 string? socketPath = null;
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
-    var logger = LoggerFactory
-        .Create(b => b.AddConsole())
-        .CreateLogger("Scout.Host.ControlPlane.Transport");
-
     socketPath = KestrelTransportConfigurator.Configure(
         kestrel,
         socketPathOverride: builder.Configuration["Scout:ControlPlane:SocketPath"],
-        pipeName: ControlPlaneEndpoint.DefaultPipeName,
-        logger);
+        pipeName: ControlPlaneEndpoint.DefaultPipeName);
 });
 
 var app = builder.Build();
 app.MapControlPlaneServices();
 
-// Once Kestrel has created the socket, tighten it to 0600. Named pipes are
-// ACL'd at creation time, so this only applies to the UDS path.
+// Fail loud if the native stat the UDS anti-hijack pre-flight depends on
+// cannot be trusted on this platform (unresolved symbol, unsupported arch,
+// mis-ported struct offsets). Runs before Kestrel binds in RunAsync.
+if (!OperatingSystem.IsWindows() && !NativeUnix.SelfTest())
+{
+    app.Logger.LogCritical(
+        "UDS ownership self-test failed: native stat is unreliable on this platform. Refusing to start.");
+    throw new InvalidOperationException(
+        "Control plane cannot verify Unix socket ownership on this platform; refusing to start.");
+}
+
+// Once Kestrel has created the socket, log the bind line and tighten it to
+// 0600. Named pipes are ACL'd at creation time, so the chmod only applies to
+// the UDS path. Logging uses the host's configured logger, not a throwaway.
 if (socketPath is not null && !OperatingSystem.IsWindows())
 {
-    var pathToHarden = socketPath;
+    var resolvedPath = socketPath;
     app.Lifetime.ApplicationStarted.Register(() =>
     {
         if (OperatingSystem.IsWindows())
         {
             return;
         }
+        app.Logger.LogInformation("Control plane listening on UDS {SocketPath} (h2c)", resolvedPath);
         try
         {
-            ControlPlaneEndpoint.HardenSocket(pathToHarden);
+            ControlPlaneEndpoint.HardenSocket(resolvedPath);
         }
         catch (Exception ex)
         {
-            app.Logger.LogWarning(ex, "Failed to harden socket permissions for {SocketPath}", pathToHarden);
+            app.Logger.LogWarning(ex, "Failed to harden socket permissions for {SocketPath}", resolvedPath);
         }
     });
 }
