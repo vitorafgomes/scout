@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+import "protos/providers.proto";
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+// Model management on a local runtime provider. Replaces the old
+// SSE-based pull-progress endpoint with a gRPC server stream.
+service Models {
+  rpc PullModel(PullModelRequest) returns (stream ModelPullProgress);
+  rpc DeleteModel(DeleteModelRequest) returns (DeleteModelResponse);
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+}
+
+message PullModelRequest {
+  ProviderId provider = 1;
+  string model = 2;
+}
+
+// One progress frame emitted while a model is being pulled.
+message ModelPullProgress {
+  string status = 1;
+  // 0..100 derived from completed/total when both are present.
+  double percent = 2;
+  int64 completed_bytes = 3;
+  int64 total_bytes = 4;
+}
+
+message DeleteModelRequest {
+  ProviderId provider = 1;
+  string model = 2;
+}
+
+message DeleteModelResponse {
+  string model = 1;
+}
+
+message ListModelsRequest {
+  ProviderId provider = 1;
+}
+
+message ListModelsResponse {
+  repeated ProviderModel models = 1;
+}
