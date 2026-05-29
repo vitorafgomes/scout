@@ -17,8 +17,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <Protobuf Include="protos\providers.proto" GrpcServices="Server" />
-    <Protobuf Include="protos\models.proto" GrpcServices="Server" />
-    <Protobuf Include="protos\features.proto" GrpcServices="Server" />
+    <!-- Server stubs for the host; client stubs for the in-process test client. -->
+    <Protobuf Include="protos\providers.proto" GrpcServices="Both" />
+    <Protobuf Include="protos\models.proto" GrpcServices="Both" />
+    <Protobuf Include="protos\features.proto" GrpcServices="Both" />
   </ItemGroup>
 </Project>
