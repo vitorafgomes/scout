@@ -55,10 +55,19 @@ public static class ControlPlaneEndpoint
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(socketPath);
 
-        if (!NativeUnix.TryStat(socketPath, out var info))
+        var outcome = NativeUnix.TryStat(socketPath, out var info);
+        if (outcome == NativeUnix.StatOutcome.NotFound)
         {
             // Nothing there: clean slate.
             return;
+        }
+
+        if (outcome == NativeUnix.StatOutcome.Unavailable)
+        {
+            // Cannot verify ownership of an existing path. Fail closed: refuse
+            // to bind rather than risk binding over an attacker-planted socket.
+            throw new InvalidOperationException(
+                $"Refusing to bind: cannot verify ownership of '{socketPath}' (stat unavailable on this platform).");
         }
 
         if (!info.IsSocket)
@@ -86,7 +95,7 @@ public static class ControlPlaneEndpoint
     public static void HardenSocket(string socketPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(socketPath);
-        if (NativeUnix.TryStat(socketPath, out _))
+        if (NativeUnix.TryStat(socketPath, out _) == NativeUnix.StatOutcome.Found)
         {
             File.SetUnixFileMode(
                 socketPath,
