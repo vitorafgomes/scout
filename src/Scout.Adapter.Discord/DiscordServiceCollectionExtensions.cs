@@ -9,8 +9,9 @@ namespace Scout.Adapter.Discord;
 /// DI composition for the Discord chat adapter. Consumer hosts call
 /// <c>services.AddDiscordAdapter(configuration)</c> after the conversation core
 /// is registered. Binds <see cref="DiscordOptions"/> from
-/// "Scout:Adapters:Discord" and registers the adapter as the
-/// <see cref="IChatAdapter"/>.
+/// "Scout:Adapters:Discord". The adapter is registered as an
+/// <see cref="IChatAdapter"/> only when a bot token is present in configuration;
+/// when absent the call is a clean no-op so an unconfigured host still starts.
 /// </summary>
 public static class DiscordServiceCollectionExtensions
 {
@@ -24,6 +25,12 @@ public static class DiscordServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.Configure<DiscordOptions>(configuration.GetSection(ConfigSection));
+
+        var botToken = configuration.GetSection(ConfigSection).GetValue<string>("BotToken");
+        if (string.IsNullOrWhiteSpace(botToken))
+        {
+            return services;
+        }
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<DiscordMessageTranslator>();

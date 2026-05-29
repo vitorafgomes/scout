@@ -8,8 +8,10 @@ namespace Scout.Adapter.Teams;
 /// <summary>
 /// DI composition for the Teams chat adapter. Consumer hosts call
 /// <c>services.AddTeamsAdapter(configuration)</c> after the conversation core is
-/// registered. Binds <see cref="TeamsOptions"/> from "Scout:Adapters:Teams" and
-/// registers the adapter as the <see cref="IChatAdapter"/>.
+/// registered. Binds <see cref="TeamsOptions"/> from "Scout:Adapters:Teams".
+/// The adapter is registered as an <see cref="IChatAdapter"/> only when an app id
+/// is present in configuration; when absent the call is a clean no-op so an
+/// unconfigured host still starts.
 ///
 /// Live hosting additionally needs the Bot Framework webhook plumbing — a
 /// <c>CloudAdapter</c>, an <c>IBot</c> that forwards turns to
@@ -30,6 +32,12 @@ public static class TeamsServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.Configure<TeamsOptions>(configuration.GetSection(ConfigSection));
+
+        var appId = configuration.GetSection(ConfigSection).GetValue<string>("AppId");
+        if (string.IsNullOrWhiteSpace(appId))
+        {
+            return services;
+        }
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<TeamsMessageTranslator>();
