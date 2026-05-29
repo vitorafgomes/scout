@@ -46,8 +46,12 @@ public sealed class ConversationConductor
 
         try
         {
+            _logger.LogInformation(
+                "Routing inbound message for channel {ChannelId} (textLen={Length}).",
+                message.ChannelId, message.Text.Length);
             var response = _router.Route(message);
             await _pump.RunAsync(response, sink, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Response completed for channel {ChannelId}.", message.ChannelId);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

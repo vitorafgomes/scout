@@ -140,6 +140,10 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 return;
             }
 
+            _logger.LogInformation(
+                "Discord message {MessageId} accepted from channel {ChannelId} (textLen={Length}); dispatching to conversation.",
+                message.Id, message.Channel.Id, chatMessage!.Text.Length);
+
             // Bind the sink to the originating channel only and pass the
             // lifetime token so the conversation cancels on host shutdown.
             var sink = new DiscordResponseSink(message.Channel, logger: _logger);
