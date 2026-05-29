@@ -142,4 +142,34 @@ describe('FeaturesComponent', () => {
 
     expect(bridge.featureDisable).toHaveBeenCalledWith({ id: 'github' });
   });
+
+  it('renders backend-unavailable notice and hides feature grid when worker HTTP endpoint absent', async () => {
+    const unavailableErr = Object.assign(new Error('Worker HTTP endpoint not available'), {
+      code: 'worker/http-unavailable',
+    });
+    const bridge = {
+      featuresList: vi.fn(async () => { throw unavailableErr; }),
+      featureEnable: vi.fn(),
+      featureDisable: vi.fn(),
+      featureSetCredentials: vi.fn(),
+      featureSetup: vi.fn(),
+      featureDeleteCredentials: vi.fn(),
+    };
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+        FeaturesStore,
+      ],
+    });
+
+    const fixture = TestBed.createComponent(FeaturesComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-test="backend-unavailable"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="features-grid"]')).toBeNull();
+  });
 });

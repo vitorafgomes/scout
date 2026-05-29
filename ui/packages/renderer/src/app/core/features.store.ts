@@ -13,6 +13,14 @@ interface StoreState {
   readonly busy: ReadonlySet<FeatureId>;
 }
 
+function isHttpUnavailable(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { code?: unknown }).code === 'worker/http-unavailable'
+  );
+}
+
 @Injectable({ providedIn: 'root' })
 export class FeaturesStore {
   private readonly _bridge = inject(ScoutBridgeService);
@@ -20,8 +28,12 @@ export class FeaturesStore {
   private readonly _features = signal<readonly FeatureDto[]>([]);
   private readonly _busy = signal<ReadonlySet<FeatureId>>(new Set());
   private readonly _lastError = signal<string | null>(null);
+  // True when the last load() failed because the worker HTTP endpoint is not
+  // yet available. The component renders a friendly empty-state in this case.
+  private readonly _backendUnavailable = signal<boolean>(false);
 
   readonly lastError = this._lastError.asReadonly();
+  readonly backendUnavailable = this._backendUnavailable.asReadonly();
 
   readonly features = computed<readonly FeatureViewModel[]>(() => {
     const busy = this._busy();
@@ -33,8 +45,15 @@ export class FeaturesStore {
       const res = await this._bridge.featuresList();
       this._features.set(res.features);
       this._lastError.set(null);
+      this._backendUnavailable.set(false);
     } catch (err: unknown) {
-      this._lastError.set(err instanceof Error ? err.message : String(err));
+      if (isHttpUnavailable(err)) {
+        this._backendUnavailable.set(true);
+        this._lastError.set(null);
+      } else {
+        this._backendUnavailable.set(false);
+        this._lastError.set(err instanceof Error ? err.message : String(err));
+      }
     }
   }
 

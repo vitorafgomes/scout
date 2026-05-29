@@ -22,16 +22,22 @@ import { FeatureCardComponent } from './feature-card.component';
         </p>
       </header>
 
-      <div class="features-grid" data-test="features-grid">
-        @for (f of store.features(); track f.id) {
-          <sc-feature-card
-            [feature]="f"
-            (toggle)="store.toggle(f.id)"
-            (openCredentialDialog)="openDialog(f)"
-            (clearCredentials)="store.clearCredentials(f.id)"
-          />
-        }
-      </div>
+      @if (store.backendUnavailable()) {
+        <div class="unavailable-notice" data-test="backend-unavailable">
+          Backend control plane arrives in the next step. Features will appear once the worker is running.
+        </div>
+      } @else {
+        <div class="features-grid" data-test="features-grid">
+          @for (f of store.features(); track f.id) {
+            <sc-feature-card
+              [feature]="f"
+              (toggle)="store.toggle(f.id)"
+              (openCredentialDialog)="openDialog(f)"
+              (clearCredentials)="store.clearCredentials(f.id)"
+            />
+          }
+        </div>
+      }
 
       @if (activeDialog(); as dlg) {
         <sc-credential-dialog
@@ -71,6 +77,14 @@ import { FeatureCardComponent } from './feature-card.component';
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 16px;
+      }
+      .unavailable-notice {
+        padding: 16px 20px;
+        border: 1px solid #2d3348;
+        border-radius: 8px;
+        background: #11131a;
+        font-size: 13px;
+        color: #7b8299;
       }
     `,
   ],

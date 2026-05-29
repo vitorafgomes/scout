@@ -191,4 +191,44 @@ describe('FeaturesStore', () => {
     expect(store.lastError()).toBe('list-failed');
     expect(store.features()).toEqual([]);
   });
+
+  it('load sets backendUnavailable=true and clears lastError on worker/http-unavailable', async () => {
+    const unavailableErr = Object.assign(new Error('Worker HTTP endpoint not available'), {
+      code: 'worker/http-unavailable',
+    });
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        throw unavailableErr;
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(store.backendUnavailable()).toBe(true);
+    expect(store.lastError()).toBeNull();
+    expect(store.features()).toEqual([]);
+  });
+
+  it('load clears backendUnavailable on success after prior unavailable state', async () => {
+    const unavailableErr = Object.assign(new Error('unavailable'), {
+      code: 'worker/http-unavailable',
+    });
+    let callCount = 0;
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        callCount += 1;
+        if (callCount === 1) throw unavailableErr;
+        return { features: [githubDisabled] };
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+    expect(store.backendUnavailable()).toBe(true);
+
+    await store.load();
+    expect(store.backendUnavailable()).toBe(false);
+    expect(store.features().length).toBe(1);
+  });
 });
