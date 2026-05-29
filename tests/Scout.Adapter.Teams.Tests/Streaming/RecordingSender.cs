@@ -46,6 +46,8 @@ internal sealed class RecordingSender : ITeamsActivitySender
         return null;
     }
 
+    public static bool HasStreamInfoEntity(Activity a) => Entity(a) is not null;
+
     private static Entity? Entity(Activity a) =>
         a.Entities?.FirstOrDefault(e => e.Type == "streaminfo");
 }

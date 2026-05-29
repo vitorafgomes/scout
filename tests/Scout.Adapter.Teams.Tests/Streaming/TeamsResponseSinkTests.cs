@@ -149,8 +149,14 @@ public sealed class TeamsResponseSinkTests
 
         // Only the terminal message activity hit the wire.
         sender.Sent.ShouldHaveSingleItem();
-        sender.Sent[0].Type.ShouldBe(ActivityTypes.Message);
-        sender.Sent[0].Text.ShouldBe("final answer");
+        var final = sender.Sent[0];
+        final.Type.ShouldBe(ActivityTypes.Message);
+        final.Text.ShouldBe("final answer");
+        // No stream was ever opened, so the terminal is a PLAIN message: no
+        // streaminfo entity and no dangling streamId-less `final`.
+        RecordingSender.HasStreamInfoEntity(final).ShouldBeFalse();
+        RecordingSender.StreamType(final).ShouldBeNull();
+        RecordingSender.StreamId(final).ShouldBeNull();
     }
 
     [Fact]
