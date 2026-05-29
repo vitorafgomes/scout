@@ -1,8 +1,12 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Scout.Llm.Abstractions;
+using Scout.Llm.Configuration;
 
 namespace Scout.Llm;
 
@@ -15,10 +19,24 @@ namespace Scout.Llm;
 internal sealed class ChatGateway : IChatGateway
 {
     private readonly IChatCompletionService _chat;
+    private readonly ILogger<ChatGateway> _logger;
+    private readonly string _target;
 
-    public ChatGateway(IChatCompletionService chat)
+    public ChatGateway(
+        IChatCompletionService chat,
+        IOptions<LlmOptions>? options = null,
+        ILogger<ChatGateway>? logger = null)
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
+        _logger = logger ?? NullLogger<ChatGateway>.Instance;
+
+        // Human-readable description of what the gateway talks to, for the
+        // communication log. Best-effort: options is optional (e.g. in tests).
+        var llm = options?.Value;
+        var provider = llm?.Provider ?? "unknown";
+        var endpoint = llm?.Ollama?.Endpoint ?? "unknown";
+        var model = llm?.Ollama?.Chat?.Model ?? "unknown";
+        _target = $"provider={provider} endpoint={endpoint} model={model}";
     }
 
     public async IAsyncEnumerable<string> StreamAsync(
@@ -41,16 +59,26 @@ internal sealed class ChatGateway : IChatGateway
 
         var settings = BuildSettings(request);
 
+        _logger.LogInformation(
+            "LLM request -> {Target} (inputChars={InputChars}).",
+            _target, request.UserMessage.Length);
+
         var stream = _chat.GetStreamingChatMessageContentsAsync(
             history, settings, kernel: null, cancellationToken);
 
+        var outputChars = 0;
         await foreach (var chunk in stream.ConfigureAwait(false))
         {
             if (!string.IsNullOrEmpty(chunk.Content))
             {
+                outputChars += chunk.Content.Length;
                 yield return chunk.Content;
             }
         }
+
+        _logger.LogInformation(
+            "LLM response complete <- {Target} (outputChars={OutputChars}).",
+            _target, outputChars);
     }
 
     public async Task<string> CompleteAsync(
