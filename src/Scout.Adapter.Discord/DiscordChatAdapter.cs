@@ -135,8 +135,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 
             if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage, out var reason))
             {
-                _logger.LogDebug(
-                    "Discord message {MessageId} ignored: {Reason}", message.Id, reason);
+                _logger.LogInformation(
+                    "Discord message {MessageId} ignored: {Reason} (in a server channel the bot only replies when @-mentioned; DMs always work).",
+                    message.Id, reason);
                 return;
             }
 
