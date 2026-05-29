@@ -29,5 +29,10 @@ builder.Services.AddTeamsAdapter(builder.Configuration);
 
 builder.Services.AddHostedService<ConversationWorker>();
 
+// Self-terminate if the supervising parent dies ungracefully. Gated on an env
+// var the supervisor sets, so standalone/interactive runs are never affected.
+builder.Services.AddParentWatchdog(
+    Environment.GetEnvironmentVariable(ParentWatchdogRegistration.EnableEnvVar));
+
 var host = builder.Build();
 await host.RunAsync();
