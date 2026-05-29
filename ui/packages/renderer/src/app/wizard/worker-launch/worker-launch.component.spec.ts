@@ -203,6 +203,7 @@ describe('WorkerLaunchComponent', () => {
         ],
       });
       const store = TestBed.inject(WizardStore);
+      await store.loadFromVault();
       store.setGuild({ id: 'g1', name: 'G' });
       const router = TestBed.inject(Router);
       const nav = vi.spyOn(router, 'navigateByUrl');
@@ -233,6 +234,7 @@ describe('WorkerLaunchComponent', () => {
       ],
     });
     const store = TestBed.inject(WizardStore);
+    await store.loadFromVault();
     store.setGuild({ id: 'g1', name: 'G' });
     const fixture = TestBed.createComponent(WorkerLaunchComponent);
     fixture.detectChanges();
@@ -261,6 +263,7 @@ describe('WorkerLaunchComponent', () => {
       ],
     });
     const store = TestBed.inject(WizardStore);
+    await store.loadFromVault();
     store.setGuild({ id: 'g1', name: 'G' });
     const fixture = TestBed.createComponent(WorkerLaunchComponent);
     fixture.detectChanges();
@@ -288,6 +291,7 @@ describe('WorkerLaunchComponent', () => {
       ],
     });
     const store = TestBed.inject(WizardStore);
+    await store.loadFromVault();
     store.setGuild({ id: 'g1', name: 'G' });
     const router = TestBed.inject(Router);
     const nav = vi.spyOn(router, 'navigateByUrl');
