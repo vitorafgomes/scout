@@ -3,18 +3,9 @@ import { UpperCasePipe } from '@angular/common';
 import type { WorkerEvent } from '@scout/shared';
 
 import { LogStore } from '../../core/log.store';
-
-type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+import { type LogLevel, detectLevel } from '../../core/log-level';
 
 const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'debug'] as const);
-
-function detectLevel(line: string): LogLevel {
-  const upper = line.toUpperCase();
-  if (upper.includes('ERROR') || upper.includes('FAIL') || upper.includes('CRIT')) return 'error';
-  if (upper.includes('WARN')) return 'warn';
-  if (upper.includes('DEBUG') || upper.includes('TRACE')) return 'debug';
-  return 'info';
-}
 
 @Component({
   selector: 'sc-logs',
