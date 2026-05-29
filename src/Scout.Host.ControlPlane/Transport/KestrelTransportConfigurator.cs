@@ -1,7 +1,6 @@
 using System.Runtime.Versioning;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.Extensions.Logging;
 
 namespace Scout.Host.ControlPlane.Transport;
 
@@ -14,13 +13,13 @@ public static class KestrelTransportConfigurator
     /// <summary>
     /// Apply the per-OS bind. On Unix, runs the anti-hijack pre-flight before
     /// binding and returns the resolved socket path so the caller can chmod it
-    /// to 0600 after the server starts. Returns null on Windows (named pipe).
+    /// to 0600 and log the bind line after the server starts. Returns null on
+    /// Windows (named pipe).
     /// </summary>
     public static string? Configure(
         KestrelServerOptions kestrel,
         string? socketPathOverride,
-        string pipeName,
-        ILogger logger)
+        string pipeName)
     {
         ArgumentNullException.ThrowIfNull(kestrel);
 
@@ -34,7 +33,6 @@ public static class KestrelTransportConfigurator
         ControlPlaneEndpoint.PreflightSocketPath(socketPath);
 
         kestrel.ListenUnixSocket(socketPath, listen => listen.Protocols = HttpProtocols.Http2);
-        logger.LogInformation("Control plane listening on UDS {SocketPath} (h2c)", socketPath);
         return socketPath;
     }
 
