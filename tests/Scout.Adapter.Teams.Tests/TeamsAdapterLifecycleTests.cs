@@ -35,6 +35,36 @@ public sealed class TeamsAdapterLifecycleTests
     }
 
     [Fact]
+    public void TryGetLifetimeToken_False_Before_Start()
+    {
+        using var lifecycle = new TeamsAdapterLifecycle();
+        lifecycle.TryGetLifetimeToken(out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void TryGetLifetimeToken_Returns_Live_Token_While_Running()
+    {
+        using var lifecycle = new TeamsAdapterLifecycle();
+        lifecycle.Start(CancellationToken.None);
+
+        lifecycle.TryGetLifetimeToken(out var token).ShouldBeTrue();
+        token.IsCancellationRequested.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryGetLifetimeToken_False_After_Stop_No_Throw()
+    {
+        using var lifecycle = new TeamsAdapterLifecycle();
+        lifecycle.Start(CancellationToken.None);
+        await lifecycle.StopAsync();
+
+        // The race-safe read sees a clean shutdown rather than throwing like
+        // LifetimeToken would.
+        lifecycle.TryGetLifetimeToken(out var token).ShouldBeFalse();
+        token.ShouldBe(default(CancellationToken));
+    }
+
+    [Fact]
     public void Start_Twice_Throws()
     {
         using var lifecycle = new TeamsAdapterLifecycle();
