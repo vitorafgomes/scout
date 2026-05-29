@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
 
@@ -14,20 +15,25 @@ namespace Scout.Llm;
 /// Streaming-first <see cref="IChatGateway"/> over the shared
 /// <see cref="IChatCompletionService"/>. Translates the provider-agnostic
 /// <see cref="ChatRequest"/> into Semantic Kernel primitives and yields content
-/// chunks as they arrive.
+/// chunks as they arrive. The composed <see cref="Kernel"/> is passed into the
+/// streaming call so Semantic Kernel can drive function-calling: tool round-trips
+/// happen internally and only final assistant content is yielded.
 /// </summary>
 internal sealed class ChatGateway : IChatGateway
 {
     private readonly IChatCompletionService _chat;
+    private readonly Kernel? _kernel;
     private readonly ILogger<ChatGateway> _logger;
     private readonly string _target;
 
     public ChatGateway(
         IChatCompletionService chat,
+        Kernel? kernel = null,
         IOptions<LlmOptions>? options = null,
         ILogger<ChatGateway>? logger = null)
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
+        _kernel = kernel;
         _logger = logger ?? NullLogger<ChatGateway>.Instance;
 
         // Human-readable description of what the gateway talks to, for the
@@ -64,7 +70,7 @@ internal sealed class ChatGateway : IChatGateway
             _target, request.UserMessage.Length);
 
         var stream = _chat.GetStreamingChatMessageContentsAsync(
-            history, settings, kernel: null, cancellationToken);
+            history, settings, kernel: _kernel, cancellationToken);
 
         var outputChars = 0;
         await foreach (var chunk in stream.ConfigureAwait(false))
@@ -93,23 +99,25 @@ internal sealed class ChatGateway : IChatGateway
         return builder.ToString();
     }
 
-    private static PromptExecutionSettings? BuildSettings(ChatRequest request)
+    // Always enable automatic function-calling so the kernel's plugins are
+    // offered to the model and tool round-trips are handled internally.
+    // Temperature and max tokens are forwarded only when the request sets them.
+    internal static OpenAIPromptExecutionSettings BuildSettings(ChatRequest request)
     {
-        if (request.Temperature is null && request.MaxTokens is null)
+        var settings = new OpenAIPromptExecutionSettings
         {
-            return null;
-        }
+            FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
+        };
 
-        var extensionData = new Dictionary<string, object>();
         if (request.Temperature is { } temperature)
         {
-            extensionData["temperature"] = temperature;
+            settings.Temperature = temperature;
         }
         if (request.MaxTokens is { } maxTokens)
         {
-            extensionData["max_tokens"] = maxTokens;
+            settings.MaxTokens = maxTokens;
         }
 
-        return new PromptExecutionSettings { ExtensionData = extensionData };
+        return settings;
     }
 }

@@ -87,4 +87,19 @@ public sealed class LlmServiceCollectionExtensionsTests
             () => new ServiceCollection().AddScoutLlm(Config("Nonexistent")))
             .Message.ShouldContain("Nonexistent");
     }
+
+    [Fact]
+    public void AddScoutLlm_Composes_Registered_KernelPlugins_Onto_Kernel()
+    {
+        var services = new ServiceCollection().AddScoutLlm(Config());
+        var plugin = KernelPluginFactory.CreateFromFunctions(
+            "TestPlugin",
+            [KernelFunctionFactory.CreateFromMethod(() => "ok", "ping")]);
+        services.AddSingleton(plugin);
+
+        using var provider = services.BuildServiceProvider();
+        var kernel = provider.GetRequiredService<Kernel>();
+
+        kernel.Plugins.ShouldContain(plugin);
+    }
 }
