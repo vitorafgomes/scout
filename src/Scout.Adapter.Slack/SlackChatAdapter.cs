@@ -97,7 +97,6 @@ public sealed class SlackChatAdapter : IChatAdapter, IAsyncDisposable
         // Throws if already started or stopped (single-connect) and arms the
         // lifetime token linked to the host's start token.
         _lifecycle.Start(cancellationToken);
-        _handler = handler;
 
         // Resolve the bot's own user id so the translator can drop self-authored
         // messages and strip the bot's mention.
@@ -105,6 +104,10 @@ public sealed class SlackChatAdapter : IChatAdapter, IAsyncDisposable
         _botUserId = auth.UserId ?? string.Empty;
         _logger.LogInformation(
             "Slack bot ready: user={BotUserId} team={Team}", _botUserId, auth.Team ?? string.Empty);
+
+        // Arm the inbound handler only after _botUserId is resolved, so the
+        // user-id self-loop guard is in force for the very first delivered event.
+        _handler = handler;
 
         await _socketModeClient.Connect(new SlackNet.SocketMode.SocketModeConnectionOptions(), cancellationToken)
             .ConfigureAwait(false);
