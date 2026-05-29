@@ -13,7 +13,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Console');
       expect(result).not.toContain('.exe');
     });
 
@@ -23,7 +23,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'arm64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(posix(result)).toContain('build/worker/osx-arm64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/osx-arm64/Scout.Host.Console');
       expect(result).not.toContain('.exe');
     });
 
@@ -33,7 +33,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(posix(result)).toContain('build/worker/osx-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/osx-x64/Scout.Host.Console');
     });
 
     it('appends .exe on win32', () => {
@@ -42,7 +42,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(posix(result)).toContain('build/worker/win-x64/Scout.Host.Worker.exe');
+      expect(posix(result)).toContain('build/worker/win-x64/Scout.Host.Console.exe');
     });
 
     it('treats isPackaged===false as dev mode', () => {
@@ -52,7 +52,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: '/repo/ui/packages/main/src/worker',
       });
-      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Worker');
+      expect(posix(result)).toContain('build/worker/linux-x64/Scout.Host.Console');
     });
   });
 
@@ -66,7 +66,7 @@ describe('resolveWorkerBinary', () => {
         cwd: '/any',
       });
       expect(result).toBe(
-        path.join('/opt/scout/resources', 'worker', 'linux-x64', 'Scout.Host.Worker'),
+        path.join('/opt/scout/resources', 'worker', 'linux-x64', 'Scout.Host.Console'),
       );
     });
 
@@ -83,7 +83,7 @@ describe('resolveWorkerBinary', () => {
           '/Applications/Scout.app/Contents/Resources',
           'worker',
           'osx-arm64',
-          'Scout.Host.Worker',
+          'Scout.Host.Console',
         ),
       );
     });
@@ -96,7 +96,7 @@ describe('resolveWorkerBinary', () => {
         arch: 'x64',
         cwd: 'C:\\any',
       });
-      expect(result).toContain('Scout.Host.Worker.exe');
+      expect(result).toContain('Scout.Host.Console.exe');
     });
   });
 });
