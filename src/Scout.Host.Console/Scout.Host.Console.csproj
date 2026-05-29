@@ -18,6 +18,8 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
+    <!-- Lets NSubstitute proxy internal seams (IReadinessSignal) in tests. -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
   <ItemGroup>
     <None Update="appsettings.json">

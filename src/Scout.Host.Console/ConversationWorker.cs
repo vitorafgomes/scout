@@ -11,10 +11,11 @@ namespace Scout.Host.Console;
 /// When no adapter is configured it logs actionable guidance and stops the host
 /// gracefully instead of throwing.
 /// </summary>
-public sealed class ConversationWorker(
+internal sealed class ConversationWorker(
     IEnumerable<IChatAdapter> adapters,
     ConversationConductor conductor,
     IHostApplicationLifetime lifetime,
+    IReadinessSignal readiness,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private readonly IReadOnlyList<IChatAdapter> _adapters = adapters.ToList();
@@ -35,6 +36,10 @@ public sealed class ConversationWorker(
             logger.LogInformation("Starting chat adapter {Adapter}.", adapter.Name);
             await adapter.StartAsync(conductor.HandleAsync, stoppingToken).ConfigureAwait(false);
         }
+
+        // All configured adapters connected without throwing: emit the readiness
+        // marker so the supervisor flips the backend to "running".
+        readiness.Signal();
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

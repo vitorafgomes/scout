@@ -52,15 +52,18 @@ public sealed class ConversationWorkerTests
     public async Task NoAdapters_LogsGuidance_And_StopsApplication()
     {
         var lifetime = new FakeLifetime();
+        var readiness = Substitute.For<IReadinessSignal>();
         var worker = new ConversationWorker(
             [],
             BuildConductor(),
             lifetime,
+            readiness,
             NullLogger<ConversationWorker>.Instance);
 
         await RunExecuteAsync(worker, CancellationToken.None);
 
         lifetime.StopApplicationCalls.ShouldBe(1);
+        readiness.DidNotReceive().Signal();
     }
 
     [Fact]
@@ -73,6 +76,7 @@ public sealed class ConversationWorkerTests
             [adapter],
             BuildConductor(),
             new FakeLifetime(),
+            Substitute.For<IReadinessSignal>(),
             NullLogger<ConversationWorker>.Instance);
 
         await RunExecuteAsync(worker, CancellationToken.None);
@@ -95,6 +99,7 @@ public sealed class ConversationWorkerTests
             [first, second],
             BuildConductor(),
             new FakeLifetime(),
+            Substitute.For<IReadinessSignal>(),
             NullLogger<ConversationWorker>.Instance);
 
         await RunExecuteAsync(worker, CancellationToken.None);
@@ -105,6 +110,57 @@ public sealed class ConversationWorkerTests
         await second.Received(1).StartAsync(
             Arg.Any<Func<ChatMessage, IResponseSink, CancellationToken, Task>>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AllAdaptersStarted_Signals_Readiness_Once()
+    {
+        var first = Substitute.For<IChatAdapter>();
+        first.Name.Returns("First");
+        var second = Substitute.For<IChatAdapter>();
+        second.Name.Returns("Second");
+        var readiness = Substitute.For<IReadinessSignal>();
+
+        var worker = new ConversationWorker(
+            [first, second],
+            BuildConductor(),
+            new FakeLifetime(),
+            readiness,
+            NullLogger<ConversationWorker>.Instance);
+
+        await RunExecuteAsync(worker, CancellationToken.None);
+
+        readiness.Received(1).Signal();
+        await first.Received(1).StartAsync(
+            Arg.Any<Func<ChatMessage, IResponseSink, CancellationToken, Task>>(),
+            Arg.Any<CancellationToken>());
+        await second.Received(1).StartAsync(
+            Arg.Any<Func<ChatMessage, IResponseSink, CancellationToken, Task>>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AdapterStartThrows_Does_Not_Signal_Readiness()
+    {
+        var adapter = Substitute.For<IChatAdapter>();
+        adapter.Name.Returns("Faulty");
+        adapter.StartAsync(
+                Arg.Any<Func<ChatMessage, IResponseSink, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task>(_ => throw new InvalidOperationException("login failure"));
+        var readiness = Substitute.For<IReadinessSignal>();
+
+        var worker = new ConversationWorker(
+            [adapter],
+            BuildConductor(),
+            new FakeLifetime(),
+            readiness,
+            NullLogger<ConversationWorker>.Instance);
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => RunExecuteAsync(worker, CancellationToken.None));
+
+        readiness.DidNotReceive().Signal();
     }
 
     [Fact]
@@ -119,6 +175,7 @@ public sealed class ConversationWorkerTests
             [first, second],
             BuildConductor(),
             new FakeLifetime(),
+            Substitute.For<IReadinessSignal>(),
             NullLogger<ConversationWorker>.Instance);
 
         await RunExecuteAsync(worker, CancellationToken.None);
