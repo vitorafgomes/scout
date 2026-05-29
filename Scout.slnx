@@ -6,6 +6,9 @@
     <Project Path="src/Scout.Adapter.Slack/Scout.Adapter.Slack.csproj" />
     <Project Path="src/Scout.Adapter.Teams/Scout.Adapter.Teams.csproj" />
     <Project Path="src/Scout.Host.Console/Scout.Host.Console.csproj" />
+    <Project Path="src/Scout.ControlPlane.Contracts/Scout.ControlPlane.Contracts.csproj" />
+    <Project Path="src/Scout.ControlPlane/Scout.ControlPlane.csproj" />
+    <Project Path="src/Scout.Host.ControlPlane/Scout.Host.ControlPlane.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />
@@ -14,5 +17,6 @@
     <Project Path="tests/Scout.Adapter.Slack.Tests/Scout.Adapter.Slack.Tests.csproj" />
     <Project Path="tests/Scout.Adapter.Teams.Tests/Scout.Adapter.Teams.Tests.csproj" />
     <Project Path="tests/Scout.Host.Console.Tests/Scout.Host.Console.Tests.csproj" />
+    <Project Path="tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj" />
   </Folder>
 </Solution>
