@@ -7,6 +7,7 @@ using Scout.Adapter.Teams;
 using Scout.Conversation;
 using Scout.Host.Console;
 using Scout.Llm;
+using Scout.Plugin.GitHub;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -26,6 +27,9 @@ builder.Services.AddScoutConversation(builder.Configuration);
 builder.Services.AddDiscordAdapter(builder.Configuration);
 builder.Services.AddSlackAdapter(builder.Configuration);
 builder.Services.AddTeamsAdapter(builder.Configuration);
+
+// Semantic Kernel function-calling plugins. Self-gates on its configured token.
+builder.Services.AddGitHubPlugin(builder.Configuration);
 
 builder.Services.AddHostedService<ConversationWorker>();
 

@@ -6,10 +6,12 @@ using Scout.Llm.Configuration;
 namespace Scout.Llm.Providers.Ollama;
 
 /// <summary>
-/// <see cref="ILlmProviderFactory"/> that wires Semantic Kernel's Ollama
-/// connector for both chat completion and embeddings. This is the only type in
-/// the gateway that touches the (alpha-tagged) Connectors.Ollama package, so a
-/// future provider can be added without disturbing the abstraction layer.
+/// <see cref="ILlmProviderFactory"/> that wires Semantic Kernel services for
+/// Ollama. Chat completion goes through the OpenAI connector against Ollama's
+/// OpenAI-compatible <c>/v1</c> endpoint so the model can do function-calling;
+/// embeddings stay on the native Ollama connector. This is the only type in the
+/// gateway that touches those connector packages, so a future provider can be
+/// added without disturbing the abstraction layer.
 /// </summary>
 public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
 {
@@ -106,14 +108,37 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
         if (_httpClient is not null)
         {
             _httpClient.BaseAddress ??= _endpoint;
-            builder.AddOllamaChatCompletion(_chatModel, _httpClient);
+            AddChat(builder, _httpClient);
             AddEmbeddings(builder, _httpClient);
             return;
         }
 
-        builder.AddOllamaChatCompletion(_chatModel, _endpoint);
+        AddChat(builder, ChatEndpoint());
         AddEmbeddings(builder, _endpoint);
     }
+
+    // Ollama exposes an OpenAI-compatible surface under "/v1". The chat service
+    // talks to that base so function-calling round-trips work through the OpenAI
+    // connector. Embeddings keep using the native Ollama endpoint.
+    private Uri ChatEndpoint()
+    {
+        var trimmed = _endpoint.AbsoluteUri.TrimEnd('/');
+        return new Uri($"{trimmed}/v1", UriKind.Absolute);
+    }
+
+    // SKEXP0010: AddOpenAIChatCompletion's HttpClient/endpoint overload is
+    // experimental. The consumed type (IChatCompletionService) is stable, so the
+    // suppression is scoped to the registration call only and never leaks to
+    // consumers of the gateway.
+#pragma warning disable SKEXP0010
+    private void AddChat(IKernelBuilder builder, HttpClient httpClient)
+        => builder.AddOpenAIChatCompletion(
+            modelId: _chatModel, apiKey: "ollama", httpClient: httpClient);
+
+    private void AddChat(IKernelBuilder builder, Uri endpoint)
+        => builder.AddOpenAIChatCompletion(
+            modelId: _chatModel, endpoint: endpoint, apiKey: "ollama");
+#pragma warning restore SKEXP0010
 
     // SKEXP0070: the Ollama connector surface is experimental. The consumed
     // type (IEmbeddingGenerator<string, Embedding<float>>) is stable, so the

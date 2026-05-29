@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -57,6 +58,15 @@ public static class LlmServiceCollectionExtensions
             var factory = sp.GetRequiredService<ILlmProviderFactory>();
             var builder = Kernel.CreateBuilder();
             factory.AddToKernel(builder);
+
+            // Register every plugin contributed by feature modules (e.g. GitHub)
+            // onto the shared kernel so the LLM can invoke them via
+            // function-calling. Self-gating modules contribute none when off.
+            foreach (var plugin in sp.GetServices<KernelPlugin>())
+            {
+                builder.Plugins.Add(plugin);
+            }
+
             return builder.Build();
         });
 
@@ -68,7 +78,11 @@ public static class LlmServiceCollectionExtensions
               .GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>());
 
         services.AddSingleton<IChatGateway>(sp =>
-            new ChatGateway(sp.GetRequiredService<IChatCompletionService>()));
+            new ChatGateway(
+                sp.GetRequiredService<IChatCompletionService>(),
+                sp.GetRequiredService<Kernel>(),
+                sp.GetService<IOptions<LlmOptions>>(),
+                sp.GetService<ILogger<ChatGateway>>()));
 
         return services;
     }

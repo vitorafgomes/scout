@@ -15,6 +15,7 @@
     <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Slack\Scout.Adapter.Slack.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Teams\Scout.Adapter.Teams.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
