@@ -192,7 +192,7 @@ describe('WizardStore', () => {
     expect(store.guild()).toBeNull();
   });
 
-  it('loadFromVault returns hasProvisioning=false when token exists but localStorage is empty', async () => {
+  it('loadFromVault returns hasProvisioning=true when token exists even if localStorage is empty', async () => {
     const bridge = makeBridgeStub({
       vaultHas: vi.fn().mockResolvedValue({ exists: true }),
     });
@@ -208,7 +208,9 @@ describe('WizardStore', () => {
 
     const result = await store.loadFromVault();
 
-    expect(result).toEqual({ hasProvisioning: false });
+    // Token alone is enough to provision; clientId/guild remain null (optional metadata).
+    expect(result).toEqual({ hasProvisioning: true });
+    expect(store.hasProvisioning()).toBe(true);
     expect(store.clientId()).toBeNull();
     expect(store.guild()).toBeNull();
   });
@@ -257,5 +259,26 @@ describe('WizardStore', () => {
 
     expect(result).toEqual({ hasProvisioning: false });
     expect(store.clientId()).toBeNull();
+  });
+
+  it('hasProvisioning is true with token alone (no clientId, no guild)', async () => {
+    const bridge = makeBridgeStub({
+      vaultHas: vi.fn().mockResolvedValue({ exists: true }),
+    });
+    const persistent = makePersistentStub(null);
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge },
+        { provide: PersistentStateService, useValue: persistent },
+      ],
+    });
+    const store = TestBed.inject(WizardStore);
+
+    await store.loadFromVault();
+
+    expect(store.clientId()).toBeNull();
+    expect(store.guild()).toBeNull();
+    expect(store.hasProvisioning()).toBe(true);
   });
 });

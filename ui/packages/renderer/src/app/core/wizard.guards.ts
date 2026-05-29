@@ -20,3 +20,13 @@ export const requireGuildGuard: CanActivateFn = (): boolean | UrlTree => {
   }
   return true;
 };
+
+// Guards /launch: token alone (no clientId/guild) is sufficient to proceed.
+export const requireBotTokenGuard: CanActivateFn = (): boolean | UrlTree => {
+  const store = inject(WizardStore);
+  const router = inject(Router);
+  if (!store.hasProvisioning()) {
+    return router.parseUrl('/');
+  }
+  return true;
+};

@@ -32,6 +32,9 @@ export class WizardStore {
   private readonly _clientId = signal<string | null>(null);
   private readonly _guild = signal<WizardGuild | null>(null);
   private readonly _intentsAcknowledged = signal<boolean>(false);
+  // True once loadFromVault confirms the vault holds discord.bot-token.
+  // Allows launch without clientId/guild (token-only provisioning).
+  private readonly _hasToken = signal<boolean>(false);
 
   readonly currentStep = this._currentStep.asReadonly();
   readonly clientId = this._clientId.asReadonly();
@@ -44,8 +47,9 @@ export class WizardStore {
     return index < 0 ? 0 : index;
   });
 
+  // Token alone is sufficient to launch; clientId/guild are optional metadata.
   readonly hasProvisioning = computed<boolean>(
-    () => this._clientId() !== null && this._guild() !== null,
+    () => this._hasToken() || (this._clientId() !== null && this._guild() !== null),
   );
 
   goTo(step: WizardStep): void {
@@ -72,6 +76,7 @@ export class WizardStore {
     this._clientId.set(null);
     this._guild.set(null);
     this._intentsAcknowledged.set(false);
+    this._hasToken.set(false);
   }
 
   // Destructive counterpart of reset: clears signals AND deletes every
@@ -82,6 +87,7 @@ export class WizardStore {
     this._clientId.set(null);
     this._guild.set(null);
     this._intentsAcknowledged.set(false);
+    this._hasToken.set(false);
 
     // Best-effort clear; swallow errors so reprovisioning never throws back
     // to the caller (UI has typically already navigated away).
@@ -116,13 +122,19 @@ export class WizardStore {
       hasToken = false;
     }
 
-    const persisted = this.persistent.get();
-    if (!hasToken || persisted === null) {
+    if (!hasToken) {
       return { hasProvisioning: false };
     }
 
-    this._clientId.set(persisted.clientId);
-    this._guild.set({ id: persisted.guildId, name: persisted.guildName });
+    this._hasToken.set(true);
+
+    // Restore optional metadata from localStorage when available.
+    const persisted = this.persistent.get();
+    if (persisted !== null) {
+      this._clientId.set(persisted.clientId);
+      this._guild.set({ id: persisted.guildId, name: persisted.guildName });
+    }
+
     return { hasProvisioning: true };
   }
 }
