@@ -43,10 +43,10 @@ if ($SupportedRids -notcontains $RID) {
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir "../../..")).Path
 $UiRoot    = Join-Path $RepoRoot "ui"
-$Csproj    = Join-Path $RepoRoot "src\Scout.Host.Worker\Scout.Host.Worker.csproj"
+$Csproj    = Join-Path $RepoRoot "src\Scout.Host.Console\Scout.Host.Console.csproj"
 $OutputDir = Join-Path $UiRoot "build\worker\$RID"
 
-Write-Host "publishing Scout.Host.Worker for $RID -> $OutputDir"
+Write-Host "publishing Scout.Host.Console for $RID -> $OutputDir"
 
 & dotnet publish $Csproj `
     --configuration Release `
@@ -63,9 +63,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($RID -eq "win-x64") {
-    $BinaryName = "Scout.Host.Worker.exe"
+    $BinaryName = "Scout.Host.Console.exe"
 } else {
-    $BinaryName = "Scout.Host.Worker"
+    $BinaryName = "Scout.Host.Console"
 }
 
 $Binary = Join-Path $OutputDir $BinaryName

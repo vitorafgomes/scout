@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 UI_ROOT="${REPO_ROOT}/ui"
-CSPROJ="${REPO_ROOT}/src/Scout.Host.Worker/Scout.Host.Worker.csproj"
+CSPROJ="${REPO_ROOT}/src/Scout.Host.Console/Scout.Host.Console.csproj"
 
 detect_rid() {
   local os arch
@@ -60,7 +60,7 @@ fi
 
 OUTPUT_DIR="${UI_ROOT}/build/worker/${RID}"
 
-echo "publishing Scout.Host.Worker for ${RID} -> ${OUTPUT_DIR}"
+echo "publishing Scout.Host.Console for ${RID} -> ${OUTPUT_DIR}"
 
 dotnet publish "${CSPROJ}" \
   --configuration Release \
@@ -72,9 +72,9 @@ dotnet publish "${CSPROJ}" \
   --output "${OUTPUT_DIR}"
 
 if [[ "${RID}" == win-x64 ]]; then
-  BINARY="${OUTPUT_DIR}/Scout.Host.Worker.exe"
+  BINARY="${OUTPUT_DIR}/Scout.Host.Console.exe"
 else
-  BINARY="${OUTPUT_DIR}/Scout.Host.Worker"
+  BINARY="${OUTPUT_DIR}/Scout.Host.Console"
 fi
 
 if [[ ! -f "${BINARY}" ]]; then
