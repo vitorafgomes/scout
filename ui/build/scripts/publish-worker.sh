@@ -60,6 +60,11 @@ fi
 
 OUTPUT_DIR="${UI_ROOT}/build/worker/${RID}"
 
+# Clean the output dir first so stale artifacts from a previous build (e.g.
+# old project pdb/xml) are never bundled into the package.
+rm -rf "${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}"
+
 echo "publishing Scout.Host.Console for ${RID} -> ${OUTPUT_DIR}"
 
 dotnet publish "${CSPROJ}" \
