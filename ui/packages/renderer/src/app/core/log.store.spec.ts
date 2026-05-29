@@ -147,4 +147,26 @@ describe('LogStore', () => {
     expect(store.status().state).toBe('crashed');
     expect(store.status().restarts).toBe(1);
   });
+
+  it('copy() labels lines by detected level, not by stream', () => {
+    const { store, emit } = setup();
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    emit({
+      kind: 'stderr',
+      line: 'info: Microsoft.Hosting.Lifetime[0]',
+      ts: '2026-01-01T00:00:00Z',
+    });
+    emit({ kind: 'stderr', line: 'fail: Scout.Host.Console[0]', ts: '2026-01-01T00:00:01Z' });
+
+    store.copy();
+
+    expect(writeText).toHaveBeenCalledOnce();
+    const copied = writeText.mock.calls[0]?.[0] as string;
+    expect(copied).toContain('[INFO] info: Microsoft.Hosting.Lifetime[0]');
+    expect(copied).toContain('[ERROR] fail: Scout.Host.Console[0]');
+    expect(copied).not.toContain('[stderr]');
+    expect(copied).not.toContain('[stdout]');
+  });
 });
