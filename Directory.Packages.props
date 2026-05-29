@@ -33,6 +33,9 @@
     <PackageVersion Include="Microsoft.Bot.Schema" Version="4.23.1" />
     <PackageVersion Include="Octokit" Version="14.0.0" />
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.SqliteVec" Version="1.67.1-preview" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Agents.Core" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.77.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.74.0-alpha" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />

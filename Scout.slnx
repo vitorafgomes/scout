@@ -7,6 +7,7 @@
     <Project Path="src/Scout.Adapter.Teams/Scout.Adapter.Teams.csproj" />
     <Project Path="src/Scout.Host.Console/Scout.Host.Console.csproj" />
     <Project Path="src/Scout.Plugin.GitHub/Scout.Plugin.GitHub.csproj" />
+    <Project Path="src/Scout.Knowledge/Scout.Knowledge.csproj" />
     <Project Path="src/Scout.ControlPlane.Contracts/Scout.ControlPlane.Contracts.csproj" />
     <Project Path="src/Scout.ControlPlane/Scout.ControlPlane.csproj" />
     <Project Path="src/Scout.Host.ControlPlane/Scout.Host.ControlPlane.csproj" />
@@ -19,6 +20,7 @@
     <Project Path="tests/Scout.Adapter.Teams.Tests/Scout.Adapter.Teams.Tests.csproj" />
     <Project Path="tests/Scout.Host.Console.Tests/Scout.Host.Console.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.GitHub.Tests/Scout.Plugin.GitHub.Tests.csproj" />
+    <Project Path="tests/Scout.Knowledge.Tests/Scout.Knowledge.Tests.csproj" />
     <Project Path="tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj" />
   </Folder>
 </Solution>
