@@ -216,4 +216,27 @@ describe('registerFeaturesHandlers', () => {
       expect(ipcMain.handlers.size).toBe(0);
     });
   });
+
+  describe('case 8: null http endpoint surfaces worker/http-unavailable', () => {
+    it('featuresList rejects with code worker/http-unavailable when endpoint is null', async () => {
+      const { WorkerHttpClient: RealClient } = await import('../src/worker/http-client.js');
+      const nullEndpointClient = new RealClient({
+        getEndpoint: () => null,
+        fetch: globalThis.fetch,
+        logger,
+      });
+      registerFeaturesHandlers(ipcMain, nullEndpointClient, logger);
+
+      const handler = ipcMain.handlers.get(CHANNEL.featuresList)!;
+      let thrown: unknown = null;
+      try {
+        await handler(NULL_EVENT);
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).not.toBeNull();
+      expect((thrown as { code?: string }).code).toBe('worker/http-unavailable');
+    });
+  });
 });
