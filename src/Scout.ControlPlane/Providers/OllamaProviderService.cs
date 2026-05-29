@@ -345,6 +345,21 @@ public sealed class OllamaProviderService
 
     private async Task EnsureReadyOrThrowAsync(CancellationToken ct)
     {
+        // Cold-start fallback: the readiness gate only completes once a managed
+        // Start drives Starting->Ready. When the worker never started the
+        // daemon (state still Unknown) but Ollama is already running
+        // externally, blocking on the gate would time out and surface a
+        // spurious ProviderNotReadyException. In that case probe the daemon
+        // directly: if /api/tags answers, the runtime is usable - proceed.
+        if (_probe.Current == OllamaReadinessState.Unknown)
+        {
+            var tags = await _api.GetTagsAsync(ct).ConfigureAwait(false);
+            if (tags is not null)
+            {
+                return;
+            }
+        }
+
         var ready = await _probe.WaitReadyAsync(_options.PingTimeout, ct).ConfigureAwait(false);
         if (!ready)
         {

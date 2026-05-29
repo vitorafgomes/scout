@@ -58,6 +58,48 @@ public sealed class OllamaProviderServiceTests
     }
 
     [Fact]
+    public async Task ListModelsAsync_ExternalDaemon_ColdStart_SucceedsWithoutPriorStart()
+    {
+        // Cold start: the worker never ran Start, so the readiness gate is
+        // still Unknown and never completes (WaitReadyAsync would time out).
+        // Ollama is already running externally, so /api/tags answers and the
+        // op must proceed instead of throwing ProviderNotReadyException.
+        var harness = new OllamaTestHarness();
+        harness.Probe.Current.Returns(OllamaReadinessState.Unknown);
+        harness.Probe.WaitReadyAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(false));
+        harness.Api.GetTagsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<OllamaTags?>(new OllamaTags(new[]
+            {
+                new ProviderModel("phi3", 7, "2024-03-03"),
+            })));
+        var service = harness.Build();
+
+        var models = await service.ListModelsAsync(CancellationToken.None);
+
+        models.Single().Name.ShouldBe("phi3");
+        await harness.Probe.DidNotReceive()
+            .WaitReadyAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ListModelsAsync_ColdStart_DaemonUnreachable_StillGatesOnProbe()
+    {
+        // Unknown gate but daemon not reachable: fall through to the probe so
+        // a genuinely-not-ready runtime still surfaces ProviderNotReadyException.
+        var harness = new OllamaTestHarness();
+        harness.Probe.Current.Returns(OllamaReadinessState.Unknown);
+        harness.Probe.WaitReadyAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(false));
+        harness.Api.GetTagsAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<OllamaTags?>(null));
+        var service = harness.Build();
+
+        await Should.ThrowAsync<ProviderNotReadyException>(() =>
+            service.ListModelsAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ListModelsAsync_Ready_ReturnsTags()
     {
         var harness = new OllamaTestHarness();
