@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Bot.Builder" />
     <PackageReference Include="Microsoft.Bot.Builder.Integration.AspNet.Core" />
+    <PackageReference Include="Microsoft.Bot.Connector" />
     <PackageReference Include="Microsoft.Bot.Schema" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />

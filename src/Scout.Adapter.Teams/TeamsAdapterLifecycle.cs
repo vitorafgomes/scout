@@ -30,6 +30,25 @@ internal sealed class TeamsAdapterLifecycle : IDisposable
         }
     }
 
+    /// <summary>
+    /// Atomically read the lifetime token while running. Returns false (and a
+    /// default token) when not running, so a caller racing <see cref="StopAsync"/>
+    /// sees a clean shutdown rather than the <see cref="LifetimeToken"/> throw.
+    /// </summary>
+    public bool TryGetLifetimeToken(out CancellationToken token)
+    {
+        lock (_gate)
+        {
+            if (_running && _lifetimeCts is not null)
+            {
+                token = _lifetimeCts.Token;
+                return true;
+            }
+            token = default;
+            return false;
+        }
+    }
+
     /// <summary>True between a successful <see cref="Start"/> and <see cref="StopAsync"/>.</summary>
     public bool IsRunning
     {

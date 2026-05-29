@@ -111,7 +111,10 @@ public sealed class TeamsChatAdapter : IChatAdapter, IDisposable
         ArgumentNullException.ThrowIfNull(turnContext);
 
         var handler = _handler;
-        if (handler is null || !_lifecycle.IsRunning)
+        // Read the running guard and lifetime token atomically: StopAsync can null
+        // the CTS between the checks, so a separate IsRunning + LifetimeToken read
+        // would race. A lost race is a clean shutdown no-op, not a processing error.
+        if (handler is null || !_lifecycle.TryGetLifetimeToken(out var lifetimeToken))
         {
             return;
         }
@@ -119,7 +122,7 @@ public sealed class TeamsChatAdapter : IChatAdapter, IDisposable
         // Link the per-turn token to the lifetime token so host shutdown unwinds
         // an in-flight conversation.
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken, _lifecycle.LifetimeToken);
+            cancellationToken, lifetimeToken);
         var token = linked.Token;
 
         var activity = turnContext.Activity;

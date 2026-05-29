@@ -29,6 +29,7 @@
     <PackageVersion Include="SlackNet" Version="0.17.10" />
     <PackageVersion Include="Microsoft.Bot.Builder" Version="4.23.1" />
     <PackageVersion Include="Microsoft.Bot.Builder.Integration.AspNet.Core" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Connector" Version="4.23.1" />
     <PackageVersion Include="Microsoft.Bot.Schema" Version="4.23.1" />
     <PackageVersion Include="Octokit" Version="14.0.0" />
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.77.0" />

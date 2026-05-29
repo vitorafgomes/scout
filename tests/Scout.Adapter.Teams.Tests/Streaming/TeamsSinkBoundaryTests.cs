@@ -117,8 +117,12 @@ public sealed class TeamsSinkBoundaryTests
 
         var final = sender.Sent[^1];
         final.Type.ShouldBe(ActivityTypes.Message);
-        RecordingSender.StreamType(final).ShouldBe("final");
         final.Text.ShouldBe("final answer");
+        // The stream was canceled (403), so the terminal closes nothing: a plain
+        // message with NO streamId-less `final` streaminfo entity.
+        RecordingSender.HasStreamInfoEntity(final).ShouldBeFalse();
+        RecordingSender.StreamType(final).ShouldBeNull();
+        RecordingSender.StreamId(final).ShouldBeNull();
     }
 
     [Fact]
@@ -145,6 +149,11 @@ public sealed class TeamsSinkBoundaryTests
         var messages = sender.Sent.Where(a => a.Type == ActivityTypes.Message).ToList();
         messages.ShouldHaveSingleItem();
         messages[0].Text.ShouldBe("answer");
+        // Streaming was never opened, so the terminal is a PLAIN message: no
+        // streamId-less `final` streaminfo entity.
+        RecordingSender.HasStreamInfoEntity(messages[0]).ShouldBeFalse();
+        RecordingSender.StreamType(messages[0]).ShouldBeNull();
+        RecordingSender.StreamId(messages[0]).ShouldBeNull();
     }
 
     [Fact]

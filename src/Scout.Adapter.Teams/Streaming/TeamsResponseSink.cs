@@ -280,10 +280,20 @@ public sealed class TeamsResponseSink : IResponseSink
             ?? throw new InvalidOperationException("Failed to create message activity.");
         activity.Text = text;
 
-        // The final activity's sequence must stay monotonic with the interim
-        // streaming activities, so advance past the last one.
-        _sequence++;
-        var entities = new List<Entity> { BuildStreamInfoEntity(StreamTypeFinal, _sequence) };
+        // A `final` streaminfo entity is only valid when it closes a stream that
+        // was actually opened: it must carry the same streamId. When no stream
+        // ran (group/channel) or it was canceled (403 ContentStreamNotAllowed),
+        // emit a plain message with no streaminfo entity and no dangling sequence.
+        var streamWasOpen = _streamId is not null && !_streamCanceled;
+
+        var entities = new List<Entity>();
+        if (streamWasOpen)
+        {
+            // The final activity's sequence must stay monotonic with the interim
+            // streaming activities, so advance past the last one.
+            _sequence++;
+            entities.Add(BuildStreamInfoEntity(StreamTypeFinal, _sequence));
+        }
         if (citations.Count > 0)
         {
             entities.Add(BuildCitationEntity(citations));
