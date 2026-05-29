@@ -78,7 +78,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     buildEnv,
     checkBinaryExists = isFile,
     ringLimit = 2000,
-    readinessTimeoutMs = 30_000,
+    readinessTimeoutMs = 45_000,
     stopTimeoutMs = 5_000,
     restartPolicy = DEFAULT_POLICY,
   } = deps;
