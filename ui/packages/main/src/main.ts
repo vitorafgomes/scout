@@ -27,7 +27,7 @@ import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
 import { resolveWorkerBinary } from './worker/resolve-binary.js';
-import { VaultUnavailableError } from '@scout/shared';
+import { buildEnv } from './worker/build-env.js';
 import type { Supervisor } from './worker/supervisor.js';
 
 const logger = createLogger('main');
@@ -156,35 +156,8 @@ app
           arch: process.arch,
           cwd: __dirname,
         }),
-      buildEnv: async (): Promise<Record<string, string>> => {
-        const token = await vault.get('discord.bot-token');
-        if (token === null) {
-          throw new VaultUnavailableError(
-            'discord.bot-token not found in vault — complete the Discord wizard first',
-          );
-        }
-
-        // .NET configuration env-var convention: each ":" path segment is
-        // mapped to "__". The worker binds Scout:Llm from configuration, so
-        //   Scout:Llm:Provider          -> SCOUT__LLM__PROVIDER
-        //   Scout:Llm:Ollama:Model      -> SCOUT__LLM__OLLAMA__MODEL
-        //   Scout:Llm:Ollama:Endpoint   -> SCOUT__LLM__OLLAMA__ENDPOINT
-        // Verified against src/Scout.Core/Llm/LlmOptions.cs.
-        const llmProvider = (await vault.get('llm.provider')) ?? 'Ollama';
-        const llmModel = await vault.get('llm.model');
-        const llmEndpoint = await vault.get('llm.endpoint');
-
-        // env is passed to spawn; never logged
-        const env: Record<string, string> = {
-          SCOUT__CHATADAPTER: 'Discord',
-          SCOUT__LLM__PROVIDER: llmProvider,
-          DOTNET_ENVIRONMENT: 'Production',
-          SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
-        };
-        if (llmModel !== null) env['SCOUT__LLM__OLLAMA__MODEL'] = llmModel;
-        if (llmEndpoint !== null) env['SCOUT__LLM__OLLAMA__ENDPOINT'] = llmEndpoint;
-        return env;
-      },
+      // env is assembled by buildEnv; never logged — it contains secrets
+      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key) }),
     });
 
     unregisterWorker = registerWorkerHandlers(
