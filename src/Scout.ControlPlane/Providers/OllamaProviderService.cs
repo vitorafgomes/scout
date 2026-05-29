@@ -14,10 +14,15 @@ public sealed class OllamaProviderService
     public const string ProviderId = "ollama";
     private const string BinaryName = "ollama";
 
+    // Mirror of Scout.Host.ControlPlane.Security.SessionToken.EnvVarName. The
+    // domain project cannot reference the host, so the literal is duplicated;
+    // a host-side test asserts the two stay in sync. Scrubbed from every child
+    // launch so the session token is not inherited by spawned daemons.
+    internal const string SessionTokenEnvVarName = "SCOUT_CONTROLPLANE_TOKEN";
+
     private static readonly TimeSpan ReadinessPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan RestartGrace = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan ExternalStopGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExternalStopMaxWait = TimeSpan.FromSeconds(10);
 
     private readonly IBinaryLocator _locator;
@@ -185,7 +190,14 @@ public sealed class OllamaProviderService
 
             var request = new ProcessLaunchRequest(
                 FileName: binaryPath,
-                Arguments: new[] { "serve" });
+                Arguments: new[] { "serve" },
+                // Scrub the control-plane session token so it is not inherited
+                // by the daemon (visible via /proc/<pid>/environ). Null value
+                // tells the launcher to remove the variable from the child env.
+                EnvironmentOverrides: new Dictionary<string, string?>
+                {
+                    [SessionTokenEnvVarName] = null,
+                });
 
             _logger.LogInformation("Spawning ollama daemon: {Path} serve", binaryPath);
             var proc = _launcher.Launch(request);
@@ -249,80 +261,42 @@ public sealed class OllamaProviderService
         }
 
         var owned = _registry.GetOwned(ProviderId);
-        if (owned is not null)
+        if (owned is null)
         {
-            var graceful = await owned.StopAsync(RestartGrace, ct).ConfigureAwait(false);
-            if (!graceful)
-            {
-                _logger.LogWarning(
-                    "Ollama daemon (pid {Pid}) did not exit within grace window and was force-killed",
-                    owned.Pid);
-            }
-            _registry.Untrack(ProviderId);
-            try
-            {
-                await owned.DisposeAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Dispose of stopped ollama process raised");
-            }
-        }
-        else
-        {
-            // Externally-started daemon: fall back to OS-level kill. We do not
-            // own the PID so we shoot by binary name.
-            var killRequest = OperatingSystem.IsWindows()
-                ? new ProcessLaunchRequest("taskkill", new[] { "/F", "/IM", "ollama.exe" })
-                : new ProcessLaunchRequest("pkill", new[] { "-x", "ollama" });
-
+            // Externally-started daemon: Scout did not spawn this process and
+            // must not kill what it does not own (boundary cases default to
+            // forbidden). Surface a clear, non-fatal status instead of a
+            // name-globbed kill that could take down an unrelated process.
             _logger.LogInformation(
-                "Stopping externally-started ollama daemon via {Tool}",
-                killRequest.FileName);
+                "Ollama is running but was not started by Scout; refusing to stop an externally-managed daemon");
 
-            ILaunchedProcess killer;
-            try
+            return status with
             {
-                killer = _launcher.Launch(killRequest);
-            }
-            catch (Exception ex)
-            {
-                throw new ProviderStopFailedException(
-                    ProviderId,
-                    $"Failed to invoke {killRequest.FileName} to stop ollama: {ex.Message}");
-            }
-
-            try
-            {
-                using var killCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                killCts.CancelAfter(ExternalStopGrace);
-                try
-                {
-                    await killer.WaitForExitAsync(killCts.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    _logger.LogDebug(
-                        "External kill helper did not exit within {Grace}; continuing to poll",
-                        ExternalStopGrace);
-                }
-            }
-            finally
-            {
-                try
-                {
-                    await killer.DisposeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Dispose of kill helper raised");
-                }
-            }
+                LastError = new ProviderError(
+                    Code: "providers/externally-managed",
+                    Message: "Ollama is running but was not started by Scout; it must be stopped externally."),
+            };
         }
 
-        // Poll until the daemon stops answering /api/tags. If a managed proc
-        // already returned from StopAsync the daemon is normally gone; for the
-        // external path this is the real boundary check.
+        var graceful = await owned.StopAsync(RestartGrace, ct).ConfigureAwait(false);
+        if (!graceful)
+        {
+            _logger.LogWarning(
+                "Ollama daemon (pid {Pid}) did not exit within grace window and was force-killed",
+                owned.Pid);
+        }
+        _registry.Untrack(ProviderId);
+        try
+        {
+            await owned.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Dispose of stopped ollama process raised");
+        }
+
+        // Poll until the daemon stops answering /api/tags as the real boundary
+        // check that the owned process actually released the endpoint.
         var deadline = DateTimeOffset.UtcNow + ExternalStopMaxWait;
         while (DateTimeOffset.UtcNow < deadline)
         {

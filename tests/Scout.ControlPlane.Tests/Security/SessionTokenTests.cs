@@ -1,3 +1,4 @@
+using Scout.ControlPlane.Providers;
 using Scout.Host.ControlPlane.Security;
 using Shouldly;
 using Xunit;
@@ -6,6 +7,15 @@ namespace Scout.ControlPlane.Tests.Security;
 
 public sealed class SessionTokenTests
 {
+    [Fact]
+    public void EnvVarName_MirroredByProviderScrubConstant()
+    {
+        // The domain project cannot reference the host, so OllamaProviderService
+        // duplicates the env var name to scrub it from spawned daemons. Assert
+        // the two literals stay in sync.
+        OllamaProviderService.SessionTokenEnvVarName.ShouldBe(SessionToken.EnvVarName);
+    }
+
     [Fact]
     public void Matches_ExactValue_ReturnsTrue()
     {

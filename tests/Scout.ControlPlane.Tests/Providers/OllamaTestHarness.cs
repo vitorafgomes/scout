@@ -22,6 +22,7 @@ internal sealed class OllamaTestHarness
     public OllamaTestHarness()
     {
         // Sensible hermetic defaults: ready, binary present, daemon up, autostart on.
+        Probe.Current.Returns(OllamaReadinessState.Ready);
         Probe.WaitReadyAsync(Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
         Locator.FindOnPathAsync("ollama", Arg.Any<CancellationToken>())
