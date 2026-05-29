@@ -196,7 +196,10 @@ export class LogsComponent {
     let counter = 0;
     for (const ev of source) {
       if (ev.kind !== 'stdout' && ev.kind !== 'stderr') continue;
-      const level = ev.kind === 'stderr' ? 'error' : detectLevel(ev.line);
+      // The .NET worker host routes every level to stderr by design (to keep
+      // stdout clean for the readiness marker), so the level must come from the
+      // line content, not the stream.
+      const level = detectLevel(ev.line);
       if (!filters[level]) continue;
       out.push({ id: `${ev.ts}-${counter++}`, ts: ev.ts, level, text: ev.line });
     }
