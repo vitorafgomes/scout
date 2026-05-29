@@ -96,6 +96,51 @@ public sealed class SlackChatAdapterTests
     }
 
     [Fact]
+    public async Task Inbound_Channel_Message_Binds_Sink_To_Its_Own_Ts()
+    {
+        var (adapter, _, chat) = Build();
+        IResponseSink? sink = null;
+        await adapter.StartAsync((_, s, _) => { sink = s; return Task.CompletedTask; },
+            CancellationToken.None);
+
+        var message = Message("<@UBOT> hi", channelType: "channel");
+        message.Ts = "1700000000.000100";
+        await adapter.OnMessageReceivedAsync(message);
+
+        // Driving the sink's first post reveals the thread it is bound to: a
+        // non-threaded channel message starts a thread on its own ts.
+        await sink.ShouldNotBeNull().BeginAsync(CancellationToken.None);
+        await chat.Received(1).PostMessage(
+            Arg.Is<Message>(m => m.Channel == "C1" && m.ThreadTs == "1700000000.000100"),
+            Arg.Any<CancellationToken>());
+
+        await adapter.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Inbound_Threaded_Channel_Message_Binds_Sink_To_Parent_Thread()
+    {
+        var (adapter, _, chat) = Build();
+        IResponseSink? sink = null;
+        await adapter.StartAsync((_, s, _) => { sink = s; return Task.CompletedTask; },
+            CancellationToken.None);
+
+        var message = Message("<@UBOT> hi", channelType: "channel");
+        message.Ts = "1700000000.000200";
+        message.ThreadTs = "1700000000.000100";
+        await adapter.OnMessageReceivedAsync(message);
+
+        // An already-threaded message replies under the parent thread, not its
+        // own ts.
+        await sink.ShouldNotBeNull().BeginAsync(CancellationToken.None);
+        await chat.Received(1).PostMessage(
+            Arg.Is<Message>(m => m.Channel == "C1" && m.ThreadTs == "1700000000.000100"),
+            Arg.Any<CancellationToken>());
+
+        await adapter.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Inbound_From_The_Bot_Is_Ignored()
     {
         var (adapter, _, _) = Build();
