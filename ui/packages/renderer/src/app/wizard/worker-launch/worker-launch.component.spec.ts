@@ -7,6 +7,7 @@ import type { WorkerEvent, WorkerStatus } from '@scout/shared';
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { LogStore } from '../../core/log.store';
 import { WizardStore } from '../../core/wizard.store';
+import { PersistentStateService } from '../../core/persistent-state';
 import { WorkerLaunchComponent } from './worker-launch.component';
 
 type WorkerEventListener = (e: WorkerEvent) => void;
@@ -22,6 +23,8 @@ function makeCrashedStatus(): WorkerStatus {
 interface BridgeFactory {
   workerStartImpl?: () => Promise<{ pid: number }>;
   onWorkerEventImpl?: (listener: WorkerEventListener) => () => void;
+  // Controls what vaultHas returns for discord.bot-token (default: exists=false)
+  tokenExists?: boolean;
 }
 
 function makeBridge(opts: BridgeFactory = {}) {
@@ -29,12 +32,14 @@ function makeBridge(opts: BridgeFactory = {}) {
 
   const startImpl = opts.workerStartImpl ?? (() => Promise.resolve({ pid: 42 }));
   const eventImpl = opts.onWorkerEventImpl;
+  const tokenExists = opts.tokenExists ?? false;
 
   const bridge = {
     workerStart: vi.fn(startImpl),
     workerStop: vi.fn().mockResolvedValue({ exitCode: 0 }),
     workerStatus: vi.fn().mockResolvedValue({ state: 'idle', restarts: 0 }),
     vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
+    vaultHas: vi.fn().mockResolvedValue({ exists: tokenExists }),
     onWorkerEvent: vi.fn((listener: WorkerEventListener) => {
       capturedListener = listener;
       if (eventImpl !== undefined) return eventImpl(listener);
@@ -61,14 +66,24 @@ function makeLogStore(): LogStore {
   } as unknown as LogStore;
 }
 
+function makePersistentStub() {
+  return {
+    get: vi.fn(() => null),
+    set: vi.fn(),
+    clear: vi.fn(),
+  } as unknown as PersistentStateService;
+}
+
 async function setup(
   opts: {
     guildName?: string;
     clientId?: string;
+    tokenOnly?: boolean;
     bridgeOpts?: BridgeFactory;
   } = {},
 ) {
-  const { bridge, fire } = makeBridge(opts.bridgeOpts ?? {});
+  const tokenExists = opts.tokenOnly === true || opts.guildName !== undefined || opts.clientId !== undefined;
+  const { bridge, fire } = makeBridge({ ...(opts.bridgeOpts ?? {}), tokenExists });
 
   TestBed.configureTestingModule({
     providers: [
@@ -79,12 +94,19 @@ async function setup(
       ]),
       { provide: ScoutBridgeService, useValue: bridge },
       { provide: LogStore, useValue: makeLogStore() },
+      { provide: PersistentStateService, useValue: makePersistentStub() },
     ],
   });
 
   const store = TestBed.inject(WizardStore);
-  if (opts.clientId !== undefined) store.setClientId(opts.clientId);
-  if (opts.guildName !== undefined) store.setGuild({ id: 'g1', name: opts.guildName });
+
+  if (opts.tokenOnly === true) {
+    // Token-only provisioning: hydrate _hasToken via loadFromVault.
+    await store.loadFromVault();
+  } else {
+    if (opts.clientId !== undefined) store.setClientId(opts.clientId);
+    if (opts.guildName !== undefined) store.setGuild({ id: 'g1', name: opts.guildName });
+  }
 
   const fixture = TestBed.createComponent(WorkerLaunchComponent);
   fixture.detectChanges();
@@ -98,32 +120,61 @@ describe('WorkerLaunchComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('calls workerStart on init', async () => {
+  it('calls workerStart on init when guild is set', async () => {
     const { bridge } = await setup({ guildName: 'Scout Server', clientId: 'cid' });
     expect(bridge.workerStart).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the guild name', async () => {
-    const { fixture } = await setup({ guildName: 'My Guild', clientId: 'cid' });
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('My Guild');
+  it('calls workerStart on init when token-only (no guild)', async () => {
+    const { bridge } = await setup({ tokenOnly: true });
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
   });
 
-  it('shows env summary tags', async () => {
-    const { fixture } = await setup({ guildName: 'G', clientId: 'c' });
-    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('CHAT_ADAPTER=Discord');
-    expect(text).toContain('LLM_PROVIDER=Ollama');
-  });
-
-  it('redirects to / when no guild is in the store', async () => {
-    const { bridge } = makeBridge();
+  it('does NOT redirect to / when provisioned via token only (no guild)', async () => {
+    const { bridge } = makeBridge({ tokenExists: true });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '', children: [] }]),
         { provide: ScoutBridgeService, useValue: bridge },
         { provide: LogStore, useValue: makeLogStore() },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
+      ],
+    });
+    const store = TestBed.inject(WizardStore);
+    await store.loadFromVault();
+    const router = TestBed.inject(Router);
+    const nav = vi.spyOn(router, 'navigateByUrl');
+
+    const fixture = TestBed.createComponent(WorkerLaunchComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(nav).not.toHaveBeenCalledWith('/');
+  });
+
+  it('renders the guild name when guild metadata is present', async () => {
+    const { fixture } = await setup({ guildName: 'My Guild', clientId: 'cid' });
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('My Guild');
+  });
+
+  it('shows env summary chips reflecting token and provider', async () => {
+    const { fixture } = await setup({ guildName: 'G', clientId: 'c' });
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('LLM_PROVIDER=Ollama');
+    expect(text).toContain('ENV=Production');
+  });
+
+  it('redirects to / when hasProvisioning is false (no token, no guild)', async () => {
+    const { bridge } = makeBridge({ tokenExists: false });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([{ path: '', children: [] }]),
+        { provide: ScoutBridgeService, useValue: bridge },
+        { provide: LogStore, useValue: makeLogStore() },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
       ],
     });
     const router = TestBed.inject(Router);
@@ -138,7 +189,7 @@ describe('WorkerLaunchComponent', () => {
   it('navigates to /ready after running state event (200ms delay)', async () => {
     vi.useFakeTimers();
     try {
-      const { bridge, fire } = makeBridge();
+      const { bridge, fire } = makeBridge({ tokenExists: true });
       TestBed.configureTestingModule({
         providers: [
           provideZonelessChangeDetection(),
@@ -148,6 +199,7 @@ describe('WorkerLaunchComponent', () => {
           ]),
           { provide: ScoutBridgeService, useValue: bridge },
           { provide: LogStore, useValue: makeLogStore() },
+          { provide: PersistentStateService, useValue: makePersistentStub() },
         ],
       });
       const store = TestBed.inject(WizardStore);
@@ -170,13 +222,14 @@ describe('WorkerLaunchComponent', () => {
   });
 
   it('shows error badge on crashed state', async () => {
-    const { bridge, fire } = makeBridge();
+    const { bridge, fire } = makeBridge({ tokenExists: true });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '', children: [] }]),
         { provide: ScoutBridgeService, useValue: bridge },
         { provide: LogStore, useValue: makeLogStore() },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
       ],
     });
     const store = TestBed.inject(WizardStore);
@@ -197,13 +250,14 @@ describe('WorkerLaunchComponent', () => {
     const startImpl = async (): Promise<{ pid: number }> => {
       throw new Error('binary missing');
     };
-    const { bridge, fire } = makeBridge({ workerStartImpl: startImpl });
+    const { bridge, fire } = makeBridge({ workerStartImpl: startImpl, tokenExists: true });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '', children: [] }]),
         { provide: ScoutBridgeService, useValue: bridge },
         { provide: LogStore, useValue: makeLogStore() },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
       ],
     });
     const store = TestBed.inject(WizardStore);
@@ -223,13 +277,14 @@ describe('WorkerLaunchComponent', () => {
   });
 
   it('cancel only navigates; worker state and wizard store are untouched', async () => {
-    const { bridge, fire } = makeBridge();
+    const { bridge, fire } = makeBridge({ tokenExists: true });
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '', children: [] }]),
         { provide: ScoutBridgeService, useValue: bridge },
         { provide: LogStore, useValue: makeLogStore() },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
       ],
     });
     const store = TestBed.inject(WizardStore);
