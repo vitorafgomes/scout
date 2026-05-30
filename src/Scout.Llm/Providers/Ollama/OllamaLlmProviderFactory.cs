@@ -1,3 +1,4 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Scout.Llm.Abstractions;
@@ -115,6 +116,29 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
 
         AddChat(builder, ChatEndpoint());
         AddEmbeddings(builder, _endpoint);
+    }
+
+    /// <summary>
+    /// Build a standalone <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/>
+    /// using the same connector wiring as <see cref="AddToKernel"/>, but resolved
+    /// from a throwaway kernel so it carries no dependency on the shared kernel.
+    /// The composition root registers the returned instance directly, breaking the
+    /// embedder-to-kernel construction cycle.
+    /// </summary>
+    public IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator()
+    {
+        var builder = Kernel.CreateBuilder();
+        if (_httpClient is not null)
+        {
+            _httpClient.BaseAddress ??= _endpoint;
+            AddEmbeddings(builder, _httpClient);
+        }
+        else
+        {
+            AddEmbeddings(builder, _endpoint);
+        }
+
+        return builder.Build().GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
     }
 
     // Ollama exposes an OpenAI-compatible surface under "/v1". The chat service

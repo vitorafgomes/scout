@@ -1,3 +1,4 @@
+using Microsoft.Extensions.AI;
 using Microsoft.SemanticKernel;
 
 namespace Scout.Llm.Abstractions;
@@ -24,4 +25,12 @@ public interface ILlmProviderFactory
     /// every LLM call.
     /// </summary>
     void AddToKernel(IKernelBuilder builder);
+
+    /// <summary>
+    /// Build a standalone embedding generator that does NOT depend on the shared
+    /// <see cref="Kernel"/>. The composition root registers this directly so
+    /// consumers (e.g. project knowledge) resolve an embedder without pulling the
+    /// kernel transitively, which would form a construction cycle.
+    /// </summary>
+    IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator();
 }

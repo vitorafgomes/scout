@@ -74,9 +74,18 @@ public static class LlmServiceCollectionExtensions
         services.AddSingleton(sp =>
             sp.GetRequiredService<Kernel>().GetRequiredService<IChatCompletionService>());
 
+        // Resolve the embedding generator straight from the provider factory, NOT
+        // from the shared kernel. Deriving it from the kernel created a cycle:
+        // kernel -> KernelPlugin (project knowledge) -> ProjectKnowledgeService ->
+        // IEmbeddingGenerator -> kernel (still under construction). The kernel
+        // still registers its own embedder via AddToKernel for its internal use.
+        // Resolve the embedding generator straight from the provider factory, NOT
+        // from the shared kernel. Deriving it from the kernel created a cycle:
+        // kernel -> KernelPlugin (project knowledge) -> ProjectKnowledgeService ->
+        // IEmbeddingGenerator -> kernel (still under construction). The kernel
+        // still registers its own embedder via AddToKernel for its internal use.
         services.AddSingleton(sp =>
-            sp.GetRequiredService<Kernel>()
-              .GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>());
+            sp.GetRequiredService<ILlmProviderFactory>().CreateEmbeddingGenerator());
 
         services.AddSingleton<IChatGateway>(sp =>
             new ChatGateway(
