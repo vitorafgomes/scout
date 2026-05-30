@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Scout.Llm.Abstractions;
@@ -17,12 +18,15 @@ namespace Scout.Llm;
 /// <see cref="ChatRequest"/> into Semantic Kernel primitives and yields content
 /// chunks as they arrive. The composed <see cref="Kernel"/> is passed into the
 /// streaming call so Semantic Kernel can drive function-calling: tool round-trips
-/// happen internally and only final assistant content is yielded.
+/// happen internally and only final assistant content is yielded. When a chat
+/// <see cref="ChatCompletionAgent"/> is supplied, the stream is routed through it
+/// so its instructions and tools apply; the yielded contract is unchanged.
 /// </summary>
 internal sealed class ChatGateway : IChatGateway
 {
     private readonly IChatCompletionService _chat;
     private readonly Kernel? _kernel;
+    private readonly ChatCompletionAgent? _agent;
     private readonly ILogger<ChatGateway> _logger;
     private readonly string _target;
 
@@ -30,10 +34,12 @@ internal sealed class ChatGateway : IChatGateway
         IChatCompletionService chat,
         Kernel? kernel = null,
         IOptions<LlmOptions>? options = null,
-        ILogger<ChatGateway>? logger = null)
+        ILogger<ChatGateway>? logger = null,
+        ChatCompletionAgent? agent = null)
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _kernel = kernel;
+        _agent = agent;
         _logger = logger ?? NullLogger<ChatGateway>.Instance;
 
         // Human-readable description of what the gateway talks to, for the
@@ -56,6 +62,39 @@ internal sealed class ChatGateway : IChatGateway
                 "ChatRequest.UserMessage must be non-empty.", nameof(request));
         }
 
+        _logger.LogInformation(
+            "LLM request -> {Target} (inputChars={InputChars}).",
+            _target, request.UserMessage.Length);
+
+        var outputChars = 0;
+        if (_agent is not null)
+        {
+            await foreach (var content in StreamAgentAsync(request, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                outputChars += content.Length;
+                yield return content;
+            }
+        }
+        else
+        {
+            await foreach (var content in StreamChatAsync(request, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                outputChars += content.Length;
+                yield return content;
+            }
+        }
+
+        _logger.LogInformation(
+            "LLM response complete <- {Target} (outputChars={OutputChars}).",
+            _target, outputChars);
+    }
+
+    private async IAsyncEnumerable<string> StreamChatAsync(
+        ChatRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         var history = new ChatHistory();
         if (!string.IsNullOrWhiteSpace(request.SystemPrompt))
         {
@@ -64,27 +103,39 @@ internal sealed class ChatGateway : IChatGateway
         history.AddUserMessage(request.UserMessage);
 
         var settings = BuildSettings(request);
-
-        _logger.LogInformation(
-            "LLM request -> {Target} (inputChars={InputChars}).",
-            _target, request.UserMessage.Length);
-
         var stream = _chat.GetStreamingChatMessageContentsAsync(
             history, settings, kernel: _kernel, cancellationToken);
 
-        var outputChars = 0;
         await foreach (var chunk in stream.ConfigureAwait(false))
         {
             if (!string.IsNullOrEmpty(chunk.Content))
             {
-                outputChars += chunk.Content.Length;
                 yield return chunk.Content;
             }
         }
+    }
 
-        _logger.LogInformation(
-            "LLM response complete <- {Target} (outputChars={OutputChars}).",
-            _target, outputChars);
+    // Routes the response through the Project Expert agent. The agent owns its
+    // instructions and tools; a fresh thread per request keeps the gateway
+    // stateless. Only non-empty assistant content is yielded.
+    private async IAsyncEnumerable<string> StreamAgentAsync(
+        ChatRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var message = new ChatMessageContent(AuthorRole.User, request.UserMessage);
+        ChatHistoryAgentThread thread = new();
+
+        var stream = _agent!.InvokeStreamingAsync(
+            new[] { message }, thread, options: null, cancellationToken);
+
+        await foreach (var item in stream.ConfigureAwait(false))
+        {
+            var content = item.Message.Content;
+            if (!string.IsNullOrEmpty(content))
+            {
+                yield return content;
+            }
+        }
     }
 
     public async Task<string> CompleteAsync(
