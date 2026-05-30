@@ -118,6 +118,19 @@ public sealed class LlmServiceCollectionExtensionsTests
             })
             .Build();
 
+    private static IConfiguration OpenRouterConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "OpenRouter",
+                ["Scout:Llm:OpenRouter:ApiKey"] = "test-key",
+                ["Scout:Llm:OpenRouter:Chat:Model"] = "openai/gpt-4o-mini",
+                ["Scout:Llm:OpenRouter:Embeddings:Model"] = "text-embedding-3-small",
+                ["Scout:Llm:OpenRouter:Embeddings:Endpoint"] = "https://api.openai.com/v1",
+                ["Scout:Llm:OpenRouter:Embeddings:ApiKey"] = "embeddings-key",
+            })
+            .Build();
+
     private static IConfiguration AzureOpenAIConfig() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -167,6 +180,7 @@ public sealed class LlmServiceCollectionExtensionsTests
     public static TheoryData<string, Func<IConfiguration>> ProviderConfigs() => new()
     {
         { "OpenAI", OpenAIConfig },
+        { "OpenRouter", OpenRouterConfig },
         { "AzureOpenAI", AzureOpenAIConfig },
         { "Mistral", MistralConfig },
         { "HuggingFace", HuggingFaceConfig },
@@ -204,6 +218,7 @@ public sealed class LlmServiceCollectionExtensionsTests
         ex.Message.ShouldContain("Ollama");
         ex.Message.ShouldContain("Gemini");
         ex.Message.ShouldContain("OpenAI");
+        ex.Message.ShouldContain("OpenRouter");
         ex.Message.ShouldContain("AzureOpenAI");
         ex.Message.ShouldContain("Mistral");
         ex.Message.ShouldContain("HuggingFace");

@@ -15,6 +15,7 @@ using Scout.Llm.Providers.HuggingFace;
 using Scout.Llm.Providers.Mistral;
 using Scout.Llm.Providers.Ollama;
 using Scout.Llm.Providers.OpenAI;
+using Scout.Llm.Providers.OpenRouter;
 
 namespace Scout.Llm;
 
@@ -61,6 +62,9 @@ public static class LlmServiceCollectionExtensions
             case "OpenAI":
                 services.AddOpenAILlmProvider();
                 break;
+            case "OpenRouter":
+                services.AddOpenRouterLlmProvider();
+                break;
             case "AzureOpenAI":
                 services.AddAzureOpenAILlmProvider();
                 break;
@@ -76,7 +80,8 @@ public static class LlmServiceCollectionExtensions
             default:
                 throw new InvalidOperationException(
                     $"Unknown LLM provider '{provider}'. Supported providers: Ollama, " +
-                    "Gemini, OpenAI, AzureOpenAI, Mistral, HuggingFace, AzureAIInference.");
+                    "Gemini, OpenAI, OpenRouter, AzureOpenAI, Mistral, HuggingFace, " +
+                    "AzureAIInference.");
         }
 
         services.AddSingleton(sp =>

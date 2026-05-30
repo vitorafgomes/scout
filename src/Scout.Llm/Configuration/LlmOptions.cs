@@ -4,8 +4,9 @@ namespace Scout.Llm.Configuration;
 /// Top-level LLM configuration. Bound from the "Scout:Llm" section. The active
 /// provider is selected by <see cref="Provider"/>; provider-specific blocks
 /// (<see cref="Ollama"/>, <see cref="Gemini"/>, <see cref="OpenAI"/>,
-/// <see cref="AzureOpenAI"/>, <see cref="Mistral"/>, <see cref="HuggingFace"/>,
-/// <see cref="AzureAIInference"/>) carry the settings for each implementation.
+/// <see cref="OpenRouter"/>, <see cref="AzureOpenAI"/>, <see cref="Mistral"/>,
+/// <see cref="HuggingFace"/>, <see cref="AzureAIInference"/>) carry the settings
+/// for each implementation.
 /// Single source of truth for both chat and embeddings.
 /// </summary>
 public sealed class LlmOptions
@@ -22,6 +23,9 @@ public sealed class LlmOptions
 
     /// <summary>Settings for the OpenAI-compatible provider. Null when not configured.</summary>
     public OpenAIOptions? OpenAI { get; set; }
+
+    /// <summary>Settings for the OpenRouter provider. Null when not configured.</summary>
+    public OpenRouterOptions? OpenRouter { get; set; }
 
     /// <summary>Settings for the Azure OpenAI provider. Null when not configured.</summary>
     public AzureOpenAIOptions? AzureOpenAI { get; set; }
@@ -71,6 +75,38 @@ public sealed class OpenAIEmbeddingOptions
 
     /// <summary>Optional embeddings API key. Null falls back to the chat key.</summary>
     public string? ApiKey { get; set; }
+}
+
+/// <summary>Settings for the OpenRouter provider. Chat targets the preset
+/// OpenRouter base URL via the OpenAI connector. OpenRouter serves no embeddings,
+/// so the <see cref="Embeddings"/> block is required and points at a separate
+/// OpenAI-compatible embeddings host with its own endpoint and key.</summary>
+public sealed class OpenRouterOptions
+{
+    /// <summary>API key for the OpenRouter chat endpoint.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding settings; targets a separate OpenAI-compatible host since
+    /// OpenRouter serves no embeddings. Endpoint and key are required.</summary>
+    public OpenRouterEmbeddingOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Embedding settings for the OpenRouter provider. OpenRouter has no
+/// embeddings endpoint, so all three fields point at a separate OpenAI-compatible
+/// host and are required.</summary>
+public sealed class OpenRouterEmbeddingOptions
+{
+    /// <summary>Embedding model identifier, e.g. "text-embedding-3-small".</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Base URL of the OpenAI-compatible embeddings host. Required.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>API key for the embeddings host. Required.</summary>
+    public string ApiKey { get; set; } = string.Empty;
 }
 
 /// <summary>Settings for the Azure OpenAI provider. Uses deployment names rather
