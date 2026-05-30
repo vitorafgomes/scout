@@ -1,0 +1,56 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Scout.Adapter.Discord;
+using Scout.Adapter.Slack;
+using Scout.Adapter.Teams;
+using Scout.Conversation;
+using Scout.Knowledge;
+using Scout.Llm;
+using Scout.Plugin.GitHub;
+
+namespace Scout.Host.Console;
+
+/// <summary>
+/// Single source of truth for the host's service graph. Program.cs and the
+/// composition smoke test both call <see cref="AddScoutHost"/>, so the tested
+/// wiring cannot drift from what production runs.
+/// </summary>
+internal static class HostComposition
+{
+    /// <summary>
+    /// Register every service the host needs: readiness signal, LLM, conversation,
+    /// project knowledge, the self-gating chat adapters, the GitHub plugin, the
+    /// conversation worker, and the parent watchdog.
+    /// </summary>
+    public static IServiceCollection AddScoutHost(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.AddSingleton<IReadinessSignal, StdoutReadinessSignal>();
+
+        services.AddScoutLlm(configuration);
+        services.AddScoutConversation(configuration);
+        services.AddProjectKnowledge(configuration);
+
+        // Each adapter self-gates on its configured credentials, so the host runs
+        // whatever combination is configured and starts none when nothing is set.
+        services.AddDiscordAdapter(configuration);
+        services.AddSlackAdapter(configuration);
+        services.AddTeamsAdapter(configuration);
+
+        // Semantic Kernel function-calling plugins. Self-gates on its configured token.
+        services.AddGitHubPlugin(configuration);
+
+        services.AddHostedService<ConversationWorker>();
+
+        // Self-terminate if the supervising parent dies ungracefully. Gated on an env
+        // var the supervisor sets, so standalone/interactive runs are never affected.
+        services.AddParentWatchdog(
+            Environment.GetEnvironmentVariable(ParentWatchdogRegistration.EnableEnvVar));
+
+        return services;
+    }
+}

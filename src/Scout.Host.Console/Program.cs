@@ -1,14 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Scout.Adapter.Discord;
-using Scout.Adapter.Slack;
-using Scout.Adapter.Teams;
-using Scout.Conversation;
 using Scout.Host.Console;
-using Scout.Knowledge;
-using Scout.Llm;
-using Scout.Plugin.GitHub;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -18,29 +11,33 @@ var builder = Host.CreateApplicationBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
-builder.Services.AddSingleton<IReadinessSignal, StdoutReadinessSignal>();
+builder.Services.AddScoutHost(builder.Configuration);
 
-builder.Services.AddScoutLlm(builder.Configuration);
-builder.Services.AddScoutConversation(builder.Configuration);
-builder.Services.AddProjectKnowledge(builder.Configuration);
+// Startup visibility (synchronous, never buffered). The async console logger can
+// drop queued messages on a fast startup/shutdown, hiding why the host stalled or
+// exited. These markers bypass the logging pipeline and always reach stderr.
+var configuredAdapters = new List<string>();
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Scout:Adapters:Discord:BotToken"]))
+{
+    configuredAdapters.Add("Discord");
+}
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Scout:Adapters:Slack:BotToken"]))
+{
+    configuredAdapters.Add("Slack");
+}
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Scout:Adapters:Teams:AppId"]))
+{
+    configuredAdapters.Add("Teams");
+}
 
-// Each adapter self-gates on its configured credentials, so the host runs
-// whatever combination is configured and starts none when nothing is set.
-builder.Services.AddDiscordAdapter(builder.Configuration);
-builder.Services.AddSlackAdapter(builder.Configuration);
-builder.Services.AddTeamsAdapter(builder.Configuration);
-
-// Semantic Kernel function-calling plugins. Self-gates on its configured token.
-builder.Services.AddGitHubPlugin(builder.Configuration);
-
-builder.Services.AddHostedService<ConversationWorker>();
-
-// Self-terminate if the supervising parent dies ungracefully. Gated on an env
-// var the supervisor sets, so standalone/interactive runs are never affected.
-builder.Services.AddParentWatchdog(
-    Environment.GetEnvironmentVariable(ParentWatchdogRegistration.EnableEnvVar));
+WriteMarker($"env={builder.Environment.EnvironmentName} adapters configured: " +
+    (configuredAdapters.Count == 0 ? "none" : string.Join(", ", configuredAdapters)));
 
 var host = builder.Build();
+
+var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStarted.Register(() => WriteMarker("host started"));
+lifetime.ApplicationStopping.Register(() => WriteMarker("host stopping"));
 
 var command = ConsoleCommand.Parse(args);
 if (command.Command == Command.Index)
@@ -48,5 +45,12 @@ if (command.Command == Command.Index)
     return await IndexEntryPoint.RunAsync(host.Services, command.Project, CancellationToken.None);
 }
 
+WriteMarker("running host");
 await host.RunAsync();
 return 0;
+
+static void WriteMarker(string message)
+{
+    System.Console.Error.WriteLine($"[scout] {message}");
+    System.Console.Error.Flush();
+}
