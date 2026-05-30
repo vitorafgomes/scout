@@ -31,6 +31,14 @@ public sealed class ProjectExpertAgentFactoryTests
     }
 
     [Fact]
+    public void Instructions_Scope_The_Tool_To_Project_Questions_And_Answer_General_Directly()
+    {
+        ProjectExpertAgentFactory.Instructions.ShouldContain("search_project");
+        ProjectExpertAgentFactory.Instructions.ShouldContain("general", Case.Insensitive);
+        ProjectExpertAgentFactory.Instructions.ShouldContain("directly", Case.Insensitive);
+    }
+
+    [Fact]
     public void Create_Binds_The_Supplied_Kernel()
     {
         var kernel = BuildKernel();

@@ -54,10 +54,16 @@ public static class KnowledgeServiceCollectionExtensions
             new ProjectKnowledgePlugin(sp.GetRequiredService<ProjectKnowledgeService>()),
             "ProjectKnowledge"));
 
-        // The agent binds the fully-composed shared kernel (which carries the
-        // search_project plugin). The LLM gateway resolves it to drive replies.
-        services.AddSingleton(sp =>
-            ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>()));
+        // Gate the agent on configured projects. With none, the gateway resolves
+        // no ChatCompletionAgent and falls back to general chat. The agent binds
+        // the fully-composed shared kernel (which carries the search_project plugin).
+        var projects = new ProjectsOptions();
+        configuration.GetSection(ProjectsOptions.SectionName).Bind(projects);
+        if (projects.Items.Count > 0)
+        {
+            services.AddSingleton(sp =>
+                ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>()));
+        }
 
         return services;
     }

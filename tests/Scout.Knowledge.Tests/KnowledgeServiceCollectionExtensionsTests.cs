@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
 using Scout.Knowledge;
 
 namespace Scout.Knowledge.Tests;
@@ -26,6 +27,9 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
         // AddScoutLlm supplies the embedder in production; substitute it here so
         // the knowledge graph resolves in isolation.
         services.AddSingleton(Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>());
+        // AddScoutLlm supplies the shared kernel in production; the agent factory
+        // needs it to resolve.
+        services.AddSingleton(Kernel.CreateBuilder().Build());
         services.AddProjectKnowledge(configuration);
         return services.BuildServiceProvider();
     }
@@ -57,6 +61,35 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
 
         plugin.ShouldNotBeNull();
         plugin!.TryGetFunction("search_project", out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Registers_Search_Project_Plugin_With_No_Projects_Configured()
+    {
+        using var provider = Build();
+
+        var plugin = provider.GetServices<KernelPlugin>()
+            .SingleOrDefault(p => p.Name == "ProjectKnowledge");
+
+        plugin.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void Does_Not_Register_Agent_When_No_Projects_Configured()
+    {
+        using var provider = Build();
+
+        provider.GetService<ChatCompletionAgent>().ShouldBeNull();
+    }
+
+    [Fact]
+    public void Registers_Agent_When_At_Least_One_Project_Configured()
+    {
+        using var provider = Build(
+            ("Scout:Projects:Items:0:Name", "scout"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
+
+        provider.GetService<ChatCompletionAgent>().ShouldNotBeNull();
     }
 
     [Fact]
