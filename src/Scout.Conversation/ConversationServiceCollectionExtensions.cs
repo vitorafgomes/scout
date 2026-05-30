@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Routing;
 using Scout.Conversation.Streaming;
+using Scout.Skills;
 
 namespace Scout.Conversation;
 
@@ -33,6 +34,11 @@ public static class ConversationServiceCollectionExtensions
             Logger = sp.GetService<ILoggerFactory>()?.CreateLogger<StreamPump>(),
         });
         services.TryAddSingleton(sp => new StreamPump(sp.GetRequiredService<StreamPumpOptions>()));
+        // Fallback skill selector so the conversation core resolves standalone.
+        // The host registers the real embedding-driven selector via AddScoutSkills
+        // beforehand; this TryAdd then no-ops and the real one wins.
+        services.TryAddSingleton<ISkillSelector, NoOpSkillSelector>();
+
         services.TryAddSingleton<IConversationRouter, LlmStreamingRouter>();
         services.TryAddSingleton<ConversationConductor>();
 

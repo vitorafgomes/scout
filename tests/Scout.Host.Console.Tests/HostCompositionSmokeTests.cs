@@ -10,6 +10,7 @@ using Scout.Llm;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
 using Scout.Llm.Providers.Ollama;
+using Scout.Skills;
 using Shouldly;
 using Xunit;
 
@@ -143,6 +144,20 @@ public sealed class HostCompositionSmokeTests
 
         var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
         kernel.Plugins.ShouldContain(p => p.Name == "ProjectKnowledge");
+    }
+
+    [Fact]
+    public void Resolves_SkillSelector_Without_Indexing_Or_Network()
+    {
+        using var host = BuildHost(FullConfig());
+        var provider = host.Services;
+
+        // The selector must construct under the fail-fast HttpClient and budget.
+        // If it embedded skill descriptions or loaded files at build/resolve time
+        // it would hit the network (throwing) or exceed the budget; it must defer
+        // all that to the first SelectAsync call.
+        var selector = ResolveWithin(() => provider.GetRequiredService<ISkillSelector>());
+        selector.ShouldNotBeNull();
     }
 
     [Fact]

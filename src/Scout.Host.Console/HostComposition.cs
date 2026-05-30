@@ -7,6 +7,7 @@ using Scout.Conversation;
 using Scout.Knowledge;
 using Scout.Llm;
 using Scout.Plugin.GitHub;
+using Scout.Skills;
 
 namespace Scout.Host.Console;
 
@@ -32,6 +33,10 @@ internal static class HostComposition
         services.AddSingleton<IReadinessSignal, StdoutReadinessSignal>();
 
         services.AddScoutLlm(configuration);
+
+        // Register skills before conversation so the embedding-driven selector
+        // wins over the conversation core's NoOp fallback (a TryAdd).
+        services.AddScoutSkills(configuration);
         services.AddScoutConversation(configuration);
         services.AddProjectKnowledge(configuration);
 

@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Scout.Llm\Scout.Llm.csproj" />
+    <ProjectReference Include="..\Scout.Skills\Scout.Skills.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Conversation.Tests" />

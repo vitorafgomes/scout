@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Streaming;
 using Scout.Llm.Abstractions;
+using Scout.Skills;
 
 namespace Scout.Conversation.Tests;
 
@@ -49,6 +50,14 @@ public sealed class ConversationServiceCollectionExtensionsTests
         provider.GetRequiredService<IConversationRouter>().ShouldNotBeNull();
         provider.GetRequiredService<StreamPump>().ShouldNotBeNull();
         provider.GetRequiredService<ConversationConductor>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void Registers_NoOp_SkillSelector_As_Fallback()
+    {
+        using var provider = Build();
+
+        provider.GetRequiredService<ISkillSelector>().ShouldBeOfType<NoOpSkillSelector>();
     }
 
     [Fact]
