@@ -49,7 +49,7 @@ public sealed class ConversationWorkerTests
     }
 
     [Fact]
-    public async Task NoAdapters_LogsGuidance_And_StopsApplication()
+    public async Task NoAdapters_WritesGuidanceToStderr_And_StopsApplication()
     {
         var lifetime = new FakeLifetime();
         var readiness = Substitute.For<IReadinessSignal>();
@@ -60,8 +60,19 @@ public sealed class ConversationWorkerTests
             readiness,
             NullLogger<ConversationWorker>.Instance);
 
-        await RunExecuteAsync(worker, CancellationToken.None);
+        var originalError = System.Console.Error;
+        var captured = new StringWriter();
+        try
+        {
+            System.Console.SetError(captured);
+            await RunExecuteAsync(worker, CancellationToken.None);
+        }
+        finally
+        {
+            System.Console.SetError(originalError);
+        }
 
+        captured.ToString().ShouldContain("no chat adapter is configured");
         lifetime.StopApplicationCalls.ShouldBe(1);
         readiness.DidNotReceive().Signal();
     }
@@ -140,7 +151,7 @@ public sealed class ConversationWorkerTests
     }
 
     [Fact]
-    public async Task AdapterStartThrows_Does_Not_Signal_Readiness()
+    public async Task AdapterStartThrows_WritesFailureToStderr_StopsApplication_NoCrash_NoReadiness()
     {
         var adapter = Substitute.For<IChatAdapter>();
         adapter.Name.Returns("Faulty");
@@ -148,18 +159,32 @@ public sealed class ConversationWorkerTests
                 Arg.Any<Func<ChatMessage, IResponseSink, CancellationToken, Task>>(),
                 Arg.Any<CancellationToken>())
             .Returns<Task>(_ => throw new InvalidOperationException("login failure"));
+        var lifetime = new FakeLifetime();
         var readiness = Substitute.For<IReadinessSignal>();
 
         var worker = new ConversationWorker(
             [adapter],
             BuildConductor(),
-            new FakeLifetime(),
+            lifetime,
             readiness,
             NullLogger<ConversationWorker>.Instance);
 
-        await Should.ThrowAsync<InvalidOperationException>(
-            () => RunExecuteAsync(worker, CancellationToken.None));
+        var originalError = System.Console.Error;
+        var captured = new StringWriter();
+        try
+        {
+            System.Console.SetError(captured);
+            // Must not propagate: a failing adapter stops the host gracefully.
+            await RunExecuteAsync(worker, CancellationToken.None);
+        }
+        finally
+        {
+            System.Console.SetError(originalError);
+        }
 
+        captured.ToString().ShouldContain("Faulty");
+        captured.ToString().ShouldContain("login failure");
+        lifetime.StopApplicationCalls.ShouldBe(1);
         readiness.DidNotReceive().Signal();
     }
 

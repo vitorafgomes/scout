@@ -27,6 +27,12 @@ internal sealed class ConversationWorker(
             logger.LogError(
                 "No chat adapter is configured. Set SCOUT__ADAPTERS__DISCORD__BOTTOKEN " +
                 "(or the Slack/Teams equivalents) and restart.");
+            // Async console logger may drop queued messages on the fast
+            // startup->shutdown path; write synchronously so the reason surfaces.
+            System.Console.Error.WriteLine(
+                "Scout cannot start: no chat adapter is configured. " +
+                "Set SCOUT__ADAPTERS__DISCORD__BOTTOKEN (or the Slack/Teams equivalents) and restart.");
+            System.Console.Error.Flush();
             lifetime.StopApplication();
             return;
         }
@@ -34,7 +40,25 @@ internal sealed class ConversationWorker(
         foreach (var adapter in _adapters)
         {
             logger.LogInformation("Starting chat adapter {Adapter}.", adapter.Name);
-            await adapter.StartAsync(conductor.HandleAsync, stoppingToken).ConfigureAwait(false);
+            try
+            {
+                await adapter.StartAsync(conductor.HandleAsync, stoppingToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Normal shutdown; let it pass through.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to start chat adapter {Adapter}.", adapter.Name);
+                // Surface synchronously so the failure is not lost to the async log pipeline.
+                System.Console.Error.WriteLine(
+                    $"Scout failed to start adapter '{adapter.Name}': {ex.Message}");
+                System.Console.Error.Flush();
+                lifetime.StopApplication();
+                return;
+            }
         }
 
         // All configured adapters connected without throwing: emit the readiness
