@@ -16,4 +16,12 @@ public interface IGitHubClient
     /// <summary>List open issues for <paramref name="owner"/>/<paramref name="repo"/>.</summary>
     Task<IReadOnlyList<GitHubIssue>> ListOpenIssuesAsync(
         string owner, string repo, CancellationToken ct);
+
+    /// <summary>
+    /// Fetch an overview of <paramref name="owner"/>/<paramref name="repo"/>:
+    /// metadata, language breakdown, README excerpt, and top-level structure.
+    /// Returns null when the repository is not found or not accessible.
+    /// </summary>
+    Task<RepositoryInfo?> GetRepositoryAsync(
+        string owner, string repo, CancellationToken ct);
 }

@@ -93,6 +93,67 @@ public sealed class GitHubPlugin
         }
     }
 
+    /// <summary>Get an overview of a single repository for describing a project.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="ct">Cancels the underlying GitHub request.</param>
+    /// <returns>A readable multi-section summary, or a clean message when not found or on failure.</returns>
+    [KernelFunction("get_repository")]
+    [Description("Get an overview of a GitHub repository: description, language(s), topics, license, README excerpt, and top-level structure. Use this to describe or summarize a project.")]
+    public async Task<string> GetRepositoryAsync(
+        [Description("Repository owner or organization login, e.g. octocat.")] string owner,
+        [Description("Repository name, e.g. hello-world.")] string repo,
+        CancellationToken ct)
+    {
+        try
+        {
+            var info = await _client.GetRepositoryAsync(owner, repo, ct).ConfigureAwait(false);
+            return info is null
+                ? $"Repository {owner}/{repo} not found or not accessible."
+                : FormatRepositoryInfo(info);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex))
+        {
+            return ErrorLine(ex);
+        }
+    }
+
+    private static string FormatRepositoryInfo(RepositoryInfo info)
+    {
+        var lines = new List<string>
+        {
+            info.FullName,
+            $"Description: {info.Description ?? "(none)"}",
+            $"Primary language: {info.Language ?? "(unknown)"}",
+        };
+
+        if (info.Languages.Count > 0)
+        {
+            lines.Add("Languages: " + string.Join(", ",
+                info.Languages.Select(l => $"{l.Name} ({l.Bytes} bytes)")));
+        }
+
+        if (info.Topics.Count > 0)
+        {
+            lines.Add("Topics: " + string.Join(", ", info.Topics));
+        }
+
+        lines.Add($"License: {info.License ?? "(none)"}");
+        lines.Add($"Default branch: {info.DefaultBranch}");
+        lines.Add($"Stars: {info.StarCount}, Forks: {info.ForkCount}");
+        lines.Add($"URL: {info.HtmlUrl}");
+
+        lines.Add(info.TopLevelEntries.Count > 0
+            ? "Top-level structure:\n" + string.Join("\n", info.TopLevelEntries.Select(e => $"  - {e}"))
+            : "Top-level structure: (unavailable)");
+
+        lines.Add(info.Readme is null
+            ? "README: (none)"
+            : "README excerpt:\n" + info.Readme);
+
+        return string.Join("\n", lines);
+    }
+
     private static string FormatRepo(GitHubRepository r)
         => r.Private ? $"{r.FullName} (private)" : r.FullName;
 

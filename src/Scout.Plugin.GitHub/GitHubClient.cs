@@ -50,6 +50,108 @@ internal sealed class GitHubClient(HttpClient http) : IGitHubClient
             .ToList();
     }
 
+    public async Task<RepositoryInfo?> GetRepositoryAsync(
+        string owner, string repo, CancellationToken ct)
+    {
+        // The repo endpoint is required: a 404 means not found / no access and
+        // yields null. Other non-success statuses surface as GitHubApiException.
+        var repoDto = await TryGetAsync<RepoInfoDto>(
+            $"repos/{owner}/{repo}", ct).ConfigureAwait(false);
+        if (repoDto is null)
+        {
+            return null;
+        }
+
+        // Sub-calls are best-effort: a 404 leaves that part empty rather than
+        // failing the whole overview. Transport faults and 5xx still bubble.
+        var languages = await TryGetAsync<Dictionary<string, long>>(
+            $"repos/{owner}/{repo}/languages", ct).ConfigureAwait(false);
+        var readme = await TryGetAsync<ReadmeDto>(
+            $"repos/{owner}/{repo}/readme", ct).ConfigureAwait(false);
+        var contents = await TryGetAsync<List<ContentEntryDto>>(
+            $"repos/{owner}/{repo}/contents", ct).ConfigureAwait(false);
+
+        return new RepositoryInfo(
+            FullName: repoDto.FullName ?? $"{owner}/{repo}",
+            Description: NullIfBlank(repoDto.Description),
+            Language: NullIfBlank(repoDto.Language),
+            Languages: MapLanguages(languages),
+            Topics: repoDto.Topics ?? [],
+            License: NullIfBlank(repoDto.License?.SpdxId),
+            DefaultBranch: repoDto.DefaultBranch ?? "main",
+            StarCount: repoDto.StargazersCount,
+            ForkCount: repoDto.ForksCount,
+            HtmlUrl: repoDto.HtmlUrl ?? string.Empty,
+            Readme: DecodeReadme(readme),
+            TopLevelEntries: MapEntries(contents));
+    }
+
+    private static IReadOnlyList<LanguageUsage> MapLanguages(Dictionary<string, long>? languages)
+        => languages is null
+            ? []
+            : languages
+                .OrderByDescending(kvp => kvp.Value)
+                .Select(kvp => new LanguageUsage(kvp.Key, kvp.Value))
+                .ToList();
+
+    private static IReadOnlyList<string> MapEntries(List<ContentEntryDto>? contents)
+        => contents is null
+            ? []
+            : contents
+                .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+                .Select(e => $"{e.Name} ({(string.IsNullOrWhiteSpace(e.Type) ? "file" : e.Type)})")
+                .ToList();
+
+    private static string? DecodeReadme(ReadmeDto? readme)
+    {
+        if (string.IsNullOrWhiteSpace(readme?.Content))
+        {
+            return null;
+        }
+
+        // GitHub returns base64 content with embedded newlines; strip them
+        // before decoding to UTF-8, then truncate to keep the LLM context small.
+        var raw = readme.Content.Replace("\n", string.Empty).Replace("\r", string.Empty);
+        string text;
+        try
+        {
+            text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(raw));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+
+        const int maxLength = 2000;
+        return text.Length <= maxLength ? text : text[..maxLength];
+    }
+
+    private static string? NullIfBlank(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    /// GET that returns null on 404 (resource absent / no access) and maps other
+    /// non-success responses to <see cref="GitHubApiException"/>. Transport faults
+    /// and timeouts bubble unchanged.
+    /// </summary>
+    private async Task<T?> TryGetAsync<T>(string path, CancellationToken ct)
+        where T : class
+    {
+        using var response = await _http.GetAsync(path, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw ToApiException(response);
+        }
+
+        return await response.Content
+            .ReadFromJsonAsync<T>(cancellationToken: ct).ConfigureAwait(false);
+    }
+
     private async Task<T> GetAsync<T>(string path, CancellationToken ct)
     {
         using var response = await _http.GetAsync(path, ct).ConfigureAwait(false);
@@ -118,4 +220,25 @@ internal sealed class GitHubClient(HttpClient http) : IGitHubClient
 
     private sealed record PullRequestRefDto(
         [property: JsonPropertyName("url")] string? Url);
+
+    private sealed record RepoInfoDto(
+        [property: JsonPropertyName("full_name")] string? FullName,
+        [property: JsonPropertyName("description")] string? Description,
+        [property: JsonPropertyName("language")] string? Language,
+        [property: JsonPropertyName("topics")] List<string>? Topics,
+        [property: JsonPropertyName("license")] LicenseDto? License,
+        [property: JsonPropertyName("default_branch")] string? DefaultBranch,
+        [property: JsonPropertyName("stargazers_count")] int StargazersCount,
+        [property: JsonPropertyName("forks_count")] int ForksCount,
+        [property: JsonPropertyName("html_url")] string? HtmlUrl);
+
+    private sealed record LicenseDto(
+        [property: JsonPropertyName("spdx_id")] string? SpdxId);
+
+    private sealed record ReadmeDto(
+        [property: JsonPropertyName("content")] string? Content);
+
+    private sealed record ContentEntryDto(
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("type")] string? Type);
 }

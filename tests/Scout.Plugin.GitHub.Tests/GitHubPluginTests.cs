@@ -152,6 +152,86 @@ public sealed class GitHubPluginTests
     }
 
     [Fact]
+    public async Task GetRepository_Formats_Overview()
+    {
+        var client = Client();
+        client.GetRepositoryAsync("octocat", "hello-world", Arg.Any<CancellationToken>())
+            .Returns(new RepositoryInfo(
+                FullName: "octocat/hello-world",
+                Description: "A friendly greeter",
+                Language: "C#",
+                Languages: new List<LanguageUsage> { new("C#", 9000), new("HTML", 1000) },
+                Topics: new List<string> { "dotnet", "sample" },
+                License: "MIT",
+                DefaultBranch: "main",
+                StarCount: 12,
+                ForkCount: 3,
+                HtmlUrl: "https://github.com/octocat/hello-world",
+                Readme: "# Hello World\nA sample project.",
+                TopLevelEntries: new List<string> { "src (dir)", "tests (dir)", "README.md (file)" }));
+
+        var result = await Plugin(client)
+            .GetRepositoryAsync("octocat", "hello-world", CancellationToken.None);
+
+        result.ShouldContain("octocat/hello-world");
+        result.ShouldContain("A friendly greeter");
+        result.ShouldContain("C#");
+        result.ShouldContain("MIT");
+        result.ShouldContain("dotnet");
+        result.ShouldContain("src (dir)");
+        result.ShouldContain("Hello World");
+    }
+
+    [Fact]
+    public async Task GetRepository_Null_Returns_NotFound_Message()
+    {
+        var client = Client();
+        client.GetRepositoryAsync("octocat", "ghost", Arg.Any<CancellationToken>())
+            .Returns((RepositoryInfo?)null);
+
+        var result = await Plugin(client)
+            .GetRepositoryAsync("octocat", "ghost", CancellationToken.None);
+
+        result.ShouldBe("Repository octocat/ghost not found or not accessible.");
+    }
+
+    [Fact]
+    public async Task GetRepository_ServerError_Returns_Clean_Error_Without_Throwing()
+    {
+        var client = Client();
+        client.GetRepositoryAsync("octocat", "hello-world", Arg.Any<CancellationToken>())
+            .Returns<RepositoryInfo?>(
+                _ => throw new GitHubApiException("GitHub is currently unavailable. Try again later."));
+
+        var plugin = Plugin(client);
+
+        string result = string.Empty;
+        await Should.NotThrowAsync(async () =>
+            result = await plugin.GetRepositoryAsync(
+                "octocat", "hello-world", CancellationToken.None));
+
+        result.ShouldBe("GitHub is currently unavailable. Try again later.");
+    }
+
+    [Fact]
+    public async Task GetRepository_Transport_Failure_Returns_Clean_Error_Without_Throwing()
+    {
+        var client = Client();
+        client.GetRepositoryAsync("octocat", "hello-world", Arg.Any<CancellationToken>())
+            .Returns<RepositoryInfo?>(
+                _ => throw new HttpRequestException("connection reset"));
+
+        var plugin = Plugin(client);
+
+        string result = string.Empty;
+        await Should.NotThrowAsync(async () =>
+            result = await plugin.GetRepositoryAsync(
+                "octocat", "hello-world", CancellationToken.None));
+
+        result.ShouldBe("Could not reach GitHub. Try again later.");
+    }
+
+    [Fact]
     public void Ctor_Throws_When_Client_Null()
     {
         Should.Throw<ArgumentNullException>(() => new GitHubPlugin(null!));
