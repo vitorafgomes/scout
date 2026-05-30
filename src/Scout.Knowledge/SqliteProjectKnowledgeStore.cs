@@ -131,6 +131,8 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
                         && KindMatches(r));
 
         // Exact matches before partial matches, deduped by Id, capped at top.
+        // A non-positive top means unbounded: treat it as effectively no cap.
+        var cap = top > 0 ? top : int.MaxValue;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var ordered = new List<ChunkRecord>();
         foreach (var record in exact.Concat(partial))
@@ -138,7 +140,7 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
             if (seen.Add(record.Id))
             {
                 ordered.Add(record);
-                if (ordered.Count == top)
+                if (ordered.Count >= cap)
                 {
                     break;
                 }

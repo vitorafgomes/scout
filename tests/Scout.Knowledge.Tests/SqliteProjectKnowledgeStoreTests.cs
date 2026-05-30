@@ -162,6 +162,54 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task FindSymbolAsync_WithNonPositiveTop_ReturnsAllMatches()
+    {
+        // A non-positive top means unbounded: every match must be returned.
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "Handler", "code"),
+                SymbolChunk("alpha", "b", "Handler", "code"),
+                SymbolChunk("alpha", "c", "Handler", "code"),
+            },
+            CancellationToken.None);
+
+        var zero = await store.FindSymbolAsync("alpha", "Handler", kind: null, top: 0, CancellationToken.None);
+        zero.Count.ShouldBe(3);
+
+        var negative = await store.FindSymbolAsync("alpha", "Handler", kind: null, top: -1, CancellationToken.None);
+        negative.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_WithKindMatchingNothing_ReturnsEmpty()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "Overview", "code"),
+                SymbolChunk("alpha", "b", "Overview", "doc"),
+            },
+            CancellationToken.None);
+
+        // No row has this kind: the filter must exclude everything.
+        var unmatched = await store.FindSymbolAsync("alpha", "Overview", kind: "schema", top: 10, CancellationToken.None);
+        unmatched.ShouldBeEmpty();
+
+        // Empty kind means "no filter": both rows match.
+        var noFilter = await store.FindSymbolAsync("alpha", "Overview", kind: string.Empty, top: 10, CancellationToken.None);
+        noFilter.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task FindSymbolAsync_OnUninitializedStore_ReturnsEmptyWithoutThrowing()
     {
         // Fresh temp db: collection was never created. Lookup must degrade to empty,
