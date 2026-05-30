@@ -27,4 +27,21 @@ public sealed class ProjectKnowledgePlugin
         [Description("The user's question about the project.")] string question,
         CancellationToken ct)
         => this.service.SearchAsync(project, question, ct);
+
+    /// <summary>Find a class, method, interface, or member by name in a configured project.</summary>
+    /// <param name="project">Configured project name.</param>
+    /// <param name="symbol">The symbol name to look up.</param>
+    /// <param name="kind">Optional coarse kind filter ("code" or "doc").</param>
+    /// <param name="top">Optional maximum number of results.</param>
+    /// <param name="ct">Cancels the underlying lookup.</param>
+    /// <returns>A citation-tagged context string, or a clean status message.</returns>
+    [KernelFunction("find_symbol")]
+    [Description("Find a class, method, interface, or member by NAME in an indexed project. Use for 'where is X' / 'find the method X' questions — exact and partial name matches, no semantic search. Prefer this over search_project when the user names a specific symbol.")]
+    public Task<string> FindSymbolAsync(
+        [Description("Configured project name, e.g. cegos-buddy.")] string project,
+        [Description("The exact or partial symbol name to find, e.g. SearchAsync or ProjectKnowledgeService.")] string symbol,
+        [Description("Optional coarse kind filter: 'code' or 'doc'. Leave empty to match any.")] string? kind,
+        [Description("Optional maximum number of results; leave at 0 for the default.")] int top,
+        CancellationToken ct)
+        => this.service.FindSymbolAsync(project, symbol, kind, ct, top);
 }

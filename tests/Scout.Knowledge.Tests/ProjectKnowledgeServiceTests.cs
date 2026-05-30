@@ -136,4 +136,104 @@ public sealed class ProjectKnowledgeServiceTests
 
         result.ShouldBe("Could not search project 'proj' right now.");
     }
+
+    [Fact]
+    public async Task FindSymbolAsync_does_not_call_the_embedder()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store
+            .FindSymbolAsync("proj", "Bar", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<ChunkRecord> { Hit("a.cs", "Bar", 1, 3, "int Bar() => 1;") });
+
+        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+
+        await service.FindSymbolAsync("proj", "Bar", kind: null, CancellationToken.None);
+
+        await embedder.DidNotReceive().GenerateAsync(
+            Arg.Any<IEnumerable<string>>(),
+            Arg.Any<EmbeddingGenerationOptions?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_returns_cited_hits_when_store_returns_rows()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store
+            .FindSymbolAsync("proj", "ClassA", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<ChunkRecord>
+            {
+                Hit("a.cs", "ClassA", 1, 5, "class ClassA {}"),
+            });
+
+        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+
+        var result = await service.FindSymbolAsync("proj", "ClassA", kind: null, CancellationToken.None);
+
+        result.ShouldContain("[a.cs:1-5 ClassA]");
+        result.ShouldContain("class ClassA {}");
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_returns_run_index_message_when_no_results()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store
+            .FindSymbolAsync("proj", "Ghost", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<ChunkRecord>());
+
+        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+
+        var result = await service.FindSymbolAsync("proj", "Ghost", kind: null, CancellationToken.None);
+
+        result.ShouldBe("No symbol matching 'Ghost' found in project 'proj'. If the project is not indexed yet, run: index proj.");
+    }
+
+    [Theory]
+    [InlineData(null, "Sym")]
+    [InlineData("  ", "Sym")]
+    [InlineData("proj", null)]
+    [InlineData("proj", "  ")]
+    public async Task FindSymbolAsync_returns_guard_message_without_calling_dependencies(string? project, string? symbol)
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+
+        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+
+        var result = await service.FindSymbolAsync(project!, symbol!, kind: null, CancellationToken.None);
+
+        result.ShouldBe("Provide a project and a symbol.");
+        await store.DidNotReceive().FindSymbolAsync(
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string?>(),
+            Arg.Any<int>(),
+            Arg.Any<CancellationToken>());
+        await embedder.DidNotReceive().GenerateAsync(
+            Arg.Any<IEnumerable<string>>(),
+            Arg.Any<EmbeddingGenerationOptions?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_returns_clean_error_when_store_throws()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store
+            .FindSymbolAsync("proj", "Boom", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<ChunkRecord>>(_ => throw new InvalidOperationException("boom"));
+
+        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+
+        string result = string.Empty;
+        await Should.NotThrowAsync(async () =>
+            result = await service.FindSymbolAsync("proj", "Boom", kind: null, CancellationToken.None));
+
+        result.ShouldBe("Could not find symbol 'Boom' in project 'proj' right now.");
+    }
 }

@@ -27,4 +27,16 @@ public interface IProjectKnowledgeStore
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Matching chunks ordered nearest first.</returns>
     Task<IReadOnlyList<ChunkRecord>> SearchAsync(string project, ReadOnlyMemory<float> query, int top, CancellationToken ct);
+
+    /// <summary>
+    /// Metadata-only symbol lookup restricted to one project. No embedding is used.
+    /// Exact (case-insensitive) symbol matches come first, then partial (contains) matches.
+    /// </summary>
+    /// <param name="project">Project name to restrict the lookup to.</param>
+    /// <param name="symbol">Symbol name to match against <see cref="ChunkRecord.Symbol"/>.</param>
+    /// <param name="kind">Optional coarse kind filter ("code"/"doc"); null or empty to skip.</param>
+    /// <param name="top">Maximum number of results to return.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Matching chunks, exact matches before partial matches, capped at <paramref name="top"/>.</returns>
+    Task<IReadOnlyList<ChunkRecord>> FindSymbolAsync(string project, string symbol, string? kind, int top, CancellationToken ct);
 }

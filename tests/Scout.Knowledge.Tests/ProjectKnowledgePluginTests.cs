@@ -93,4 +93,57 @@ public sealed class ProjectKnowledgePluginTests
 
         result.ShouldContain("ghost");
     }
+
+    [Fact]
+    public void Exposes_Find_Symbol_Function()
+    {
+        var plugin = BuildPlugin(Service(Substitute.For<IProjectKnowledgeStore>()));
+
+        plugin.TryGetFunction("find_symbol", out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Find_Symbol_Function_Has_NonEmpty_Description()
+    {
+        var plugin = BuildPlugin(Service(Substitute.For<IProjectKnowledgeStore>()));
+        plugin.TryGetFunction("find_symbol", out var function).ShouldBeTrue();
+
+        function!.Metadata.Description.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Theory]
+    [InlineData("project")]
+    [InlineData("symbol")]
+    public void Find_Symbol_Exposes_Described_Parameter(string parameterName)
+    {
+        var plugin = BuildPlugin(Service(Substitute.For<IProjectKnowledgeStore>()));
+        plugin.TryGetFunction("find_symbol", out var function).ShouldBeTrue();
+
+        var parameter = function!.Metadata.Parameters.SingleOrDefault(p => p.Name == parameterName);
+
+        parameter.ShouldNotBeNull();
+        parameter!.Description.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task Find_Symbol_Returns_Cited_Context_From_Service()
+    {
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store.FindSymbolAsync("scout", "Bar", Arg.Any<string?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<ChunkRecord>
+            {
+                new()
+                {
+                    Id = "scout:Foo.cs:1", Project = "scout", Path = "Foo.cs", Kind = "code",
+                    Symbol = "Bar", StartLine = 1, EndLine = 3, Content = "public int Bar() => 1;",
+                },
+            });
+
+        var plugin = new ProjectKnowledgePlugin(Service(store));
+
+        var result = await plugin.FindSymbolAsync("scout", "Bar", kind: null, top: 0, CancellationToken.None);
+
+        result.ShouldContain("Foo.cs:1-3");
+        result.ShouldContain("public int Bar() => 1;");
+    }
 }

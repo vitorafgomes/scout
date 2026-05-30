@@ -45,6 +45,136 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
         Embedding = embedding,
     };
 
+    private static ChunkRecord SymbolChunk(string project, string id, string symbol, string kind) => new()
+    {
+        Id = $"{project}:{id}",
+        Project = project,
+        Path = $"{id}.cs",
+        Kind = kind,
+        Symbol = symbol,
+        StartLine = 1,
+        EndLine = 10,
+        Content = $"content for {symbol}",
+        Embedding = Vector((0, 1f)),
+    };
+
+    [Fact]
+    public async Task FindSymbolAsync_ReturnsExactMatch_CaseInsensitively()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "SearchAsync", "code"),
+                SymbolChunk("alpha", "b", "Unrelated", "code"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", "searchasync", kind: null, top: 10, CancellationToken.None);
+
+        results.ShouldHaveSingleItem().Symbol.ShouldBe("SearchAsync");
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_PutsExactMatchesBeforePartialMatches()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "partial", "FindSymbolAsync", "code"),
+                SymbolChunk("alpha", "exact", "Find", "code"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", "Find", kind: null, top: 10, CancellationToken.None);
+
+        results.Count.ShouldBe(2);
+        results[0].Symbol.ShouldBe("Find");
+        results[1].Symbol.ShouldBe("FindSymbolAsync");
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_FiltersByKind_CaseInsensitively()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "Overview", "code"),
+                SymbolChunk("alpha", "b", "Overview", "doc"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", "Overview", kind: "DOC", top: 10, CancellationToken.None);
+
+        results.ShouldHaveSingleItem().Kind.ShouldBe("doc");
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_RespectsProjectIsolation()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { SymbolChunk("alpha", "a", "Shared", "code") },
+            CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "beta",
+            new[] { SymbolChunk("beta", "b", "Shared", "code") },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", "Shared", kind: null, top: 10, CancellationToken.None);
+
+        results.ShouldHaveSingleItem().Project.ShouldBe("alpha");
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_CapsResultsAtTop()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "Handler", "code"),
+                SymbolChunk("alpha", "b", "Handler", "code"),
+                SymbolChunk("alpha", "c", "Handler", "code"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", "Handler", kind: null, top: 2, CancellationToken.None);
+
+        results.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_OnUninitializedStore_ReturnsEmptyWithoutThrowing()
+    {
+        // Fresh temp db: collection was never created. Lookup must degrade to empty,
+        // not throw "no such table".
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+
+        IReadOnlyList<ChunkRecord> results = Array.Empty<ChunkRecord>();
+        await Should.NotThrowAsync(async () =>
+            results = await store.FindSymbolAsync("never-indexed", "Anything", kind: null, top: 5, CancellationToken.None));
+
+        results.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task SearchAsync_ReturnsOnlyRequestedProject_NearestFirst()
     {

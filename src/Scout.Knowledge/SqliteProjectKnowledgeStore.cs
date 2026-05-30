@@ -95,4 +95,56 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
 
         return results;
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ChunkRecord>> FindSymbolAsync(string project, string symbol, string? kind, int top, CancellationToken ct)
+    {
+        // Same graceful-empty guard as SearchAsync: a never-indexed project has no
+        // backing table, so ensure the (empty) collection exists before scanning.
+        await _collection.EnsureCollectionExistsAsync(ct).ConfigureAwait(false);
+
+        // Fetch the project's candidate rows via the proven filtered scan, then match
+        // in memory: SQLite TEXT == is binary/case-sensitive, so case-insensitivity and
+        // contains semantics are applied here in C#.
+        var candidates = new List<ChunkRecord>();
+        await foreach (var record in _collection
+                           .GetAsync(r => r.Project == project, MaxProjectChunks, options: null!, ct)
+                           .ConfigureAwait(false))
+        {
+            candidates.Add(record);
+        }
+
+        var hasKind = !string.IsNullOrEmpty(kind);
+
+        bool KindMatches(ChunkRecord r) =>
+            !hasKind || string.Equals(r.Kind, kind, StringComparison.OrdinalIgnoreCase);
+
+        var exact = candidates
+            .Where(r => !string.IsNullOrEmpty(r.Symbol)
+                        && string.Equals(r.Symbol, symbol, StringComparison.OrdinalIgnoreCase)
+                        && KindMatches(r));
+
+        var partial = candidates
+            .Where(r => !string.IsNullOrEmpty(r.Symbol)
+                        && !string.Equals(r.Symbol, symbol, StringComparison.OrdinalIgnoreCase)
+                        && r.Symbol.Contains(symbol, StringComparison.OrdinalIgnoreCase)
+                        && KindMatches(r));
+
+        // Exact matches before partial matches, deduped by Id, capped at top.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var ordered = new List<ChunkRecord>();
+        foreach (var record in exact.Concat(partial))
+        {
+            if (seen.Add(record.Id))
+            {
+                ordered.Add(record);
+                if (ordered.Count == top)
+                {
+                    break;
+                }
+            }
+        }
+
+        return ordered;
+    }
 }
