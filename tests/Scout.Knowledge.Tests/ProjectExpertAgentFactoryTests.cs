@@ -59,4 +59,39 @@ public sealed class ProjectExpertAgentFactoryTests
             .Single();
         settings.FunctionChoiceBehavior.ShouldNotBeNull();
     }
+
+    [Fact]
+    public void Create_Default_Persona_Argument_Equals_Instructions()
+    {
+        var agent = ProjectExpertAgentFactory.Create(BuildKernel());
+
+        agent.Arguments.ShouldNotBeNull();
+        agent.Arguments!["persona"].ShouldBe(ProjectExpertAgentFactory.Instructions);
+    }
+
+    [Fact]
+    public async Task Create_Default_Persona_Renders_To_Instructions_Verbatim()
+    {
+        var agent = ProjectExpertAgentFactory.Create(BuildKernel());
+
+        // The templated agent carries "{{$persona}}" as its instruction template and
+        // the default persona argument is Instructions, so rendering the template with
+        // the agent's own Arguments yields Instructions byte-for-byte: the default
+        // persona is behavior-neutral versus the pre-template factory. The persona input
+        // is marked safe so SK does not HTML-encode the apostrophe in Instructions.
+        var config = new PromptTemplateConfig
+        {
+            Template = "{{$persona}}",
+            TemplateFormat = PromptTemplateConfig.SemanticKernelTemplateFormat,
+            InputVariables =
+            {
+                new InputVariable { Name = "persona", AllowDangerouslySetContent = true },
+            },
+        };
+        var template = new KernelPromptTemplateFactory().Create(config);
+
+        var rendered = await template.RenderAsync(BuildKernel(), agent.Arguments);
+
+        rendered.ShouldBe(ProjectExpertAgentFactory.Instructions);
+    }
 }

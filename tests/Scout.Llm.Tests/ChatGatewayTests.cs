@@ -161,4 +161,39 @@ public sealed class ChatGatewayTests
         await Should.ThrowAsync<ArgumentNullException>(
             () => gateway.CompleteAsync(null!, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task StreamChatAsync_Composes_Persona_And_SystemPrompt_Into_One_System_Message()
+    {
+        var captured = new List<ChatHistory>();
+        var chat = Substitute.For<IChatCompletionService>();
+        chat.GetStreamingChatMessageContentsAsync(
+                Arg.Do<ChatHistory>(captured.Add),
+                Arg.Any<PromptExecutionSettings?>(),
+                Arg.Any<Kernel?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => ToAsync([Chunk("ok")], CancellationToken.None));
+        var gateway = Gateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest
+            {
+                UserMessage = "hello",
+                Persona = "You are Scout's Code Reviewer.",
+                SystemPrompt = "Injected skill: prefer small diffs.",
+            },
+            CancellationToken.None))
+        {
+        }
+
+        var systemMessages = captured
+            .SelectMany(history => history)
+            .Where(message => message.Role == AuthorRole.System)
+            .Select(message => message.Content)
+            .ToList();
+
+        systemMessages.ShouldHaveSingleItem();
+        systemMessages[0].ShouldBe(
+            "You are Scout's Code Reviewer.\n\nInjected skill: prefer small diffs.");
+    }
 }

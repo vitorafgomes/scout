@@ -96,9 +96,16 @@ internal sealed class ChatGateway : IChatGateway
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var history = new ChatHistory();
-        if (!string.IsNullOrWhiteSpace(request.SystemPrompt))
+
+        // Single system message = persona then system prompt, non-empty parts joined
+        // by a blank line. With Persona null this is just SystemPrompt as before.
+        var system = string.Join(
+            "\n\n",
+            new[] { request.Persona, request.SystemPrompt }
+                .Where(part => !string.IsNullOrWhiteSpace(part)));
+        if (!string.IsNullOrWhiteSpace(system))
         {
-            history.AddSystemMessage(request.SystemPrompt);
+            history.AddSystemMessage(system);
         }
         history.AddUserMessage(request.UserMessage);
 
@@ -117,10 +124,10 @@ internal sealed class ChatGateway : IChatGateway
 
     // Routes the response through the Project Expert agent. The agent owns its
     // base instructions and tools; a fresh thread per request keeps the gateway
-    // stateless. The composed per-turn system prompt (base persona + injected
-    // skill) is forwarded as additional instructions so the agent path honors the
-    // same prompt the direct path does. When it is empty, the agent's own
-    // Instructions still apply (null options). Only non-empty content is yielded.
+    // stateless. Persona binds to the agent's "{{$persona}}" template via
+    // KernelArguments["persona"]; the system prompt rides AdditionalInstructions.
+    // When both are empty, options stays null and the agent's default persona
+    // applies. Only non-empty content is yielded.
     private async IAsyncEnumerable<string> StreamAgentAsync(
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -128,9 +135,22 @@ internal sealed class ChatGateway : IChatGateway
         var message = new ChatMessageContent(AuthorRole.User, request.UserMessage);
         ChatHistoryAgentThread thread = new();
 
-        var options = string.IsNullOrWhiteSpace(request.SystemPrompt)
-            ? null
-            : new AgentInvokeOptions { AdditionalInstructions = request.SystemPrompt };
+        AgentInvokeOptions? options = null;
+        var hasPersona = !string.IsNullOrWhiteSpace(request.Persona);
+        var hasSystemPrompt = !string.IsNullOrWhiteSpace(request.SystemPrompt);
+        if (hasPersona || hasSystemPrompt)
+        {
+            // AgentInvokeOptions members are init-only. Persona binds via KernelArguments
+            // only when present; the system prompt rides AdditionalInstructions only when
+            // present (its empty default adds no instruction otherwise).
+            options = new AgentInvokeOptions
+            {
+                KernelArguments = hasPersona
+                    ? new KernelArguments { ["persona"] = request.Persona }
+                    : null,
+                AdditionalInstructions = hasSystemPrompt ? request.SystemPrompt! : string.Empty,
+            };
+        }
 
         var stream = _agent!.InvokeStreamingAsync(
             new[] { message }, thread, options, cancellationToken);

@@ -22,15 +22,33 @@ public static class ProjectExpertAgentFactory
     {
         ArgumentNullException.ThrowIfNull(kernel);
 
-        return new ChatCompletionAgent
+        // Templated instruction so a per-turn persona can override the default via
+        // KernelArguments["persona"]. The default persona is Instructions, so with no
+        // override the rendered instruction is byte-identical to the prior agent.
+        // The persona variable is rendered verbatim: SK HTML-encodes template inputs by
+        // default, which would corrupt characters such as the apostrophe in Instructions.
+        var config = new PromptTemplateConfig
+        {
+            Template = "{{$persona}}",
+            TemplateFormat = PromptTemplateConfig.SemanticKernelTemplateFormat,
+            Name = "Project Expert",
+            InputVariables =
+            {
+                new InputVariable { Name = "persona", AllowDangerouslySetContent = true },
+            },
+        };
+
+        return new ChatCompletionAgent(config, new KernelPromptTemplateFactory())
         {
             Name = "Project Expert",
-            Instructions = Instructions,
             Kernel = kernel,
             Arguments = new KernelArguments(new OpenAIPromptExecutionSettings
             {
                 FunctionChoiceBehavior = FunctionChoiceBehavior.Auto(),
-            }),
+            })
+            {
+                ["persona"] = Instructions,
+            },
         };
     }
 }

@@ -14,6 +14,14 @@ public sealed record ChatRequest
     /// </summary>
     public string? SystemPrompt { get; init; }
 
+    /// <summary>
+    /// Optional per-turn persona body (WHO answers + tool posture). On the agent path
+    /// it is bound to the agent template via KernelArguments["persona"]; on the direct
+    /// path it leads the single system message. When null/whitespace, the agent's default
+    /// persona (or SystemPrompt alone) applies.
+    /// </summary>
+    public string? Persona { get; init; }
+
     /// <summary>The user message. Required; must be non-empty.</summary>
     public required string UserMessage { get; init; }
 

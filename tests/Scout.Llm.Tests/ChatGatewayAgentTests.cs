@@ -70,6 +70,40 @@ public sealed class ChatGatewayAgentTests
         return (new ChatGateway(chat, kernel, agent: agent), kernel);
     }
 
+    // A templated agent whose instruction is purely "{{$persona}}" with no fixed
+    // Instructions and no default persona argument: the only way a persona body
+    // reaches the chat history is the per-turn KernelArguments["persona"] override
+    // forwarded by StreamAgentAsync.
+    private static (ChatGateway gateway, Kernel kernel) TemplatedAgentGateway(IChatCompletionService chat)
+    {
+        var builder = Kernel.CreateBuilder();
+        builder.Services.AddSingleton(chat);
+        var kernel = builder.Build();
+        var config = new PromptTemplateConfig
+        {
+            Template = "{{$persona}}",
+            TemplateFormat = PromptTemplateConfig.SemanticKernelTemplateFormat,
+            Name = "Project Expert",
+            InputVariables =
+            {
+                new InputVariable { Name = "persona", AllowDangerouslySetContent = true },
+            },
+        };
+        var agent = new ChatCompletionAgent(config, new KernelPromptTemplateFactory())
+        {
+            Name = "Project Expert",
+            Kernel = kernel,
+        };
+        return (new ChatGateway(chat, kernel, agent: agent), kernel);
+    }
+
+    private static List<string?> SystemMessages(IEnumerable<ChatHistory> captured)
+        => captured
+            .SelectMany(history => history)
+            .Where(message => message.Role == AuthorRole.System)
+            .Select(message => message.Content)
+            .ToList();
+
     [Fact]
     public async Task StreamAsync_Routes_Through_Agent_And_Yields_Content()
     {
@@ -118,12 +152,53 @@ public sealed class ChatGatewayAgentTests
         // The composed prompt is forwarded as AgentInvokeOptions.AdditionalInstructions,
         // which the agent surfaces as a system message in the chat history. Without
         // the forwarding (options: null) this system message is absent and the test fails.
-        var systemMessages = captured
-            .SelectMany(history => history)
-            .Where(message => message.Role == AuthorRole.System)
-            .Select(message => message.Content)
-            .ToList();
+        var systemMessages = SystemMessages(captured);
 
+        systemMessages.ShouldContain(systemPrompt);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Templated_Agent_Surfaces_Persona_As_System_Message()
+    {
+        const string persona = "You are Scout's Code Reviewer. Be terse and cite files.";
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = TemplatedAgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest { UserMessage = "review this", Persona = persona },
+            CancellationToken.None))
+        {
+        }
+
+        // KernelArguments["persona"] overrides the agent's (absent) default, so the
+        // "{{$persona}}" template renders the persona body into the agent instruction,
+        // which surfaces as a system message in the captured history.
+        SystemMessages(captured).ShouldContain(persona);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Templated_Agent_Surfaces_Both_Persona_And_SystemPrompt()
+    {
+        const string persona = "You are Scout's Code Reviewer.";
+        const string systemPrompt = "Injected skill: prefer small diffs.";
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = TemplatedAgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest
+            {
+                UserMessage = "review this",
+                Persona = persona,
+                SystemPrompt = systemPrompt,
+            },
+            CancellationToken.None))
+        {
+        }
+
+        // Persona binds via KernelArguments; SystemPrompt rides AdditionalInstructions.
+        // Both reach the agent and surface as distinct system messages.
+        var systemMessages = SystemMessages(captured);
+        systemMessages.ShouldContain(persona);
         systemMessages.ShouldContain(systemPrompt);
     }
 }
