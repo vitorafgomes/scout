@@ -58,4 +58,27 @@ internal static class HostComposition
 
         return services;
     }
+
+    /// <summary>
+    /// Minimal service graph for the one-shot <c>index &lt;project&gt;</c> command:
+    /// only the LLM embeddings and project knowledge that <see cref="IndexEntryPoint"/>
+    /// needs. Deliberately registers no chat adapters, no conversation, no skills,
+    /// and no conversation worker or watchdog so a one-shot index never spins up the
+    /// inbound chat path.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddScoutIndexHost(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.AddScoutLlm(configuration);
+        services.AddProjectKnowledge(configuration);
+
+        return services;
+    }
 }

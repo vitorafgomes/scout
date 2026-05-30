@@ -3,7 +3,34 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scout.Host.Console;
 
-var builder = Host.CreateApplicationBuilder(args);
+var command = ConsoleCommand.Parse(args);
+
+if (command.Command == Command.Index)
+{
+    // One-shot index: build the minimal graph only (LLM embeddings + project
+    // knowledge), with the same explicit content root so config loads from the
+    // binary directory regardless of the working directory. No adapters, no
+    // conversation, no skills, no host loop.
+    var indexBuilder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+    {
+        Args = args,
+        ContentRootPath = AppContext.BaseDirectory,
+    });
+
+    indexBuilder.Logging.ClearProviders();
+    indexBuilder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+
+    indexBuilder.Services.AddScoutIndexHost(indexBuilder.Configuration);
+
+    using var indexHost = indexBuilder.Build();
+    return await IndexEntryPoint.RunAsync(indexHost.Services, command.Project, CancellationToken.None);
+}
+
+var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
 
 // Keep stdout clean: replace the default console logger with one that writes
 // everything to stderr, so the SCOUT_READY marker is the only thing the
@@ -38,12 +65,6 @@ var host = builder.Build();
 var lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
 lifetime.ApplicationStarted.Register(() => WriteMarker("host started"));
 lifetime.ApplicationStopping.Register(() => WriteMarker("host stopping"));
-
-var command = ConsoleCommand.Parse(args);
-if (command.Command == Command.Index)
-{
-    return await IndexEntryPoint.RunAsync(host.Services, command.Project, CancellationToken.None);
-}
 
 WriteMarker("running host");
 await host.RunAsync();
