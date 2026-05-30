@@ -26,6 +26,24 @@ public sealed class ChatGatewayAgentTests
         return chat;
     }
 
+    // Captures the ChatHistory that reaches the chat service. The agent appends
+    // its own Instructions and the AgentInvokeOptions.AdditionalInstructions as
+    // system messages, so the captured history is the observable seam for the
+    // composed system prompt forwarded by StreamAgentAsync.
+    private static (IChatCompletionService chat, List<ChatHistory> captured) ChatCapturing(
+        params string?[] contents)
+    {
+        var captured = new List<ChatHistory>();
+        var chat = Substitute.For<IChatCompletionService>();
+        chat.GetStreamingChatMessageContentsAsync(
+                Arg.Do<ChatHistory>(captured.Add),
+                Arg.Any<PromptExecutionSettings?>(),
+                Arg.Any<Kernel?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => ToAsync(contents, CancellationToken.None));
+        return (chat, captured);
+    }
+
     private static async IAsyncEnumerable<StreamingChatMessageContent> ToAsync(
         IEnumerable<string?> contents,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -82,5 +100,30 @@ public sealed class ChatGatewayAgentTests
         }
 
         result.ShouldBe(["a", "b"]);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Agent_Forwards_Composed_System_Prompt()
+    {
+        const string systemPrompt = "Base persona + injected skill body.";
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = AgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest { UserMessage = "what is scout?", SystemPrompt = systemPrompt },
+            CancellationToken.None))
+        {
+        }
+
+        // The composed prompt is forwarded as AgentInvokeOptions.AdditionalInstructions,
+        // which the agent surfaces as a system message in the chat history. Without
+        // the forwarding (options: null) this system message is absent and the test fails.
+        var systemMessages = captured
+            .SelectMany(history => history)
+            .Where(message => message.Role == AuthorRole.System)
+            .Select(message => message.Content)
+            .ToList();
+
+        systemMessages.ShouldContain(systemPrompt);
     }
 }

@@ -116,8 +116,11 @@ internal sealed class ChatGateway : IChatGateway
     }
 
     // Routes the response through the Project Expert agent. The agent owns its
-    // instructions and tools; a fresh thread per request keeps the gateway
-    // stateless. Only non-empty assistant content is yielded.
+    // base instructions and tools; a fresh thread per request keeps the gateway
+    // stateless. The composed per-turn system prompt (base persona + injected
+    // skill) is forwarded as additional instructions so the agent path honors the
+    // same prompt the direct path does. When it is empty, the agent's own
+    // Instructions still apply (null options). Only non-empty content is yielded.
     private async IAsyncEnumerable<string> StreamAgentAsync(
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -125,8 +128,12 @@ internal sealed class ChatGateway : IChatGateway
         var message = new ChatMessageContent(AuthorRole.User, request.UserMessage);
         ChatHistoryAgentThread thread = new();
 
+        var options = string.IsNullOrWhiteSpace(request.SystemPrompt)
+            ? null
+            : new AgentInvokeOptions { AdditionalInstructions = request.SystemPrompt };
+
         var stream = _agent!.InvokeStreamingAsync(
-            new[] { message }, thread, options: null, cancellationToken);
+            new[] { message }, thread, options, cancellationToken);
 
         await foreach (var item in stream.ConfigureAwait(false))
         {
