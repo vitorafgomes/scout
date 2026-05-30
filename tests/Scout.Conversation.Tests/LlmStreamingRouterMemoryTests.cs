@@ -119,6 +119,28 @@ public sealed class LlmStreamingRouterMemoryTests
     }
 
     [Fact]
+    public async Task RateLimit_Stream_Does_Not_Poison_History()
+    {
+        var store = Substitute.For<IConversationMemoryStore>();
+        store.Load(Arg.Any<string>()).Returns(Array.Empty<ConversationTurn>());
+        var gateway = Substitute.For<IChatGateway>();
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => AsyncSequence.ThenThrow(
+                new LlmRateLimitException("LLM rate limit (HTTP 429)."),
+                ci.ArgAt<CancellationToken>(1),
+                "partial"));
+        var router = Build(gateway, store, new ConversationMemoryOptions());
+
+        await Should.ThrowAsync<LlmRateLimitException>(
+            () => Drain(router.Route(new ChatMessage("u1", "c1", "q1"))));
+
+        // The router appends only after a clean loop; a rate-limit throw leaves
+        // history untouched, exactly like any other mid-stream failure.
+        store.DidNotReceive().Append(
+            Arg.Any<string>(), Arg.Any<ConversationTurn>(), Arg.Any<ConversationTurn>());
+    }
+
+    [Fact]
     public async Task Cancelled_Stream_Does_Not_Poison_History()
     {
         var store = NewStore(new ConversationMemoryOptions());

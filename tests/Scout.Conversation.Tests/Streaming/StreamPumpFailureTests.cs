@@ -1,8 +1,10 @@
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Tests.Fakes;
+using Scout.Llm.Abstractions;
 
 namespace Scout.Conversation.Tests.Streaming;
 
@@ -26,12 +28,13 @@ public sealed class StreamPumpFailureTests
     private static FakeTimeProvider Clock() =>
         new(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero));
 
-    private static StreamPump Pump(FakeTimeProvider time)
+    private static StreamPump Pump(FakeTimeProvider time, ILogger? logger = null)
         => new(new StreamPumpOptions
         {
             EditInterval = Interval,
             Cursor = Cursor,
             TimeProvider = time,
+            Logger = logger,
         });
 
     private static async IAsyncEnumerable<string> Ticking(
@@ -114,5 +117,87 @@ public sealed class StreamPumpFailureTests
         sink.Completed.ShouldBeFalse();
         sink.Failed.ShouldBeFalse();
         sink.TerminalCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task RateLimit_MidStream_Finalizes_With_Friendly_Message_And_Quiet_Log()
+    {
+        var time = Clock();
+        var logger = new RecordingLogger();
+        var sink = new RecordingResponseSink(FineGrained);
+        var response = new ChatResponse(
+            AsyncSequence.ThenThrow(
+                new LlmRateLimitException("LLM rate limit (HTTP 429)."),
+                default,
+                "par", "tial"));
+
+        await Should.NotThrowAsync(
+            () => Pump(time, logger).RunAsync(response, sink, CancellationToken.None));
+
+        // Finalized via Complete (not Fail) so the user sees the friendly text.
+        sink.Completed.ShouldBeTrue();
+        sink.Failed.ShouldBeFalse();
+        sink.TerminalCount.ShouldBe(1);
+        sink.FinalText.ShouldNotBeNull();
+        sink.FinalText!.ShouldContain("rate limit");
+        sink.FinalText!.ShouldContain("partial");
+
+        // Quiet log: nothing logged with an exception and no Warning-level noise.
+        logger.Entries.Any(e => e.Exception != null).ShouldBeFalse();
+        logger.EntriesAt(LogLevel.Warning).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Generic_Failure_MidStream_Still_Warns_With_Stack_And_Fails()
+    {
+        var time = Clock();
+        var logger = new RecordingLogger();
+        var sink = new RecordingResponseSink(FineGrained);
+        var response = new ChatResponse(
+            AsyncSequence.ThenThrow(
+                new InvalidOperationException("connection reset"),
+                default,
+                "par", "tial"));
+
+        await Should.NotThrowAsync(
+            () => Pump(time, logger).RunAsync(response, sink, CancellationToken.None));
+
+        sink.Failed.ShouldBeTrue();
+        sink.FailReason.ShouldNotBeNull();
+        sink.FailReason!.ShouldContain("connection reset");
+
+        // Generic failures keep the stack: a Warning entry carrying the exception.
+        logger.EntriesAt(LogLevel.Warning).Any(e => e.Exception != null).ShouldBeTrue();
+    }
+
+    // Captures (level, message, exception) per emit so tests can assert log
+    // shape: quiet (no exception, no Warning) vs. error (Warning + stack).
+    private sealed class RecordingLogger : ILogger
+    {
+        public List<(LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+        public IEnumerable<(LogLevel Level, string Message, Exception? Exception)> EntriesAt(
+            LogLevel level) => Entries.Where(e => e.Level == level);
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception), exception));
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+
+            public void Dispose()
+            {
+            }
+        }
     }
 }

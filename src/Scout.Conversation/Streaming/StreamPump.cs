@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
+using Scout.Llm.Abstractions;
 
 namespace Scout.Conversation.Streaming;
 
@@ -38,8 +39,11 @@ public sealed class StreamPump
     /// Drive <paramref name="response"/> into <paramref name="sink"/>. Begins
     /// the sink, streams updates, and finishes with exactly one terminal call.
     /// Caller cancellation propagates as <see cref="OperationCanceledException"/>
-    /// without forcing a terminal edit; any other mid-stream failure is reported
-    /// via <see cref="IResponseSink.FailAsync"/> and does not escape.
+    /// without forcing a terminal edit. A model rate limit
+    /// (<see cref="LlmRateLimitException"/>) finalizes via
+    /// <see cref="IResponseSink.CompleteAsync"/> with a friendly user-facing
+    /// message; any other mid-stream failure is reported via
+    /// <see cref="IResponseSink.FailAsync"/>. Neither escapes.
     /// </summary>
     public async Task RunAsync(
         ChatResponse response,
@@ -98,6 +102,20 @@ public sealed class StreamPump
         {
             // Caller cancelled: surface it, do not force a terminal edit.
             throw;
+        }
+        catch (LlmRateLimitException)
+        {
+            // Transient, expected 429: finalize via Complete with a user-facing
+            // message (FailAsync's reason is never rendered). Log quietly without
+            // the stack — this is not an error.
+            _options.Logger?.LogInformation(
+                "StreamPump stopped on model rate limit (429); finalizing with a friendly message.");
+            var body = buffer.Length == 0
+                ? _options.RateLimitMessage
+                : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.RateLimitMessage;
+            await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
         }
         catch (Exception ex)
         {

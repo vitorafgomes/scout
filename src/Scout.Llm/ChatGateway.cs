@@ -1,3 +1,4 @@
+using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -128,11 +129,30 @@ internal sealed class ChatGateway : IChatGateway
         var stream = _chat.GetStreamingChatMessageContentsAsync(
             history, settings, kernel: _kernel, cancellationToken);
 
-        await foreach (var chunk in stream.ConfigureAwait(false))
+        // Explicit enumerator so the 429 -> domain translation can sit in a try
+        // while the yield stays outside it (yield is illegal inside try/catch).
+        await using var e = stream.GetAsyncEnumerator(cancellationToken);
+        while (true)
         {
-            if (!string.IsNullOrEmpty(chunk.Content))
+            string? content;
+            try
             {
-                yield return chunk.Content;
+                if (!await e.MoveNextAsync().ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                content = e.Current.Content;
+            }
+            catch (HttpOperationException ex)
+                when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
+            }
+
+            if (!string.IsNullOrEmpty(content))
+            {
+                yield return content;
             }
         }
     }
@@ -187,9 +207,27 @@ internal sealed class ChatGateway : IChatGateway
         var stream = _agent!.InvokeStreamingAsync(
             new[] { message }, thread, options, cancellationToken);
 
-        await foreach (var item in stream.ConfigureAwait(false))
+        // Explicit enumerator so the 429 -> domain translation can sit in a try
+        // while the yield stays outside it (yield is illegal inside try/catch).
+        await using var e = stream.GetAsyncEnumerator(cancellationToken);
+        while (true)
         {
-            var content = item.Message.Content;
+            string? content;
+            try
+            {
+                if (!await e.MoveNextAsync().ConfigureAwait(false))
+                {
+                    break;
+                }
+
+                content = e.Current.Message.Content;
+            }
+            catch (HttpOperationException ex)
+                when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
+            }
+
             if (!string.IsNullOrEmpty(content))
             {
                 yield return content;

@@ -33,4 +33,11 @@ public sealed record StreamPumpOptions
 
     /// <summary>Logger for retries, rate-limit backoff, and diagnostics.</summary>
     public ILogger? Logger { get; init; }
+
+    /// <summary>
+    /// User-facing text appended when the model rate-limits (HTTP 429). Rendered
+    /// verbatim via the terminal Complete call, distinct from internal failures.
+    /// </summary>
+    public string RateLimitMessage { get; init; } =
+        "I've hit the model's rate limit right now — please wait a moment and try again.";
 }
