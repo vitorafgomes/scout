@@ -131,14 +131,16 @@ public sealed class ProjectKnowledgePluginTests
     public void Project_Parameter_Description_Does_Not_Name_A_Concrete_Project(string functionName)
     {
         // Regression lock: the project parameter [Description] is serialized into the
-        // tool schema the model sees. A concrete project name there (e.g. "cegos-buddy")
-        // gets parroted regardless of configuration. The example must stay neutral.
+        // tool schema the model sees. A concrete project name inlined there gets parroted
+        // regardless of configuration, so the description must delegate to the runtime
+        // agent instructions and carry no inline example.
         var plugin = BuildPlugin(Service(Substitute.For<IProjectKnowledgeStore>()));
         plugin.TryGetFunction(functionName, out var function).ShouldBeTrue();
 
         var parameter = function!.Metadata.Parameters.Single(p => p.Name == "project");
 
-        parameter.Description.ShouldNotContain("cegos-buddy");
+        parameter.Description.ShouldContain("instructions");
+        parameter.Description.ShouldNotContain("e.g.");
     }
 
     [Fact]

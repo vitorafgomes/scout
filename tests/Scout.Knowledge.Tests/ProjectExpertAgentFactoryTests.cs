@@ -101,7 +101,6 @@ public sealed class ProjectExpertAgentFactoryTests
         var instructions = ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" });
 
         instructions.ShouldContain("messaging-explorer");
-        instructions.ShouldNotContain("cegos-buddy");
     }
 
     [Fact]

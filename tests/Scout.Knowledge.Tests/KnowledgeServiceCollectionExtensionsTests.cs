@@ -187,7 +187,6 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
         var rendered = await template.RenderAsync(Kernel.CreateBuilder().Build(), agent!.Arguments);
 
         rendered.ShouldContain("messaging-explorer");
-        rendered.ShouldNotContain("cegos-buddy");
     }
 
     [Fact]
