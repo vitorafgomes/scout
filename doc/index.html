@@ -590,6 +590,51 @@
     color: var(--accent-2);
   }
 
+  /* ---------- Config code blocks ---------- */
+  pre.cfg {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin: 8px 0 16px 0;
+    overflow-x: auto;
+    color: #c9d6e6;
+    white-space: pre;
+    tab-size: 2;
+  }
+  pre.cfg .k { color: var(--accent); }
+  pre.cfg .s { color: var(--accent-2); }
+  pre.cfg .c { color: var(--text-faint); font-style: italic; }
+  .prov-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 24px 0 2px 0;
+  }
+  .prov-head .pname {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 650;
+    color: #f1f5fa;
+  }
+  .prov-head .ptag {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .val-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 4px 0; }
+  .val {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 4px 12px;
+    color: var(--accent-2);
+  }
+
   footer {
     margin-top: 70px;
     padding-top: 22px;
@@ -661,6 +706,7 @@
       <ul>
         <li><a href="#overview">Overview</a></li>
         <li><a href="#architecture">Architecture &amp; Flow</a></li>
+        <li><a href="#llm-providers">LLM Providers &mdash; Config</a></li>
       </ul>
 
       <div class="nav-group-title">Projects</div>
@@ -773,12 +819,31 @@
           <rect x="40" y="608" width="1120" height="92" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
           <text x="60" y="644" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">LLM GATEWAY</text>
           <text x="60" y="662" fill="#6c7888" font-size="10.5">Foundation</text>
-          <rect x="250" y="624" width="446" height="60" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
-          <text x="473" y="648" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Llm</text>
-          <text x="473" y="668" fill="#97a3b3" font-size="10.5" text-anchor="middle">IChatGateway &middot; streaming-first</text>
-          <rect x="714" y="624" width="446" height="60" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
-          <text x="937" y="648" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Llm.Ollama</text>
-          <text x="937" y="668" fill="#97a3b3" font-size="10.5" text-anchor="middle">chat via /v1 &middot; embeddings via native Ollama</text>
+          <rect x="250" y="620" width="190" height="68" rx="9" fill="#1b222b" stroke="#2a4a63" stroke-width="1.4"/>
+          <text x="345" y="646" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Llm</text>
+          <text x="345" y="663" fill="#7ad9b0" font-size="10" text-anchor="middle">IChatGateway</text>
+          <text x="345" y="678" fill="#7ad9b0" font-size="10" text-anchor="middle">ILlmProviderFactory</text>
+          <!-- pluggable providers (one selected per run via Scout:Llm:Provider) -->
+          <rect x="456" y="620" width="688" height="68" rx="9" fill="#10151c" stroke="#232c38" stroke-width="1"/>
+          <text x="468" y="634" fill="#97a3b3" font-size="9.5" font-weight="700" letter-spacing="0.5">PLUGGABLE PROVIDERS &middot; one selected per run via Scout:Llm:Provider</text>
+          <g font-size="9.5" text-anchor="middle" fill="#cdd9e6">
+            <rect x="468" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#2a4a63" stroke-width="1"/>
+            <text x="547" y="654">Ollama</text>
+            <rect x="634" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="713" y="654">Gemini</text>
+            <rect x="800" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="879" y="654">OpenAI</text>
+            <rect x="966" y="642" width="170" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="1051" y="654">OpenRouter</text>
+            <rect x="468" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="547" y="676">AzureOpenAI</text>
+            <rect x="634" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="713" y="676">Mistral</text>
+            <rect x="800" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="879" y="676">HuggingFace</text>
+            <rect x="966" y="664" width="170" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="1051" y="676">AzureAIInference</text>
+          </g>
         </g>
         <!-- external runtime -->
         <rect x="250" y="716" width="910" height="44" rx="9" fill="#0a0d12" stroke="#2a4a63" stroke-width="1.2" stroke-dasharray="5 4"/>
@@ -979,6 +1044,167 @@
           <code>Kernel &rarr; KernelPlugin &rarr; IEmbeddingGenerator &rarr; Kernel</code> loop.
           <strong>Self-gating</strong>: adapters and plugins register only when configured, so an unconfigured host still starts.
           <strong>Distributed tracing</strong> via <code>ScoutActivitySource</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== LLM PROVIDERS ===================== -->
+    <section id="llm-providers">
+      <h2>LLM Providers &mdash; Configuration</h2>
+      <p>
+        <code>Scout.Llm</code> exposes a provider-agnostic gateway (<code>IChatGateway</code>) and an
+        <code>ILlmProviderFactory</code> abstraction. Exactly one provider is selected per run via the
+        <code>Scout:Llm:Provider</code> key; its matching options block under <code>Scout:Llm</code> supplies the chat
+        and embedding settings. All blocks bind to <code>LlmOptions</code> &mdash; the single source of truth for both
+        chat and embeddings.
+      </p>
+
+      <h3>Provider selection</h3>
+      <p>Set the active provider with the <code>Scout:Llm:Provider</code> key. Valid values (each maps to an <code>ILlmProviderFactory.Name</code>):</p>
+      <div class="val-list">
+        <span class="val">Ollama</span>
+        <span class="val">Gemini</span>
+        <span class="val">OpenAI</span>
+        <span class="val">OpenRouter</span>
+        <span class="val">AzureOpenAI</span>
+        <span class="val">Mistral</span>
+        <span class="val">HuggingFace</span>
+        <span class="val">AzureAIInference</span>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">Security &mdash; never commit API keys</div>
+        <p>
+          API keys must <strong>never</strong> live in the tracked <code>appsettings.json</code>. Use one of:
+        </p>
+        <ul class="body-list">
+          <li><strong>appsettings.Development.json</strong> &mdash; gitignored; fine for local runs.</li>
+          <li><strong>user-secrets</strong> &mdash; <code>dotnet user-secrets set "Scout:Llm:&lt;Provider&gt;:ApiKey" "&lt;key&gt;"</code> (e.g. <code>Scout:Llm:OpenAI:ApiKey</code>).</li>
+          <li><strong>environment variable</strong> &mdash; <code>Scout__Llm__&lt;Provider&gt;__ApiKey</code> (double-underscore segment separator), e.g. <code>Scout__Llm__OpenAI__ApiKey</code>.</li>
+        </ul>
+        <p>The tracked <code>appsettings.json</code> should hold non-secret structure only (endpoints, model names) with empty key strings.</p>
+      </div>
+
+      <h3>Per-provider <code>appsettings</code> blocks</h3>
+      <p>Each block is shown nested under <code>Scout:Llm</code>. Property names match <code>LlmOptions</code> exactly. Keep <code>ApiKey</code> empty here and supply it via one of the secure mechanisms above.</p>
+
+      <!-- Ollama -->
+      <div class="prov-head"><span class="pname">Ollama</span><span class="ptag">local-first &middot; no API key &middot; default provider</span></div>
+      <pre class="cfg"><span class="c">// One endpoint serves both chat and embeddings; no key needed.</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Llm"</span>: {
+    <span class="k">"Provider"</span>: <span class="s">"Ollama"</span>,
+    <span class="k">"Ollama"</span>: {
+      <span class="k">"Endpoint"</span>: <span class="s">"http://localhost:11434"</span>,
+      <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"qwen2.5"</span> },
+      <span class="k">"Embeddings"</span>: {
+        <span class="k">"Model"</span>: <span class="s">"nomic-embed-text"</span>,
+        <span class="k">"MaxBatchSize"</span>: <span class="s">16</span>,
+        <span class="k">"ExpectedDimensions"</span>: <span class="s">0</span>,
+        <span class="k">"HttpTimeoutSeconds"</span>: <span class="s">100</span>
+      }
+    }
+  }
+}</pre>
+
+      <!-- Gemini -->
+      <div class="prov-head"><span class="pname">Gemini</span><span class="ptag">Google AI &middot; one key for chat + embeddings</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"Gemini"</span>,
+<span class="k">"Gemini"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// secret &rarr; user-secrets / env</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"gemini-1.5-flash"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"text-embedding-004"</span>, <span class="k">"MaxBatchSize"</span>: <span class="s">16</span> }
+}</pre>
+
+      <!-- OpenAI -->
+      <div class="prov-head"><span class="pname">OpenAI</span><span class="ptag">OpenAI API or any OpenAI-compatible host &middot; decoupled embeddings</span></div>
+      <pre class="cfg"><span class="c">// Endpoint is OPTIONAL: omit/null targets the default OpenAI API.</span>
+<span class="c">// Set it to point at an OpenAI-compatible host, e.g. NVIDIA:</span>
+<span class="c">//   "Endpoint": "https://integrate.api.nvidia.com/v1"</span>
+<span class="c">// Embeddings is a DECOUPLED block: its Endpoint/ApiKey, when set,</span>
+<span class="c">// override the chat ones so embeddings can run elsewhere.</span>
+<span class="k">"Provider"</span>: <span class="s">"OpenAI"</span>,
+<span class="k">"OpenAI"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// or "https://integrate.api.nvidia.com/v1"</span>
+  <span class="k">"Chat"</span>: { <span class="k">"Model"</span>: <span class="s">"gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: {
+    <span class="k">"Model"</span>: <span class="s">"text-embedding-3-small"</span>,
+    <span class="k">"Endpoint"</span>: <span class="s">null</span>,                        <span class="c">// null &rarr; falls back to chat Endpoint</span>
+    <span class="k">"ApiKey"</span>: <span class="s">null</span>                          <span class="c">// null &rarr; falls back to chat ApiKey</span>
+  }
+}</pre>
+
+      <!-- OpenRouter -->
+      <div class="prov-head"><span class="pname">OpenRouter</span><span class="ptag">preset chat endpoint &middot; separate embeddings host REQUIRED</span></div>
+      <pre class="cfg"><span class="c">// Chat targets the preset base https://openrouter.ai/api/v1 (not configurable).</span>
+<span class="c">// OpenRouter serves NO embeddings, so the Embeddings block is REQUIRED and must</span>
+<span class="c">// point at a separate OpenAI-compatible host: Model, Endpoint and ApiKey all required.</span>
+<span class="k">"Provider"</span>: <span class="s">"OpenRouter"</span>,
+<span class="k">"OpenRouter"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// OpenRouter chat key</span>
+  <span class="k">"Chat"</span>: { <span class="k">"Model"</span>: <span class="s">"openai/gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: {
+    <span class="k">"Model"</span>: <span class="s">"text-embedding-3-small"</span>,    <span class="c">// required</span>
+    <span class="k">"Endpoint"</span>: <span class="s">"https://api.openai.com/v1"</span>, <span class="c">// required (separate host)</span>
+    <span class="k">"ApiKey"</span>: <span class="s">""</span>                            <span class="c">// required (embeddings host key)</span>
+  }
+}</pre>
+
+      <!-- AzureOpenAI -->
+      <div class="prov-head"><span class="pname">AzureOpenAI</span><span class="ptag">deployment names, not model ids &middot; Endpoint required</span></div>
+      <pre class="cfg"><span class="c">// Azure binds DEPLOYMENT names (configured in the portal), not bare model ids.</span>
+<span class="c">// Endpoint is required.</span>
+<span class="k">"Provider"</span>: <span class="s">"AzureOpenAI"</span>,
+<span class="k">"AzureOpenAI"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">"https://my-aoai.openai.azure.com"</span>,
+  <span class="k">"Chat"</span>:       { <span class="k">"Deployment"</span>: <span class="s">"gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Deployment"</span>: <span class="s">"text-embedding-3-small"</span> }
+}</pre>
+
+      <!-- Mistral -->
+      <div class="prov-head"><span class="pname">Mistral</span><span class="ptag">one key for chat + embeddings &middot; Endpoint optional</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"Mistral"</span>,
+<span class="k">"Mistral"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// null &rarr; default Mistral API</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"mistral-small-latest"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"mistral-embed"</span> }
+}</pre>
+
+      <!-- HuggingFace -->
+      <div class="prov-head"><span class="pname">HuggingFace</span><span class="ptag">one token for chat + embeddings &middot; Endpoint optional</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"HuggingFace"</span>,
+<span class="k">"HuggingFace"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// HuggingFace API token</span>
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// null &rarr; default inference API</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"meta-llama/Llama-3.1-8B-Instruct"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"sentence-transformers/all-MiniLM-L6-v2"</span> }
+}</pre>
+
+      <!-- AzureAIInference -->
+      <div class="prov-head"><span class="pname">AzureAIInference</span><span class="ptag">one key for chat + embeddings &middot; Endpoint required</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"AzureAIInference"</span>,
+<span class="k">"AzureAIInference"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">"https://my-model.region.models.ai.azure.com"</span>,
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"Mistral-large"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"Cohere-embed-v3-english"</span> }
+}</pre>
+
+      <div class="callout warn">
+        <div class="c-title">Caveats</div>
+        <p>
+          <strong>Chat model must be tool-capable.</strong> Function-calling for <code>search_project</code> and
+          <code>find_symbol</code> only works when the selected chat model supports tools. For <strong>HuggingFace</strong>
+          and <strong>OpenRouter</strong> this is route-/model-dependent &mdash; pick a model that advertises tool use
+          (for Ollama, run a tool-capable model such as <code>qwen2.5</code>, not <code>gemma3</code>).
+        </p>
+        <p>
+          <strong>Changing the embeddings model requires re-indexing.</strong> Embedding vectors are model-specific, so
+          switching the embeddings <code>Model</code> (or its dimensions) invalidates stored vectors &mdash; re-index every
+          configured project before querying again.
         </p>
       </div>
     </section>
