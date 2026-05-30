@@ -92,6 +92,7 @@ public sealed class InMemoryConversationMemoryStore : IConversationMemoryStore
 
     private IReadOnlyList<ConversationTurn> Snapshot(ConversationEntry entry)
     {
+        // Defensive re-bound: Append already FIFO-evicts to exactly MaxTurns*2.
         var maxEntries = Math.Max(0, _options.MaxTurns) * 2;
         var startIndex = Math.Max(0, entry.Turns.Count - maxEntries);
 

@@ -119,6 +119,31 @@ public sealed class LlmStreamingRouterMemoryTests
     }
 
     [Fact]
+    public async Task Cancelled_Stream_Does_Not_Poison_History()
+    {
+        var store = NewStore(new ConversationMemoryOptions());
+        using var cts = new CancellationTokenSource();
+        var gateway = Substitute.For<IChatGateway>();
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(ci => AsyncSequence.CancelAfterFirst(
+                cts, ci.ArgAt<CancellationToken>(1), "partial", "more"));
+        var router = Build(gateway, store, new ConversationMemoryOptions());
+
+        // Drain with the cancellable token so it reaches the gateway: one token
+        // surfaces, then cancellation fires mid-stream.
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var _ in router.Route(new ChatMessage("u1", "c1", "q1"))
+                .Tokens.WithCancellation(cts.Token))
+            {
+            }
+        });
+
+        var key = new ConversationKeyProvider().DeriveKey(new ChatMessage("u1", "c1", "x"));
+        store.Load(key).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Disabled_Memory_Neither_Loads_Nor_Writes()
     {
         var store = Substitute.For<IConversationMemoryStore>();
