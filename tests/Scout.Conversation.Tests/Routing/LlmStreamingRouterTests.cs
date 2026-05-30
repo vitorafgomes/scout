@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Memory;
 using Scout.Conversation.Routing;
 using Scout.Llm.Abstractions;
 using Scout.Skills;
@@ -33,23 +34,34 @@ public sealed class LlmStreamingRouterTests
         return selector;
     }
 
+    private static IConversationMemoryStore NoMemory() => Substitute.For<IConversationMemoryStore>();
+
     private static LlmStreamingRouter Router(
         IChatGateway gateway,
         ISkillSelector? skillSelector = null,
         LlmStreamingRouterOptions? options = null)
-        => new(gateway, skillSelector ?? NoSkills(), Options.Create(options ?? new LlmStreamingRouterOptions
-        {
-            SystemPrompt = "sys",
-            Temperature = 0.3,
-            MaxTokens = 100,
-        }));
+        => new(
+            gateway,
+            skillSelector ?? NoSkills(),
+            NoMemory(),
+            new ConversationKeyProvider(),
+            // Disabled keeps these legacy tests behavior-neutral (no load/write-back).
+            Options.Create(new ConversationMemoryOptions { Enabled = false }),
+            Options.Create(options ?? new LlmStreamingRouterOptions
+            {
+                SystemPrompt = "sys",
+                Temperature = 0.3,
+                MaxTokens = 100,
+            }));
 
     [Fact]
     public void Ctor_Throws_When_Gateway_Null()
     {
         Should.Throw<ArgumentNullException>(
             () => new LlmStreamingRouter(
-                null!, NoSkills(), Options.Create(new LlmStreamingRouterOptions())));
+                null!, NoSkills(), NoMemory(), new ConversationKeyProvider(),
+                Options.Create(new ConversationMemoryOptions()),
+                Options.Create(new LlmStreamingRouterOptions())));
     }
 
     [Fact]
@@ -58,7 +70,31 @@ public sealed class LlmStreamingRouterTests
         var gateway = Substitute.For<IChatGateway>();
         Should.Throw<ArgumentNullException>(
             () => new LlmStreamingRouter(
-                gateway, null!, Options.Create(new LlmStreamingRouterOptions())));
+                gateway, null!, NoMemory(), new ConversationKeyProvider(),
+                Options.Create(new ConversationMemoryOptions()),
+                Options.Create(new LlmStreamingRouterOptions())));
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_MemoryStore_Null()
+    {
+        var gateway = Substitute.For<IChatGateway>();
+        Should.Throw<ArgumentNullException>(
+            () => new LlmStreamingRouter(
+                gateway, NoSkills(), null!, new ConversationKeyProvider(),
+                Options.Create(new ConversationMemoryOptions()),
+                Options.Create(new LlmStreamingRouterOptions())));
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_KeyProvider_Null()
+    {
+        var gateway = Substitute.For<IChatGateway>();
+        Should.Throw<ArgumentNullException>(
+            () => new LlmStreamingRouter(
+                gateway, NoSkills(), NoMemory(), null!,
+                Options.Create(new ConversationMemoryOptions()),
+                Options.Create(new LlmStreamingRouterOptions())));
     }
 
     [Fact]

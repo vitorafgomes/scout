@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Memory;
 using Scout.Conversation.Routing;
 using Scout.Conversation.Streaming;
 using Scout.Skills;
@@ -26,8 +27,12 @@ public static class ConversationServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.Configure<LlmStreamingRouterOptions>(configuration.GetSection(ConfigSection));
+        services.Configure<ConversationMemoryOptions>(
+            configuration.GetSection(ConversationMemoryOptions.ConfigSection));
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IConversationKeyProvider, ConversationKeyProvider>();
+        services.TryAddSingleton<IConversationMemoryStore, InMemoryConversationMemoryStore>();
         services.TryAddSingleton(sp => new StreamPumpOptions
         {
             TimeProvider = sp.GetRequiredService<TimeProvider>(),
