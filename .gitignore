@@ -19,6 +19,8 @@ artifacts/
 secrets.json
 appsettings.Development.json
 appsettings.Local.json
+*.bkp
+appsettings*.bkp
 
 ## OS
 .DS_Store
