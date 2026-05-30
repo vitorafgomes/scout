@@ -67,6 +67,45 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void Registers_Plugin_With_list_projects_Function()
+    {
+        using var provider = Build(
+            ("Scout:Projects:Items:0:Name", "scout"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
+
+        var plugin = provider.GetServices<KernelPlugin>()
+            .SingleOrDefault(p => p.Name == "ProjectKnowledge");
+
+        plugin.ShouldNotBeNull();
+        plugin!.TryGetFunction("list_projects", out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Registers_Plugin_When_Only_Roots_Configured()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "scout-roots-" + Guid.NewGuid().ToString("N"));
+        var repo = Path.Combine(root, "discovered-repo");
+        Directory.CreateDirectory(Path.Combine(repo, ".git"));
+        try
+        {
+            using var provider = Build(("Scout:Projects:Roots:0", root));
+
+            var plugin = provider.GetServices<KernelPlugin>()
+                .SingleOrDefault(p => p.Name == "ProjectKnowledge");
+            plugin.ShouldNotBeNull();
+
+            provider.GetService<ChatCompletionAgent>().ShouldNotBeNull();
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Does_Not_Register_Search_Project_Plugin_When_No_Projects_Configured()
     {
         using var provider = Build();

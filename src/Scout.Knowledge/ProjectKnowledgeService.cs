@@ -13,6 +13,7 @@ public sealed class ProjectKnowledgeService
 
     private readonly IEmbeddingGenerator<string, Embedding<float>> embedder;
     private readonly IProjectKnowledgeStore store;
+    private readonly ProjectResolutionService resolution;
     private readonly ILogger<ProjectKnowledgeService> logger;
 
     /// <summary>
@@ -20,14 +21,17 @@ public sealed class ProjectKnowledgeService
     /// </summary>
     /// <param name="embedder">The embedding generator.</param>
     /// <param name="store">The knowledge store.</param>
+    /// <param name="resolution">Resolves a project name and lazily indexes it on first use.</param>
     /// <param name="logger">The logger.</param>
     public ProjectKnowledgeService(
         IEmbeddingGenerator<string, Embedding<float>> embedder,
         IProjectKnowledgeStore store,
+        ProjectResolutionService resolution,
         ILogger<ProjectKnowledgeService> logger)
     {
         this.embedder = embedder;
         this.store = store;
+        this.resolution = resolution;
         this.logger = logger;
     }
 
@@ -49,13 +53,19 @@ public sealed class ProjectKnowledgeService
             return "Provide a project and a question.";
         }
 
+        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        if (entry is null)
+        {
+            return $"Unknown project '{project}'.";
+        }
+
         try
         {
             var vector = await this.embedder.GenerateVectorAsync(
                 question,
                 cancellationToken: cancellationToken);
 
-            var hits = await this.store.SearchAsync(project, vector, TopResults, cancellationToken);
+            var hits = await this.store.SearchAsync(entry.Name, vector, TopResults, cancellationToken);
 
             if (hits.Count == 0)
             {
@@ -95,12 +105,18 @@ public sealed class ProjectKnowledgeService
             return "Provide a project and a symbol.";
         }
 
+        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        if (entry is null)
+        {
+            return $"Unknown project '{project}'.";
+        }
+
         var limit = top > 0 ? top : FindSymbolTopResults;
 
         try
         {
             // Metadata-only path: the embedder is intentionally not invoked here.
-            var hits = await this.store.FindSymbolAsync(project, symbol, kind, limit, cancellationToken);
+            var hits = await this.store.FindSymbolAsync(entry.Name, symbol, kind, limit, cancellationToken);
 
             if (hits.Count == 0)
             {

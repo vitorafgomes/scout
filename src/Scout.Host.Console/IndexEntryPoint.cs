@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Scout.Knowledge;
 
 namespace Scout.Host.Console;
@@ -31,9 +30,7 @@ internal static class IndexEntryPoint
             return 2;
         }
 
-        var options = services.GetRequiredService<IOptions<ProjectsOptions>>().Value;
-        var entry = options.Items.FirstOrDefault(p =>
-            string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+        var entry = services.GetRequiredService<ProjectResolutionService>().Find(projectName);
 
         if (entry is null)
         {

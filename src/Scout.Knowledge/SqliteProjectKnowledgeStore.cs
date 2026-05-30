@@ -26,6 +26,24 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     public Task InitializeAsync(CancellationToken ct) => _collection.EnsureCollectionExistsAsync(ct);
 
     /// <inheritdoc />
+    public async Task<bool> HasProjectAsync(string project, CancellationToken ct)
+    {
+        // A never-indexed project has no backing table, so ensure the (empty)
+        // collection exists first; a filtered scan capped at one row then probes
+        // for any chunk belonging to the project.
+        await _collection.EnsureCollectionExistsAsync(ct).ConfigureAwait(false);
+
+        await foreach (var _ in _collection
+                           .GetAsync(r => r.Project == project, top: 1, options: null!, ct)
+                           .ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <inheritdoc />
     public async Task ReplaceProjectAsync(string project, IReadOnlyList<ChunkRecord> chunks, CancellationToken ct)
     {
         // Replace semantics: drop every existing row for this project, then upsert the new set.

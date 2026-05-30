@@ -7,12 +7,15 @@ namespace Scout.Knowledge;
 public sealed class ProjectKnowledgePlugin
 {
     private readonly ProjectKnowledgeService service;
+    private readonly ProjectResolutionService resolution;
 
-    /// <summary>Creates the plugin over the retrieval service.</summary>
+    /// <summary>Creates the plugin over the retrieval and resolution services.</summary>
     /// <param name="service">The retrieval service. Must be non-null.</param>
-    public ProjectKnowledgePlugin(ProjectKnowledgeService service)
+    /// <param name="resolution">Resolves project names for listing. Must be non-null.</param>
+    public ProjectKnowledgePlugin(ProjectKnowledgeService service, ProjectResolutionService resolution)
     {
         this.service = service ?? throw new ArgumentNullException(nameof(service));
+        this.resolution = resolution ?? throw new ArgumentNullException(nameof(resolution));
     }
 
     /// <summary>Search a configured project's code and docs for context.</summary>
@@ -44,4 +47,16 @@ public sealed class ProjectKnowledgePlugin
         [Description("Optional maximum number of results; leave at 0 for the default.")] int top,
         CancellationToken ct)
         => this.service.FindSymbolAsync(project, symbol, kind, ct, top);
+
+    /// <summary>List the project names the agent can search.</summary>
+    /// <returns>A comma-separated list of project names, or a clean status message.</returns>
+    [KernelFunction("list_projects")]
+    [Description("List the projects available to search (auto-discovered plus explicitly configured).")]
+    public string ListProjects()
+    {
+        var names = this.resolution.GetProjectNames();
+        return names.Count == 0
+            ? "No projects configured."
+            : "Available projects: " + string.Join(", ", names);
+    }
 }

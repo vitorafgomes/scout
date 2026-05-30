@@ -2,12 +2,26 @@ namespace Scout.Knowledge.Tests;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
-using Shouldly;
-using Xunit;
+using Microsoft.Extensions.Options;
 
-public sealed class ProjectKnowledgeServiceTests
+public sealed class ProjectKnowledgeServiceTests : IDisposable
 {
+    private readonly string _repo;
+
+    public ProjectKnowledgeServiceTests()
+    {
+        _repo = Path.Combine(Path.GetTempPath(), "scout-knowledge-service-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_repo);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_repo))
+        {
+            Directory.Delete(_repo, recursive: true);
+        }
+    }
+
     // GenerateVectorAsync is an extension method that delegates to GenerateAsync,
     // so the stub targets GenerateAsync (the only virtual member).
     private static IEmbeddingGenerator<string, Embedding<float>> StubEmbedder()
@@ -22,6 +36,35 @@ public sealed class ProjectKnowledgeServiceTests
             .Returns(generated);
         return embedder;
     }
+
+    // Resolution that knows "proj" pointing at an existing dir; HasProjectAsync is
+    // stubbed true so ResolveAsync returns the entry without lazy indexing, keeping
+    // the search/find assertions focused on formatting.
+    private ProjectResolutionService Resolution(IProjectKnowledgeStore store, string project = "proj")
+    {
+        store.HasProjectAsync(project, Arg.Any<CancellationToken>()).Returns(true);
+        var options = new ProjectsOptions
+        {
+            Items = { new ProjectEntry { Name = project, RepoPath = _repo } },
+        };
+        var indexer = new ProjectIndexer(
+            Substitute.For<IChunker>(),
+            Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>(),
+            store,
+            NullLogger<ProjectIndexer>.Instance);
+        return new ProjectResolutionService(
+            Options.Create(options),
+            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
+            indexer,
+            store,
+            NullLogger<ProjectResolutionService>.Instance);
+    }
+
+    private ProjectKnowledgeService NewService(
+        IEmbeddingGenerator<string, Embedding<float>> embedder,
+        IProjectKnowledgeStore store,
+        string project = "proj")
+        => new(embedder, store, Resolution(store, project), NullLogger<ProjectKnowledgeService>.Instance);
 
     private static ChunkRecord Hit(string path, string symbol, int start, int end, string content) => new()
     {
@@ -49,7 +92,7 @@ public sealed class ProjectKnowledgeServiceTests
                 Hit("b.cs", string.Empty, 10, 12, "var x = 1;"),
             });
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.SearchAsync("proj", "where is A?", CancellationToken.None);
 
@@ -68,11 +111,25 @@ public sealed class ProjectKnowledgeServiceTests
             .SearchAsync("proj", Arg.Any<ReadOnlyMemory<float>>(), 5, Arg.Any<CancellationToken>())
             .Returns(new List<ChunkRecord>());
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.SearchAsync("proj", "anything", CancellationToken.None);
 
         result.ShouldBe("No indexed content found for project 'proj'. Run: index proj");
+    }
+
+    [Fact]
+    public async Task SearchAsync_returns_unknown_project_message_when_not_resolvable()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+
+        // Resolution only knows "proj"; an unconfigured name resolves to null.
+        var service = NewService(embedder, store);
+
+        var result = await service.SearchAsync("ghost", "anything", CancellationToken.None);
+
+        result.ShouldBe("Unknown project 'ghost'.");
     }
 
     [Theory]
@@ -85,7 +142,7 @@ public sealed class ProjectKnowledgeServiceTests
         var embedder = StubEmbedder();
         var store = Substitute.For<IProjectKnowledgeStore>();
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.SearchAsync(project!, question!, CancellationToken.None);
 
@@ -110,7 +167,7 @@ public sealed class ProjectKnowledgeServiceTests
             .SearchAsync("proj", Arg.Any<ReadOnlyMemory<float>>(), 5, Arg.Any<CancellationToken>())
             .Returns<IReadOnlyList<ChunkRecord>>(_ => throw new InvalidOperationException("boom"));
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         string result = string.Empty;
         await Should.NotThrowAsync(async () =>
@@ -128,7 +185,7 @@ public sealed class ProjectKnowledgeServiceTests
             .Returns<GeneratedEmbeddings<Embedding<float>>>(_ => throw new InvalidOperationException("boom"));
         var store = Substitute.For<IProjectKnowledgeStore>();
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         string result = string.Empty;
         await Should.NotThrowAsync(async () =>
@@ -146,7 +203,7 @@ public sealed class ProjectKnowledgeServiceTests
             .FindSymbolAsync("proj", "Bar", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<ChunkRecord> { Hit("a.cs", "Bar", 1, 3, "int Bar() => 1;") });
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         await service.FindSymbolAsync("proj", "Bar", kind: null, CancellationToken.None);
 
@@ -168,7 +225,7 @@ public sealed class ProjectKnowledgeServiceTests
                 Hit("a.cs", "ClassA", 1, 5, "class ClassA {}"),
             });
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.FindSymbolAsync("proj", "ClassA", kind: null, CancellationToken.None);
 
@@ -185,7 +242,7 @@ public sealed class ProjectKnowledgeServiceTests
             .FindSymbolAsync("proj", "Ghost", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new List<ChunkRecord>());
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.FindSymbolAsync("proj", "Ghost", kind: null, CancellationToken.None);
 
@@ -202,7 +259,7 @@ public sealed class ProjectKnowledgeServiceTests
         var embedder = StubEmbedder();
         var store = Substitute.For<IProjectKnowledgeStore>();
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         var result = await service.FindSymbolAsync(project!, symbol!, kind: null, CancellationToken.None);
 
@@ -220,6 +277,19 @@ public sealed class ProjectKnowledgeServiceTests
     }
 
     [Fact]
+    public async Task FindSymbolAsync_returns_unknown_project_message_when_not_resolvable()
+    {
+        var embedder = StubEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+
+        var service = NewService(embedder, store);
+
+        var result = await service.FindSymbolAsync("ghost", "Bar", kind: null, CancellationToken.None);
+
+        result.ShouldBe("Unknown project 'ghost'.");
+    }
+
+    [Fact]
     public async Task FindSymbolAsync_returns_clean_error_when_store_throws()
     {
         var embedder = StubEmbedder();
@@ -228,7 +298,7 @@ public sealed class ProjectKnowledgeServiceTests
             .FindSymbolAsync("proj", "Boom", null, Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns<IReadOnlyList<ChunkRecord>>(_ => throw new InvalidOperationException("boom"));
 
-        var service = new ProjectKnowledgeService(embedder, store, NullLogger<ProjectKnowledgeService>.Instance);
+        var service = NewService(embedder, store);
 
         string result = string.Empty;
         await Should.NotThrowAsync(async () =>

@@ -399,6 +399,33 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
         results.ShouldHaveSingleItem().Id.ShouldBe("alpha:Foo.cs:new");
     }
 
+    [Fact]
+    public async Task HasProjectAsync_ReturnsFalse_ForNeverIndexedProject()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        var has = await store.HasProjectAsync("never-indexed", CancellationToken.None);
+
+        has.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task HasProjectAsync_ReturnsTrue_AfterReplaceProject()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { Chunk("alpha", "only", Vector((0, 1f))) },
+            CancellationToken.None);
+
+        var has = await store.HasProjectAsync("alpha", CancellationToken.None);
+
+        has.ShouldBeTrue();
+    }
+
     public void Dispose()
     {
         if (File.Exists(_dbPath))

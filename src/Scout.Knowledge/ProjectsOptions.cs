@@ -9,6 +9,9 @@ public sealed class ProjectsOptions
     /// <summary>The configured projects.</summary>
     public IList<ProjectEntry> Items { get; set; } = new List<ProjectEntry>();
 
+    /// <summary>Root directories scanned for repositories at startup; explicit Items win on name collision.</summary>
+    public IList<string> Roots { get; set; } = new List<string>();
+
     /// <summary>Incremental file-watch settings; opt-in (default off).</summary>
     public WatchOptions Watch { get; set; } = new();
 }

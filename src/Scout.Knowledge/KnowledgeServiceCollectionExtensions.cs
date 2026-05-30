@@ -54,9 +54,13 @@ public static class KnowledgeServiceCollectionExtensions
             sp.GetRequiredService<IProjectKnowledgeStore>(),
             sp.GetRequiredService<ILogger<ProjectIndexer>>()));
 
+        services.AddSingleton<ProjectDiscoveryService>();
+        services.AddSingleton<ProjectResolutionService>();
+
         services.AddSingleton(sp => new ProjectKnowledgeService(
             sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
             sp.GetRequiredService<IProjectKnowledgeStore>(),
+            sp.GetRequiredService<ProjectResolutionService>(),
             sp.GetRequiredService<ILogger<ProjectKnowledgeService>>()));
 
         // Gate the search_project plugin and the agent on configured projects.
@@ -66,22 +70,22 @@ public static class KnowledgeServiceCollectionExtensions
         // binds the fully-composed shared kernel (which carries the plugin).
         var projects = new ProjectsOptions();
         configuration.GetSection(ProjectsOptions.SectionName).Bind(projects);
-        if (projects.Items.Count > 0)
+        var hasProjects = projects.Items.Count > 0 || projects.Roots.Count > 0;
+        if (hasProjects)
         {
             services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
-                new ProjectKnowledgePlugin(sp.GetRequiredService<ProjectKnowledgeService>()),
+                new ProjectKnowledgePlugin(
+                    sp.GetRequiredService<ProjectKnowledgeService>(),
+                    sp.GetRequiredService<ProjectResolutionService>()),
                 "ProjectKnowledge"));
 
-            // Ground the agent on the already-bound configured project names so the model
-            // defaults to a real project instead of any example in the tool schema. Reuses
-            // the local binding above; adds no dependency edge to the agent factory.
-            var projectNames = projects.Items
-                .Select(item => item.Name)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .ToArray();
-
+            // Ground the agent on the merged project names (discovered roots plus explicit
+            // items) so the model defaults to a real project instead of any example in the
+            // tool schema. Names are computed once at resolve from the resolution service.
             services.AddSingleton(sp =>
-                ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>(), projectNames));
+                ProjectExpertAgentFactory.Create(
+                    sp.GetRequiredService<Kernel>(),
+                    sp.GetRequiredService<ProjectResolutionService>().GetProjectNames()));
         }
 
         // Opt-in incremental file watch: only when explicitly enabled and at least one

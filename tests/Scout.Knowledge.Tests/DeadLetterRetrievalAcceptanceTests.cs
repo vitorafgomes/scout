@@ -70,12 +70,24 @@ public sealed class DeadLetterRetrievalAcceptanceTests : IDisposable
             store,
             NullLogger<ProjectIndexer>.Instance);
 
+        const string project = "deadletter-fixture";
+
+        var resolution = new ProjectResolutionService(
+            Options.Create(new ProjectsOptions
+            {
+                Items = { new ProjectEntry { Name = project, RepoPath = _repoPath } },
+            }),
+            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
+            indexer,
+            store,
+            NullLogger<ProjectResolutionService>.Instance);
+
         var service = new ProjectKnowledgeService(
             embedder,
             store,
+            resolution,
             NullLogger<ProjectKnowledgeService>.Instance);
 
-        const string project = "deadletter-fixture";
         await indexer.IndexAsync(
             new ProjectEntry { Name = project, RepoPath = _repoPath },
             CancellationToken.None);

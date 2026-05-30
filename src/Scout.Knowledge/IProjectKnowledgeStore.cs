@@ -7,6 +7,11 @@ public interface IProjectKnowledgeStore
     /// <param name="ct">Cancellation token.</param>
     Task InitializeAsync(CancellationToken ct);
 
+    /// <summary>Returns true when at least one chunk exists for the project.</summary>
+    /// <param name="project">Project name to probe.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<bool> HasProjectAsync(string project, CancellationToken ct);
+
     /// <summary>Replace all chunks for a project with the supplied set.</summary>
     /// <param name="project">Project name whose chunks are being replaced.</param>
     /// <param name="chunks">The complete new chunk set for the project.</param>
