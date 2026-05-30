@@ -8,6 +8,7 @@ using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
+using Scout.Llm.Providers.Gemini;
 using Scout.Llm.Providers.Ollama;
 
 namespace Scout.Llm;
@@ -49,9 +50,12 @@ public static class LlmServiceCollectionExtensions
             case "Ollama":
                 services.AddOllamaLlmProvider();
                 break;
+            case "Gemini":
+                services.AddGeminiLlmProvider();
+                break;
             default:
                 throw new InvalidOperationException(
-                    $"Unknown LLM provider '{provider}'. Supported providers: Ollama.");
+                    $"Unknown LLM provider '{provider}'. Supported providers: Ollama, Gemini.");
         }
 
         services.AddSingleton(sp =>

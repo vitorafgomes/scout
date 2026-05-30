@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Llm.Tests" />

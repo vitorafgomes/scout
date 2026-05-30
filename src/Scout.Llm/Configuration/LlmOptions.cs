@@ -14,6 +14,23 @@ public sealed class LlmOptions
 
     /// <summary>Settings for the Ollama provider.</summary>
     public OllamaOptions Ollama { get; set; } = new();
+
+    /// <summary>Settings for the Gemini provider. Null when not configured.</summary>
+    public GeminiOptions? Gemini { get; set; }
+}
+
+/// <summary>Settings for the Google Gemini LLM provider. One API key serves both
+/// the chat-completion and embedding services against the hosted Google AI API.</summary>
+public sealed class GeminiOptions
+{
+    /// <summary>Google AI API key used for both chat and embeddings.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
 }
 
 /// <summary>Settings for the Ollama LLM provider. One endpoint serves both the

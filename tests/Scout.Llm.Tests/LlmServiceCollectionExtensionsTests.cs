@@ -80,12 +80,42 @@ public sealed class LlmServiceCollectionExtensionsTests
         provider.GetRequiredService<IChatGateway>().ShouldNotBeNull();
     }
 
+    private static IConfiguration GeminiConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "Gemini",
+                ["Scout:Llm:Gemini:ApiKey"] = "test-key",
+                ["Scout:Llm:Gemini:Chat:Model"] = "gemini-1.5-flash",
+                ["Scout:Llm:Gemini:Embeddings:Model"] = "text-embedding-004",
+            })
+            .Build();
+
+    [Fact]
+    public void AddScoutLlm_Resolves_GeminiProviderFactory()
+    {
+        using var provider = new ServiceCollection()
+            .AddScoutLlm(GeminiConfig()).BuildServiceProvider();
+
+        var factory = provider.GetRequiredService<ILlmProviderFactory>();
+        factory.Name.ShouldBe("Gemini");
+    }
+
+    [Fact]
+    public void AddScoutLlm_Does_Not_Throw_For_Gemini_Provider()
+    {
+        Should.NotThrow(() => new ServiceCollection().AddScoutLlm(GeminiConfig()));
+    }
+
     [Fact]
     public void AddScoutLlm_Throws_For_Unknown_Provider()
     {
-        Should.Throw<InvalidOperationException>(
-            () => new ServiceCollection().AddScoutLlm(Config("Nonexistent")))
-            .Message.ShouldContain("Nonexistent");
+        var ex = Should.Throw<InvalidOperationException>(
+            () => new ServiceCollection().AddScoutLlm(Config("Nonexistent")));
+
+        ex.Message.ShouldContain("Nonexistent");
+        ex.Message.ShouldContain("Ollama");
+        ex.Message.ShouldContain("Gemini");
     }
 
     [Fact]
