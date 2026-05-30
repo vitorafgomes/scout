@@ -8,6 +8,19 @@ public sealed class ProjectsOptions
 
     /// <summary>The configured projects.</summary>
     public IList<ProjectEntry> Items { get; set; } = new List<ProjectEntry>();
+
+    /// <summary>Incremental file-watch settings; opt-in (default off).</summary>
+    public WatchOptions Watch { get; set; } = new();
+}
+
+/// <summary>Settings for incremental file-watch re-indexing.</summary>
+public sealed class WatchOptions
+{
+    /// <summary>When true, each project's repo is watched and changed files are re-indexed. Default false.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>Quiet window in milliseconds before a changed file is re-indexed. Default 750.</summary>
+    public int DebounceMilliseconds { get; set; } = 750;
 }
 
 /// <summary>One configured project: a name and its repository path.</summary>

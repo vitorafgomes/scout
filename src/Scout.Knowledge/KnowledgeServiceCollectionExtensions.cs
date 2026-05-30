@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
@@ -68,6 +69,14 @@ public static class KnowledgeServiceCollectionExtensions
 
             services.AddSingleton(sp =>
                 ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>()));
+        }
+
+        // Opt-in incremental file watch: only when explicitly enabled and at least one
+        // project is configured. The service does no I/O at construction; it begins
+        // watching in ExecuteAsync, so registering it here cannot hang startup.
+        if (projects.Watch.Enabled && projects.Items.Count > 0)
+        {
+            services.AddHostedService<ProjectWatchService>();
         }
 
         return services;

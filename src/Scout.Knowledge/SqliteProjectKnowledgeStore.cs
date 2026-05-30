@@ -52,6 +52,31 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     }
 
     /// <inheritdoc />
+    public async Task ReplaceFileAsync(string project, string relativePath, IReadOnlyList<ChunkRecord> chunks, CancellationToken ct)
+    {
+        // Same replace semantics as ReplaceProjectAsync, scoped to one file: gather the
+        // current rows for (project, path) via a filtered scan, delete them by key, then
+        // upsert the new set. Empty chunks degenerates to a pure delete.
+        var staleIds = new List<string>();
+        await foreach (var existing in _collection
+                           .GetAsync(r => r.Project == project && r.Path == relativePath, MaxProjectChunks, options: null!, ct)
+                           .ConfigureAwait(false))
+        {
+            staleIds.Add(existing.Id);
+        }
+
+        if (staleIds.Count > 0)
+        {
+            await _collection.DeleteAsync(staleIds, ct).ConfigureAwait(false);
+        }
+
+        if (chunks.Count > 0)
+        {
+            await _collection.UpsertAsync(chunks, ct).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<ChunkRecord>> SearchAsync(string project, ReadOnlyMemory<float> query, int top, CancellationToken ct)
     {
         var options = new VectorSearchOptions<ChunkRecord> { Filter = r => r.Project == project, IncludeVectors = false };

@@ -10,21 +10,6 @@ public sealed class ProjectIndexer(
     IProjectKnowledgeStore store,
     ILogger<ProjectIndexer> logger)
 {
-    private static readonly HashSet<string> CodeExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".cs", ".ts", ".tsx", ".js", ".jsx", ".py", ".json", ".yml", ".yaml",
-    };
-
-    private static readonly HashSet<string> DocExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".md", ".txt",
-    };
-
-    private static readonly HashSet<string> SkipSegments = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "bin", "obj", ".git", "node_modules", "dist", ".vs",
-    };
-
     /// <summary>Index a project's repository in place: enumerate, chunk, embed, and replace the project's chunks.</summary>
     /// <param name="project">The project to index; its <see cref="ProjectEntry.RepoPath"/> is read locally.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -37,45 +22,14 @@ public sealed class ProjectIndexer(
         {
             ct.ThrowIfCancellationRequested();
 
-            var extension = Path.GetExtension(path);
-            var kind = DocExtensions.Contains(extension) ? "doc" : "code";
-            var relPath = ToRelativePath(project.RepoPath, path);
-
-            try
+            var fileRecords = await BuildRecordsForFileAsync(project, path, ct).ConfigureAwait(false);
+            if (fileRecords.Count == 0)
             {
-                var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-                var chunks = chunker.Chunk(relPath, text);
-                if (chunks.Count == 0)
-                {
-                    continue;
-                }
-
-                var inputs = chunks.Select(chunk => BuildEmbeddingInput(relPath, kind, chunk)).ToList();
-                var embeddings = await embedder.GenerateAsync(inputs, options: null, ct).ConfigureAwait(false);
-
-                for (int i = 0; i < chunks.Count; i++)
-                {
-                    var chunk = chunks[i];
-                    records.Add(new ChunkRecord
-                    {
-                        Id = $"{project.Name}:{relPath}:{chunk.StartLine}",
-                        Project = project.Name,
-                        Path = relPath,
-                        Kind = kind,
-                        Symbol = chunk.Symbol,
-                        StartLine = chunk.StartLine,
-                        EndLine = chunk.EndLine,
-                        Content = chunk.Text,
-                        Embedding = embeddings[i].Vector,
-                    });
-                }
-
-                filesIndexed++;
+                continue;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger.LogWarning(ex, "Skipping file that failed to index: {Path}", relPath);
-            }
+
+            records.AddRange(fileRecords);
+            filesIndexed++;
         }
 
         await store.ReplaceProjectAsync(project.Name, records, ct).ConfigureAwait(false);
@@ -87,35 +41,66 @@ public sealed class ProjectIndexer(
             records.Count);
     }
 
+    /// <summary>
+    /// Read, chunk, embed, and build the chunk records for a single file. Returns an empty
+    /// list when the file yields no chunks or fails to read/embed (logged, never thrown).
+    /// </summary>
+    /// <param name="project">The owning project; supplies name and repo root.</param>
+    /// <param name="absolutePath">Absolute path to the file on disk.</param>
+    /// <param name="ct">Cancellation token.</param>
+    internal async Task<IReadOnlyList<ChunkRecord>> BuildRecordsForFileAsync(
+        ProjectEntry project,
+        string absolutePath,
+        CancellationToken ct)
+    {
+        var kind = ProjectFileFilter.KindFor(absolutePath);
+        var relPath = ProjectFileFilter.ToRelativePath(project.RepoPath, absolutePath);
+
+        try
+        {
+            var text = await File.ReadAllTextAsync(absolutePath, ct).ConfigureAwait(false);
+            var chunks = chunker.Chunk(relPath, text);
+            if (chunks.Count == 0)
+            {
+                return Array.Empty<ChunkRecord>();
+            }
+
+            var inputs = chunks.Select(chunk => BuildEmbeddingInput(relPath, kind, chunk)).ToList();
+            var embeddings = await embedder.GenerateAsync(inputs, options: null, ct).ConfigureAwait(false);
+
+            var records = new List<ChunkRecord>(chunks.Count);
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                var chunk = chunks[i];
+                records.Add(new ChunkRecord
+                {
+                    Id = $"{project.Name}:{relPath}:{chunk.StartLine}",
+                    Project = project.Name,
+                    Path = relPath,
+                    Kind = kind,
+                    Symbol = chunk.Symbol,
+                    StartLine = chunk.StartLine,
+                    EndLine = chunk.EndLine,
+                    Content = chunk.Text,
+                    Embedding = embeddings[i].Vector,
+                });
+            }
+
+            return records;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Skipping file that failed to index: {Path}", relPath);
+            return Array.Empty<ChunkRecord>();
+        }
+    }
+
     private static IEnumerable<string> EnumerateFiles(string repoPath)
     {
         return Directory
             .EnumerateFiles(repoPath, "*", SearchOption.AllDirectories)
-            .Where(IsIncluded);
-
-        bool IsIncluded(string path)
-        {
-            var extension = Path.GetExtension(path);
-            if (!CodeExtensions.Contains(extension) && !DocExtensions.Contains(extension))
-            {
-                return false;
-            }
-
-            var relative = Path.GetRelativePath(repoPath, path);
-            foreach (var segment in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            {
-                if (SkipSegments.Contains(segment))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+            .Where(path => ProjectFileFilter.IsIndexable(ProjectFileFilter.ToRelativePath(repoPath, path)));
     }
-
-    private static string ToRelativePath(string repoPath, string path)
-        => Path.GetRelativePath(repoPath, path).Replace('\\', '/');
 
     private static string BuildEmbeddingInput(string relPath, string kind, Chunk chunk)
     {

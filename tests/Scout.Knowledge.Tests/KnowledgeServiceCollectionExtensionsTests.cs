@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
@@ -92,6 +93,71 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
             ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
 
         provider.GetService<ChatCompletionAgent>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void Does_Not_Register_WatchService_When_Disabled()
+    {
+        using var provider = Build(
+            ("Scout:Projects:Items:0:Name", "scout"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
+
+        provider.GetServices<IHostedService>()
+            .OfType<ProjectWatchService>()
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Does_Not_Register_WatchService_When_Enabled_But_No_Projects()
+    {
+        using var provider = Build(
+            ("Scout:Projects:Watch:Enabled", "true"));
+
+        provider.GetServices<IHostedService>()
+            .OfType<ProjectWatchService>()
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Registers_WatchService_When_Enabled_And_At_Least_One_Project()
+    {
+        using var provider = Build(
+            ("Scout:Projects:Watch:Enabled", "true"),
+            ("Scout:Projects:Items:0:Name", "scout"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
+
+        provider.GetServices<IHostedService>()
+            .OfType<ProjectWatchService>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public void BuildingProvider_With_Watch_Enabled_Does_No_Io_Or_Embedding()
+    {
+        // No-startup-hang guard: resolving the graph must not touch the filesystem,
+        // create a FileSystemWatcher, or call the embedder. Watching only begins in
+        // ExecuteAsync, which BuildServiceProvider never invokes.
+        var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Projects:Watch:Enabled"] = "true",
+                ["Scout:Projects:Items:0:Name"] = "scout",
+                ["Scout:Projects:Items:0:RepoPath"] = "/nonexistent/repo/path",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(embedder);
+        services.AddSingleton(Kernel.CreateBuilder().Build());
+        services.AddProjectKnowledge(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        _ = provider.GetServices<IHostedService>().OfType<ProjectWatchService>().Single();
+
+        embedder.ReceivedCalls().ShouldBeEmpty();
     }
 
     [Fact]
