@@ -79,6 +79,13 @@ public sealed class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     /// <inheritdoc />
     public async Task<IReadOnlyList<ChunkRecord>> SearchAsync(string project, ReadOnlyMemory<float> query, int top, CancellationToken ct)
     {
+        // A project that was never indexed has no backing collection, so the
+        // underlying SqliteVec store would throw "no such table" on search.
+        // Ensure the (empty) collection exists first so a never-indexed project
+        // degrades to zero results instead of an exception. Idempotent: a no-op
+        // once the collection has been created by InitializeAsync or a replace.
+        await _collection.EnsureCollectionExistsAsync(ct).ConfigureAwait(false);
+
         var options = new VectorSearchOptions<ChunkRecord> { Filter = r => r.Project == project, IncludeVectors = false };
         var results = new List<ChunkRecord>();
         await foreach (var hit in _collection.SearchAsync(query, top, options, ct).ConfigureAwait(false))

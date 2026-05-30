@@ -114,6 +114,20 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SearchAsync_on_uninitialized_store_returns_empty_without_throwing()
+    {
+        // Fresh temp db: collection was never created (no InitializeAsync, no Replace).
+        // Search must degrade to an empty result, not throw "no such table".
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+
+        IReadOnlyList<ChunkRecord> results = Array.Empty<ChunkRecord>();
+        await Should.NotThrowAsync(async () =>
+            results = await store.SearchAsync("never-indexed", Vector((0, 1f)), top: 5, CancellationToken.None));
+
+        results.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task ReplaceFileAsync_ReplacesOnlyThatPath_WithinProject()
     {
         var store = new SqliteProjectKnowledgeStore(ConnectionString);
