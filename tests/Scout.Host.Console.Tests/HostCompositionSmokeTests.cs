@@ -144,6 +144,11 @@ public sealed class HostCompositionSmokeTests
 
         var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
         kernel.Plugins.ShouldContain(p => p.Name == "ProjectKnowledge");
+
+        // The tool-based skills plugin is aggregated too. Resolving it here proves
+        // its embedding-free catalog builds under the fail-fast HttpClient and the
+        // budget, so it adds no construction-time I/O or cycle.
+        kernel.Plugins.ShouldContain(p => p.Name == "Skills");
     }
 
     [Fact]
