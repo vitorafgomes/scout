@@ -107,6 +107,93 @@ public sealed class LlmServiceCollectionExtensionsTests
         Should.NotThrow(() => new ServiceCollection().AddScoutLlm(GeminiConfig()));
     }
 
+    private static IConfiguration OpenAIConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "OpenAI",
+                ["Scout:Llm:OpenAI:ApiKey"] = "test-key",
+                ["Scout:Llm:OpenAI:Chat:Model"] = "gpt-4o-mini",
+                ["Scout:Llm:OpenAI:Embeddings:Model"] = "text-embedding-3-small",
+            })
+            .Build();
+
+    private static IConfiguration AzureOpenAIConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "AzureOpenAI",
+                ["Scout:Llm:AzureOpenAI:ApiKey"] = "test-key",
+                ["Scout:Llm:AzureOpenAI:Endpoint"] = "https://my-aoai.openai.azure.com",
+                ["Scout:Llm:AzureOpenAI:Chat:Deployment"] = "gpt-4o",
+                ["Scout:Llm:AzureOpenAI:Embeddings:Deployment"] = "text-embedding-3-small",
+            })
+            .Build();
+
+    private static IConfiguration MistralConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "Mistral",
+                ["Scout:Llm:Mistral:ApiKey"] = "test-key",
+                ["Scout:Llm:Mistral:Chat:Model"] = "mistral-small-latest",
+                ["Scout:Llm:Mistral:Embeddings:Model"] = "mistral-embed",
+            })
+            .Build();
+
+    private static IConfiguration HuggingFaceConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "HuggingFace",
+                ["Scout:Llm:HuggingFace:ApiKey"] = "test-key",
+                ["Scout:Llm:HuggingFace:Chat:Model"] = "meta-llama/Llama-3.1-8B-Instruct",
+                ["Scout:Llm:HuggingFace:Embeddings:Model"] = "sentence-transformers/all-MiniLM-L6-v2",
+            })
+            .Build();
+
+    private static IConfiguration AzureAIInferenceConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "AzureAIInference",
+                ["Scout:Llm:AzureAIInference:ApiKey"] = "test-key",
+                ["Scout:Llm:AzureAIInference:Endpoint"] = "https://my-inference.services.ai.azure.com/models",
+                ["Scout:Llm:AzureAIInference:Chat:Model"] = "Phi-3.5-MoE-instruct",
+                ["Scout:Llm:AzureAIInference:Embeddings:Model"] = "text-embedding-3-small",
+            })
+            .Build();
+
+    public static TheoryData<string, Func<IConfiguration>> ProviderConfigs() => new()
+    {
+        { "OpenAI", OpenAIConfig },
+        { "AzureOpenAI", AzureOpenAIConfig },
+        { "Mistral", MistralConfig },
+        { "HuggingFace", HuggingFaceConfig },
+        { "AzureAIInference", AzureAIInferenceConfig },
+    };
+
+    [Theory]
+    [MemberData(nameof(ProviderConfigs))]
+    public void AddScoutLlm_Resolves_Expected_ProviderFactory(
+        string expectedName, Func<IConfiguration> config)
+    {
+        using var provider = new ServiceCollection()
+            .AddScoutLlm(config()).BuildServiceProvider();
+
+        var factory = provider.GetRequiredService<ILlmProviderFactory>();
+        factory.Name.ShouldBe(expectedName);
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderConfigs))]
+    public void AddScoutLlm_Does_Not_Throw_For_Supported_Provider(
+        string expectedName, Func<IConfiguration> config)
+    {
+        _ = expectedName;
+        Should.NotThrow(() => new ServiceCollection().AddScoutLlm(config()));
+    }
+
     [Fact]
     public void AddScoutLlm_Throws_For_Unknown_Provider()
     {
@@ -116,6 +203,11 @@ public sealed class LlmServiceCollectionExtensionsTests
         ex.Message.ShouldContain("Nonexistent");
         ex.Message.ShouldContain("Ollama");
         ex.Message.ShouldContain("Gemini");
+        ex.Message.ShouldContain("OpenAI");
+        ex.Message.ShouldContain("AzureOpenAI");
+        ex.Message.ShouldContain("Mistral");
+        ex.Message.ShouldContain("HuggingFace");
+        ex.Message.ShouldContain("AzureAIInference");
     }
 
     [Fact]

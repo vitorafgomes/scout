@@ -8,8 +8,13 @@ using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
+using Scout.Llm.Providers.AzureAIInference;
+using Scout.Llm.Providers.AzureOpenAI;
 using Scout.Llm.Providers.Gemini;
+using Scout.Llm.Providers.HuggingFace;
+using Scout.Llm.Providers.Mistral;
 using Scout.Llm.Providers.Ollama;
+using Scout.Llm.Providers.OpenAI;
 
 namespace Scout.Llm;
 
@@ -53,9 +58,25 @@ public static class LlmServiceCollectionExtensions
             case "Gemini":
                 services.AddGeminiLlmProvider();
                 break;
+            case "OpenAI":
+                services.AddOpenAILlmProvider();
+                break;
+            case "AzureOpenAI":
+                services.AddAzureOpenAILlmProvider();
+                break;
+            case "Mistral":
+                services.AddMistralLlmProvider();
+                break;
+            case "HuggingFace":
+                services.AddHuggingFaceLlmProvider();
+                break;
+            case "AzureAIInference":
+                services.AddAzureAIInferenceLlmProvider();
+                break;
             default:
                 throw new InvalidOperationException(
-                    $"Unknown LLM provider '{provider}'. Supported providers: Ollama, Gemini.");
+                    $"Unknown LLM provider '{provider}'. Supported providers: Ollama, " +
+                    "Gemini, OpenAI, AzureOpenAI, Mistral, HuggingFace, AzureAIInference.");
         }
 
         services.AddSingleton(sp =>

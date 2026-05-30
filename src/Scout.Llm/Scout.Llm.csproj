@@ -15,8 +15,12 @@
     <PackageReference Include="Microsoft.SemanticKernel" />
     <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.MistralAI" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.HuggingFace" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureAIInference" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Llm.Tests" />
