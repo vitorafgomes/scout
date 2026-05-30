@@ -156,8 +156,13 @@ public sealed class HostCompositionSmokeTests
 
         provider.GetServices<IChatAdapter>().ShouldBeEmpty();
 
-        // No projects configured: the Project Expert agent is not registered, but
-        // the host still builds and the worker still resolves.
+        // No projects configured: the search_project plugin is gated off the kernel
+        // so the model never picks a tool that would fail on an empty index, and the
+        // Project Expert agent is not registered. The host still builds regardless.
+        var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
+        kernel.Plugins.ShouldNotContain(p => p.Name == "ProjectKnowledge");
+
+        // The host still builds and the worker still resolves.
         var hostedServices = ResolveWithin(
             () => provider.GetServices<IHostedService>().ToList());
         hostedServices.ShouldContain(s => s is ConversationWorker);

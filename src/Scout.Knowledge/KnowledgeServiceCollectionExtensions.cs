@@ -11,7 +11,10 @@ namespace Scout.Knowledge;
 /// DI composition for project knowledge: the SQLite-vec store, the file chunker,
 /// the indexer, the retrieval service, the search_project Semantic Kernel plugin,
 /// and the Project Expert chat agent. The plugin is registered as a
-/// <see cref="KernelPlugin"/> so the shared kernel composition picks it up.
+/// <see cref="KernelPlugin"/> so the shared kernel composition picks it up. The
+/// plugin and the agent are only registered when at least one project is
+/// configured; the store, chunker, indexer, and service are always registered so
+/// the index console command works regardless.
 /// </summary>
 public static class KnowledgeServiceCollectionExtensions
 {
@@ -50,17 +53,19 @@ public static class KnowledgeServiceCollectionExtensions
             sp.GetRequiredService<IProjectKnowledgeStore>(),
             sp.GetRequiredService<ILogger<ProjectKnowledgeService>>()));
 
-        services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
-            new ProjectKnowledgePlugin(sp.GetRequiredService<ProjectKnowledgeService>()),
-            "ProjectKnowledge"));
-
-        // Gate the agent on configured projects. With none, the gateway resolves
-        // no ChatCompletionAgent and falls back to general chat. The agent binds
-        // the fully-composed shared kernel (which carries the search_project plugin).
+        // Gate the search_project plugin and the agent on configured projects.
+        // With none, the search_project plugin is not added to the kernel so the
+        // model never picks it (it would 404 on an empty index), and the gateway
+        // resolves no ChatCompletionAgent and falls back to general chat. The agent
+        // binds the fully-composed shared kernel (which carries the plugin).
         var projects = new ProjectsOptions();
         configuration.GetSection(ProjectsOptions.SectionName).Bind(projects);
         if (projects.Items.Count > 0)
         {
+            services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
+                new ProjectKnowledgePlugin(sp.GetRequiredService<ProjectKnowledgeService>()),
+                "ProjectKnowledge"));
+
             services.AddSingleton(sp =>
                 ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>()));
         }

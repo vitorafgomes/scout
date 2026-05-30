@@ -52,9 +52,11 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void Registers_Search_Project_Plugin()
+    public void Registers_Search_Project_Plugin_When_At_Least_One_Project_Configured()
     {
-        using var provider = Build();
+        using var provider = Build(
+            ("Scout:Projects:Items:0:Name", "scout"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/scout"));
 
         var plugin = provider.GetServices<KernelPlugin>()
             .SingleOrDefault(p => p.Name == "ProjectKnowledge");
@@ -64,14 +66,14 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void Registers_Search_Project_Plugin_With_No_Projects_Configured()
+    public void Does_Not_Register_Search_Project_Plugin_When_No_Projects_Configured()
     {
         using var provider = Build();
 
         var plugin = provider.GetServices<KernelPlugin>()
             .SingleOrDefault(p => p.Name == "ProjectKnowledge");
 
-        plugin.ShouldNotBeNull();
+        plugin.ShouldBeNull();
     }
 
     [Fact]
