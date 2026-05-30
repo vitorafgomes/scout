@@ -162,6 +162,76 @@ public sealed class ChatGatewayTests
             () => gateway.CompleteAsync(null!, CancellationToken.None));
     }
 
+    private static (IChatCompletionService chat, List<ChatHistory> captured) ChatCapturing(
+        params StreamingChatMessageContent[] chunks)
+    {
+        var captured = new List<ChatHistory>();
+        var chat = Substitute.For<IChatCompletionService>();
+        chat.GetStreamingChatMessageContentsAsync(
+                Arg.Do<ChatHistory>(captured.Add),
+                Arg.Any<PromptExecutionSettings?>(),
+                Arg.Any<Kernel?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => ToAsync(chunks, CancellationToken.None));
+        return (chat, captured);
+    }
+
+    private static List<(AuthorRole Role, string? Content)> Turns(IEnumerable<ChatHistory> captured)
+        => captured
+            .SelectMany(history => history)
+            .Select(message => (message.Role, message.Content))
+            .ToList();
+
+    [Fact]
+    public async Task StreamChatAsync_Replays_History_In_Order_Between_System_And_Current_User()
+    {
+        var (chat, captured) = ChatCapturing(Chunk("ok"));
+        var gateway = Gateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest
+            {
+                UserMessage = "current",
+                SystemPrompt = "sys",
+                History =
+                [
+                    new ConversationTurn(ConversationRole.User, "q1"),
+                    new ConversationTurn(ConversationRole.Assistant, "a1"),
+                ],
+            },
+            CancellationToken.None))
+        {
+        }
+
+        Turns(captured).ShouldBe(
+        [
+            (AuthorRole.System, "sys"),
+            (AuthorRole.User, "q1"),
+            (AuthorRole.Assistant, "a1"),
+            (AuthorRole.User, "current"),
+        ]);
+    }
+
+    [Fact]
+    public async Task StreamChatAsync_Empty_History_Is_ByteIdentical_To_Baseline()
+    {
+        var (chat, captured) = ChatCapturing(Chunk("ok"));
+        var gateway = Gateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest { UserMessage = "hello", SystemPrompt = "sys" },
+            CancellationToken.None))
+        {
+        }
+
+        // No History -> identical to the single-turn shape: system then current user.
+        Turns(captured).ShouldBe(
+        [
+            (AuthorRole.System, "sys"),
+            (AuthorRole.User, "hello"),
+        ]);
+    }
+
     [Fact]
     public async Task StreamChatAsync_Composes_Persona_And_SystemPrompt_Into_One_System_Message()
     {

@@ -22,6 +22,13 @@ public sealed record ChatRequest
     /// </summary>
     public string? Persona { get; init; }
 
+    /// <summary>
+    /// Prior conversation turns to replay, oldest-first, after the system message
+    /// and before the current <see cref="UserMessage"/>. Empty (the default) means a
+    /// single-turn request with no replayed history.
+    /// </summary>
+    public IReadOnlyList<ConversationTurn> History { get; init; } = Array.Empty<ConversationTurn>();
+
     /// <summary>The user message. Required; must be non-empty.</summary>
     public required string UserMessage { get; init; }
 

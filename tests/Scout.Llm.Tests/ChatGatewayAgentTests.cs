@@ -104,6 +104,17 @@ public sealed class ChatGatewayAgentTests
             .Select(message => message.Content)
             .ToList();
 
+    // The agent flattens its thread (seeded prior turns + the current invoke message)
+    // into the chat history. Filtering out the agent's own system messages leaves the
+    // observable user/assistant conversation, oldest-first, ending with the current turn.
+    private static List<(AuthorRole Role, string? Content)> ConversationTurns(
+        IEnumerable<ChatHistory> captured)
+        => captured
+            .SelectMany(history => history)
+            .Where(message => message.Role != AuthorRole.System)
+            .Select(message => (message.Role, message.Content))
+            .ToList();
+
     [Fact]
     public async Task StreamAsync_Routes_Through_Agent_And_Yields_Content()
     {
@@ -174,6 +185,80 @@ public sealed class ChatGatewayAgentTests
         // "{{$persona}}" template renders the persona body into the agent instruction,
         // which surfaces as a system message in the captured history.
         SystemMessages(captured).ShouldContain(persona);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Agent_Seeds_Prior_Turns_Before_Current()
+    {
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = AgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest
+            {
+                UserMessage = "current",
+                History =
+                [
+                    new ConversationTurn(ConversationRole.User, "q1"),
+                    new ConversationTurn(ConversationRole.Assistant, "a1"),
+                ],
+            },
+            CancellationToken.None))
+        {
+        }
+
+        ConversationTurns(captured).ShouldBe(
+        [
+            (AuthorRole.User, "q1"),
+            (AuthorRole.Assistant, "a1"),
+            (AuthorRole.User, "current"),
+        ]);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Agent_Empty_History_Matches_New_Thread_Baseline()
+    {
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = AgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest { UserMessage = "current" }, CancellationToken.None))
+        {
+        }
+
+        // Behavior-neutral: with no History the seeded thread carries only the
+        // current invoke message, identical to the prior new() ChatHistoryAgentThread.
+        ConversationTurns(captured).ShouldBe(
+        [
+            (AuthorRole.User, "current"),
+        ]);
+    }
+
+    [Fact]
+    public async Task StreamAsync_With_Agent_Does_Not_Duplicate_Current_User_Message()
+    {
+        var (chat, captured) = ChatCapturing("ok");
+        var (gateway, _) = AgentGateway(chat);
+
+        await foreach (var _ in gateway.StreamAsync(
+            new ChatRequest
+            {
+                UserMessage = "current",
+                History =
+                [
+                    new ConversationTurn(ConversationRole.User, "q1"),
+                    new ConversationTurn(ConversationRole.Assistant, "a1"),
+                ],
+            },
+            CancellationToken.None))
+        {
+        }
+
+        // The current user message is the invoke message; the seed must not also
+        // contain it, so it appears exactly once across the flattened history.
+        ConversationTurns(captured)
+            .Count(turn => turn is { Role: var role, Content: "current" } && role == AuthorRole.User)
+            .ShouldBe(1);
     }
 
     [Fact]

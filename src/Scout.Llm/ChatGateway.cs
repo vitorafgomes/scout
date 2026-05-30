@@ -107,6 +107,21 @@ internal sealed class ChatGateway : IChatGateway
         {
             history.AddSystemMessage(system);
         }
+
+        // Replay prior turns oldest-first between the system message and the current
+        // user message. Empty History keeps the single-turn shape unchanged.
+        foreach (var turn in request.History)
+        {
+            if (turn.Role == ConversationRole.Assistant)
+            {
+                history.AddAssistantMessage(turn.Text);
+            }
+            else
+            {
+                history.AddUserMessage(turn.Text);
+            }
+        }
+
         history.AddUserMessage(request.UserMessage);
 
         var settings = BuildSettings(request);
@@ -133,7 +148,24 @@ internal sealed class ChatGateway : IChatGateway
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var message = new ChatMessageContent(AuthorRole.User, request.UserMessage);
-        ChatHistoryAgentThread thread = new();
+
+        // Seed the thread with prior turns oldest-first. The current user message is the
+        // invoke message, so it is NOT added to the seed (duplicate guard). Empty History
+        // yields an empty seed, identical to the prior new() thread.
+        var seed = new ChatHistory();
+        foreach (var turn in request.History)
+        {
+            if (turn.Role == ConversationRole.Assistant)
+            {
+                seed.AddAssistantMessage(turn.Text);
+            }
+            else
+            {
+                seed.AddUserMessage(turn.Text);
+            }
+        }
+
+        ChatHistoryAgentThread thread = new(seed);
 
         AgentInvokeOptions? options = null;
         var hasPersona = !string.IsNullOrWhiteSpace(request.Persona);
