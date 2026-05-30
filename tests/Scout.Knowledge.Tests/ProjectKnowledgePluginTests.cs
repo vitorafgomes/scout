@@ -125,6 +125,22 @@ public sealed class ProjectKnowledgePluginTests
         parameter!.Description.ShouldNotBeNullOrWhiteSpace();
     }
 
+    [Theory]
+    [InlineData("search_project")]
+    [InlineData("find_symbol")]
+    public void Project_Parameter_Description_Does_Not_Name_A_Concrete_Project(string functionName)
+    {
+        // Regression lock: the project parameter [Description] is serialized into the
+        // tool schema the model sees. A concrete project name there (e.g. "cegos-buddy")
+        // gets parroted regardless of configuration. The example must stay neutral.
+        var plugin = BuildPlugin(Service(Substitute.For<IProjectKnowledgeStore>()));
+        plugin.TryGetFunction(functionName, out var function).ShouldBeTrue();
+
+        var parameter = function!.Metadata.Parameters.Single(p => p.Name == "project");
+
+        parameter.Description.ShouldNotContain("cegos-buddy");
+    }
+
     [Fact]
     public async Task Find_Symbol_Returns_Cited_Context_From_Service()
     {

@@ -26,7 +26,7 @@ public sealed class WatchOptions
 /// <summary>One configured project: a name and its repository path.</summary>
 public sealed class ProjectEntry
 {
-    /// <summary>Project name used to reference it (e.g. "cegos-buddy").</summary>
+    /// <summary>Project name used to reference it in queries and tool calls.</summary>
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Absolute path to the project's repository root.</summary>

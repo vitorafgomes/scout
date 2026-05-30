@@ -72,8 +72,16 @@ public static class KnowledgeServiceCollectionExtensions
                 new ProjectKnowledgePlugin(sp.GetRequiredService<ProjectKnowledgeService>()),
                 "ProjectKnowledge"));
 
+            // Ground the agent on the already-bound configured project names so the model
+            // defaults to a real project instead of any example in the tool schema. Reuses
+            // the local binding above; adds no dependency edge to the agent factory.
+            var projectNames = projects.Items
+                .Select(item => item.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToArray();
+
             services.AddSingleton(sp =>
-                ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>()));
+                ProjectExpertAgentFactory.Create(sp.GetRequiredService<Kernel>(), projectNames));
         }
 
         // Opt-in incremental file watch: only when explicitly enabled and at least one

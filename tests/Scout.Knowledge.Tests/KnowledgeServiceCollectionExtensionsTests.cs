@@ -161,6 +161,36 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task Resolved_Agent_Default_Persona_Names_The_Configured_Project()
+    {
+        // DI smoke: the configured project name must be baked into the agent's default
+        // persona so the model is grounded on the real project rather than a tool-schema
+        // example. Render the agent's "{{$persona}}" template with its own Arguments.
+        using var provider = Build(
+            ("Scout:Projects:Items:0:Name", "messaging-explorer"),
+            ("Scout:Projects:Items:0:RepoPath", "/repos/messaging-explorer"));
+
+        var agent = provider.GetService<ChatCompletionAgent>();
+        agent.ShouldNotBeNull();
+
+        var config = new PromptTemplateConfig
+        {
+            Template = "{{$persona}}",
+            TemplateFormat = PromptTemplateConfig.SemanticKernelTemplateFormat,
+            InputVariables =
+            {
+                new InputVariable { Name = "persona", AllowDangerouslySetContent = true },
+            },
+        };
+        var template = new KernelPromptTemplateFactory().Create(config);
+
+        var rendered = await template.RenderAsync(Kernel.CreateBuilder().Build(), agent!.Arguments);
+
+        rendered.ShouldContain("messaging-explorer");
+        rendered.ShouldNotContain("cegos-buddy");
+    }
+
+    [Fact]
     public void Binds_Configured_Projects()
     {
         using var provider = Build(

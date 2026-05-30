@@ -94,4 +94,58 @@ public sealed class ProjectExpertAgentFactoryTests
 
         rendered.ShouldBe(ProjectExpertAgentFactory.Instructions);
     }
+
+    [Fact]
+    public void BuildInstructions_Names_The_Single_Configured_Project()
+    {
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" });
+
+        instructions.ShouldContain("messaging-explorer");
+        instructions.ShouldNotContain("cegos-buddy");
+    }
+
+    [Fact]
+    public void BuildInstructions_Names_All_Configured_Projects()
+    {
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(
+            new[] { "messaging-explorer", "scout" });
+
+        instructions.ShouldContain("messaging-explorer");
+        instructions.ShouldContain("scout");
+    }
+
+    [Fact]
+    public void BuildInstructions_Empty_Falls_Back_To_Base_Without_Throwing()
+    {
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(Array.Empty<string>());
+
+        instructions.ShouldBe(ProjectExpertAgentFactory.Instructions);
+    }
+
+    [Fact]
+    public void BuildInstructions_Begins_With_The_Base_Instructions()
+    {
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" });
+
+        instructions.ShouldStartWith(ProjectExpertAgentFactory.Instructions);
+    }
+
+    [Fact]
+    public void Create_With_Projects_Sets_Persona_To_Grounded_Instructions()
+    {
+        var agent = ProjectExpertAgentFactory.Create(BuildKernel(), new[] { "messaging-explorer" });
+
+        agent.Arguments.ShouldNotBeNull();
+        agent.Arguments!["persona"].ShouldBe(
+            ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" }));
+    }
+
+    [Fact]
+    public void Create_With_Empty_Projects_Falls_Back_To_Base_Persona()
+    {
+        var agent = ProjectExpertAgentFactory.Create(BuildKernel(), Array.Empty<string>());
+
+        agent.Arguments.ShouldNotBeNull();
+        agent.Arguments!["persona"].ShouldBe(ProjectExpertAgentFactory.Instructions);
+    }
 }
