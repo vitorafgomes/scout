@@ -6,6 +6,7 @@ using Scout.Adapter.Slack;
 using Scout.Adapter.Teams;
 using Scout.Conversation;
 using Scout.Host.Console;
+using Scout.Knowledge;
 using Scout.Llm;
 using Scout.Plugin.GitHub;
 
@@ -21,6 +22,7 @@ builder.Services.AddSingleton<IReadinessSignal, StdoutReadinessSignal>();
 
 builder.Services.AddScoutLlm(builder.Configuration);
 builder.Services.AddScoutConversation(builder.Configuration);
+builder.Services.AddProjectKnowledge(builder.Configuration);
 
 // Each adapter self-gates on its configured credentials, so the host runs
 // whatever combination is configured and starts none when nothing is set.
@@ -39,4 +41,12 @@ builder.Services.AddParentWatchdog(
     Environment.GetEnvironmentVariable(ParentWatchdogRegistration.EnableEnvVar));
 
 var host = builder.Build();
+
+var command = ConsoleCommand.Parse(args);
+if (command.Command == Command.Index)
+{
+    return await IndexEntryPoint.RunAsync(host.Services, command.Project, CancellationToken.None);
+}
+
 await host.RunAsync();
+return 0;
