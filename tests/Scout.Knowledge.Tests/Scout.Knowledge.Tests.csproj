@@ -20,5 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Scout.Knowledge\Scout.Knowledge.csproj" />
+    <!-- Opt-in dead-letter acceptance test builds a real Ollama embedder via the
+         same provider factory the host uses. -->
+    <ProjectReference Include="..\..\src\Scout.Llm\Scout.Llm.csproj" />
   </ItemGroup>
 </Project>
