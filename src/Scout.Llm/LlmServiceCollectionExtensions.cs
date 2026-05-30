@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
@@ -82,7 +83,11 @@ public static class LlmServiceCollectionExtensions
                 sp.GetRequiredService<IChatCompletionService>(),
                 sp.GetRequiredService<Kernel>(),
                 sp.GetService<IOptions<LlmOptions>>(),
-                sp.GetService<ILogger<ChatGateway>>()));
+                sp.GetService<ILogger<ChatGateway>>(),
+                // Optional: when a feature module registers the Project Expert
+                // agent, the gateway streams replies through it so its grounding
+                // instructions and tools apply. Absent, the direct chat path runs.
+                sp.GetService<ChatCompletionAgent>()));
 
         return services;
     }
