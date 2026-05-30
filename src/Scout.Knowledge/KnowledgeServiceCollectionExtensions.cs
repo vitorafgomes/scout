@@ -38,6 +38,11 @@ public static class KnowledgeServiceCollectionExtensions
 
         services.Configure<ProjectsOptions>(configuration.GetSection(ProjectsOptions.SectionName));
 
+        // Warn (never throw) on malformed configured projects at startup so a
+        // mis-configured list is visible instead of silently producing no results.
+        services.AddSingleton<ProjectsOptionsValidator>();
+        services.AddHostedService<ProjectsOptionsValidationStartup>();
+
         services.AddSingleton<IProjectKnowledgeStore>(
             new SqliteProjectKnowledgeStore($"Data Source={ResolveDatabasePath()}"));
 
