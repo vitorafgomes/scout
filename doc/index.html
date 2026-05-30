@@ -707,6 +707,7 @@
         <li><a href="#overview">Overview</a></li>
         <li><a href="#architecture">Architecture &amp; Flow</a></li>
         <li><a href="#llm-providers">LLM Providers &mdash; Config</a></li>
+        <li><a href="#project-knowledge">Project Knowledge &mdash; Config</a></li>
       </ul>
 
       <div class="nav-group-title">Projects</div>
@@ -1207,6 +1208,72 @@
           configured project before querying again.
         </p>
       </div>
+    </section>
+
+    <!-- ===================== PROJECT KNOWLEDGE ===================== -->
+    <section id="project-knowledge">
+      <h2>Project Knowledge &mdash; Configuration</h2>
+      <p>
+        <code>Scout.Knowledge</code> answers questions about local repositories by indexing them into a
+        vector store and grounding the agent on the result. Projects come from two sources under
+        <code>Scout:Projects</code>, both optional: <strong>explicit</strong> entries (<code>Items</code>) and
+        <strong>auto-discovered</strong> repositories scanned from parent directories (<code>Roots</code>).
+        The plugin and the Project&nbsp;Expert agent register only when at least one project is configured
+        (Items <em>or</em> Roots), so an unconfigured host still starts.
+      </p>
+
+      <h3><code>Items</code> &mdash; explicit projects</h3>
+      <p>
+        Pin a project by name and repository path. Explicit items are authoritative: they
+        <strong>win on name collision</strong> (case-insensitive) with anything auto-discovered.
+      </p>
+      <pre class="cfg"><span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"messaging-explorer"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/vitor/WorkSpace/Dev/messaging-explorer"</span> }
+    ]
+  }
+}</pre>
+
+      <h3><code>Roots</code> &mdash; auto-discovery</h3>
+      <p>
+        List parent directories; Scout scans their immediate child directories and registers each one that
+        looks like a repository. A child qualifies when any of these markers is present:
+      </p>
+      <div class="val-list">
+        <span class="val">.git</span>
+        <span class="val">*.sln</span>
+        <span class="val">*.slnx</span>
+        <span class="val">*.csproj</span>
+        <span class="val">package.json</span>
+        <span class="val">go.mod</span>
+        <span class="val">pyproject.toml</span>
+        <span class="val">Cargo.toml</span>
+      </div>
+      <p>
+        A discovered project's <code>Name</code> is the directory name and its <code>RepoPath</code> is the
+        directory path. Discovery does directory listing only &mdash; <strong>no embedding and no indexing at
+        startup</strong>; a project is <strong>lazily indexed on its first search</strong> and skipped on later
+        queries once stored. The <code>list_projects</code> kernel function returns the merged, searchable set
+        (auto-discovered plus explicit).
+      </p>
+      <pre class="cfg"><span class="c">// Items and Roots can be combined; Items win on name collision.</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Roots"</span>: [
+      <span class="s">"/home/vitor/WorkSpace"</span>
+    ],
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"messaging-explorer"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/vitor/WorkSpace/Dev/messaging-explorer"</span> }
+    ]
+  }
+}</pre>
+      <p>
+        <strong>Changing the embeddings model requires re-indexing.</strong> Embedding vectors are
+        model-specific, so switching the embeddings <code>Model</code> (or its dimensions) invalidates stored
+        vectors. The optional file-watch re-indexing (<code>Scout:Projects:Watch</code>) applies to explicit
+        <code>Items</code> only.
+      </p>
     </section>
 
     <!-- ===================== PROJECTS ===================== -->
