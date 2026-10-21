@@ -67,6 +67,7 @@ nsis:
   perMachine: false
 
 linux:
+  executableName: scout-desktop
   category: Development
   maintainer: Scout OSS contributors <noreply@example.com>
   target:
