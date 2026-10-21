@@ -80,6 +80,12 @@ jobs:
         shell: bash
         run: bun run typecheck
 
+      - name: Format check
+        if: runner.os == 'Linux'
+        working-directory: ui
+        shell: bash
+        run: bun run format
+
       - name: Test (UI)
         working-directory: ui
         shell: bash

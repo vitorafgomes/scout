@@ -24,12 +24,14 @@ interface FakeLmStudioModel {
   id: string;
 }
 
-function makeBridge(opts: {
-  models?: readonly FakeModel[];
-  listError?: unknown;
-  lmStudioModels?: readonly FakeLmStudioModel[];
-  lmStudioError?: unknown;
-} = {}): FakeBridge {
+function makeBridge(
+  opts: {
+    models?: readonly FakeModel[];
+    listError?: unknown;
+    lmStudioModels?: readonly FakeLmStudioModel[];
+    lmStudioError?: unknown;
+  } = {},
+): FakeBridge {
   return {
     llmListOllamaModels: vi.fn(async () => {
       if (opts.listError !== undefined) throw opts.listError;
@@ -142,9 +144,7 @@ describe('SourcesComponent', () => {
   it('successful scan marks Ollama as Connected (reachable counts, even with zero models)', async () => {
     const { fixture } = await setup({ models: [] });
 
-    const badge = fixture.nativeElement.querySelector(
-      '[data-test="badge-ollama"]',
-    ) as HTMLElement;
+    const badge = fixture.nativeElement.querySelector('[data-test="badge-ollama"]') as HTMLElement;
     expect(badge.textContent ?? '').toContain('Connected');
     expect(badge.textContent ?? '').not.toContain('Not Connected');
   });
@@ -223,9 +223,7 @@ describe('SourcesComponent', () => {
       listError: new OllamaUnreachableError('http://localhost:11434'),
     });
 
-    const badge = fixture.nativeElement.querySelector(
-      '[data-test="badge-ollama"]',
-    ) as HTMLElement;
+    const badge = fixture.nativeElement.querySelector('[data-test="badge-ollama"]') as HTMLElement;
     expect(badge.textContent ?? '').toContain('Not Connected');
   });
 

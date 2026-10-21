@@ -28,11 +28,6 @@ reliability: medium
 - **Unblocks when:** a SqliteVec build targets VectorData >= 10.5, or the vector store in [[pages/services/knowledge]] moves to another connector.
 - **Affects:** the whole SK family pinned in `Directory.Packages.props`, per [[pages/decisions/0012-llm-communication-through-semantic-kernel]].
 
-### Prettier drift in `ui/` (2026-10-21)
-
-- **Blocker:** none. `bun run format` fails on main (24 files), and on 26 files after the bump to prettier 3.9.10. `ui-ci.yml` runs lint, typecheck and test but not format, so the drift went unnoticed.
-- **Fix:** one change with `bun run format:write` and a `bun run format` step in `ui-ci.yml`. See [[pages/conventions/testing]].
-
 ### `electron-builder-squirrel-windows` peer mismatch (2026-10-21)
 
 - **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:57` stays `nsis`.

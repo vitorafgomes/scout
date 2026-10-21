@@ -36,16 +36,11 @@ const ICONS = Object.freeze({
     'M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Zm-2 5V7a2 2 0 1 1 4 0v1Zm-1 5a1 1 0 1 1 2 0 1 1 0 0 1-2 0Zm4 0a1 1 0 1 1 2 0 1 1 0 0 1-2 0Z',
   ollama:
     'M12 2c-3 0-5 2-5 5v3c-2 0-3 1-3 3v7h4v-4h8v4h4v-7c0-2-1-3-3-3V7c0-3-2-5-5-5Zm-3 5c0-2 1-3 3-3s3 1 3 3v3H9V7Z',
-  lmStudio:
-    'M4 4h3v16H4Zm5 6h3v10H9Zm5-4h3v14h-3Zm5 8h3v6h-3Z',
-  openai:
-    'M12 2 13.5 9 21 11 13.5 13 12 20 10.5 13 3 11 10.5 9Z',
-  gemini:
-    'M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z',
-  openRouter:
-    'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 4 4 4-4 4-4-4Zm0 4 4 4-4 4-4-4Z',
-  customApi:
-    'M4 7h10v2H4Zm0 4h6v2H4Zm0 4h10v2H4ZM20 6l-1.5 1.5L20 9h-3v2h3l-1.5 1.5L20 14l4-4Z',
+  lmStudio: 'M4 4h3v16H4Zm5 6h3v10H9Zm5-4h3v14h-3Zm5 8h3v6h-3Z',
+  openai: 'M12 2 13.5 9 21 11 13.5 13 12 20 10.5 13 3 11 10.5 9Z',
+  gemini: 'M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z',
+  openRouter: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 4 4 4-4 4-4-4Zm0 4 4 4-4 4-4-4Z',
+  customApi: 'M4 7h10v2H4Zm0 4h6v2H4Zm0 4h10v2H4ZM20 6l-1.5 1.5L20 9h-3v2h3l-1.5 1.5L20 14l4-4Z',
 });
 
 @Component({
@@ -100,136 +95,139 @@ const ICONS = Object.freeze({
       </header>
 
       @if (showLocal()) {
-      <section data-test="section-local">
-        <h2 class="section-title"><span class="section-rule"></span>Local &amp; On-Device</h2>
-        <div class="grid">
-          @for (card of localCards; track card.id) {
-          <article class="card" [attr.data-test]="'card-' + card.id">
-            <div class="card-head">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22">
-                  <path [attr.d]="card.iconPath" fill="currentColor" />
-                </svg>
-              </div>
-              <span
-                class="badge"
-                [class.badge--ok]="stateOf(card.id) === 'connected'"
-                [class.badge--off]="stateOf(card.id) !== 'connected'"
-                [attr.data-test]="'badge-' + card.id"
-              >
-                <span class="badge-dot" aria-hidden="true"></span>
-                {{ stateOf(card.id) === 'connected' ? 'Connected' : 'Not Connected' }}
-              </span>
-            </div>
-            <h3 class="card-title">{{ card.title }}</h3>
-            <p class="card-desc">{{ card.description }}</p>
-            <div class="card-actions">
-              @if (card.primaryIsScan) {
-              <button
-                type="button"
-                class="action action--scan"
-                [attr.data-test]="'action-' + card.id"
-                [disabled]="isCardDisabled(card) || scanning() === card.id"
-                (click)="onPrimaryAction(card)"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                  <path
-                    d="M10 4a6 6 0 1 0 3.74 10.68l4.29 4.3 1.41-1.42-4.29-4.29A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span>{{ card.primaryAction }}</span>
-              </button>
-              } @else {
-              <button
-                type="button"
-                class="action action--primary"
-                [attr.data-test]="'action-' + card.id"
-                [disabled]="isCardDisabled(card)"
-                [title]="isCardDisabled(card) && card.id === 'local-models' ? 'Install Ollama or LM Studio to manage downloaded models' : ''"
-                (click)="onPrimaryAction(card)"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                  <path
-                    d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3 1.4 1.42L12 17.42 6.3 11.7l1.4-1.41L11 13.6V4a1 1 0 0 1 1-1Zm-7 16h14v2H5Z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span>{{ card.primaryAction }}</span>
-              </button>
-              } @if (card.secondaryLabel && card.secondaryUrl) {
-              <button
-                type="button"
-                class="secondary"
-                [attr.data-test]="'secondary-' + card.id"
-                (click)="openExternal(card.secondaryUrl)"
-              >
-                {{ card.secondaryLabel }}
-                <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
-                  <path
-                    d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42L17.59 5H14Zm-9 4h6v2H7v10h10v-6h2v8H5Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
-              }
-            </div>
-          </article>
-          }
-        </div>
-      </section>
-      } @if (showCloud()) {
-      <section data-test="section-cloud">
-        <h2 class="section-title"><span class="section-rule"></span>Cloud APIs</h2>
-        <div class="grid">
-          @for (card of cloudCards; track card.id) {
-          <article class="card" [attr.data-test]="'card-' + card.id">
-            <div class="card-head">
-              <div class="icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22">
-                  <path [attr.d]="card.iconPath" fill="currentColor" />
-                </svg>
-              </div>
-              <span
-                class="badge badge--off"
-                [attr.data-test]="'badge-' + card.id"
-              >
-                <span class="badge-dot" aria-hidden="true"></span>
-                Not Connected
-              </span>
-            </div>
-            <h3 class="card-title">{{ card.title }}</h3>
-            <p class="card-desc">{{ card.description }}</p>
-            <div class="card-actions">
-              <button
-                type="button"
-                class="action action--primary action--wide"
-                [attr.data-test]="'action-' + card.id"
-                [disabled]="card.disabled"
-                [title]="card.disabled ? 'Coming soon' : ''"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                  <path
-                    d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                    fill="currentColor"
-                  />
-                </svg>
-                <span>{{ card.primaryAction }}</span>
-                <svg
-                  class="chevron"
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  aria-hidden="true"
-                >
-                  <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
-                </svg>
-              </button>
-            </div>
-          </article>
-          }
-        </div>
-      </section>
+        <section data-test="section-local">
+          <h2 class="section-title"><span class="section-rule"></span>Local &amp; On-Device</h2>
+          <div class="grid">
+            @for (card of localCards; track card.id) {
+              <article class="card" [attr.data-test]="'card-' + card.id">
+                <div class="card-head">
+                  <div class="icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22">
+                      <path [attr.d]="card.iconPath" fill="currentColor" />
+                    </svg>
+                  </div>
+                  <span
+                    class="badge"
+                    [class.badge--ok]="stateOf(card.id) === 'connected'"
+                    [class.badge--off]="stateOf(card.id) !== 'connected'"
+                    [attr.data-test]="'badge-' + card.id"
+                  >
+                    <span class="badge-dot" aria-hidden="true"></span>
+                    {{ stateOf(card.id) === 'connected' ? 'Connected' : 'Not Connected' }}
+                  </span>
+                </div>
+                <h3 class="card-title">{{ card.title }}</h3>
+                <p class="card-desc">{{ card.description }}</p>
+                <div class="card-actions">
+                  @if (card.primaryIsScan) {
+                    <button
+                      type="button"
+                      class="action action--scan"
+                      [attr.data-test]="'action-' + card.id"
+                      [disabled]="isCardDisabled(card) || scanning() === card.id"
+                      (click)="onPrimaryAction(card)"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path
+                          d="M10 4a6 6 0 1 0 3.74 10.68l4.29 4.3 1.41-1.42-4.29-4.29A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                      <span>{{ card.primaryAction }}</span>
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="action action--primary"
+                      [attr.data-test]="'action-' + card.id"
+                      [disabled]="isCardDisabled(card)"
+                      [title]="
+                        isCardDisabled(card) && card.id === 'local-models'
+                          ? 'Install Ollama or LM Studio to manage downloaded models'
+                          : ''
+                      "
+                      (click)="onPrimaryAction(card)"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path
+                          d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3 1.4 1.42L12 17.42 6.3 11.7l1.4-1.41L11 13.6V4a1 1 0 0 1 1-1Zm-7 16h14v2H5Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                      <span>{{ card.primaryAction }}</span>
+                    </button>
+                  }
+                  @if (card.secondaryLabel && card.secondaryUrl) {
+                    <button
+                      type="button"
+                      class="secondary"
+                      [attr.data-test]="'secondary-' + card.id"
+                      (click)="openExternal(card.secondaryUrl)"
+                    >
+                      {{ card.secondaryLabel }}
+                      <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+                        <path
+                          d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42L17.59 5H14Zm-9 4h6v2H7v10h10v-6h2v8H5Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+      }
+      @if (showCloud()) {
+        <section data-test="section-cloud">
+          <h2 class="section-title"><span class="section-rule"></span>Cloud APIs</h2>
+          <div class="grid">
+            @for (card of cloudCards; track card.id) {
+              <article class="card" [attr.data-test]="'card-' + card.id">
+                <div class="card-head">
+                  <div class="icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="22" height="22">
+                      <path [attr.d]="card.iconPath" fill="currentColor" />
+                    </svg>
+                  </div>
+                  <span class="badge badge--off" [attr.data-test]="'badge-' + card.id">
+                    <span class="badge-dot" aria-hidden="true"></span>
+                    Not Connected
+                  </span>
+                </div>
+                <h3 class="card-title">{{ card.title }}</h3>
+                <p class="card-desc">{{ card.description }}</p>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="action action--primary action--wide"
+                    [attr.data-test]="'action-' + card.id"
+                    [disabled]="card.disabled"
+                    [title]="card.disabled ? 'Coming soon' : ''"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                      <path
+                        d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    <span>{{ card.primaryAction }}</span>
+                    <svg
+                      class="chevron"
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      aria-hidden="true"
+                    >
+                      <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
+                    </svg>
+                  </button>
+                </div>
+              </article>
+            }
+          </div>
+        </section>
       }
     </main>
   `,
@@ -549,8 +547,7 @@ export class SourcesComponent implements OnInit {
       id: 'google-gemini',
       kind: 'cloud',
       title: 'Google Gemini',
-      description:
-        'Fast, multimodal AI models from Google including Gemini 2.5 Pro and Flash.',
+      description: 'Fast, multimodal AI models from Google including Gemini 2.5 Pro and Flash.',
       iconPath: ICONS.gemini,
       primaryAction: 'Add API Key',
       secondaryLabel: null,

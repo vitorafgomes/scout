@@ -91,9 +91,7 @@ describe('ModelsComponent', () => {
     store.markDownloaded('whisper-large-v3-turbo');
     fixture.detectChanges();
 
-    const pill = fixture.nativeElement.querySelector(
-      '[data-test="selected-pill"]',
-    ) as HTMLElement;
+    const pill = fixture.nativeElement.querySelector('[data-test="selected-pill"]') as HTMLElement;
     expect(pill).not.toBeNull();
     expect(pill.textContent ?? '').toContain('Whisper Large v3 Turbo');
   });
