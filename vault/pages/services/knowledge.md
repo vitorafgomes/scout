@@ -1,8 +1,8 @@
 ---
 title: "Knowledge"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+changes: "Added the hot spot that holds Semantic Kernel at 1.78.0"
 page_type: service
 status: active
 description: "Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent."
@@ -61,6 +61,7 @@ Indexing runs from the host command `index <project>` ([[pages/services/host-con
 - `src/Scout.Knowledge/ProjectFileFilter.cs:27`: the only allow-list for what enters the index; no secret-file exclusion.
 - `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`: OpenAI-typed execution settings in a provider-neutral project.
 - `src/Scout.Knowledge/ProjectWatchService.cs:14`: debounce and re-index on file events.
+- The SqliteVec connector holds the whole Semantic Kernel family at 1.78.0 ([[pages/roadmap/followups]]).
 
 ## Testing footprint
 
