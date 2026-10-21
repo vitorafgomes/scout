@@ -17,6 +17,29 @@
     <ProjectReference Include="..\Scout.Adapter.Slack\Scout.Adapter.Slack.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Teams\Scout.Adapter.Teams.csproj" />
     <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.CodeReview\Scout.Plugin.CodeReview.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Weather\Scout.Plugin.Weather.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Lists\Scout.Plugin.Lists.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Wikipedia\Scout.Plugin.Wikipedia.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Currency\Scout.Plugin.Currency.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Dates\Scout.Plugin.Dates.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Holidays\Scout.Plugin.Holidays.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Notes\Scout.Plugin.Notes.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.SelfInfo\Scout.Plugin.SelfInfo.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Reminders\Scout.Plugin.Reminders.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.WorldClock\Scout.Plugin.WorldClock.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Converter\Scout.Plugin.Converter.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.News\Scout.Plugin.News.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.WebSearch\Scout.Plugin.WebSearch.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Dictionary\Scout.Plugin.Dictionary.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Recipes\Scout.Plugin.Recipes.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Markets\Scout.Plugin.Markets.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Sports\Scout.Plugin.Sports.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Nutrition\Scout.Plugin.Nutrition.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.WhatToWatch\Scout.Plugin.WhatToWatch.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Ledger\Scout.Plugin.Ledger.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Parcels\Scout.Plugin.Parcels.csproj" />
+    <ProjectReference Include="..\Scout.ControlPlane\Scout.ControlPlane.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Host.Console.Tests" />

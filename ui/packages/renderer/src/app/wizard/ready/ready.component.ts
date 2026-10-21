@@ -112,7 +112,7 @@ function formatUptime(startedAt: string | undefined): string {
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -137,7 +137,7 @@ function formatUptime(startedAt: string | undefined): string {
       .guild {
         font-size: 14px;
         margin: 0 0 16px;
-        color: #a0aab8;
+        color: var(--sc-text-muted);
       }
       .meta-row {
         display: flex;
@@ -147,7 +147,7 @@ function formatUptime(startedAt: string | undefined): string {
       }
       .meta-item {
         font-size: 13px;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
       }
       .badge {
         display: inline-block;
@@ -158,32 +158,32 @@ function formatUptime(startedAt: string | undefined): string {
         letter-spacing: 0.03em;
       }
       .badge--running {
-        background: #0f3325;
-        color: #38d27a;
+        background: var(--sc-success-bg);
+        color: var(--sc-success-text);
       }
       .badge--crashed {
-        background: #3d1a1a;
-        color: #f07070;
+        background: var(--sc-danger-border);
+        color: var(--sc-danger-text);
       }
       .badge--stopped {
-        background: #1e2230;
-        color: #8fa3c0;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
       }
       .badge--starting {
-        background: #1e3a5f;
-        color: #5eb3f0;
+        background: var(--sc-info-bg);
+        color: var(--sc-info);
       }
       .badge--idle {
-        background: #1e2230;
-        color: #8fa3c0;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
       }
       .crash-banner {
-        background: #1e0f0f;
-        border: 1px solid #3d1a1a;
+        background: var(--sc-danger-bg);
+        border: 1px solid var(--sc-danger-border);
         border-radius: 6px;
         padding: 10px 14px;
         font-size: 13px;
-        color: #f07070;
+        color: var(--sc-danger-text);
         margin-bottom: 16px;
       }
       .log-header {
@@ -194,16 +194,16 @@ function formatUptime(startedAt: string | undefined): string {
       }
       .log-label {
         font-size: 12px;
-        color: #6a7a90;
+        color: var(--sc-text-dim);
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
       }
       .copy-btn {
         background: transparent;
-        border: 1px solid #2d3348;
+        border: 1px solid var(--sc-border-strong);
         border-radius: 4px;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
         font-size: 12px;
         padding: 2px 8px;
         cursor: pointer;
@@ -211,8 +211,8 @@ function formatUptime(startedAt: string | undefined): string {
       .log-viewer {
         max-height: 320px;
         overflow-y: auto;
-        background: #0c0e14;
-        border: 1px solid #1e2230;
+        background: var(--sc-bg-deep);
+        border: 1px solid var(--sc-surface-3);
         border-radius: 6px;
         margin-bottom: 20px;
       }
@@ -222,7 +222,7 @@ function formatUptime(startedAt: string | undefined): string {
         font-family: 'JetBrains Mono', 'Fira Code', monospace;
         font-size: 12px;
         line-height: 1.55;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
         white-space: pre-wrap;
         word-break: break-all;
       }
@@ -233,8 +233,8 @@ function formatUptime(startedAt: string | undefined): string {
         flex-wrap: wrap;
       }
       .primary {
-        background: #7c5cff;
-        color: #ffffff;
+        background: var(--sc-accent);
+        color: var(--sc-on-accent);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -244,8 +244,8 @@ function formatUptime(startedAt: string | undefined): string {
       }
       .secondary {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #2d3348;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border-strong);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;
@@ -254,7 +254,7 @@ function formatUptime(startedAt: string | undefined): string {
       }
       .ghost {
         background: transparent;
-        color: #6a7a90;
+        color: var(--sc-text-dim);
         border: none;
         font-size: 13px;
         cursor: pointer;
@@ -262,13 +262,13 @@ function formatUptime(startedAt: string | undefined): string {
       }
       .stopped-msg {
         font-size: 13px;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
         margin: 0;
       }
       .destructive {
         background: transparent;
-        color: #f07070;
-        border: 1px solid #3d1a1a;
+        color: var(--sc-danger-text);
+        border: 1px solid var(--sc-danger-border);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;
@@ -276,7 +276,7 @@ function formatUptime(startedAt: string | undefined): string {
         cursor: pointer;
       }
       .destructive:hover {
-        background: #1e0f0f;
+        background: var(--sc-danger-bg);
       }
       .llm-banner {
         display: flex;
@@ -285,15 +285,15 @@ function formatUptime(startedAt: string | undefined): string {
         gap: 12px;
         padding: 10px 14px;
         margin: 0 0 16px;
-        background: #2b2010;
-        border: 1px solid #d4a24a;
+        background: var(--sc-warning-bg);
+        border: 1px solid var(--sc-warning);
         border-radius: 6px;
         font-size: 13px;
-        color: #d4a24a;
+        color: var(--sc-warning);
       }
       .banner-action {
-        background: #5a8fd4;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 6px 12px;

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Knowledge Optimization — Scout Wiki</title>
+<meta name="description" content="Roadmap to move Project Knowledge retrieval from dense-only to symbol-aware and hybrid: find_symbol, FTS5+RRF, and indexing throughput.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Roadmap</a><span class="sep">/</span>Project Knowledge Optimization</nav>
+
+    <section>
+      <h1>Project Knowledge Optimization — Initiative</h1>
+      <p class="blockquote">Move Project Knowledge retrieval from dense-only cosine search to a symbol-aware, hybrid pipeline so that "where is method X" is deterministic and "find this functionality" survives fuzzy phrasing.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype roadmap">roadmap</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/project-knowledge-optimization-roadmap.md</code></span>
+      </div>
+
+      <h2>Why now</h2>
+      <p>
+        Project Knowledge retrieval is <strong>dense-only</strong>: <code>SqliteProjectKnowledgeStore.SearchAsync</code>
+        filters on <code>Project</code> and runs pure cosine over <code>nomic-embed-text</code>. So "where is method
+        <code>X</code>" depends entirely on embedding similarity — the persisted <code>Symbol</code> column is
+        <strong>dead weight, never queried</strong>, and exact identifier matches are neither boosted nor guaranteed.
+      </p>
+      <p>
+        It is compounded by a <strong>hardcoded top-5 with no dedup</strong>: the AST chunker walks
+        <code>DescendantNodes()</code> and emits the full class <strong>and</strong> each method, so the five
+        result slots can collapse into near-duplicate spans of a single symbol. The roadmap comes out of a
+        multi-agent workflow (<code>scout-knowledge-optimization</code>) that produced 33 recommendations across
+        six dimensions, each adversarially verified against the real codebase on branch <code>feat/project-knowledge</code>.
+      </p>
+
+      <div class="callout">
+        <div class="c-title">Highest-leverage fix</div>
+        <p>
+          A metadata-only exact-symbol lookup — <code>find_symbol</code> over the already-persisted <code>Symbol</code>
+          column. It is deterministic, never misses the exact identifier, and is independent of embedding quality.
+          The mechanism is already proven by <code>ReplaceFileAsync</code>, which does a filtered <code>GetAsync</code>
+          over a non-indexed text column.
+        </p>
+      </div>
+
+      <h2>Scope</h2>
+      <p class="field-label">In scope</p>
+      <ul class="body-list">
+        <li>An exact-symbol retrieval line ("find a method"): <code>find_symbol</code> and its supporting indexer changes.</li>
+        <li>A hybrid retrieval line for fuzzy "functionality" queries: FTS5 keyword index fused with dense search via Reciprocal Rank Fusion (RRF).</li>
+        <li>Quick wins that need no reindex: configurable top-K + dedup, exposing scores, query/index embedding symmetry, and wiring dead embedding config.</li>
+        <li>Indexing throughput and robustness (bounded-concurrency batching, oversized-chunk handling, retry-with-backoff).</li>
+      </ul>
+      <p class="field-label">Out of scope</p>
+      <ul class="body-list">
+        <li>Replacing the local-first embedding model — work stays on <code>nomic-embed-text</code> via Ollama.</li>
+        <li>The <a href="../architecture/capability-engine.html">Capability Engine</a> retrieval unification — tracked separately.</li>
+        <li>Any change to the read-only / descriptive-write boundary — retrieval improvements do not introduce executive writes.</li>
+      </ul>
+
+      <h2>Status</h2>
+      <p>As of <strong>2026-06-01</strong>, this is an active, sequenced plan derived from the verified recommendation set. The note records <strong>33 recommendations, 32 actionable, 0 already done</strong>. Sequencing is fixed (below) but no workstream item is reported as merged yet.</p>
+
+      <div class="callout warn">
+        <div class="c-title">Verified gotchas to respect</div>
+        <ul class="body-list">
+          <li><code>IsIndexed</code> on SqliteVec is a <strong>perf hint, not a filterability gate</strong> — filtering on non-indexed columns already works (proven by the passing <code>ReplaceFileAsync</code> Path test).</li>
+          <li><code>VectorSearchResult&lt;T&gt;.Score</code> is a nullable <code>double?</code>, and with <code>CosineDistance</code> it is a <strong>distance</strong> (lower = nearer), not a similarity.</li>
+          <li><code>EmbeddingGeneratorBuilder.UseRetry</code> and <code>CreateChat</code> referenced in some proposals <strong>do not exist</strong> — use a hand-rolled <code>DelegatingEmbeddingGenerator</code> / resolve <code>IChatCompletionService</code> from the kernel.</li>
+          <li>FTS5 ships inside <code>bundle_e_sqlite3</code> — no <code>LoadExtension</code>, no new native dependency (only an explicit <code>Microsoft.Data.Sqlite</code> PackageReference, currently transitive).</li>
+          <li><code>DeadLetterRetrievalAcceptanceTests</code> is env-gated/skipped (<code>SCOUT_OLLAMA_ACCEPTANCE=1</code>), not a unit test.</li>
+        </ul>
+      </div>
+
+      <h2>Workstreams / Phases</h2>
+      <div class="road-grid">
+
+        <div class="road-block">
+          <h3><span class="num">0</span>Quick wins (no reindex)</h3>
+          <p>Run on the existing database; ship before any schema or reindex work.</p>
+          <ul class="check">
+            <li><b>Configurable top-K + dedup</b> of nested spans. <code>ProjectKnowledgeService.cs</code> hardcodes <code>TopResults=5</code>; the store <code>SearchAsync</code> already takes <code>top</code>. Add <code>top</code>/<code>kind</code> to <code>search_project</code> and dedup hits whose <code>(Path, StartLine..EndLine)</code> nest inside a higher-ranked hit.<span class="sub">Update the NSubstitute assertions in <code>ProjectKnowledgeServiceTests.cs</code>.</span></li>
+            <li><b>Expose <code>hit.Score</code></b> (currently discarded in <code>SqliteProjectKnowledgeStore.cs</code>) as a <code>ScoredChunk</code>, render it in <code>FormatHit</code>, add a min-score cutoff (or native <code>VectorSearchOptions.ScoreThreshold</code>). Cosine score is a distance, lower = nearer.</li>
+            <li><b>Query↔index embedding symmetry</b>: extract <code>BuildEmbeddingInput</code> from <code>ProjectIndexer.cs</code> and add a <code>BuildQueryInput</code> (nomic <code>search_query:</code> / <code>search_document:</code>). Query-side only, so no reindex; gate on the model name.</li>
+            <li><b>Wire dead embedding config</b>: <code>MaxBatchSize</code>/<code>HttpTimeoutSeconds</code>/<code>ExpectedDimensions</code> are validated then ignored in <code>OllamaLlmProviderFactory.cs</code>. Set <code>HttpClient.Timeout</code>; assert vector length == <code>ExpectedDimensions</code> (when &gt; 0) in <code>ProjectIndexer.BuildRecordsForFileAsync</code>.</li>
+            <li><b>Progress + skipped-file accounting</b> in the index summary, distinguishing a catch-path empty return from a legitimately chunk-less file in <code>ProjectIndexer.cs</code>.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">A</span>Symbol-search line — "find a method"</h3>
+          <p>The direct deterministic answer to identifier lookups. A1 is the single next thing.</p>
+          <ul class="check">
+            <li><b>A1 — <code>find_symbol</code></b>: metadata-only <code>FindSymbolAsync(project, symbol, kind?, top)</code> via <code>GetAsync(r =&gt; r.Project == project &amp;&amp; r.Symbol == symbol)</code>; the service skips the embedder; exposed as <code>[KernelFunction("find_symbol")]</code>. <strong>No schema change, runs on the existing DB.</strong> Case-insensitivity post-filtered in memory. Foundation of hybrid's exact-match leg.</li>
+            <li><b>A2 — <code>SymbolLower</code> + <code>NodeKind</code></b>: <code>ProjectIndexer.cs</code> currently overwrites the fine kind (<code>method</code>/<code>class</code>) with a coarse <code>code</code>/<code>doc</code>. Adds case-insensitive SQL match + kind-scoped filter. <strong>Requires a one-time reindex.</strong></li>
+            <li><b>A3 — Qualified symbols + signatures</b> (<code>Namespace.Type.Method(params)</code>, walking <code>node.Parent</code>). Bundle the reindex with A2.</li>
+            <li><b>A4 — <code>RoslynSymbolLocator</code></b>: live parse of <code>.cs</code>, covering all declaration kinds (struct/enum/property/ctor/local-function/delegate), never stale. Additive, no schema change; layers on A1.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">B</span>Hybrid retrieval — fuzzy "functionality" queries</h3>
+          <p>Keyword + dense fusion so phrasing differences stop breaking recall.</p>
+          <ul class="check">
+            <li><b>B5 — FTS5 + RRF</b> (BM25 ⊕ dense, k ≈ 60), dual-written in <code>ReplaceProjectAsync</code> + <code>ReplaceFileAsync</code>. New <code>SqliteKeywordIndex.cs</code>; mirror the <code>EnsureCollectionExistsAsync</code> graceful guard. Risk: transactionality across two connections. This is the hybrid-retrieval slice proper (Phase 2 slice 2).</li>
+            <li><b>B6 — Code-aware tokenization</b> (camel / Pascal / snake / <code>.</code>) applied to FTS content and query, so <code>DeadLetter</code> ↔ <code>dead letter</code>. Depends on B5.</li>
+            <li><b>B7 — Exact-symbol rank-0 shortcut</b> (reuses A1) + optional LLM rerank behind a flag + retrieval config plumbing.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">C</span>Indexing throughput &amp; robustness</h3>
+          <p>Orthogonal track: improves freshness, not precision. Can run in parallel.</p>
+          <ul class="check">
+            <li><b>C8 — Bounded-concurrency cross-file batch embedding</b> (<code>Parallel.ForEachAsync</code> degree 2-4, batch by <code>MaxBatchSize</code>, one final <code>ReplaceProjectAsync</code>). Prereq: a collision-proof Id <code>{project}:{relPath}:{StartLine}-{EndLine}#{ordinal}</code>.</li>
+            <li><b>C9 — Cap/split oversized chunks</b> (a whole-class <code>node.ToString()</code> can exceed model context). Depends on C8's Id.</li>
+            <li><b>C10 — Member-level non-overlapping chunking</b> (header-only type chunks + per-member body chunks) — kills duplicate spans, the biggest precision lift from chunking. Requires reindex + heavy <code>FileChunkerTests</code> churn.</li>
+            <li><b>C11 — Retry-with-backoff</b> via <code>DelegatingEmbeddingGenerator</code> + per-input fallback; share the batch+retry path with the file watcher.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <p class="field-label">Sequencing</p>
+      <ol class="seq">
+        <li><b>A1 (<code>find_symbol</code>)</b> first — no reindex, runs on the existing DB, unblocks A4 and B7.</li>
+        <li>Bundle <b>A2 + A3</b> together behind a single reindex.</li>
+        <li><b>B5 (FTS5 + RRF)</b> is the fuzzy "functionality" fix.</li>
+        <li>Track <b>C</b> is orthogonal (throughput / freshness) and can proceed in parallel.</li>
+      </ol>
+
+      <h2>Risks</h2>
+      <ul class="body-list">
+        <li><strong>Two-connection transactionality (B5).</strong> Dual-writing the dense store and the new FTS5 keyword index across two connections can leave them out of sync on partial failure; mirror the existing graceful guard and test the failure path.</li>
+        <li><strong>Reindex cost (A2/A3, C10).</strong> Several of the higher-value items require a one-time full reindex and heavy churn in <code>FileChunkerTests</code> — schedule them as a bundle, not piecemeal.</li>
+        <li><strong>GPU contention (operational).</strong> A heavy chat model (<code>qwen3.5:9b</code>) starves the embedder on the same GPU, stalling indexing and per-query embedding. Use a lighter chat model (e.g. <code>qwen2.5:7b</code>) or ensure GPU headroom for <code>nomic-embed-text</code> to coexist.</li>
+        <li><strong>API-shape assumptions.</strong> Some proposals lean on members that do not exist (<code>EmbeddingGeneratorBuilder.UseRetry</code>, <code>CreateChat</code>); building against them blindly fails — use the hand-rolled / kernel-resolved alternatives.</li>
+        <li><strong>Score-sign confusion.</strong> With <code>CosineDistance</code>, lower means nearer; treating the nullable <code>double?</code> as a similarity inverts ranking and cutoffs.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/project-knowledge-rag.html"><span class="rt">arch</span>Project Knowledge RAG</a>
+          <a href="../services/scout-knowledge.html"><span class="rt">service</span>Scout.Knowledge</a>
+          <a href="../domain/project-knowledge.html"><span class="rt">domain</span>Project Knowledge</a>
+          <a href="../roadmap/current-focus.html"><span class="rt">roadmap</span>Current Focus &amp; Backlog</a>
+          <a href="../history/project-knowledge-rag-rollout.html"><span class="rt">history</span>Project Knowledge RAG Rollout</a>
+          <a href="../runbooks/index-a-project.html"><span class="rt">runbook</span>Index a Project</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

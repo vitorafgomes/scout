@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0004 — Web Stack Angular — Scout Wiki</title>
+<meta name="description" content="ADR 0004: all Scout web UI uses Angular (latest stable), Signals-first, standalone components, new control flow, built with the Angular CLI.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0004</nav>
+
+    <section>
+      <h1>ADR 0004 — Web Stack: Angular</h1>
+      <p class="blockquote">All web UI for Scout uses Angular — latest stable — with Signals as the reactivity model, standalone components, the new control flow, and the Angular CLI for builds.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-22</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-04-22-web-stack-angular.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li>Accepted — 2026-04-22.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        Scout will eventually need web surfaces. The first is the Electron provisioning UI renderer
+        (see <a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a>); a future admin dashboard,
+        status page, or hosted control plane may follow.
+      </p>
+      <p>
+        Without an explicit framework choice locked in early, contributors would ship PRs using whichever web
+        framework is convenient (React, Vue, Svelte, Solid). Each additional framework multiplies onboarding cost,
+        build-tooling surface, component-library decisions, and testing infrastructure. A single-framework rule now
+        is cheaper than untangling a mixed codebase later.
+      </p>
+      <p>
+        The project owner has already standardized on Angular across other projects and wants Scout aligned. This
+        ADR makes that choice explicit and enforceable.
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        All web UI for Scout uses <strong>Angular</strong> — latest stable (currently <strong>21.2.9</strong> at the
+        time of this ADR; track the latest stable in <code>angular/angular</code> releases). The conventions below
+        apply to every Angular codepath in the project.
+      </p>
+
+      <div class="callout good">
+        <p class="field-label">Required conventions</p>
+        <ul class="body-list">
+          <li><strong>Signals as the reactivity model.</strong> State flows through <code>signal()</code>, <code>computed()</code>, and <code>effect()</code>. RxJS is reserved for actual stream semantics — cancellation, debouncing, HTTP.</li>
+          <li><strong>Standalone components only.</strong> No <code>NgModule</code> boilerplate; new code uses <code>standalone: true</code> (the Angular 21 default) with explicit <code>imports</code> arrays.</li>
+          <li><strong>New control flow.</strong> Templates use <code>@if</code>, <code>@for</code>, <code>@switch</code>, <code>@defer</code>.</li>
+          <li><strong>Zoneless change detection when feasible.</strong> At minimum avoid zone.js-only reactivity; prefer <code>provideZonelessChangeDetection()</code> as soon as the runtime allows it for the project.</li>
+          <li><strong>Angular CLI (<code>ng</code>) for builds.</strong> <code>ng build</code>, <code>ng test</code>, <code>ng generate</code> are the canonical commands, invoked through <code>bun run</code> scripts where the package-manager boundary allows. The Angular CLI owns the bundler pipeline (currently esbuild under the hood).</li>
+        </ul>
+      </div>
+
+      <div class="callout danger">
+        <p class="field-label">Forbidden</p>
+        <ul class="body-list">
+          <li><code>BehaviorSubject</code>-only patterns for component state.</li>
+          <li>Structural directives <code>*ngIf</code>, <code>*ngFor</code>, <code>*ngSwitch</code> in new code; existing ones (none yet) migrate on sight.</li>
+          <li><code>bun build</code> for the renderer bundle — the Angular CLI owns that pipeline.</li>
+          <li>Any other web framework (React, Vue, Svelte, Solid, plain Web Components).</li>
+        </ul>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li><strong>Single stack, single onboarding path.</strong> New contributors learn one framework, one CLI, one testing story.</li>
+        <li><strong>Consistency with the owner's other projects.</strong> Code-review patterns, linter configs, and muscle memory carry across.</li>
+        <li><strong>Clear rejection criterion in CI.</strong> Any PR introducing React, Vue, Svelte, Solid, or any other web framework is automatically out of scope and can be closed on framework choice alone.</li>
+        <li><strong>Signals-first code ages well.</strong> Angular is explicitly moving toward a zoneless, Signals-based future; starting there avoids a later migration.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li><strong>Angular's npm-centric tooling may friction against Bun.</strong> Some schematics historically shell out to <code>npm</code>, and peer-dependency resolution assumes npm semantics. The ng + Bun interop is flagged as a to-verify item; any npm-only escape hatch (e.g. a <code>package-lock.json</code> shim) is documented in the provisioning note.</li>
+        <li><strong>Heavier runtime than Svelte or Solid.</strong> For a desktop Electron renderer this is largely irrelevant (no cold network payload, no SEO budget), but a real cost for any eventual public-facing web surface.</li>
+        <li><strong>Ecosystem narrower for Electron-specific Angular patterns.</strong> React has broader Electron tutorial coverage; expect to write thin integration glue ourselves.</li>
+        <li><strong>Contributors may still ship non-Angular PRs.</strong> CI and review must reject non-Angular web code explicitly — add a lint rule or a pre-PR check if drift appears.</li>
+      </ul>
+
+      <h2>Alternatives</h2>
+      <ul class="body-list">
+        <li><strong>React.</strong> Largest ecosystem, best Electron tutorial coverage, richest component-library surface. Rejected: the owner has standardized on Angular, and Scout needs no React-specific library Angular cannot match.</li>
+        <li><strong>Vue.</strong> Good DX, reasonable Electron support. Rejected on the same ecosystem-split grounds as React, with a smaller upside.</li>
+        <li><strong>Svelte / SvelteKit.</strong> Smallest runtime, most ergonomic template syntax. Rejected: the bundle-size advantage is irrelevant for an Electron renderer (payload is local, startup is dominated by Chromium), and the ecosystem-split cost dwarfs the gain.</li>
+        <li><strong>Solid.</strong> Signals-first by design, fast, small. Rejected for the same ecosystem reason; Angular 21's Signals model covers the same reactivity story within the chosen stack.</li>
+        <li><strong>No framework / plain TypeScript + Web Components.</strong> Rejected: the productivity delta vs. a full framework is too large for the scope Scout anticipates (provisioning wizard today, admin dashboard tomorrow).</li>
+      </ul>
+
+      <h2>Enforcement</h2>
+      <ul class="body-list">
+        <li>PRs introducing any non-Angular web framework are out of scope and closed on framework choice alone.</li>
+        <li>New components must be standalone with explicit <code>imports</code>; templates use the new control flow only.</li>
+        <li>Renderer bundling goes through the Angular CLI; <code>bun build</code> is not used for the renderer.</li>
+        <li>If non-Angular drift appears, add a lint rule or a pre-PR check to reject it mechanically.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="rt">adr</span>0005 Desktop M1 Scope</a>
+          <a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="rt">adr</span>0011 Backend/Frontend gRPC</a>
+          <a href="../decisions/0002-platform-priority.html"><span class="rt">adr</span>0002 Platform Priority</a>
+          <a href="../history/desktop-m1.html"><span class="rt">history</span>Desktop M1</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

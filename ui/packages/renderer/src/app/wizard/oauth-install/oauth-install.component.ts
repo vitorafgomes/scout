@@ -100,7 +100,7 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -117,13 +117,13 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
         margin: 0 0 4px;
       }
       .subtitle {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         margin: 0 0 24px;
         font-size: 13px;
       }
       .panel {
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 10px;
         padding: 32px;
         display: flex;
@@ -133,16 +133,16 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
         text-align: center;
       }
       .panel.success {
-        border-color: #3aaf7b;
+        border-color: var(--sc-success);
       }
       .panel.error-panel {
-        border-color: #d45a5a;
+        border-color: var(--sc-danger);
       }
       .error {
-        color: #d45a5a;
+        color: var(--sc-danger);
       }
       .hint {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
         font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
       }
@@ -150,8 +150,8 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
         width: 28px;
         height: 28px;
         border-radius: 9999px;
-        border: 3px solid #252b3b;
-        border-top-color: #7c5cff;
+        border: 3px solid var(--sc-border);
+        border-top-color: var(--sc-accent);
         animation: sc-spin 1s linear infinite;
       }
       @keyframes sc-spin {
@@ -170,8 +170,8 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
         justify-content: center;
       }
       .primary {
-        background: #7c5cff;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -181,8 +181,8 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
       }
       .secondary {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;
@@ -190,7 +190,7 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
       }
       .ghost {
         background: transparent;
-        color: #e4e8f0;
+        color: var(--sc-text);
         border: none;
         padding: 8px 12px;
         font-size: 13px;

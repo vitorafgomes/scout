@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0013 — Conversation Streaming Sink — Scout Wiki</title>
+<meta name="description" content="ADR 0013: a platform-agnostic conversation core owns the stream-drive loop once and renders through a thin, cumulative per-platform IResponseSink.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0013</nav>
+
+    <section>
+      <h1>ADR 0013 — Conversation Core Streaming Sink</h1>
+      <p class="blockquote">Introduce a platform-agnostic conversation core that owns the stream-drive loop once and renders through a thin per-platform sink whose contract is designed against the least-capable platform, so the routing layer never knows any platform's capabilities.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-29</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-05-29-conversation-core-streaming-sink.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-05-29. Implemented for the conversation core plus the Discord reference adapter on branch <code>feat/scout-llm-gateway</code> (131 tests green). Slack and Teams adapters implement this same <code>IResponseSink</code> as the next parallel workstream.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        Scout is multi-platform chatops: Discord today, Slack and Teams next. The
+        <a href="../invariants/streaming-first.html">streaming-first</a> mandate means every assistant response
+        streams to the chat surface as tokens arrive. Each platform renders a growing message differently:
+      </p>
+      <ul class="body-list">
+        <li><strong>Discord</strong> (<code>Discord.Net</code>) — post an embed, then <code>ModifyAsync</code> repeatedly. Fine-grained edit.</li>
+        <li><strong>Slack</strong> (<code>SlackNet</code>) — <code>chat.update</code> repeatedly. Edit, but with different rate limits.</li>
+        <li><strong>Teams</strong> (<code>Microsoft.Bot.Framework</code>) — the least capable. Updates must carry <strong>cumulative</strong> text (not deltas), roughly 1 request per second, a 2-minute stream cap, citations only on the final message, 1:1 chats only, and no fine-grained edit of interim content.</li>
+      </ul>
+      <p>
+        In the archived design (<code>src/old/</code>), the stream-drive loop — the <code>await foreach</code> over tokens
+        plus throttle, truncate, finalize, and rate-limit retry — lived <strong>inside each adapter's poster</strong>
+        (<code>Scout.Adapter.Discord/Streaming/EmbedEditThrottler.cs</code> and <code>DiscordEmbedReplyPoster.cs</code>).
+        Every new platform would re-implement that loop. Routing also returned a dual-mode <code>ChatResponse</code>
+        (plain XOR streaming) that each adapter had to branch on.
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        Introduce <code>src/Scout.Conversation</code>, a platform-agnostic core that owns the stream-drive loop once
+        and renders through a thin per-platform sink. The sink contract is designed against the Teams
+        least-common-denominator so the routing layer never knows a platform's capabilities.
+      </p>
+
+      <h3>Outbound sink — <code>IResponseSink</code> (cumulative)</h3>
+      <pre class="cfg">RenderCapabilities Capabilities { get; }
+Task BeginAsync(CancellationToken ct);
+Task UpdateAsync(string cumulativeText, CancellationToken ct);   <span class="c">// CUMULATIVE, not a delta</span>
+Task CompleteAsync(string finalText, IReadOnlyList&lt;Citation&gt; citations, CancellationToken ct);
+Task FailAsync(string finalTextSoFar, string reason, CancellationToken ct);</pre>
+      <ul class="body-list">
+        <li>Lifecycle: exactly one <code>Begin</code>, zero or more monotonic-cumulative <code>Update</code> calls, then exactly one terminal <code>Complete</code> or <code>Fail</code>.</li>
+        <li><code>UpdateAsync</code> takes <strong>cumulative text</strong> precisely because Teams forbids deltas; Discord and Slack re-render the whole body anyway, so cumulative costs them nothing. This single decision is what lets the router and pump stay capability-ignorant.</li>
+        <li><code>RenderCapabilities</code> exposes <code>FineGrainedEdit</code>, <code>MaxBodyLength</code>, <code>SupportsInterimCitations</code>, <code>EditIntervalFloor</code>, and <code>MaxResponseDuration</code> (the Teams 2-minute cap, declared by the sink).</li>
+      </ul>
+
+      <h3>The drive loop — <code>StreamPump</code> (owned once)</h3>
+      <p>
+        <code>StreamPump.RunAsync(ChatResponse, IResponseSink, ct)</code> owns: <code>Begin</code>, the
+        <code>await foreach</code> over <code>ChatResponse.Tokens</code>, cumulative buffering, throttled
+        <code>UpdateAsync</code> at a cadence derived from <code>Capabilities</code> (Discord ~750ms, Teams ~1s floor),
+        tail/head truncation to <code>MaxBodyLength</code>, and the terminal <code>Complete</code>/<code>Fail</code>.
+        Capability-driven degradation: a non-fine-grained, non-interim sink gets final-only rendering. The pump is
+        the single caller and is transport-agnostic — it contains <strong>no</strong> platform-specific code.
+      </p>
+
+      <h3>Inverted <code>IChatAdapter</code></h3>
+      <pre class="cfg">Task StartAsync(Func&lt;ChatMessage, IResponseSink, CancellationToken, Task&gt; handler, CancellationToken ct);
+Task StopAsync(CancellationToken ct);
+string Name { get; }</pre>
+      <p>
+        The adapter normalizes inbound platform events to <code>ChatMessage</code>, constructs an
+        <code>IResponseSink</code> bound to the <strong>originating channel only</strong>, and invokes the handler
+        with a lifetime-linked cancellation token. The core (<code>ConversationConductor</code>) routes and pumps.
+        Ownership is inverted: <strong>adapters provide a sink, the core drives it.</strong> The descriptive-write
+        invariant is enforced by construction — the sink exposes no API to post outside its channel, and the core
+        never sees a channel handle.
+      </p>
+
+      <h3>Routing and composition</h3>
+      <ul class="body-list">
+        <li><code>IConversationRouter.Route(ChatMessage) -&gt; ChatResponse</code> — non-null, always streaming. v1 has one responder, <code>LlmStreamingRouter</code>, which consumes <a href="../services/scout-llm.html"><code>IChatGateway</code></a> (not <code>IChatCompletionService</code> directly), staying Semantic Kernel-free.</li>
+        <li><code>ChatResponse</code> redesigned to <code>(IAsyncEnumerable&lt;string&gt; Tokens, IReadOnlyList&lt;Citation&gt; Citations)</code> plus <code>FromText</code> for the forced-non-streaming path. The plain-XOR-streaming union is gone.</li>
+        <li><code>ChatMessage</code>, <code>ChatResponse</code>, <code>Citation</code>, and <code>IChatAdapter</code> relocated from <code>Scout.Llm.Abstractions</code> to <code>Scout.Conversation.Abstractions</code> — they are chat-transport, not LLM, concerns. <code>Scout.Conversation</code> depends on <code>Scout.Llm</code>; never the reverse.</li>
+        <li><code>ConversationConductor</code> wraps route plus pump in an OpenTelemetry activity and guarantees a routing or streaming failure surfaces as <code>FailAsync</code>, never a host crash.</li>
+      </ul>
+
+      <div class="callout good">
+        <div class="c-title">Owned by the core (once)</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li>The stream-drive loop: begin, token <code>await foreach</code>, cumulative buffering, throttle.</li>
+          <li>Truncation to <code>MaxBodyLength</code> and capability-driven final-only degradation.</li>
+          <li>Folding the Teams <code>MaxResponseDuration</code> as <code>min(OverallTimeout, MaxResponseDuration)</code>.</li>
+          <li>Terminal <code>Complete</code>/<code>Fail</code> ordering and failure surfacing as <code>FailAsync</code>.</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">Owned by the transport sink (per platform)</div>
+        <p style="margin:0">
+          429/5xx detection and backoff live in the sink that owns the platform SDK's typed exception — for example
+          <code>DiscordResponseSink</code> catches <code>Discord.Net</code>'s <code>RateLimitedException</code> and applies
+          Retry-After backoff. The pump simply calls <code>UpdateAsync</code>; a transient interim failure is swallowed
+          and the buffer retained. This keeps the core free of platform-specific rate-limit reflection.
+        </p>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li><strong>One drive loop.</strong> Slack and Teams sinks implement only Begin/Update/Complete/Fail plus <code>Capabilities</code>; the pump, router, and conductor are unchanged. Verified by a final-only-degradation test for the non-edit path.</li>
+        <li><strong>Teams fits without touching the core.</strong> <code>MaxResponseDuration</code> lets the Teams sink declare its 2-minute cap; the pump folds it as <code>min(OverallTimeout, MaxResponseDuration)</code>, mirroring the <code>EditIntervalFloor</code> fold. Cumulative semantics are the contract default.</li>
+        <li><strong>Streaming-first end to end</strong>, a Semantic Kernel-free router, correct layering, and no dependency cycle.</li>
+        <li><strong>Descriptive-write boundary enforced by construction</strong>, not by convention.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li><strong>Cumulative re-send cost.</strong> Edit-based platforms re-transmit the full body per update. Bounded by the throttle cadence and <code>MaxBodyLength</code>; acceptable.</li>
+        <li><strong>Capability surface must stay honest.</strong> New platforms must set <code>RenderCapabilities</code> correctly or get wrong cadence/degradation. Mitigation: the capability contract is small and documented, and per-sink tests assert behavior.</li>
+      </ul>
+      <p class="field-label">Operational</p>
+      <ul class="body-list">
+        <li>The pump's <code>OverallTimeout</code> now bounds <code>BeginAsync</code> and the terminal <code>CompleteAsync</code> (timeout-linked token), important for non-edit platforms whose only write is the terminal call. <code>FailAsync</code> runs on <code>CancellationToken.None</code> so finalization is not torn down by the same cancellation.</li>
+        <li>Each platform transport is an external boundary: mandatory failure-injection tests (429 retry, 5xx drop, gateway-throws-mid-stream, cancellation) — present for Discord, required for Slack and Teams when built, per <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+        <li>Quality gates run: <code>architect-reviewer</code> (cross-cutting contracts) and <code>code-reviewer</code> (each adapter). Both passed for the conversation core plus Discord reference adapter (APPROVE-WITH-NITS; the four architecture majors were fixed).</li>
+      </ul>
+
+      <h2>Alternatives</h2>
+      <ul class="body-list">
+        <li><strong>Per-adapter drive loop (the old design).</strong> Rejected: every platform re-implements throttle/truncate/finalize/retry; the bug surface multiplies.</li>
+        <li><strong>Delta-based sink updates.</strong> Rejected: Teams requires cumulative text; delta-first would force a Teams-specific re-accumulation layer and leak Teams into the core.</li>
+        <li><strong>Rate-limit handling in the core pump (duck-typed reflection).</strong> Tried in the first cut and rejected on review — it was Discord-shaped, would not detect Slack/Teams HTTP-header 429s, and pulled <code>System.Reflection</code> into a platform-agnostic type. Moved into the sink.</li>
+        <li><strong>A core <code>SinkLifecycleGuard</code> decorator.</strong> Deferred (YAGNI): each sink enforces its own Begin/Update/terminal ordering for v1; revisit if a third-party sink author needs the invariant for free.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="rt">adr</span>0012 LLM via Semantic Kernel</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

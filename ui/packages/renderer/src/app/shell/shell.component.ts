@@ -30,8 +30,8 @@ import { VaultAvailabilityBannerComponent } from './vault-availability-banner.co
       :host {
         display: block;
         min-height: 100vh;
-        background: #0f1117;
-        color: #e4e8f0;
+        background: var(--sc-bg);
+        color: var(--sc-text);
       }
     `,
   ],

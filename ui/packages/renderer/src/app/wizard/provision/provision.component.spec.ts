@@ -91,6 +91,32 @@ describe('ProvisionComponent', () => {
     expect(url.textContent).toContain('https://discord.com/developers/applications');
   });
 
+  it('enables continue via the fallback when opening the portal fails', async () => {
+    const bridge = makeBridge({
+      appOpenExternal: vi
+        .fn()
+        .mockRejectedValue(new ExternalHostNotAllowedError('discord.com', 'blocked')),
+    });
+    const fixture = await setup(bridge);
+
+    const continueBtn = fixture.nativeElement.querySelector(
+      '[data-test="created-continue"]',
+    ) as HTMLButtonElement;
+    expect(continueBtn.disabled).toBe(true);
+
+    const openBtn = fixture.nativeElement.querySelector(
+      'button.primary:not([data-test="created-continue"])',
+    ) as HTMLButtonElement;
+    openBtn.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    // The browser handoff failed, but the copy-URL fallback is on screen, so the
+    // user can still create the app manually — Continue must not dead-end.
+    expect(fixture.componentInstance.portalOpened()).toBe(false);
+    expect(continueBtn.disabled).toBe(false);
+  });
+
   it('navigates to /token on continue', async () => {
     const bridge = makeBridge();
     const fixture = await setup(bridge);

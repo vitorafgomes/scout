@@ -71,8 +71,8 @@ import type { FeatureViewModel } from '../core/features.store';
         display: block;
       }
       .card {
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 8px;
         padding: 16px;
         display: flex;
@@ -88,12 +88,12 @@ import type { FeatureViewModel } from '../core/features.store';
       .title {
         margin: 0 0 4px;
         font-size: 16px;
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .desc {
         margin: 0;
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .badge {
         font-size: 11px;
@@ -101,30 +101,30 @@ import type { FeatureViewModel } from '../core/features.store';
         letter-spacing: 0.04em;
         padding: 3px 8px;
         border-radius: 999px;
-        background: #1e2333;
-        color: #7b8299;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
         white-space: nowrap;
       }
       .badge--ok {
-        background: #133022;
-        color: #4ade80;
+        background: var(--sc-success-bg);
+        color: var(--sc-success-text);
       }
       .badge--warn {
-        background: #3a2a10;
-        color: #fbbf24;
+        background: var(--sc-warning-bg);
+        color: var(--sc-warning);
       }
       .badge--off {
-        background: #1e2333;
-        color: #7b8299;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
       }
       .badge--err {
-        background: #3a1414;
-        color: #f87171;
+        background: var(--sc-danger-bg);
+        color: var(--sc-danger-text);
       }
       .err {
         margin: 0;
         font-size: 12px;
-        color: #f87171;
+        color: var(--sc-danger-text);
       }
       .actions {
         display: flex;
@@ -137,7 +137,7 @@ import type { FeatureViewModel } from '../core/features.store';
         gap: 6px;
         align-items: center;
         font-size: 13px;
-        color: #e4e8f0;
+        color: var(--sc-text);
         margin-right: auto;
       }
       .btn {
@@ -152,13 +152,13 @@ import type { FeatureViewModel } from '../core/features.store';
         cursor: not-allowed;
       }
       .btn--primary {
-        background: #2563eb;
+        background: var(--sc-accent);
         color: white;
       }
       .btn--secondary {
         background: transparent;
-        color: #e4e8f0;
-        border-color: #252b3b;
+        color: var(--sc-text);
+        border-color: var(--sc-border);
       }
     `,
   ],

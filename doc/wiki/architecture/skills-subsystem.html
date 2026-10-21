@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skills Subsystem — Scout Wiki</title>
+<meta name="description" content="How Scout selects and surfaces markdown skills: an embedding-driven auto-injection path and a tool-based list/load path, plus the prompt-gate finding and improvement roadmap.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Architecture</a><span class="sep">/</span>Skills Subsystem</nav>
+
+    <section>
+      <h1>Skills Subsystem</h1>
+      <p class="lead">Skills are markdown process guides that nudge Scout's behavior. The subsystem reaches the model through two independent paths over the same files: an embedding-driven <em>auto-injection</em> path that splices the most relevant skill into the per-turn system prompt, and a tool-based <em>list/load</em> path the model can call itself. Both load lazily, never throw, and degrade to "no skills" on any failure.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">knowledge</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/skills-subsystem-improvement-roadmap.md</code>, <code>multiagent-vs-skill-routing.md</code>; <code>src/Scout.Skills/</code></span>
+      </div>
+
+      <h2>What a skill is</h2>
+      <p>
+        A <a href="../domain/skill.html">Skill</a> is a single markdown file with a <code>---</code> frontmatter fence
+        carrying required <code>name</code> and <code>description</code> keys, a closing fence, then a non-empty body.
+        <code>SkillFileLoader</code> parses it into the record <code>Skill(Name, Description, Body, SourcePath)</code>
+        (<code>Skill.cs:15</code>). The <strong>description</strong> is the retrieval signal — it gets embedded and
+        cosine-matched against the user message — while the <strong>body</strong> is the instruction text that ends
+        up in the prompt. Malformed files (no fences, missing keys, empty body) are skipped with a warning;
+        parsing never throws (<code>SkillFileLoader.cs:63</code>).
+      </p>
+      <div class="callout">
+        Files live under <code>src/Scout.Skills/skills/</code> and are copied to the build output, where they are
+        resolved relative to <code>AppContext.BaseDirectory</code> unless an absolute <code>Directory</code> is configured
+        (<code>SkillSelector.cs:123</code>, <code>SkillCatalog.cs:58</code>). The catalog is derived from the
+        Superpowers project (MIT) per <code>SKILLS-ATTRIBUTION.md</code>.
+      </div>
+
+      <h2>Two surfaces over one catalog</h2>
+      <p>The same markdown files back two registrations, wired in <code>AddScoutSkills</code> when <code>Enabled</code> is true (<code>SkillsServiceCollectionExtensions.cs:43</code>):</p>
+      <div class="layer-stack">
+        <div class="layer">
+          <strong>Auto-injection (embedding path)</strong> — <code>ISkillSelector</code> → <code>SkillSelector</code>.
+          Embeds skill descriptions, ranks them against the message by cosine similarity, and returns the top matches.
+          Needs the embedding generator. Used by the conversation router to compose the system prompt.
+        </div>
+        <div class="layer">
+          <strong>Tool path (model-driven)</strong> — <code>ISkillCatalog</code> → <code>SkillCatalog</code>, fronted by
+          <code>SkillsPlugin</code>. Exposes <code>list_skills</code> and <code>load_skill</code> as Semantic Kernel
+          functions the model can call. Embedding-free, so the shared kernel can aggregate it without re-entering the embedder.
+        </div>
+      </div>
+      <p>
+        The split is deliberate: the tool path depends only on the loader and options
+        (<code>ISkillCatalog.cs:9</code>), never on the embedding generator. Because the
+        <a href="../services/scout-knowledge.html">Scout.Knowledge</a> embedder is itself built from the shared kernel,
+        letting the kernel-aggregated <code>SkillsPlugin</code> touch the embedder would close a DI construction cycle.
+        The embedding-free catalog breaks it.
+      </p>
+
+      <h2>Selection pipeline (embedding path)</h2>
+      <p>
+        The index is built once, lazily, on the first <code>SelectAsync</code> call and cached for the process lifetime,
+        so DI build and host startup do zero file I/O, embedding, or network work (<code>SkillSelector.cs:42</code>).
+      </p>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-node">user message</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">embed query<br><small>GenerateVectorAsync</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">cosine vs. index<br><small>VectorMath.Cosine</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">threshold + TopN<br><small>&ge; 0.55, top 1</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">selected skills</div>
+        </div>
+      </div>
+      <ul class="seq">
+        <li>Empty/whitespace messages short-circuit to no skills (<code>SkillSelector.cs:53</code>).</li>
+        <li>The index embeds <strong>descriptions only</strong> today (<code>SkillSelector.cs:100</code>); the message is embedded as the query (<code>SkillSelector.cs:66</code>).</li>
+        <li>Each candidate is scored with <code>VectorMath.Cosine</code>, which returns 0 on length mismatch or zero-magnitude vectors (<code>VectorMath.cs:15</code>).</li>
+        <li>Candidates below <code>SimilarityThreshold</code> are dropped; the rest are ordered by descending score and capped at <code>TopN</code> (<code>SkillSelector.cs:71</code>).</li>
+        <li>Any exception in selection or index build is logged and treated as "no skills" — the conversation is never poisoned (<code>SkillSelector.cs:81</code>, <code>:114</code>).</li>
+      </ul>
+
+      <h2>Prompt composition</h2>
+      <p>
+        Selected skills are folded into the system prompt by <code>SkillPromptComposer.Compose</code>: the base prompt is
+        returned unchanged when nothing is selected, otherwise each skill body is appended under a
+        <code># Relevant skill: &lt;name&gt;</code> delimiter (<code>SkillPromptComposer.cs:18</code>).
+      </p>
+      <div class="callout">
+        Known weakness: the delimiter uses a Markdown <code>#</code> heading that collides with the skills' own headings,
+        and the bodies are injected verbatim with no framing. The roadmap's move <strong>F</strong> replaces it with a
+        structured <code>&lt;skills&gt;&lt;skill name="…"&gt;</code> wrapper plus a budget and dedup-by-name once more than
+        one skill can be injected.
+      </div>
+
+      <h2>Tool path</h2>
+      <p>
+        <code>SkillsPlugin</code> exposes two Semantic Kernel functions over the embedding-free catalog. Every call returns
+        a clean, non-empty string and never throws back into the kernel (<code>SkillsPlugin.cs:14</code>):
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">list_skills</div><div class="t-role">Returns one <code>name: description</code> line per skill, or <code>"No skills available."</code> when the catalog is empty (<code>SkillsPlugin.cs:27</code>).</div></div>
+        <div class="type-row"><div class="t-name">load_skill(name)</div><div class="t-role">Case-insensitive exact-name lookup returning the skill body, or a clean not-found message pointing back at <code>list_skills</code> (<code>SkillsPlugin.cs:40</code>).</div></div>
+      </div>
+      <p>
+        The plugin is registered as a <code>KernelPlugin</code> named <code>"Skills"</code> via
+        <code>KernelPluginFactory.CreateFromObject</code> (<code>SkillsServiceCollectionExtensions.cs:63</code>), which the
+        shared kernel aggregates for function-calling. See <a href="../domain/plugin.html">Semantic Kernel Plugin</a>.
+      </p>
+
+      <h2>Configuration</h2>
+      <p>All keys bind from <code>Scout:Skills</code> (<code>SkillsOptions.cs:11</code>); code defaults make the feature work with no section present.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Skills"</span>: {
+    <span class="k">"Enabled"</span>: <span class="s">true</span>,
+    <span class="k">"Directory"</span>: <span class="s">"skills"</span>,
+    <span class="k">"TopN"</span>: <span class="s">1</span>,
+    <span class="k">"SimilarityThreshold"</span>: <span class="s">0.55</span>
+  }
+}</pre>
+      <ul class="body-list">
+        <li><code>Enabled</code> (default <code>true</code>) — when false, only <code>NoOpSkillSelector</code> is registered and the tool plugin is not aggregated (<code>SkillsServiceCollectionExtensions.cs:67</code>, <code>NoOpSkillSelector.cs:7</code>).</li>
+        <li><code>Directory</code> (default <code>skills</code>) — relative paths resolve under <code>AppContext.BaseDirectory</code> (<code>SkillsOptions.cs:20</code>).</li>
+        <li><code>TopN</code> (default <code>1</code>) — maximum skills injected per turn (<code>SkillsOptions.cs:23</code>).</li>
+        <li><code>SimilarityThreshold</code> (default <code>0.55</code>) — minimum cosine score to select (<code>SkillsOptions.cs:28</code>).</li>
+      </ul>
+
+      <h2>The gate: auto-injection was a silent no-op</h2>
+      <p>
+        The improvement roadmap's critical finding is that, on the shipped config, <strong>the composed prompt never
+        reached the model when a project was configured.</strong> With a project active, <code>ChatGateway</code> routes
+        through the agent path, which invoked the agent with <code>options: null</code> and never referenced
+        <code>request.SystemPrompt</code>. The base persona plus the injected skill body — both built into
+        <code>SystemPrompt</code> — were discarded every turn; the response used only the agent's own
+        <code>Instructions</code>. Embedding-based skills auto-injection was effectively dead whenever a project was set.
+      </p>
+      <div class="callout">
+        <strong>Gate fix (do first).</strong> Pass <code>request.SystemPrompt</code> into the agent invocation via
+        <code>AdditionalInstructions</code>, guarding null/empty so the agent's own <code>Instructions</code> still apply.
+        This is the hard dependency for the entire auto-inject roadmap and is shared with the
+        <a href="../architecture/capability-engine.html">one-agent / dynamic-persona</a> routing direction.
+      </div>
+
+      <h2>The right lever per model</h2>
+      <p>The roadmap splits work by which model drives each decision, so effort lands where it pays off:</p>
+      <div class="chain">
+        <span>weak embedder (nomic-embed-text)</span>
+        <span>drives selection</span>
+        <span>task prefixes &middot; name-aware indexing &middot; threshold calibration</span>
+      </div>
+      <div class="chain">
+        <span>capable chat model</span>
+        <span>drives everything downstream</span>
+        <span>LLM classification fallback &middot; calling list_skills/load_skill &middot; absorbing larger bodies</span>
+      </div>
+      <p>
+        Selection quality is therefore tuned at the embedder (asymmetric <code>search_query:</code> /
+        <code>search_document:</code> prefixes, embedding name+description rather than description alone, recalibrating
+        the 0.55 threshold once per-turn scores are logged), while richer behaviors (a system-prompt clause telling the
+        model the tools exist, an LLM-driven selection fallback) depend on the capable model and on the gate fix.
+      </p>
+
+      <h2>Improvement roadmap (ordered)</h2>
+      <div class="road-grid">
+        <div class="road-block"><strong>A. Gate fix</strong> — agent path honors <code>SystemPrompt</code> via <code>AdditionalInstructions</code>. Do first; unblocks everything below.</div>
+        <div class="road-block"><strong>D. Card, not full body</strong> — inject a condensed Name+Description card with a "load via <code>load_skill</code>" pointer; <code>load_skill</code> becomes the single source of the multi-KB body, resolving the auto-inject / tool double-surfacing.</div>
+        <div class="road-block"><strong>Logging</strong> — log per-turn selection (top skill, score, threshold, runner-up; names and scores only, never message text). Prerequisite evidence for retuning the threshold and TopN.</div>
+        <div class="road-block"><strong>C. Descriptions as retrieval keys</strong> — rewrite descriptions as embedding keys (remove literal quotes such as the one in <code>brainstorming.md:3</code>), sequenced with name+description indexing and prefixes.</div>
+        <div class="road-block"><strong>B. Body rewrite</strong> — re-author bodies for read-only chatops, dropping write/exec/subagent imperatives that contradict Scout's persona; update attribution to "adapted from".</div>
+        <div class="road-block"><strong>E. LLM-driven fallback</strong> — cheap embedding pre-filter, then one classification call in the grey zone, built as an <code>ISkillSelector</code> decorator to avoid the kernel-to-embedder DI cycle; gated by config.</div>
+        <div class="road-block"><strong>F. Structured delimiter</strong> — replace <code>#</code>-heading framing with <code>&lt;skills&gt;</code> wrapper plus byte budget and dedup-by-name; matters once TopN &gt; 1.</div>
+        <div class="road-block"><strong>G. Lifecycle</strong> — collapse the two directory/file-load implementations into one shared store, then operator-triggered hot reload. Lowest payoff; do last.</div>
+      </div>
+      <p>
+        Sequencing: A (gate) first, then D (card mode) to stop dumping multi-KB bodies, then logging to get real scores,
+        then C plus name/description indexing and prefixes tuned from those scores, then B (body rewrite); E when
+        selection robustness is wanted. Full detail in the <a href="../roadmap/skills-subsystem.html">Skills Subsystem roadmap</a>.
+      </p>
+
+      <h2>Why skills, not multi-agent routing</h2>
+      <p>
+        A companion analysis asked whether Scout should grow a specialized agent per request type via multi-agent
+        orchestration. The verdict is a false binary: the recommended middle is <strong>one agent, many personas,
+        deterministic embedding routing</strong> — reusing the very <code>SkillSelector</code> / <code>VectorMath.Cosine</code>
+        machinery the skills subsystem already provides. A "specialist" becomes a skill-like markdown record whose
+        description is the routing signal.
+      </p>
+      <ul class="body-list">
+        <li><strong>Local model can't pay for handoff orchestration</strong> — multi-agent triage turns routing into a tool-calling problem and stacks nested inferences, exactly where open-weight models fall off. Embedding routing moves the decision out of the model into a tunable cosine threshold.</li>
+        <li><strong>Latency on one GPU punishes hops</strong> — the one-agent path adds zero extra LLM calls beyond a near-free local embedding.</li>
+        <li><strong>Maximum reuse</strong> — the selector, cosine math, file loader, and prompt composer are already built; no new packages, no prerelease orchestration runtime.</li>
+      </ul>
+
+      <h2>Resilience &amp; observability</h2>
+      <ul class="body-list">
+        <li>Every public path returns empty or a clean string on failure: the selector (<code>SkillSelector.cs:81</code>), the loader (<code>SkillFileLoader.cs:31</code>), and the plugin functions (<code>SkillsPlugin.cs:32</code>) all degrade gracefully so skills can never break a conversation.</li>
+        <li>Index and catalog build lazily under <code>LazyThreadSafetyMode.ExecutionAndPublication</code>, so files load exactly once on first use (<code>SkillSelector.cs:44</code>, <code>SkillCatalog.cs:31</code>).</li>
+        <li>Per-turn selection logging is a roadmap item, not yet shipped — without it the threshold and TopN cannot be retuned from evidence. OTel spans/metrics are dropped today (no exporter registered); <code>ILogger</code> works, the <code>Meter</code> path does not.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-skills.html"><span class="rt">service</span>Scout.Skills</a>
+          <a href="../domain/skill.html"><span class="rt">domain</span>Skill</a>
+          <a href="../domain/plugin.html"><span class="rt">domain</span>Semantic Kernel Plugin</a>
+          <a href="../architecture/capability-engine.html"><span class="rt">arch</span>Capability Engine</a>
+          <a href="../roadmap/skills-subsystem.html"><span class="rt">roadmap</span>Skills Subsystem</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0012 — LLM Communication via Semantic Kernel — Scout Wiki</title>
+<meta name="description" content="ADR 0012: route every model call — chat completion and embeddings — through one Semantic Kernel in the Scout.Llm gateway; no direct provider SDK clients for inference.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0012</nav>
+
+    <section>
+      <h1>ADR 0012 — LLM Communication through Semantic Kernel</h1>
+      <p class="blockquote">Every model call — chat completion and embeddings — is registered on and resolved from a Semantic Kernel through the single <code>Scout.Llm</code> gateway; no gateway code constructs a provider SDK client directly for inference.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-28</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-05-28-llm-communication-through-semantic-kernel.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-05-28. First project of the restructure; supersedes the throwaway-kernel registration hack noted in <a href="../decisions/0010-scout-host-kernel-accessor.html">ADR 0010 — Host Kernel Accessor</a>. Realised in the <a href="../services/scout-llm.html">Scout.Llm</a> gateway.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        Scout's stated goal is that all model communication flows through Microsoft Semantic Kernel (the
+        "Semantic Kernel is the hub" direction). The pre-restructure code only partially honoured this:
+      </p>
+      <ul class="body-list">
+        <li><strong>Chat completion went through SK correctly.</strong> <code>LlmFallbackRouter</code>, the agent router, and the CodeQA <code>LlmComposer</code> all consumed <code>IChatCompletionService</code>, and <code>OllamaLlmProviderFactory</code> registered it via <code>builder.AddOllamaChatCompletion(...)</code>.</li>
+        <li><strong>Embeddings bypassed SK entirely.</strong> <code>Scout.Llm.Ollama.OllamaEmbedder</code> constructed an <code>OllamaSharp.OllamaApiClient</code> directly and consumed it via <code>Microsoft.Extensions.AI.IEmbeddingGenerator</code>. Its own XML comment cited the experimental <code>SKEXP0070</code> status of the SK Ollama connector as the reason to avoid the kernel. Embedding generation is model communication, so this violated the rule.</li>
+        <li><strong>Configuration had two sources of truth</strong> for "where is Ollama": chat read <code>Scout:Llm</code> (<code>Endpoint</code> + <code>Model</code>), while embeddings read <code>CodeQAOptions.Embeddings.BaseUrl</code> + <code>Model</code>. Two endpoints, drift-prone.</li>
+        <li>The chat completion service was built ad hoc: <code>LlmChatServiceCollectionExtensions</code> built a throwaway kernel at registration time purely to extract <code>IChatCompletionService</code> (the negative consequence noted in <a href="../decisions/0010-scout-host-kernel-accessor.html">ADR 0010</a>).</li>
+      </ul>
+      <p>
+        The restructure archives the previous source tree under <code>src/old/</code> and rebuilds fresh. The
+        first new project is the single gateway for all chat + LLM communication.
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        Introduce <code>src/Scout.Llm</code> as the sole gateway for LLM communication. Every model call — chat
+        completion and embeddings — is registered on and resolved from a Semantic Kernel. No gateway code
+        constructs a provider SDK client directly for inference.
+      </p>
+
+      <div class="callout good">
+        <div class="c-title">Through the kernel — mandatory</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li><code>Scout.Llm.Abstractions.ILlmProviderFactory</code> exposes <code>void AddToKernel(IKernelBuilder builder)</code> which registers <strong>both</strong> chat completion and embedding generation. A provider configures its full capability surface atomically; consumers always get a fully-wired kernel.</li>
+          <li><code>OllamaLlmProviderFactory.AddToKernel</code> — chat via <code>builder.AddOllamaChatCompletion(chatModel, endpoint)</code> (stable surface); embeddings via <code>builder.AddOllamaEmbeddingGenerator(embeddingModel, endpoint)</code>, which registers the stable <code>Microsoft.Extensions.AI.IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt;</code> into the kernel's service provider.</li>
+          <li><strong>Single configuration source</strong> <code>Scout:Llm</code>: one <code>Ollama.Endpoint</code> shared by chat and embeddings; models split per role (<code>Chat.Model</code>, <code>Embeddings.Model</code>). A chat model and an embed model legitimately differ, but they share one endpoint/provider.</li>
+          <li><code>AddScoutLlm</code> builds one shared <code>Kernel</code> singleton from the active provider factory and exposes <code>IChatCompletionService</code> and <code>IEmbeddingGenerator</code> resolved from it, replacing the throwaway-kernel hack.</li>
+        </ul>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">Forbidden</div>
+        <p style="margin:0">No gateway code <code>new</code>s a provider SDK client (e.g. <code>OllamaSharp.OllamaApiClient</code>) for inference. Building an <code>IEmbeddingGenerator</code> in user code and adding it via <code>builder.Services.AddSingleton</code> is rejected: it is "through the kernel's DI container" but not "through SK's connector" — hollow compliance.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">SKEXP0070 acceptance — scoped boundary</div>
+        <p style="margin:0 0 8px 0"><code>AddOllamaEmbeddingGenerator</code> (and the alpha Ollama connector generally) carries the experimental <code>SKEXP0070</code> attribute. It is accepted under a <strong>scoped</strong> <code>#pragma warning disable SKEXP0070</code> / <code>restore</code> around the registration calls only — two private helpers in <code>OllamaLlmProviderFactory</code>.</p>
+        <p style="margin:0">The consumed type (<code>IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt;</code>) is stable, so no experimental surface leaks to consumers, and <code>LlmServiceCollectionExtensions</code> needs no suppression at all. This is strictly better than the previous state, which suppressed <code>SKEXP0070</code> project-wide <em>and</em> still bypassed the kernel.</p>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li><strong>Rule is structurally enforced.</strong> Embeddings can no longer bypass SK because the only embedding entry point is the kernel registration. A registration test asserts <code>IChatCompletionService</code> and <code>IEmbeddingGenerator</code> both resolve from the built kernel — the regression guard for the original violation.</li>
+        <li><strong>One source of truth</strong> for the Ollama endpoint, at config and at runtime (one shared <code>Kernel</code>).</li>
+        <li><strong>Provider isolation.</strong> Only <code>Providers/Ollama/</code> touches the alpha connector; a future <code>Scout.Llm.AzureOpenAI</code> is an additive provider with no churn to the abstraction layer or consumers — preserves the <a href="../invariants/pluggable-everything.html">Pluggable Everything</a> invariant.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li><strong>Experimental dependency in the build.</strong> <code>SKEXP0070</code> is accepted. Mitigation: scoped suppression, stable consumed type, this ADR, and the alpha connector version is pinned in <code>Directory.Packages.props</code> (<code>Microsoft.SemanticKernel.Connectors.Ollama 1.74.0-alpha</code>). If the connector API drifts, the fallback is <code>AddOllamaTextEmbeddingGeneration</code> (<code>ITextEmbeddingGenerationService</code>, also <code>SKEXP0070</code>, still kernel-routed).</li>
+        <li><strong>Gateway carries connector packages.</strong> Expected: <code>Scout.Llm</code> is the LLM project, so the old "keep <code>Scout.Core</code> free of the alpha package" rationale for a separate <code>Scout.Llm.Ollama</code> project no longer applies. The split returns only when a second provider lands.</li>
+      </ul>
+
+      <h2>Alternatives considered</h2>
+      <div class="types">
+        <div class="type-row"><div class="t-name">Register externally-built IEmbeddingGenerator into the kernel DI</div><div class="t-role">Build an <code>OllamaApiClient</code>/<code>IEmbeddingGenerator</code> in user code and add it via <code>builder.Services.AddSingleton</code>. <strong>Rejected:</strong> still <code>new</code>s the provider SDK client — the exact pattern being eliminated. Through DI, but not through SK's connector: hollow compliance.</div></div>
+        <div class="type-row"><div class="t-name">Keep the old bespoke IEmbedder facade</div><div class="t-role">The old <code>IEmbedder</code> (batching, dimension validation, input-order guarantees) was a CodeQA-plugin concern. <strong>Rejected</strong> for the gateway: it re-wraps and hides the SK type. The gateway exposes the SK-native <code>IEmbeddingGenerator</code>; CodeQA, when rebuilt, can wrap it with its own batching/validation policy as a consumer.</div></div>
+        <div class="type-row"><div class="t-name">Separate AddChatToKernel + AddEmbeddingsToKernel</div><div class="t-role"><strong>Rejected:</strong> invites partially-configured kernels and pushes capability composition up into the host. A provider that genuinely lacks embeddings should surface as a missing kernel service (caught by a startup smoke check), not as an abstraction split.</div></div>
+      </div>
+
+      <h2>Enforcement</h2>
+      <ul class="body-list">
+        <li><strong>Registration test.</strong> Asserts that both <code>IChatCompletionService</code> and <code>IEmbeddingGenerator</code> resolve from the built kernel — the regression guard for the original embeddings-bypass-SK violation.</li>
+        <li><strong>Mandatory failure-injection test on the HTTP boundary.</strong> The factory accepts an injectable <code>HttpClient</code> (test seam) driven by a stub <code>HttpMessageHandler</code> returning 500 / timeout / dropped connection; the call must surface a failure rather than hang or return silent empty results. See <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+        <li><strong>PR quality gates</strong> (Scout CLAUDE.md): <code>architect-reviewer</code> (defines the new LLM provider abstraction) and <code>security-auditor</code> (external API boundary).</li>
+        <li><strong>Scope guard.</strong> Daemon lifecycle / model-management (<code>/api/tags</code>, <code>/api/pull</code>, <code>/api/delete</code>) is NOT inference and stays out of this gateway; it remains direct HTTP in the worker's provider-management layer.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="rt">adr</span>0010 Host Kernel Accessor</a>
+          <a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="rt">adr</span>0013 Streaming Sink</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

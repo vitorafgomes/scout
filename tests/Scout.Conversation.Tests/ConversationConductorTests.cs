@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Time.Testing;
+using Scout.Contracts;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Tests.Fakes;
@@ -12,6 +13,10 @@ public sealed class ConversationConductorTests
         FineGrainedEdit = true,
         MaxBodyLength = 4096,
     };
+
+    // The conductor requires an ambient request context. These tests do not
+    // assert on identity, so a no-op context keeps them focused on routing/pump.
+    private static IScoutRequestContext Context() => NullScoutRequestContext.Instance;
 
     private static StreamPump Pump() => new(new StreamPumpOptions
     {
@@ -33,7 +38,7 @@ public sealed class ConversationConductorTests
         var router = Substitute.For<IConversationRouter>();
         router.Route(Arg.Any<ChatMessage>())
             .Returns(new ChatResponse(Tokens("hello")));
-        var conductor = new ConversationConductor(router, Pump());
+        var conductor = new ConversationConductor(router, Pump(), Context());
         var sink = new RecordingResponseSink(FineGrained);
 
         await conductor.HandleAsync(
@@ -49,7 +54,7 @@ public sealed class ConversationConductorTests
         var router = Substitute.For<IConversationRouter>();
         router.Route(Arg.Any<ChatMessage>())
             .Returns(_ => throw new InvalidOperationException("router boom"));
-        var conductor = new ConversationConductor(router, Pump());
+        var conductor = new ConversationConductor(router, Pump(), Context());
         var sink = new RecordingResponseSink(FineGrained);
 
         await Should.NotThrowAsync(() => conductor.HandleAsync(
@@ -65,7 +70,7 @@ public sealed class ConversationConductorTests
     public async Task HandleAsync_Throws_When_Message_Null()
     {
         var conductor = new ConversationConductor(
-            Substitute.For<IConversationRouter>(), Pump());
+            Substitute.For<IConversationRouter>(), Pump(), Context());
         var sink = new RecordingResponseSink(FineGrained);
 
         await Should.ThrowAsync<ArgumentNullException>(
@@ -75,6 +80,14 @@ public sealed class ConversationConductorTests
     [Fact]
     public void Ctor_Throws_When_Router_Null()
     {
-        Should.Throw<ArgumentNullException>(() => new ConversationConductor(null!, Pump()));
+        Should.Throw<ArgumentNullException>(
+            () => new ConversationConductor(null!, Pump(), Context()));
+    }
+
+    [Fact]
+    public void Ctor_Throws_When_RequestContext_Null()
+    {
+        Should.Throw<ArgumentNullException>(() => new ConversationConductor(
+            Substitute.For<IConversationRouter>(), Pump(), null!));
     }
 }

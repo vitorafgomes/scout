@@ -7,6 +7,46 @@ import { type LogLevel, detectLevel } from '../../core/log-level';
 
 const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'debug'] as const);
 
+// The worker intentionally writes ALL of its logs to stderr so stdout stays
+// clean for the SCOUT_READY/SCOUT_HTTP markers. Labelling by stream therefore
+// paints healthy startups as errors. Parse the .NET console logger prefix
+// (info:/warn:/fail:/crit:/dbug:/trce:) instead; indented continuation lines
+// inherit the level of the header line above them.
+const DOTNET_LEVEL_PREFIX = /^(trce|dbug|info|warn|fail|crit):/;
+
+const DOTNET_LEVEL_MAP: Readonly<Record<string, LogLevel>> = Object.freeze({
+  trce: 'debug',
+  dbug: 'debug',
+  info: 'info',
+  warn: 'warn',
+  fail: 'error',
+  crit: 'error',
+});
+
+export function classifyWorkerLine(
+  kind: 'stdout' | 'stderr',
+  line: string,
+  lastStderrLevel: LogLevel,
+): LogLevel {
+  if (kind === 'stdout') {
+    return detectLevel(line);
+  }
+
+  const prefix = DOTNET_LEVEL_PREFIX.exec(line);
+  if (prefix?.[1] !== undefined) {
+    return DOTNET_LEVEL_MAP[prefix[1]] ?? 'info';
+  }
+  if (line.startsWith('[scout]')) {
+    return 'info';
+  }
+  if (/^\s/.test(line)) {
+    // Continuation of the previous .NET log entry (message body, stack frame).
+    return lastStderrLevel;
+  }
+  // Raw unformatted stderr (e.g. an unhandled-exception dump): keep it loud.
+  return 'error';
+}
+
 @Component({
   selector: 'sc-logs',
   standalone: true,
@@ -58,7 +98,7 @@ const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'deb
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -88,21 +128,21 @@ const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'deb
       }
       .ghost {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 6px 12px;
         font-size: 13px;
         cursor: pointer;
       }
       .ghost:hover {
-        background: #1e2333;
+        background: var(--sc-surface-3);
       }
       .filters {
         display: flex;
         gap: 12px;
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .filter {
         display: inline-flex;
@@ -112,8 +152,8 @@ const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'deb
       }
       .viewer {
         flex: 1;
-        background: #0a0d13;
-        border: 1px solid #252b3b;
+        background: var(--sc-bg-deep);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 12px;
         overflow-y: auto;
@@ -128,32 +168,32 @@ const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'deb
         padding: 1px 0;
       }
       .ts {
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .lvl {
         font-weight: 600;
       }
       .line[data-level='info'] .lvl {
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .line[data-level='warn'] .lvl,
       .line[data-level='warn'] .msg {
-        color: #d4a24a;
+        color: var(--sc-warning);
       }
       .line[data-level='error'] .lvl,
       .line[data-level='error'] .msg {
-        color: #d45a5a;
+        color: var(--sc-danger);
       }
       .line[data-level='debug'] .lvl,
       .line[data-level='debug'] .msg {
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .msg {
         white-space: pre-wrap;
         word-break: break-all;
       }
       .empty {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
       }
     `,
@@ -185,12 +225,11 @@ export class LogsComponent {
     const filters = this.enabledLevels();
     const out: { id: string; ts: string; level: LogLevel; text: string }[] = [];
     let counter = 0;
+    let lastStderrLevel: LogLevel = 'info';
     for (const ev of source) {
       if (ev.kind !== 'stdout' && ev.kind !== 'stderr') continue;
-      // The .NET worker host routes every level to stderr by design (to keep
-      // stdout clean for the readiness marker), so the level must come from the
-      // line content, not the stream.
-      const level = detectLevel(ev.line);
+      const level = classifyWorkerLine(ev.kind, ev.line, lastStderrLevel);
+      if (ev.kind === 'stderr') lastStderrLevel = level;
       if (!filters[level]) continue;
       out.push({ id: `${ev.ts}-${counter++}`, ts: ev.ts, level, text: ev.line });
     }

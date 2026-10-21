@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desktop Provisioning UI — Scout Wiki</title>
+<meta name="description" content="Scout Desktop: an Electron 41 + Angular 21 (zoneless, Signals) provisioning UI that detects chat clients, manages local models, and supervises the .NET worker.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Architecture</a><span class="sep">/</span>Desktop UI</nav>
+
+    <section>
+      <h1>Desktop Provisioning UI</h1>
+      <p class="lead">Scout Desktop is the Electron desktop shell that lowers the install friction of the read-only chatops bot: it walks a user through provisioning a bot per chat platform, discovers local inference backends and downloads models into them, and supervises the .NET worker as a child process. It is a thin operator console around the same Scout runtime, not a second product.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">knowledge</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/electron-provisioning-ui.md</code>, <code>desktop-models-system.md</code>; <code>ui/README.md</code></span>
+      </div>
+
+      <h2>Why it exists</h2>
+      <p>
+        The original install story for a contributor was five manual steps per platform: create the app in a
+        developer portal, enable the bot and copy the token, build an OAuth2 install URL, drop the token into
+        configuration, and run the worker. For an OSS chatops bot chasing wide adoption, that is high friction —
+        especially for a user who wants to "just try it" on Discord, Slack, and Teams side by side.
+      </p>
+      <p>
+        The Desktop UI collapses that to a wizard-with-deep-links. It cannot be true one-click: the feasibility
+        study established that end-to-end automated provisioning is only possible on <strong>Slack</strong> (via the
+        App Manifest API), that <strong>Discord</strong> is blocked on a human-only Developer Portal step, and that
+        <strong>Teams</strong> requires tenant-admin policy and a public HTTPS endpoint that conflicts with running
+        locally. The wizard automates everything that policy permits and deep-links the rest.
+      </p>
+      <div class="callout">
+        <strong>Detection is polish, not a gate.</strong> A chat client being installed only hints that the user
+        might use that platform; provisioning a bot never requires the desktop client, since a web session is enough
+        for all three. Detection surfaces a "detected on this machine" badge rather than blocking the flow.
+      </div>
+
+      <h2>Per-platform feasibility</h2>
+      <p>The line between automatable and manual cuts differently per platform. This shapes every wizard.</p>
+      <table class="wt">
+        <thead>
+          <tr><th>Platform</th><th>Automatable</th><th>Irreducibly manual</th><th>Running mode</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Discord</td>
+            <td>OAuth2 install URL construction; authorize → install to guild via the local callback.</td>
+            <td>App + Bot creation in the Developer Portal; token copy-paste; intent toggles. No public creation API, and the ToS forbids scraping the portal.</td>
+            <td>Gateway WebSocket (outbound). No inbound endpoint.</td>
+          </tr>
+          <tr>
+            <td>Slack</td>
+            <td>App creation via <code>apps.manifest.create</code>; workspace install; bot + app-level token capture.</td>
+            <td>One-time app configuration token generated on api.slack.com. There is no OAuth flow that mints it.</td>
+            <td>Socket Mode WebSocket (outbound). No public HTTPS endpoint needed.</td>
+          </tr>
+          <tr>
+            <td>Teams</td>
+            <td>Manifest publish + install via Graph (with admin-consented scopes).</td>
+            <td>Azure Bot Service + Entra app registration; tenant "Upload custom apps" toggle. Deferred for V1.</td>
+            <td>HTTPS webhook — structurally at odds with local-only Scout.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        Slack is the closest to one-click (~4 clicks), Discord is a deep-link wizard (~6 clicks), and Teams is not a
+        viable end-user install flow for V1 and is kept as a future topic.
+      </p>
+
+      <h2>Stack</h2>
+      <p>The renderer framework is fixed to Angular — no React, Vue, Svelte, or Solid anywhere in Scout's web surfaces (see the Angular web-stack ADR). The shipped layers are:</p>
+      <div class="layer-stack">
+        <div class="layer"><strong>Bun 1.3+</strong> — workspace toolchain: install, scripts, and tests. It is the dev toolchain, <em>not</em> the runtime inside the packaged app.</div>
+        <div class="layer"><strong>Electron 41</strong> — desktop shell. Main process in ESM, sandboxed preload bridge.</div>
+        <div class="layer"><strong>Angular 21</strong> — renderer with zoneless change detection, Signals-first, standalone components using the new <code>@if</code>/<code>@for</code> control flow.</div>
+        <div class="layer"><strong>.NET 10</strong> — the <code>Scout.Host.Worker</code> spawned as a supervised child process.</div>
+        <div class="layer"><strong>electron-builder</strong> — cross-platform packaging: NSIS, DMG, AppImage, deb.</div>
+      </div>
+      <div class="callout">
+        <strong>Bun is the toolchain, not the runtime.</strong> The Electron main process owns the lifecycle of the
+        packaged app and executes <code>main.js</code> under Electron's own runtime; the renderer runs in V8 under
+        Chromium. Bun only runs at install/build/test time. Code that assumes <code>bun:*</code> built-ins at runtime
+        would break the moment the app is packaged. Node is not required to build or test the UI — <code>.nvmrc</code>
+        is guidance only.
+      </div>
+
+      <h2>Process &amp; workspace layout</h2>
+      <p>The UI is a Bun workspace under <code>ui/</code> split into four packages. The main process resolves the preload from <code>packages/preload/dist/preload.cjs</code> and the renderer from <code>packages/renderer/dist/browser/index.html</code> in production, or <code>http://localhost:4200</code> when <code>NODE_ENV=development</code>.</p>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-node">Bun workspace<br><small>shared → preload → renderer → main</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">Electron main<br><small>ESM, app lifecycle</small></div>
+          <div class="flow-arrow">↔ IPC ↔</div>
+          <div class="flow-node">Renderer<br><small>Chromium + Angular 21 (Signals)</small></div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-node">Main process<br><small>detect / OAuth callback / safeStorage / spawn</small></div>
+          <div class="flow-arrow">spawn →</div>
+          <div class="flow-node">Scout.Host.Worker<br><small>.NET 10, supervised child</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">Discord / Slack / Teams APIs</div>
+        </div>
+      </div>
+      <p>
+        The <code>build</code> script at the workspace root chains <code>shared → preload → renderer → main</code>
+        in the correct order. The Angular CLI (<code>ng build</code>/<code>ng test</code>) keeps ownership of the
+        renderer bundle, invoked through <code>bun run</code>.
+      </p>
+
+      <h2>Main-process responsibilities</h2>
+      <ul class="body-list">
+        <li><strong>Platform detection</strong> — thin per-OS modules (<code>detect/windows</code>, <code>detect/macos</code>, <code>detect/linux</code>) exporting predicates like <code>isDiscordInstalled()</code>. Windows uses the uninstall registry, App Paths, AppX packages, and URI schemes; macOS uses Launch Services / Spotlight and bundle ids; Linux walks <code>.desktop</code> files and package managers. No mature cross-platform library exists, so Scout rolls its own.</li>
+        <li><strong>Local OAuth callback</strong> — the main process is the redirect target on <code>http://localhost:&lt;port&gt;</code> and exchanges the authorization <code>code</code> for token info. The callback port is fixed (not random) because Discord and Slack require redirect URIs to be pre-registered; <code>http://127.0.0.1:53682/callback</code> is the registered Discord redirect.</li>
+        <li><strong>Token storage</strong> — Electron <code>safeStorage</code> (OS keychain: Keychain / DPAPI / libsecret), not the unmaintained <code>keytar</code>. On Linux without a desktop keyring it falls back to plaintext-equivalent encryption; that state must be surfaced to the user as a warning.</li>
+        <li><strong>Worker supervision</strong> — the worker is published single-file and self-contained per RID, shipped as <code>extraResource</code> so it lives <em>outside</em> the ASAR archive (binaries inside ASAR cannot be spawned). The main process spawns it with configuration passed via env vars, monitors stdout/stderr, restarts on crash, and terminates it on quit.</li>
+      </ul>
+
+      <h2>Models subsystem (AI Sources → Models)</h2>
+      <p>Beyond bot provisioning, Desktop manages local inference. The post-connect UI separates two layers: <strong>AI Sources</strong> (where models come from) feeds <strong>Models</strong> (which model handles which task).</p>
+      <ul class="seq">
+        <li><strong>AI Sources</strong> (<code>/sources</code>) shows Ollama / LM Studio status; a card drills into Manage Downloaded Models (<code>/sources/local-models</code>).</li>
+        <li>The user downloads a model; on first download of a kind it is auto-selected so the user is never left with a downloaded-but-unselected model.</li>
+        <li><strong>Models</strong> (<code>/llm</code>, route name kept for compat) then surfaces it for per-task selection (transcription, analysis; translation is "coming soon").</li>
+      </ul>
+      <p>
+        <code>LocalModelsStore</code> (<code>providedIn: 'root'</code>) is the single source of truth, persisted to
+        <code>localStorage['scout:local-models']</code>. It tracks <code>downloaded</code> catalog ids and the
+        <code>selected</code> model per kind. The static catalog in <code>core/local-models.catalog.ts</code> is a
+        frozen array of <code>LocalModelCatalogEntry</code> records — Whisper GGML variants (transcription) and Qwen /
+        Gemma Ollama models (analysis). <code>LlmComponent</code>, <code>LlmConfigStore</code>, and
+        <code>TranscriptionConfigStore</code> are orphan code pending a cleanup PR.
+      </p>
+
+      <h3>Download flow (Ollama example)</h3>
+      <p>Downloading Qwen 2.5 3B maps the catalog id to an Ollama tag, streams the pull over IPC, and reconciles store state:</p>
+      <div class="chain">
+        <span>onDownload('qwen-3-vl-2b')</span>
+        <span>ollamaTagFor → 'qwen2.5:3b'</span>
+        <span>bridge.llmPullOllamaModel(endpoint, tag, requestId)</span>
+        <span>main: ensureOllamaIdentity()</span>
+        <span>POST /api/pull (stream)</span>
+        <span>per-chunk NDJSON → pullOllamaProgress event</span>
+        <span>finishDownload → store.markDownloaded (auto-select if first of kind)</span>
+      </div>
+      <p>
+        Whisper downloads follow the same shape: <code>whisperVariantFor</code> resolves the GGML variant, the main
+        process streams the Hugging Face file into a <code>.partial</code>, derives progress from
+        <code>Content-Length</code> (capped at 99), then renames to the final <code>.bin</code> and emits 100.
+      </p>
+
+      <h3>IPC surface</h3>
+      <p>All channels are declared in <code>@scout/shared</code>'s <code>CHANNEL</code> constant and typed on the <code>ScoutBridge</code> interface. Every "write" channel is added to <code>LOCAL_WRITE_ALLOWLIST</code> with a justification in <code>shared/test/ipc-contract.test.ts</code>.</p>
+      <table class="wt">
+        <thead>
+          <tr><th>Kind</th><th>Channel</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Read</td><td><code>scout:llm.listOllamaModels</code></td><td><code>GET /api/tags</code></td></tr>
+          <tr><td>Read</td><td><code>scout:llm.listLmStudioModels</code></td><td><code>GET /v1/models</code></td></tr>
+          <tr><td>Read</td><td><code>scout:whisper.listInstalled</code></td><td>Read <code>userData/whisper-models/</code></td></tr>
+          <tr><td>Write</td><td><code>scout:llm.pullOllamaModel</code></td><td><code>POST /api/pull</code> stream</td></tr>
+          <tr><td>Write</td><td><code>scout:llm.deleteOllamaModel</code></td><td><code>DELETE /api/delete</code></td></tr>
+          <tr><td>Write</td><td><code>scout:whisper.downloadModel</code></td><td>HF streaming download</td></tr>
+          <tr><td>Write</td><td><code>scout:whisper.deleteModel</code></td><td><code>fs.rm</code> on userData</td></tr>
+          <tr><td>Event</td><td><code>scout:llm.pullOllamaProgress</code></td><td>NDJSON-derived percent</td></tr>
+          <tr><td>Event</td><td><code>scout:whisper.downloadProgress</code></td><td>Content-Length-derived percent</td></tr>
+        </tbody>
+      </table>
+
+      <h2>The read-only invariant in the renderer</h2>
+      <p>Scout's <a href="../invariants/no-executive-writes.html">no executive writes</a> rule reaches all the way into the desktop shell. Every IPC channel either reads remote APIs the user runs on their own machine, or writes only to the user's own filesystem — nothing mutates an external service.</p>
+      <ul class="check">
+        <li>Ollama and Whisper models live on the user's own disk; nothing leaves the machine through these handlers.</li>
+        <li>External URL navigation (Download Ollama, Download LM Studio) goes through <code>appOpenExternal</code>, which validates against a main-process allow-list before calling <code>shell.openExternal</code>.</li>
+        <li>Each write channel carries a justification comment in the IPC contract test, asserted against the allow-list.</li>
+      </ul>
+
+      <h2>Storage layout</h2>
+      <pre class="cfg"><span class="c"># per-platform userData</span>
+Linux    ~/.config/Scout Desktop/
+macOS    ~/Library/Application Support/Scout Desktop/
+Windows  %APPDATA%\Scout Desktop\
+
+<span class="c"># model + state locations</span>
+Ollama models      Ollama's own data dir (e.g. ~/.ollama/models/)
+Ollama identity     ~/.ollama/id_ed25519
+Whisper GGML       &lt;userData&gt;/whisper-models/ggml-*.bin
+Renderer mirror    localStorage['scout:local-models']</pre>
+
+      <h2>Build, test &amp; packaging</h2>
+      <ul class="body-list">
+        <li><strong>Install &amp; dev</strong> — <code>bun install</code> from <code>ui/</code>; dev runs the Angular dev server (HMR on 4200) in one terminal and the built preload + main under Electron in another.</li>
+        <li><strong>Test</strong> — <code>bun run test</code> covers shared + main + preload + renderer; .NET tests run separately via <code>dotnet test Scout.slnx</code>.</li>
+        <li><strong>Package</strong> — <code>bun run dist[:linux|:mac|:win]</code> emits artifacts under <code>ui/build/dist/</code>. <strong>AppImage is always produced on Linux builds — a release invariant.</strong> All artifacts in-repo are UNSIGNED and must not be distributed as official releases until signing and notarisation are set up.</li>
+        <li><strong>CI</strong> — <code>.github/workflows/ui-ci.yml</code> runs on Ubuntu, macOS, and Windows for every push to <code>main</code> and every PR touching <code>ui/**</code> or the .NET worker: lint, typecheck, test, publish the worker binary, package unsigned artifacts.</li>
+      </ul>
+
+      <h2>What is not built yet</h2>
+      <ul class="body-list">
+        <li>Actual transcription / inference — downloads are real, but the .NET worker does not yet load these files.</li>
+        <li>The worker reading <code>LocalModelsStore.selected</code> on spawn; it still pulls <code>llm.*</code> keys from the vault, decoupled from this screen.</li>
+        <li>Cloud providers (the five cards on the right of AI Sources).</li>
+        <li>Teams provisioning — deferred until clear user demand, given the Azure subscription + tenant-admin prerequisites.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../decisions/0004-web-stack-angular.html"><span class="rt">adr</span>0004 Web Stack Angular</a>
+          <a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="rt">adr</span>0005 Desktop M1 Scope</a>
+          <a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="rt">adr</span>0011 Backend/Frontend gRPC</a>
+          <a href="../services/scout-controlplane.html"><span class="rt">service</span>Scout.ControlPlane</a>
+          <a href="../runbooks/desktop-packaging.html"><span class="rt">runbook</span>Desktop Packaging</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

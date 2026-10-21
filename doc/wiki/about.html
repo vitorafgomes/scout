@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About this wiki — Scout Wiki</title>
+<meta name="description" content="How the Scout engineering wiki is organised: three-layer model, page-type taxonomy, the per-page metadata convention, and navigation rules.">
+<link rel="stylesheet" href="assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="index.html">Home &amp; Catalog</a></li>
+        <li><a href="about.html">About this wiki</a></li>
+        <li><a href="log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="overview/vision.html">Vision</a></li>
+        <li><a href="overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="domain/provider.html">LLM Provider</a></li>
+        <li><a href="domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="domain/skill.html">Skill</a></li>
+        <li><a href="domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="conventions/testing.html">Testing</a></li>
+        <li><a href="conventions/code-style.html">Code Style</a></li>
+        <li><a href="conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="runbooks/local-models.html">Local Models</a></li>
+        <li><a href="runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="index.html">Wiki</a><span class="sep">/</span>About this wiki</nav>
+
+    <section>
+      <h1>About this wiki</h1>
+      <p class="blockquote">A Karpathy-style LLM wiki, tuned for engineering and rendered as static HTML inside the Scout repo.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">reference</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> GamifYou LLM Wiki Template; Scout README; Obsidian vault <code>scout/</code></span>
+      </div>
+
+      <p>
+        This wiki adapts the <strong>three-layer LLM-wiki pattern</strong> to Scout. It is the cheap context
+        layer: a teammate or an agent should be able to answer most questions here before grepping
+        <code>src/</code>. Where the wiki cannot answer, read the code, then fold the finding back into the
+        relevant page.
+      </p>
+
+      <h2>Three layers</h2>
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="layer-label">Sources<span>immutable inputs</span></div>
+          <div class="layer-body">
+            <span class="chip">Obsidian vault scout/</span>
+            <span class="chip">README.md</span>
+            <span class="chip">src/ source tree</span>
+            <span class="chip">06-decisions ADRs</span>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Wiki<span>this folder</span></div>
+          <div class="layer-body">
+            <span class="chip"><span class="s a"></span>services</span>
+            <span class="chip"><span class="s a"></span>invariants</span>
+            <span class="chip"><span class="s a"></span>decisions</span>
+            <span class="chip"><span class="s a"></span>runbooks</span>
+            <span class="chip"><span class="s a"></span>roadmap</span>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Index<span>catalog + log</span></div>
+          <div class="layer-body">
+            <span class="chip"><a class="dep" href="index.html">index.html</a></span>
+            <span class="chip"><a class="dep" href="log.html">log.html</a></span>
+          </div>
+        </div>
+      </div>
+
+      <h2>Page-type taxonomy</h2>
+      <p>Every content page declares a <code>page_type</code> in its metadata header. The badge colour matches the type.</p>
+      <table class="wt">
+        <thead><tr><th>Type</th><th>Folder</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ptype service">service</span></td><td><code>services/</code></td><td>One page per active backend project: responsibility, contract, dependencies, hot spots.</td></tr>
+          <tr><td><span class="ptype adr">adr</span></td><td><code>decisions/</code></td><td>Accepted architecture decision, numbered <code>NNNN-slug</code>. Superseded, never deleted.</td></tr>
+          <tr><td><span class="ptype invariant">invariant</span></td><td><code>invariants/</code></td><td>A rule the code must preserve, with enforcement sites and the tests that prove it.</td></tr>
+          <tr><td><span class="ptype convention">convention</span></td><td><code>conventions/</code></td><td>How we write and ship code: testing, style, secrets, commits.</td></tr>
+          <tr><td><span class="ptype runbook">runbook</span></td><td><code>runbooks/</code></td><td>An operational procedure with steps, verification, and rollback.</td></tr>
+          <tr><td><span class="ptype roadmap">roadmap</span></td><td><code>roadmap/</code></td><td>An initiative or backlog. Forward-looking and date-stamped.</td></tr>
+          <tr><td><span class="ptype domain">domain</span></td><td><code>domain/</code></td><td>Anchor page for a term Scout overloads, linked from everywhere it is used.</td></tr>
+          <tr><td><span class="ptype">overview</span> / <span class="ptype">reference</span></td><td><code>overview/</code>, <code>history/</code></td><td>Project snapshot, vision, and retrospectives on completed efforts.</td></tr>
+          <tr><td><span class="ptype incident">incident</span></td><td><code>incidents/</code></td><td>Per-incident note. Scout is pre-alpha, so this is currently a stub.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>The metadata header</h2>
+      <p>
+        HTML has no front-matter, so each page opens with a <code>.wiki-meta</code> block — the visual analog of
+        the YAML front-matter used by the Markdown template. It carries:
+      </p>
+      <ul class="body-list">
+        <li><strong>page_type</strong> — the badge, from the taxonomy above.</li>
+        <li><strong>status</strong> — <code>active</code>, <code>accepted</code>, <code>proposed</code>, <code>deprecated</code>, <code>stub</code>, or <code>archived</code>.</li>
+        <li><strong>version</strong> and <strong>date</strong> — start at 1.0 on creation; the date is the creation date.</li>
+        <li><strong>sources</strong> — where the content traces back to. Nothing on a page is written from memory alone.</li>
+      </ul>
+
+      <h2>Conventions</h2>
+      <div class="callout good">
+        <div class="c-title">Read first, code second</div>
+        <p style="margin:0">Before any non-trivial change, read the affected <a href="index.html#catalog">service page</a>, the invariants it links, and any related ADR. A change that violates an invariant needs either a revision or a superseding ADR.</p>
+      </div>
+      <ul class="body-list">
+        <li>Cross-links are inline (the HTML analog of wikilinks); every page ends with a <em>Related</em> footer.</li>
+        <li>This wiki is the in-repo HTML render. The editable source of truth for design records remains the Obsidian vault at <code>obsidian-vault/scout/</code>.</li>
+        <li>ADRs are renumbered <code>0001..0013</code> here in chronological order; the vault keeps them date-named.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="index.html"><span class="rt">index</span>Home &amp; Catalog</a>
+          <a href="log.html"><span class="rt">log</span>Operation Log</a>
+          <a href="overview/project-snapshot.html"><span class="rt">overview</span>Project Snapshot</a>
+          <a href="../index.html"><span class="rt">ref</span>Architecture Reference</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="index.html">Home</a> &middot; <a href="log.html">Log</a> &middot; <a href="../index.html">Architecture Reference</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="assets/wiki.js"></script>
+</body>
+</html>

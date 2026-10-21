@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, session, Tray, Menu, nativeImage } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readlink as fsReadlink, unlink as fsUnlink } from 'node:fs/promises';
 import os from 'node:os';
@@ -29,6 +30,8 @@ import { createSupervisor } from './worker/supervisor.js';
 import { resolveWorkerBinary } from './worker/resolve-binary.js';
 import { buildEnv } from './worker/build-env.js';
 import type { Supervisor } from './worker/supervisor.js';
+import { createTrayController } from './tray/tray.js';
+import type { TrayController } from './tray/tray.js';
 
 const logger = createLogger('main');
 
@@ -88,6 +91,12 @@ const CSP_DEV = [
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: Supervisor | null = null;
+let trayController: TrayController | null = null;
+let unregisterTrayStatus: (() => void) | null = null;
+// Closing the window hides it to the tray instead of quitting (see the main
+// window's 'close' handler below). Only a real quit path — the tray's Quit
+// item or 'before-quit' — sets this, letting the window actually close.
+let isQuitting = false;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 let unregisterApp: (() => void) | null = null;
@@ -99,6 +108,33 @@ let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
+
+function showAndFocusMainWindow(): void {
+  if (mainWindow == null || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+}
+
+// Builds the tray's Electron Tray instance from an icon file path. Resolves
+// robustly for both dev and the packaged AppImage: the icon ships as a sibling
+// resource under packages/main/resources (asarUnpack'd, same as index.html),
+// so a single dist-relative path works in both cases — mirroring how
+// indexHtmlPath/preloadPath resolve packaged resources elsewhere in this file.
+// A missing or undecodable icon must never crash tray creation: fall back to
+// an empty image and just log.
+function createTrayIcon(iconPath: string, log: typeof logger): Tray {
+  if (!existsSync(iconPath)) {
+    log.warn('tray: icon file not found; using empty image', { iconPath });
+    return new Tray(nativeImage.createEmpty());
+  }
+
+  const image = nativeImage.createFromPath(iconPath);
+  if (image.isEmpty()) {
+    log.warn('tray: icon loaded but resulted in an empty image', { iconPath });
+  }
+  return new Tray(image);
+}
 
 app
   .whenReady()
@@ -145,6 +181,11 @@ app
       logger.child({ module: 'discord' }),
     );
 
+    // Mint the control-plane token once at startup. The same value is injected
+    // into the worker's env (as SCOUT_CONTROLPLANE_TOKEN) and sent by the HTTP
+    // client (as x-scout-token), so the loopback surface is not unauthenticated.
+    const controlPlaneToken = randomBytes(32).toString('hex');
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -157,7 +198,7 @@ app
           cwd: __dirname,
         }),
       // env is assembled by buildEnv; never logged — it contains secrets
-      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key) }),
+      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key), controlPlaneToken }),
     });
 
     unregisterWorker = registerWorkerHandlers(
@@ -170,6 +211,7 @@ app
       getEndpoint: () => supervisor?.httpEndpoint ?? null,
       fetch: globalThis.fetch,
       logger: logger.child({ module: 'worker-http' }),
+      token: controlPlaneToken,
     });
 
     unregisterProviders = registerProvidersHandlers(
@@ -240,6 +282,16 @@ app
       ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
     });
 
+    // Closing the window (the X button) hides it to the tray instead of
+    // quitting, so the worker keeps running in the background — only the
+    // tray's Quit item (or a real app quit) proceeds past this guard.
+    mainWindow.on('close', (event) => {
+      if (!isQuitting) {
+        event.preventDefault();
+        mainWindow?.hide();
+      }
+    });
+
     mainWindow.on('closed', () => {
       mainWindow = null;
     });
@@ -247,6 +299,41 @@ app
     attachBrowserWindow(mainWindow, supervisor);
 
     logger.info('main window created', { dev: DEV });
+
+    const trayIconPath = path.join(__dirname, '..', 'resources', 'icon.png');
+
+    trayController = createTrayController({
+      createTray: (iconPath) => createTrayIcon(iconPath, logger.child({ module: 'tray' })),
+      buildContextMenu: (template) => Menu.buildFromTemplate(template),
+      iconPath: trayIconPath,
+      onShowWindow: showAndFocusMainWindow,
+      onStopWorker: () => supervisor?.stop().then(() => undefined) ?? Promise.resolve(),
+      onQuit: () => {
+        isQuitting = true;
+        app.quit();
+      },
+      logger: logger.child({ module: 'tray' }),
+      initialStatus: supervisor.status,
+    });
+
+    unregisterTrayStatus = supervisor.onEvent((event) => {
+      if (event.kind === 'state') trayController?.setStatus(event.status);
+    });
+
+    // Start the worker (and its control API) as soon as the app opens when
+    // provisioning already exists, instead of depending on the welcome screen
+    // being visited. The renderer's own start call stays as a no-op fallback —
+    // supervisor.start() is idempotent while starting/running.
+    void (async () => {
+      try {
+        if (!vault.availability().available) return;
+        if (!(await vault.has('discord.bot-token'))) return;
+        await supervisor?.start();
+        logger.info('worker auto-started on launch');
+      } catch (err: unknown) {
+        logger.warn('worker auto-start on launch failed', { err: String(err) });
+      }
+    })();
   })
   .catch((err: unknown) => {
     logger.error('app.whenReady failed', err);
@@ -254,10 +341,14 @@ app
   });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // With hide-to-tray, closing the window's 'close' handler prevents it from
+  // ever actually closing (see above), so this only fires on a real quit —
+  // but guard on isQuitting anyway rather than relying on that invariant.
+  if (isQuitting) app.quit();
 });
 
 app.on('before-quit', (event) => {
+  isQuitting = true;
   logger.info('before-quit');
 
   const runningWorker = supervisor;
@@ -267,6 +358,8 @@ app.on('before-quit', (event) => {
     runningWorker.status.state === 'idle'
   ) {
     // No running worker — unregister synchronously and allow the quit.
+    trayController?.destroy();
+    unregisterTrayStatus?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -283,30 +376,46 @@ app.on('before-quit', (event) => {
 
   // Worker is running; stop it gracefully before allowing the quit.
   event.preventDefault();
+
+  let exited = false;
+  const exitOnce = (): void => {
+    if (exited) return;
+    exited = true;
+    trayController?.destroy();
+    unregisterTrayStatus?.();
+    unregisterFeatures?.();
+    unregisterProviders?.();
+    unregisterWhisper?.();
+    unregisterLlmPull?.();
+    unregisterLmStudio?.();
+    unregisterLlm?.();
+    unregisterWorker?.();
+    unregisterDiscord?.();
+    unregisterApp?.();
+    unregisterDetect?.();
+    unregisterVault?.();
+    app.exit(0);
+  };
+
+  // Never let a hung stop() strand the process: a windowless Electron main would
+  // keep the worker's stdin open, so its parent-death watchdog would never fire
+  // and the backend would outlive the closed UI. Force-exit after a bounded
+  // grace period regardless; exiting closes stdin, which the watchdog treats as
+  // its cue to self-terminate (belt to stop()'s SIGKILL suspenders).
+  const forceExit = setTimeout(exitOnce, 8_000);
   void runningWorker
     .stop()
     .catch((err: unknown) => {
       logger.warn('before-quit: worker stop failed', { err: String(err) });
     })
     .finally(() => {
-      unregisterFeatures?.();
-      unregisterProviders?.();
-      unregisterWhisper?.();
-      unregisterLlmPull?.();
-      unregisterLmStudio?.();
-      unregisterLlm?.();
-      unregisterWorker?.();
-      unregisterDiscord?.();
-      unregisterApp?.();
-      unregisterDetect?.();
-      unregisterVault?.();
-      app.exit(0);
+      clearTimeout(forceExit);
+      exitOnce();
     });
 });
 
 app.on('second-instance', () => {
-  if (mainWindow != null && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
+  // The window may be hidden to the tray rather than destroyed; showAndFocus
+  // handles both the minimized and hidden cases.
+  showAndFocusMainWindow();
 });

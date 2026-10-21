@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Adapter — Scout Wiki</title>
+<meta name="description" content="Chat Adapter domain term: the per-platform I/O connector that normalises chat messages into the conversation core and streams replies back, self-gating on credentials.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Domain</a><span class="sep">/</span>Chat Adapter</nav>
+
+    <section>
+      <h1>Chat Adapter</h1>
+      <p class="blockquote">A chat adapter is the per-platform I/O connector that normalises an inbound chat message into Scout's platform-agnostic conversation core and streams the reply back out — and it disables itself automatically when its credentials are absent.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype domain">domain</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Adapter.*</code>; README adapters</span>
+      </div>
+
+      <h2>Meaning in this project</h2>
+      <p>
+        An <em>adapter</em> is Scout's seam against a specific chat platform — Discord, Slack, or Microsoft
+        Teams. Each one implements a single inverted contract, <code>IChatAdapter</code>, defined in the
+        conversation core. The adapter owns everything platform-specific: the SDK, the connection model, the
+        message shapes, and the rate-limit quirks. Everything <em>above</em> the adapter — routing, history,
+        the LLM call — works only against the normalised <code>ChatMessage</code> and the
+        <code>IResponseSink</code> the adapter hands it, so the core never references a platform SDK type.
+      </p>
+      <p>
+        The contract is deliberately inverted: the adapter does not return a value. On
+        <code>StartAsync</code> it receives a handler delegate and, for each inbound message addressed to the
+        bot, it (1) translates the platform event into a <code>ChatMessage</code>, (2) builds an
+        <code>IResponseSink</code> bound to the originating channel only, and (3) invokes the handler with both.
+        The conversation core then drives the sink to stream the answer. The adapter is the only place that
+        knows how to talk to the platform; the rest of Scout stays platform-agnostic.
+      </p>
+      <p>
+        Each adapter is <strong>self-gating</strong>: its DI registration extension reads its credential from
+        configuration and, when that credential is blank, the call is a clean no-op — no adapter is registered
+        and the host still starts with whatever other adapters are configured. This is what lets a contributor
+        run Scout with only Ollama and a single chat platform wired up.
+      </p>
+
+      <h2>Where it lives</h2>
+      <p class="field-label">Owned by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-adapter-discord.html">Scout.Adapter.Discord</a>
+        <a class="dep" href="../services/scout-adapter-slack.html">Scout.Adapter.Slack</a>
+        <a class="dep" href="../services/scout-adapter-teams.html">Scout.Adapter.Teams</a>
+      </div>
+      <p class="field-label">Contract &amp; consumers</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+        <a class="dep" href="../services/scout-host-console.html">Scout.Host.Console</a>
+      </div>
+      <p>
+        The <code>IChatAdapter</code> / <code>IResponseSink</code> / <code>ChatMessage</code> contracts are
+        defined in <a href="../services/scout-conversation.html">Scout.Conversation</a>'s
+        <code>Abstractions</code> namespace; the three concrete adapters depend on it but never on each other.
+        <a href="../services/scout-host-console.html">Scout.Host.Console</a> calls each adapter's
+        <code>Add&lt;Platform&gt;Adapter</code> extension at startup and starts whichever ones registered.
+      </p>
+
+      <h2>Key attributes</h2>
+      <ul class="body-list">
+        <li><strong>One contract, one method of entry.</strong> Every adapter implements <code>IChatAdapter</code> with a <code>Name</code> ("Discord" / "Slack" / "Teams"), a <code>StartAsync(handler, ct)</code> that begins receiving events, and a <code>StopAsync(ct)</code>.</li>
+        <li><strong>Inbound normalisation through a pure translator.</strong> A dedicated <code>*MessageTranslator</code> turns the platform payload into a <code>ChatMessage</code> and decides whether the message is even for Scout. No SDK type crosses that boundary, so the decision logic is unit-testable without the SDK.</li>
+        <li><strong>Addressing rules per platform.</strong> Discord replies only when the bot is explicitly @-mentioned in a guild channel; DMs need no mention. Self-authored messages are always dropped so the bot never answers itself.</li>
+        <li><strong>Outbound streaming via a channel-bound sink.</strong> Each adapter builds an <code>IResponseSink</code> tied to the originating channel and the core drives <code>BeginAsync</code> → <code>UpdateAsync</code>* → <code>CompleteAsync</code>/<code>FailAsync</code>. <code>UpdateAsync</code> always receives the FULL cumulative text, never a delta, so even Teams (which cannot edit a message) works.</li>
+        <li><strong>Descriptive-write boundary.</strong> A reply may write only where the message came from. The sink is bound to the originating channel (and thread, on Slack/Teams) at construction; the adapter cannot post anywhere else.</li>
+        <li><strong>Transport resilience lives in the sink.</strong> Each sink owns its own rate-limit handling — Discord backs off once on a <code>RateLimitedException</code> and retries; Teams backs off on a 429 and treats a 403 stream-not-allowed as a cancel. The platform-agnostic pump never sees these.</li>
+        <li><strong>Self-gating registration.</strong> <code>AddDiscordAdapter</code> needs a bot token; <code>AddSlackAdapter</code> needs both a bot token and an app-level token; <code>AddTeamsAdapter</code> needs an App id. A missing credential makes the call a no-op rather than an error.</li>
+        <li><strong>Connection model differs, contract does not.</strong> Discord opens a gateway socket, Slack uses Socket Mode (no public URL), and Teams is webhook-push (the host exposes <code>POST /api/messages</code> and forwards each turn to <code>ProcessActivityAsync</code>). All three present the same <code>IChatAdapter</code> upward.</li>
+        <li><strong>Single-login lifecycle.</strong> A small lifecycle state machine arms a lifetime <code>CancellationToken</code> on start and trips it on stop, so in-flight conversations unwind on host shutdown. Discord/Slack reject a restart after stop; Teams is re-startable.</li>
+      </ul>
+
+      <h2>Related terms</h2>
+      <ul class="body-list">
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a> — the adapter's channel-bound sink is the descriptive-write boundary: it may write back only where the message came from, never elsewhere.</li>
+        <li><a href="../domain/provider.html">LLM Provider</a> — the other pluggable boundary: a provider is chosen once per process, whereas any subset of adapters can be active at the same time.</li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a> — adapters carry messages in and out; plugins are what the model can call mid-turn. An adapter never exposes a plugin.</li>
+      </ul>
+
+      <h2>Code references</h2>
+      <ul class="body-list">
+        <li><code>Scout.Conversation/Abstractions/IChatAdapter.cs:11</code> — the contract every adapter implements: <code>Name</code>, <code>StartAsync(handler, ct)</code>, <code>StopAsync(ct)</code>.</li>
+        <li><code>Scout.Conversation/Abstractions/IResponseSink.cs:17</code> — the outbound sink; <code>UpdateAsync</code> receives full cumulative text, with the Begin → Update* → terminal lifecycle documented in the remarks.</li>
+        <li><code>Scout.Conversation/Abstractions/ChatMessage.cs:7</code> — the normalised inbound message (<code>UserId</code>, <code>ChannelId</code>, <code>Text</code>, <code>Timestamp</code>); validated non-empty at construction.</li>
+        <li><code>Scout.Adapter.Discord/DiscordChatAdapter.cs:18</code> — the Discord adapter; <code>OnMessageReceivedAsync</code> at <code>:108</code> translates, builds the channel-bound sink, and invokes the handler.</li>
+        <li><code>Scout.Adapter.Discord/DiscordMessageTranslator.cs:25</code> — <code>TryTranslate</code>: drops self-authored messages, requires an @-mention in guild channels, strips the bot mention, normalises to <code>ChatMessage</code>.</li>
+        <li><code>Scout.Adapter.Discord/DiscordServiceCollectionExtensions.cs:20</code> — <code>AddDiscordAdapter</code>: a blank <code>BotToken</code> returns early as a no-op (self-gating).</li>
+        <li><code>Scout.Adapter.Slack/SlackChatAdapter.cs:18</code> — the Slack adapter over Socket Mode; needs bot token + app-level token, replies in the originating thread.</li>
+        <li><code>Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:32</code> — registration no-ops when either token is missing.</li>
+        <li><code>Scout.Adapter.Teams/TeamsChatAdapter.cs:107</code> — <code>ProcessActivityAsync</code>: the webhook seam the host's <code>IBot</code> calls per turn; builds a sink bound to the originating conversation.</li>
+        <li><code>Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:36</code> — <code>AddTeamsAdapter</code> no-ops when <code>AppId</code> is blank.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-adapter-discord.html"><span class="rt">service</span>Adapter.Discord</a>
+          <a href="../services/scout-adapter-slack.html"><span class="rt">service</span>Adapter.Slack</a>
+          <a href="../services/scout-adapter-teams.html"><span class="rt">service</span>Adapter.Teams</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../domain/descriptive-vs-executive-writes.html"><span class="rt">domain</span>Descriptive vs Executive Writes</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

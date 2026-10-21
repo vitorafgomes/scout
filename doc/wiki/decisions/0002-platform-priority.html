@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0002 — Platform Priority — Scout Wiki</title>
+<meta name="description" content="ADR 0002: ship Scout's chat adapters sequentially by integration friction — Discord first, then Slack, then Microsoft Teams.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0002</nav>
+
+    <section>
+      <h1>ADR 0002 — Platform Priority</h1>
+      <p class="blockquote">Implement Scout's chat adapters sequentially, in order of integration friction: Discord first, then Slack, then Microsoft Teams.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-21</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-04-21-platform-priority.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-04-21. Sets the rollout order for the three target chat platforms; the <code>IChatAdapter</code> abstraction stays in place from V1 so later platforms slot in without touching Core.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        Scout must eventually support Slack, Discord, and Microsoft Teams. Supporting all three at once would
+        triple the surface area of the first release — three SDKs, three auth models, three message-rendering
+        layers — without improving core value. The three platforms differ sharply in how much ceremony it takes
+        to stand up even a "hello world" bot, so the rollout order is decided by integration friction rather than
+        perceived market preference.
+      </p>
+      <p>The friction profile of each platform, lowest to highest:</p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">Discord</div><div class="t-role">Bot token is a single string created by clicking through the Developer Portal. <code>Discord.Net</code> is a mature, well-documented .NET SDK. No app review, no workspace admin, no tenant consent. Testable on a personal server in minutes.</div></div>
+        <div class="type-row"><div class="t-name">Slack</div><div class="t-role">Requires a Slack App, OAuth scopes, and either Socket Mode (dev) or a public HTTPS endpoint (prod). SDK option is <code>SlackNet</code> (community, actively maintained). Distribution beyond a single workspace requires review.</div></div>
+        <div class="type-row"><div class="t-name">Microsoft Teams</div><div class="t-role">Requires <code>Microsoft.Bot.Framework</code> plus an Azure Bot Service registration, a Teams app manifest, and admin consent inside the target tenant. The most ceremony to stand up even a minimal bot.</div></div>
+      </div>
+
+      <h2>Decision</h2>
+      <p>Adapters ship sequentially, ordered by integration friction. The order is fixed and the abstraction layer must precede it.</p>
+
+      <div class="callout good">
+        <div class="c-title">Rollout order — lowest friction first</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li><strong>Discord — first.</strong> Single-string bot token, mature <code>Discord.Net</code> SDK, no review or consent, tested on a personal server in minutes.</li>
+          <li><strong>Slack — second.</strong> Slack App with OAuth scopes; Socket Mode for dev or a public HTTPS endpoint for prod; <code>SlackNet</code> SDK; review needed beyond one workspace.</li>
+          <li><strong>Microsoft Teams — third.</strong> <code>Microsoft.Bot.Framework</code>, Azure Bot Service registration, Teams app manifest, and tenant admin consent.</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">Abstraction precedes platform two and three</div>
+        <p style="margin:0">The first release targets Discord only, but the <code>IChatAdapter</code> abstraction must already be in place so Slack and Teams slot in without changing <code>Scout.Core</code>. Any chat feature that only makes sense on one platform (for example, Block Kit-specific interactions) goes behind a capability flag on the adapter, never in Core.</p>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li>The first release carries a single SDK, auth model, and rendering layer instead of three, keeping V1 scope tight.</li>
+        <li>Discord's zero setup friction lets contributors run and test the bot in minutes, which matters for an OSS project.</li>
+        <li>Forcing the <code>IChatAdapter</code> abstraction in from V1 means Slack and Teams land additively, without reworking Core.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li>Documentation and onboarding examples for V1 assume Discord; a second onboarding guide is added when Slack ships.</li>
+        <li>Slack and Teams users wait through the rollout order — they are not first-class until their adapter lands.</li>
+        <li>Platform-specific interactions must be gated behind capability flags rather than expressed directly, adding a small amount of indirection per feature.</li>
+      </ul>
+
+      <h2>Alternatives considered</h2>
+      <ul class="body-list">
+        <li><strong>Teams first</strong> — rejected. Highest integration cost, narrowest contributor base, tied to Microsoft 365 licensing.</li>
+        <li><strong>All three in parallel</strong> — rejected. Forces the adapter abstraction to stabilise before Core has shipped, and triples V1 scope.</li>
+        <li><strong>Slack first</strong> — rejected. Slack is a plausible second choice, but Discord has zero setup friction for contributors, which matters for an OSS project.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-adapter-discord.html"><span class="rt">service</span>Adapter.Discord</a>
+          <a href="../services/scout-adapter-slack.html"><span class="rt">service</span>Adapter.Slack</a>
+          <a href="../services/scout-adapter-teams.html"><span class="rt">service</span>Adapter.Teams</a>
+          <a href="../domain/adapter.html"><span class="rt">domain</span>Chat Adapter</a>
+          <a href="../overview/vision.html"><span class="rt">overview</span>Vision</a>
+          <a href="../roadmap/current-focus.html"><span class="rt">roadmap</span>Current Focus</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

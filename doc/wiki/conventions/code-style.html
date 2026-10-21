@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Style — Scout Wiki</title>
+<meta name="description" content="Scout code style convention: English-only code, .NET 10, file-scoped namespaces, I-prefixed interfaces, and the .editorconfig rules that enforce them.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Conventions</a><span class="sep">/</span>Code Style</nav>
+
+    <section>
+      <h1>Code Style</h1>
+      <p class="blockquote">Scout is English-only, .NET 10-only source: code, identifiers, comments, and documentation are all in English, with no emojis and no AI-attribution headers — and <code>.editorconfig</code> enforces the rest.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype convention">convention</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>obsidian-vault/scout/CLAUDE.md</code>; <code>.editorconfig</code></span>
+      </div>
+
+      <h2>The rule</h2>
+      <p>
+        Every source file in Scout follows one style. The human-facing rules come from the project
+        instructions, and the mechanical formatting and naming rules are codified in the repository-root
+        <code>.editorconfig</code> so the compiler and <code>dotnet format</code> can check them.
+      </p>
+
+      <p class="field-label">Language and authorship</p>
+      <ul class="body-list">
+        <li><strong>All code, identifiers, and comments in English.</strong> No exceptions, regardless of who is contributing.</li>
+        <li><strong>All documentation in English</strong> — Scout is an open-source project.</li>
+        <li><strong>No emojis in source files.</strong></li>
+        <li><strong>No AI-attribution comments or marketing headers</strong> in source. Authorship attribution rules also extend to commits and PRs (see <a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a>).</li>
+      </ul>
+
+      <p class="field-label">Stack</p>
+      <ul class="body-list">
+        <li><strong>.NET 10 only.</strong> No .NET 8/9 artifacts.</li>
+        <li>Microsoft Semantic Kernel is the orchestration core; no project references a provider SDK or a Semantic Kernel type outside the LLM gateway (see <a href="../services/scout-llm.html">Scout.Llm</a>).</li>
+        <li>OpenTelemetry for traces, metrics, and logs.</li>
+      </ul>
+
+      <p class="field-label">Formatting (from <code>.editorconfig</code>)</p>
+      <ul class="body-list">
+        <li><code>charset = utf-8</code>, <code>end_of_line = lf</code>, <code>insert_final_newline = true</code>, and <code>trim_trailing_whitespace = true</code> apply to all files.</li>
+        <li>Default indentation is <strong>4 spaces</strong> (<code>indent_style = space</code>, <code>indent_size = 4</code>).</li>
+        <li>Markdown, YAML, and JSON use <strong>2-space</strong> indentation; so do project files (<code>.csproj</code>, <code>.props</code>, <code>.targets</code>).</li>
+      </ul>
+
+      <p class="field-label">C# language rules (from <code>.editorconfig</code>)</p>
+      <ul class="body-list">
+        <li><strong>File-scoped namespaces</strong> — <code>csharp_style_namespace_declarations = file_scoped</code> at <code>warning</code> severity.</li>
+        <li><strong>Always use braces</strong> — <code>csharp_prefer_braces = true</code> at <code>warning</code> severity.</li>
+        <li><strong>Interfaces are prefixed with <code>I</code></strong> and PascalCase — a naming rule raised to <code>warning</code> severity.</li>
+        <li><code>System</code> using directives sort first (<code>dotnet_sort_system_directives_first = true</code>); import groups are not separated by blank lines.</li>
+        <li><code>var</code> is discouraged for built-in types but allowed when the type is apparent — both at <code>suggestion</code> severity.</li>
+        <li>Nullable-reference diagnostics <code>CS8600</code>, <code>CS8602</code>, and <code>CS8603</code> are escalated to <code>warning</code>.</li>
+      </ul>
+
+      <h2>Rationale</h2>
+      <ul class="body-list">
+        <li><strong>One contributor language.</strong> Scout is open-source and accepts work from humans and other agents; English-only code and docs keep the codebase readable for everyone and avoid mixed-language drift.</li>
+        <li><strong>No noise in source.</strong> Emojis and AI-attribution headers add no engineering value and clutter diffs and blame; the authorship rule is the in-file counterpart of the commit/PR policy that the human who requested the work is the author.</li>
+        <li><strong>Single target framework.</strong> Pinning to .NET 10 avoids multi-targeting complexity and keeps build, test, and packaging deterministic.</li>
+        <li><strong>Mechanical rules belong in tooling.</strong> Putting formatting and naming in <code>.editorconfig</code> means the IDE, the compiler, and <code>dotnet format</code> agree, so review can focus on design rather than whitespace.</li>
+        <li><strong>Severity is intentional.</strong> Style and naming sit at <code>warning</code> so they surface in CI; <code>var</code> preferences stay at <code>suggestion</code> because they are guidance, not gates.</li>
+      </ul>
+
+      <h2>Examples</h2>
+
+      <p class="field-label">Namespaces and braces</p>
+      <div class="callout good">
+        <strong>Do</strong> — file-scoped namespace, braces on every block.
+        <pre class="cfg"><span class="k">namespace</span> Scout.Llm;
+
+<span class="k">public sealed class</span> ChatGateway
+{
+    <span class="k">public bool</span> CanStream(ChatRequest request)
+    {
+        <span class="k">if</span> (request <span class="k">is null</span>)
+        {
+            <span class="k">return false</span>;
+        }
+
+        <span class="k">return true</span>;
+    }
+}</pre>
+      </div>
+      <div class="callout danger">
+        <strong>Don't</strong> — block-scoped namespace and a brace-less <code>if</code> trip the <code>warning</code> rules.
+        <pre class="cfg"><span class="k">namespace</span> Scout.Llm
+{
+    <span class="k">public sealed class</span> ChatGateway
+    {
+        <span class="k">public bool</span> CanStream(ChatRequest request)
+        {
+            <span class="k">if</span> (request <span class="k">is null</span>) <span class="k">return false</span>;
+            <span class="k">return true</span>;
+        }
+    }
+}</pre>
+      </div>
+
+      <p class="field-label">Interface naming</p>
+      <div class="callout good">
+        <strong>Do</strong> — interfaces start with <code>I</code> in PascalCase.
+        <pre class="cfg"><span class="k">public interface</span> IChatGateway { }
+<span class="k">public interface</span> ILlmProviderFactory { }</pre>
+      </div>
+      <div class="callout danger">
+        <strong>Don't</strong> — a missing <code>I</code> prefix raises the naming warning.
+        <pre class="cfg"><span class="k">public interface</span> ChatGateway { }</pre>
+      </div>
+
+      <p class="field-label">Comments and authorship</p>
+      <div class="callout good">
+        <strong>Do</strong> — terse, technical, English-only comment that explains a non-obvious decision.
+        <pre class="cfg"><span class="c">// Resolve the embedder from the factory, not the shared kernel,</span>
+<span class="c">// to avoid a DI construction cycle.</span></pre>
+      </div>
+      <div class="callout danger">
+        <strong>Don't</strong> — emoji, non-English text, or AI-attribution headers in source.
+        <pre class="cfg"><span class="c">// Generated with an AI assistant (with an emoji prefix)</span>
+<span class="c">// Valida a requisicao antes de transmitir</span></pre>
+      </div>
+
+      <h2>Enforcement</h2>
+      <p>The quality gates below must pass before opening a PR against <code>main</code>:</p>
+      <div class="check">
+        <ul>
+          <li><code>dotnet format</code> clean — applies the <code>.editorconfig</code> formatting and style rules across the solution.</li>
+          <li><code>dotnet test</code> green — see the <a href="../conventions/testing.html">Testing</a> convention; assertions use Shouldly only.</li>
+          <li><code>architect-reviewer</code> agent reviews any change touching <code>Scout.Core</code> or plugin contracts.</li>
+          <li><code>code-reviewer</code> agent for any new plugin or adapter.</li>
+          <li><code>security-auditor</code> agent for any change touching credentials, token handling, or external API calls.</li>
+        </ul>
+      </div>
+      <ul class="body-list">
+        <li>The <code>.editorconfig</code> rules are honored by the IDE and the compiler, so the <code>warning</code>-severity style and naming rules surface during the build and in CI, not only at review time.</li>
+        <li>Nullable diagnostics (<code>CS8600</code>/<code>CS8602</code>/<code>CS8603</code>) raised to <code>warning</code> keep null-safety regressions visible in the same build output.</li>
+        <li>Authorship and emoji rules are caught in review; commit and PR attribution is governed by <a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../conventions/commit-and-pr-policy.html"><span class="rt">convention</span>Commit &amp; PR Policy</a>
+          <a href="../conventions/testing.html"><span class="rt">convention</span>Testing</a>
+          <a href="../conventions/secrets-handling.html"><span class="rt">convention</span>Secrets Handling</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+          <a href="../invariants/shouldly-only.html"><span class="rt">invariant</span>Shouldly-Only Tests</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

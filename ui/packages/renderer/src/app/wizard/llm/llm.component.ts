@@ -145,7 +145,7 @@ function isHttpUrl(raw: string): boolean {
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -166,19 +166,19 @@ function isHttpUrl(raw: string): boolean {
       }
       .lede {
         margin: 0;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
       }
       .card {
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 10px;
         padding: 16px;
       }
       .card h2 {
         font-size: 14px;
         margin: 0 0 12px;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-weight: 600;
         letter-spacing: 0.02em;
       }
@@ -194,11 +194,11 @@ function isHttpUrl(raw: string): boolean {
         font-size: 14px;
       }
       .radio--disabled {
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .radio--disabled em {
         font-style: italic;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 12px;
       }
       .field {
@@ -208,13 +208,13 @@ function isHttpUrl(raw: string): boolean {
       }
       .field-label {
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .text-input,
       .select {
-        background: #0f1117;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        background: var(--sc-bg);
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 8px 10px;
         font-size: 14px;
@@ -241,8 +241,8 @@ function isHttpUrl(raw: string): boolean {
         gap: 12px;
       }
       .primary {
-        background: #5a8fd4;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -251,36 +251,36 @@ function isHttpUrl(raw: string): boolean {
         cursor: pointer;
       }
       .primary:disabled {
-        background: #3d4258;
-        color: #7b8299;
+        background: var(--sc-disabled-bg);
+        color: var(--sc-text-muted);
         cursor: not-allowed;
       }
       .ghost {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 8px 12px;
         font-size: 13px;
         cursor: pointer;
       }
       .ghost:disabled {
-        color: #3d4258;
+        color: var(--sc-disabled-bg);
         cursor: not-allowed;
       }
       .error {
-        color: #d45a5a;
+        color: var(--sc-danger);
         font-size: 13px;
         margin: 8px 0 0;
       }
       .loading {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
         margin: 8px 0 0;
       }
       .saved-msg {
         font-size: 13px;
-        color: #3aaf7b;
+        color: var(--sc-success);
       }
       .banner {
         display: flex;
@@ -292,13 +292,13 @@ function isHttpUrl(raw: string): boolean {
         font-size: 13px;
       }
       .banner--info {
-        background: #1e2e45;
-        color: #e4e8f0;
-        border: 1px solid #5a8fd4;
+        background: var(--sc-info-bg);
+        color: var(--sc-text);
+        border: 1px solid var(--sc-info);
       }
       .banner-action {
-        background: #5a8fd4;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 6px 12px;

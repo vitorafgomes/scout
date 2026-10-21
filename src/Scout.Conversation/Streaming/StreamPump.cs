@@ -42,8 +42,11 @@ public sealed class StreamPump
     /// without forcing a terminal edit. A model rate limit
     /// (<see cref="LlmRateLimitException"/>) finalizes via
     /// <see cref="IResponseSink.CompleteAsync"/> with a friendly user-facing
-    /// message; any other mid-stream failure is reported via
-    /// <see cref="IResponseSink.FailAsync"/>. Neither escapes.
+    /// message. An unreachable provider
+    /// (<see cref="LlmProviderUnavailableException"/>) likewise finalizes via
+    /// <see cref="IResponseSink.CompleteAsync"/> with a friendly message and is
+    /// logged concisely without a stack. Any other mid-stream failure is reported
+    /// via <see cref="IResponseSink.FailAsync"/>. None escapes.
     /// </summary>
     public async Task RunAsync(
         ChatResponse response,
@@ -113,6 +116,21 @@ public sealed class StreamPump
             var body = buffer.Length == 0
                 ? _options.RateLimitMessage
                 : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.RateLimitMessage;
+            await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
+        }
+        catch (LlmProviderUnavailableException ex)
+        {
+            // Provider unreachable: finalize via Complete with a user-facing
+            // message (FailAsync's reason is never rendered). Log concisely at
+            // Warning WITHOUT the exception object so no stack noise leaks.
+            _options.Logger?.LogWarning(
+                "StreamPump stopped: LLM provider unavailable ({Reason}); finalizing with a friendly message.",
+                ex.Message);
+            var body = buffer.Length == 0
+                ? _options.ProviderUnavailableMessage
+                : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.ProviderUnavailableMessage;
             await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
                 .ConfigureAwait(false);
             return;

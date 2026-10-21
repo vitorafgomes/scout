@@ -24,6 +24,13 @@ export interface SupervisorDeps {
   readinessTimeoutMs?: number;
   stopTimeoutMs?: number;
   restartPolicy?: RestartPolicy;
+  /**
+   * Signals the worker's whole process tree: the negative-pid process group on
+   * POSIX (so grandchild provider daemons launched by the .NET host die too),
+   * or a `taskkill /t` tree-kill on Windows. Defaults to `defaultKillProcessTree`.
+   * Injectable so tests never signal a real OS pid.
+   */
+  killProcessTree?: (pid: number, signal: NodeJS.Signals | 'SIGKILL') => void;
 }
 
 export interface Supervisor {
@@ -47,6 +54,18 @@ function isFile(filePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+// Production default for SupervisorDeps.killProcessTree. On POSIX, `pid` is
+// expected to already be the negative process-group id (the caller decides
+// the sign); on win32 it is the plain child pid, since taskkill's `/t` flag
+// walks the tree itself.
+function defaultKillProcessTree(pid: number, signal: NodeJS.Signals | 'SIGKILL'): void {
+  if (process.platform === 'win32') {
+    nodeSpawn('taskkill', ['/pid', String(pid), '/t']);
+    return;
+  }
+  process.kill(pid, signal);
 }
 
 // Build a WorkerStatus value omitting optional fields when undefined so
@@ -81,6 +100,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     readinessTimeoutMs = 45_000,
     stopTimeoutMs = 5_000,
     restartPolicy = DEFAULT_POLICY,
+    killProcessTree = defaultKillProcessTree,
   } = deps;
 
   const ringBuffer: WorkerEvent[] = [];
@@ -93,6 +113,10 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
   let failureTimes: number[] = [];
   let restartCount = 0;
+  // Handle of the pending crash-restart backoff timer (see scheduleRestart),
+  // so stop() can cancel it and prevent a scheduled restart from resurrecting
+  // a worker the user just stopped.
+  let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
   function emit(event: WorkerEvent): void {
     if (event.kind !== 'state') {
@@ -115,15 +139,42 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     emit({ kind: 'state', status: next });
   }
 
+  // Kills the whole worker process tree, not just the direct child: the .NET
+  // host launches provider daemons as grandchildren (SystemProcessLauncher /
+  // Process.Start), which would otherwise orphan and keep running after the
+  // supervisor signals only the direct pid. On POSIX the child is spawned
+  // detached (its own process-group leader), so signalling -pid reaches the
+  // whole group; on win32, taskkill's /t already walks the tree.
   function kill(child: ChildProcess, signal: NodeJS.Signals | 'SIGKILL'): void {
-    try {
-      if (process.platform === 'win32' && child.pid != null) {
-        nodeSpawn('taskkill', ['/pid', String(child.pid), '/t']);
-      } else {
+    const pid = child.pid;
+    if (pid == null) {
+      try {
         child.kill(signal);
+      } catch {
+        // process may already be gone
       }
-    } catch {
-      // process may already be gone
+      return;
+    }
+
+    try {
+      killProcessTree(process.platform === 'win32' ? pid : -pid, signal);
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'ESRCH') {
+        logger.warn('supervisor: process group already gone; falling back to direct signal', {
+          pid,
+        });
+      } else {
+        logger.warn('supervisor: killProcessTree failed; falling back to direct signal', {
+          pid,
+          err: String(err),
+        });
+      }
+      try {
+        child.kill(signal);
+      } catch {
+        // process may already be gone
+      }
     }
   }
 
@@ -153,7 +204,15 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
     transition(makeStatus('starting', restartCount, undefined, _startedAt));
 
-    setTimeout(() => {
+    restartTimer = setTimeout(() => {
+      restartTimer = null;
+      // A stop() that ran during the backoff window already transitioned to
+      // 'stopped'/'idle' and cleared this timer in the common case; this
+      // guard is the last line of defense so a race can never resurrect a
+      // worker the user explicitly stopped.
+      if (_status.state === 'stopped' || _status.state === 'idle') {
+        return;
+      }
       void doStart().catch((err: unknown) => {
         logger.error('supervisor: restart attempt failed', err);
         transition(makeStatus('crashed', restartCount, undefined, _startedAt));
@@ -178,12 +237,16 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
     // stdin is a pipe (not 'ignore') so the host's parent-death watchdog gets
     // EOF when we die. We keep the write end open and never write to it.
+    // detached on POSIX makes the child its own process-group leader (via
+    // setsid), so `kill()` can later signal the whole group — including
+    // grandchild provider daemons the .NET host spawns — instead of orphaning
+    // them. Windows has no process-group concept here; taskkill /t handles it.
     const child = spawn(binaryPath, [], {
       env: childEnv,
       cwd: path.dirname(binaryPath),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
-      detached: false,
+      detached: process.platform !== 'win32',
     });
 
     _child = child;
@@ -237,6 +300,11 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
       child.once('exit', (code, signal) => {
         _httpEndpoint = null;
+        // Without this, _child keeps pointing at the dead process during the
+        // crash-restart backoff window: stop() would then await this same
+        // ChildProcess's 'exit' event a second time, which Node never
+        // re-fires, hanging the returned Promise forever.
+        _child = null;
         emit({ kind: 'exit', code, signal });
         logger.info('supervisor: worker exited', {
           code: code ?? undefined,
@@ -282,22 +350,54 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     },
 
     async stop(): Promise<{ exitCode: number | null }> {
+      // Cancel any pending crash-restart backoff timer first: without this,
+      // a restart scheduled before this stop() call would still fire later
+      // and resurrect a worker the user just explicitly stopped.
+      if (restartTimer !== null) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
+
       const child = _child;
-      if (child == null || _status.state === 'stopped' || _status.state === 'idle') {
+      // Covers the case where _child was not yet nulled by the exit handler
+      // (e.g. a caller holding a stale reference) but the process has
+      // already exited or been signalled — waiting on 'exit' again would
+      // hang, since Node never re-fires an event that already fired.
+      const alreadyExited =
+        child != null &&
+        (child.killed || (child.exitCode !== null && child.exitCode !== undefined));
+
+      if (
+        child == null ||
+        alreadyExited ||
+        _status.state === 'stopped' ||
+        _status.state === 'idle'
+      ) {
         transition(makeStatus('stopped', restartCount, undefined, _startedAt));
-        return { exitCode: null };
+        return { exitCode: child?.exitCode ?? null };
       }
 
       return new Promise<{ exitCode: number | null }>((resolve) => {
+        let settled = false;
+        const settleOnce = (exitCode: number | null): void => {
+          if (settled) return;
+          settled = true;
+          transition(makeStatus('stopped', restartCount, undefined, _startedAt));
+          resolve({ exitCode });
+        };
+
         const killTimer = setTimeout(() => {
           logger.warn('supervisor: stop timeout; sending SIGKILL');
           kill(child, 'SIGKILL');
+          // Resolve here too: if 'exit' never re-fires (e.g. the process was
+          // already gone before this SIGKILL), the Promise must still settle
+          // instead of hanging past the kill timer indefinitely.
+          settleOnce(child.exitCode ?? null);
         }, stopTimeoutMs);
 
         child.once('exit', (code) => {
           clearTimeout(killTimer);
-          transition(makeStatus('stopped', restartCount, undefined, _startedAt));
-          resolve({ exitCode: code });
+          settleOnce(code);
         });
 
         transition(makeStatus('stopped', restartCount, undefined, _startedAt));

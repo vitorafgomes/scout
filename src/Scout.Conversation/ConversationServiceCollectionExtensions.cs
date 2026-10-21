@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Scout.Contracts;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Routing;
@@ -29,6 +30,10 @@ public static class ConversationServiceCollectionExtensions
         services.Configure<LlmStreamingRouterOptions>(configuration.GetSection(ConfigSection));
         services.Configure<ConversationMemoryOptions>(
             configuration.GetSection(ConversationMemoryOptions.ConfigSection));
+
+        // Ambient per-request identity used by the conductor to scope each turn.
+        // TryAdd keeps a single shared instance across every composition root.
+        services.AddScoutRequestContext();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IConversationKeyProvider, ConversationKeyProvider>();

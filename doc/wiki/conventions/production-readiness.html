@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Readiness — Scout Wiki</title>
+<meta name="description" content="Production-readiness convention: before a PR touches an external boundary, ship at least one test that simulates the call failing.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Conventions</a><span class="sep">/</span>Production Readiness</nav>
+
+    <section>
+      <h1>Production Readiness</h1>
+      <p class="blockquote">Before a PR adds or modifies code that touches an external boundary, it must ship at least one test that simulates that boundary call failing.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype convention">convention</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>obsidian-vault/scout/CLAUDE.md</code></span>
+      </div>
+
+      <h2>The rule</h2>
+      <p>
+        Any pull request that adds or modifies code touching an <strong>external boundary</strong> must run the
+        <code>production-readiness-checks</code> skill before it is opened against <code>main</code>. An external
+        boundary is any call that leaves the process: HTTP, a database, a message broker, a cache, the
+        filesystem, or a cloud API. The minimum bar is concrete and non-negotiable.
+      </p>
+      <ul class="body-list">
+        <li><strong>One failure test per boundary.</strong> For every boundary the change touches, there must be at least one test that drives the dependency into a failure mode — a timeout, a 5xx response, or a connection reset — and asserts the code's behaviour under that failure.</li>
+        <li><strong>Run the skill, not just the unit tests.</strong> Standard happy-path unit tests do not satisfy this rule. The reference playbook is <code>playbooks/failure-testing.md</code> inside the <code>production-readiness-checks</code> skill.</li>
+        <li><strong>Boundary cases default to required.</strong> If you are unsure whether a change crosses a boundary, treat it as if it does and add the failure test.</li>
+      </ul>
+
+      <p class="field-label">Boundaries in scope</p>
+      <div class="deps">
+        <span class="dep">HTTP</span>
+        <span class="dep">Database</span>
+        <span class="dep">Message broker</span>
+        <span class="dep">Cache</span>
+        <span class="dep">Filesystem</span>
+        <span class="dep">Cloud APIs</span>
+      </div>
+
+      <h2>Rationale</h2>
+      <p>
+        Scout talks to a lot of things it does not control: LLM providers over HTTP, chat platforms,
+        a local vector store, the filesystem when indexing a project, and GitHub for descriptive writes.
+        Every one of those calls can time out, return a 5xx, rate-limit, or have its socket reset midway —
+        and the failure path is exactly the code that never runs in a green happy-path test suite.
+      </p>
+      <ul class="body-list">
+        <li><strong>Failure paths are the untested paths.</strong> A passing unit suite proves the success branch works; it says nothing about the timeout branch, which is where production incidents are born.</li>
+        <li><strong>Streaming widens the blast radius.</strong> Scout is <a href="../invariants/streaming-first.html">streaming-first</a>, so a provider can fail <em>mid-stream</em>, after chunks have already been emitted. The <code>IChatGateway</code> already translates an HTTP 429 into a domain <code>LlmRateLimitException</code> raised inside the stream — exactly the kind of behaviour a failure test must pin down.</li>
+        <li><strong>Cheap to add, expensive to omit.</strong> A single fault-injection test is small. The bug it catches — a swallowed exception, an unbounded retry, a leaked handle — is not.</li>
+      </ul>
+
+      <h2>Examples</h2>
+      <p>The patterns below describe intent, not literal test code. Apply the matching playbook from the skill.</p>
+
+      <div class="callout good">
+        <strong>Do — simulate the provider returning 5xx mid-stream.</strong>
+        A change to <a href="../services/scout-llm.html">Scout.Llm</a> that touches the HTTP path to an LLM
+        provider ships a test that makes the provider respond with a 500 (or a 429) while streaming, and
+        asserts the gateway surfaces the failure as a domain exception rather than swallowing it or hanging.
+      </div>
+
+      <div class="callout good">
+        <strong>Do — drive the filesystem boundary into failure when indexing.</strong>
+        A change to <a href="../services/scout-knowledge.html">Scout.Knowledge</a> project indexing adds a
+        test where a file read fails (missing file, permission denied) and asserts the indexer fails the
+        single item without aborting the whole run or corrupting the store.
+      </div>
+
+      <div class="callout danger">
+        <strong>Don't — ship a boundary change with only happy-path tests.</strong>
+        A PR that adds a new HTTP call to a cloud API but tests only the 200 response does not meet the bar.
+        The 5xx, timeout, and reset behaviour is undefined, and that is precisely what reaches production.
+      </div>
+
+      <div class="callout danger">
+        <strong>Don't — assert "no exception" and call it covered.</strong>
+        A test that runs the failure scenario but only checks that nothing threw hides the real question:
+        what did the code <em>do</em> with the failure? Assert the observable outcome — the domain exception,
+        the retry count, the partial result — per the failure-testing playbook.
+      </div>
+
+      <h2>Enforcement</h2>
+      <p>
+        This convention sits on top of the standard Scout quality gates. Before opening a PR against
+        <code>main</code>, the following must hold:
+      </p>
+      <div class="check">
+        <ul>
+          <li><code>dotnet format</code> is clean.</li>
+          <li><code>dotnet test</code> is green.</li>
+          <li>The <code>production-readiness-checks</code> skill has been run for any change touching an external boundary, and the per-boundary failure tests are present and passing.</li>
+          <li>The <code>security-auditor</code> agent reviews any change touching credentials, token handling, or external API calls.</li>
+          <li>The <code>architect-reviewer</code> agent reviews changes to <code>Scout.Core</code> or plugin contracts; the <code>code-reviewer</code> agent reviews any new plugin or adapter.</li>
+        </ul>
+      </div>
+      <p>
+        Reviewers should treat a missing failure test on a boundary-touching PR as a blocking change request,
+        not a nit. Where Scout already documents a service's boundary surface, its
+        <em>Testing footprint</em> section should state that the failure tests are required here — see, for
+        example, the note on <a href="../services/scout-llm.html">Scout.Llm</a>. Projects may strengthen this
+        rule in their own context but may never relax it below the one-test-per-boundary minimum.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../conventions/testing.html"><span class="rt">convention</span>Testing</a>
+          <a href="../runbooks/build-and-test.html"><span class="rt">runbook</span>Build &amp; Test</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../conventions/commit-and-pr-policy.html"><span class="rt">convention</span>Commit &amp; PR Policy</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

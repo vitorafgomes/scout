@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testing — Scout Wiki</title>
+<meta name="description" content="Scout testing convention: unit tests with Shouldly assertions, a green dotnet test before every PR, and the reviewer-agent quality gates.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Conventions</a><span class="sep">/</span>Testing</nav>
+
+    <section>
+      <h1>Testing</h1>
+      <p class="blockquote">Scout tests are unit tests written with Shouldly assertions; <code>dotnet test</code> must be green before any PR, and reviewer agents gate the change.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype convention">convention</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>obsidian-vault/scout/CLAUDE.md</code>; ADR 0003</span>
+      </div>
+
+      <h2>The rule</h2>
+      <p>
+        Scout uses <strong>unit tests</strong> and asserts with <strong>Shouldly</strong>. The convention has
+        three non-negotiable parts that every change must satisfy before it can land on <code>main</code>:
+      </p>
+      <ul class="body-list">
+        <li><strong>Shouldly for every assertion — never FluentAssertions.</strong> This applies to every test project. New code uses Shouldly from the first line. If FluentAssertions is found, it is migrated in a dedicated <code>chore/tests-shouldly-migration</code> PR rather than mixed with feature work.</li>
+        <li><strong>A green test run before the PR.</strong> <code>dotnet format</code> must be clean and <code>dotnet test</code> must be green before opening a PR against <code>main</code>.</li>
+        <li><strong>Reviewer-agent gates.</strong> The change passes the relevant reviewer agents — <code>architect-reviewer</code>, <code>code-reviewer</code>, and <code>security-auditor</code> — depending on what it touches.</li>
+      </ul>
+      <p>
+        The Shouldly-only side of this convention is also recorded as a hard
+        <a href="../invariants/shouldly-only.html">project invariant</a> and as
+        <a href="../decisions/0003-shouldly-migration.html">ADR 0003</a>.
+      </p>
+
+      <h2>Rationale</h2>
+      <ul class="body-list">
+        <li><strong>License.</strong> Shouldly is MIT. FluentAssertions flipped to a commercial license in v8 (January 2025); the first five Scout test projects had started on the last permissive release, v6.12.1. Never allowing FluentAssertions in is the cheapest way to avoid a future license debate.</li>
+        <li><strong>Consistency.</strong> One assertion library per codebase. Two frameworks in the same suite is immediate cognitive overhead and a code-review tax for every PR that touches tests.</li>
+        <li><strong>API parity is close enough.</strong> Every assertion FluentAssertions v6 expressed has a Shouldly equivalent; a few fluent chains break into two asserts, but no expressivity is lost.</li>
+      </ul>
+      <p>
+        A green <code>dotnet test</code> gate keeps <code>main</code> always-shippable, and the reviewer-agent gates
+        catch architecture, plugin-contract, and credential-handling regressions that unit tests alone do not cover.
+      </p>
+
+      <h2>Examples</h2>
+
+      <div class="callout good">
+        <strong>Do — assert with Shouldly.</strong>
+        <pre class="cfg"><span class="c">// tests/.../Usings.cs</span>
+global using Shouldly;
+
+<span class="c">// in a test</span>
+result.Provider.ShouldBe("Ollama");
+chunks.ShouldNotBeEmpty();</pre>
+      </div>
+
+      <div class="callout danger">
+        <strong>Don't — pull in FluentAssertions.</strong>
+        <pre class="cfg"><span class="c">// forbidden — never add this using or the package</span>
+global using FluentAssertions;
+
+result.Provider.Should().Be("Ollama");</pre>
+        <p>
+          <code>Directory.Packages.props</code> lists <code>Shouldly 4.3.0</code> and does <strong>not</strong> list
+          <code>FluentAssertions</code>; every test <code>csproj</code> references <code>Shouldly</code> and every
+          <code>tests/.../Usings.cs</code> carries <code>global using Shouldly;</code>.
+        </p>
+      </div>
+
+      <h3>Shouldly gotchas to know</h3>
+      <ul class="body-list">
+        <li>Shouldly refuses null actuals on <code>ShouldContain</code> over <code>string?</code>. Tests asserting on nullable messages use the null-forgiving operator on the asserted side.</li>
+        <li><code>ShouldThrowAsync&lt;T&gt;()</code> returns <code>Task&lt;T&gt;</code>. Code that needs to inspect the thrown exception captures the awaited result: <code>var ex = await act.ShouldThrowAsync&lt;T&gt;(); ex.Message.ShouldContain(...)</code>.</li>
+      </ul>
+
+      <h3>Where this shows up in practice</h3>
+      <p>
+        Service pages document their own testing footprint against this convention — for example,
+        <a href="../services/scout-llm.html">Scout.Llm</a> unit-tests request validation, the HTTP 429 translation,
+        settings construction, and provider selection, all with Shouldly assertions.
+      </p>
+
+      <h2>Enforcement</h2>
+      <p>The quality gates that must pass before opening a PR against <code>main</code>:</p>
+      <ul class="body-list">
+        <li><strong><code>dotnet format</code> clean</strong> — style is auto-checked first.</li>
+        <li><strong><code>dotnet test</code> green</strong> — the full suite must pass.</li>
+        <li><strong><code>architect-reviewer</code></strong> — runs on any change touching <code>Scout.Core</code> or plugin contracts.</li>
+        <li><strong><code>code-reviewer</code></strong> — runs on any new plugin or adapter.</li>
+        <li><strong><code>security-auditor</code></strong> — runs on any change touching credentials, token handling, or external API calls.</li>
+      </ul>
+      <p>
+        For any change that touches an external boundary (HTTP, DB, message broker, cache, filesystem, cloud APIs),
+        the <a href="../conventions/production-readiness.html">Production Readiness</a> bar adds at least one test per
+        boundary that simulates that call failing. The day-to-day commands for the format/test loop live in the
+        <a href="../runbooks/build-and-test.html">Build &amp; Test</a> runbook.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../invariants/shouldly-only.html"><span class="rt">invariant</span>Shouldly-Only Tests</a>
+          <a href="../decisions/0003-shouldly-migration.html"><span class="rt">adr</span>0003 Shouldly Migration</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+          <a href="../runbooks/build-and-test.html"><span class="rt">runbook</span>Build &amp; Test</a>
+          <a href="../conventions/code-style.html"><span class="rt">convention</span>Code Style</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

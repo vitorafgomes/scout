@@ -40,4 +40,12 @@ public sealed record StreamPumpOptions
     /// </summary>
     public string RateLimitMessage { get; init; } =
         "I've hit the model's rate limit right now — please wait a moment and try again.";
+
+    /// <summary>
+    /// User-facing text appended when the LLM provider is unreachable (connection
+    /// refused, socket failure, or an internal timeout). Rendered verbatim via the
+    /// terminal Complete call, distinct from internal failures and rate limits.
+    /// </summary>
+    public string ProviderUnavailableMessage { get; init; } =
+        "I can't reach the language model right now. Make sure the model server is running, then try again.";
 }

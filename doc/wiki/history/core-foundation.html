@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Core Foundation — Scout Wiki</title>
+<meta name="description" content="Historical retrospective of Plan 1 (2026-04): scaffolding the Scout .NET 10 solution, the core contracts, the read-only plugin registry, and the first Ollama LLM provider.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">History</a><span class="sep">/</span>Core Foundation</nav>
+
+    <section>
+      <h1>Core Foundation (2026-04)</h1>
+      <p class="blockquote">Plan 1 turned an empty repository into a buildable .NET 10 solution with the contracts, the read-only plugin registry, and the first Ollama provider that everything since has been built on top of.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">reference</span>
+        <span class="m"><span class="lbl">status</span><span class="stag archived">archived</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-21</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>sessions/2026-04-21-core-foundation.md</code></span>
+      </div>
+
+      <div class="callout">
+        This is a <strong>historical record</strong> of the foundational build, archived as written. The
+        code shapes described here are the <em>starting point</em>, not today's structure: the single
+        <code>Scout.Core</code> library was later split into the per-feature services you see in the nav,
+        and the test stack was migrated off FluentAssertions. Read it as the origin story, then follow the
+        cross-links for the current state.
+      </div>
+
+      <h2>What changed</h2>
+      <p>
+        The session scaffolded the Scout solution from nothing and delivered it across five small,
+        independently mergeable pull requests against a protected <code>main</code>. Each PR was CI-green
+        with unit tests before merge.
+      </p>
+      <div class="seq">
+        <div class="chain">
+          <span class="road-block">PR 1 &middot; scaffold</span>
+          <span class="road-block">PR 2 &middot; contracts</span>
+          <span class="road-block">PR 3 &middot; plugin registry</span>
+          <span class="road-block">PR 4 &middot; Ollama provider</span>
+          <span class="road-block">PR 5 &middot; host facade</span>
+        </div>
+      </div>
+      <ul class="body-list">
+        <li><strong>Solution scaffold</strong> — <code>Scout.sln</code>, a shared <code>Directory.Build.props</code> (.NET 10, C# 13, nullable, <code>TreatWarningsAsErrors</code>), central package versions in <code>Directory.Packages.props</code>, and a <code>Scout.Core</code> class library plus a <code>Scout.Core.Tests</code> xUnit project. First green CI.</li>
+        <li><strong>Chat contracts</strong> — the <code>ChatMessage</code> and <code>ChatResponse</code> records and the <code>IChatAdapter</code> interface that adapters would later implement.</li>
+        <li><strong>Plugin contracts</strong> — <code>PluginCapabilities</code> (read-only by default; constructing a write-capable instance throws) and the <code>IScoutPlugin</code> interface that builds a Semantic Kernel <code>KernelPlugin</code>.</li>
+        <li><strong>Plugin registry</strong> — <code>PluginRegistry</code> rejects any plugin that does not declare <code>PluginCapabilities.ReadOnly</code> (raising <code>ReadOnlyViolationException</code>) and rejects duplicate names, enforcing the read-only invariant at registration time.</li>
+        <li><strong>LLM provider</strong> — <code>ILlmProviderFactory</code> plus the first implementation, <code>OllamaLlmProviderFactory</code>, wiring Semantic Kernel's Ollama chat-completion connector from <code>LlmOptions</code>.</li>
+        <li><strong>Host facade</strong> — <code>ScoutHost</code> (the entry point adapters call), <code>ScoutHostBuilder</code> for DI composition, <code>ScoutOptions</code>, and a <code>ScoutActivitySource</code> for OpenTelemetry traces. V1 behavior was a static handshake; intent routing was explicitly deferred to a later plan.</li>
+      </ul>
+
+      <h2>Why</h2>
+      <p>
+        The goal was a buildable library that proved the core abstractions and the read-only security
+        posture before any external integration existed — no Discord, no feature plugins, only unit tests
+        with in-memory fakes. Three principles drove the design and survive in today's services:
+      </p>
+      <ul class="body-list">
+        <li><strong>Read-only by construction.</strong> Rather than trust plugins to behave, the registry refuses to load anything that declares write capability, so the invariant fails fast at startup instead of at runtime. This is the seed of <a href="../invariants/no-executive-writes.html">No Executive Writes</a>.</li>
+        <li><strong>Pluggable everything.</strong> The LLM provider was hidden behind <code>ILlmProviderFactory</code> from day one, with the active provider chosen from configuration — see <a href="../invariants/pluggable-everything.html">Pluggable Everything</a>.</li>
+        <li><strong>Local-first default.</strong> Ollama was the first and default provider so contributors could run Scout with no paid credentials — see <a href="../invariants/local-first-default.html">Local-First Default</a>.</li>
+      </ul>
+      <p>
+        Splitting the work into five focused PRs through a protected <code>main</code> was deliberate: each
+        one mergeable on its own, each one CI-green, none mixing concerns. That branch-and-PR discipline
+        became the standing workflow for the project.
+      </p>
+
+      <h2>Outcome</h2>
+      <ul class="check">
+        <li>A buildable .NET 10 solution with a green test suite and green CI for the first time.</li>
+        <li>The core contracts — <code>ChatMessage</code>, <code>ChatResponse</code>, <code>IChatAdapter</code>, <code>PluginCapabilities</code>, <code>IScoutPlugin</code> — that all later adapters and plugins implement.</li>
+        <li>A <code>PluginRegistry</code> that enforces the read-only invariant at registration, with a deliberate write-capable fake proving the rejection path.</li>
+        <li>An LLM provider abstraction with Ollama as the working default, ready for hosted providers to be added later.</li>
+        <li>A <code>ScoutHost</code> facade observably alive end-to-end, with OpenTelemetry tracing in place from the start.</li>
+      </ul>
+      <p>
+        The plan's own "what comes after" section set up the next three deliverables: a Discord adapter
+        (Plan 2), a CloudStatus feature plugin (Plan 3), and a CodeQA RAG plugin (Plan 4) — each on its own
+        branch and plan file.
+      </p>
+
+      <h2>Services affected</h2>
+      <p>
+        Everything in this build originally lived inside a single <code>Scout.Core</code> library. As the
+        project grew, those responsibilities were extracted into the dedicated services that exist today:
+      </p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-llm.html">Scout.Llm</a>
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+        <a class="dep" href="../services/scout-controlplane.html">Scout.ControlPlane</a>
+      </div>
+      <ul class="body-list">
+        <li>The <code>ILlmProviderFactory</code> + Ollama work is the direct ancestor of <a href="../services/scout-llm.html">Scout.Llm</a>, which now hosts the provider abstraction behind a streaming-first gateway and ships eight providers.</li>
+        <li>The <code>ScoutHost</code> handshake and message-handling entry point evolved into the routing and conversation handling now owned by <a href="../services/scout-conversation.html">Scout.Conversation</a>.</li>
+        <li>The chat-adapter contract opened the door for the Discord, Slack, and Teams adapters that followed.</li>
+      </ul>
+
+      <h2>Lessons</h2>
+      <ul class="body-list">
+        <li><strong>Enforce invariants in code, not in review.</strong> Baking read-only enforcement into <code>PluginCapabilities</code> and <code>PluginRegistry</code> meant the security posture could not silently regress; a violating plugin simply fails to load.</li>
+        <li><strong>Small PRs against a protected main scale.</strong> Five mergeable, single-concern PRs kept CI honest and made each step reviewable. The discipline stuck and is now codified in the <a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a>.</li>
+        <li><strong>A single core library is a fine start, not a fine end.</strong> Putting contracts, host, registry, and provider in one <code>Scout.Core</code> was the right move for a first buildable artifact, but the responsibilities were later split into the per-feature services in the nav as the surface area grew.</li>
+        <li><strong>Test-stack choices age.</strong> This build standardised on FluentAssertions and NSubstitute. FluentAssertions later went commercial-licensed, so the project migrated every test to Shouldly — see <a href="../invariants/shouldly-only.html">Shouldly-Only Tests</a> and <a href="../decisions/0003-shouldly-migration.html">ADR 0003</a>. Pin and revisit third-party test dependencies, not just runtime ones.</li>
+        <li><strong>Ship a minimal but observable host.</strong> The V1 static handshake plus OpenTelemetry tracing proved the end-to-end path was alive before any real feature existed, deferring intent routing without leaving the host untestable.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../overview/project-snapshot.html"><span class="rt">overview</span>Project Snapshot</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
   "name": "@scout/desktop",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "main": "packages/main/dist/main.js",
   "private": true,
   "type": "module",
@@ -33,5 +33,9 @@
     "js-yaml": "^4.1.1",
     "prettier": "^3.8.3",
     "typescript-eslint": "^8.59.0"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8"
   }
 }

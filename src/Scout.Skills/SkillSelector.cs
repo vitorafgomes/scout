@@ -80,7 +80,8 @@ public sealed class SkillSelector : ISkillSelector
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to select skills; returning none.");
+            _logger.LogWarning("Failed to select skills ({Reason}); returning none.", ex.Message);
+            _logger.LogDebug(ex, "Skill selection failure detail.");
             return [];
         }
     }
@@ -115,7 +116,8 @@ public sealed class SkillSelector : ISkillSelector
         {
             // A failed index build must not poison the conversation: log and act
             // as if no skills exist.
-            _logger.LogWarning(ex, "Failed to build skill index; running with no skills.");
+            _logger.LogWarning("Failed to build skill index ({Reason}); running with no skills.", ex.Message);
+            _logger.LogDebug(ex, "Skill index build failure detail.");
             return [];
         }
     }

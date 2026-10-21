@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.Adapter.Teams — Scout Wiki</title>
+<meta name="description" content="Scout.Adapter.Teams service page: the Microsoft Teams chat adapter over Bot Framework, webhook-push instead of connect-and-listen, self-gated on an App id.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Adapter.Teams</nav>
+
+    <section>
+      <h1>Scout.Adapter.Teams</h1>
+      <p class="blockquote">The Microsoft Teams chat adapter: a webhook-push <code>IChatAdapter</code> that translates inbound Bot Framework activities into Scout chat messages and streams answers back as a sequence of typing activities the Teams client stitches into one bubble.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Adapter.Teams/</code>; README</span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        Scout.Adapter.Teams binds Scout's platform-agnostic conversation core to Microsoft Teams. It
+        implements <a href="../domain/adapter.html"><code>IChatAdapter</code></a> on top of the
+        Microsoft Bot Framework: it translates each inbound Teams <code>Activity</code> into a Scout
+        <code>ChatMessage</code>, builds an <code>IResponseSink</code> bound to the originating
+        conversation, and invokes the handler supplied by
+        <a href="../services/scout-conversation.html">Scout.Conversation</a>.
+      </p>
+      <p>
+        The defining wrinkle is the transport shape. Discord and Slack open a socket and pull events;
+        Teams is <strong>webhook-push</strong> and has no outbound connection of its own. The Azure Bot
+        Service relays each inbound activity as an HTTPS POST to a messaging endpoint the host exposes
+        (for example <code>POST /api/messages</code>), so there is nothing to "connect" in
+        <code>StartAsync</code>. The adapter only arms a lifetime token and stores the handler; the live
+        webhook host then forwards each turn into <code>ProcessActivityAsync</code>, the unit-testable
+        seam between the HTTP host and this project.
+      </p>
+      <p>
+        It does <strong>not</strong> own conversation state, routing, or the LLM call — those belong to
+        <a href="../services/scout-conversation.html">Scout.Conversation</a> and
+        <a href="../services/scout-llm.html">Scout.Llm</a>. It also deliberately does not register the
+        Bot Framework webhook plumbing (the <code>CloudAdapter</code>, the <code>IBot</code>, and the
+        ASP.NET endpoint), because that needs real Azure; this project wires only the adapter,
+        translator, and sink seam.
+      </p>
+
+      <h2>Public contract</h2>
+      <ul class="body-list">
+        <li><strong><code>TeamsChatAdapter</code></strong> — the <code>IChatAdapter</code> implementation. <code>Name</code> returns <code>"Teams"</code>; <code>StartAsync</code> arms the lifetime token and stores the handler; <code>StopAsync</code> trips the token so in-flight turns unwind; <code>ProcessActivityAsync(turnContext, ct)</code> is the per-turn entry point the webhook host calls.</li>
+        <li><strong><code>TeamsMessageTranslator</code></strong> — <code>TryTranslate(inbound, out chatMessage)</code>: a pure decision over an <code>InboundTeamsMessage</code>. No Bot Framework types cross its public boundary, so the accept/ignore logic is testable without constructing SDK primitives.</li>
+        <li><strong><code>AddTeamsAdapter(services, configuration)</code></strong> — the composition root. Binds <code>TeamsOptions</code> from <code>Scout:Adapters:Teams</code> and registers the adapter as an <code>IChatAdapter</code> <em>only</em> when an App id is present; otherwise it is a clean no-op.</li>
+        <li><strong><code>ITeamsActivitySender</code></strong> — the transport seam the sink sends through. Production binds it to an <code>ITurnContext</code>; tests bind a delegate via <code>DelegateTeamsActivitySender</code>.</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">TeamsChatAdapter</div><div class="t-role"><code>sealed</code> <code>IChatAdapter</code>/<code>IDisposable</code>. Arm/stop lifecycle plus the <code>ProcessActivityAsync</code> turn seam; per-turn work runs under try/catch linked to the lifetime token.</div></div>
+        <div class="type-row"><div class="t-name">TeamsAdapterLifecycle</div><div class="t-role"><code>internal sealed</code> start/stop state with a lifetime token that trips on stop. Re-startable after stop (webhook-push has no socket to re-login); start while running is rejected.</div></div>
+        <div class="type-row"><div class="t-name">TeamsMessageTranslator</div><div class="t-role">Pure <code>partial</code> translator. Skips non-messages, bot self-echoes, and empties; strips the bot's own <code>&lt;at&gt;</code> mention; requires an explicit mention in group chats, implicit in 1:1.</div></div>
+        <div class="type-row"><div class="t-name">InboundTeamsMessage</div><div class="t-role"><code>record</code> projection of the fields the translator needs, so the translator stays pure and trivially testable while the live adapter maps a real <code>Activity</code> into it.</div></div>
+        <div class="type-row"><div class="t-name">TeamsResponseSink</div><div class="t-role"><code>IResponseSink</code> over the Teams streaming protocol: informative typing &rarr; cumulative streaming typing &rarr; one final message. Owns its own 429 backoff and 403 fallback.</div></div>
+        <div class="type-row"><div class="t-name">TeamsTransportException</div><div class="t-role">Transport-neutral failure carrying just status + Teams error code, so the sink reacts to <code>IsRateLimited</code> (429) and <code>IsContentStreamNotAllowed</code> (403) without SDK types.</div></div>
+        <div class="type-row"><div class="t-name">TeamsOptions</div><div class="t-role">Settings bound from <code>Scout:Adapters:Teams</code>: <code>AppId</code>, <code>AppPassword</code>, <code>TenantId</code>. Secrets are injected, never committed.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/pluggable-everything.html">Pluggable Everything</a> — Teams is one interchangeable <code>IChatAdapter</code> alongside Discord and Slack; the host loads it only when configured, otherwise <code>AddTeamsAdapter</code> is a no-op.</li>
+        <li><a href="../invariants/streaming-first.html">Streaming-First</a> — the sink streams a growing bubble via cumulative typing activities; <code>UpdateAsync</code> always carries the full cumulative text, never a delta.</li>
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — a reply is sent only into the conversation the message came from (the descriptive-write boundary); the sink is bound to the originating <code>ITurnContext</code> and writes nowhere else.</li>
+        <li><a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> — <code>AppPassword</code> and the App id are injected via environment variables or User Secrets / Key Vault; <code>TeamsOptions</code> documents this and the adapter never logs them.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>TeamsChatAdapter.cs:58</code> — the self-gate: the constructor throws <code>ArgumentException</code> when <code>AppId</code> is empty, so an adapter that reached construction is always configured.</li>
+        <li><code>TeamsChatAdapter.cs:107</code> — <code>ProcessActivityAsync</code>: the seam the webhook host calls per turn; reads the handler + lifetime token atomically, links a per-turn token, translates, and dispatches.</li>
+        <li><code>TeamsChatAdapter.cs:140</code> — the sink is built with <code>streamingSupported: !inbound.IsGroup</code>, so group chats and channels render final-only.</li>
+        <li><code>TeamsChatAdapter.cs:160</code> — <code>BuildSink</code>: binds the send to <code>turnContext.SendActivityAsync</code> and maps the SDK's <code>ErrorResponseException</code> to <code>TeamsTransportException</code> via <code>TeamsErrorMapper</code>.</li>
+        <li><code>TeamsAdapterLifecycle.cs:38</code> — <code>TryGetLifetimeToken</code>: reads the running guard and token under one lock so a turn racing <code>StopAsync</code> sees a clean shutdown rather than the <code>LifetimeToken</code> throw.</li>
+        <li><code>TeamsMessageTranslator.cs:54</code> — the group rule: a group/channel message is accepted only when it mentions the bot, mirroring Discord's guild rule; 1:1 chats are implicitly addressed.</li>
+        <li><code>TeamsMessageTranslator.cs:107</code> — <code>ProjectInbound</code>: maps a real <code>Activity</code> into <code>InboundTeamsMessage</code>, deriving <code>IsGroup</code> from the conversation account flag or <code>groupChat</code>/<code>channel</code> type.</li>
+        <li><code>Streaming/TeamsResponseSink.cs:247</code> — <code>SendWithResilienceAsync</code>: a 429 backs off once on the injected clock and retries; other transport errors propagate to the caller.</li>
+        <li><code>Streaming/TeamsResponseSink.cs:235</code> — <code>HandleContentStreamNotAllowed</code>: a 403 ContentStreamNotAllowed cancels streaming for the rest of the run and lets one final message carry the answer.</li>
+        <li><code>Streaming/TeamsResponseSink.cs:287</code> — the final activity carries a <code>final</code> streaminfo entity only when a stream was actually opened and not canceled, keeping the streamSequence monotonic.</li>
+        <li><code>TeamsServiceCollectionExtensions.cs:36</code> — the registration self-gate: an empty <code>AppId</code> short-circuits before any service is added, so an unconfigured host still starts.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+        <span class="dep">Microsoft.Bot.Builder</span>
+        <span class="dep">Microsoft.Bot.Schema</span>
+        <span class="dep">Microsoft.Bot.Connector</span>
+      </div>
+      <p class="field-label">Used by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-host-console.html">Scout.Host.Console</a>
+      </div>
+      <p class="field-label">Sibling adapters</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-adapter-discord.html">Scout.Adapter.Discord</a>
+        <a class="dep" href="../services/scout-adapter-slack.html">Scout.Adapter.Slack</a>
+      </div>
+
+      <h2>Configuration</h2>
+      <p>
+        All keys live under <code>Scout:Adapters:Teams</code> (constant <code>ConfigSection</code> in
+        <code>TeamsServiceCollectionExtensions</code>). An empty <code>AppId</code> disables the adapter.
+        Secrets are injected via environment variables (double-underscore separator) or User Secrets /
+        Key Vault and are never committed or logged.
+      </p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt) — values injected, not committed</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Teams"</span>: {
+      <span class="k">"AppId"</span>: <span class="s">""</span>,
+      <span class="k">"AppPassword"</span>: <span class="s">""</span>,
+      <span class="k">"TenantId"</span>: <span class="s">""</span>
+    }
+  }
+}</pre>
+      <div class="val-list">
+        <span class="val">SCOUT__ADAPTERS__TEAMS__APPID</span>
+        <span class="val">SCOUT__ADAPTERS__TEAMS__APPPASSWORD</span>
+        <span class="val">SCOUT__ADAPTERS__TEAMS__TENANTID</span>
+      </div>
+      <p>
+        <code>AppPassword</code> and <code>TenantId</code> may be empty for a single-tenant or
+        user-assigned managed-identity bot, or for a multi-tenant bot respectively. Live hosting needs
+        the Bot Framework webhook plumbing — a <code>CloudAdapter</code>, an <code>IBot</code> forwarding
+        turns to <code>ProcessActivityAsync</code>, and a <code>POST /api/messages</code> endpoint — which
+        requires real Azure and is intentionally not wired by this project.
+      </p>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li>Unit tests live in <code>tests/Scout.Adapter.Teams.Tests/</code> (granted via <code>InternalsVisibleTo</code> in the csproj). Assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a>.</li>
+        <li>The translator is a pure class over <code>InboundTeamsMessage</code>, so accept/ignore rules (non-message, bot self-echo, empty-after-strip, group no-mention, mention stripping) are exercised without any SDK primitive.</li>
+        <li>The lifecycle is extracted so start/stop, the re-start-after-stop allowance, and the <code>TryGetLifetimeToken</code> race are unit-testable without an HTTP host.</li>
+        <li>The sink sends through <code>ITeamsActivitySender</code>, so the full streaming lifecycle — cumulative-text invariant, 429 backoff/retry on a fake clock, 403 ContentStreamNotAllowed fallback, group final-only mode, and citation rendering — is tested without Azure or a network, satisfying <a href="../conventions/production-readiness.html">Production Readiness</a> boundary-failure coverage.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../domain/adapter.html"><span class="rt">domain</span>Chat Adapter</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../services/scout-adapter-slack.html"><span class="rt">service</span>Scout.Adapter.Slack</a>
+          <a href="../services/scout-adapter-discord.html"><span class="rt">service</span>Scout.Adapter.Discord</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

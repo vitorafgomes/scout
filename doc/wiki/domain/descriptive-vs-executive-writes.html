@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Descriptive vs Executive Writes — Scout Wiki</title>
+<meta name="description" content="The two-class partition of Scout's external-system writes: descriptive writes describe work for others to act on and are permitted; executive writes mutate state and are forbidden.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Domain</a><span class="sep">/</span>Descriptive vs Executive Writes</nav>
+
+    <section>
+      <h1>Descriptive vs Executive Writes</h1>
+      <p class="blockquote">Scout partitions every write it could make against an external system into two classes: a <strong>descriptive write</strong> produces content another agent must read and decide to act on (a GitHub issue, a PR comment), and an <strong>executive write</strong> mutates code, configuration, infrastructure, or data with immediate effect — descriptive writes are permitted, executive writes are forbidden.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype domain">domain</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> ADR 0009; <code>obsidian-vault/scout/CLAUDE.md</code></span>
+      </div>
+
+      <h2>Meaning in this project</h2>
+      <p>
+        Scout is a read-only chatops assistant: it describes work for humans and other agents, and it does
+        not execute work against external systems. The original read-only invariant stated this as a single
+        bar — no plugin, adapter, or integration may write to any external system at all. As the plugin
+        ecosystem grew, that single bar conflated two materially different kinds of write, so
+        <a href="../decisions/0009-descriptive-vs-executive-writes.html">ADR 0009</a> refined it into the
+        two named classes below.
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">Descriptive write</div><div class="t-role"><strong>Permitted.</strong> Produces content another agent must later read and decide to act on. Does not, by itself, mutate code, configuration, infrastructure, data, or any executable state. Example: creating a GitHub issue, commenting on a PR, posting in the originating chat channel.</div></div>
+        <div class="type-row"><div class="t-name">Executive write</div><div class="t-role"><strong>Forbidden.</strong> Mutates code, configuration, infrastructure, or data in a way that takes effect immediately without a human gate. Example: committing or pushing code, merging a PR, <code>kubectl apply</code>, a cloud-API mutation, a database <code>INSERT</code>.</div></div>
+      </div>
+      <p>
+        The intuition the user holds for Scout is exactly this split: <em>describe work, never execute it</em>.
+        A descriptive write cannot break production on its own — it is a description of intent that a human
+        reviewer, a CI pipeline, or a developer decides whether to act on. An executive write, once taken,
+        cannot be intercepted by a human in the loop without an explicit rollback; that is the case the
+        invariant exists to prevent.
+      </p>
+
+      <div class="callout">
+        <strong>Classify by effect, not by API surface.</strong> The class of a write is determined by what it
+        does to the world, not by the verb on the API. Adding a comment to a PR is descriptive even though it
+        is a write, because the comment is content for humans. Creating a Kubernetes ConfigMap is executive
+        even though it resembles "just text", because it mutates cluster state. When in doubt, a plugin author
+        must default to <strong>forbidden</strong> and seek explicit approval.
+      </div>
+
+      <h2>Where it lives</h2>
+      <p class="field-label">Owned by</p>
+      <p>
+        This is a project-wide security invariant, not a single service's concern. It is enforced at design
+        time across every plugin and adapter. The canonical, model-facing surface today is
+        <a href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a>, which is the first integration
+        whose write classification matters in practice.
+      </p>
+      <p class="field-label">Referenced by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a>
+        <a class="dep" href="../invariants/no-executive-writes.html">No Executive Writes</a>
+        <a class="dep" href="../domain/plugin.html">Semantic Kernel Plugin</a>
+        <a class="dep" href="../domain/adapter.html">Chat Adapter</a>
+      </div>
+
+      <h2>Key attributes</h2>
+      <ul class="body-list">
+        <li><strong>Descriptive writes are permitted.</strong> Per ADR 0009: creating a GitHub issue (title, body, labels), posting a comment on a PR or issue, adding a purely organisational label (e.g. <code>triage</code>, <code>bug</code>), and posting a message in the originating chat channel (already permitted by the chat adapter contract).</li>
+        <li><strong>Executive writes are forbidden.</strong> Committing or pushing code; merging, closing, or approving a PR; editing repository settings, webhooks, secrets, or branch protection; any <code>kubectl apply/delete/exec/scale/patch/rollout/cordon/drain</code>; any cloud-API mutation; database <code>INSERT/UPDATE/DELETE/DDL</code>; host filesystem writes outside Scout's own config directory; and email or external notifications outside the originating chat.</li>
+        <li><strong>Boundary cases default to forbidden.</strong> A descriptive write whose effect indirectly mutates state is reclassified as executive — for example, creating a GitHub issue with a label that triggers a CI workflow is executive, and requires explicit per-repository user consent.</li>
+        <li><strong>Content hygiene is a separate concern.</strong> The line is conceptually sharper than it is enforceable. A descriptive write that leaks credentials in plain text is still a leak even though it mutates no state; plugin authors must treat secrets and PII as their own concern on top of this split.</li>
+        <li><strong>Classified per function, in code review.</strong> There is no automated classifier. Each new plugin function must be tagged <code>descriptive</code> or <code>executive</code> at design review, and PRs that introduce executive writes must be rejected.</li>
+        <li><strong>Class changes need a new ADR.</strong> Changing the permitted class for any existing plugin function (for example, proposing any Kubernetes write — descriptive or otherwise) requires a separate ADR. <code>Scout.Plugin.Kubernetes</code> remains strict read-only for the foreseeable future.</li>
+      </ul>
+
+      <h2>Related terms</h2>
+      <ul class="body-list">
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a> — a plugin exposes <code>KernelFunction</code>s to the model; each function is the unit that gets classified descriptive or executive.</li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a> — posting into the originating channel is a descriptive write already permitted by the adapter contract.</li>
+        <li><a href="../domain/provider.html">LLM Provider</a> — the provider drives function-calling; the write-class split constrains which functions are safe to offer.</li>
+      </ul>
+
+      <h2>Code references</h2>
+      <p>
+        ADR 0009 permits descriptive writes (for example a future <code>CreateIssue</code>), but the shipped
+        GitHub plugin is still strict read-only — descriptive writes are sanctioned by the decision yet not
+        yet implemented in code. The current surface therefore demonstrates the executive-write prohibition
+        in full and the descriptive-write allowance only by absence.
+      </p>
+      <ul class="body-list">
+        <li><code>src/Scout.Plugin.GitHub/GitHubPlugin.cs:7</code> — class summary: "Read-only GitHub plugin… Listing only: no create, merge, or push operations exist by design." The only <code>KernelFunction</code>s are <code>list_repositories</code>, <code>list_pull_requests</code>, <code>list_issues</code>, and <code>get_repository</code>.</li>
+        <li><code>src/Scout.Plugin.GitHub/Abstractions/IGitHubClient.cs:3</code> — interface summary: "Read-only access to GitHub data… Listing only: no create, merge, push, or comment operations exist by design." No write method is declared on the client contract.</li>
+        <li><code>obsidian-vault/scout/CLAUDE.md</code> — the project rules state the descriptive/executive split as the security invariant and link to ADR 0009 for the full classification and per-plugin allow-list.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="rt">adr</span>0009 Descriptive vs Executive</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../domain/plugin.html"><span class="rt">domain</span>Semantic Kernel Plugin</a>
+          <a href="../domain/adapter.html"><span class="rt">domain</span>Chat Adapter</a>
+          <a href="../services/scout-plugin-github.html"><span class="rt">service</span>Scout.Plugin.GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

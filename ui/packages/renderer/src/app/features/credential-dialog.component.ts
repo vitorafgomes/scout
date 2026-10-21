@@ -232,8 +232,8 @@ export interface CredentialDialogSubmit {
         z-index: 100;
       }
       .dialog {
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 8px;
         padding: 20px;
         width: min(600px, 92vw);
@@ -242,7 +242,7 @@ export interface CredentialDialogSubmit {
         display: flex;
         flex-direction: column;
         gap: 14px;
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       h2 {
         margin: 0;
@@ -253,7 +253,7 @@ export interface CredentialDialogSubmit {
         font-size: 13px;
         text-transform: uppercase;
         letter-spacing: 0.04em;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .field {
         display: flex;
@@ -262,21 +262,21 @@ export interface CredentialDialogSubmit {
       }
       .label {
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .helper {
         margin: 0;
         font-size: 12px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       input[type='text'],
       input[type='password'],
       textarea {
-        background: #0f1117;
-        border: 1px solid #252b3b;
+        background: var(--sc-bg);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 8px;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family: inherit;
         font-size: 13px;
       }
@@ -290,16 +290,16 @@ export interface CredentialDialogSubmit {
         font-size: 12px;
         padding: 4px 10px;
         border-radius: 4px;
-        border: 1px solid #252b3b;
-        color: #93c5fd;
+        border: 1px solid var(--sc-border);
+        color: var(--sc-info);
         text-decoration: none;
         background: transparent;
       }
       .link-btn:hover {
-        background: #1e2333;
+        background: var(--sc-surface-3);
       }
       .scope-matrix {
-        border-top: 1px solid #252b3b;
+        border-top: 1px solid var(--sc-border);
         padding-top: 12px;
       }
       .scope-matrix table {
@@ -311,16 +311,16 @@ export interface CredentialDialogSubmit {
       .scope-matrix td {
         text-align: left;
         padding: 6px 8px;
-        border-bottom: 1px solid #1e2333;
+        border-bottom: 1px solid var(--sc-surface-3);
         vertical-align: top;
       }
       .scope-matrix th {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-weight: 500;
       }
       .scope-matrix code {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
-        color: #fbbf24;
+        color: var(--sc-warning);
         font-size: 11px;
       }
       .scope-matrix ul {
@@ -328,7 +328,7 @@ export interface CredentialDialogSubmit {
         padding-left: 16px;
       }
       .setup-steps {
-        border-top: 1px solid #252b3b;
+        border-top: 1px solid var(--sc-border);
         padding-top: 12px;
       }
       .setup-steps ol {
@@ -338,7 +338,7 @@ export interface CredentialDialogSubmit {
         flex-direction: column;
         gap: 6px;
         font-size: 12px;
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .setup-steps li {
         line-height: 1.45;
@@ -360,13 +360,13 @@ export interface CredentialDialogSubmit {
         cursor: not-allowed;
       }
       .btn--primary {
-        background: #2563eb;
+        background: var(--sc-accent);
         color: white;
       }
       .btn--secondary {
         background: transparent;
-        color: #e4e8f0;
-        border-color: #252b3b;
+        color: var(--sc-text);
+        border-color: var(--sc-border);
       }
     `,
   ],

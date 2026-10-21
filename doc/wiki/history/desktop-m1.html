@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Desktop M1 — Scout Wiki</title>
+<meta name="description" content="Historical record of Scout Desktop Milestone 1: the Electron + Angular provisioning wizard, its 14-PR work breakdown, and the deferrals carried into the post-M1 backlog.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">History</a><span class="sep">/</span>Desktop M1</nav>
+
+    <section>
+      <h1>Desktop M1 (2026-04)</h1>
+      <p class="blockquote">Milestone 1 delivered a Discord-only desktop provisioning wizard — an Electron shell driving an Angular 21 renderer that detects chat clients, stores the bot token in <code>safeStorage</code>, runs the OAuth2 install over a loopback server, and supervises a bundled .NET worker — shipping unsigned, cross-platform builds while deliberately deferring signing, Slack, and Teams provisioning.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">reference</span>
+        <span class="m"><span class="lbl">status</span><span class="stag archived">archived</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-23</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>sessions/2026-04-23-scout-desktop-m1.md</code></span>
+      </div>
+
+      <div class="callout">
+        This is a <strong>historical record</strong> of a closed milestone. The plan it summarises was active in April 2026 and is preserved here as a retrospective. For the current shape of the provisioning UI, see <a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a>; for scope and deferrals as a decision, see <a href="../decisions/0005-scout-desktop-m1-scope.html">ADR 0005</a>.
+      </div>
+
+      <h2>What changed</h2>
+      <p>
+        M1 introduced a new top-level <code>ui/</code> folder as a sibling of the existing <code>src/</code> (.NET backend) and
+        <code>tests/</code> trees — a Bun-managed monorepo whose packages are <code>main</code> (Electron main process),
+        <code>preload</code>, <code>renderer</code> (the Angular 21 application), and <code>shared</code> (pure TypeScript IPC
+        contract consumed by all three). The deliverable was a guided wizard that takes a contributor from launch to a
+        running Discord bot without touching a config file.
+      </p>
+
+      <p>The work shipped as a fourteen-PR sequence on <code>main</code> (#29 through #42), each green on its own CI job:</p>
+      <div class="seq">
+        <div class="chain">
+          <span class="pill">1 bootstrap workspace</span>
+          <span class="pill">2 shared IPC contract</span>
+          <span class="pill">3 main shell</span>
+          <span class="pill">4 preload bridge</span>
+          <span class="pill">5 renderer shell</span>
+          <span class="pill">6 client detection</span>
+          <span class="pill">7 safeStorage vault</span>
+          <span class="pill">8 Discord OAuth loopback</span>
+          <span class="pill">9 wizard screens</span>
+          <span class="pill">10 worker supervisor</span>
+          <span class="pill">11 worker publish pipeline</span>
+          <span class="pill">12 packaging</span>
+          <span class="pill">13 CI matrix</span>
+          <span class="pill">14 README + ADR</span>
+        </div>
+      </div>
+
+      <p>The major capabilities that landed:</p>
+      <ul class="body-list">
+        <li><strong>Hardened Electron shell.</strong> A single <code>BrowserWindow</code> with <code>contextIsolation: true</code>, <code>nodeIntegration: false</code>, <code>sandbox: true</code>, and a strict CSP. The renderer has no Node, no filesystem, and no <code>child_process</code> — only the preload-exposed API surface.</li>
+        <li><strong>Typed IPC contract.</strong> Every renderer↔main channel is namespaced <code>scout:*</code> with request/response types in the shared package. No channel exposes a write capability to any external system.</li>
+        <li><strong>Cross-platform client detection.</strong> Discord detected on Windows, macOS, and Linux; Slack and Teams are detection-only badges. Each subprocess probe has a 2-second timeout and a failure test.</li>
+        <li><strong>safeStorage secret vault.</strong> The bot token is encrypted to <code>&lt;userData&gt;/vault.enc</code> via Electron <code>safeStorage</code>; cleartext never touches disk and the renderer can write/check existence but never decrypt.</li>
+        <li><strong>OAuth2 loopback install.</strong> A single-shot Node HTTP server bound strictly to <code>127.0.0.1:53682</code> handles the Discord authorize callback, with a main-generated single-use <code>state</code> verified on <code>/callback</code>.</li>
+        <li><strong>Supervised .NET worker.</strong> The packaged app spawns <code>Scout.Host.Worker</code> as a child process with exponential-backoff restarts, line-buffered log streaming over <code>scout:worker.events</code>, and a graceful SIGTERM→SIGKILL shutdown that always reaps the child on quit.</li>
+        <li><strong>Unsigned cross-platform packaging.</strong> <code>electron-builder</code> produces a Windows NSIS installer, macOS DMGs (arm64 + x64), a Linux AppImage, and a <code>.deb</code>, all driven by a three-OS GitHub Actions matrix.</li>
+      </ul>
+
+      <h2>Why</h2>
+      <p>
+        Scout had a working .NET backend but no on-ramp for a non-technical operator to stand up a bot. The console host
+        required hand-editing configuration and managing a long-lived process. M1's goal was to make provisioning a Discord
+        bot a guided, repeatable, secure flow on a real desktop, while keeping the project's hard constraints intact.
+      </p>
+      <ul class="body-list">
+        <li><strong>Read-only invariant preserved end-to-end.</strong> No IPC channel initiates a write against Discord or any external API. The single outbound network call in the main process is the OAuth2 token exchange — authentication, not a user-data write. All runtime traffic happens in the .NET worker under the descriptive-write enforcement of <a href="../invariants/no-executive-writes.html">No Executive Writes</a>.</li>
+        <li><strong>Secrets never in the renderer or on disk in cleartext.</strong> <code>safeStorage</code> was chosen over <code>keytar</code> (unmaintained) and raw <code>libsecret</code> (Linux packaging pain). On a Linux box with no keyring, <code>isEncryptionAvailable()</code> returns false and the UI surfaces a banner rather than silently writing plaintext.</li>
+        <li><strong>Local-first stayed the default.</strong> The worker launches with <code>SCOUT__LLMPROVIDER=Ollama</code> so a fresh install runs without paid credentials, consistent with <a href="../invariants/local-first-default.html">Local-First Default</a>.</li>
+        <li><strong>Discord-first, deliberately narrow.</strong> Per <a href="../decisions/0002-platform-priority.html">platform priority</a>, only the Discord wizard was built end-to-end; Slack and Teams were scoped to detection only to keep the milestone shippable.</li>
+        <li><strong>Angular 21 with Signals.</strong> The renderer bootstraps zoneless with a signal-based store, in line with <a href="../decisions/0004-web-stack-angular.html">the web-stack decision</a>.</li>
+      </ul>
+
+      <h2>Outcome</h2>
+      <p>
+        As of the 2026-04-24 status checkpoint, implementation was in flight with PRs #29 through #42 merged on
+        <code>main</code> — covering the full fourteen-PR breakdown plus a <code>SingletonLock</code> stale-PID recovery fix
+        (#42) that lets a crashed instance relaunch cleanly. The intended end-to-end happy path was: launch → welcome →
+        provision → token paste → OAuth install → worker launch → ready.
+      </p>
+      <div class="road-grid">
+        <div class="road-block">
+          <div class="field-label">Shipped in M1</div>
+          <ul class="body-list">
+            <li>Bun workspace + shared IPC contract</li>
+            <li>Hardened main shell &amp; typed preload bridge</li>
+            <li>Angular 21 zoneless renderer + six wizard screens</li>
+            <li>Client detection across three OSes</li>
+            <li>safeStorage vault + Discord OAuth loopback</li>
+            <li>Worker supervisor + per-RID publish pipeline</li>
+            <li>Unsigned packaging + three-OS CI matrix</li>
+            <li><code>SingletonLock</code> stale-PID recovery (#42)</li>
+          </ul>
+        </div>
+        <div class="road-block">
+          <div class="field-label">Deferred to post-M1 backlog</div>
+          <ul class="body-list">
+            <li>Signing / notarization / <code>electron-updater</code></li>
+            <li>Slack wizard (<code>apps.manifest.create</code>)</li>
+            <li>Teams provisioning (detection only; policy-blocked)</li>
+            <li>Renderer / main OpenTelemetry</li>
+            <li>Discord adapter ID-redaction (accepted as Info-level logging for now)</li>
+          </ul>
+        </div>
+      </div>
+      <p>
+        The full list of scope and deferrals was recorded as an ADR. The plan note was to stay <code>active</code> until the
+        final documentation PR landed, then flip to <code>deprecated</code> once M1 closed.
+      </p>
+
+      <h2>Services affected</h2>
+      <p>M1 was almost entirely net-new desktop tooling around the existing backend; the services it touched or depends on:</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-adapter-discord.html">Adapter.Discord</a>
+        <a class="dep" href="../services/scout-host-console.html">Host.Console</a>
+      </div>
+      <ul class="body-list">
+        <li><strong>Scout.Host.Worker</strong> — the .NET 10 single-file, self-contained binary published per RID (<code>win-x64</code>, <code>osx-arm64</code>, <code>osx-x64</code>, <code>linux-x64</code>) and shipped as <code>electron-builder</code> <code>extraResources</code> outside the ASAR so it can be spawned. The desktop shell is its supervisor.</li>
+        <li><a href="../services/scout-adapter-discord.html">Adapter.Discord</a> — the only adapter wired through the wizard; the worker launches with <code>SCOUT__CHATADAPTER=Discord</code>. ID-redaction in this adapter was the one accepted gap.</li>
+        <li><a href="../services/scout-host-console.html">Host.Console</a> — the pre-existing entry point that the desktop worker pipeline mirrors; the desktop app is an alternative front door, not a replacement.</li>
+      </ul>
+      <p>
+        A companion <code>.NET</code> change (<code>feat/worker-ready-signal</code>, out of desktop scope) was flagged to add a
+        <code>SCOUT_READY</code> stdout signal in <code>ScoutWorker.cs</code> so the supervisor could confirm the worker had
+        connected before showing the ready screen.
+      </p>
+
+      <h2>Lessons</h2>
+      <ul class="body-list">
+        <li><strong>The IPC contract is the spine.</strong> Putting every renderer↔main type in one shared package, and forbidding any write-capable channel, kept the read-only invariant enforceable by code review rather than convention. It is the single source of truth for the boundary.</li>
+        <li><strong>Pick the runtime model deliberately.</strong> Bun is dev-only; Electron's bundled Node executes <code>main.ts</code> at runtime. This was flagged as the highest-severity open question and addressed with a lint rule forbidding the <code>Bun</code> global inside the <code>main</code> and <code>preload</code> packages.</li>
+        <li><strong>Boundary failure tests paid off.</strong> Every external boundary — keychain unavailable, Discord token endpoint 4xx/5xx/timeout, loopback port-in-use, state mismatch, worker binary missing or hanging on shutdown — got an explicit failure test, matching the <a href="../conventions/production-readiness.html">production-readiness</a> bar of at least one failing-path test per boundary.</li>
+        <li><strong>Ship unsigned, then sign.</strong> Deferring code signing, notarization, and auto-update kept the milestone deliverable; releases were labelled "UNSIGNED BUILD" with a documented <code>xattr -d com.apple.quarantine</code> workaround for macOS rather than blocking on certificates.</li>
+        <li><strong>Detection that never blocks.</strong> Treating a missing or undetected client as SKIP/LINK rather than an error meant the wizard worked even when Discord desktop was not installed — a web session is enough.</li>
+        <li><strong>Stale locks bite packaged apps.</strong> The <code>SingletonLock</code> stale-PID recovery fix was the one item discovered late and folded in (#42), a reminder that single-instance handling needs crash-recovery testing.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="rt">adr</span>0005 Desktop M1 Scope</a>
+          <a href="../decisions/0004-web-stack-angular.html"><span class="rt">adr</span>0004 Web Stack Angular</a>
+          <a href="../runbooks/desktop-packaging.html"><span class="rt">runbook</span>Desktop Packaging</a>
+          <a href="../services/scout-adapter-discord.html"><span class="rt">service</span>Adapter.Discord</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

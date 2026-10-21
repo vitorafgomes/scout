@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commit &amp; PR Policy — Scout Wiki</title>
+<meta name="description" content="How changes reach main in Scout: branch-and-PR for every change, atomic commits, the human is always the author, and never AI attribution.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Conventions</a><span class="sep">/</span>Commit &amp; PR Policy</nav>
+
+    <section>
+      <h1>Commit &amp; PR Policy</h1>
+      <p class="blockquote">Every change reaches <code>main</code> through a branch and a Pull Request, the human who requested the work is the sole author, and no commit or PR ever attributes authorship to an AI tool.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype convention">convention</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>obsidian-vault/scout/CLAUDE.md</code>; <code>CONTRIBUTING.md</code></span>
+      </div>
+
+      <h2>The rule</h2>
+      <p>
+        Scout has one path to <code>main</code>: a feature branch and a Pull Request. There are no
+        direct pushes to <code>main</code> — not for docs, not for chores, not for a one-line fix. The
+        commit history that lands is composed of <strong>atomic commits</strong>, one concern each. The
+        <strong>author of every commit is the human</strong> who requested the work, and nothing in the
+        commit or PR may credit an AI tool as author, co-author, or contributor.
+      </p>
+
+      <ul class="body-list">
+        <li><strong>Branch for every change.</strong> Use a typed slug: <code>feat/&lt;slug&gt;</code>, <code>fix/&lt;slug&gt;</code>, <code>chore/&lt;slug&gt;</code>, or <code>docs/&lt;slug&gt;</code>.</li>
+        <li><strong>Atomic commits.</strong> One concern per commit; do not bundle a refactor with a feature or a format pass with logic.</li>
+        <li><strong>PR against <code>main</code>.</strong> Push the branch and open the PR with <code>gh pr create</code>; fill in the repository template.</li>
+        <li><strong>The PR body confirms the read-only invariant</strong> — that the change introduces no executive writes against external systems.</li>
+        <li><strong>Merge only after CI passes</strong> and, when required, review is complete.</li>
+        <li><strong>No force-push to <code>main</code>, ever.</strong> No force-push to a feature branch once review has started.</li>
+        <li><strong>The human is the author.</strong> If a commit template would auto-append AI attribution, strip it before committing.</li>
+      </ul>
+
+      <div class="callout danger">
+        <strong>Absolute rule.</strong> Never add Claude — or any AI tool — as co-author, author, or
+        contributor. This covers commit trailers (<code>Co-Authored-By:</code>, <code>Signed-off-by: Claude</code>),
+        commit-message footers ("Generated with Claude Code"), PR descriptions, PR authors / reviewers /
+        assignees, and source-file headers or comments. There is no exception.
+      </div>
+
+      <h2>Rationale</h2>
+      <ul class="body-list">
+        <li><strong>The PR is the gate that protects the read-only invariant.</strong> Scout is a read-only assistant: no contribution may introduce write operations against external systems. A direct push bypasses the review where that invariant is checked, so every change is forced through a PR whose body restates the invariant.</li>
+        <li><strong>Atomic commits keep history auditable.</strong> One concern per commit means a reviewer — and a future bisect — can reason about each change in isolation, and a single bad commit can be reverted without unpicking unrelated work.</li>
+        <li><strong>Human authorship is a provenance and licensing concern.</strong> Scout ships under MIT; by opening a PR the contributor confirms they have the right to contribute the code. Authorship must therefore name the human who is making that attestation, never a tool.</li>
+        <li><strong>No AI attribution keeps the record clean.</strong> Source files carry no AI-attribution comments or marketing headers, and the same discipline extends to commits and PRs so the project's metadata stays honest and free of vendor noise.</li>
+      </ul>
+
+      <h2>Examples</h2>
+
+      <p>Workflow for a change — including docs, chores, and one-line fixes:</p>
+      <div class="seq">
+        <div class="chain">
+          <span>branch <code>feat/&lt;slug&gt;</code></span>
+          <span>atomic commits</span>
+          <span>push branch</span>
+          <span><code>gh pr create</code> vs <code>main</code></span>
+          <span>CI + review</span>
+          <span>merge</span>
+        </div>
+      </div>
+
+      <div class="callout good">
+        <strong>Do</strong> — branch, commit atomically, open a PR.
+        <pre class="cfg"><span class="c"># branch off main</span>
+git switch -c <span class="s">fix/rate-limit-message</span>
+
+<span class="c"># one concern, human is the author, no AI trailer</span>
+git commit -m <span class="s">"fix: translate provider 429 to LlmRateLimitException"</span>
+
+git push -u origin <span class="s">fix/rate-limit-message</span>
+gh pr create --base <span class="s">main</span> --fill</pre>
+      </div>
+
+      <div class="callout danger">
+        <strong>Don't</strong> — push to <code>main</code>, or attach AI attribution.
+        <pre class="cfg"><span class="c"># never push straight to main</span>
+git push origin <span class="s">main</span>
+
+<span class="c"># never credit an AI tool as author or co-author</span>
+git commit -m <span class="s">"feat: add Slack adapter
+
+Co-Authored-By: Claude &lt;noreply@anthropic.com&gt;
+Generated with Claude Code"</span></pre>
+      </div>
+
+      <p>
+        Both the project <code>CLAUDE.md</code> and <code>CONTRIBUTING.md</code> name the same branch prefixes.
+        The vault adds <code>docs/&lt;slug&gt;</code> for documentation-only changes; <code>CONTRIBUTING.md</code>
+        lists <code>feat</code>, <code>fix</code>, and <code>chore</code> for external contributors. Either way,
+        the branch is typed and the PR targets <code>main</code>.
+      </p>
+
+      <div class="callout">
+        <strong>Bootstrap exception.</strong> The two initial commits — <code>chore: bootstrap repository</code>
+        and <code>chore: add OSS project baseline</code> — pre-date this policy and remain on <code>main</code>
+        directly. Every commit after them follows the branch-and-PR flow. This is the only carve-out.
+      </div>
+
+      <h2>Enforcement</h2>
+      <ul class="body-list">
+        <li><strong>Quality gates before the PR opens.</strong> Run <code>dotnet format</code> until clean and <code>dotnet test</code> until green. For external contributors, <code>CONTRIBUTING.md</code> states the same: run <code>dotnet format</code> and <code>dotnet test</code> before pushing.</li>
+        <li><strong>Reviewer agents per change surface.</strong> <code>architect-reviewer</code> for any change touching <code>Scout.Core</code> or plugin contracts; <code>code-reviewer</code> for any new plugin or adapter; <code>security-auditor</code> for any change touching credentials, token handling, or external API calls.</li>
+        <li><strong>Production-readiness for external boundaries.</strong> A change touching HTTP, DB, broker, cache, filesystem, or cloud APIs runs the <code>production-readiness-checks</code> skill before the PR — see <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+        <li><strong>PR body restates the invariant.</strong> The template asks the author to confirm the change introduces no executive writes; <code>CONTRIBUTING.md</code> warns that PRs which break the read-only invariant will not be merged.</li>
+        <li><strong>Merge is CI-gated.</strong> Merge only after CI passes and any required review is complete; no force-push to <code>main</code> under any circumstance.</li>
+        <li><strong>Issue first for non-trivial work.</strong> Open an issue describing the change before starting anything non-trivial; small fixes (typos, obvious bugs) may go straight to a PR.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+          <a href="../conventions/code-style.html"><span class="rt">convention</span>Code Style</a>
+          <a href="../conventions/testing.html"><span class="rt">convention</span>Testing</a>
+          <a href="../conventions/secrets-handling.html"><span class="rt">convention</span>Secrets Handling</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

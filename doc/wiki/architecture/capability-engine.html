@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capability Engine — Scout Wiki</title>
+<meta name="description" content="The Capability Engine: one retrieval index that selects a persona (WHO answers) and skills (HOW to reason) per turn from a single typed markdown library.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Architecture</a><span class="sep">/</span>Capability Engine</nav>
+
+    <section>
+      <h1>Capability Engine</h1>
+      <p class="lead">Skills and personas are the same mechanism — retrieval over a typed markdown library — applied to two layers of context. The Capability Engine collapses them into <strong>one</strong> index, <strong>one</strong> embedding pass per turn, and <strong>one</strong> config section. Each turn it selects the persona that answers (top-1) and the skills that guide the reasoning (top-N), then injects both into the same agent invocation.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">knowledge</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/capability-engine-architecture.md</code>, <code>capability-engine-PLAN.md</code></span>
+      </div>
+
+      <h2>The unification</h2>
+      <p>
+        A <strong>capability</strong> is a markdown file with frontmatter <code>type: persona | skill</code>,
+        <code>name</code>, <code>description</code> (the retrieval key), optional <code>tools</code>, and a body.
+        The two types differ only in what they answer and how they are injected:
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">persona</div><div class="t-role">WHO answers + tool posture. Selected <strong>top-1</strong> above threshold, else a <code>general-assistant</code> fallback. Injected through the agent's <code>{{$persona}}</code> template via <code>AgentInvokeOptions.KernelArguments["persona"]</code>.</div></div>
+        <div class="type-row"><div class="t-name">skill</div><div class="t-role">HOW to reason. Selected <strong>top-N</strong> above threshold. Injected via <code>AgentInvokeOptions.AdditionalInstructions</code> — the path the gate fix opened.</div></div>
+      </div>
+      <p>
+        Both share one loader, one embedding index, one cosine pass per turn, one config block, one lifecycle
+        store, and one log line. The engine is a single <code>Lazy&lt;Task&lt;index&gt;&gt;</code> over every
+        capability description; per turn it runs one cosine pass over the single message embedding and partitions
+        the ranked results by <code>type</code>.
+      </p>
+
+      <div class="callout">
+        <strong>Why one engine, not two.</strong> The temptation is to clone the skill selector into a parallel
+        persona selector. That would double the embedding indexes, the per-turn embeds, the index-build passes,
+        the config sections, the selectors, and the log lines. Unifying keeps each of those at exactly one.
+      </div>
+
+      <h3>Unification proof (2 selectors &rarr; unified)</h3>
+      <table class="wt">
+        <thead><tr><th>&nbsp;</th><th>2 selectors</th><th>unified</th></tr></thead>
+        <tbody>
+          <tr><td>embedding indexes</td><td>2</td><td>1</td></tr>
+          <tr><td>message embeds / turn</td><td>2</td><td>1</td></tr>
+          <tr><td>index-build embed passes</td><td>2</td><td>1 batch over all <code>name+description</code></td></tr>
+          <tr><td>config sections</td><td>2</td><td>1 — <code>Scout:Capabilities</code></td></tr>
+          <tr><td>selectors / lifecycle stores / log lines</td><td>2</td><td>1</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Per-turn flow</h2>
+      <p>One message in; a grounded, persona-shaped, skill-guided agent invocation out.</p>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-node">user message</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">embed once<br><small>search_query: prefix</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">one cosine pass<br><small>over single index</small></div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-node">partition by type</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">persona = top-1<br><small>else fallback</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">skills = top-N<br><small>&ge; threshold</small></div>
+        </div>
+        <div class="flow-row">
+          <div class="flow-node">compose</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">ChatRequest<br><small>Persona + SystemPrompt</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">agent invoke<br><small>stream chunks</small></div>
+        </div>
+      </div>
+      <ul class="seq">
+        <li>The message is embedded <strong>once</strong>, prefixed <code>search_query:</code> for the nomic asymmetric scheme.</li>
+        <li>A single cosine pass ranks every capability; the results are partitioned by <code>type</code>.</li>
+        <li>Persona = the highest-scoring <code>persona</code> at or above <code>PersonaThreshold</code>, else the <code>general-assistant</code> fallback (never null).</li>
+        <li>Skills = the <code>type==skill</code> entries at or above <code>SkillThreshold</code>, ranked, capped at <code>SkillTopN</code>.</li>
+        <li>The composer folds persona body into <code>ChatRequest.Persona</code> and the composed skill text into <code>ChatRequest.SystemPrompt</code>.</li>
+        <li>The selector never throws; on any failure it returns the fallback persona and an empty skill list.</li>
+      </ul>
+
+      <h2>Injection at the gateway</h2>
+      <p>
+        The two layers land on the agent through two distinct slots, which is why both must coexist in one
+        invocation. On the agent path, <code>ChatGateway.StreamAgentAsync</code> builds an
+        <code>AgentInvokeOptions</code> only when a persona or system prompt is present: the persona binds via
+        <code>KernelArguments["persona"]</code> (only when non-empty) and the system prompt rides
+        <code>AdditionalInstructions</code> (only when non-empty); both empty leaves <code>options</code> null so
+        the agent's default persona applies.
+      </p>
+      <div class="layer-stack">
+        <div class="layer"><strong>Persona slot</strong> — <code>KernelArguments["persona"]</code> renders into the agent's <code>{{$persona}}</code> template. <code>ChatGateway.cs:200</code>.</div>
+        <div class="layer"><strong>Skills slot</strong> — <code>AdditionalInstructions = request.SystemPrompt</code> surfaces as a second system message. <code>ChatGateway.cs:203</code>.</div>
+        <div class="layer"><strong>Direct path</strong> — when no agent is registered, persona then system prompt are joined by a blank line into a single system message. <code>ChatGateway.cs:103</code>.</div>
+      </div>
+
+      <h2>Foundation already landed</h2>
+      <p>The first two steps of the plan are in <code>main</code>; the unified selector (Step 2) is the remaining work.</p>
+      <div class="chain">
+        <div class="check done"><strong>Step 0 — gate fix (<code>d61f785</code>).</strong> <code>ChatGateway.StreamAgentAsync</code> now passes the composed prompt via <code>AgentInvokeOptions.AdditionalInstructions</code>. Before this the agent path discarded <code>request.SystemPrompt</code> every turn, so skills and persona were dead on the live config. <code>ChatGateway.cs:166</code>.</div>
+        <div class="check done"><strong>Step 1 — templated persona agent (behavior-neutral).</strong> <code>ChatRequest.Persona</code> exists (<code>ChatRequest.cs:23</code>); <code>ProjectExpertAgentFactory</code> builds a templated agent with <code>Template = "{{$persona}}"</code> and a default <code>Arguments["persona"]</code> equal to today's grounded instructions, so behavior is identical until routing wires in. <code>ProjectExpertAgentFactory.cs:67</code>.</div>
+        <div class="check"><strong>Step 2 — unified capability engine.</strong> Refactor <code>SkillSelector</code> into <code>CapabilitySelector</code>, move the markdown library under <code>capabilities/</code>, collapse config into <code>Scout:Capabilities</code>, and swap the router to <code>ICapabilitySelector</code>. Not yet built.</div>
+      </div>
+
+      <h2>SK 1.77.0 API anchors</h2>
+      <p>The design is pinned to types verified against the resolved Semantic Kernel 1.77.0 assemblies:</p>
+      <ul class="body-list">
+        <li><code>AgentInvokeOptions</code> — settable <code>KernelArguments</code> and <code>AdditionalInstructions</code>. (<code>ChatCompletionAgentInvokeOptions</code> does <strong>not</strong> exist.)</li>
+        <li><code>ChatCompletionAgent(PromptTemplateConfig, IPromptTemplateFactory)</code> constructor.</li>
+        <li><code>KernelPromptTemplateFactory</code> (in <code>Microsoft.SemanticKernel.Core</code>).</li>
+        <li><code>PromptTemplateConfig.SemanticKernelTemplateFormat</code>.</li>
+        <li><code>Agent.Arguments</code> get/set; a per-invoke <code>AgentInvokeOptions.KernelArguments</code> overrides the agent's defaults when instructions are rendered.</li>
+      </ul>
+
+      <h2>Step 2 design — the unified selector</h2>
+      <p>The current <a href="../architecture/skills-subsystem.html">Skills subsystem</a> already has the right shape: one lazy index, one cosine pass, never-throws. Step 2 generalises it rather than cloning it.</p>
+      <ul class="body-list">
+        <li><strong>File format.</strong> <code>SkillFileLoader</code> gains <code>type</code> (unknown &rarr; <code>skill</code> with a warning, so existing files stay valid) and <code>tools</code> parsing, returning a <code>Capability(Type, Name, Description, Body, SourcePath, Tools)</code> with <code>enum CapabilityType { Skill, Persona }</code>. All fence, empty-body, and skip-malformed rules carry over from <code>SkillFileLoader.cs:79</code> onward.</li>
+        <li><strong>Engine.</strong> <code>SkillSelector</code> &rarr; <code>CapabilitySelector</code>: one <code>Lazy&lt;Task&lt;index&gt;&gt;</code> (<code>ExecutionAndPublication</code>) over every <code>name+description</code> in one batch embed; <code>SelectAsync</code> embeds the message once, runs one cosine pass, then partitions by type. Returns <code>CapabilitySelection(Capability Persona, IReadOnlyList&lt;Capability&gt; Skills)</code> where <code>Persona</code> is never null. The lazy pattern already guarantees zero file I/O at DI build and host startup (<code>SkillSelector.cs:44</code>).</li>
+        <li><strong>Catalog.</strong> <code>SkillCatalog</code> / <code>SkillsPlugin</code> (<code>list_skills</code> / <code>load_skill</code>) filter to <code>Type==Skill</code> so personas are never surfaced as skills.</li>
+        <li><strong>Composer.</strong> <code>SkillPromptComposer.Compose(SystemPrompt, selection.Skills)</code> &rarr; <code>ChatRequest.SystemPrompt</code>; <code>selection.Persona.Body</code> &rarr; <code>ChatRequest.Persona</code>.</li>
+        <li><strong>Router.</strong> <code>LlmStreamingRouter</code> swaps <code>ISkillSelector</code> for <code>ICapabilitySelector</code> and forwards both <code>Persona</code> and composed <code>SystemPrompt</code> on the per-turn <code>ChatRequest</code>.</li>
+      </ul>
+
+      <div class="callout">
+        <strong>Cycle safety.</strong> The selector depends on <code>IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt;</code> resolved from the <em>provider factory</em>, not the shared kernel, and it is <strong>not</strong> a <code>KernelPlugin</code>. Both choices keep it out of the DI construction cycle that runs through project knowledge.
+      </div>
+
+      <h2>Configuration</h2>
+      <p>Step 2 collapses the current <code>Scout:Skills</code> block into one <code>Scout:Capabilities</code> section.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt — Step 2 target)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Capabilities"</span>: {
+    <span class="k">"Enabled"</span>: <span class="s">true</span>,
+    <span class="k">"Directory"</span>: <span class="s">"capabilities"</span>,
+    <span class="k">"SkillTopN"</span>: <span class="s">1</span>,
+    <span class="k">"SkillThreshold"</span>: <span class="s">0.55</span>,
+    <span class="k">"PersonaThreshold"</span>: <span class="s">0.55</span>,
+    <span class="k">"FallbackPersonaName"</span>: <span class="s">"general-assistant"</span>,
+    <span class="k">"EmbedNameAndDescription"</span>: <span class="s">true</span>,
+    <span class="k">"QueryPrefix"</span>: <span class="s">"search_query:"</span>,
+    <span class="k">"DocumentPrefix"</span>: <span class="s">"search_document:"</span>
+  }
+}</pre>
+
+      <h2>Capability library</h2>
+      <p>Step 2 ships the first personas alongside the retyped skills, all under one folder:</p>
+      <div class="val-list">
+        <span class="val">general-assistant (persona, fallback)</span>
+        <span class="val">code-analyst (persona)</span>
+        <span class="val">kubernetes-specialist (persona)</span>
+        <span class="val">the existing skills, retyped type: skill</span>
+      </div>
+      <p>The 7 reference skills are unchanged apart from the added <code>type: skill</code> line, preserving back-compat. The csproj <code>Content Include</code> moves from <code>skills\**\*.md</code> to <code>capabilities\**\*.md</code>.</p>
+
+      <h2>Tool scoping</h2>
+      <ul class="body-list">
+        <li><strong>Now (soft).</strong> The persona body instructs which tools to use or avoid. Zero plumbing.</li>
+        <li><strong>Later (hard, Step 3).</strong> <code>FunctionChoiceBehavior.Auto(functions: subset)</code> built from the selected <code>Capability.Tools</code>, threaded via a new <code>ChatRequest.AllowedTools</code>. Addresses the tool overload a 9B local model suffers when offered the full set.</li>
+      </ul>
+
+      <h2>Fold-ins applied to the single engine</h2>
+      <ul class="body-list">
+        <li>nomic asymmetric prefixes (<code>search_query:</code> / <code>search_document:</code>) applied at the selector call site, since the connector returns a raw <code>IEmbeddingGenerator</code>.</li>
+        <li>Embed <code>name+description</code>, not description alone (<code>EmbedNameAndDescription</code>).</li>
+        <li>One per-turn log line — persona name and score plus each skill name and score — as the tunability seam.</li>
+        <li>Card-vs-full-body injection mode (default full body) and a future hot-reload that invalidates one <code>Lazy</code>.</li>
+      </ul>
+
+      <h2>The escape hatch (Step 4)</h2>
+      <p>
+        This is <strong>Pattern B</strong>: one agent, dynamic persona, embedding routing — deliberately not
+        multi-agent orchestration, which was rejected for the local model (no GroupChat/Magentic, no deep handoff
+        chains, route with embeddings not LLM triage). If the chat model is later upgraded, each persona maps
+        roughly 1:1 to a <code>ChatCompletionAgent</code> under <code>HandoffOrchestration</code>. The persona
+        content is the migration asset, so nothing written today is wasted.
+      </p>
+
+      <h2>What to avoid on a local model</h2>
+      <ul class="body-list">
+        <li>No GroupChat or Magentic orchestration; no deep handoff chains.</li>
+        <li>Keep roughly 3&ndash;5 tools per persona; route with embeddings, not LLM triage.</li>
+        <li>Validate the chat model tag — confirm it is real, tool-capable, and streams tool calls over the OpenAI-compatible <code>/v1</code> connector.</li>
+        <li>The heavy chat model can starve <code>nomic-embed-text</code> on a single GPU; use a lighter chat model or free Ollama while indexing.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/skills-subsystem.html"><span class="rt">arch</span>Skills Subsystem</a>
+          <a href="../services/scout-skills.html"><span class="rt">service</span>Scout.Skills</a>
+          <a href="../roadmap/capability-engine.html"><span class="rt">roadmap</span>Capability Engine</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+          <a href="../architecture/project-knowledge-rag.html"><span class="rt">arch</span>Project Knowledge RAG</a>
+          <a href="../domain/skill.html"><span class="rt">domain</span>Skill</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.Adapter.Discord — Scout Wiki</title>
+<meta name="description" content="Scout.Adapter.Discord service page: the Discord.Net chat adapter that self-gates on a bot token and streams replies via single-embed edits.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Adapter.Discord</nav>
+
+    <section>
+      <h1>Scout.Adapter.Discord</h1>
+      <p class="blockquote">The Discord chat adapter: it owns a single Discord.Net gateway client, decides which inbound messages are for Scout, and streams each reply by editing one embed in the originating channel.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Adapter.Discord/</code>; README; vault <code>sessions/2026-05-23-discord-streaming.md</code></span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        Scout.Adapter.Discord is the Discord side of the <a href="../domain/adapter.html">chat adapter</a> boundary.
+        It implements <code>IChatAdapter</code> over a single <code>DiscordSocketClient</code>: it logs in with a bot
+        token, subscribes to gateway events, normalizes each inbound message into a platform-agnostic
+        <code>ChatMessage</code>, and invokes the conversation handler with an <code>IResponseSink</code> bound to the
+        channel the message came from. It is a self-contained NuGet-style module — the host calls
+        <code>AddDiscordAdapter(configuration)</code> and the adapter wires itself in only when a token is present.
+      </p>
+      <p>
+        It does <strong>not</strong> own conversation state, routing, or the LLM call — that is
+        <a href="../services/scout-conversation.html">Scout.Conversation</a>, which drives the sink. The adapter only
+        decides <em>whether</em> a message is addressed to Scout, <em>normalizes</em> it, and <em>renders</em> the
+        streamed reply back to Discord. Replies write only to the originating channel: that is the descriptive-write
+        boundary, never an executive write to any other system.
+      </p>
+
+      <h2>Public contract</h2>
+      <ul class="body-list">
+        <li><strong><code>DiscordChatAdapter : IChatAdapter</code></strong> — <code>Name</code> returns <code>"Discord"</code>; <code>StartAsync(handler, ct)</code> logs in and starts the gateway; <code>StopAsync(ct)</code> tears it down. Also <code>IAsyncDisposable</code>.</li>
+        <li><strong><code>DiscordMessageTranslator</code></strong> — pure, Discord.Net-free translator. <code>TryTranslate(inbound, botUserId, out ChatMessage?)</code> applies the @-mention / DM gate and strips bot mentions.</li>
+        <li><strong><code>DiscordResponseSink : IResponseSink</code></strong> — streams a reply into one Discord embed via <code>BeginAsync</code> / <code>UpdateAsync</code> / <code>CompleteAsync</code> / <code>FailAsync</code>.</li>
+        <li><strong><code>AddDiscordAdapter(services, configuration)</code></strong> — the composition root. Binds <code>Scout:Adapters:Discord</code> and registers the adapter as an <code>IChatAdapter</code> <em>only</em> when a bot token is configured; otherwise a clean no-op.</li>
+        <li><strong><code>DiscordOptions</code></strong> / <strong><code>InboundDiscordMessage</code></strong> — the bound settings record and the minimal projection passed to the translator.</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">DiscordChatAdapter</div><div class="t-role"><code>sealed</code> <code>IChatAdapter</code> + <code>IAsyncDisposable</code>. Owns the <code>DiscordSocketClient</code>, subscribes gateway handlers, projects each <code>SocketMessage</code> and dispatches accepted ones to the conversation handler.</div></div>
+        <div class="type-row"><div class="t-name">DiscordAdapterLifecycle</div><div class="t-role"><code>internal sealed</code> single-login state machine (Idle → Started → Stopped). Holds a lifetime <code>CancellationToken</code> that trips on stop so in-flight conversations unwind. A start after a stop is rejected — Discord.Net cannot re-login a stopped session.</div></div>
+        <div class="type-row"><div class="t-name">DiscordMessageTranslator</div><div class="t-role">Pure <code>partial</code> class. Rejects bot-authored messages, applies the guild @-mention gate (DMs bypass it), strips bot mentions, and emits a <code>ChatMessage</code>. No Discord.Net type crosses this boundary.</div></div>
+        <div class="type-row"><div class="t-name">InboundDiscordMessage</div><div class="t-role"><code>record</code> projection of the fields the translator needs (ids, content, mentions-self flag, timestamp, optional guild id). Exists so the translator stays unit-testable without the sealed <code>SocketMessage</code>.</div></div>
+        <div class="type-row"><div class="t-name">DiscordResponseSink</div><div class="t-role"><code>sealed</code> <code>IResponseSink</code>. Renders the stream into one embed with a <code>▌</code> cursor; owns its own Discord.Net 429 backoff-and-retry; head-preserving truncation against the 4096-char embed limit.</div></div>
+        <div class="type-row"><div class="t-name">DiscordOptions</div><div class="t-role">Bound from <code>Scout:Adapters:Discord</code>; carries the <code>BotToken</code>. Default empty string disables the adapter.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/streaming-first.html">Streaming-First</a> — the sink renders the response incrementally by editing one embed (Discord has no SSE for bot replies), driven by the conversation pump's cumulative <code>UpdateAsync</code> calls.</li>
+        <li><a href="../invariants/pluggable-everything.html">Pluggable Everything</a> — the adapter is self-gating: present a token and it registers, omit it and the host starts without Discord. No host code references Discord.Net.</li>
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — the sink binds to the originating channel only; the bot writes its reply there and nowhere else.</li>
+        <li><a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> — the bot token comes from environment variables or User Secrets; the options doc-comment and constructor error message both forbid committing it.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>DiscordChatAdapter.cs:49</code> — gateway intents: <code>Guilds | GuildMessages | DirectMessages | MessageContent</code>. The <code>DirectMessages</code> + <code>MessageContent</code> pair is what lets the bot read DMs and message text.</li>
+        <li><code>DiscordChatAdapter.cs:108</code> — <code>OnMessageReceivedAsync</code>: projects the message, runs the translator gate, and on accept builds a channel-bound <code>DiscordResponseSink</code> and invokes the handler under the lifetime token.</li>
+        <li><code>DiscordChatAdapter.cs:150</code> — the sink is constructed against <code>message.Channel</code> only, enforcing the descriptive-write boundary in code.</li>
+        <li><code>DiscordMessageTranslator.cs:45</code> — the gate: guild messages require an explicit @-mention; DMs (<code>GuildId is null</code>) are implicitly addressed and skip the mention requirement.</li>
+        <li><code>DiscordAdapterLifecycle.cs:31</code> — <code>Start</code> uses <code>Interlocked.CompareExchange</code> to reject a double-start and a restart-after-stop, then links the lifetime token to the host token.</li>
+        <li><code>Streaming/DiscordResponseSink.cs:201</code> — <code>WriteWithRateLimitRetryAsync</code>: catches Discord.Net <code>RateLimitedException</code>, backs off once (default 1s on the injected <code>TimeProvider</code>), then retries; other exceptions propagate to the caller.</li>
+        <li><code>Streaming/DiscordResponseSink.cs:129</code> — interim edits are best-effort: a non-rate-limit transport failure is logged and dropped, since the pump keeps the buffer and the terminal call re-renders the full body.</li>
+        <li><code>Streaming/DiscordResponseSink.cs:252</code> — <code>TruncateHead</code>: head-preserving truncation against the 4096-char embed limit so the start of the answer is never lost; <code>ComposeTerminalBody</code> drops the citation footer first when over budget.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Used by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-host-console.html">Scout.Host.Console</a>
+      </div>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+        <span class="dep">Discord.Net</span>
+        <span class="dep">Microsoft.Extensions.Options</span>
+      </div>
+      <p>
+        The adapter references only <code>Scout.Conversation</code> for the
+        <code>IChatAdapter</code> / <code>IResponseSink</code> / <code>ChatMessage</code> / <code>Citation</code>
+        abstractions; it has no dependency on <a href="../services/scout-llm.html">Scout.Llm</a>. The host composes the
+        adapter together with the conversation core, and the conversation core (not the adapter) reaches the LLM.
+      </p>
+
+      <h2>Configuration</h2>
+      <p>All keys live under <code>Scout:Adapters:Discord</code>. An empty or absent <code>BotToken</code> disables the adapter; the host then continues with whatever other adapters are configured.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt) — token never committed; inject via env / User Secrets</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Discord"</span>: {
+      <span class="k">"BotToken"</span>: <span class="s">""</span>
+    }
+  }
+}</pre>
+      <p>
+        In development the token is supplied through User Secrets; in any environment it can be overridden with the
+        environment variable <code>SCOUT__ADAPTERS__DISCORD__BOTTOKEN</code> (double-underscore separator). The
+        adapter requires the bot's <em>Message Content</em> privileged intent to be enabled in the Discord developer
+        portal, matching the <code>MessageContent</code> gateway intent it requests.
+      </p>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li>Unit tests in <code>tests/Scout.Adapter.Discord.Tests/</code> cover the translator gate (<code>DiscordMessageTranslatorTests</code>), the inbound projection (<code>DiscordInboundProjectionTests</code>), the single-login lifecycle (<code>DiscordAdapterLifecycleTests</code>), and the DI self-gating (<code>DiscordServiceCollectionExtensionsTests</code>). Assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a>.</li>
+        <li><code>Streaming/DiscordResponseSinkTests</code> drives the sink through its full lifecycle via the injected post/edit delegates — cursor seeding, cumulative updates, terminal body, and the 4096-char truncation rules — with no Discord.Net network.</li>
+        <li><code>Streaming/DiscordSinkBoundaryTests</code> is the boundary-failure suite required by <a href="../conventions/production-readiness.html">Production Readiness</a>: a 429 backs off on a <code>FakeTimeProvider</code> then retries once (interim and terminal), and a 5xx on an interim edit is dropped without breaking the terminal render.</li>
+        <li>Internals are exposed to the test project via <code>InternalsVisibleTo</code>, so the pure projection, lifecycle, and sink seams are exercised directly without a live login.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../domain/adapter.html"><span class="rt">domain</span>Chat Adapter</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../services/scout-host-console.html"><span class="rt">service</span>Host.Console</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Knowledge RAG — Scout Wiki</title>
+<meta name="description" content="Project Knowledge RAG: how Scout indexes a project's code and docs into a local SQLite-vec store and answers grounded, cited questions through the Project Expert agent.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Architecture</a><span class="sep">/</span>Project Knowledge RAG</nav>
+
+    <section>
+      <h1>Project Knowledge RAG</h1>
+      <p class="lead">Ask Scout, in natural language, about a software project — its architecture, business rules, or how something is implemented — and get an answer grounded in that project's real code and in-repo documentation, with citations to the source files. The retrieval-augmented pipeline lives in the <a href="../services/scout-knowledge.html">Scout.Knowledge</a> project: it chunks a repository, embeds the chunks into a local SQLite-vec store, and exposes search to the model through the <strong>Project Expert</strong> agent.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">knowledge</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/project-knowledge-rag.md</code>, <code>project-knowledge-rag-phase1-plan.md</code>; <code>src/Scout.Knowledge/</code></span>
+      </div>
+
+      <h2>What it is</h2>
+      <p>
+        Project Knowledge is a <strong>local-first RAG layer</strong> on top of the existing Ollama embedding
+        generator from <a href="../services/scout-llm.html">Scout.Llm</a>. There is no external vector service and
+        no dependency on any human knowledge base: each project is self-contained in its own repository, and
+        "docs" means in-repo markdown (README, <code>*.md</code>, <code>*.txt</code>). The vault is the human
+        knowledge base, not a runtime source.
+      </p>
+      <p>
+        A configured (or auto-discovered) repository is walked, chunked at semantic boundaries, embedded, and
+        stored in a SQLite file. At question time the <strong>Project Expert</strong>
+        <code>ChatCompletionAgent</code> calls the <code>search_project</code> tool, which embeds the question,
+        runs a per-project cosine search, and returns a citation-tagged context block. The agent composes a
+        grounded, streamed answer and cites the source files. Everything stays read-only — Project Knowledge
+        never mutates the repositories it indexes.
+      </p>
+
+      <div class="callout">
+        <strong>Phase 1 vs. shipped.</strong> The original design (vault <code>project-knowledge-rag.md</code>)
+        scoped a knowledge graph, graph-boost retrieval, and incremental file-watch as deferred work; Phase 1
+        (vault <code>project-knowledge-rag-phase1-plan.md</code>) shipped the index → embed → store → retrieve →
+        cite path. The current code adds two pieces beyond Phase 1: an opt-in file-watch re-indexer
+        (<code>ProjectWatchService</code>) and a metadata-only symbol lookup (<code>find_symbol</code>). The
+        knowledge graph with transitive-closure boost and BM25 + reranking remain
+        <a href="../roadmap/project-knowledge-optimization.html">roadmap items</a>.
+      </div>
+
+      <h2>Layers</h2>
+      <div class="layer-stack">
+        <div class="layer">
+          <strong>Agent &amp; plugin</strong> — the <code>ProjectKnowledgePlugin</code> exposes
+          <code>search_project</code>, <code>find_symbol</code>, and <code>list_projects</code> as kernel
+          functions; the Project Expert agent is the chat responder that calls them.
+        </div>
+        <div class="layer">
+          <strong>Retrieval</strong> — <code>ProjectKnowledgeService</code> turns a question into a
+          citation-tagged context string: embed the question, search the store, format the hits.
+        </div>
+        <div class="layer">
+          <strong>Resolution &amp; discovery</strong> — <code>ProjectResolutionService</code> merges configured
+          projects with repositories auto-discovered under configured roots and lazily indexes a project on
+          first use; <code>ProjectDiscoveryService</code> finds repositories by listing directories only.
+        </div>
+        <div class="layer">
+          <strong>Indexing</strong> — <code>ProjectIndexer</code> walks the repo, <code>FileChunker</code>
+          chunks each file (Roslyn for C#, line windows otherwise), and chunks are embedded in batches; an
+          opt-in <code>ProjectWatchService</code> re-indexes single files as they change.
+        </div>
+        <div class="layer">
+          <strong>Storage</strong> — <code>SqliteProjectKnowledgeStore</code> persists
+          <code>ChunkRecord</code> rows in a local SQLite-vec file with cosine similarity over a 768-dim vector.
+        </div>
+      </div>
+
+      <h2>Indexing pipeline</h2>
+      <p>
+        Indexing is the write side. It runs from the <code>index &lt;project&gt;</code> console subcommand, from
+        lazy first-use resolution, or per file from the watcher. The shape is the same: enumerate, chunk, embed,
+        store.
+      </p>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-node">walk repo<br><small>skip bin/obj/.git/node_modules/dist/.vs</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">chunk file<br><small>Roslyn AST (C#) or 100-line windows</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">embed batch<br><small>context prefix + chunk text &rarr; Ollama</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">replace rows<br><small>delete project's stale ids, upsert fresh</small></div>
+        </div>
+      </div>
+      <ul class="seq">
+        <li>
+          <strong>Enumerate.</strong> <code>ProjectIndexer</code> recurses the repo and keeps only indexable
+          files. The include/skip predicate is shared so the indexer and the watcher agree on which files count
+          and how relative paths are spelled — code extensions <code>.cs/.ts/.tsx/.js/.jsx/.py/.json/.yml/.yaml</code>,
+          doc extensions <code>.md/.txt</code>, with segments <code>bin obj .git node_modules dist .vs</code>
+          skipped (<code>ProjectFileFilter.cs:10</code>, <code>:20</code>, <code>:27</code>).
+        </li>
+        <li>
+          <strong>Chunk.</strong> <code>FileChunker</code> parses C# with Roslyn and emits a chunk per method,
+          class, record, and interface declaration with 1-based start/end lines
+          (<code>FileChunker.cs:15</code>). Any non-C# file — or a C# file with no member declarations — falls
+          back to fixed 100-line windows (<code>FileChunker.cs:9</code>, <code>:41</code>, <code>:44</code>), so
+          a file never produces zero chunks.
+        </li>
+        <li>
+          <strong>Embed.</strong> Each chunk is prefixed with a context line
+          (<code>File: {relPath} | {kind}:{symbol} | lines {s}-{e}</code>) before embedding, then the whole
+          file's inputs are embedded in one batch via <code>IEmbeddingGenerator</code>
+          (<code>ProjectIndexer.cs:105</code>, <code>:69</code>). The dimension must match the model —
+          <code>nomic-embed-text</code> is 768 (<code>ChunkRecord.cs:41</code>).
+        </li>
+        <li>
+          <strong>Store.</strong> The full project's records are handed to <code>ReplaceProjectAsync</code>
+          (<code>ProjectIndexer.cs:35</code>), which drops the project's existing rows then upserts the new set
+          so chunks for deleted code are removed, not just overwritten
+          (<code>SqliteProjectKnowledgeStore.cs:47</code>).
+        </li>
+      </ul>
+      <p>
+        Per-file failures are isolated: a file that fails to read, chunk, or embed is logged and skipped, and
+        indexing continues with the rest (<code>ProjectIndexer.cs:91</code>).
+      </p>
+
+      <h2>Retrieval pipeline</h2>
+      <p>
+        Retrieval is the read side, triggered by the model calling <code>search_project</code> during a chat
+        turn.
+      </p>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="flow-node">question<br><small>+ project name</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">resolve<br><small>known? lazily index on first use</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">embed question</div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">cosine top-5<br><small>filtered to one project</small></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node">cited context<br><small>[path:start-end symbol]</small></div>
+        </div>
+      </div>
+      <ul class="seq">
+        <li>
+          <strong>Resolve.</strong> <code>ResolveAsync</code> looks the name up in the merged project map; an
+          unknown name returns null and a clean "Unknown project" message. A known-but-unindexed project is
+          indexed on first use, and a first-use indexing failure also returns null without throwing
+          (<code>ProjectResolutionService.cs:73</code>).
+        </li>
+        <li>
+          <strong>Embed &amp; search.</strong> <code>ProjectKnowledgeService.SearchAsync</code> embeds the
+          question and runs <code>store.SearchAsync</code> for the top 5 hits, filtered to the resolved project
+          (<code>ProjectKnowledgeService.cs:46</code>, <code>:11</code>). The store ensures the (possibly empty)
+          collection exists first, so a never-indexed project degrades to zero results instead of a
+          "no such table" exception (<code>SqliteProjectKnowledgeStore.cs:98</code>).
+        </li>
+        <li>
+          <strong>Format with citations.</strong> Each hit is rendered as a citation header
+          <code>[path:start-end symbol]</code> followed by the chunk content, joined into one block
+          (<code>ProjectKnowledgeService.cs:136</code>). No hits yields a clean
+          "No indexed content found" message naming the project (<code>ProjectKnowledgeService.cs:70</code>).
+        </li>
+      </ul>
+
+      <h2>The tools the model sees</h2>
+      <p>
+        <code>ProjectKnowledgePlugin</code> registers three kernel functions. The plugin is added to the kernel
+        only when at least one project is configured or discovered, so the model never offers a tool that would
+        search an empty index.
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">search_project</div><div class="t-role">Semantic search over a project's code and docs; embeds the question and returns cited context. The primary grounding path. (<code>ProjectKnowledgePlugin.cs:26</code>)</div></div>
+        <div class="type-row"><div class="t-name">find_symbol</div><div class="t-role">Metadata-only lookup of a class/method/interface by name — exact matches before partial, no embedding. Preferred for "where is X" questions. (<code>ProjectKnowledgePlugin.cs:41</code>)</div></div>
+        <div class="type-row"><div class="t-name">list_projects</div><div class="t-role">Lists the project names the agent can search (discovered roots plus explicit items). (<code>ProjectKnowledgePlugin.cs:53</code>)</div></div>
+      </div>
+
+      <h2>The Project Expert agent</h2>
+      <p>
+        <code>ProjectExpertAgentFactory</code> builds the single <code>ChatCompletionAgent</code> that responds
+        in chat. Its instructions tell it to use <code>search_project</code> only for project questions, to cite
+        the source files when context grounds the answer, to say so plainly when context does not cover the
+        question, and to answer general or conversational questions directly without the tool
+        (<code>ProjectExpertAgentFactory.cs:11</code>).
+      </p>
+      <ul class="body-list">
+        <li>The persona is rendered through a Semantic Kernel prompt template variable so a per-turn persona can override the default; the variable allows raw content because SK would otherwise HTML-encode characters such as the apostrophe in the instructions (<code>ProjectExpertAgentFactory.cs:67</code>).</li>
+        <li>When projects are configured, the default persona is extended with their names so the model defaults to a real project instead of any example in the tool schema and never invents a project name (<code>ProjectExpertAgentFactory.cs:26</code>, <code>:38</code>).</li>
+        <li>The agent is created with <code>FunctionChoiceBehavior.Auto()</code> so kernel functions are offered to the model on every turn (<code>ProjectExpertAgentFactory.cs:82</code>).</li>
+      </ul>
+
+      <h2>Resolution &amp; discovery</h2>
+      <p>
+        Projects reach the agent two ways, merged into one case-insensitive map built once at construction —
+        explicit items win on name collision (<code>ProjectResolutionService.cs:34</code>):
+      </p>
+      <ul class="body-list">
+        <li><strong>Explicit items</strong> — entries under <code>Scout:Projects:Items</code>, each a <code>{ Name, RepoPath }</code> (<code>ProjectsOptions.cs:30</code>).</li>
+        <li><strong>Auto-discovery</strong> — repositories found directly under each configured root in <code>Scout:Projects:Roots</code>. A child directory counts as a repository when it has a <code>.git</code> entry, a marker file (<code>package.json</code>, <code>go.mod</code>, <code>pyproject.toml</code>, <code>Cargo.toml</code>), or a <code>.sln/.slnx/.csproj</code> (<code>ProjectDiscoveryService.cs:13</code>, <code>:84</code>). Discovery lists directories only — it never reads file contents and never writes (<code>ProjectDiscoveryService.cs:5</code>).</li>
+      </ul>
+      <p>
+        Indexing is deferred to first resolution rather than run at startup, so building the DI graph costs no
+        embedding work (<code>ProjectResolutionService.cs:6</code>).
+      </p>
+
+      <h2>Incremental file watch (opt-in)</h2>
+      <p>
+        <code>ProjectWatchService</code> is a hosted background service, registered only when
+        <code>Scout:Projects:Watch:Enabled</code> is true and at least one explicit project is configured
+        (<code>KnowledgeServiceCollectionExtensions.cs:94</code>). It does no I/O in its constructor; watchers
+        are armed in <code>ExecuteAsync</code>, so registering it cannot hang startup
+        (<code>ProjectWatchService.cs:48</code>).
+      </p>
+      <ul class="body-list">
+        <li>A <code>FileSystemWatcher</code> per repo enqueues created, changed, deleted, and renamed paths that pass the same indexable filter; a debounce window (default 750&nbsp;ms) batches them before draining (<code>ProjectWatchService.cs:62</code>, <code>:132</code>, <code>ProjectsOptions.cs:25</code>).</li>
+        <li>On drain, a changed file is re-chunked and re-embedded and <code>ReplaceFileAsync</code> swaps just that file's rows; a deleted file degenerates to a pure delete (<code>ProjectWatchService.cs:189</code>, <code>SqliteProjectKnowledgeStore.cs:73</code>).</li>
+        <li>Per-file re-index failures are logged and skipped; a watcher error triggers a single re-arm attempt before the project stops watching (<code>ProjectWatchService.cs:178</code>, <code>:116</code>).</li>
+      </ul>
+
+      <h2>Storage record</h2>
+      <p>
+        <code>SqliteProjectKnowledgeStore</code> wraps one SQLite-vec collection of <code>ChunkRecord</code> over
+        a local file — no external service (<code>SqliteProjectKnowledgeStore.cs:7</code>). The record carries
+        the id, project (indexed for per-project filtering), repo-relative path, kind
+        (<code>code</code>/<code>doc</code>), symbol, start/end lines, content, and the 768-dim cosine embedding
+        (<code>ChunkRecord.cs:6</code>).
+      </p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Roots"</span>: [ <span class="s">"/home/me/WorkSpace"</span> ],
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"cegos-buddy"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/me/WorkSpace/cegos-buddy"</span> }
+    ],
+    <span class="k">"Watch"</span>: { <span class="k">"Enabled"</span>: <span class="s">false</span>, <span class="k">"DebounceMilliseconds"</span>: <span class="s">750</span> }
+  }
+}</pre>
+      <p>
+        The vector database file <code>project-knowledge.db</code> is created under the host's local application
+        data directory (<code>KnowledgeServiceCollectionExtensions.cs:22</code>, <code>:102</code>).
+      </p>
+
+      <h2>Error handling &amp; boundaries</h2>
+      <p>
+        Project Knowledge touches two external boundaries — the embedding generator and the SQLite-vec store —
+        so every entry point degrades to a clean string and never throws into the kernel
+        (per <a href="../conventions/production-readiness.html">Production Readiness</a>).
+      </p>
+      <ul class="check">
+        <li>Unknown or empty project / question &rarr; a plain status message, not an exception (<code>ProjectKnowledgeService.cs:51</code>, <code>:57</code>).</li>
+        <li>Embed or search failure &rarr; logged warning and a "Could not search project" message; the host stays up (<code>ProjectKnowledgeService.cs:78</code>).</li>
+        <li>Never-indexed project &rarr; the store ensures the empty collection exists first, so search and symbol lookup return zero results rather than "no such table" (<code>SqliteProjectKnowledgeStore.cs:98</code>, <code>:118</code>).</li>
+        <li>Per-file index failure &rarr; isolated and logged; the rest of the repo still indexes (<code>ProjectIndexer.cs:91</code>).</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-knowledge.html"><span class="rt">service</span>Scout.Knowledge</a>
+          <a href="../domain/project-knowledge.html"><span class="rt">domain</span>Project Knowledge</a>
+          <a href="../roadmap/project-knowledge-optimization.html"><span class="rt">roadmap</span>Knowledge Optimization</a>
+          <a href="../runbooks/index-a-project.html"><span class="rt">runbook</span>Index a Project</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

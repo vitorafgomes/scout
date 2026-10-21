@@ -16,6 +16,12 @@ import { WizardStore } from '../../core/wizard.store';
 
 type BootState = 'booting' | 'ready' | 'error';
 
+// If the worker never reports 'running' or 'crashed' (gateway stall, port race,
+// a config that never reaches ready), a bare "booting" screen would strand the
+// user with no on-screen control. Fail over to the error state after this bound
+// so Retry/Cancel become reachable.
+const READY_TIMEOUT_MS = 25_000;
+
 @Component({
   selector: 'sc-worker-launch',
   standalone: true,
@@ -56,6 +62,14 @@ type BootState = 'booting' | 'ready' | 'error';
 
       <pre class="log-tail">{{ logTail() }}</pre>
 
+      @if (bootState() === 'booting') {
+        <div class="actions">
+          <button type="button" class="secondary" data-test="cancel-booting" (click)="cancel()">
+            Cancel
+          </button>
+        </div>
+      }
+
       @if (bootState() === 'error') {
         <div class="actions">
           <button type="button" class="primary" data-test="retry" (click)="retry()">Retry</button>
@@ -70,7 +84,7 @@ type BootState = 'booting' | 'ready' | 'error';
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -89,7 +103,7 @@ type BootState = 'booting' | 'ready' | 'error';
       .guild {
         font-size: 14px;
         margin: 0 0 16px;
-        color: #a0aab8;
+        color: var(--sc-text-muted);
       }
       .env-summary {
         display: flex;
@@ -98,13 +112,13 @@ type BootState = 'booting' | 'ready' | 'error';
         margin-bottom: 20px;
       }
       .env-tag {
-        background: #1e2230;
-        border: 1px solid #2d3348;
+        background: var(--sc-surface-3);
+        border: 1px solid var(--sc-border-strong);
         border-radius: 4px;
         padding: 2px 8px;
         font-size: 12px;
         font-family: monospace;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
       }
       .status-row {
         margin-bottom: 16px;
@@ -118,36 +132,36 @@ type BootState = 'booting' | 'ready' | 'error';
         letter-spacing: 0.03em;
       }
       .badge--starting {
-        background: #1e3a5f;
-        color: #5eb3f0;
+        background: var(--sc-info-bg);
+        color: var(--sc-info);
       }
       .badge--running {
-        background: #0f3325;
-        color: #38d27a;
+        background: var(--sc-success-bg);
+        color: var(--sc-success-text);
       }
       .badge--crashed {
-        background: #3d1a1a;
-        color: #f07070;
+        background: var(--sc-danger-border);
+        color: var(--sc-danger-text);
       }
       .error-msg {
         font-size: 13px;
-        color: #f07070;
+        color: var(--sc-danger-text);
         margin: 0 0 16px;
-        background: #1e0f0f;
-        border: 1px solid #3d1a1a;
+        background: var(--sc-danger-bg);
+        border: 1px solid var(--sc-danger-border);
         border-radius: 6px;
         padding: 10px 14px;
         word-break: break-word;
       }
       .log-tail {
-        background: #0c0e14;
-        border: 1px solid #1e2230;
+        background: var(--sc-bg-deep);
+        border: 1px solid var(--sc-surface-3);
         border-radius: 6px;
         padding: 12px 14px;
         font-family: 'JetBrains Mono', 'Fira Code', monospace;
         font-size: 12px;
         line-height: 1.55;
-        color: #8fa3c0;
+        color: var(--sc-text-muted);
         white-space: pre-wrap;
         word-break: break-all;
         max-height: 240px;
@@ -160,8 +174,8 @@ type BootState = 'booting' | 'ready' | 'error';
         gap: 10px;
       }
       .primary {
-        background: #7c5cff;
-        color: #ffffff;
+        background: var(--sc-accent);
+        color: var(--sc-on-accent);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -171,8 +185,8 @@ type BootState = 'booting' | 'ready' | 'error';
       }
       .secondary {
         background: transparent;
-        color: #a0aab8;
-        border: 1px solid #2d3348;
+        color: var(--sc-text-muted);
+        border: 1px solid var(--sc-border-strong);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;
@@ -204,6 +218,7 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
   });
 
   private unsubscribeStatus: (() => void) | null = null;
+  private readyTimer: ReturnType<typeof setTimeout> | null = null;
 
   ngOnInit(): void {
     this.wizard.goTo('launch');
@@ -216,11 +231,13 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
     this.unsubscribeStatus = this.bridge.onWorkerEvent((event) => {
       if (event.kind === 'state') {
         if (event.status.state === 'running') {
+          this.clearReadyTimer();
           this.bootState.set('ready');
           setTimeout(() => {
             void this.router.navigateByUrl('/ready');
           }, 200);
         } else if (event.status.state === 'crashed') {
+          this.clearReadyTimer();
           this.bootState.set('error');
           this.errorMessage.set('Worker crashed before becoming ready. Check logs below.');
         }
@@ -231,6 +248,7 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearReadyTimer();
     this.unsubscribeStatus?.();
     this.unsubscribeStatus = null;
   }
@@ -238,12 +256,34 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
   private async startWorker(): Promise<void> {
     this.bootState.set('booting');
     this.errorMessage.set(null);
+    this.armReadyTimer();
     try {
       await this.bridge.workerStart();
     } catch (err: unknown) {
+      this.clearReadyTimer();
       this.bootState.set('error');
       const msg = err instanceof Error ? err.message : String(err);
       this.errorMessage.set(msg);
+    }
+  }
+
+  private armReadyTimer(): void {
+    this.clearReadyTimer();
+    this.readyTimer = setTimeout(() => {
+      this.readyTimer = null;
+      if (this.bootState() === 'booting') {
+        this.bootState.set('error');
+        this.errorMessage.set(
+          'Worker did not report ready in time. Check the logs below or retry.',
+        );
+      }
+    }, READY_TIMEOUT_MS);
+  }
+
+  private clearReadyTimer(): void {
+    if (this.readyTimer !== null) {
+      clearTimeout(this.readyTimer);
+      this.readyTimer = null;
     }
   }
 

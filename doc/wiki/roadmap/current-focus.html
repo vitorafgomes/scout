@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Current Focus &amp; Backlog — Scout Wiki</title>
+<meta name="description" content="Scout's current focus and improvement backlog: preconditions to verify, the RAG correctness chain, things to build, and a suggested sequencing.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Roadmap</a><span class="sep">/</span>Current Focus</nav>
+
+    <section>
+      <h1>Current Focus &amp; Backlog</h1>
+      <p class="blockquote">Turn "probably works" into measured: verify the preconditions, build the end-to-end acceptance test, then fix whichever link of the RAG chain the test exposes as broken.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype roadmap">roadmap</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>doc/index.html</code> roadmap section; vault <code>01-overview/pending-work.md</code></span>
+      </div>
+
+      <h2>Why now</h2>
+      <p>
+        The core platform, the eight pluggable LLM providers, the Skills library, and the Project Knowledge
+        RAG path are all in place, and the conversation-memory and grounding fixes are committed. What is
+        <em>not</em> in place is any measured guarantee that an end-user question against an indexed project
+        produces a correct, grounded answer. The chain from "user asks" to "bot cites the right file" has four
+        independent links, and none of them is currently verified end to end. The focus of this cycle is to
+        close that gap with an acceptance test, then repair whatever the test shows is broken.
+      </p>
+      <p>
+        A second pressure point is delivery. Everything below sits locally on the
+        <code>feat/project-knowledge</code> branch and has not been pushed, so the fixes that exist only take
+        effect after the branch lands and the bot is redeployed.
+      </p>
+
+      <h2>Scope</h2>
+      <p class="field-label">In scope</p>
+      <ul class="body-list">
+        <li>Verifying the RAG preconditions (tool-capable model, deployed fixes, fresh index).</li>
+        <li>An end-to-end acceptance test for the <code>ask &rarr; search_project &rarr; cite</code> flow against Ollama.</li>
+        <li>Correctness improvements across the four-link RAG chain.</li>
+        <li>Skills-system tuning (retrieval, attribution, measured value).</li>
+        <li>GitHub grounding so <code>get_repository</code> resolves a sensible default project.</li>
+        <li>Planning the PR off <code>feat/project-knowledge</code> and running production-readiness checks.</li>
+      </ul>
+      <p class="field-label">Out of scope (this cycle)</p>
+      <ul class="body-list">
+        <li>Executive writes. The gated-write milestone (PR-gated proposals + allowlist) is decided but not built, and remains separate.</li>
+        <li>Remote private-repo deep analysis beyond what the existing GitHub plugin already supports.</li>
+        <li>The backend &harr; frontend gRPC split (a future desktop concern).</li>
+      </ul>
+
+      <h2>Status</h2>
+      <p>As of 2026-06-01:</p>
+      <div class="callout warn">
+        <div class="c-title">Committed locally, not deployed</div>
+        <p>
+          The conversation-memory and grounding fixes are committed on <code>feat/project-knowledge</code> but
+          <strong>not deployed</strong> &mdash; the bot must be redeployed for them to take effect. Eight LLM
+          providers are selectable via <code>Scout:Llm:Provider</code> and the Llm test suite is green. The
+          Skills library is curated. Nothing on this branch has been pushed.
+        </p>
+      </div>
+      <div class="callout danger">
+        <div class="c-title">Verify before trusting project Q&amp;A</div>
+        <ul class="check warn" style="margin-top:6px;">
+          <li><b>Tool-capable model.</b> The deployed LLM must be tool-capable and stream tool calls over the OpenAI-compatible <code>/v1</code> connector. Validate the configured model tag &mdash; <code>"qwen3.5:9b"</code> is likely not a real Ollama tag.</li>
+          <li><b>Fixes committed but not deployed.</b> The conversation-memory and grounding fixes live on <code>feat/project-knowledge</code> and only matter after a redeploy.</li>
+          <li><b>Indexed and fresh.</b> The target project must be indexed and its index fresh.</li>
+        </ul>
+      </div>
+
+      <h2>Workstreams / Phases</h2>
+      <div class="road-grid">
+
+        <div class="road-block">
+          <h3><span class="num">1</span>RAG / project-answer correctness</h3>
+          <p style="color:var(--text-dim);font-size:14px;margin-top:4px;">A four-link chain &mdash; none of the links is guaranteed. Each must hold for a correct, grounded answer.</p>
+          <div class="chain">
+            <div class="chain-link"><span class="n">1</span><div><div class="lk-title">Tool-call reliability</div><div class="lk-body">The local model must <em>decide</em> to call <code>search_project</code>. Non-deterministic on a weak model &mdash; induce via prompt now, later via hard tool-scoping.</div></div></div>
+            <div class="chain-link"><span class="n">2</span><div><div class="lk-title">Index coverage &amp; freshness</div><div class="lk-body">Verify the project is indexed, that file-watch re-index works, and that chunking quality is adequate.</div></div></div>
+            <div class="chain-link"><span class="n">3</span><div><div class="lk-title">Retrieval recall</div><div class="lk-body">Tune the embedder, chunking, top-K, and nomic prefixes.</div></div></div>
+            <div class="chain-link"><span class="n">4</span><div><div class="lk-title">Answer faithfulness</div><div class="lk-body">Enforce citations and an honest "not in context"; guard against hallucination even with good context.</div></div></div>
+          </div>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">2</span>Skills system</h3>
+          <ul class="check">
+            <li>With ~52 skills and <code>TopN=1</code> retrieval, <b>sharpen overlapping descriptions</b> (backend-developer vs sql, software-architect vs backend-developer, clean-architecture vs hexagonal, clean-code vs refactoring) or raise <code>TopN</code>.</li>
+            <li>Update <code>SKILLS-ATTRIBUTION.md</code>: <code>redis-development</code> is third-party; the role / language / architecture skills are authored original.</li>
+            <li>Measure whether injected skill bodies <b>actually improve answers</b> on the local model.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">3</span>Ops</h3>
+          <ul class="check">
+            <li><b>VRAM contention.</b> A heavy chat model starves the <code>nomic-embed-text</code> embedder on a single GPU &mdash; use a lighter chat model or free Ollama while indexing.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">4</span>Things to build</h3>
+          <ul class="check build">
+            <li><b>End-to-end acceptance test</b> for the <code>ask &rarr; search_project &rarr; cite</code> flow (real, against Ollama) &mdash; turns "probably works" into measured.</li>
+            <li><b>Capability Engine.</b> A unified persona + skill embedding-retrieval engine ("Pattern B"), currently stashed; finishing it makes the role skills act as personas and cleans selection. <span class="sub">Step 3 = hard per-persona tool-scoping (also helps link #1); Step 4 = HandoffOrchestration once the model is upgraded.</span></li>
+            <li><b>GitHub grounding.</b> <code>get_repository</code> has no default repo &mdash; ground it on the configured project or add a <code>list_projects</code> affordance.</li>
+            <li><b>Answer-faithfulness / citation-enforcement</b> mechanism (chain link #4).</li>
+            <li><b>Indexing quality.</b> Chunking strategy plus verified incremental re-index.</li>
+            <li><b>Backend &harr; frontend gRPC</b> over a Unix socket / named pipe (future desktop split).</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">5</span>Delivery</h3>
+          <ul class="check">
+            <li>Everything is local on <code>feat/project-knowledge</code> (not pushed) &mdash; plan the PR.</li>
+            <li>The skills history (import &rarr; drop &rarr; author) could be squashed.</li>
+            <li>Run the <b>production-readiness checks</b> before opening a PR (boundaries: LLM HTTP, memory store, knowledge store, GitHub).</li>
+            <li>Redeploy the bot so the conversation-memory and grounding fixes take effect live.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <h3>More expertise skills (wishlist)</h3>
+      <div class="val-list">
+        <span class="val">tdd</span><span class="val">observability</span><span class="val">security/owasp</span><span class="val">database-design</span><span class="val">ci-cd</span>
+        <span class="val">terraform</span><span class="val">kafka/messaging</span><span class="val">graphql</span><span class="val">caching</span><span class="val">performance</span>
+      </div>
+
+      <h3>Suggested sequencing</h3>
+      <ol class="seq">
+        <li><b>Verify preconditions</b> &mdash; model tool-capable, deploy, index.</li>
+        <li><b>Build the e2e test</b> for <code>ask &rarr; search &rarr; cite</code>.</li>
+        <li><b>Fix whichever link the test shows broken</b> &mdash; most likely #1, tool-calling.</li>
+        <li><b>GitHub grounding</b> &mdash; small, high value.</li>
+        <li><b>Finish the Capability Engine.</b></li>
+        <li><b>Skill retrieval tuning + attribution.</b></li>
+        <li><b>More skills + hard tool-scoping.</b></li>
+      </ol>
+
+      <h2>Risks</h2>
+      <ul class="body-list">
+        <li><strong>Weak local model.</strong> Tool-calling is non-deterministic on a small model; the deployed tag must be confirmed tool-capable over <code>/v1</code> before any project Q&amp;A is trusted.</li>
+        <li><strong>Silent staleness.</strong> An out-of-date index or an undeployed branch makes the bot answer confidently from wrong context &mdash; the acceptance test exists to catch this.</li>
+        <li><strong>Single-GPU contention.</strong> A heavy chat model and the embedder competing for VRAM can degrade or stall indexing.</li>
+        <li><strong>Test coverage gaps.</strong> Provider tests cover wiring and validation only; boundary-failure tests (LLM timeout / 5xx) and a real-skills parse guard are still owed before the PR per the production-readiness bar.</li>
+        <li><strong>Unmerged work.</strong> All of this lives unpushed on one branch; the longer it sits, the larger the eventual review and the higher the merge risk.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../roadmap/capability-engine.html"><span class="rt">roadmap</span>Capability Engine</a>
+          <a href="../roadmap/project-knowledge-optimization.html"><span class="rt">roadmap</span>Project Knowledge Optimization</a>
+          <a href="../roadmap/skills-subsystem.html"><span class="rt">roadmap</span>Skills Subsystem</a>
+          <a href="../overview/status.html"><span class="rt">overview</span>Status &amp; Pending Work</a>
+          <a href="../architecture/project-knowledge-rag.html"><span class="rt">arch</span>Project Knowledge RAG</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

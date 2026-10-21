@@ -708,6 +708,7 @@
         <li><a href="#architecture">Architecture &amp; Flow</a></li>
         <li><a href="#llm-providers">LLM Providers &mdash; Config</a></li>
         <li><a href="#project-knowledge">Project Knowledge &mdash; Config</a></li>
+        <li><a href="#adapters">Adapters &mdash; Config</a></li>
       </ul>
 
       <div class="nav-group-title">Projects</div>
@@ -1274,6 +1275,126 @@
         vectors. The optional file-watch re-indexing (<code>Scout:Projects:Watch</code>) applies to explicit
         <code>Items</code> only.
       </p>
+    </section>
+
+    <!-- ===================== ADAPTERS ===================== -->
+    <section id="adapters">
+      <h2>Adapters &mdash; Configuration</h2>
+      <p>
+        Each chat adapter binds its settings from <code>Scout:Adapters</code> and is
+        <strong>self-gating</strong>: it activates only when its credentials are present, and an
+        unconfigured host still starts. Inject every token via environment variables or .NET User
+        Secrets &mdash; <strong>never commit a token</strong> to <code>appsettings.json</code>.
+      </p>
+      <div class="callout warn">
+        <div class="c-title">Environment variable mapping</div>
+        <p>
+          Config keys use <code>:</code> as the path separator. The equivalent environment variable
+          replaces each separator with a double underscore and upper-cases the name, e.g.
+          <code>Scout:Adapters:Discord:BotToken</code> &rarr;
+          <code>SCOUT__ADAPTERS__DISCORD__BOTTOKEN</code>.
+        </p>
+      </div>
+
+      <h3>Discord</h3>
+      <p>
+        Scout connects as a bot over the Gateway. You need a single bot token and the
+        <strong>Message Content</strong> privileged intent so the bot can read message text.
+      </p>
+      <div class="val-list">
+        <span class="val">discord.com/developers/applications</span>
+        <span class="val">New Application &rarr; Bot</span>
+        <span class="val">Reset Token</span>
+        <span class="val">Message Content Intent</span>
+        <span class="val">OAuth2 &rarr; bot scope</span>
+      </div>
+      <p>
+        Create the application in the Developer Portal, add a bot and reveal its token, enable the
+        <strong>Message Content Intent</strong> under the bot's Privileged Gateway Intents, then use
+        the OAuth2 URL Generator (<code>bot</code> scope, with View Channels / Send Messages / Read
+        Message History) to invite the bot to your server. The bot token is the only key Scout reads.
+      </p>
+      <pre class="cfg"><span class="k">"Scout"</span>: {
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Discord"</span>: {
+      <span class="k">"BotToken"</span>: <span class="s">""</span>     <span class="c">// secret &rarr; user-secrets / env</span>
+    }
+  }
+}</pre>
+
+      <h3>Slack</h3>
+      <p>
+        Scout uses <strong>Socket Mode</strong>, so no public URL is required. It needs two tokens:
+        a bot token (<code>xoxb-</code>) for Web API calls and an app-level token (<code>xapp-</code>)
+        to open the Socket Mode connection.
+      </p>
+      <div class="val-list">
+        <span class="val">api.slack.com/apps</span>
+        <span class="val">Socket Mode &rarr; connections:write</span>
+        <span class="val">Bot Token Scopes</span>
+        <span class="val">Event Subscriptions</span>
+        <span class="val">Install to Workspace</span>
+      </div>
+      <p>
+        Create an app from scratch, enable <strong>Socket Mode</strong> and generate an app-level
+        token with the <code>connections:write</code> scope (the <code>xapp-</code> value). Add the
+        bot token scopes you need (e.g. <code>app_mentions:read</code>, <code>chat:write</code>,
+        <code>channels:history</code>), subscribe to bot events such as <code>app_mention</code> under
+        Event Subscriptions, then install to the workspace and copy the
+        <strong>Bot User OAuth Token</strong> (<code>xoxb-</code>). Both tokens are required for the
+        adapter to start.
+      </p>
+      <pre class="cfg"><span class="k">"Scout"</span>: {
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Slack"</span>: {
+      <span class="k">"BotToken"</span>:      <span class="s">""</span>,    <span class="c">// xoxb- &rarr; Web API calls</span>
+      <span class="k">"AppLevelToken"</span>: <span class="s">""</span>     <span class="c">// xapp- &rarr; Socket Mode (connections:write)</span>
+    }
+  }
+}</pre>
+
+      <h3>Microsoft Teams</h3>
+      <p>
+        Scout authenticates as an Azure Bot using its App (client) id and, for a single- or
+        multi-tenant bot, a client secret. A user-assigned managed-identity bot may leave the
+        password empty.
+      </p>
+      <div class="val-list">
+        <span class="val">portal.azure.com</span>
+        <span class="val">Azure Bot</span>
+        <span class="val">App registration</span>
+        <span class="val">Certificates &amp; secrets</span>
+        <span class="val">Teams channel</span>
+      </div>
+      <p>
+        Create an <strong>Azure Bot</strong> (or register an app under Microsoft Entra ID &rarr; App
+        registrations) and copy its <strong>Microsoft App ID</strong>. Under the app registration's
+        <strong>Certificates &amp; secrets</strong>, create a client secret for
+        <code>AppPassword</code> (leave empty for managed identity). For a single-tenant bot, copy the
+        <strong>Directory (tenant) ID</strong> into <code>TenantId</code>; leave it empty for a
+        multi-tenant bot. Finally enable the <strong>Teams</strong> channel on the Azure Bot resource.
+      </p>
+      <pre class="cfg"><span class="k">"Scout"</span>: {
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Teams"</span>: {
+      <span class="k">"AppId"</span>:       <span class="s">""</span>,    <span class="c">// Microsoft App (bot) id</span>
+      <span class="k">"AppPassword"</span>: <span class="s">""</span>,    <span class="c">// client secret (empty for managed identity)</span>
+      <span class="k">"TenantId"</span>:    <span class="s">""</span>     <span class="c">// directory (tenant) id (empty for multi-tenant)</span>
+    }
+  }
+}</pre>
+
+      <h3>Storing secrets with User Secrets</h3>
+      <p>
+        From <code>src/Scout.Host.Console</code>, keep tokens out of the repository:
+      </p>
+      <pre class="cfg"><span class="c">// run from src/Scout.Host.Console</span>
+dotnet user-secrets init
+dotnet user-secrets set <span class="s">"Scout:Adapters:Discord:BotToken"</span> <span class="s">"&lt;discord-bot-token&gt;"</span>
+dotnet user-secrets set <span class="s">"Scout:Adapters:Slack:BotToken"</span> <span class="s">"&lt;xoxb-token&gt;"</span>
+dotnet user-secrets set <span class="s">"Scout:Adapters:Slack:AppLevelToken"</span> <span class="s">"&lt;xapp-token&gt;"</span>
+dotnet user-secrets set <span class="s">"Scout:Adapters:Teams:AppId"</span> <span class="s">"&lt;app-id&gt;"</span>
+dotnet user-secrets set <span class="s">"Scout:Adapters:Teams:AppPassword"</span> <span class="s">"&lt;client-secret&gt;"</span></pre>
     </section>
 
     <!-- ===================== PROJECTS ===================== -->
