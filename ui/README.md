@@ -8,8 +8,8 @@ process.
 ## Stack
 
 - Bun 1.3+ — workspace toolchain (install, scripts, tests).
-- Electron 41 — desktop shell (main process in ESM, sandboxed preload).
-- Angular 21 — renderer, zoneless change detection, Signals-first,
+- Electron 45 — desktop shell (main process in ESM, sandboxed preload).
+- Angular 22 — renderer, zoneless change detection, Signals-first,
   standalone components with the new `@if`/`@for` control flow.
 - .NET 10 — the `Scout.Host.Worker` spawned as a supervised child
   process.
@@ -20,6 +20,8 @@ process.
 
 - Bun 1.3 or newer — install from `https://bun.sh/` (`curl -fsSL
 https://bun.sh/install | bash`).
+- Node.js 22.22.3+ or 24.15+ on `PATH` — the Angular CLI runs under Node,
+  not Bun, and refuses older versions.
 - .NET SDK matching the version in `../global.json` (currently 10.x).
 - Optional: [Ollama](https://ollama.com/) if you want a local LLM
   provider without paid credentials.

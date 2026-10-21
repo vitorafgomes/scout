@@ -1,9 +1,9 @@
 ---
 title: "Electron Provisioning UI - feasibility study: References"
-version: "1.0"
+version: "1.1"
 date: 2026-04-22
 updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+changes: "Angular reference moved to v22.2.3, verified against the npm registry"
 page_type: longform
 status: active
 description: "Reference links used by the Electron provisioning feasibility study."
@@ -69,9 +69,10 @@ reliability: medium
 - [Angular Signals guide](https://angular.dev/guide/signals)
 - [Standalone components guide](https://angular.dev/guide/components)
 - [Angular CLI](https://angular.dev/tools/cli)
-- [Angular v21.2.9 release (angular/angular)](https://github.com/angular/angular/releases/tag/21.2.9)
-  — `TODO: verify` that 21.2.9 is still the latest stable at the time
-  of the next update; Angular ships frequent patch releases.
+- [Angular v22.2.3 release (angular/angular)](https://github.com/angular/angular/releases/tag/v22.2.3)
+  — the `latest` dist-tag of `@angular/core` on npm on 2026-10-21 (published
+  2026-10-14), and the version the renderer pins (`^22.2.3`). Angular ships
+  frequent patch releases; the renderer's `package.json` is the current pin.
 
 ### Prior art
 
