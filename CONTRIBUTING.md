@@ -58,9 +58,13 @@ Any change that touches:
 - The LLM provider abstraction
 - The chat adapter abstraction
 
-…requires a short ADR in the Obsidian vault (`obsidian-vault/scout/06-decisions/`).
-For external contributors, describing the change in the PR body is enough —
-a maintainer will port it to an ADR on merge.
+requires a short ADR under `vault/pages/decisions/` (copy
+`vault/templates/_adr.md`, next number). For external contributors, describing
+the change in the PR body is enough; a maintainer will port it to an ADR on merge.
+
+The invariants under `vault/pages/invariants/` are the rules every PR is reviewed
+against; read `vault/pages/invariants/no-executive-writes.md` before adding any
+call that leaves the process.
 
 ## DCO / CLA
 
