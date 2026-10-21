@@ -3,10 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScoutBridgeService } from './scout-bridge';
-import {
-  STT_CONFIG_STORAGE_KEY,
-  TranscriptionConfigStore,
-} from './transcription-config.store';
+import { STT_CONFIG_STORAGE_KEY, TranscriptionConfigStore } from './transcription-config.store';
 
 interface FakeBridge {
   vaultStore: ReturnType<typeof vi.fn>;

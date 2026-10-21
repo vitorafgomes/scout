@@ -99,10 +99,11 @@ function createFakeBridge(): ScoutBridge {
     llmListLmStudioModels: (
       _req: LlmListLmStudioModelsRequest,
     ): Promise<LlmListLmStudioModelsResponse> => rejectNotAvailable(),
-    llmPullOllamaModel: (
-      _req: LlmPullOllamaModelRequest,
-    ): Promise<LlmPullOllamaModelResponse> => rejectNotAvailable(),
-    onLlmPullOllamaProgress: (_listener: (event: LlmPullOllamaProgressEvent) => void): (() => void) => {
+    llmPullOllamaModel: (_req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse> =>
+      rejectNotAvailable(),
+    onLlmPullOllamaProgress: (
+      _listener: (event: LlmPullOllamaProgressEvent) => void,
+    ): (() => void) => {
       return (): void => {
         // no-op
       };
@@ -121,26 +122,21 @@ function createFakeBridge(): ScoutBridge {
         // no-op
       };
     },
-    whisperDeleteModel: (
-      _req: WhisperDeleteModelRequest,
-    ): Promise<WhisperDeleteModelResponse> => rejectNotAvailable(),
+    whisperDeleteModel: (_req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse> =>
+      rejectNotAvailable(),
     providersList: (): Promise<ProvidersListResponse> => rejectNotAvailable(),
     providerStatus: (_req: ProviderStatusRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
-    providerStart: (_req: ProviderStartRequest): Promise<ProviderStatusDto> =>
-      rejectNotAvailable(),
-    providerStop: (_req: ProviderStopRequest): Promise<ProviderStatusDto> =>
-      rejectNotAvailable(),
+    providerStart: (_req: ProviderStartRequest): Promise<ProviderStatusDto> => rejectNotAvailable(),
+    providerStop: (_req: ProviderStopRequest): Promise<ProviderStatusDto> => rejectNotAvailable(),
     providerRestart: (_req: ProviderRestartRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
-    providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> =>
-      rejectNotAvailable(),
+    providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> => rejectNotAvailable(),
     featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
     featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
       rejectNotAvailable(),
     featureSetup: (_req: FeatureSetupRequest): Promise<FeatureDto> => rejectNotAvailable(),
-    featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> =>
-      rejectNotAvailable(),
+    featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
   };
@@ -210,9 +206,7 @@ export class ScoutBridgeService {
     return this.bridge.llmListLmStudioModels(req);
   }
 
-  async llmPullOllamaModel(
-    req: LlmPullOllamaModelRequest,
-  ): Promise<LlmPullOllamaModelResponse> {
+  async llmPullOllamaModel(req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse> {
     return this.bridge.llmPullOllamaModel(req);
   }
 
@@ -236,15 +230,11 @@ export class ScoutBridgeService {
     return this.bridge.whisperDownloadModel(req);
   }
 
-  onWhisperDownloadProgress(
-    listener: (event: WhisperDownloadProgressEvent) => void,
-  ): () => void {
+  onWhisperDownloadProgress(listener: (event: WhisperDownloadProgressEvent) => void): () => void {
     return this.bridge.onWhisperDownloadProgress(listener);
   }
 
-  async whisperDeleteModel(
-    req: WhisperDeleteModelRequest,
-  ): Promise<WhisperDeleteModelResponse> {
+  async whisperDeleteModel(req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse> {
     return this.bridge.whisperDeleteModel(req);
   }
 

@@ -1,8 +1,8 @@
 ---
 title: "Testing"
-version: "1.1"
+version: "1.2"
 date: 2026-10-21
-changes: "Test package versions refreshed with their citations; noted that ui-ci does not run the format check"
+changes: "ui-ci now runs the prettier check on the Linux leg"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -84,7 +84,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 ## UI tests
 
-`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:69` to `:96`). It does not run `bun run format`, which fails on main ([[pages/roadmap/followups]]).
+`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:69` to `:102`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
 - 58 spec or test files: 29 in `ui/packages/main/test`, 3 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 25 in `ui/packages/renderer/src/app`.

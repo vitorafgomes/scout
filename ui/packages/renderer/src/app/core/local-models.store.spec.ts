@@ -102,7 +102,9 @@ describe('LocalModelsStore', () => {
     store.markDownloaded('qwen-2.5-1.5b-instruct');
     store.deleteUnused();
     // Only the auto-selected first of each kind survives.
-    expect([...store.downloaded()].sort()).toEqual(['qwen-3-vl-2b', 'whisper-large-v3-turbo'].sort());
+    expect([...store.downloaded()].sort()).toEqual(
+      ['qwen-3-vl-2b', 'whisper-large-v3-turbo'].sort(),
+    );
   });
 
   it('persists across instances via localStorage', () => {

@@ -38,10 +38,13 @@ function create(feature: FeatureDto): ComponentFixture<CredentialDialogComponent
   return fixture;
 }
 
-function setInput(fixture: ComponentFixture<CredentialDialogComponent>, key: string, value: string): void {
-  const input = fixture.nativeElement.querySelector(
-    `[data-test="input-${key}"]`,
-  ) as HTMLInputElement | HTMLTextAreaElement;
+function setInput(
+  fixture: ComponentFixture<CredentialDialogComponent>,
+  key: string,
+  value: string,
+): void {
+  const input = fixture.nativeElement.querySelector(`[data-test="input-${key}"]`) as
+    HTMLInputElement | HTMLTextAreaElement;
   input.value = value;
   input.dispatchEvent(new Event('input'));
   fixture.detectChanges();
@@ -52,9 +55,8 @@ function setSettingInput(
   key: string,
   value: string,
 ): void {
-  const input = fixture.nativeElement.querySelector(
-    `[data-test="setting-input-${key}"]`,
-  ) as HTMLInputElement | HTMLTextAreaElement;
+  const input = fixture.nativeElement.querySelector(`[data-test="setting-input-${key}"]`) as
+    HTMLInputElement | HTMLTextAreaElement;
   input.value = value;
   input.dispatchEvent(new Event('input'));
   fixture.detectChanges();
@@ -174,7 +176,9 @@ describe('CredentialDialogComponent', () => {
     const matrix = fixture.nativeElement.querySelector('[data-test="scope-matrix"]');
     expect(matrix).not.toBeNull();
 
-    const repoRow = fixture.nativeElement.querySelector('[data-test="scope-row-repo"]') as HTMLElement;
+    const repoRow = fixture.nativeElement.querySelector(
+      '[data-test="scope-row-repo"]',
+    ) as HTMLElement;
     expect(repoRow).not.toBeNull();
     expect(repoRow.textContent).toContain('repo');
     expect(repoRow.textContent).toContain('Read repository metadata');
@@ -345,9 +349,7 @@ describe('CredentialDialogComponent', () => {
     const settingInput = fixture.nativeElement.querySelector(
       '[data-test="setting-input-default_repo_url"]',
     ) as HTMLElement;
-    const patInput = fixture.nativeElement.querySelector(
-      '[data-test="input-pat"]',
-    ) as HTMLElement;
+    const patInput = fixture.nativeElement.querySelector('[data-test="input-pat"]') as HTMLElement;
 
     expect(settingInput).not.toBeNull();
     expect(patInput).not.toBeNull();
@@ -466,7 +468,7 @@ describe('CredentialDialogComponent', () => {
   it('renders the setup steps as a numbered list when setupSteps is non-empty', () => {
     const steps = [
       "Click 'Create token on GitHub' below.",
-      "Generate token and copy the value.",
+      'Generate token and copy the value.',
       'Paste the token into the field above.',
       'Click Save to validate and store.',
     ];
@@ -516,9 +518,7 @@ describe('CredentialDialogComponent', () => {
       }),
     );
 
-    expect(
-      fixture.nativeElement.querySelector('[data-test="setup-steps"]'),
-    ).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="setup-steps"]')).toBeNull();
   });
 
   describe('backwards-compat fallback (worker without schema)', () => {

@@ -24,7 +24,8 @@ import { FeatureCardComponent } from './feature-card.component';
 
       @if (store.backendUnavailable()) {
         <div class="unavailable-notice" data-test="backend-unavailable">
-          Backend control plane arrives in the next step. Features will appear once the worker is running.
+          Backend control plane arrives in the next step. Features will appear once the worker is
+          running.
         </div>
       } @else {
         <div class="features-grid" data-test="features-grid">
@@ -57,7 +58,11 @@ import { FeatureCardComponent } from './feature-card.component';
         padding: 32px;
         max-width: 1080px;
         margin: 0 auto;
-        font-family: Inter, -apple-system, 'Segoe UI', sans-serif;
+        font-family:
+          Inter,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
       }
       .header {
         margin-bottom: 24px;
