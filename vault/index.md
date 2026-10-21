@@ -111,3 +111,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Runbooks
 
 - [[pages/runbooks/local-models|Local Models - operations runbook]] - Quick reference for working with the AI Sources / Models surface in the Scout Desktop app.
+
+## Roadmap
+
+- [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
