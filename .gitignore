@@ -33,3 +33,9 @@ logs/
 ## Rider / Visual Studio
 *.sln.iml
 .vscode/
+
+# Per-session harness metrics written by the SessionEnd hook; local, never committed
+.claude/metrics/
+
+# claude plugin eval output
+.claude/skills/*/evals/results/
