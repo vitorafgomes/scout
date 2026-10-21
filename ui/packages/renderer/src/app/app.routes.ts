@@ -1,6 +1,6 @@
 import type { Routes } from '@angular/router';
 
-import { requireClientIdGuard, requireGuildGuard } from './core/wizard.guards';
+import { requireClientIdGuard, requireBotTokenGuard } from './core/wizard.guards';
 
 export const appRoutes: Routes = [
   {
@@ -26,7 +26,7 @@ export const appRoutes: Routes = [
   },
   {
     path: 'launch',
-    canActivate: [requireGuildGuard],
+    canActivate: [requireBotTokenGuard],
     loadComponent: () =>
       import('./wizard/worker-launch/worker-launch.component').then((m) => m.WorkerLaunchComponent),
   },
@@ -47,6 +47,11 @@ export const appRoutes: Routes = [
     path: 'sources/local-models',
     loadComponent: () =>
       import('./sources/local-models.component').then((m) => m.LocalModelsComponent),
+  },
+  {
+    path: 'features',
+    loadComponent: () =>
+      import('./features/features.component').then((m) => m.FeaturesComponent),
   },
   {
     path: 'llm',

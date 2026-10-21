@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <RootNamespace>Scout.Host.Worker</RootNamespace>
+    <AssemblyName>Scout.Host.Worker</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <UserSecretsId>dotnet-Scout.Host.Worker-91b24b99-1ef4-4ec5-99b7-43263fb9356e</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Host.Worker.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Scout.Core\Scout.Core.csproj" />
+    <ProjectReference Include="..\Scout.Llm.Ollama\Scout.Llm.Ollama.csproj" />
+    <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Agent\Scout.Plugin.Agent.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Chat\Scout.Plugin.Chat.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.CloudStatus\Scout.Plugin.CloudStatus.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.CodeQA\Scout.Plugin.CodeQA.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Help\Scout.Plugin.Help.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.Kubernetes\Scout.Plugin.Kubernetes.csproj" />
+  </ItemGroup>
+</Project>

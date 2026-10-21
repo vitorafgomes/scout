@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { buildBridge, type IpcSubset } from '../src/build-bridge.js';
-import { CHANNEL, type ScoutBridge, type WorkerEvent } from '@scout/shared';
+import { CHANNEL, type FeatureDto, type ScoutBridge, type WorkerEvent } from '@scout/shared';
 
 function makeFakeIpc(): IpcSubset {
   return {
@@ -48,6 +48,12 @@ describe('buildBridge', () => {
       'providerStop',
       'providerRestart',
       'providerSetAutostart',
+      'featuresList',
+      'featureSetCredentials',
+      'featureSetup',
+      'featureDeleteCredentials',
+      'featureEnable',
+      'featureDisable',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -212,5 +218,109 @@ describe('buildBridge', () => {
     const bridge = buildBridge(ipc);
 
     await expect(bridge.appQuit()).rejects.toBe(error);
+  });
+
+  it('featuresList invokes the correct channel with no arguments', async () => {
+    const ipc = makeFakeIpc();
+    const expected = { features: [] };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.featuresList();
+
+    expect(ipc.invoke).toHaveBeenCalledTimes(1);
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featuresList);
+    expect(result).toBe(expected);
+  });
+
+  it('featureSetCredentials forwards the payload to the matching channel', async () => {
+    const ipc = makeFakeIpc();
+    const req = { id: 'github' as const, body: { pat: 'ghp_xxx' } };
+    const expected: FeatureDto = {
+      id: 'github',
+      displayName: 'GitHub',
+      description: '',
+      requiresCredentials: true,
+      hasCredentials: true,
+      enabled: false,
+      status: 'disabled',
+      lastError: null,
+      credentialFields: [],
+      settingsFields: [],
+      settings: {},
+      scopeMatrix: null,
+      setupSteps: null,
+    };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.featureSetCredentials(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureSetCredentials, req);
+    expect(result).toBe(expected);
+  });
+
+  it('featureSetup forwards the credentials and settings to the matching channel', async () => {
+    const ipc = makeFakeIpc();
+    const req = {
+      id: 'github' as const,
+      credentials: { pat: 'ghp_xxx' },
+      settings: { default_repo_url: 'https://github.com/acme/repo' },
+    };
+    const expected: FeatureDto = {
+      id: 'github',
+      displayName: 'GitHub',
+      description: '',
+      requiresCredentials: true,
+      hasCredentials: true,
+      enabled: false,
+      status: 'disabled',
+      lastError: null,
+      credentialFields: [],
+      settingsFields: [],
+      settings: {},
+      scopeMatrix: null,
+      setupSteps: null,
+    };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.featureSetup(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureSetup, req);
+    expect(result).toBe(expected);
+  });
+
+  it('featureEnable invokes the correct channel with the id request', async () => {
+    const ipc = makeFakeIpc();
+    const req = { id: 'kubernetes' as const };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve({}));
+
+    const bridge = buildBridge(ipc);
+    await bridge.featureEnable(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureEnable, req);
+  });
+
+  it('featureDisable invokes the correct channel with the id request', async () => {
+    const ipc = makeFakeIpc();
+    const req = { id: 'github' as const };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve({}));
+
+    const bridge = buildBridge(ipc);
+    await bridge.featureDisable(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureDisable, req);
+  });
+
+  it('featureDeleteCredentials invokes the correct channel with the id request', async () => {
+    const ipc = makeFakeIpc();
+    const req = { id: 'github' as const };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve({}));
+
+    const bridge = buildBridge(ipc);
+    await bridge.featureDeleteCredentials(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureDeleteCredentials, req);
   });
 });

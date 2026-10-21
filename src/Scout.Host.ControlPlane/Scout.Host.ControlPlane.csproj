@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Scout.Host.ControlPlane</RootNamespace>
+    <AssemblyName>Scout.Host.ControlPlane</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Required by [LibraryImport] source-generated marshalling. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Scout.ControlPlane.Contracts\Scout.ControlPlane.Contracts.csproj" />
+    <ProjectReference Include="..\Scout.ControlPlane\Scout.ControlPlane.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.ControlPlane.Tests" />
+  </ItemGroup>
+</Project>

@@ -169,5 +169,33 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
         ScoutBridge['providerSetAutostart']
       >;
     },
+
+    featuresList() {
+      return ipc.invoke(CHANNEL.featuresList) as ReturnType<ScoutBridge['featuresList']>;
+    },
+
+    featureSetCredentials(req) {
+      return ipc.invoke(CHANNEL.featureSetCredentials, req) as ReturnType<
+        ScoutBridge['featureSetCredentials']
+      >;
+    },
+
+    featureSetup(req) {
+      return ipc.invoke(CHANNEL.featureSetup, req) as ReturnType<ScoutBridge['featureSetup']>;
+    },
+
+    featureDeleteCredentials(req) {
+      return ipc.invoke(CHANNEL.featureDeleteCredentials, req) as ReturnType<
+        ScoutBridge['featureDeleteCredentials']
+      >;
+    },
+
+    featureEnable(req) {
+      return ipc.invoke(CHANNEL.featureEnable, req) as ReturnType<ScoutBridge['featureEnable']>;
+    },
+
+    featureDisable(req) {
+      return ipc.invoke(CHANNEL.featureDisable, req) as ReturnType<ScoutBridge['featureDisable']>;
+    },
   };
 }

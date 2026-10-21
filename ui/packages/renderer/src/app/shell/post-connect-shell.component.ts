@@ -24,6 +24,12 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       'M12 3a4 4 0 0 0-4 4v1H6a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-3a3 3 0 0 0-3-3h-2V7a4 4 0 0 0-4-4Zm-2 5V7a2 2 0 1 1 4 0v1Z',
   },
   {
+    path: '/features',
+    label: 'Features',
+    testId: 'nav-features',
+    iconPath: 'M4 4h6v6H4Zm10 0h6v6h-6Zm-10 10h6v6H4Zm10 0h6v6h-6Z',
+  },
+  {
     path: '/status',
     label: 'Status',
     testId: 'nav-status',

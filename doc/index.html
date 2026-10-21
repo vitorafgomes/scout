@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout — Architecture &amp; Project Reference</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --bg-elev: #151a21;
+    --bg-elev-2: #1b222b;
+    --bg-code: #0a0d12;
+    --border: #232c38;
+    --border-soft: #1c242e;
+    --text: #d7dde6;
+    --text-dim: #97a3b3;
+    --text-faint: #6c7888;
+    --accent: #5db4f0;
+    --accent-soft: #2a4a63;
+    --accent-2: #7ad9b0;
+    --warn: #e9b872;
+    --danger: #e88a8a;
+    --legacy: #b08bd6;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --sidebar-w: 290px;
+    --max-w: 980px;
+    --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    width: var(--sidebar-w);
+    flex: 0 0 var(--sidebar-w);
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+    background: linear-gradient(180deg, #11151b 0%, #0e1116 100%);
+    padding: 26px 18px 60px 26px;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 9px; }
+  .sidebar::-webkit-scrollbar-thumb { background: #222a35; border-radius: 5px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 4px;
+  }
+
+  .brand .mark {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .brand .name {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #f1f5fa;
+  }
+
+  .brand .name small {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .nav-tagline {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin: 0 0 22px 0;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  nav .nav-group-title {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 22px 0 8px 0;
+  }
+
+  nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  nav li a {
+    display: block;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 13.5px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border-left: 2px solid transparent;
+    transition: color .12s ease, background .12s ease, border-color .12s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  nav li a:hover {
+    color: var(--text);
+    background: var(--bg-elev);
+  }
+
+  nav li a.active {
+    color: var(--accent);
+    background: var(--bg-elev);
+    border-left-color: var(--accent);
+  }
+
+  nav li a .dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .dot.active-s { background: var(--accent-2); }
+  .dot.legacy-s { background: var(--legacy); }
+
+  /* ---------- Main ---------- */
+  main {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 48px 120px 48px;
+  }
+
+  .content {
+    max-width: var(--max-w);
+    margin: 0 auto;
+  }
+
+  section { padding-top: 56px; scroll-margin-top: 20px; }
+  section:first-of-type { padding-top: 44px; }
+
+  h1 {
+    font-size: 32px;
+    line-height: 1.2;
+    letter-spacing: -0.6px;
+    margin: 0 0 14px 0;
+    color: #f3f7fb;
+  }
+
+  h2 {
+    font-size: 23px;
+    letter-spacing: -0.3px;
+    margin: 0 0 10px 0;
+    color: #eef3f8;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h3 {
+    font-size: 16.5px;
+    margin: 26px 0 8px 0;
+    color: #e4ebf2;
+  }
+
+  p { margin: 0 0 14px 0; color: var(--text); }
+  .lead { font-size: 17px; color: var(--text-dim); line-height: 1.6; }
+
+  a { color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--bg-code);
+    border: 1px solid var(--border-soft);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: #c9d6e6;
+  }
+
+  strong { color: #eef3f8; font-weight: 650; }
+
+  ul.body-list { margin: 0 0 16px 0; padding-left: 22px; }
+  ul.body-list li { margin-bottom: 7px; }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background:
+      radial-gradient(900px 360px at 88% -10%, rgba(93,180,240,0.12), transparent 60%),
+      radial-gradient(700px 300px at 0% 0%, rgba(122,217,176,0.07), transparent 55%),
+      var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 38px 34px 38px;
+    margin-bottom: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ---------- Architecture diagram (top) ---------- */
+  .arch-figure {
+    margin: 8px 0 30px 0;
+    padding: 18px 18px 12px 18px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .arch-figure svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+  }
+  .arch-figure figcaption {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    text-align: center;
+    letter-spacing: 0.2px;
+  }
+
+  .hero .kicker {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+  }
+  .pill .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+  .invariant {
+    margin-top: 26px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: rgba(122,217,176,0.07);
+    border: 1px solid var(--accent-soft);
+    border-left: 3px solid var(--accent-2);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .invariant .ico { flex: 0 0 22px; margin-top: 2px; }
+  .invariant strong { color: var(--accent-2); }
+
+  /* ---------- Callouts ---------- */
+  .callout {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--bg-elev);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: rgba(233,184,114,0.06); }
+  .callout.danger { border-left-color: var(--danger); background: rgba(232,138,138,0.06); }
+  .callout.good { border-left-color: var(--accent-2); background: rgba(122,217,176,0.06); }
+  .callout .c-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+
+  /* ---------- Layer / architecture ---------- */
+  .layer-stack { margin: 24px 0 8px 0; }
+  .layer {
+    display: grid;
+    grid-template-columns: 168px 1fr;
+    gap: 18px;
+    align-items: start;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .layer .layer-label {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #eef3f8;
+  }
+  .layer .layer-label span {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-faint);
+    margin-top: 3px;
+  }
+  .layer .layer-body { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 4px 11px;
+    color: #cdd9e6;
+    text-decoration: none;
+  }
+  .chip:hover { border-color: var(--accent); color: #fff; }
+  .chip .s { width: 7px; height: 7px; border-radius: 50%; }
+  .chip .s.a { background: var(--accent-2); }
+  .chip .s.l { background: var(--legacy); }
+
+  /* ---------- Flow diagram ---------- */
+  .flow {
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    margin: 18px 0 8px 0;
+    overflow-x: auto;
+  }
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 760px;
+  }
+  .flow-node {
+    flex: 1;
+    text-align: center;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    position: relative;
+  }
+  .flow-node .fn-name { font-family: var(--mono); font-size: 12.5px; color: #e8eef5; font-weight: 600; }
+  .flow-node .fn-sub { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+  .flow-arrow {
+    flex: 0 0 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+  }
+  .flow-caption { font-size: 13px; color: var(--text-dim); margin-top: 16px; }
+  .flow-caption strong { color: var(--accent-2); }
+
+  /* ---------- Project cards ---------- */
+  .proj-layer-head {
+    margin: 40px 0 14px 0;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .proj-layer-head .l-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .proj-layer-head .l-desc { font-size: 13px; color: var(--text-faint); }
+  .proj-layer-head:first-child { margin-top: 8px; }
+
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    padding: 22px 24px;
+    margin-bottom: 18px;
+    scroll-margin-top: 16px;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .card-head h3 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 17px;
+    color: #f1f5fa;
+    letter-spacing: -0.2px;
+  }
+  .badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 100px;
+    flex: 0 0 auto;
+  }
+  .badge.active { background: rgba(122,217,176,0.14); color: var(--accent-2); border: 1px solid rgba(122,217,176,0.35); }
+  .badge.legacy { background: rgba(176,139,214,0.13); color: var(--legacy); border: 1px solid rgba(176,139,214,0.35); }
+
+  .one-liner { color: var(--text-dim); font-style: italic; margin: 8px 0 16px 0; font-size: 14.5px; }
+
+  .card .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 18px 0 7px 0;
+  }
+  .card .resp { font-size: 14.5px; color: var(--text); margin: 0; }
+
+  .types { margin: 4px 0 0 0; border-top: 1px solid var(--border-soft); }
+  .type-row {
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    gap: 16px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .type-row .t-name {
+    font-family: var(--mono);
+    font-size: 12.8px;
+    color: var(--accent);
+    word-break: break-word;
+  }
+  .type-row .t-role { font-size: 13.5px; color: var(--text-dim); }
+
+  .deps { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+  .dep {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px 9px;
+    color: #c2cedd;
+  }
+  .dep.none { color: var(--text-faint); font-style: italic; font-family: var(--sans); }
+
+  .fits { font-size: 13.8px; color: var(--text-dim); }
+  .notable { font-size: 13.8px; color: var(--text-dim); background: var(--bg-code); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .notable strong { color: var(--text); }
+
+  /* ---------- Roadmap ---------- */
+  .road-grid { display: grid; gap: 16px; }
+
+  .road-block {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    padding: 20px 22px;
+  }
+  .road-block h3 { margin-top: 0; display: flex; align-items: center; gap: 10px; }
+  .road-block h3 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--bg);
+    background: var(--accent);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    flex: 0 0 22px;
+  }
+
+  ul.check { list-style: none; padding-left: 0; margin: 10px 0 0 0; }
+  ul.check li {
+    position: relative;
+    padding-left: 26px;
+    margin-bottom: 11px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  ul.check li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 8px;
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    border: 1.5px solid var(--accent);
+    background: rgba(93,180,240,0.12);
+  }
+  ul.check.warn li::before { border-color: var(--warn); background: rgba(233,184,114,0.12); }
+  ul.check.build li::before { border-color: var(--accent-2); background: rgba(122,217,176,0.12); border-radius: 50%; }
+  ul.check li .sub { display:block; color: var(--text-faint); font-size: 12.8px; margin-top: 2px; }
+  ul.check li b { color: #eef3f8; }
+
+  /* chain steps */
+  .chain { display: grid; gap: 8px; margin-top: 12px; }
+  .chain-link {
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 12px;
+    align-items: start;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+  }
+  .chain-link .n {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .chain-link .lk-title { font-weight: 650; color: #eef3f8; font-size: 13.8px; }
+  .chain-link .lk-body { font-size: 13.3px; color: var(--text-dim); margin-top: 2px; }
+
+  /* sequence */
+  .seq { counter-reset: seq; list-style: none; padding-left: 0; margin: 12px 0 0 0; }
+  .seq li {
+    counter-increment: seq;
+    position: relative;
+    padding: 12px 14px 12px 52px;
+    margin-bottom: 9px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+  }
+  .seq li::before {
+    content: counter(seq);
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #3f8fc7);
+    color: #06121c;
+    font-weight: 700;
+    font-family: var(--mono);
+    font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .seq li b { color: #eef3f8; }
+
+  .skills-wishlist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .skill-tag {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg-elev-2);
+    border: 1px dashed var(--border);
+    border-radius: 100px;
+    padding: 4px 12px;
+    color: var(--accent-2);
+  }
+
+  /* ---------- Config code blocks ---------- */
+  pre.cfg {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin: 8px 0 16px 0;
+    overflow-x: auto;
+    color: #c9d6e6;
+    white-space: pre;
+    tab-size: 2;
+  }
+  pre.cfg .k { color: var(--accent); }
+  pre.cfg .s { color: var(--accent-2); }
+  pre.cfg .c { color: var(--text-faint); font-style: italic; }
+  .prov-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 24px 0 2px 0;
+  }
+  .prov-head .pname {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 650;
+    color: #f1f5fa;
+  }
+  .prov-head .ptag {
+    font-size: 11px;
+    color: var(--text-faint);
+  }
+  .val-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 4px 0; }
+  .val {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 4px 12px;
+    color: var(--accent-2);
+  }
+
+  footer {
+    margin-top: 70px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+
+  /* ---------- Mobile ---------- */
+  .menu-toggle {
+    display: none;
+    position: fixed;
+    top: 14px; left: 14px;
+    z-index: 50;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 8px 11px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  @media (max-width: 1080px) {
+    main { padding: 0 28px 100px 28px; }
+  }
+
+  @media (max-width: 860px) {
+    .menu-toggle { display: block; }
+    .sidebar {
+      position: fixed;
+      z-index: 40;
+      left: 0; top: 0;
+      transform: translateX(-100%);
+      transition: transform .22s ease;
+      box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    }
+    .sidebar.open { transform: translateX(0); }
+    main { padding: 56px 18px 100px 18px; }
+    .layer { grid-template-columns: 1fr; gap: 10px; }
+    .type-row { grid-template-columns: 1fr; gap: 3px; }
+    .type-row .t-role { padding-left: 0; }
+    h1 { font-size: 26px; }
+    .hero { padding: 28px 22px; }
+  }
+</style>
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <div class="name">Scout<small>Architecture Reference</small></div>
+    </div>
+    <p class="nav-tagline">Open-source read-only chatops assistant. Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#architecture">Architecture &amp; Flow</a></li>
+        <li><a href="#llm-providers">LLM Providers &mdash; Config</a></li>
+        <li><a href="#project-knowledge">Project Knowledge &mdash; Config</a></li>
+      </ul>
+
+      <div class="nav-group-title">Projects</div>
+      <ul>
+        <li><a href="#p-cp-contracts"><span class="dot active-s"></span>ControlPlane.Contracts</a></li>
+        <li><a href="#p-llm"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="#p-llm-ollama"><span class="dot active-s"></span>Scout.Llm (Ollama)</a></li>
+        <li><a href="#p-knowledge"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="#p-skills"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="#p-github"><span class="dot active-s"></span>Plugin.GitHub</a></li>
+        <li><a href="#p-conversation"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="#p-controlplane"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="#p-discord"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="#p-slack"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="#p-teams"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="#p-host-console"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="#p-host-cp"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="#preconditions">Preconditions</a></li>
+        <li><a href="#improvements">Improvements</a></li>
+        <li><a href="#build">Things to Build</a></li>
+        <li><a href="#sequencing">Suggested Sequencing</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main>
+  <div class="content">
+
+    <!-- ARCHITECTURE DIAGRAM (top, first prominent visual) -->
+    <figure class="arch-figure">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" role="img" aria-label="Scout architecture and per-turn flow diagram" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+        <defs>
+          <marker id="arrowReq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#5db4f0"/>
+          </marker>
+          <marker id="arrowRes" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="#7ad9b0"/>
+          </marker>
+        </defs>
+        <rect x="0" y="0" width="1200" height="860" fill="#0e1116"/>
+        <text x="40" y="44" fill="#f3f7fb" font-size="24" font-weight="700" letter-spacing="-0.4">Scout &mdash; active architecture &amp; per-turn flow</text>
+        <text x="40" y="68" fill="#97a3b3" font-size="13.5">Read-only ChatOps assistant &middot; Microsoft Semantic Kernel &middot; .NET 10 &middot; local-first Ollama &middot; 13 active projects</text>
+        <!-- HOSTS (top) -->
+        <g>
+          <rect x="40" y="92" width="1120" height="84" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="128" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">HOSTS</text>
+          <text x="60" y="146" fill="#6c7888" font-size="10.5">Process entry points</text>
+          <rect x="250" y="108" width="430" height="52" rx="9" fill="#1b222b" stroke="#2a4a63" stroke-width="1.4"/>
+          <text x="465" y="132" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Host.Console</text>
+          <text x="465" y="150" fill="#7ad9b0" font-size="10.5" text-anchor="middle">primary composition root</text>
+          <rect x="710" y="108" width="430" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="925" y="132" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Host.ControlPlane</text>
+          <text x="925" y="150" fill="#97a3b3" font-size="10.5" text-anchor="middle">control-plane host</text>
+        </g>
+        <!-- ADAPTERS -->
+        <g>
+          <rect x="40" y="192" width="1120" height="84" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="228" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">ADAPTERS</text>
+          <text x="60" y="246" fill="#6c7888" font-size="10.5">Chat I/O connectors</text>
+          <rect x="250" y="208" width="282" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="391" y="240" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Adapter.Discord</text>
+          <rect x="564" y="208" width="282" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="705" y="240" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Adapter.Slack</text>
+          <rect x="878" y="208" width="282" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="1019" y="240" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Adapter.Teams</text>
+        </g>
+        <!-- CONVERSATION -->
+        <g>
+          <rect x="40" y="292" width="1120" height="92" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="328" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">CONVERSATION</text>
+          <text x="60" y="346" fill="#6c7888" font-size="10.5">Per-turn loop</text>
+          <rect x="250" y="308" width="910" height="60" rx="9" fill="#1b222b" stroke="#2a4a63" stroke-width="1.4"/>
+          <text x="705" y="332" fill="#eef3f8" font-size="14" font-weight="600" text-anchor="middle">Scout.Conversation</text>
+          <text x="705" y="352" fill="#97a3b3" font-size="11" text-anchor="middle">ConversationConductor &middot; LlmStreamingRouter &middot; in-memory history (channel + user)</text>
+        </g>
+        <!-- CONTROL PLANE -->
+        <g>
+          <rect x="40" y="400" width="1120" height="84" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="436" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">CONTROL PLANE</text>
+          <text x="60" y="454" fill="#6c7888" font-size="10.5">Management &middot; gRPC</text>
+          <rect x="250" y="416" width="446" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="473" y="440" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.ControlPlane</text>
+          <text x="473" y="457" fill="#97a3b3" font-size="10.5" text-anchor="middle">providers &middot; models &middot; features</text>
+          <rect x="714" y="416" width="446" height="52" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="937" y="440" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.ControlPlane.Contracts</text>
+          <text x="937" y="457" fill="#97a3b3" font-size="10.5" text-anchor="middle">gRPC service contracts</text>
+        </g>
+        <!-- CAPABILITIES -->
+        <g>
+          <rect x="40" y="500" width="1120" height="92" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="536" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">CAPABILITIES</text>
+          <text x="60" y="554" fill="#6c7888" font-size="10.5">Retrieval &amp; plugins</text>
+          <rect x="250" y="516" width="290" height="60" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="395" y="540" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Knowledge</text>
+          <text x="395" y="560" fill="#97a3b3" font-size="10.5" text-anchor="middle">RAG &middot; search_project &middot; find_symbol</text>
+          <rect x="560" y="516" width="290" height="60" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="705" y="540" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Skills</text>
+          <text x="705" y="560" fill="#97a3b3" font-size="10.5" text-anchor="middle">embedding retrieval &middot; TopN to prompt</text>
+          <rect x="870" y="516" width="290" height="60" rx="9" fill="#1b222b" stroke="#232c38" stroke-width="1.2"/>
+          <text x="1015" y="540" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Plugin.GitHub</text>
+          <text x="1015" y="560" fill="#97a3b3" font-size="10.5" text-anchor="middle">Semantic Kernel function</text>
+        </g>
+        <!-- LLM GATEWAY (foundation, bottom) -->
+        <g>
+          <rect x="40" y="608" width="1120" height="92" rx="12" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="644" fill="#5db4f0" font-size="13" font-weight="700" letter-spacing="0.6">LLM GATEWAY</text>
+          <text x="60" y="662" fill="#6c7888" font-size="10.5">Foundation</text>
+          <rect x="250" y="620" width="190" height="68" rx="9" fill="#1b222b" stroke="#2a4a63" stroke-width="1.4"/>
+          <text x="345" y="646" fill="#eef3f8" font-size="13.5" font-weight="600" text-anchor="middle">Scout.Llm</text>
+          <text x="345" y="663" fill="#7ad9b0" font-size="10" text-anchor="middle">IChatGateway</text>
+          <text x="345" y="678" fill="#7ad9b0" font-size="10" text-anchor="middle">ILlmProviderFactory</text>
+          <!-- pluggable providers (one selected per run via Scout:Llm:Provider) -->
+          <rect x="456" y="620" width="688" height="68" rx="9" fill="#10151c" stroke="#232c38" stroke-width="1"/>
+          <text x="468" y="634" fill="#97a3b3" font-size="9.5" font-weight="700" letter-spacing="0.5">PLUGGABLE PROVIDERS &middot; one selected per run via Scout:Llm:Provider</text>
+          <g font-size="9.5" text-anchor="middle" fill="#cdd9e6">
+            <rect x="468" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#2a4a63" stroke-width="1"/>
+            <text x="547" y="654">Ollama</text>
+            <rect x="634" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="713" y="654">Gemini</text>
+            <rect x="800" y="642" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="879" y="654">OpenAI</text>
+            <rect x="966" y="642" width="170" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="1051" y="654">OpenRouter</text>
+            <rect x="468" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="547" y="676">AzureOpenAI</text>
+            <rect x="634" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="713" y="676">Mistral</text>
+            <rect x="800" y="664" width="158" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="879" y="676">HuggingFace</text>
+            <rect x="966" y="664" width="170" height="18" rx="5" fill="#1b222b" stroke="#232c38" stroke-width="1"/>
+            <text x="1051" y="676">AzureAIInference</text>
+          </g>
+        </g>
+        <!-- external runtime -->
+        <rect x="250" y="716" width="910" height="44" rx="9" fill="#0a0d12" stroke="#2a4a63" stroke-width="1.2" stroke-dasharray="5 4"/>
+        <text x="705" y="743" fill="#e9b872" font-size="12.5" font-weight="600" text-anchor="middle">Semantic Kernel + Ollama LLM &middot; function-calling: search_project / find_symbol</text>
+        <!-- request flow (blue, down) -->
+        <g stroke="#5db4f0" stroke-width="2.2" fill="none">
+          <path d="M200 234 L200 332" marker-end="url(#arrowReq)"/>
+          <path d="M200 354 L200 442" marker-end="url(#arrowReq)"/>
+          <path d="M200 462 L200 650" marker-end="url(#arrowReq)"/>
+          <path d="M200 670 L200 736" marker-end="url(#arrowReq)"/>
+        </g>
+        <g stroke="#5db4f0" stroke-width="1.6" fill="none" opacity="0.85">
+          <path d="M200 234 L246 234" marker-end="url(#arrowReq)"/>
+          <path d="M200 338 L246 338" marker-end="url(#arrowReq)"/>
+        </g>
+        <!-- response flow (green, up) -->
+        <g stroke="#7ad9b0" stroke-width="2.2" fill="none">
+          <path d="M1180 736 L1180 462" marker-end="url(#arrowRes)"/>
+          <path d="M1180 442 L1180 354" marker-end="url(#arrowRes)"/>
+          <path d="M1180 332 L1180 234" marker-end="url(#arrowRes)"/>
+        </g>
+        <g fill="#5db4f0" font-size="10.5" font-weight="600">
+          <text x="186" y="282" text-anchor="end">1 normalize</text>
+          <text x="186" y="400" text-anchor="end">2 select skill</text>
+          <text x="186" y="556" text-anchor="end">3 build request</text>
+          <text x="186" y="706" text-anchor="end">4 invoke</text>
+        </g>
+        <g fill="#7ad9b0" font-size="10.5" font-weight="600">
+          <text x="1166" y="600" text-anchor="end">stream tokens back</text>
+        </g>
+        <!-- entry point: User -->
+        <g>
+          <rect x="40" y="208" width="150" height="52" rx="9" fill="#0a0d12" stroke="#5db4f0" stroke-width="1.4"/>
+          <text x="115" y="232" fill="#f3f7fb" font-size="13" font-weight="700" text-anchor="middle">User</text>
+          <text x="115" y="250" fill="#97a3b3" font-size="10" text-anchor="middle">Discord/Slack/Teams</text>
+        </g>
+        <!-- legend -->
+        <g>
+          <rect x="40" y="784" width="1120" height="56" rx="10" fill="#151a21" stroke="#232c38" stroke-width="1"/>
+          <text x="60" y="808" fill="#97a3b3" font-size="11" font-weight="700" letter-spacing="0.6">FLOW</text>
+          <line x1="118" y1="812" x2="152" y2="812" stroke="#5db4f0" stroke-width="2.6" marker-end="url(#arrowReq)"/>
+          <text x="162" y="816" fill="#d7dde6" font-size="11">Request: User &rarr; Adapter &rarr; Conductor &rarr; Router (history + skill + grounding) &rarr; Gateway</text>
+          <line x1="118" y1="828" x2="152" y2="828" stroke="#7ad9b0" stroke-width="2.6" marker-end="url(#arrowRes)"/>
+          <text x="162" y="832" fill="#d7dde6" font-size="11">Response: tokens streamed back out the same path; function-calling &rarr; Scout.Knowledge mid-stream</text>
+          <rect x="760" y="800" width="22" height="14" rx="3" fill="#1b222b" stroke="#2a4a63" stroke-width="1.2"/>
+          <text x="790" y="811" fill="#d7dde6" font-size="11.5">hot-path project</text>
+          <rect x="950" y="800" width="22" height="14" rx="3" fill="#0a0d12" stroke="#2a4a63" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="980" y="811" fill="#d7dde6" font-size="11.5">external runtime</text>
+          <text x="760" y="832" fill="#6c7888" font-size="11">Layers read bottom-up: LLM gateway is the foundation; hosts compose the stack at the top.</text>
+        </g>
+      </svg>
+      <figcaption>Scout architecture &amp; per-turn flow</figcaption>
+    </figure>
+
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <div class="hero">
+        <div class="kicker">Read-only ChatOps Assistant</div>
+        <h1>Scout</h1>
+        <p class="lead">
+          Scout is an open-source ChatOps assistant that <strong>describes and answers work for humans in chat</strong>.
+          It surfaces information about your systems &mdash; repositories, issues, cloud health, indexed project knowledge &mdash;
+          and <strong>never executes mutating operations against external systems</strong>. It is built on Microsoft Semantic Kernel
+          and .NET 10, with pluggable LLM providers (local-first via Ollama), pluggable chat adapters, and pluggable feature plugins.
+        </p>
+
+        <div class="pill-row">
+          <span class="pill"><span class="pdot"></span>Microsoft Semantic Kernel</span>
+          <span class="pill"><span class="pdot"></span>.NET 10</span>
+          <span class="pill"><span class="pdot"></span>Ollama (local-first)</span>
+          <span class="pill"><span class="pdot"></span>Discord &middot; Slack &middot; Teams adapters</span>
+          <span class="pill"><span class="pdot"></span>Streaming-first</span>
+        </div>
+
+        <div class="invariant">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2.5l8 3.2v5.4c0 5-3.4 8.8-8 10.4-4.6-1.6-8-5.4-8-10.4V5.7l8-3.2z" stroke="#7ad9b0" stroke-width="1.6"/>
+            <path d="M8.5 12l2.4 2.4 4.6-5" stroke="#7ad9b0" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div>
+            <strong>The descriptive-write / read-only invariant.</strong> No feature may execute against an external system.
+            Plugins declare capabilities classified by <code>WriteClass</code> (None / Descriptive / Executive); executive writes
+            are forbidden, and the registry enforces the invariant <em>at startup</em>. <code>PluginCapabilities.IsReadOnly</code>
+            has no setter, so a write-capable state is literally unrepresentable in the type system. Replies are bound only to the
+            originating channel/thread.
+          </div>
+        </div>
+      </div>
+
+      <h3>What you get</h3>
+      <ul class="body-list">
+        <li><strong>A streaming-first conversation core</strong> that drives per-turn LLM responses to any chat platform through a single cumulative-text sink contract.</li>
+        <li><strong>A provider-agnostic LLM gateway</strong> (<code>IChatGateway</code>) over Semantic Kernel &mdash; no SK or connector SDK types leak to consumers.</li>
+        <li><strong>Retrieval capabilities</strong>: a vector-backed RAG knowledge store and an embedding-driven skills library that shape each turn.</li>
+        <li><strong>Read-only feature plugins</strong> (GitHub) exposed to the LLM as Semantic Kernel function calls.</li>
+        <li><strong>A control plane</strong> for managing local LLM runtimes (Ollama / LM Studio), models, and feature credentials over a secure local gRPC transport.</li>
+      </ul>
+    </section>
+
+    <!-- ARCHITECTURE -->
+    <section id="architecture">
+      <h2>Architecture &amp; Per-turn Flow</h2>
+      <p>
+        Scout is organised in layers. The architecture centres on the per-turn conversation model
+        in <code>Scout.Conversation</code> plus a distributed control plane, with pluggable chat adapters,
+        LLM providers, and read-only feature plugins. The diagram below groups all 13 projects by their role.
+      </p>
+
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="layer-label">Foundation<span>Core contracts</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-cp-contracts"><span class="s a"></span>Scout.ControlPlane.Contracts</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">LLM<span>Gateway &amp; providers</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-llm"><span class="s a"></span>Scout.Llm</a>
+            <a class="chip" href="#p-llm-ollama"><span class="s a"></span>Scout.Llm (Ollama)</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Capabilities<span>Retrieval &amp; behaviour</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-knowledge"><span class="s a"></span>Scout.Knowledge</a>
+            <a class="chip" href="#p-skills"><span class="s a"></span>Scout.Skills</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Plugins<span>Read-only feature modules</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-github"><span class="s a"></span>Plugin.GitHub</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Conversation<span>Per-turn pipeline core</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-conversation"><span class="s a"></span>Scout.Conversation</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Control Plane<span>Provider &amp; feature management</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-controlplane"><span class="s a"></span>Scout.ControlPlane</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Adapters<span>Chat platform connectors</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-discord"><span class="s a"></span>Adapter.Discord</a>
+            <a class="chip" href="#p-slack"><span class="s a"></span>Adapter.Slack</a>
+            <a class="chip" href="#p-teams"><span class="s a"></span>Adapter.Teams</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Hosts<span>Process entry points</span></div>
+          <div class="layer-body">
+            <a class="chip" href="#p-host-console"><span class="s a"></span>Host.Console (primary)</a>
+            <a class="chip" href="#p-host-cp"><span class="s a"></span>Host.ControlPlane</a>
+          </div>
+        </div>
+      </div>
+
+      <h3>The per-turn message flow</h3>
+      <p>
+        Every inbound chat message follows the same streaming pipeline. A platform adapter normalises the event into a
+        <code>ChatMessage</code> and a channel-bound <code>IResponseSink</code>, the conductor wraps the turn in telemetry,
+        the router selects skills and calls the gateway, and the gateway streams tokens (optionally invoking read-only
+        feature plugins as Semantic Kernel function calls) back through the sink to the originating channel only.
+      </p>
+
+      <div class="flow" role="img" aria-label="Per-turn message flow diagram">
+        <div class="flow-row">
+          <div class="flow-node"><div class="fn-name">Chat Adapter</div><div class="fn-sub">Discord / Slack / Teams &rarr; ChatMessage + sink</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">ConversationConductor</div><div class="fn-sub">OTel activity, fail-safe</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">LlmStreamingRouter</div><div class="fn-sub">skill select + memory replay</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">ChatGateway</div><div class="fn-sub">SK kernel, agent/direct path</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">LLM + Tools</div><div class="fn-sub">Ollama /v1 &middot; search_project, GitHub&hellip;</div></div>
+        </div>
+        <p class="flow-caption">
+          Tokens stream back through <strong>StreamPump</strong> &rarr; <strong>IResponseSink</strong>, which accumulates
+          cumulative text (never deltas) and emits a single terminal <em>Complete</em> or <em>Fail</em>. Feature plugins
+          (GitHub, Knowledge, Skills) contribute Semantic Kernel functions that the model may call mid-stream; retrieval
+          grounds the answer with citations. Memory is written back <strong>only on clean completion</strong>.
+        </p>
+      </div>
+
+      <div class="callout good">
+        <div class="c-title">Cross-cutting invariants</div>
+        <p>
+          <strong>Streaming-first</strong> everywhere (<code>IAsyncEnumerable&lt;string&gt;</code>; blocking calls drain the stream internally).
+          <strong>Cycle-safe DI</strong>: the embedder is built outside the kernel to break the
+          <code>Kernel &rarr; KernelPlugin &rarr; IEmbeddingGenerator &rarr; Kernel</code> loop.
+          <strong>Self-gating</strong>: adapters and plugins register only when configured, so an unconfigured host still starts.
+          <strong>Distributed tracing</strong> via <code>ScoutActivitySource</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== LLM PROVIDERS ===================== -->
+    <section id="llm-providers">
+      <h2>LLM Providers &mdash; Configuration</h2>
+      <p>
+        <code>Scout.Llm</code> exposes a provider-agnostic gateway (<code>IChatGateway</code>) and an
+        <code>ILlmProviderFactory</code> abstraction. Exactly one provider is selected per run via the
+        <code>Scout:Llm:Provider</code> key; its matching options block under <code>Scout:Llm</code> supplies the chat
+        and embedding settings. All blocks bind to <code>LlmOptions</code> &mdash; the single source of truth for both
+        chat and embeddings.
+      </p>
+
+      <h3>Provider selection</h3>
+      <p>Set the active provider with the <code>Scout:Llm:Provider</code> key. Valid values (each maps to an <code>ILlmProviderFactory.Name</code>):</p>
+      <div class="val-list">
+        <span class="val">Ollama</span>
+        <span class="val">Gemini</span>
+        <span class="val">OpenAI</span>
+        <span class="val">OpenRouter</span>
+        <span class="val">AzureOpenAI</span>
+        <span class="val">Mistral</span>
+        <span class="val">HuggingFace</span>
+        <span class="val">AzureAIInference</span>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">Security &mdash; never commit API keys</div>
+        <p>
+          API keys must <strong>never</strong> live in the tracked <code>appsettings.json</code>. Use one of:
+        </p>
+        <ul class="body-list">
+          <li><strong>appsettings.Development.json</strong> &mdash; gitignored; fine for local runs.</li>
+          <li><strong>user-secrets</strong> &mdash; <code>dotnet user-secrets set "Scout:Llm:&lt;Provider&gt;:ApiKey" "&lt;key&gt;"</code> (e.g. <code>Scout:Llm:OpenAI:ApiKey</code>).</li>
+          <li><strong>environment variable</strong> &mdash; <code>Scout__Llm__&lt;Provider&gt;__ApiKey</code> (double-underscore segment separator), e.g. <code>Scout__Llm__OpenAI__ApiKey</code>.</li>
+        </ul>
+        <p>The tracked <code>appsettings.json</code> should hold non-secret structure only (endpoints, model names) with empty key strings.</p>
+      </div>
+
+      <h3>Per-provider <code>appsettings</code> blocks</h3>
+      <p>Each block is shown nested under <code>Scout:Llm</code>. Property names match <code>LlmOptions</code> exactly. Keep <code>ApiKey</code> empty here and supply it via one of the secure mechanisms above.</p>
+
+      <!-- Ollama -->
+      <div class="prov-head"><span class="pname">Ollama</span><span class="ptag">local-first &middot; no API key &middot; default provider</span></div>
+      <pre class="cfg"><span class="c">// One endpoint serves both chat and embeddings; no key needed.</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Llm"</span>: {
+    <span class="k">"Provider"</span>: <span class="s">"Ollama"</span>,
+    <span class="k">"Ollama"</span>: {
+      <span class="k">"Endpoint"</span>: <span class="s">"http://localhost:11434"</span>,
+      <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"qwen2.5"</span> },
+      <span class="k">"Embeddings"</span>: {
+        <span class="k">"Model"</span>: <span class="s">"nomic-embed-text"</span>,
+        <span class="k">"MaxBatchSize"</span>: <span class="s">16</span>,
+        <span class="k">"ExpectedDimensions"</span>: <span class="s">0</span>,
+        <span class="k">"HttpTimeoutSeconds"</span>: <span class="s">100</span>
+      }
+    }
+  }
+}</pre>
+
+      <!-- Gemini -->
+      <div class="prov-head"><span class="pname">Gemini</span><span class="ptag">Google AI &middot; one key for chat + embeddings</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"Gemini"</span>,
+<span class="k">"Gemini"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// secret &rarr; user-secrets / env</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"gemini-1.5-flash"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"text-embedding-004"</span>, <span class="k">"MaxBatchSize"</span>: <span class="s">16</span> }
+}</pre>
+
+      <!-- OpenAI -->
+      <div class="prov-head"><span class="pname">OpenAI</span><span class="ptag">OpenAI API or any OpenAI-compatible host &middot; decoupled embeddings</span></div>
+      <pre class="cfg"><span class="c">// Endpoint is OPTIONAL: omit/null targets the default OpenAI API.</span>
+<span class="c">// Set it to point at an OpenAI-compatible host, e.g. NVIDIA:</span>
+<span class="c">//   "Endpoint": "https://integrate.api.nvidia.com/v1"</span>
+<span class="c">// Embeddings is a DECOUPLED block: its Endpoint/ApiKey, when set,</span>
+<span class="c">// override the chat ones so embeddings can run elsewhere.</span>
+<span class="k">"Provider"</span>: <span class="s">"OpenAI"</span>,
+<span class="k">"OpenAI"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// or "https://integrate.api.nvidia.com/v1"</span>
+  <span class="k">"Chat"</span>: { <span class="k">"Model"</span>: <span class="s">"gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: {
+    <span class="k">"Model"</span>: <span class="s">"text-embedding-3-small"</span>,
+    <span class="k">"Endpoint"</span>: <span class="s">null</span>,                        <span class="c">// null &rarr; falls back to chat Endpoint</span>
+    <span class="k">"ApiKey"</span>: <span class="s">null</span>                          <span class="c">// null &rarr; falls back to chat ApiKey</span>
+  }
+}</pre>
+
+      <!-- OpenRouter -->
+      <div class="prov-head"><span class="pname">OpenRouter</span><span class="ptag">preset chat endpoint &middot; separate embeddings host REQUIRED</span></div>
+      <pre class="cfg"><span class="c">// Chat targets the preset base https://openrouter.ai/api/v1 (not configurable).</span>
+<span class="c">// OpenRouter serves NO embeddings, so the Embeddings block is REQUIRED and must</span>
+<span class="c">// point at a separate OpenAI-compatible host: Model, Endpoint and ApiKey all required.</span>
+<span class="k">"Provider"</span>: <span class="s">"OpenRouter"</span>,
+<span class="k">"OpenRouter"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// OpenRouter chat key</span>
+  <span class="k">"Chat"</span>: { <span class="k">"Model"</span>: <span class="s">"openai/gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: {
+    <span class="k">"Model"</span>: <span class="s">"text-embedding-3-small"</span>,    <span class="c">// required</span>
+    <span class="k">"Endpoint"</span>: <span class="s">"https://api.openai.com/v1"</span>, <span class="c">// required (separate host)</span>
+    <span class="k">"ApiKey"</span>: <span class="s">""</span>                            <span class="c">// required (embeddings host key)</span>
+  }
+}</pre>
+
+      <!-- AzureOpenAI -->
+      <div class="prov-head"><span class="pname">AzureOpenAI</span><span class="ptag">deployment names, not model ids &middot; Endpoint required</span></div>
+      <pre class="cfg"><span class="c">// Azure binds DEPLOYMENT names (configured in the portal), not bare model ids.</span>
+<span class="c">// Endpoint is required.</span>
+<span class="k">"Provider"</span>: <span class="s">"AzureOpenAI"</span>,
+<span class="k">"AzureOpenAI"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">"https://my-aoai.openai.azure.com"</span>,
+  <span class="k">"Chat"</span>:       { <span class="k">"Deployment"</span>: <span class="s">"gpt-4o-mini"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Deployment"</span>: <span class="s">"text-embedding-3-small"</span> }
+}</pre>
+
+      <!-- Mistral -->
+      <div class="prov-head"><span class="pname">Mistral</span><span class="ptag">one key for chat + embeddings &middot; Endpoint optional</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"Mistral"</span>,
+<span class="k">"Mistral"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// null &rarr; default Mistral API</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"mistral-small-latest"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"mistral-embed"</span> }
+}</pre>
+
+      <!-- HuggingFace -->
+      <div class="prov-head"><span class="pname">HuggingFace</span><span class="ptag">one token for chat + embeddings &middot; Endpoint optional</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"HuggingFace"</span>,
+<span class="k">"HuggingFace"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,                              <span class="c">// HuggingFace API token</span>
+  <span class="k">"Endpoint"</span>: <span class="s">null</span>,                          <span class="c">// null &rarr; default inference API</span>
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"meta-llama/Llama-3.1-8B-Instruct"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"sentence-transformers/all-MiniLM-L6-v2"</span> }
+}</pre>
+
+      <!-- AzureAIInference -->
+      <div class="prov-head"><span class="pname">AzureAIInference</span><span class="ptag">one key for chat + embeddings &middot; Endpoint required</span></div>
+      <pre class="cfg"><span class="k">"Provider"</span>: <span class="s">"AzureAIInference"</span>,
+<span class="k">"AzureAIInference"</span>: {
+  <span class="k">"ApiKey"</span>: <span class="s">""</span>,
+  <span class="k">"Endpoint"</span>: <span class="s">"https://my-model.region.models.ai.azure.com"</span>,
+  <span class="k">"Chat"</span>:       { <span class="k">"Model"</span>: <span class="s">"Mistral-large"</span> },
+  <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"Cohere-embed-v3-english"</span> }
+}</pre>
+
+      <div class="callout warn">
+        <div class="c-title">Caveats</div>
+        <p>
+          <strong>Chat model must be tool-capable.</strong> Function-calling for <code>search_project</code> and
+          <code>find_symbol</code> only works when the selected chat model supports tools. For <strong>HuggingFace</strong>
+          and <strong>OpenRouter</strong> this is route-/model-dependent &mdash; pick a model that advertises tool use
+          (for Ollama, run a tool-capable model such as <code>qwen2.5</code>, not <code>gemma3</code>).
+        </p>
+        <p>
+          <strong>Changing the embeddings model requires re-indexing.</strong> Embedding vectors are model-specific, so
+          switching the embeddings <code>Model</code> (or its dimensions) invalidates stored vectors &mdash; re-index every
+          configured project before querying again.
+        </p>
+      </div>
+    </section>
+
+    <!-- ===================== PROJECT KNOWLEDGE ===================== -->
+    <section id="project-knowledge">
+      <h2>Project Knowledge &mdash; Configuration</h2>
+      <p>
+        <code>Scout.Knowledge</code> answers questions about local repositories by indexing them into a
+        vector store and grounding the agent on the result. Projects come from two sources under
+        <code>Scout:Projects</code>, both optional: <strong>explicit</strong> entries (<code>Items</code>) and
+        <strong>auto-discovered</strong> repositories scanned from parent directories (<code>Roots</code>).
+        The plugin and the Project&nbsp;Expert agent register only when at least one project is configured
+        (Items <em>or</em> Roots), so an unconfigured host still starts.
+      </p>
+
+      <h3><code>Items</code> &mdash; explicit projects</h3>
+      <p>
+        Pin a project by name and repository path. Explicit items are authoritative: they
+        <strong>win on name collision</strong> (case-insensitive) with anything auto-discovered.
+      </p>
+      <pre class="cfg"><span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"messaging-explorer"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/vitor/WorkSpace/Dev/messaging-explorer"</span> }
+    ]
+  }
+}</pre>
+
+      <h3><code>Roots</code> &mdash; auto-discovery</h3>
+      <p>
+        List parent directories; Scout scans their immediate child directories and registers each one that
+        looks like a repository. A child qualifies when any of these markers is present:
+      </p>
+      <div class="val-list">
+        <span class="val">.git</span>
+        <span class="val">*.sln</span>
+        <span class="val">*.slnx</span>
+        <span class="val">*.csproj</span>
+        <span class="val">package.json</span>
+        <span class="val">go.mod</span>
+        <span class="val">pyproject.toml</span>
+        <span class="val">Cargo.toml</span>
+      </div>
+      <p>
+        A discovered project's <code>Name</code> is the directory name and its <code>RepoPath</code> is the
+        directory path. Discovery does directory listing only &mdash; <strong>no embedding and no indexing at
+        startup</strong>; a project is <strong>lazily indexed on its first search</strong> and skipped on later
+        queries once stored. The <code>list_projects</code> kernel function returns the merged, searchable set
+        (auto-discovered plus explicit).
+      </p>
+      <pre class="cfg"><span class="c">// Items and Roots can be combined; Items win on name collision.</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Roots"</span>: [
+      <span class="s">"/home/vitor/WorkSpace"</span>
+    ],
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"messaging-explorer"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/vitor/WorkSpace/Dev/messaging-explorer"</span> }
+    ]
+  }
+}</pre>
+      <p>
+        <strong>Changing the embeddings model requires re-indexing.</strong> Embedding vectors are
+        model-specific, so switching the embeddings <code>Model</code> (or its dimensions) invalidates stored
+        vectors. The optional file-watch re-indexing (<code>Scout:Projects:Watch</code>) applies to explicit
+        <code>Items</code> only.
+      </p>
+    </section>
+
+    <!-- ===================== PROJECTS ===================== -->
+    <section id="projects" style="padding-top:56px;">
+      <h2>Projects</h2>
+      <p>One section per solution project, ordered by layer. Each project is part of the active Scout architecture.</p>
+
+      <!-- FOUNDATION -->
+      <div class="proj-layer-head"><span class="l-name">Foundation</span><span class="l-desc">Core contracts</span></div>
+
+      <article class="card" id="p-cp-contracts">
+        <div class="card-head"><h3>Scout.ControlPlane.Contracts</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">gRPC service contracts for provider/model/feature management.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Defines protobuf message types and gRPC service interfaces for the Scout control plane. Contains three core services: <strong>Providers</strong> (manage Ollama/LM Studio lifecycle), <strong>Models</strong> (pull/list/delete LLMs), and <strong>Features</strong> (plugin discovery, credential setup, enable/disable). Generated from three <code>.proto</code> files; serves as the contract between the ControlPlane host and its clients.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">ProviderStatus</div><div class="t-role">Snapshot of a local runtime provider (Ollama/LM Studio): install state, endpoint, version, managed status, models.</div></div>
+          <div class="type-row"><div class="t-name">ProviderError</div><div class="t-role">Structured error payload (code + message) for provider diagnostics.</div></div>
+          <div class="type-row"><div class="t-name">Feature</div><div class="t-role">Merged catalog + persisted state for a plugin, with credentials, settings, scope matrix, setup steps.</div></div>
+          <div class="type-row"><div class="t-name">FeatureStatus</div><div class="t-role">Enum: ENABLED, NEEDS_CREDENTIALS, DISABLED, ERROR for plugin lifecycle.</div></div>
+          <div class="type-row"><div class="t-name">ModelPullProgress</div><div class="t-role">Streamed progress frame (percent, bytes completed/total, status) for model download.</div></div>
+          <div class="type-row"><div class="t-name">ProviderId</div><div class="t-role">Enum: OLLAMA, LM_STUDIO for runtime provider identification.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.ControlPlane</span><span class="dep">Scout.Host.ControlPlane</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The contracts layer: defines the gRPC boundary between the ControlPlane host (<code>Scout.Host.ControlPlane</code>) and clients/tests. Sits at the interface between core orchestration logic and external consumption; no implementation code.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Pure protobuf-generated contract library (<code>net10.0</code>, TFM inherited). Three proto files (providers, models, features) each generate both server and client stubs. Generated code suppresses 10+ analyzer warnings (CS1591, CA1707, CA1716, CA1724&hellip;) since gRPC generation does not follow C# conventions. <code>IsPackable=false</code>; no SDK shipping. Primary consumers: <code>Scout.Host.ControlPlane</code> (server) and <code>Scout.ControlPlane.Tests</code> (in-process test client).</p>
+      </article>
+
+      <!-- LLM -->
+      <div class="proj-layer-head"><span class="l-name">LLM</span><span class="l-desc">Gateway &amp; providers</span></div>
+
+      <article class="card" id="p-llm">
+        <div class="card-head"><h3>Scout.Llm</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Streaming-first LLM gateway over Semantic Kernel with pluggable providers.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Provides the abstract chat completion surface (<code>IChatGateway</code>) for Scout's conversation loop. Routes requests through Semantic Kernel, supports pluggable LLM providers (Ollama today), exposes both streaming (primary) and blocking completion APIs, and integrates an optional <code>ChatCompletionAgent</code> for tool-grounded responses. Shields consumers from SK and provider SDK types.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">IChatGateway</div><div class="t-role">Primary public contract: streaming and blocking chat completion; no SK types leak to consumers.</div></div>
+          <div class="type-row"><div class="t-name">ChatRequest</div><div class="t-role">Provider-agnostic request carrying user message, system prompt, persona, history, and generation settings.</div></div>
+          <div class="type-row"><div class="t-name">ChatGateway</div><div class="t-role">Internal streaming-first implementation; routes via SK's IChatCompletionService or an optional ChatCompletionAgent; yields content chunks.</div></div>
+          <div class="type-row"><div class="t-name">ILlmProviderFactory</div><div class="t-role">Abstraction for pluggable providers; each factory wires SK services and a standalone embedder without a kernel dependency.</div></div>
+          <div class="type-row"><div class="t-name">OllamaLlmProviderFactory</div><div class="t-role">Concrete Ollama provider; uses the OpenAI connector for chat (via /v1) and the native Ollama connector for embeddings.</div></div>
+          <div class="type-row"><div class="t-name">LlmOptions</div><div class="t-role">Configuration tree (Scout:Llm) selecting provider and endpoint; single source of truth for chat and embedding settings.</div></div>
+          <div class="type-row"><div class="t-name">ConversationTurn</div><div class="t-role">Immutable record of a prior user/assistant message replayed into context oldest-first.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Conversation</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">Sits below the conversation loop (<code>Scout.Conversation</code>): receives a <code>ChatRequest</code>, yields streaming content via <code>IChatGateway.StreamAsync</code>, and integrates function-calling through Semantic Kernel plugins contributed by feature modules. Provides embeddings for grounding services (e.g. project knowledge). Local-first (Ollama) by default.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Streaming-first invariant: all consumers use <code>StreamAsync</code>; <code>CompleteAsync</code> drains it internally so there is one code path. Provider abstraction has no SK or connector SDK dependencies in public types. Cycle-safe DI: the embedder factory creates a standalone generator outside the kernel to break the plugin&rarr;kernel&rarr;embedder cycle. Persona binding on the agent path via <code>KernelArguments</code>; <code>SystemPrompt</code> on the direct chat path. Ollama/OpenAI-compatible wiring; <code>SKEXP0010</code> / <code>SKEXP0070</code> suppressions scoped to the factory only.</p>
+      </article>
+
+      <article class="card" id="p-llm-ollama">
+        <div class="card-head"><h3>Scout.Llm (Ollama Provider)</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Semantic Kernel abstraction layer with pluggable LLM providers, Ollama-native.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">The primary LLM gateway abstraction that decouples the rest of Scout from provider implementations. It defines a streaming-first chat API (<code>IChatGateway</code>), pluggable provider interfaces (<code>ILlmProviderFactory</code>), and a composition root that wires Semantic Kernel services. The Ollama provider integrates chat completion (via the OpenAI connector to Ollama's <code>/v1</code> endpoint for function-calling) and embeddings (native Ollama connector), with strict validation and cycle-safe DI to prevent kernel construction loops.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">IChatGateway</div><div class="t-role">Primary chat API; routes requests through the shared kernel via agent or direct path, yielding content chunks as they arrive.</div></div>
+          <div class="type-row"><div class="t-name">ChatGateway</div><div class="t-role">Streaming-first implementation; translates provider-agnostic ChatRequest to SK primitives; supports function-calling and optional agent routing.</div></div>
+          <div class="type-row"><div class="t-name">ILlmProviderFactory</div><div class="t-role">Pluggable provider interface; registers chat/embedding services on the kernel; isolates provider connectors from the gateway.</div></div>
+          <div class="type-row"><div class="t-name">OllamaLlmProviderFactory</div><div class="t-role">Ollama provider; OpenAI connector for chat (Ollama /v1), native Ollama connector for embeddings; validates all options upfront.</div></div>
+          <div class="type-row"><div class="t-name">ChatRequest</div><div class="t-role">Provider-agnostic request record with user message, history, persona, system prompt, temperature, max tokens.</div></div>
+          <div class="type-row"><div class="t-name">LlmOptions / OllamaOptions</div><div class="t-role">Configuration hierarchy; binds Scout:Llm; holds endpoint, chat model, embedding model, batch size, timeouts.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep none">none</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The gateway layer between the chatops composition root and the LLM providers. Every LLM call (chat, embeddings, function-calling) flows through <code>IChatGateway</code> to the shared Kernel, which routes to the active provider. No SK types leak beyond <code>IChatGateway</code>. Agent composition (optional <code>ChatCompletionAgent</code>) and plugin registration happen at gateway initialization.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Streaming-first API (<code>IAsyncEnumerable</code> primary, Complete secondary); cycle-safe DI (embedder created outside the kernel to break the <code>Kernel &rarr; KernelPlugin &rarr; IEmbeddingGenerator &rarr; Kernel</code> loop); Ollama connector dual-path (OpenAI-compatible <code>/v1</code> for chat function-calling, native endpoint for embeddings); strict options validation in the factory constructor; test seam allows a stubbed <code>HttpClient</code> for network-free unit testing; experimental SK connectors (<code>SKEXP0010</code>, <code>SKEXP0070</code>) isolated to provider registrations; <code>InternalsVisibleTo</code> lets host console smoke tests inject mock HTTP.</p>
+      </article>
+
+      <!-- CAPABILITIES -->
+      <div class="proj-layer-head"><span class="l-name">Capabilities</span><span class="l-desc">Retrieval &amp; behaviour</span></div>
+
+      <article class="card" id="p-knowledge">
+        <div class="card-head"><h3>Scout.Knowledge</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Vector-backed RAG knowledge store for indexed project code and docs.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Indexes project repositories into semantic chunks with embeddings, stores them in local SQLite-vec, and exposes retrieval through a Semantic Kernel plugin for context-aware LLM grounding. Provides both semantic search (via embedding vectors) and symbol-based lookup (exact/partial metadata match), with optional incremental file watching for live re-indexing.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">IProjectKnowledgeStore</div><div class="t-role">Persistence and vector similarity search interface over indexed project chunks with project/file-scoped operations.</div></div>
+          <div class="type-row"><div class="t-name">ProjectKnowledgeService</div><div class="t-role">Turns project questions into citation-tagged context strings via embedding-based semantic search or metadata-only symbol lookup.</div></div>
+          <div class="type-row"><div class="t-name">ProjectKnowledgePlugin</div><div class="t-role">SK plugin wrapping retrieval with search_project and find_symbol kernel functions for LLM use.</div></div>
+          <div class="type-row"><div class="t-name">ProjectIndexer</div><div class="t-role">Walks the repo, chunks files (Roslyn AST for C#, line windows otherwise), embeds chunks, and replaces project chunks in the store.</div></div>
+          <div class="type-row"><div class="t-name">SqliteProjectKnowledgeStore</div><div class="t-role">SQLite-vec implementation using a local .db with filtered vector and metadata-only scans.</div></div>
+          <div class="type-row"><div class="t-name">ProjectWatchService</div><div class="t-role">Optional background service watching project repos and incrementally re-indexing changed files with debounce.</div></div>
+          <div class="type-row"><div class="t-name">ProjectExpertAgentFactory</div><div class="t-role">Factory building the Project Expert ChatCompletionAgent with templated instructions grounded on configured projects.</div></div>
+          <div class="type-row"><div class="t-name">ChunkRecord</div><div class="t-role">Vector store record for one indexed chunk: project, path, symbol, line range, content, embedding.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep none">none</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The core RAG layer supporting context injection for the LLM via the shared Semantic Kernel. At query time, <code>ProjectKnowledgePlugin</code>'s <code>search_project</code>/<code>find_symbol</code> functions ground agent responses with project-specific code/doc excerpts; at configuration time, DI wiring registers the plugin only when projects are configured.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">AST-first chunking (Roslyn for C#, line windows fallback); deterministic chunk IDs enable idempotent full/incremental project replacement; metadata-only symbol lookup avoids embedding cost; optional file watch with debounce for live indexing; DI composition gates plugin/agent registration on configured projects; failure-tolerant indexing (per-file exceptions logged, never crash).</p>
+      </article>
+
+      <article class="card" id="p-skills">
+        <div class="card-head"><h3>Scout.Skills</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Embedding-driven skill library for system prompt injection during LLM turns.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Provides a retrieval-based skills system that loads markdown behavioral instructions from disk, embeds their descriptions, and selects the most relevant skills per conversational turn via cosine similarity. Injects selected skill bodies into the system prompt to guide LLM behavior. Dual-mode: embedding-free tool-based access via <code>SkillsPlugin</code> (list/load for the LLM) and retrieval-driven auto-injection via <code>SkillSelector</code>. Avoids circular DI by separating embedding concerns from the catalog.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">ISkillCatalog</div><div class="t-role">Embedding-free access to loaded skills; backs SkillsPlugin to prevent embedder re-entry cycles.</div></div>
+          <div class="type-row"><div class="t-name">SkillSelector</div><div class="t-role">Embedding-driven ranking; selects top-N skills per turn via cosine similarity with a configurable threshold.</div></div>
+          <div class="type-row"><div class="t-name">SkillsPlugin</div><div class="t-role">SK plugin exposing list_skills and load_skill functions for LLM-driven skill discovery.</div></div>
+          <div class="type-row"><div class="t-name">SkillFileLoader</div><div class="t-role">Parses markdown skill files with frontmatter (name, description) and body; handles missing/malformed files gracefully.</div></div>
+          <div class="type-row"><div class="t-name">SkillPromptComposer</div><div class="t-role">Composes the per-turn system prompt by appending selected skill bodies under labeled delimiters.</div></div>
+          <div class="type-row"><div class="t-name">Skill</div><div class="t-role">Immutable record of a skill: name, retrieval description, instructional body, source path.</div></div>
+          <div class="type-row"><div class="t-name">SkillsOptions</div><div class="t-role">Configuration (Enabled, Directory, TopN, SimilarityThreshold) with sensible code defaults.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep none">none</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The per-turn system prompt preparation layer in the conversation router. Sits between <code>LlmStreamingRouter</code> and the LLM, providing skill selection before the chat request is assembled. Skills auto-inject into the system prompt when enabled; dual-mode also lets the LLM discover and load skills dynamically via tool calls.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Lazy initialization for both catalog and selector means zero file I/O or embedding work during DI build &mdash; deferred to the first turn. Embedding-free <code>ISkillCatalog</code> decouples <code>SkillsPlugin</code> from the embedding generator, preventing circular DI. Graceful degradation: <code>NoOpSkillSelector</code> returns an empty list, never throws. Cosine similarity over <code>ReadOnlySpan&lt;float&gt;</code> with configurable thresholds. Markdown skill definitions with YAML-style frontmatter; malformed files skipped with logging.</p>
+      </article>
+
+      <!-- PLUGINS -->
+      <div class="proj-layer-head"><span class="l-name">Plugins</span><span class="l-desc">Read-only feature modules</span></div>
+
+      <article class="card" id="p-github">
+        <div class="card-head"><h3>Scout.Plugin.GitHub</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Read-only GitHub REST plugin for Scout LLM chatops via Semantic Kernel.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Provides read-only GitHub integration to Scout's LLM as Semantic Kernel functions. Exposes the authenticated user's repositories, pull requests, issues, and repository metadata via the GitHub REST API (<code>list_repositories</code>, <code>list_pull_requests</code>, <code>list_issues</code>, <code>get_repository</code>). Enforces the read-only invariant: no create/merge/push operations. All errors are caught and surfaced as user-safe strings to avoid tool-call failures returning into the kernel.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">GitHubPlugin</div><div class="t-role">SK kernel functions exposed to the LLM; four [KernelFunction] methods for listing and retrieving GitHub data.</div></div>
+          <div class="type-row"><div class="t-name">IGitHubClient</div><div class="t-role">Abstraction for read-only GitHub REST calls: ListRepositoriesAsync, ListOpenPullRequestsAsync, ListOpenIssuesAsync, GetRepositoryAsync.</div></div>
+          <div class="type-row"><div class="t-name">GitHubClient</div><div class="t-role">Thin HTTP client over injected HttpClient; maps GitHub REST responses to domain models, 404s to null, non-success to GitHubApiException.</div></div>
+          <div class="type-row"><div class="t-name">RepositoryInfo</div><div class="t-role">Rich read projection of a repository: description, languages, topics, license, README excerpt, top-level structure for project summarization.</div></div>
+          <div class="type-row"><div class="t-name">GitHubApiException</div><div class="t-role">User-safe exception wrapping GitHub API errors with HTTP status; raised on non-2xx except 404.</div></div>
+          <div class="type-row"><div class="t-name">GitHubServiceCollectionExtensions</div><div class="t-role">DI composition; self-gates on empty token, registers HttpClient and KernelPlugin when configured.</div></div>
+          <div class="type-row"><div class="t-name">GitHubRepository</div><div class="t-role">Minimal projection of a repository (full name, private flag).</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep none">none</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The pluggable feature layer; active only when a token is configured in <code>Scout:Plugins:GitHub</code>. Registered as a <code>KernelPlugin</code> during DI composition and available for LLM function-calling. Read-only tier: no side effects on GitHub state.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Read-only by design (no mutating endpoints). Self-gating DI: registers only when the token is non-empty, leaving the host functional without GitHub. All exceptions caught at the plugin boundary and converted to non-empty user-safe strings (no kernel failures). Best-effort sub-calls: a 404 on README or language data does not fail the whole <code>GetRepository</code> overview. PR-backed entries excluded from <code>ListIssuesAsync</code>. Base64 README decoding with truncation (2000 chars) to preserve LLM context.</p>
+      </article>
+
+      <!-- CONVERSATION -->
+      <div class="proj-layer-head"><span class="l-name">Conversation</span><span class="l-desc">Per-turn pipeline core</span></div>
+
+      <article class="card" id="p-conversation">
+        <div class="card-head"><h3>Scout.Conversation</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Platform-agnostic conversation core: streaming-first routing, memory, sink lifecycle.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">The platform-agnostic heart of the chatops assistant, responsible for orchestrating per-turn message routing, streaming responses, and conversation memory. It bridges inbound platform events (via chat adapters) to the LLM gateway through a streaming-first pipeline: a conductor handles each inbound message, a router selects skills and delegates to the LLM, and a stream pump drives cumulative token output to a channel-bound sink. It enforces Scout's descriptive-write invariant (replies only to originating channels) and provides out-of-the-box conversation history with configurable memory budgets.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">ConversationConductor</div><div class="t-role">Adapter-facing handler: wraps inbound routing/streaming in an OTel activity; surfaces failures via sink.FailAsync without crashing the host.</div></div>
+          <div class="type-row"><div class="t-name">IConversationRouter</div><div class="t-role">Maps inbound ChatMessage to streaming ChatResponse; single responder for v1 (no fan-out).</div></div>
+          <div class="type-row"><div class="t-name">LlmStreamingRouter</div><div class="t-role">Routes the message to the LLM via IChatGateway, selects the most relevant skill, replays/appends conversation memory, returns a token stream.</div></div>
+          <div class="type-row"><div class="t-name">StreamPump</div><div class="t-role">Transport-agnostic stream-drive loop: opens the sink, accumulates tokens, throttles interim updates per RenderCapabilities, emits a single terminal complete/fail.</div></div>
+          <div class="type-row"><div class="t-name">IResponseSink</div><div class="t-role">Platform-specific outbound sink bound to the originating channel; cumulative-text lifecycle (Begin&rarr;Update&rarr;Complete|Fail).</div></div>
+          <div class="type-row"><div class="t-name">ChatMessage</div><div class="t-role">Immutable inbound message with validated UserId, ChannelId, Text, Timestamp; entry point to the conversation core.</div></div>
+          <div class="type-row"><div class="t-name">ChatResponse</div><div class="t-role">Streaming-first outbound response: token sequence plus optional citations; a single-element sequence wraps static text.</div></div>
+          <div class="type-row"><div class="t-name">IConversationMemoryStore</div><div class="t-role">Per-conversation history store: loads a bounded turn snapshot (oldest-first, newest-kept) and appends completed user/assistant pairs atomically.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Llm</span><span class="dep">Scout.Skills</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">Sits between chat adapters (Discord, Slack, Teams) and the LLM gateway, implementing the core per-turn pipeline: message inbound &rarr; skill selection &rarr; LLM streaming &rarr; cumulative rendering &rarr; platform-specific transport.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Streaming-first design (all responses are <code>IAsyncEnumerable&lt;string&gt;</code>); cumulative-text-only sink API (never deltas) works against Teams' least-capable API; <code>RenderCapabilities</code> lets the pump adapt cadence/length per platform without platform-specific code; conversation memory is optional and non-poisoning (only written on clean completion); DI composition registers defaults with <code>TryAdd</code> so the host can override; OTel activity wrapping at conductor level; best-effort interim updates (non-cancellation failures logged and retained for the next tick or terminal call).</p>
+      </article>
+
+      <!-- CONTROL PLANE -->
+      <div class="proj-layer-head"><span class="l-name">Control Plane</span><span class="l-desc">Provider &amp; feature management</span></div>
+
+      <article class="card" id="p-controlplane">
+        <div class="card-head"><h3>Scout.ControlPlane</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Domain layer for features and local LLM providers management.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">The core domain layer that manages two subsystems: <strong>Features</strong> &mdash; a hardcoded catalog (GitHub, Kubernetes) with credential/settings persistence, validation, and activation logic; and <strong>Providers</strong> &mdash; local LLM runtime lifecycle (Ollama daemon management, model pulls, autostart). It enforces Scout's read-only security invariant via <code>WriteClass</code> classification (None/Descriptive/Executive). All business logic is transport-agnostic; gRPC/HTTP adapters are thin shells.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">FeaturesService</div><div class="t-role">Domain facade: validates/persists credentials and settings, merges catalog + state + credential-presence into snapshots, orchestrates enable/disable/delete.</div></div>
+          <div class="type-row"><div class="t-name">OllamaProviderService</div><div class="t-role">Manages Ollama daemon lifecycle (start/stop/restart), model operations, readiness probing, process ownership tracking, graceful shutdown.</div></div>
+          <div class="type-row"><div class="t-name">FeatureCatalog</div><div class="t-role">Immutable read-only catalog of all Scout features with metadata; lookup by id; single source of truth for UI and runtime logic.</div></div>
+          <div class="type-row"><div class="t-name">FeatureSnapshot</div><div class="t-role">Merged projection: catalog metadata + persisted state + credential presence + current status for UI consumption.</div></div>
+          <div class="type-row"><div class="t-name">ProvidersService</div><div class="t-role">Facade over provider operations; routes to Ollama (fully wired) or LM Studio (stub); streaming status watches.</div></div>
+          <div class="type-row"><div class="t-name">IFeatureStateStore</div><div class="t-role">Abstraction for persisting per-feature enabled/disabled state and settings (JSON file impl); idempotent writes.</div></div>
+          <div class="type-row"><div class="t-name">ICredentialStore</div><div class="t-role">Abstraction for secure credential storage by feature/field key (OS keyring, fallback to in-memory in CI/containers).</div></div>
+          <div class="type-row"><div class="t-name">FeatureMetadata</div><div class="t-role">Record defining feature shape: id, display name, credential/settings fields, write class, scope matrix, setup steps.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep none">none</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">Sits between the gRPC/HTTP boundary layer (<code>Scout.Host.ControlPlane</code>) and the feature/provider abstractions. Per request: gRPC service &rarr; thin adapter routes to <code>FeaturesService</code> or <code>ProvidersService</code> &rarr; domain logic validates, persists, activates &rarr; response projects domain objects to wire messages. The read-only invariant is enforced at the Feature level (<code>WriteClass</code> enum).</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Streaming-first (<code>IAsyncEnumerable</code> for model pulls and provider watches). Cycle-safe DI with the <code>Options&lt;T&gt;</code> pattern. Strict read-only via <code>WriteClass</code> &mdash; descriptive writes permitted, executive writes forbidden. Pluggable credential validation via <code>IFeatureCredentialValidator</code>. Ollama process ownership: tracks spawned daemons in-memory, refuses to stop externally-managed instances. Session token (<code>SCOUT_CONTROLPLANE_TOKEN</code>) scrubbed from spawned daemons via environment override. Graceful shutdown windows. Hard-coded feature catalog keeps shape static and testable. Errors are idempotent for re-runnable state on partial failures.</p>
+      </article>
+
+      <!-- ADAPTERS -->
+      <div class="proj-layer-head"><span class="l-name">Adapters</span><span class="l-desc">Chat platform connectors</span></div>
+
+      <article class="card" id="p-discord">
+        <div class="card-head"><h3>Scout.Adapter.Discord</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Discord chat adapter for Scout's pluggable inverted IChatAdapter pattern.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Adapts Discord.Net events into Scout's normalized <code>ChatMessage</code>/<code>IResponseSink</code> flow. Owns a single <code>DiscordSocketClient</code> lifecycle, normalizes inbound mentions into messages for routing, binds replies to originating channels only (descriptive-write boundary), and streams LLM responses into Discord embeds with rate-limit resilience and live-edit capability.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">DiscordChatAdapter</div><div class="t-role">Primary IChatAdapter; owns the Discord.Net client lifecycle, message filtering, and per-mention handler dispatch.</div></div>
+          <div class="type-row"><div class="t-name">DiscordResponseSink</div><div class="t-role">IResponseSink backed by Discord embed edits; live streaming with rate-limit backoff and head-preserving truncation.</div></div>
+          <div class="type-row"><div class="t-name">DiscordMessageTranslator</div><div class="t-role">Pure translator from Discord payloads to ChatMessage; filters by mention/DM and strips bot mentions.</div></div>
+          <div class="type-row"><div class="t-name">DiscordAdapterLifecycle</div><div class="t-role">Single-login state machine for start/stop transitions; owns a lifetime token linked to host shutdown.</div></div>
+          <div class="type-row"><div class="t-name">InboundDiscordMessage</div><div class="t-role">Testable DTO projection of SocketMessage fields for translator unit tests without Discord.Net mocking.</div></div>
+          <div class="type-row"><div class="t-name">DiscordServiceCollectionExtensions</div><div class="t-role">DI composition; conditional registration (no-op if the bot token is absent) so unconfigured hosts still start.</div></div>
+          <div class="type-row"><div class="t-name">DiscordOptions</div><div class="t-role">Configuration binding for the bot token (SCOUT__ADAPTERS__DISCORD__BOTTOKEN env var or secrets).</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Conversation</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The per-turn chat adapter layer (pluggable alongside Slack/Teams). Sits between the Discord.Net gateway and the Scout.Conversation conductor: ingests platform events, normalizes to <code>ChatMessage</code>, creates a channel-bound sink, and drives streaming responses back to Discord.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Streaming-first: <code>DiscordResponseSink</code> owns rate-limit retry (backoff-once) so the conductor's pump never knows about Discord 429s. Single-threaded sink lifecycle by contract. Read-only on inbound: translator rejects bot-as-author and requires explicit @-mention in guilds (DMs implicit). Testable seams: pure translator + testable lifecycle + delegate-backed sink post/edit. OAuth install includes SEND_MESSAGES (1&lt;&lt;11). Generated regex for mention parsing (C# <code>GeneratedRegex</code>). Head-preserving truncation under Discord's 4096-char embed limit.</p>
+      </article>
+
+      <article class="card" id="p-slack">
+        <div class="card-head"><h3>Scout.Adapter.Slack</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Slack chat adapter: Socket Mode inbound, normalized messages, streaming responses.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Implements <code>IChatAdapter</code> for Slack using Socket Mode (no public URL required). Receives inbound message events via SlackNet, normalizes them into <code>ChatMessage</code> objects through the translator, creates channel-bound <code>SlackResponseSink</code> instances for streaming replies, and routes through the conversation conductor. Owns transport resilience (rate-limit backoff) and enforces the descriptive-write invariant: replies write only to the originating channel and thread.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">SlackChatAdapter</div><div class="t-role">Main IChatAdapter; Socket Mode receiver; owns inbound lifecycle and the self-loop guard via bot user ID.</div></div>
+          <div class="type-row"><div class="t-name">SlackResponseSink</div><div class="t-role">IResponseSink; posts the initial message, streams updates, appends citations on complete, handles Slack 429 backoff.</div></div>
+          <div class="type-row"><div class="t-name">SlackMessageTranslator</div><div class="t-role">Pure stateless translator from Slack events to ChatMessage; self-loop guard, mention stripping, channel-vs-DM logic.</div></div>
+          <div class="type-row"><div class="t-name">SlackAdapterLifecycle</div><div class="t-role">Single-connect state machine; owns start/stop transitions and a lifetime token for in-flight unwind on shutdown.</div></div>
+          <div class="type-row"><div class="t-name">SlackOptions</div><div class="t-role">Configuration from Scout:Adapters:Slack; holds the xoxb- bot token and xapp- app-level token (never logged).</div></div>
+          <div class="type-row"><div class="t-name">InboundSlackMessage</div><div class="t-role">Test-friendly DTO for translator input; pure projection of Slack MessageEvent fields.</div></div>
+          <div class="type-row"><div class="t-name">SlackMessageHandle</div><div class="t-role">Immutable (channel, ts) identity of a posted message; used for all chat.update calls to enforce a single-message sink.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Conversation</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">An inbound entry point in the per-turn flow: receives Slack Socket Mode events, translates to <code>ChatMessage</code>, creates a sink bound to the originating channel/thread, and invokes the conversation conductor with both. The sink then drives streaming edits as the LLM responds.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Socket Mode (inverted pattern, no public URL). Cycle-safe via a self-loop guard on the bot user ID and rejection of bot-authored messages. Streaming-first: a single message handle ensures all updates target the same (channel, ts). Descriptive-write boundary: replies write only to the originating channel/thread. Rate-limit resilience in the sink (Slack 429 backoff-and-retry). SlackNet self-contained service graph created at construction; translator is pure and unit-testable without the SDK. Head-preserving truncation on overflow. Internal lifecycle state machine unit-testable in isolation.</p>
+      </article>
+
+      <article class="card" id="p-teams">
+        <div class="card-head"><h3>Scout.Adapter.Teams</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">Microsoft Teams chat adapter implementing IChatAdapter over Bot Framework SDK.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Adapts Microsoft Teams as a chat provider by translating Bot Framework activities into Scout <code>ChatMessage</code> objects and managing streaming responses back to Teams conversations. Handles the webhook-push architecture (unlike pull-based Discord/Slack), lifecycle management via <code>CancellationToken</code>, and Teams' cumulative-text streaming protocol with resilience (429 backoff, 403 downgrade to final-only).</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">TeamsChatAdapter</div><div class="t-role">Core IChatAdapter; inverted pattern (no socket to connect); routes inbound activities through translator and handler to the sink.</div></div>
+          <div class="type-row"><div class="t-name">TeamsMessageTranslator</div><div class="t-role">Pure stateless translator from inbound Activity to ChatMessage; filters non-messages, bot echoes, empty text; enforces @-mention rules for group vs 1:1.</div></div>
+          <div class="type-row"><div class="t-name">TeamsResponseSink</div><div class="t-role">IResponseSink; manages Teams' cumulative-text typing stream with streaminfo entities, citations on final message, 28K truncation, resilient to 429/403.</div></div>
+          <div class="type-row"><div class="t-name">TeamsAdapterLifecycle</div><div class="t-role">Stateful lifecycle guard using CancellationToken and Lock; allows restart after stop (webhook), atomically races against shutdown.</div></div>
+          <div class="type-row"><div class="t-name">TeamsOptions</div><div class="t-role">Configuration for AppId, AppPassword, TenantId; bound from Scout:Adapters:Teams; secrets via env vars or User Secrets, never logged.</div></div>
+          <div class="type-row"><div class="t-name">ITeamsActivitySender</div><div class="t-role">Transport abstraction for sending an Activity to the originating conversation; production binds ITurnContext, tests bind a delegate.</div></div>
+          <div class="type-row"><div class="t-name">TeamsTransportException</div><div class="t-role">Platform-neutral transport failure carrying HTTP status and Teams error code; the sink reacts to IsRateLimited and IsContentStreamNotAllowed.</div></div>
+          <div class="type-row"><div class="t-name">InboundTeamsMessage</div><div class="t-role">Minimal immutable record projection of Activity fields; unit-testable without Bot Framework SDK primitives.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Conversation</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The chat adapter layer in the per-turn flow: receives inbound Teams webhook activities from Azure Bot Service, translates them to <code>ChatMessage</code>, passes them to the conversation router's handler, and sinks responses back to Teams as cumulative streaming typing activities followed by a final message.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Webhook-push architecture (no connect step in <code>StartAsync</code> &mdash; Teams registers a messaging-endpoint POST handler); cumulative-text streaming protocol with monotonic <code>streamSequence</code> and <code>streamId</code> tying activities to a bubble; atomic lifetime-token guard against the shutdown race; transport-neutral error mapping (403 ContentStreamNotAllowed downgrades streaming to final-only, 429 backs off once); read-only invariant (all sends go back to the originating chat only); deterministic backoff via injected <code>TimeProvider</code>; groups/channels disable streaming (final-only fallback).</p>
+      </article>
+
+      <!-- HOSTS -->
+      <div class="proj-layer-head"><span class="l-name">Hosts</span><span class="l-desc">Process entry points</span></div>
+
+      <article class="card" id="p-host-console">
+        <div class="card-head"><h3>Scout.Host.Console</h3><span class="badge active">Active &middot; Primary</span></div>
+        <p class="one-liner">Console host composing adapters, LLM, conversation, knowledge indexing into the main entry point.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">The main .NET 10 console application entry point that bootstraps the Scout read-only chatops assistant. It wires together the LLM provider (Ollama), conversation conductor, project knowledge indexing, and pluggable chat adapters (Discord, Slack, Teams), then runs them via hosted background services. It also supports a one-shot <code>index &lt;project&gt;</code> command for embedding-based knowledge store initialization.</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">Program.cs</div><div class="t-role">Entry point: parses console commands (Run vs Index), logs to stderr (stdout reserved for the SCOUT_READY marker), bootstraps the full host or the index-only graph.</div></div>
+          <div class="type-row"><div class="t-name">HostComposition</div><div class="t-role">Static factory (AddScoutHost / AddScoutIndexHost): single source of truth for DI &mdash; LLM, conversation, knowledge store, adapters, plugins, conversation worker, watchdog.</div></div>
+          <div class="type-row"><div class="t-name">ConversationWorker</div><div class="t-role">BackgroundService that connects all configured adapters, waits for init, emits SCOUT_READY; stops the host gracefully if none configured or any fails startup.</div></div>
+          <div class="type-row"><div class="t-name">IndexEntryPoint</div><div class="t-role">One-shot indexing handler: validates the project name, initializes the store, runs ProjectIndexer, exits with a status code.</div></div>
+          <div class="type-row"><div class="t-name">ParentWatchdogService</div><div class="t-role">BackgroundService detecting parent death (stdin EOF when SCOUT__PARENT_WATCHDOG=1) and cleanly shutting down to prevent zombie orphaning.</div></div>
+          <div class="type-row"><div class="t-name">IReadinessSignal / StdoutReadinessSignal</div><div class="t-role">Emits the literal 'SCOUT_READY' marker to stdout for the Electron supervisor, kept outside the logging pipeline for exact-match parsing.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.Llm</span><span class="dep">Scout.Conversation</span><span class="dep">Scout.Knowledge</span><span class="dep">Scout.Adapter.Discord</span><span class="dep">Scout.Adapter.Slack</span><span class="dep">Scout.Adapter.Teams</span><span class="dep">Scout.Plugin.GitHub</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The root of host composition and startup: bootstraps the entire Scout stack and orchestrates the per-turn conversation loop via <code>ConversationWorker</code> polling configured adapters and routing inbound messages through <code>ConversationConductor</code>.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">Strict read-only architecture (no mutations, only SK plugins for function-calling); self-gating adapters and plugins (empty config &rarr; silently disabled); console output discipline (all logging to stderr, stdout reserved for supervisor markers); parent watchdog via stdin EOF for Electron integration; env overrides via the <code>SCOUT__</code> prefix; composition smoke test pattern where Program.cs and tests share the identical <code>HostComposition.AddScoutHost()</code> call; binary directory as content root for config discovery regardless of working directory.</p>
+      </article>
+
+      <article class="card" id="p-host-cp">
+        <div class="card-head"><h3>Scout.Host.ControlPlane</h3><span class="badge active">Active</span></div>
+        <p class="one-liner">gRPC control-plane host for providers, models, and features via h2c over UDS / named-pipe.</p>
+        <div class="field-label">Responsibility</div>
+        <p class="resp">Hosts three gRPC services (<code>ProvidersGrpcService</code>, <code>FeaturesGrpcService</code>, <code>ModelsGrpcService</code>) that adapt domain-layer facades (<code>ProvidersService</code>, <code>FeaturesService</code>) to the wire. Enforces per-session token authentication via <code>TokenAuthInterceptor</code>. Configures Kestrel to listen on Unix domain sockets (with anti-hijack ownership checks) or Windows named pipes (ACL-restricted), never TCP. Adapts domain exceptions to gRPC status codes and handles streaming workflows (model pull, provider status watch).</p>
+        <div class="field-label">Key Types</div>
+        <div class="types">
+          <div class="type-row"><div class="t-name">ProvidersGrpcService</div><div class="t-role">gRPC adapter over ProvidersService; maps provider lifecycle, model operations, and status watching to wire messages and RPC codes.</div></div>
+          <div class="type-row"><div class="t-name">FeaturesGrpcService</div><div class="t-role">gRPC adapter over FeaturesService; feature listing, credential setup, settings merge, enable/disable, validation-failure serialization.</div></div>
+          <div class="type-row"><div class="t-name">ModelsGrpcService</div><div class="t-role">gRPC adapter for provider model operations; streams pull progress, handles model delete/list with streaming support.</div></div>
+          <div class="type-row"><div class="t-name">TokenAuthInterceptor</div><div class="t-role">gRPC interceptor validating the per-session bearer token on every unary and streaming call with constant-time comparison.</div></div>
+          <div class="type-row"><div class="t-name">SessionToken</div><div class="t-role">Per-session bearer token (from SCOUT_CONTROLPLANE_TOKEN or minted at startup); constant-time match validation.</div></div>
+          <div class="type-row"><div class="t-name">ControlPlaneEndpoint</div><div class="t-role">Resolves the transport endpoint (UDS under XDG_RUNTIME_DIR or /tmp) and performs anti-hijack pre-flight (ownership, stale cleanup, 0600 hardening).</div></div>
+          <div class="type-row"><div class="t-name">KestrelTransportConfigurator</div><div class="t-role">Configures Kestrel to bind a Unix socket (h2c, with pre-flight) or Windows named pipe (h2c, ACL-restricted), never TCP.</div></div>
+        </div>
+        <div class="field-label">Dependencies</div>
+        <div class="deps"><span class="dep">Scout.ControlPlane</span><span class="dep">Scout.ControlPlane.Contracts</span></div>
+        <div class="field-label">Where it fits</div>
+        <p class="fits">The entry-point host for the control-plane subsystem. Runs as a separate process (spawned by the Electron supervisor with <code>SCOUT_CONTROLPLANE_TOKEN</code>) and exposes gRPC APIs for local in-process clients (worker, Electron UI) to query and control Ollama/LM Studio, manage features, and handle model downloads via streaming. Sits between the domain layer and remote clients; enforces auth, transport isolation, and platform-specific security.</p>
+        <div class="field-label">Notable</div>
+        <p class="notable">UDS anti-hijack pre-flight with P/Invoke <code>stat</code> over glibc (x86_64/arm64 LP64 hardcoded offsets, fails closed on unsupported arch); transport-level platform abstraction (Unix socket vs Windows named pipe, never TCP); streaming-first (model pull via <code>IAsyncEnumerable</code>, provider status watch, cancellation propagation); cycle-safe token-in-environment design; gRPC exception-to-Status mapping (not-found, unimplemented, unavailable, deadline-exceeded, failed-precondition, internal); constant-time token comparison to resist timing attacks; named-pipe current-user-only ACL on Windows.</p>
+      </article>
+
+    </section>
+
+    <!-- ===================== ROADMAP ===================== -->
+    <section id="roadmap" style="padding-top:60px;">
+      <h2>Improvement Backlog &amp; Roadmap</h2>
+      <p>The work below is grouped into preconditions to verify, improvements to make, things to build, and a suggested
+      sequencing that turns "probably works" into measured.</p>
+    </section>
+
+    <section id="preconditions">
+      <h3 style="font-size:18px;">Preconditions</h3>
+      <p style="color:var(--text-dim);font-size:14px;">Verify these before trusting any project Q&amp;A from the bot.</p>
+      <div class="callout danger">
+        <div class="c-title">Verify before trusting</div>
+        <ul class="check warn" style="margin-top:6px;">
+          <li><b>Tool-capable model.</b> The deployed LLM must be tool-capable and stream tool calls over the OpenAI-compatible <code>/v1</code> connector. Validate the configured model tag &mdash; <code>"qwen3.5:9b"</code> is likely not a real Ollama tag.</li>
+          <li><b>Fixes are committed but not deployed.</b> The conversation-memory and grounding fixes are committed locally on <code>feat/project-knowledge</code> but <b>not deployed</b> &mdash; redeploy the bot for them to take effect.</li>
+          <li><b>Indexed and fresh.</b> The target project must be indexed and its index fresh.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="improvements">
+      <h3 style="font-size:18px;">Improvements to Make</h3>
+
+      <div class="road-block">
+        <h3><span class="num">1</span>RAG / project-answer correctness</h3>
+        <p style="color:var(--text-dim);font-size:14px;margin-top:4px;">A 4-link chain &mdash; none of the links is guaranteed. Each must hold for a correct, grounded answer.</p>
+        <div class="chain">
+          <div class="chain-link"><span class="n">1</span><div><div class="lk-title">Tool-call reliability</div><div class="lk-body">The local model must <em>decide</em> to call <code>search_project</code>. This is non-deterministic on a weak model &mdash; induce via prompt now, later via hard tool-scoping.</div></div></div>
+          <div class="chain-link"><span class="n">2</span><div><div class="lk-title">Index coverage &amp; freshness</div><div class="lk-body">Verify the project is indexed, that file-watch re-index works, and that chunking quality is adequate.</div></div></div>
+          <div class="chain-link"><span class="n">3</span><div><div class="lk-title">Retrieval recall</div><div class="lk-body">Tune the embedder / chunking / top-K / nomic prefixes.</div></div></div>
+          <div class="chain-link"><span class="n">4</span><div><div class="lk-title">Answer faithfulness</div><div class="lk-body">Enforce citations and an honest "not in context"; guard against hallucination even with good context.</div></div></div>
+        </div>
+      </div>
+
+      <div class="road-block" style="margin-top:16px;">
+        <h3><span class="num">2</span>Skills system</h3>
+        <ul class="check">
+          <li>With ~52 skills and <code>TopN=1</code> retrieval, <b>sharpen overlapping descriptions</b> (backend-developer vs sql, software-architect vs backend-developer, clean-architecture vs hexagonal, clean-code vs refactoring) or raise <code>TopN</code>.</li>
+          <li>Update <code>SKILLS-ATTRIBUTION.md</code>: <code>redis-development</code> is third-party; the role/language/architecture skills are authored original.</li>
+          <li>Measure whether injected skill bodies <b>actually improve answers</b> on the local model.</li>
+        </ul>
+      </div>
+
+      <div class="road-block" style="margin-top:16px;">
+        <h3><span class="num">3</span>Ops</h3>
+        <ul class="check">
+          <li><b>VRAM contention.</b> A heavy chat model starves the <code>nomic-embed-text</code> embedder on a single GPU &mdash; use a lighter chat model or free Ollama while indexing.</li>
+        </ul>
+      </div>
+
+      <div class="road-block" style="margin-top:16px;">
+        <h3><span class="num">4</span>Delivery</h3>
+        <ul class="check">
+          <li>Everything is local on <code>feat/project-knowledge</code> (not pushed) &mdash; plan the PR.</li>
+          <li>The skills history (import &rarr; drop &rarr; author) could be squashed.</li>
+          <li>Run the <b>production-readiness checks</b> before opening a PR.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="build">
+      <h3 style="font-size:18px;">Things to Build</h3>
+      <div class="road-block">
+        <ul class="check build">
+          <li><b>Capability Engine.</b> A unified persona + skill embedding-retrieval engine ("Pattern B"), currently stashed. Finishing it makes the new role skills act as personas and cleans selection. <span class="sub">Then Step 3 = hard per-persona tool-scoping (also helps link #1); Step 4 = HandoffOrchestration once the model is upgraded.</span></li>
+          <li><b>GitHub grounding.</b> <code>get_repository</code> has no default repo &mdash; ground it on the configured project (e.g. <code>vitorafgomes/messaging-explorer</code>) or add a <code>list_projects</code> affordance.</li>
+          <li><b>Answer-faithfulness / citation-enforcement</b> mechanism.</li>
+          <li><b>End-to-end acceptance test</b> for the <code>ask &rarr; search_project &rarr; cite</code> flow (real, against Ollama) &mdash; turns "probably works" into measured.</li>
+          <li><b>Indexing quality.</b> Chunking strategy + verified incremental re-index.</li>
+          <li><b>Backend &harr; frontend gRPC</b> over a Unix socket / named pipe (future desktop split).</li>
+        </ul>
+        <div class="field-label" style="margin-top:18px;">More expertise skills (wishlist)</div>
+        <div class="skills-wishlist">
+          <span class="skill-tag">tdd</span>
+          <span class="skill-tag">observability</span>
+          <span class="skill-tag">security/owasp</span>
+          <span class="skill-tag">database-design</span>
+          <span class="skill-tag">ci-cd</span>
+          <span class="skill-tag">terraform</span>
+          <span class="skill-tag">kafka/messaging</span>
+          <span class="skill-tag">graphql</span>
+          <span class="skill-tag">caching</span>
+          <span class="skill-tag">performance</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="sequencing">
+      <h3 style="font-size:18px;">Suggested Sequencing</h3>
+      <ol class="seq">
+        <li><b>Verify preconditions</b> &mdash; model tool-capable, deploy, index.</li>
+        <li><b>Build the e2e test</b> for <code>ask &rarr; search &rarr; cite</code>.</li>
+        <li><b>Fix whichever link the test shows broken</b> &mdash; most likely #1, tool-calling.</li>
+        <li><b>GitHub grounding</b> &mdash; small, high value.</li>
+        <li><b>Finish the Capability Engine.</b></li>
+        <li><b>Skill retrieval tuning + attribution.</b></li>
+        <li><b>More skills + hard tool-scoping.</b></li>
+      </ol>
+    </section>
+
+    <footer>
+      Scout &mdash; open-source read-only chatops assistant. Built on Microsoft Semantic Kernel and .NET 10, local-first via Ollama.
+      This reference covers 19 solution projects. Documentation page is self-contained and offline-capable.
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script>
+  // Mobile sidebar toggle
+  (function () {
+    var toggle = document.getElementById('menuToggle');
+    var sidebar = document.getElementById('sidebar');
+    if (toggle && sidebar) {
+      toggle.addEventListener('click', function () {
+        sidebar.classList.toggle('open');
+      });
+      sidebar.addEventListener('click', function (e) {
+        if (e.target.tagName === 'A') sidebar.classList.remove('open');
+      });
+    }
+  })();
+
+  // Scrollspy: highlight the nav link of the section currently in view
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('#nav a[href^="#"]'));
+    var map = {};
+    var targets = [];
+    links.forEach(function (a) {
+      var id = a.getAttribute('href').slice(1);
+      var el = document.getElementById(id);
+      if (el) { map[id] = a; targets.push(el); }
+    });
+
+    function onScroll() {
+      var pos = window.scrollY + 120;
+      var currentId = null;
+      for (var i = 0; i < targets.length; i++) {
+        if (targets[i].offsetTop <= pos) currentId = targets[i].id;
+      }
+      links.forEach(function (a) { a.classList.remove('active'); });
+      if (currentId && map[currentId]) {
+        map[currentId].classList.add('active');
+        // keep active link visible in the sidebar
+        var active = map[currentId];
+        var sb = document.getElementById('sidebar');
+        if (active && sb) {
+          var aTop = active.offsetTop;
+          if (aTop < sb.scrollTop || aTop > sb.scrollTop + sb.clientHeight - 40) {
+            sb.scrollTop = aTop - sb.clientHeight / 2;
+          }
+        }
+      }
+    }
+
+    var ticking = false;
+    window.addEventListener('scroll', function () {
+      if (!ticking) {
+        window.requestAnimationFrame(function () { onScroll(); ticking = false; });
+        ticking = true;
+      }
+    }, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>

@@ -8,8 +8,10 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
@@ -19,26 +21,50 @@
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Azure.ResourceManager" Version="1.14.0" />
     <PackageVersion Include="Azure.ResourceManager.ResourceHealth" Version="1.0.0" />
-    <PackageVersion Include="AWSSDK.AWSHealth" Version="4.0.5.10" />
+    <PackageVersion Include="AWSSDK.AWSHealth" Version="4.0.5.17" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.8" />
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="Discord.Net" Version="3.19.1" />
+    <PackageVersion Include="SlackNet" Version="0.17.10" />
+    <PackageVersion Include="Microsoft.Bot.Builder" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Builder.Integration.AspNet.Core" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Connector" Version="4.23.1" />
+    <PackageVersion Include="Microsoft.Bot.Schema" Version="4.23.1" />
     <PackageVersion Include="Octokit" Version="14.0.0" />
-    <PackageVersion Include="Microsoft.SemanticKernel" Version="1.74.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Abstractions" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Core" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.SqliteVec" Version="1.74.0-preview" />
+    <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.14" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Agents.Core" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.77.0" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" Version="1.77.0" />
     <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.74.0-alpha" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.4.0" />
-    <PackageVersion Include="OllamaSharp" Version="5.4.12" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.Google" Version="1.77.0-alpha" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.MistralAI" Version="1.77.0-alpha" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.HuggingFace" Version="1.77.0-preview" />
+    <PackageVersion Include="Microsoft.SemanticKernel.Connectors.AzureAIInference" Version="1.77.0-beta" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
+    <PackageVersion Include="OllamaSharp" Version="5.4.25" />
     <PackageVersion Include="OpenTelemetry" Version="1.10.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.10.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.4.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
     <!-- Shouldly (MIT). FluentAssertions was removed: v8+ went commercial;
          mixing two assertion libraries is a code smell even on v6. -->
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
-    <PackageVersion Include="coverlet.collector" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.6.0" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <!-- gRPC: 2.71.x line is .NET 10 compatible. Grpc.AspNetCore pulls
+         Google.Protobuf 3.30.2 and Grpc.Tools 2.71.0; pin them explicitly
+         so codegen and runtime never skew. -->
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.71.0" />
+    <PackageVersion Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageVersion Include="Grpc.Tools" Version="2.71.0" />
+    <PackageVersion Include="Google.Protobuf" Version="3.30.2" />
   </ItemGroup>
 </Project>

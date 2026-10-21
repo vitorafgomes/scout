@@ -1,19 +1,14 @@
-using System.Text;
 using System.Text.RegularExpressions;
-using Scout.Core.Chat;
+using Scout.Conversation.Abstractions;
 
 namespace Scout.Adapter.Discord;
 
 /// <summary>
-/// Pure translator between Discord message payloads and the Scout core DTOs.
-/// No Discord.Net types cross this boundary, so the translator can be unit-
-/// tested without mocking SDK primitives.
-///
-/// - <c>TryTranslate</c> decides whether an inbound Discord message is
-///   intended for Scout (the bot was mentioned and the message carries real
-///   content) and returns the corresponding <see cref="ChatMessage"/>.
-/// - <see cref="Render"/> produces the outbound string that the adapter posts
-///   back to Discord.
+/// Pure translator from Discord message payloads to the Scout
+/// <see cref="ChatMessage"/>. No Discord.Net types cross this boundary, so the
+/// translator can be unit-tested without mocking SDK primitives. Outbound
+/// rendering is owned by <c>DiscordResponseSink</c>, so this type only decides
+/// whether an inbound message is for Scout and normalizes it.
 /// </summary>
 public sealed partial class DiscordMessageTranslator
 {
@@ -44,9 +39,9 @@ public sealed partial class DiscordMessageTranslator
             return false;
         }
 
-        // In a guild channel the bot must be explicitly @-mentioned so it
-        // does not respond to unrelated traffic. DMs (no GuildId) are
-        // implicitly addressed to the bot and do not require a mention.
+        // In a guild channel the bot must be explicitly @-mentioned so it does
+        // not respond to unrelated traffic. DMs (no GuildId) are implicitly
+        // addressed to the bot and do not require a mention.
         var isDm = inbound.GuildId is null;
         if (!isDm && !inbound.MentionsSelf)
         {
@@ -67,38 +62,6 @@ public sealed partial class DiscordMessageTranslator
             Text: stripped,
             Timestamp: inbound.Timestamp);
         return true;
-    }
-
-    public string Render(ChatResponse response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-
-        if (response.IsStreaming)
-        {
-            // Streaming responses are rendered incrementally by the adapter,
-            // not by this synchronous helper.
-            throw new InvalidOperationException(
-                "Streaming responses cannot be rendered as a single string.");
-        }
-
-        var text = response.Text!;
-
-        if (response.Citations.Count == 0)
-        {
-            return text;
-        }
-
-        var sb = new StringBuilder();
-        sb.Append(text);
-        sb.AppendLine();
-        sb.AppendLine();
-        sb.AppendLine("Sources:");
-        foreach (var citation in response.Citations)
-        {
-            sb.Append("- ");
-            sb.AppendLine(citation.ToString());
-        }
-        return sb.ToString().TrimEnd();
     }
 
     private static string StripBotMentions(string content, ulong botUserId)

@@ -1,17 +1,17 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Scout.Adapter.Discord.Streaming;
-using Scout.Core.Chat;
+using Scout.Conversation.Abstractions;
 
 namespace Scout.Adapter.Discord;
 
 /// <summary>
-/// DI composition for the Discord chat adapter. Consumer apps call
-/// <c>services.AddDiscordAdapter(configuration)</c> after <c>AddScout(...)</c>.
-/// Binds <see cref="DiscordOptions"/> from "Scout:Adapters:Discord" and
-/// registers the adapter both by concrete type and through the
-/// <see cref="IChatAdapter"/> contract.
+/// DI composition for the Discord chat adapter. Consumer hosts call
+/// <c>services.AddDiscordAdapter(configuration)</c> after the conversation core
+/// is registered. Binds <see cref="DiscordOptions"/> from
+/// "Scout:Adapters:Discord". The adapter is registered as an
+/// <see cref="IChatAdapter"/> only when a bot token is present in configuration;
+/// when absent the call is a clean no-op so an unconfigured host still starts.
 /// </summary>
 public static class DiscordServiceCollectionExtensions
 {
@@ -26,14 +26,16 @@ public static class DiscordServiceCollectionExtensions
 
         services.Configure<DiscordOptions>(configuration.GetSection(ConfigSection));
 
-        services.TryAddSingleton(TimeProvider.System);
+        var botToken = configuration.GetSection(ConfigSection).GetValue<string>("BotToken");
+        if (string.IsNullOrWhiteSpace(botToken))
+        {
+            return services;
+        }
 
+        services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<DiscordMessageTranslator>();
-        services.AddSingleton<DiscordMessageHandler>();
-        services.AddSingleton<IDiscordReplyPoster, DiscordEmbedReplyPoster>();
         services.AddSingleton<DiscordChatAdapter>();
-        services.AddSingleton<IChatAdapter>(
-            sp => sp.GetRequiredService<DiscordChatAdapter>());
+        services.AddSingleton<IChatAdapter>(sp => sp.GetRequiredService<DiscordChatAdapter>());
 
         return services;
     }

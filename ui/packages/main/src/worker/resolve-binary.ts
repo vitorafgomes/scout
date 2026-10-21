@@ -19,7 +19,7 @@ function ridFromPlatformArch(platform: NodeJS.Platform, arch: NodeJS.Architectur
 }
 
 function binaryName(platform: NodeJS.Platform): string {
-  return platform === 'win32' ? 'Scout.Host.Worker.exe' : 'Scout.Host.Worker';
+  return platform === 'win32' ? 'Scout.Host.Console.exe' : 'Scout.Host.Console';
 }
 
 function findRepoRoot(startDir: string): string {

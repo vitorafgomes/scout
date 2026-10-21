@@ -85,6 +85,11 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
           </a>
         </div>
         } @else {
+        @if (narrowsToSelectedOnly() && selectedId() === null) {
+        <p class="nudge" data-test="no-active-model-nudge">
+          No model in use for this task. Pick one below.
+        </p>
+        }
         <article class="provider">
           <header class="provider-head">
             <div class="icon" aria-hidden="true">
@@ -117,7 +122,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
           }
 
           <div class="options">
-            @for (m of downloaded(); track m.id) {
+            @for (m of visibleOptions(); track m.id) {
             <button
               type="button"
               class="option"
@@ -337,6 +342,16 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         padding: 4px 10px;
         align-self: flex-start;
       }
+      .nudge {
+        margin: 0;
+        color: #c08a3e;
+        font-size: 12px;
+        font-weight: 500;
+        background: rgba(192, 138, 62, 0.08);
+        border: 1px solid rgba(192, 138, 62, 0.25);
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
       .options {
         display: flex;
         flex-direction: column;
@@ -452,6 +467,20 @@ export class ModelsComponent {
     const id = this.selectedId();
     if (id === null) return null;
     return this.downloaded().find((m) => m.id === id)?.title ?? null;
+  });
+
+  // Analysis/Translation render only the in-use model when one is selected;
+  // Transcription always shows the full downloaded list.
+  readonly narrowsToSelectedOnly = computed<boolean>(
+    () => this.tab() === 'analysis' || this.tab() === 'translation',
+  );
+
+  readonly visibleOptions = computed<readonly LocalModelCatalogEntry[]>(() => {
+    const all = this.downloaded();
+    if (!this.narrowsToSelectedOnly()) return all;
+    const sel = this.selectedId();
+    if (sel === null) return all;
+    return all.filter((m) => m.id === sel);
   });
 
   setTab(tab: TaskTab): void {

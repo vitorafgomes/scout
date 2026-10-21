@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scout.Llm.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Scout.Llm\Scout.Llm.csproj" />
+    <!-- Composition-cycle regression: exercise the real LLM + Conversation +
+         Knowledge wiring together. Knowledge introduced the embedder<->kernel
+         cycle, so the guarding test must see all three modules. -->
+    <ProjectReference Include="..\..\src\Scout.Conversation\Scout.Conversation.csproj" />
+    <ProjectReference Include="..\..\src\Scout.Knowledge\Scout.Knowledge.csproj" />
+  </ItemGroup>
+</Project>

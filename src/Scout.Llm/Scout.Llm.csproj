@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scout.Llm</RootNamespace>
+    <AssemblyName>Scout.Llm</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.SemanticKernel" />
+    <PackageReference Include="Microsoft.SemanticKernel.Agents.Core" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureOpenAI" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Google" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.MistralAI" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.HuggingFace" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.AzureAIInference" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Llm.Tests" />
+    <!-- Host composition smoke test swaps the Ollama factory's HttpClient via the
+         internal ctor so DI resolution stays network-free. -->
+    <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
+  </ItemGroup>
+</Project>

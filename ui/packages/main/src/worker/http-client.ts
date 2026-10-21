@@ -55,6 +55,10 @@ export class WorkerHttpClient {
     return this.request<T>('PUT', path, body, opts);
   }
 
+  async delete<T>(path: string, opts?: { timeoutMs?: number }): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, opts);
+  }
+
   private async request<T>(
     method: string,
     path: string,

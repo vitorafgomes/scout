@@ -148,4 +148,83 @@ describe('ModelsComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="panel-transcription"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="panel-translation"]')).toBeNull();
   });
+
+  it('Analysis tab with a selected model renders only the selected option', async () => {
+    const { fixture, store } = await setup();
+    // Download three analysis models. The first one is auto-selected by the store
+    // (markDownloaded). Override selection to the middle one explicitly to make
+    // the narrowing rule observable.
+    store.markDownloaded('qwen-2.5-0.5b-instruct');
+    store.markDownloaded('qwen-2.5-1.5b-instruct');
+    store.markDownloaded('qwen-3-vl-2b');
+    store.select('analysis', 'qwen-2.5-1.5b-instruct');
+
+    const an = fixture.nativeElement.querySelector(
+      '[data-test="tab-analysis"]',
+    ) as HTMLButtonElement;
+    an.click();
+    fixture.detectChanges();
+
+    const options = fixture.nativeElement.querySelectorAll(
+      '[data-test^="option-"]',
+    ) as NodeListOf<HTMLElement>;
+    expect(options.length).toBe(1);
+    expect(options[0]?.getAttribute('data-test')).toBe('option-qwen-2.5-1.5b-instruct');
+    expect(fixture.nativeElement.querySelector('[data-test="no-active-model-nudge"]')).toBeNull();
+  });
+
+  it('Analysis tab with no selection renders all downloaded options plus a nudge', async () => {
+    const { fixture, store } = await setup();
+    store.markDownloaded('qwen-2.5-0.5b-instruct');
+    store.markDownloaded('qwen-2.5-1.5b-instruct');
+    store.markDownloaded('qwen-3-vl-2b');
+    // Wipe the auto-selection so the nudge path is exercised. The store API
+    // does not expose a clear-selection method, so simulate the "no selection"
+    // state by purging localStorage and re-hydrating via a fresh component.
+    // Easiest path: reach into the private signal through localStorage reset.
+    window.localStorage.setItem(
+      LOCAL_MODELS_STORAGE_KEY,
+      JSON.stringify({
+        downloaded: ['qwen-2.5-0.5b-instruct', 'qwen-2.5-1.5b-instruct', 'qwen-3-vl-2b'],
+        selected: { transcription: null, analysis: null },
+      }),
+    );
+    TestBed.resetTestingModule();
+    const fresh = await setup();
+
+    const an = fresh.fixture.nativeElement.querySelector(
+      '[data-test="tab-analysis"]',
+    ) as HTMLButtonElement;
+    an.click();
+    fresh.fixture.detectChanges();
+
+    const options = fresh.fixture.nativeElement.querySelectorAll(
+      '[data-test^="option-"]',
+    ) as NodeListOf<HTMLElement>;
+    expect(options.length).toBe(3);
+    expect(
+      fresh.fixture.nativeElement.querySelector('[data-test="no-active-model-nudge"]'),
+    ).not.toBeNull();
+    // store and fixture from outer setup are unused once we rehydrate
+    void store;
+    void fixture;
+  });
+
+  it('Transcription tab still renders the full downloaded list (no narrowing)', async () => {
+    const { fixture, store } = await setup();
+    store.markDownloaded('whisper-large-v3-turbo');
+    store.markDownloaded('whisper-large-v3');
+    fixture.detectChanges();
+
+    const options = fixture.nativeElement.querySelectorAll(
+      '[data-test^="option-"]',
+    ) as NodeListOf<HTMLElement>;
+    expect(options.length).toBe(2);
+    expect(
+      fixture.nativeElement.querySelector('[data-test="option-whisper-large-v3-turbo"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="option-whisper-large-v3"]'),
+    ).not.toBeNull();
+  });
 });
