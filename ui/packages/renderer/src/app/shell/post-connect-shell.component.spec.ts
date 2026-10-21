@@ -42,15 +42,15 @@ describe('PostConnectShellComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('renders the five nav items in order: AI Sources, Models, Status, Logs, Settings', async () => {
+  it('renders the six nav items in order: AI Sources, Models, Features, Status, Logs, Settings', async () => {
     const { fixture } = await setup();
 
     const links = fixture.nativeElement.querySelectorAll('.nav-link');
-    expect(links.length).toBe(5);
+    expect(links.length).toBe(6);
     const labels = Array.from(links).map((el) =>
       ((el as HTMLElement).querySelector('.nav-label')?.textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['AI Sources', 'Models', 'Status', 'Logs', 'Settings']);
+    expect(labels).toEqual(['AI Sources', 'Models', 'Features', 'Status', 'Logs', 'Settings']);
   });
 
   it('exposes data-test attributes for every nav item', async () => {
@@ -58,6 +58,7 @@ describe('PostConnectShellComponent', () => {
 
     expect(fixture.nativeElement.querySelector('[data-test="nav-sources"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-models"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="nav-features"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-status"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-logs"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-settings"]')).not.toBeNull();

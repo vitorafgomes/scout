@@ -25,6 +25,12 @@ describe('CHANNEL constant', () => {
         'discordBuildOAuthUrl',
         'discordCancelOAuthInstall',
         'discordStartOAuthInstall',
+        'featureDeleteCredentials',
+        'featureDisable',
+        'featureEnable',
+        'featureSetCredentials',
+        'featureSetup',
+        'featuresList',
         'llmDeleteOllamaModel',
         'llmDetectEnvironment',
         'llmListLmStudioModels',
@@ -93,6 +99,12 @@ describe('ChannelName type', () => {
       'scout:providers.stop': true,
       'scout:providers.restart': true,
       'scout:providers.setAutostart': true,
+      'scout:features.list': true,
+      'scout:features.setCredentials': true,
+      'scout:features.setup': true,
+      'scout:features.deleteCredentials': true,
+      'scout:features.enable': true,
+      'scout:features.disable': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });
@@ -118,6 +130,11 @@ describe('no-external-write sanity scan', () => {
     'scout:llm.deleteOllamaModel',
     'scout:whisper.downloadModel',
     'scout:whisper.deleteModel',
+    // - scout:features.setCredentials    -> writes a feature credential blob to the OS keyring via the worker;
+    //                                       never reaches an external system (credentials only enable later reads).
+    // - scout:features.deleteCredentials -> deletes that same local keyring entry; no external mutation.
+    'scout:features.setCredentials',
+    'scout:features.deleteCredentials',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new

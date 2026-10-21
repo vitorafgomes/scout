@@ -31,7 +31,7 @@ type BootState = 'booting' | 'ready' | 'error';
       }
 
       <div class="env-summary">
-        <span class="env-tag">CHAT_ADAPTER=Discord</span>
+        <span class="env-tag">DISCORD_BOT_TOKEN=&#x2022;&#x2022;&#x2022;</span>
         <span class="env-tag">LLM_PROVIDER=Ollama</span>
         <span class="env-tag">ENV=Production</span>
       </div>
@@ -208,7 +208,7 @@ export class WorkerLaunchComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.wizard.goTo('launch');
 
-    if (this.wizard.guild() === null) {
+    if (!this.wizard.hasProvisioning()) {
       void this.router.navigateByUrl('/');
       return;
     }

@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+// Feature catalog: list, configure credentials/settings, enable/disable.
+service Features {
+  rpc ListFeatures(ListFeaturesRequest) returns (ListFeaturesResponse);
+  rpc SetCredentials(SetCredentialsRequest) returns (Feature);
+  rpc Setup(SetupRequest) returns (Feature);
+  rpc DeleteCredentials(DeleteCredentialsRequest) returns (Feature);
+  rpc Enable(EnableRequest) returns (Feature);
+  rpc Disable(DisableRequest) returns (Feature);
+}
+
+enum FeatureStatus {
+  FEATURE_STATUS_UNSPECIFIED = 0;
+  ENABLED = 1;
+  NEEDS_CREDENTIALS = 2;
+  DISABLED = 3;
+  ERROR = 4;
+}
+
+// One credential input the UI renders in the setup dialog.
+message FeatureCredentialField {
+  string key = 1;
+  string kind = 2;
+  string label = 3;
+  optional string helper_text = 4;
+  optional string create_link_url = 5;
+  optional string create_link_label = 6;
+}
+
+// One non-secret configuration input.
+message FeatureSettingField {
+  string key = 1;
+  string kind = 2;
+  string label = 3;
+  optional string helper_text = 4;
+  optional string create_link_url = 5;
+  optional string create_link_label = 6;
+  bool required = 7;
+}
+
+// One row of a scope-to-actions matrix.
+message FeatureScopeRow {
+  string scope = 1;
+  repeated string actions = 2;
+}
+
+// Merged catalog + persisted state + credential-presence snapshot.
+message Feature {
+  string id = 1;
+  string display_name = 2;
+  string description = 3;
+  bool requires_credentials = 4;
+  bool has_credentials = 5;
+  bool enabled = 6;
+  FeatureStatus status = 7;
+  optional string last_error = 8;
+  repeated FeatureCredentialField credential_fields = 9;
+  repeated FeatureSettingField settings_fields = 10;
+  map<string, string> settings = 11;
+  repeated FeatureScopeRow scope_matrix = 12;
+  bool has_scope_matrix = 13;
+  repeated string setup_steps = 14;
+  bool has_setup_steps = 15;
+}
+
+message ListFeaturesRequest {}
+
+message ListFeaturesResponse {
+  repeated Feature features = 1;
+}
+
+message SetCredentialsRequest {
+  string id = 1;
+  map<string, string> credentials = 2;
+}
+
+message SetupRequest {
+  string id = 1;
+  map<string, string> credentials = 2;
+  // Settings carry an explicit clear semantic: a key present in
+  // cleared_settings is removed; settings carries the upserts.
+  map<string, string> settings = 3;
+  repeated string cleared_settings = 4;
+}
+
+message DeleteCredentialsRequest {
+  string id = 1;
+}
+
+message EnableRequest {
+  string id = 1;
+}
+
+message DisableRequest {
+  string id = 1;
+}

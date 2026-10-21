@@ -78,7 +78,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     buildEnv,
     checkBinaryExists = isFile,
     ringLimit = 2000,
-    readinessTimeoutMs = 30_000,
+    readinessTimeoutMs = 45_000,
     stopTimeoutMs = 5_000,
     restartPolicy = DEFAULT_POLICY,
   } = deps;
@@ -171,13 +171,17 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     }
 
     const extraEnv = await buildEnv();
-    // env is intentionally not logged — it contains secrets
-    const childEnv = { ...process.env, ...extraEnv };
+    // env is intentionally not logged — it contains secrets.
+    // SCOUT__PARENT_WATCHDOG=1 makes the host self-terminate on stdin EOF, so it
+    // cannot orphan if this supervisor dies ungracefully (crash / SIGKILL).
+    const childEnv = { ...process.env, ...extraEnv, SCOUT__PARENT_WATCHDOG: '1' };
 
+    // stdin is a pipe (not 'ignore') so the host's parent-death watchdog gets
+    // EOF when we die. We keep the write end open and never write to it.
     const child = spawn(binaryPath, [], {
       env: childEnv,
       cwd: path.dirname(binaryPath),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
       detached: false,
     });

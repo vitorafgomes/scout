@@ -378,7 +378,7 @@ describe('createSupervisor', () => {
   describe('WorkerBinaryMissingError', () => {
     it('rejects start when the binary does not exist', async () => {
       const { child, ...deps } = makeDeps({
-        resolveBinary: () => '/nonexistent/path/Scout.Host.Worker',
+        resolveBinary: () => '/nonexistent/path/Scout.Host.Console',
         checkBinaryExists: () => false,
       });
       void child;
@@ -387,6 +387,46 @@ describe('createSupervisor', () => {
       await expect(supervisor.start()).rejects.toMatchObject({
         code: 'worker/binary-missing',
       });
+    });
+  });
+
+  describe('SCOUT_READY with no http endpoint', () => {
+    it('reaches running state when SCOUT_READY arrives but no SCOUT_HTTP= line is printed', async () => {
+      const { child, ...deps } = makeDeps();
+      const supervisor = createSupervisor(deps);
+
+      const startPromise = supervisor.start();
+      await Promise.resolve();
+      await Promise.resolve();
+      emitReady(child);
+      await startPromise;
+
+      expect(supervisor.status.state).toBe('running');
+      expect(supervisor.httpEndpoint).toBeNull();
+    });
+  });
+
+  describe('exit before SCOUT_READY', () => {
+    it('rejects start and transitions to crashed when child exits before emitting SCOUT_READY', async () => {
+      const { child, ...deps } = makeDeps();
+      const supervisor = createSupervisor(deps);
+
+      const startPromise = supervisor.start();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Exit without ever emitting SCOUT_READY
+      child.emit('exit', 1, null);
+
+      let thrown: unknown = null;
+      try {
+        await startPromise;
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).not.toBeNull();
+      expect(supervisor.status.state).toBe('crashed');
     });
   });
 });
