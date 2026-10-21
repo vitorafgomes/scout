@@ -3,7 +3,7 @@ title: "Tooling"
 version: "1.0"
 date: 2026-10-21
 updated: 2026-10-21
-changes: "Founded with the harness: agents, hooks, scripts, review workflow, Stryker skill"
+changes: "Founded with the harness: agents, hooks, scripts, review workflow, Stryker skill, graphify"
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow and the diagnostics script fit the gates."
@@ -72,6 +72,10 @@ Five hooks carry a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PA
 ## `scripts/check-vault-refs.sh`
 
 Resolves every `path:line` citation in `vault/pages` (paths under `src`, `tests`, `ui`, `scripts`, `.claude`, `.github`) against the working tree; fails on a missing file or a line past the end. It proves the line exists, never that it still describes the claim; that part is read. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
+
+## `graphify-out/graph.json` and the git hooks that refresh it
+
+An AST knowledge graph of the repo (graphify 0.9.73), built locally and gitignored, never committed. `scripts/install-git-hooks.sh` copies the three versioned hooks from `scripts/git-hooks/` (`post-commit`, `post-checkout`, `post-merge`) into the clone's common hooks directory, so every worktree refreshes the graph after a commit, a checkout or a pull; `post-merge` is hand-written because a fast-forward pull fires neither of the other two, and it depends on the `GRAPHIFY_DIFF_BASE` line in `post-commit`, which `graphify hook install` would rewrite, so re-apply it after upgrading graphify. `.graphifyignore` excludes `src/old/` and `tests/old/` (the archived first cut would otherwise duplicate every live label, and `graphify affected` needs a unique one). First build 2026-10-21: 6655 nodes, 13988 edges, AST only. Manual refresh: `graphify update . --no-cluster`. The querying rules (which commands, what never to run) live once, in the owner's global `~/CLAUDE.md`; in this pipeline `graphify affected "<Symbol>" --depth 2` gives the starting Files list of the plan and `god-nodes --top 10` says whether the change lands on a hub.
 
 ## Permissions
 

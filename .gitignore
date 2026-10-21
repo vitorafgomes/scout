@@ -39,3 +39,6 @@ logs/
 
 # claude plugin eval output
 .claude/skills/*/evals/results/
+
+# graphify AST knowledge graph, rebuilt locally by the git hooks (scripts/install-git-hooks.sh); never committed
+graphify-out/
