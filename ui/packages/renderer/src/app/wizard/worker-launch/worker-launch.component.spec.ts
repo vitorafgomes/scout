@@ -82,7 +82,8 @@ async function setup(
     bridgeOpts?: BridgeFactory;
   } = {},
 ) {
-  const tokenExists = opts.tokenOnly === true || opts.guildName !== undefined || opts.clientId !== undefined;
+  const tokenExists =
+    opts.tokenOnly === true || opts.guildName !== undefined || opts.clientId !== undefined;
   const { bridge, fire } = makeBridge({ ...(opts.bridgeOpts ?? {}), tokenExists });
 
   TestBed.configureTestingModule({

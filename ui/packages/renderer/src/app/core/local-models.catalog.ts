@@ -48,7 +48,8 @@ export const LOCAL_MODEL_CATALOG: readonly LocalModelCatalogEntry[] = Object.fre
     id: 'qwen-2.5-1.5b-instruct',
     kind: 'analysis',
     title: 'Qwen 2.5 1.5B (Instruct)',
-    description: 'Small and capable text analysis. Good quality for low-RAM systems. No image support.',
+    description:
+      'Small and capable text analysis. Good quality for low-RAM systems. No image support.',
     badges: ['text-only'],
     sizeBytes: Math.round(1.12 * GiB),
     ramBytes: Math.round(2.5 * GiB),

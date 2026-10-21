@@ -91,7 +91,9 @@ describe('FeaturesComponent', () => {
   it('opens the credential dialog when a card requests it', async () => {
     const { fixture } = await setup();
 
-    const cta = fixture.nativeElement.querySelector('[data-test="cta-github"]') as HTMLButtonElement;
+    const cta = fixture.nativeElement.querySelector(
+      '[data-test="cta-github"]',
+    ) as HTMLButtonElement;
     cta.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -148,7 +150,9 @@ describe('FeaturesComponent', () => {
       code: 'worker/http-unavailable',
     });
     const bridge = {
-      featuresList: vi.fn(async () => { throw unavailableErr; }),
+      featuresList: vi.fn(async () => {
+        throw unavailableErr;
+      }),
       featureEnable: vi.fn(),
       featureDisable: vi.fn(),
       featureSetCredentials: vi.fn(),

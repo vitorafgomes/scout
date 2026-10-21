@@ -55,7 +55,9 @@ describe('FeatureCardComponent', () => {
     ) as HTMLInputElement;
     expect(toggle.disabled).toBe(true);
 
-    const cta = fixture.nativeElement.querySelector('[data-test="cta-github"]') as HTMLButtonElement;
+    const cta = fixture.nativeElement.querySelector(
+      '[data-test="cta-github"]',
+    ) as HTMLButtonElement;
     expect(cta.textContent?.trim()).toBe('Add credentials');
     expect(fixture.nativeElement.querySelector('[data-test="clear-github"]')).toBeNull();
   });
@@ -79,7 +81,9 @@ describe('FeatureCardComponent', () => {
     expect(clear).not.toBeNull();
     expect(clear.disabled).toBe(false);
 
-    const cta = fixture.nativeElement.querySelector('[data-test="cta-github"]') as HTMLButtonElement;
+    const cta = fixture.nativeElement.querySelector(
+      '[data-test="cta-github"]',
+    ) as HTMLButtonElement;
     expect(cta.textContent?.trim()).toBe('Update credentials');
   });
 
@@ -122,7 +126,9 @@ describe('FeatureCardComponent', () => {
     ) as HTMLInputElement;
     expect(toggle.disabled).toBe(true);
 
-    const cta = fixture.nativeElement.querySelector('[data-test="cta-github"]') as HTMLButtonElement;
+    const cta = fixture.nativeElement.querySelector(
+      '[data-test="cta-github"]',
+    ) as HTMLButtonElement;
     expect(cta.disabled).toBe(true);
 
     const clear = fixture.nativeElement.querySelector(

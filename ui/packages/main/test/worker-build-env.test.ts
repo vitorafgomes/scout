@@ -2,7 +2,9 @@ import { describe, it, expect } from 'bun:test';
 import { buildEnv } from '../src/worker/build-env.js';
 import { VaultUnavailableError } from '@scout/shared';
 
-function makeVault(entries: Record<string, string | null>): (key: string) => Promise<string | null> {
+function makeVault(
+  entries: Record<string, string | null>,
+): (key: string) => Promise<string | null> {
   return async (key) => entries[key] ?? null;
 }
 
