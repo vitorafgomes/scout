@@ -37,6 +37,7 @@ interface BuilderConfig {
     [key: string]: unknown;
   };
   linux: {
+    executableName?: string;
     target: LinuxTarget[];
   };
   mac: {
@@ -76,6 +77,10 @@ describe('electron-builder.yml', () => {
 
   it('extraMetadata.main points to packages/main/dist/main.js', () => {
     expect(config.extraMetadata.main).toBe('packages/main/dist/main.js');
+  });
+
+  it('linux executableName is safe for file paths', () => {
+    expect(config.linux.executableName).toMatch(/^[A-Za-z0-9._ ()-]+$/);
   });
 
   it('linux targets include AppImage for x64', () => {
