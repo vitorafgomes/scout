@@ -13,6 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Seconds, no .NET needed, so it runs first; jq ships on ubuntu runners.
+      - name: Hook guard self-test
+        shell: bash
+        run: |
+          bash .claude/hooks/pre-git-guard.test.sh
+          bash .claude/hooks/stop-review-gate.test.sh
+          bash .claude/hooks/session-start.test.sh
+          bash .claude/hooks/post-edit-oracle-note.test.sh
+          bash .claude/hooks/session-end-metrics.test.sh
+          bash scripts/check-vault-refs.test.sh
+          bash scripts/check-vault-refs.sh
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:

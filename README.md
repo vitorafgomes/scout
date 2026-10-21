@@ -46,8 +46,8 @@ dotnet run --project src/Scout.Host.Worker -- index
 
 Example Discord interaction: `@Scout where is the retriever wired?`
 
-Architecture and design rationale live at
-`obsidian-vault/scout/05-operations/plans/2026-04-21-plugin-code-qa.md`.
+Architecture and design rationale live in the vault:
+`vault/pages/domain/code-qa.md`.
 
 ## Install / run / test
 
@@ -62,17 +62,19 @@ the new model.
 
 ## Documentation
 
-All design documents, ADRs, and specifications live in the Obsidian vault,
-not in this repository:
-
-`obsidian-vault/scout/`
+All design documents, ADRs, invariants and specifications live in the in-repo
+vault, `vault/`, maintained with the Claude Code harness under `.claude/`
+(how it works: `vault/pages/conventions/tooling.md`).
 
 Entry points:
 
-- `scout/README.md` — project index
-- `scout/01-overview/vision.md` — vision and scope
-- `scout/02-architecture/high-level.md` — architecture
-- `scout/06-decisions/` — ADRs
+- `vault/index.md` - content catalogue, start here
+- `vault/pages/overview/vision.md` - vision and scope
+- `vault/pages/architecture/high-level.md` - architecture
+- `vault/pages/architecture/project-map.md` - projects and their dependencies
+- `vault/pages/decisions/` - ADRs
+- `vault/pages/invariants/` - rules the code must preserve, starting with
+  `no-executive-writes.md`
 
 ## Contributing
 
