@@ -122,14 +122,20 @@ public sealed class SlackChatAdapter : IChatAdapter, IAsyncDisposable
         }
 
         _handler = null;
-        _socketModeClient.Disconnect();
+        await _socketModeClient.DisconnectAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
     {
-        await StopAsync(CancellationToken.None).ConfigureAwait(false);
-        _lifecycle.Dispose();
-        (_socketModeClient as IDisposable)?.Dispose();
+        try
+        {
+            await StopAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lifecycle.Dispose();
+            await _socketModeClient.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     // Entry point from the SlackNet event handler. Internal so tests can drive a
