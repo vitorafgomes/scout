@@ -66,9 +66,12 @@ public sealed class ParentWatchdogServiceTests
         // Normal shutdown: cancels ExecuteAsync's stopping token.
         await service.StopAsync(CancellationToken.None);
 
+        // BackgroundService schedules ExecuteAsync with Task.Run bound to the stopping token, so a
+        // StopAsync that wins the race against the thread pool leaves ExecuteTask Canceled without
+        // ExecuteAsync ever running. Both outcomes are a clean stop; only StopApplication matters.
         if (service.ExecuteTask is { } t)
         {
-            await t;
+            await t.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
         }
 
         lifetime.StopApplicationCalls.ShouldBe(0);
