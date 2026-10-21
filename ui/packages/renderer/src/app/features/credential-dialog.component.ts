@@ -161,7 +161,9 @@ export interface CredentialDialogSubmit {
                 <tbody>
                   @for (row of feature.scopeMatrix; track row.scope) {
                     <tr [attr.data-test]="'scope-row-' + row.scope">
-                      <td><code>{{ row.scope }}</code></td>
+                      <td>
+                        <code>{{ row.scope }}</code>
+                      </td>
                       <td>
                         <ul>
                           @for (action of row.actions; track action) {

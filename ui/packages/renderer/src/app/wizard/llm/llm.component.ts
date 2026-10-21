@@ -68,76 +68,76 @@ function isHttpUrl(raw: string): boolean {
       </section>
 
       @if (selectedProvider() !== null) {
-      <section class="card">
-        <h2>Endpoint</h2>
-        <label class="field">
-          <span class="field-label">Ollama base URL</span>
-          <input
-            type="text"
-            class="text-input"
-            data-test="endpoint-input"
-            [value]="endpoint()"
-            (input)="onEndpointInput($event)"
-            placeholder="http://localhost:11434"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </label>
-        @if (!endpointValid()) {
-          <p class="error" data-test="endpoint-error">
-            Endpoint must be an absolute http:// or https:// URL.
-          </p>
-        }
-      </section>
+        <section class="card">
+          <h2>Endpoint</h2>
+          <label class="field">
+            <span class="field-label">Ollama base URL</span>
+            <input
+              type="text"
+              class="text-input"
+              data-test="endpoint-input"
+              [value]="endpoint()"
+              (input)="onEndpointInput($event)"
+              placeholder="http://localhost:11434"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          @if (!endpointValid()) {
+            <p class="error" data-test="endpoint-error">
+              Endpoint must be an absolute http:// or https:// URL.
+            </p>
+          }
+        </section>
 
-      <section class="card">
-        <h2>Model</h2>
-        <div class="model-row">
-          <select
-            class="select"
-            data-test="model-select"
-            [disabled]="loading() || models().length === 0"
-            (change)="onModelChange($event)"
-          >
-            <option value="" [selected]="selectedModel() === null">— Select a model —</option>
-            @for (m of models(); track m.name) {
-              <option [value]="m.name" [selected]="selectedModel() === m.name">
-                {{ m.name }}
-              </option>
-            }
-          </select>
+        <section class="card">
+          <h2>Model</h2>
+          <div class="model-row">
+            <select
+              class="select"
+              data-test="model-select"
+              [disabled]="loading() || models().length === 0"
+              (change)="onModelChange($event)"
+            >
+              <option value="" [selected]="selectedModel() === null">— Select a model —</option>
+              @for (m of models(); track m.name) {
+                <option [value]="m.name" [selected]="selectedModel() === m.name">
+                  {{ m.name }}
+                </option>
+              }
+            </select>
+            <button
+              type="button"
+              class="ghost"
+              data-test="refresh-models"
+              (click)="refreshModels()"
+              [disabled]="loading() || !endpointValid()"
+            >
+              Refresh
+            </button>
+          </div>
+          @if (loading()) {
+            <p class="loading" data-test="loading">Loading models from Ollama…</p>
+          }
+          @if (loadError(); as msg) {
+            <p class="error" data-test="load-error">{{ msg }}</p>
+          }
+        </section>
+
+        <div class="actions">
           <button
             type="button"
-            class="ghost"
-            data-test="refresh-models"
-            (click)="refreshModels()"
-            [disabled]="loading() || !endpointValid()"
+            class="primary"
+            data-test="save"
+            [disabled]="!canSave()"
+            (click)="save()"
           >
-            Refresh
+            Save
           </button>
+          @if (saved()) {
+            <span class="saved-msg" role="status" data-test="saved-msg">Saved</span>
+          }
         </div>
-        @if (loading()) {
-          <p class="loading" data-test="loading">Loading models from Ollama…</p>
-        }
-        @if (loadError(); as msg) {
-          <p class="error" data-test="load-error">{{ msg }}</p>
-        }
-      </section>
-
-      <div class="actions">
-        <button
-          type="button"
-          class="primary"
-          data-test="save"
-          [disabled]="!canSave()"
-          (click)="save()"
-        >
-          Save
-        </button>
-        @if (saved()) {
-          <span class="saved-msg" role="status" data-test="saved-msg">Saved</span>
-        }
-      </div>
       }
     </main>
   `,

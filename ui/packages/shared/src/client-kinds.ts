@@ -34,12 +34,7 @@ export function assertNeverClient(kind: never): never {
 }
 
 export type DetectionMethod =
-  | 'registry'
-  | 'bundle-id'
-  | 'desktop-file'
-  | 'package-manager'
-  | 'uri-scheme'
-  | 'none';
+  'registry' | 'bundle-id' | 'desktop-file' | 'package-manager' | 'uri-scheme' | 'none';
 
 export interface DetectedClient {
   readonly kind: ClientKind;

@@ -98,7 +98,11 @@ function joinPath(endpoint: string, suffix: string): string {
 }
 
 function throwOllamaError(endpoint: string, message?: string, cause?: unknown): never {
-  const err = new OllamaUnreachableError(endpoint, message, cause === undefined ? undefined : { cause });
+  const err = new OllamaUnreachableError(
+    endpoint,
+    message,
+    cause === undefined ? undefined : { cause },
+  );
   const serialized = serializeError(err);
   throw Object.assign(new Error(serialized.message), { code: serialized.code });
 }
@@ -113,10 +117,7 @@ interface PullLine {
 function isPullLine(value: unknown): value is PullLine {
   if (typeof value !== 'object' || value === null) return false;
   const obj = value as Record<string, unknown>;
-  return (
-    obj['status'] === undefined ||
-    typeof obj['status'] === 'string'
-  );
+  return obj['status'] === undefined || typeof obj['status'] === 'string';
 }
 
 export function registerLlmPullHandlers(
@@ -183,7 +184,11 @@ export function registerLlmPullHandlers(
 
       const emit = (status: string, completed: number, total: number): void => {
         const percent =
-          total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : status === 'success' ? 100 : 0;
+          total > 0
+            ? Math.min(100, Math.round((completed / total) * 100))
+            : status === 'success'
+              ? 100
+              : 0;
         const payload: LlmPullOllamaProgressEvent = {
           requestId,
           tag,
