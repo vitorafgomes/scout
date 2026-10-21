@@ -87,7 +87,7 @@ means re-grepping the repo was stated too fast: fix the plan.
    | The change... | Read first | The trap |
    |---|---|---|
    | adds or changes a **call that leaves the process** | ADR 0009 + [[pages/invariants/no-executive-writes]] + Rule A | a descriptive write that can be read by an agent which acts on it is still descriptive; a write that mutates anything outside Scout's config is executive and forbidden; boundary cases default to forbidden |
-   | adds a **function or tool the LLM can invoke**, a plugin operation or a control-plane command | ADR 0009, ADR 0012, `pages/services/skills.md`, `pages/services/control-plane.md` | the model decides when to call it; judge what it can reach, not what its description promises |
+   | adds a **function or tool the LLM can invoke**, a plugin operation or a control-plane command | ADR 0009, ADR 0012, `pages/architecture/plugin-catalogue.md`, `pages/services/control-plane.md` | the model decides when to call it; judge what it can reach, not what its description promises |
    | touches **credentials, tokens, headers, configuration binding** | [[pages/invariants/secrets-never-in-source]] + Rule G | a literal in `appsettings*.json`, a token in a log line or an exception message |
    | adds or changes an **adapter, LLM provider or plugin** | [[pages/invariants/pluggable-boundaries]] + ADR 0012 + Rule F | a vendor SDK type leaking into the core or another adapter; a second LLM path beside Semantic Kernel |
    | adds or changes a call across an **external boundary** (HTTP, gRPC, chat SDK, provider, filesystem, subprocess) | `pages/conventions/testing.md` "One failing-call test per external boundary" + Rule I | the happy path is tested and the timeout, 5xx or reset path is not |
@@ -109,7 +109,7 @@ means re-grepping the repo was stated too fast: fix the plan.
    | The diff touches... | The surface is |
    |---|---|
    | one `src/Scout.X` project | `tests/Scout.X.Tests` + the test project of every project that references `Scout.X` (`pages/architecture/project-map.md`) |
-   | `src/Scout.ControlPlane.Contracts` or anything three or more projects reference | every test project under `tests/` (not `tests/old`) |
+   | `src/Scout.ControlPlane.Contracts` or anything three or more projects reference | every test project under `tests/` |
    | `src/Scout.Host.*` or DI registration | the host's test project + every adapter and plugin test project |
    | `ui/**` | in `ui/`: `bun run typecheck`, `bun run lint`, `bun run format`, `bun run test` (per package counts) |
    | `.claude/hooks/**` | every `.claude/hooks/*.test.sh` (`pre-git-guard`, `stop-review-gate`, `session-start`, `post-edit-oracle-note`, `session-end-metrics`; each must print `ALL CASES PASS`; CI runs all five) and a run of any other touched hook |

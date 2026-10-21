@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Teams"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Microsoft Teams adapter: the Bot Framework turn handler, translator and streaming sink; the inbound webhook is deliberately not wired in this repository."
@@ -59,7 +60,7 @@ flowchart LR
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Teams.Tests` (50 test attributes, 7 files): translator, adapter and lifecycle, DI gating, sink behaviour, a sink boundary test and a sink-with-pump test using `Streaming/RecordingSender.cs`. No Azure calls.
+`tests/Scout.Adapter.Teams.Tests` (52 test attributes, 7 files): translator, adapter and lifecycle, DI gating, sink behaviour, a sink boundary test and a sink-with-pump test using `Streaming/RecordingSender.cs`. No Azure calls.
 
 ## Related
 

@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Discord"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Discord chat adapter: receives mentions and direct messages over the gateway, and streams the reply by posting then editing one embed."
@@ -65,7 +66,7 @@ The translator drops the bot's own messages, guild messages without an @-mention
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Discord.Tests` (34 test attributes, 6 files): translator rules, inbound projection, lifecycle, DI gating, sink behaviour and a sink boundary test with a faked channel. No live Discord connection.
+`tests/Scout.Adapter.Discord.Tests` (36 test attributes, 6 files): translator rules, inbound projection, lifecycle, DI gating, sink behaviour and a sink boundary test with a faked channel. No live Discord connection.
 
 ## Related
 

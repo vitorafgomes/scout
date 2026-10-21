@@ -1,8 +1,8 @@
 ---
 title: "Scout Vault Index"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded on 2026-10-21: migrated technical notes plus code-derived service, invariant and convention pages"
+changes: "Development line imported: 24 new service pages, plugin catalogue, project map rewritten, 17 pages re-verified"
 page_type: index
 status: active
 description: "Content catalogue for the Scout LLM wiki."
@@ -23,20 +23,35 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - Page schema: [[wiki-schema]] | Config: [[wiki-config]]
 - Templates: `templates/`
 
-> **Coverage note (2026-10-21):** founded in one day. The pages under `services/`, `invariants/`,
-> `conventions/` and `architecture/project-map` were written from the code at the founding commit
-> and carry verified `file:line` citations (`reliability: high`). Everything else was migrated
-> verbatim from the owner's Obsidian notes dated 2026-04 to 2026-07 and was **not re-verified
-> against the code** (`reliability: medium`): a `status: stub` or `proposed` there means the source
-> note was still a draft. Where a migrated page and a code-derived page disagree, the code-derived
-> page is the fact and the disagreement is a finding to log. The owner's private notes (plans,
-> handoffs, sessions, audits) stay outside this repo.
+> **Coverage note (2026-10-21):** founded in one day, then re-verified the same day after the
+> development line of June and July 2026 was imported (new `Scout.Contracts` and
+> `Scout.Plugin.Common`, 22 new `Scout.Plugin.*` projects, `src/old` and `tests/old` deleted). The
+> pages under `services/`, `invariants/`, `conventions/`, `architecture/project-map` and
+> `architecture/plugin-catalogue` were written or re-verified from the code at the import commit,
+> citation by citation (`reliability: high`). Everything else was migrated verbatim from the owner's
+> Obsidian notes dated 2026-04 to 2026-07 and was **not re-verified against the code**
+> (`reliability: medium`): a `status: stub` or `proposed` there means the source note was still a
+> draft. Where a migrated page and a code-derived page disagree, the code-derived page is the fact.
+> The owner's private notes (plans, handoffs, sessions, audits) stay outside this repo.
 >
-> Known gaps the founding pass recorded, for the first review: the read-only contract is a
-> convention, not an enforced allow-list ([[pages/invariants/no-executive-writes]]); secrets are kept
-> out of source by `.gitignore` alone, with no scanning in CI ([[pages/invariants/secrets-never-in-source]]);
-> the control plane mutates the host (Ollama models, the `ollama serve` process) on the user's
-> behalf and ADR 0009 does not yet classify that.
+> Known gaps the founding pass recorded, for the first review:
+> - The read-only contract is a convention, not an enforced allow-list: every DI `KernelPlugin` is
+>   offered to the model with `FunctionChoiceBehavior.Auto()` and no invocation filter
+>   ([[pages/invariants/no-executive-writes]]). Six plugins let the model write and delete records in
+>   Scout's own local store (Notes, Lists, Reminders, Ledger, Parcels watch list, News reading list);
+>   not external, but not literally read-only either ([[pages/architecture/plugin-catalogue]]).
+> - `fetch_page` in WebSearch GETs any http or https URL the model supplies, with no allow-list and
+>   no block on loopback or private addresses ([[pages/services/plugin-websearch]]).
+> - Secrets stay out of source by `.gitignore` alone, with no scanning in CI
+>   ([[pages/invariants/secrets-never-in-source]]); plugin state is plain-text JSON under
+>   `LocalApplicationData/Scout/plugin-data`.
+> - The control plane pulls and deletes Ollama models and starts and kills `ollama serve` on the
+>   user's behalf, and the chat host now exposes start, stop and restart over loopback HTTP; ADR 0009
+>   does not yet classify host-local mutations.
+> - "Pluggable" means switchable by configuration: registration is a fixed list of `Add*Plugin` calls
+>   in `Scout.Host.Console`; `FeatureCatalog` lists a Kubernetes feature with no plugin behind it and
+>   asks for a write-capable `repo` GitHub scope while advertising "Create issues", which no function
+>   implements.
 
 
 ## Overview
@@ -48,11 +63,12 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/architecture/capability-engine-architecture|Capability Engine - unified persona + skill routing (Pattern B)]] - Unified persona and skill routing (Pattern B): one capability engine that retrieves personas and skills from a typed markdown library, superseding the earlier skills roadmap and multi-agent proposal.
 - [[pages/architecture/desktop-models-system|Desktop models system (AI Sources → Models)]] - How the Scout Desktop pieces fit together to discover an inference backend (AI Sources), download a model into it, and select which model to use.
 - [[pages/architecture/desktop-ui-design-system|Scout Desktop - Visual Interface Design Document]] - Hub for the Scout Desktop visual interface design document: principles, tokens, layout, components, screens, interaction patterns, accessibility, CSS custom properties and open questions.
-  - split into 10 part pages under `pages/architecture/desktop-ui-design-system/`, linked from the hub
+  - split into 20 part pages under `pages/architecture/desktop-ui-design-system/`, linked from the hub
 - [[pages/architecture/electron-provisioning-ui|Electron Provisioning UI - feasibility study]] - Hub for the feasibility study of an Electron provisioning UI that lets users set up chat platform bots without manual developer-portal steps, with per-platform limits and a recommendation.
   - split into 10 part pages under `pages/architecture/electron-provisioning-ui/`, linked from the hub
 - [[pages/architecture/high-level|High-level architecture]] *(stub)* - The orchestration kernel. Hosts Semantic Kernel, loads enabled plugins and the configured LLM provider, and exposes a single HandleAsync(ChatMessage) -> ChatResponse entry point that adapters call.
 - [[pages/architecture/multiagent-vs-skill-routing|Multi-agent orchestration vs. identify-the-skill (SK guidance)]] - Source: multi-agent workflow scout-multiagent-architecture-guidance (8 agents: SK docs research via Microsoft Learn MCP -> design -> adversarial critique -> finalize).
+- [[pages/architecture/plugin-catalogue|Plugin catalogue]] - One row per Scout plugin: functions, data source, read-only or descriptive write, state kept, configuration keys, and how plugins are registered.
 - [[pages/architecture/project-knowledge-rag|Project Knowledge RAG - Design]] *(stub)* - Design for letting a user ask Scout natural-language questions about a software project and get answers grounded in that project's real code and docs.
 - [[pages/architecture/project-map|Project map]] - Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it.
 - [[pages/architecture/restructure-architecture|Scout Restructure - Architecture, Status and Backlog]] - Living overview of the ground-up restructure on branch feat/scout-llm-gateway. The previous source tree is archived under src/old/ (frozen reference, not built).
@@ -63,19 +79,43 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/adapter-discord|Adapter.Discord]] - Discord chat adapter: receives mentions and direct messages over the gateway, and streams the reply by posting then editing one embed.
 - [[pages/services/adapter-slack|Adapter.Slack]] - Slack chat adapter over Socket Mode: filters bot traffic, streams the reply by posting then updating one message.
 - [[pages/services/adapter-teams|Adapter.Teams]] - Microsoft Teams adapter: the Bot Framework turn handler, translator and streaming sink; the inbound webhook is deliberately not wired in this repository.
+- [[pages/services/contracts|Contracts]] - Ambient per-turn caller identity (user, channel, DM flag, adapter) flowed to plugins through an AsyncLocal; gates output disclosure only.
 - [[pages/services/control-plane-contracts|ControlPlane.Contracts]] - The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs.
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
-- [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub plugin, runs the adapters, or runs a one-shot project index.
+- [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters, plugins and a loopback control-plane endpoint, runs the adapters, or runs a one-shot project index.
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.
 - [[pages/services/knowledge|Knowledge]] - Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent.
 - [[pages/services/llm|Llm]] - Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout.
+- [[pages/services/plugin-codereview|Plugin.CodeReview]] - Model-backed code review of snippets, diffs and (with a GitHub token) a repository's key files.
+- [[pages/services/plugin-common|Plugin.Common]] - Shared plugin library: the Scout-local JSON store, an injected TimeProvider and tolerant relaxed-date parsing. The only write surface plugins may use.
+- [[pages/services/plugin-converter|Plugin.Converter]] - Converts physical units and evaluates plain decimal arithmetic locally; no network.
+- [[pages/services/plugin-currency|Plugin.Currency]] - Exchange rates, currency conversion and a rate trend from the Frankfurter public API.
+- [[pages/services/plugin-dates|Plugin.Dates]] - Date arithmetic and the current date/time in a configured zone, computed locally.
+- [[pages/services/plugin-dictionary|Plugin.Dictionary]] - Word definitions, synonyms and spelling suggestions from two free public APIs.
 - [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; self-gates off when no token is configured.
+- [[pages/services/plugin-holidays|Plugin.Holidays]] - Public holidays and long weekends by country from the Nager.Date public API.
+- [[pages/services/plugin-ledger|Plugin.Ledger]] - A personal income and expense ledger kept per year, with a month summary.
+- [[pages/services/plugin-lists|Plugin.Lists]] - Named lists (shopping, to-do) the user can add to, show, remove from and clear.
+- [[pages/services/plugin-markets|Plugin.Markets]] - Stock quotes from Stooq and crypto prices and trending coins from CoinGecko.
+- [[pages/services/plugin-news|Plugin.News]] - Headlines from operator-configured RSS feeds, Hacker News search and top stories, and a local reading list.
+- [[pages/services/plugin-notes|Plugin.Notes]] - Short personal notes the user can add, search, list and delete from chat.
+- [[pages/services/plugin-nutrition|Plugin.Nutrition]] - Food product search and nutrition facts from the Open Food Facts public API.
+- [[pages/services/plugin-parcels|Plugin.Parcels]] - Parcel tracking through Ship24 plus a local watch list of tracking numbers.
+- [[pages/services/plugin-recipes|Plugin.Recipes]] - Recipe search, detail and a random suggestion from TheMealDB.
+- [[pages/services/plugin-reminders|Plugin.Reminders]] - Personal reminders the user can add, list, complete and delete; pull-based, no proactive delivery.
+- [[pages/services/plugin-selfinfo|Plugin.SelfInfo]] - Opt-in diagnostics about the Scout host, with output tiered by caller identity.
+- [[pages/services/plugin-sports|Plugin.Sports]] - Last result, next fixture and league table from TheSportsDB.
+- [[pages/services/plugin-weather|Plugin.Weather]] - Current weather, forecast and air quality from the Open-Meteo public APIs.
+- [[pages/services/plugin-websearch|Plugin.WebSearch]] - Web search through an optional SearXNG instance, DuckDuckGo instant answers, and readable-text page fetch.
+- [[pages/services/plugin-whattowatch|Plugin.WhatToWatch]] - TV show search, next episode, genre recommendations (TVMaze) and streaming availability (TMDB, optional key).
+- [[pages/services/plugin-wikipedia|Plugin.Wikipedia]] - Wikipedia search, article summaries and on-this-day events through the Wikimedia API.
+- [[pages/services/plugin-worldclock|Plugin.WorldClock]] - Current time in a city and conversion between cities, resolved from the local time-zone database; no network.
 - [[pages/services/skills|Skills]] - Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools.
 
 ## Invariants
 
-- [[pages/invariants/local-first-default|Ollama is the default LLM provider]] - With no provider configured Scout selects Ollama on localhost, so a fresh clone runs without paid credentials. The fallback is coded in two places; no test exercises it.
+- [[pages/invariants/local-first-default|Ollama is the default LLM provider]] - With no provider configured Scout selects Ollama on localhost, so a fresh clone runs without paid credentials. The fallback is coded in three places (two in .NET, one in the desktop app); no test exercises the .NET one.
 - [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]] - Scout may write content that a human or another agent reads and decides on; it never mutates code, infrastructure, configuration or data on the host. The code upholds this by omission, not by a gate.
 - [[pages/invariants/pluggable-boundaries|Adapters, LLM providers and plugins are swapped by configuration]] - Chat adapters, LLM providers and plugins sit behind abstractions and are selected or gated by Scout: configuration; the core names no vendor. The set of options is closed at compile time.
 - [[pages/invariants/secrets-never-in-source|Secrets never live in source]] - Tokens and API keys come from user-secrets in development and environment variables in production; committed appsettings ship empty values. Only .gitignore and a convention hold this; no code or test does.

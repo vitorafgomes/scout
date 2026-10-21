@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Slack"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Slack chat adapter over Socket Mode: filters bot traffic, streams the reply by posting then updating one message."
@@ -65,7 +66,7 @@ The translator drops anything from a bot, from this app, or with a `bot_message`
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Slack.Tests` (54 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle, DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
+`tests/Scout.Adapter.Slack.Tests` (56 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle, DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
 
 ## Related
 

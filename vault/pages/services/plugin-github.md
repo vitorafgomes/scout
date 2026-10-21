@@ -1,8 +1,9 @@
 ---
 title: "Plugin.GitHub"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; self-gates off when no token is configured."
@@ -59,7 +60,7 @@ Every function catches `GitHubApiException`, `HttpRequestException` and `Operati
 ## Hot spots
 
 - `src/Scout.Plugin.GitHub/GitHubClient.cs:169`: maps 401, 403 (rate limit) and 404 to user-facing errors.
-- `src/Scout.Plugin.GitHub/GitHubOptions.cs:11`: comment says read-only scopes suffice, while the control plane asks for `repo` (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:23`).
+- `src/Scout.Plugin.GitHub/GitHubOptions.cs:11`: comment says read-only scopes suffice, while the control plane asks for `repo` and `read:org` (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:26`) and lists "Create issues" in its scope matrix (`:51`) although this plugin has no issue-creating function.
 
 ## Testing footprint
 
