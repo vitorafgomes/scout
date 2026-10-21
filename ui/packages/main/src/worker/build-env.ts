@@ -1,7 +1,7 @@
-import { VaultUnavailableError } from '@scout/shared';
+import { VaultUnavailableError, type VaultKey } from '@scout/shared';
 
 export interface BuildEnvDeps {
-  vaultGet: (key: string) => Promise<string | null>;
+  vaultGet: (key: VaultKey) => Promise<string | null>;
 }
 
 // Assembles the environment variables passed to Scout.Host.Console at spawn
