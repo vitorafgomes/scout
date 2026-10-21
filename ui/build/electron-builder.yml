@@ -5,7 +5,7 @@ appId: com.scout.desktop
 productName: Scout Desktop
 copyright: Scout OSS contributors
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-electronVersion: "41.3.0"
+electronVersion: "45.0.0"
 
 extraMetadata:
   main: packages/main/dist/main.js

@@ -1,8 +1,8 @@
 ---
 title: "Adapter.Slack"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+changes: "SlackNet 0.19.0: stop awaits the Socket Mode disconnect under the shutdown token; dispose always releases the socket client"
 page_type: service
 status: active
 description: "Slack chat adapter over Socket Mode: filters bot traffic, streams the reply by posting then updating one message."
@@ -31,7 +31,7 @@ Owns the Socket Mode connection, message filtering and the response sink. Does n
 - **Entry point:** `AddSlackAdapter(IServiceCollection, IConfiguration)` at `src/Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:20`; registers nothing unless both tokens are set (`:32`).
 - **Key types:** `SlackChatAdapter : IChatAdapter` (`src/Scout.Adapter.Slack/SlackChatAdapter.cs:18`), `SlackMessageTranslator` (`src/Scout.Adapter.Slack/SlackMessageTranslator.cs:13`), `SlackResponseSink : IResponseSink` (`src/Scout.Adapter.Slack/Streaming/SlackResponseSink.cs:34`), `SlackMessageHandle` (`src/Scout.Adapter.Slack/Streaming/SlackMessageHandle.cs:10`), `SlackOptions` (`src/Scout.Adapter.Slack/SlackOptions.cs:8`).
 - **Configuration keys:** `Scout:Adapters:Slack` with `BotToken`, `AppLevelToken` (`src/Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:18`).
-- **External boundaries:** SlackNet service builder and Socket Mode client (`src/Scout.Adapter.Slack/SlackChatAdapter.cs:63`, `:112`); writes are `Chat.PostMessage` (`src/Scout.Adapter.Slack/Streaming/SlackResponseSink.cs:84`) and `Chat.Update` (`:96`). Body capped at 3000 characters (`:38`).
+- **External boundaries:** SlackNet service builder and Socket Mode client (`src/Scout.Adapter.Slack/SlackChatAdapter.cs:63`, `:112`), on SlackNet 0.19.0; `StopAsync` awaits `DisconnectAsync`, bounded by the caller's cancellation token (`:125`), and lets its fault propagate; `DisposeAsync` disposes the lifecycle and awaits the socket client's `DisposeAsync` even when stop throws (`:128`); writes are `Chat.PostMessage` (`src/Scout.Adapter.Slack/Streaming/SlackResponseSink.cs:84`) and `Chat.Update` (`:96`). Body capped at 3000 characters (`:38`).
 
 ## How it works
 
@@ -60,13 +60,13 @@ The translator drops anything from a bot, from this app, or with a `bot_message`
 
 ## Hot spots
 
-- `src/Scout.Adapter.Slack/SlackChatAdapter.cs:192`: projection of the SlackNet event into `InboundSlackMessage`.
+- `src/Scout.Adapter.Slack/SlackChatAdapter.cs:198`: projection of the SlackNet event into `InboundSlackMessage`.
 - `src/Scout.Adapter.Slack/Streaming/SlackResponseSink.cs:261`: truncation budget with cursor glyph and citation footer.
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Slack.Tests` (54 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle, DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
+`tests/Scout.Adapter.Slack.Tests` (58 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle (stop awaits the Socket Mode disconnect, returns on cancellation if it never completes, and surfaces its fault; dispose still disposes the socket client when stop faults), DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
 
 ## Related
 
-Direct project references: [[pages/services/conversation]]. Referenced by [[pages/services/host-console]]. Map: [[pages/architecture/project-map]].
+Direct project references: [[pages/services/conversation]]. Referenced by [[pages/services/host-console]]. Map: [[pages/architecture/project-map]]. Dated changes: [[pages/history/adapter-slack]].

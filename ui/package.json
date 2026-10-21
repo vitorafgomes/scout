@@ -26,11 +26,13 @@
     "dist:mac": "bun run package:all && electron-builder --config build/electron-builder.yml --mac",
     "dist:win": "bun run package:all && electron-builder --config build/electron-builder.yml --win"
   },
+  "overrides": {
+    "@jridgewell/sourcemap-codec": "^1.6.0"
+  },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "electron-builder": "^26.18.0",
     "eslint": "^10.13.0",
-    "js-yaml": "^4.3.2",
+    "js-yaml": "^5.5.0",
     "prettier": "^3.9.10",
     "typescript-eslint": "^8.72.0"
   }

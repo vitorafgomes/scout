@@ -115,3 +115,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Roadmap
 
 - [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
+
+## History
+
+- [[pages/history/adapter-slack|Adapter Slack history]] - Dated changes to the Slack adapter: the SlackNet 0.19 move to an awaited, token-bounded DisconnectAsync.

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 const CONFIG_PATH = join(import.meta.dirname, '../../../build/electron-builder.yml');
 
@@ -28,6 +29,7 @@ interface ExtraResource {
 
 interface BuilderConfig {
   appId: string;
+  electronVersion: string;
   productName: string;
   asar: boolean;
   asarUnpack: string[];
@@ -51,7 +53,10 @@ interface BuilderConfig {
 }
 
 const raw = readFileSync(CONFIG_PATH, 'utf8');
-const config = yaml.load(raw) as BuilderConfig;
+const config = load(raw) as BuilderConfig;
+const installedElectron = JSON.parse(
+  readFileSync(createRequire(import.meta.url).resolve('electron/package.json'), 'utf8'),
+) as { version: string };
 
 describe('electron-builder.yml', () => {
   it('appId is com.scout.desktop', () => {
@@ -60,6 +65,10 @@ describe('electron-builder.yml', () => {
 
   it('productName is Scout Desktop', () => {
     expect(config.productName).toBe('Scout Desktop');
+  });
+
+  it('electronVersion packages the same Electron the app is built and tested against', () => {
+    expect(config.electronVersion).toBe(installedElectron.version);
   });
 
   it('asar is enabled', () => {
