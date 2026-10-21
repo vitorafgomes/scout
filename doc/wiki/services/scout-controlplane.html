@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.ControlPlane &amp; Contracts — Scout Wiki</title>
+<meta name="description" content="Scout.ControlPlane service page: the provider, feature, credential and runtime-config domain services behind the gRPC control-plane contracts.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Scout.ControlPlane</nav>
+
+    <section>
+      <h1>Scout.ControlPlane &amp; Contracts</h1>
+      <p class="blockquote">The transport-agnostic control-plane domain: provider lifecycle, feature catalog, credential storage and runtime config — exposed to the desktop UI through three gRPC contracts whose <code>.proto</code> files are the single source of truth.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.ControlPlane/</code>, <code>src/Scout.ControlPlane.Contracts/</code>; ADR 0010, 0011</span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        <strong>Scout.ControlPlane</strong> holds the domain logic that powers the desktop control panel:
+        which local runtimes exist and how to start/stop them, which features Scout offers and how to
+        configure their credentials, and where the per-feature and per-runtime preferences live on disk.
+        Each operation is a plain async method on a domain facade with no HTTP or gRPC shell baked in.
+      </p>
+      <p>
+        <strong>Scout.ControlPlane.Contracts</strong> is the wire boundary. It carries three <code>.proto</code>
+        files — <code>providers.proto</code>, <code>models.proto</code> and <code>features.proto</code> — compiled
+        with <code>Grpc.Tools</code> to <code>GrpcServices="Both"</code> so the host gets server stubs and the
+        in-process test client gets matching client stubs from one definition. The gRPC services in
+        <a href="../services/scout-host-controlplane.html">Scout.Host.ControlPlane</a> are thin adapters that
+        map these wire messages onto the domain facades; the facades themselves know nothing about gRPC.
+      </p>
+      <p>
+        It does <strong>not</strong> own the transport (UDS / named pipe binding, the per-session token
+        interceptor and Kestrel wiring live in the host per <a href="../decisions/0011-backend-frontend-grpc-uds.html">ADR&nbsp;0011</a>),
+        and it does <strong>not</strong> own the live Semantic Kernel — feature activation is delegated to an
+        injected <code>IFeatureActivator</code> so the kernel reference stays in the host
+        (<a href="../decisions/0010-scout-host-kernel-accessor.html">ADR&nbsp;0010</a>).
+      </p>
+
+      <h2>Public contract</h2>
+      <p class="field-label">Domain facades (Scout.ControlPlane)</p>
+      <ul class="body-list">
+        <li><strong><code>ProvidersService</code></strong> — list/status, <code>Start</code>/<code>Stop</code>/<code>Restart</code>, autostart toggle, a status <code>WatchAsync</code> stream, and model pull/list/delete. Ollama is fully wired; LM Studio is a fixed stub whose lifecycle calls throw <code>ProviderLifecycleUnsupportedException</code>.</li>
+        <li><strong><code>FeaturesService</code></strong> — <code>ListAsync</code>, <code>SetCredentialsAsync</code>, <code>SetupAsync</code>, <code>DeleteCredentialsAsync</code>, <code>EnableAsync</code>, <code>DisableAsync</code>. Each returns a merged <code>FeatureSnapshot</code> built from catalog metadata + persisted state + credential presence.</li>
+        <li><strong><code>AddControlPlaneDomain(services, configuration)</code></strong> — the composition root: binds the options, registers the Ollama stack, and registers the feature stack with in-memory credential store and null activator as overridable defaults.</li>
+      </ul>
+      <p class="field-label">gRPC services (Scout.ControlPlane.Contracts)</p>
+      <ul class="body-list">
+        <li><strong><code>Providers</code></strong> — <code>ListProviders</code>, <code>GetProviderStatus</code>, <code>StartProvider</code>, <code>StopProvider</code>, <code>RestartProvider</code>, <code>SetAutostart</code>, and the server-streaming <code>WatchProviderStatus</code>.</li>
+        <li><strong><code>Models</code></strong> — server-streaming <code>PullModel</code> (replaces the old SSE pull-progress endpoint), plus <code>DeleteModel</code> and <code>ListModels</code>.</li>
+        <li><strong><code>Features</code></strong> — <code>ListFeatures</code>, <code>SetCredentials</code>, <code>Setup</code>, <code>DeleteCredentials</code>, <code>Enable</code>, <code>Disable</code>; all return the merged <code>Feature</code> message.</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">ProvidersService</div><div class="t-role">Domain facade over provider operations. Dispatches on the provider id; LM Studio is a stub. <code>WatchAsync</code> yields a status snapshot every 2&nbsp;seconds until cancelled.</div></div>
+        <div class="type-row"><div class="t-name">OllamaProviderService</div><div class="t-role">Composes binary locator, HTTP API client, process launcher, runtime registry, readiness probe and config store into the live Ollama status + start/stop/restart lifecycle. Scrubs the control-plane session token from the spawned daemon's environment.</div></div>
+        <div class="type-row"><div class="t-name">FeaturesService</div><div class="t-role">Validates and persists credentials/settings, enable/disable activation, and the merged-snapshot build. Validates the whole setup body before any write so a bad request never leaves a half-configured feature.</div></div>
+        <div class="type-row"><div class="t-name">FeatureCatalog</div><div class="t-role">Hard-coded catalog of two features (<code>github</code>, <code>kubernetes</code>) with credential fields, settings fields, scope matrix and setup steps. Single source of truth for both runtime logic and the UI snapshot.</div></div>
+        <div class="type-row"><div class="t-name">ICredentialStore</div><div class="t-role">Opaque secret store abstraction. <strong>Current behaviour:</strong> the only implementation shipped is <code>InMemoryCredentialStore</code>, so feature credentials (GitHub PAT, kubeconfig) live in the worker process's memory only — they are <strong>not</strong> written to any OS keyring, are lost on restart, and must be re-entered. When no durable backend is reachable the store reports <code>IsAvailable=false</code> and <code>StoreAsync</code> returns false, so <code>FeaturesService</code> fails closed (throws <code>FeaturePersistFailedException</code>) instead of reporting a false success. A real OS-keyring / Electron <code>safeStorage</code> backend (libsecret / Keychain / Windows Credential Manager) is a planned follow-up.</div></div>
+        <div class="type-row"><div class="t-name">IFeatureStateStore</div><div class="t-role">Persists per-feature enabled / last-error / settings state. <code>JsonFileFeatureStateStore</code> writes via temp file + atomic move and serialises concurrent writers behind a semaphore.</div></div>
+        <div class="type-row"><div class="t-name">IFeatureActivator</div><div class="t-role">Attach/detach surface for a feature's kernel plugin. <code>NullFeatureActivator</code> reports <code>CanActivate=false</code> so enable returns not-yet-implemented until the host supplies a real activator.</div></div>
+        <div class="type-row"><div class="t-name">FeatureSnapshot / Feature</div><div class="t-role">Merged catalog + state + credential-presence view; the gRPC adapter maps the domain <code>FeatureSnapshot</code> onto the wire <code>Feature</code> message.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> — credentials are held in process memory through <code>ICredentialStore</code> (in-memory only today; durable OS-keyring backing is a planned follow-up) and are never persisted to disk; only the non-secret settings dictionary lands in the JSON state file.</li>
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — every catalog feature is declared <code>WriteClass.None</code>; even GitHub issue creation is classified as a descriptive write in the scope matrix.</li>
+        <li><a href="../invariants/local-first-default.html">Local-First Default</a> — the provider stack manages local Ollama (and stubs LM Studio) so contributors run Scout without any paid provider.</li>
+        <li><a href="../invariants/streaming-first.html">Streaming-First</a> — long-running flows (model pull, status watch) are server-streaming RPCs rather than polled request/response.</li>
+        <li><a href="../invariants/pluggable-everything.html">Pluggable Everything</a> — credential store and feature activator are registered with <code>TryAddSingleton</code> so the host overrides the in-memory / null defaults.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>FeaturesService.cs:97</code> — <code>SetupAsync</code>: collects every credential and settings validation error first and throws a single <code>FeatureValidationFailedException</code> before any persistence, so a bad body never half-writes a feature.</li>
+        <li><code>FeaturesService.cs:186</code> — credential persistence wraps non-cancellation, non-persist exceptions into <code>FeaturePersistFailedException</code>; per-key idempotent writes leave a re-runnable state if a later step fails.</li>
+        <li><code>FeaturesService.cs:245</code> — <code>EnableAsync</code>: requires the keyring to hold every required credential and the activator to report <code>CanActivate</code>; an activation failure stores <code>LastError</code> and re-throws.</li>
+        <li><code>FeaturesService.cs:386</code> — credential keys are namespaced as <code>scout/&lt;featureId&gt;/&lt;fieldKey&gt;</code> in the store.</li>
+        <li><code>ProvidersService.cs:97</code> — <code>WatchAsync</code>: server-stream loop that re-snapshots status on a 2-second interval and yields cleanly on cancellation.</li>
+        <li><code>ProvidersService.cs:163</code> — <code>LmStudioStub</code>: the fixed not-installed snapshot returned for the unmanaged LM Studio provider.</li>
+        <li><code>OllamaProviderService.cs:199</code> — the spawned daemon's environment removes <code>SCOUT_CONTROLPLANE_TOKEN</code> so the session token is never inherited (and thus not visible via <code>/proc/&lt;pid&gt;/environ</code>).</li>
+        <li><code>OllamaProviderService.cs:255</code> — <code>StopCoreAsync</code>: refuses to kill an externally-started daemon Scout does not own, returning a <code>providers/externally-managed</code> error instead of a name-globbed kill.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Used by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-host-controlplane.html">Scout.Host.ControlPlane</a>
+        <a class="dep" href="../architecture/desktop-ui.html">Desktop Provisioning UI</a>
+      </div>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <span class="dep">Google.Protobuf</span>
+        <span class="dep">Grpc.AspNetCore</span>
+        <span class="dep">Grpc.Tools</span>
+        <span class="dep">Microsoft.Extensions.Options</span>
+        <span class="dep">OS keyring (libsecret / Keychain / Credential Manager)</span>
+      </div>
+      <p>
+        The dependency on the live Semantic Kernel is deliberately inverted: rather than referencing
+        <a href="../services/scout-llm.html">Scout.Llm</a> or a kernel directly, the domain takes an
+        <code>IFeatureActivator</code> the host fulfils (see <a href="../decisions/0010-scout-host-kernel-accessor.html">ADR&nbsp;0010</a>).
+      </p>
+
+      <h2>Configuration</h2>
+      <p>All keys live under <code>Scout:</code>. The Ollama options block is validated on start; the two store paths fall back to <code>%LocalAppData%/Scout/</code> when unset.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Providers"</span>: {
+    <span class="k">"Ollama"</span>: {
+      <span class="k">"Endpoint"</span>: <span class="s">"http://localhost:11434"</span>,
+      <span class="k">"PingTimeout"</span>: <span class="s">"00:00:02"</span>,
+      <span class="k">"StartTimeout"</span>: <span class="s">"00:00:30"</span>,
+      <span class="k">"WarmupBudget"</span>: <span class="s">"00:00:05"</span>
+    }
+  },
+  <span class="k">"LocalRuntime"</span>: {
+    <span class="k">"Config"</span>: { <span class="k">"FilePath"</span>: <span class="s">null</span> }
+  },
+  <span class="k">"Features"</span>: {
+    <span class="k">"StateStore"</span>: { <span class="k">"FilePath"</span>: <span class="s">null</span> }
+  }
+}</pre>
+      <ul class="body-list">
+        <li><code>Scout:Providers:Ollama</code> — endpoint and the readiness/start timeouts; bound with <code>ValidateOnStart()</code>. The HTTP client uses <code>Timeout.InfiniteTimeSpan</code> so long model-pull streams are not capped; short ops apply their own bounded token.</li>
+        <li><code>Scout:LocalRuntime:Config</code> — path of the runtime preference file (autostart flag); default <code>%LocalAppData%/Scout/local-runtimes.json</code>, autostart defaults to <code>true</code>.</li>
+        <li><code>Scout:Features:StateStore</code> — path of the feature state file; default <code>%LocalAppData%/Scout/features.json</code>.</li>
+      </ul>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li><code>tests/Scout.ControlPlane.Tests/Features/FeaturesServiceTests.cs</code> and <code>Providers/ProvidersServiceTests.cs</code> cover the domain facades: validation, credential/settings persistence, enable/disable, snapshot status resolution, provider dispatch and the LM Studio unsupported-lifecycle paths. <code>Providers/OllamaProviderServiceTests.cs</code> drives the lifecycle through stub locator/launcher/API harnesses.</li>
+        <li><code>Integration/ControlPlaneBoundaryTests.cs</code> are the production-readiness failure-injection tests for the gRPC-over-UDS boundary — backend not listening, host disappears mid-stream, token rejected — each call bounded by a deadline so a hang fails fast. Companion <code>Integration/ControlPlaneUdsIntegrationTests.cs</code> and <code>Transport/</code> / <code>Security/</code> suites exercise the host-side transport and per-session token interceptor.</li>
+        <li>All assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a>, satisfying the boundary-failure bar in <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-host-controlplane.html"><span class="rt">service</span>Scout.Host.ControlPlane</a>
+          <a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="rt">adr</span>0011 Backend/Frontend gRPC</a>
+          <a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="rt">adr</span>0010 Host Kernel Accessor</a>
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../invariants/secrets-never-committed.html"><span class="rt">invariant</span>Secrets Never Committed</a>
+          <a href="../services/scout-plugin-github.html"><span class="rt">service</span>Scout.Plugin.GitHub</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

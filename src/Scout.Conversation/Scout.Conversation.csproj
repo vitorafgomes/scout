@@ -13,6 +13,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Scout.Contracts\Scout.Contracts.csproj" />
     <ProjectReference Include="..\Scout.Llm\Scout.Llm.csproj" />
     <ProjectReference Include="..\Scout.Skills\Scout.Skills.csproj" />
   </ItemGroup>

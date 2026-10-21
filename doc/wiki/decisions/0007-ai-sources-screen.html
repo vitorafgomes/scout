@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0007 — AI Sources Screen — Scout Wiki</title>
+<meta name="description" content="ADR 0007: a dedicated AI Sources screen that surfaces local inference runtimes, gates Manage Downloaded Models, and stakes out disabled cloud provider slots.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0007</nav>
+
+    <section>
+      <h1>ADR 0007 — AI Sources Screen</h1>
+      <p class="blockquote">Add a dedicated <strong>AI Sources</strong> screen at <code>/sources</code> that surfaces local inference runtimes, gates a single entry point to manage downloaded models, and stakes out disabled cloud-provider card slots — without committing to credential handling yet.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-16</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-05-16-ai-sources-screen.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li>Accepted — 2026-05-16. Connection-badge semantics for Ollama / LM Studio were reverted the same day from a models-count check back to a daemon-reachability check.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        The <a href="../decisions/0006-models-screen-task-based.html">Models screen</a> is organised around
+        <strong>tasks</strong> — Transcription, Analysis, Translation — and assumes a model has already been
+        downloaded somewhere. It does not surface the lower layer: <em>where models live</em>, whether a local
+        runtime is installed at all, and where the user will plug in cloud credentials in the future.
+      </p>
+      <p>A separate top-level screen is needed to:</p>
+      <ul class="body-list">
+        <li>Detect and surface the state of local inference runtimes (Ollama, LM Studio).</li>
+        <li>Provide a single entry point to "Manage Downloaded Models".</li>
+        <li>Stake out card slots for future cloud providers (ChatGPT Plus, OpenAI API, Google Gemini, OpenRouter, Custom API) without committing to credential handling yet.</li>
+      </ul>
+      <p>
+        The reference UX comes from competitor desktop apps that use a similar "AI Providers" pane. Scout's
+        variant is named <strong>AI Sources</strong> to avoid the direct name collision and to imply "where do
+        models come from" more neutrally.
+      </p>
+
+      <h2>Decision</h2>
+
+      <p class="field-label">Routing and navigation</p>
+      <ul class="body-list">
+        <li>A new route <code>/sources</code> renders <code>SourcesComponent</code>, with a new side-nav item <strong>"AI Sources"</strong> placed <strong>above Models</strong> in <code>PostConnectShellComponent</code>. The remaining nav items (Models, Status, Logs, Settings) keep their existing order.</li>
+        <li>Tradeoff: one extra left-rail entry buys a clear separation between "connections" (Sources) and "task selection" (Models).</li>
+      </ul>
+
+      <p class="field-label">Layout</p>
+      <ul class="body-list">
+        <li>A single page with a <strong>filter chip group</strong> (All / Local / Cloud) in the top-right and <strong>two sections</strong>: "Local &amp; On-Device" (3 cards) and "Cloud APIs" (5 cards).</li>
+        <li>The filter toggles section visibility via a <code>signal&lt;FilterKind&gt;</code>. No virtualised grid — eight cards is the natural ceiling; more would force a redesign.</li>
+        <li>Cards are data-driven from <code>localCards</code> / <code>cloudCards</code> arrays in the component. Each <code>CardModel</code> declares <code>id</code>, <code>kind</code>, <code>title</code>, <code>description</code>, <code>iconPath</code>, <code>primaryAction</code>, an optional secondary link, <code>primaryIsScan</code>, and <code>disabled</code>. Card variations become an interface bump rather than a forked component.</li>
+      </ul>
+
+      <p class="field-label">Connection badge semantics</p>
+      <div class="callout good">
+        <strong>Ollama / LM Studio</strong> — the badge reads <code>Connected</code> when the IPC scan
+        (<code>llmListOllamaModels</code> / <code>llmListLmStudioModels</code>) returns 200, regardless of how
+        many models the user has pulled. A reachable daemon counts as installed.
+      </div>
+      <div class="callout warn">
+        <strong>Local Models</strong> (the wrapper card for locally-managed Whisper + LLM models) — the badge
+        reads <code>Connected</code> only when a local runtime is reachable <em>and</em>
+        <code>LocalModelsStore.selected</code> has a value for at least one kind. "Connected" therefore means
+        the user has something usable, not just an installed daemon. Tradeoff: both checks must be true, which
+        can confuse a user who installed Ollama but has not yet picked a model; the "Manage" button gating
+        below mitigates this.
+      </div>
+      <div class="callout danger">
+        <strong>Cloud cards</strong> — always <code>Not Connected</code> in this iteration.
+      </div>
+      <p>
+        The first version coupled the runtime badge to <code>models.length &gt; 0</code> and confused users who
+        had a fresh install with zero models; this was reverted on 2026-05-16 back to daemon reachability.
+      </p>
+
+      <p class="field-label">"Manage Downloaded Models" gating</p>
+      <ul class="body-list">
+        <li>Enabled iff Ollama or LM Studio is reachable (<code>runtimeReachable</code> computed). Clicking navigates to <code>/sources/local-models</code>, the screen built in <a href="../decisions/0008-local-models-real-downloads.html">ADR 0008</a>.</li>
+        <li>When disabled, the tooltip reads "Install Ollama or LM Studio to manage downloaded models."</li>
+        <li>The button is enabled even when no model is downloaded — intentional, since the screen behind it is precisely where the user goes to download one.</li>
+      </ul>
+
+      <p class="field-label">Initial scans and external links</p>
+      <ul class="body-list">
+        <li><strong>Initial scans on mount:</strong> <code>ngOnInit</code> fires <code>onScan('ollama')</code> and <code>onScan('lm-studio')</code> in parallel; a scan re-runs on the user's explicit click. Cost: one extra HTTP request per supported runtime at app open — acceptable for two endpoints.</li>
+        <li><strong>External links</strong> ("Download Ollama", "Download LM Studio") render as buttons (not <code>&lt;a&gt;</code>) and route through <code>bridge.appOpenExternal({ url })</code>. Under the renderer's CSP the renderer cannot navigate to arbitrary URLs; the main process is the only place allowed to call <code>shell.openExternal</code>, and the URL allow-list lives there. Cost: one extra IPC hop per click.</li>
+      </ul>
+
+      <p class="field-label">Cloud card slots (visual only)</p>
+      <div class="callout danger">
+        ChatGPT Plus, OpenAI API, Google Gemini, OpenRouter, and Custom API all render with the same visual
+        treatment but carry <code>disabled: true</code> on their primary actions, with a "Coming soon" tooltip.
+        Each card uses the icon and description copy verbatim from the reference UX; wiring real auth flows
+        requires per-provider work that is out of scope for this ADR.
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li>Clear separation of concerns: Sources answers "where do models come from / is a runtime installed", Models answers "which model runs each task".</li>
+        <li>Daemon-reachability badges give honest feedback to fresh installs with zero models pulled.</li>
+        <li>New card variants are an interface change to <code>CardModel</code>, not a new component, keeping the grid uniform.</li>
+        <li>Cloud providers have reserved, visible slots, signalling the roadmap without shipping half-built auth.</li>
+        <li>External navigation goes through the main-process allow-list, respecting the renderer CSP.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li>One more left-rail entry to scan for the user.</li>
+        <li>The Local Models badge needs two conditions to be true, which can read as "disconnected" to a user who installed a runtime but has not selected a model.</li>
+        <li>Two extra HTTP scan requests fire on every app open.</li>
+        <li>One extra IPC hop per external-link click.</li>
+      </ul>
+
+      <h2>Deferrals</h2>
+      <ul class="body-list">
+        <li><strong>LM Studio scan retrying</strong> — the scan runs once on mount and once on explicit click; no automatic re-scan on focus or after a delay.</li>
+        <li><strong>Cloud provider wiring</strong> — API-key storage, OAuth for ChatGPT Plus, and endpoint validation for Custom API stay out of scope; all five cloud cards remain disabled until per-provider ADRs land.</li>
+        <li><strong>Filter persistence</strong> — the filter selection is not persisted across app restarts; it defaults to "All".</li>
+      </ul>
+
+      <h2>Open questions</h2>
+      <ul class="body-list">
+        <li>Should the LM Studio scan be allowed when Ollama is <em>also</em> reachable? Today both run in parallel and the badges are independent. If a user has both up but only wants one, this is visual noise but causes no functional issue.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../decisions/0006-models-screen-task-based.html"><span class="rt">adr</span>0006 Models Screen</a>
+          <a href="../decisions/0008-local-models-real-downloads.html"><span class="rt">adr</span>0008 Local Model Downloads</a>
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../domain/provider.html"><span class="rt">domain</span>LLM Provider</a>
+          <a href="../invariants/local-first-default.html"><span class="rt">invariant</span>Local-First Default</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversation Memory Fix — Scout Wiki</title>
+<meta name="description" content="Historical record of the development-time fix that gave Scout bounded per-conversation memory and grounded its agent on the configured project.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">History</a><span class="sep">/</span>Conversation Memory Fix</nav>
+
+    <section>
+      <h1>Conversation Memory Fix</h1>
+      <p class="blockquote">A development-time fix: Scout forgot everything between turns and parroted a stale example project name, so we gave it bounded per-conversation memory and grounded the agent on the projects it is actually configured to search.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">reference</span>
+        <span class="m"><span class="lbl">status</span><span class="stag archived">archived</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-30</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/conversation-memory-fix-PLAN.md</code></span>
+      </div>
+
+      <div class="callout">
+        <strong>Historical record.</strong> This page documents a fix that was planned and executed against
+        the <code>feat/project-knowledge</code> branch on 2026-05-30. It is kept for traceability; the behaviour
+        it describes is now the baseline. See <a href="../services/scout-conversation.html">Scout.Conversation</a>
+        for the current shape.
+      </div>
+
+      <h2>What changed</h2>
+      <p>
+        The fix landed as three atomic commits and split cleanly into two independent problems: a grounding
+        hotfix in Scout.Knowledge, and per-conversation memory threaded through Scout.Llm and Scout.Conversation.
+      </p>
+
+      <div class="seq">
+        <div class="chain">
+          <span class="road-block">Commit 1 — grounding hotfix</span>
+          <span class="road-block">Commit 2 — history contract + gateway seeding</span>
+          <span class="road-block">Commit 3 — memory store + router wiring + write-back</span>
+        </div>
+      </div>
+
+      <h3>Commit 1 — ground the agent on configured projects</h3>
+      <ul class="body-list">
+        <li>The <code>[Description(...)]</code> attributes on the project parameter in <code>ProjectKnowledgePlugin</code> were neutralised so no concrete project name leaks into the tool schema the model sees.</li>
+        <li>The <code>e.g. "cegos-buddy"</code> example in the <code>ProjectsOptions</code> XML doc was removed (doc-only).</li>
+        <li><code>ProjectExpertAgentFactory</code> moved from a static <code>const Instructions</code> to a <code>BuildInstructions(configuredProjects)</code> form that appends the real configured project names into the agent's default instructions, with a graceful fallback to base instructions when the list is empty.</li>
+        <li><code>KnowledgeServiceCollectionExtensions</code> passes the already-bound configured names into the new factory overload — no new dependency edge.</li>
+      </ul>
+
+      <h3>Commit 2 — history contract and gateway seeding (behaviour-neutral)</h3>
+      <ul class="body-list">
+        <li>New <code>ConversationTurn</code> abstraction in Scout.Llm: a <code>ConversationRole</code> enum (<code>User</code>/<code>Assistant</code>) plus a <code>ConversationTurn(Role, Text)</code> record.</li>
+        <li><code>ChatRequest</code> gained a <code>History</code> property defaulting to empty — replayed oldest-first before the current user message; empty means single-turn, byte-identical to prior behaviour.</li>
+        <li><code>ChatGateway</code> replays prior turns on both paths: the direct path adds them after the system message and before the current user message; the agent path seeds a <code>ChatHistory</code> and constructs a <code>ChatHistoryAgentThread</code> from it, with a duplicate guard so the current user message is not seeded twice.</li>
+      </ul>
+
+      <h3>Commit 3 — bounded in-memory store, router wiring, atomic write-back</h3>
+      <ul class="body-list">
+        <li>New <code>ConversationMemoryOptions</code> under <code>Scout:Conversation:Memory</code> — <code>Enabled</code> (default true), <code>MaxTurns</code> (6 turn-pairs), <code>MaxReplayedChars</code> (8000, newest-first), <code>IdleTtl</code> (30 minutes).</li>
+        <li><code>IConversationKeyProvider</code> derives the conversation key as channel + user (<code>$"{ChannelId}{UserId}"</code>), isolating the policy in one place so it can evolve later without touching adapters.</li>
+        <li><code>InMemoryConversationMemoryStore</code> over a <code>ConcurrentDictionary</code>: a bounded <code>Load</code> (trimmed to <code>MaxTurns</code> and <code>MaxReplayedChars</code>, newest kept, oldest-first), an atomic pair <code>Append</code> with FIFO eviction, per-entry locking so same-key writes serialise while different keys never contend, an injected <code>TimeProvider</code>, and lazy TTL eviction on access. It is documented as in-process RAM only, not a durable write boundary.</li>
+        <li><code>LlmStreamingRouter</code> loads history at enumeration (preserving deferral), accumulates streamed tokens into a <code>StringBuilder</code> while forwarding them unchanged, and appends the user/assistant pair only after the stream completes cleanly with a non-empty reply.</li>
+      </ul>
+
+      <h2>Why</h2>
+      <p>
+        The deployed bot was effectively stateless. The pipeline ran adapter &rarr; <code>ConversationConductor</code>
+        &rarr; <code>LlmStreamingRouter</code> &rarr; <code>ChatGateway</code>, and the gateway built a fresh
+        <code>ChatHistory</code> (direct path) or <code>ChatHistoryAgentThread</code> (agent path) for every request.
+        <code>ChatRequest</code> carried no history at all, so context was discarded between turns.
+      </p>
+      <p>
+        A second, independent defect made the symptom worse: the project parameter's
+        <code>[Description(...)]</code> attribute included a concrete example — <code>cegos-buddy</code> — which is
+        serialised into the tool schema the model reads. The model parroted that example, while the project
+        Scout was actually configured to search (<code>messaging-explorer</code>, via <code>Scout:Projects:Items</code>)
+        was never injected into the agent's instructions.
+      </p>
+      <div class="callout">
+        <strong>Design constraints honoured.</strong> The conversation key is channel + user, so no
+        <code>ChatMessage</code> field changed and no adapter rippled. The memory store sits inside
+        Scout.Conversation over the Scout.Llm abstractions only — no edge into Scout.Knowledge or the kernel,
+        so the dependency graph stays cycle-safe by construction. Write-back is atomic and conditional on clean
+        stream completion, so a failed or cancelled stream never poisons history.
+      </div>
+
+      <h2>Outcome</h2>
+      <ul class="body-list">
+        <li><span class="check">Memory restored.</span> A turn-2 request now carries the turn-1 user/assistant pair in <code>ChatRequest.History</code>; the first turn starts empty.</li>
+        <li><span class="check">Grounding fixed.</span> The configured project name appears in the agent's rendered default persona, and the stale <code>cegos-buddy</code> example no longer reaches the model — a regression lock test asserts the description attributes never contain it.</li>
+        <li><span class="check">Behaviour-neutral until wired.</span> Commits 1 and 2 were verified byte-identical to the baseline where history is empty; only commit 3 turns memory on, gated by configuration.</li>
+        <li><span class="check">Streaming intact.</span> The router forwards every token unchanged while accumulating in parallel; the streaming-first <code>IAsyncEnumerable&lt;string&gt;</code> path is preserved.</li>
+        <li><span class="check">No poisoned history.</span> A failed stream leaves the store empty — verified by test — because the append only runs after a normal, non-empty completion.</li>
+      </ul>
+      <p>
+        Tests were written first (TDD) across Scout.Knowledge.Tests, Scout.Llm.Tests, and
+        Scout.Conversation.Tests, covering grounding regression, behaviour-neutral seeding, FIFO/char-budget/TTL
+        eviction, concurrent same-key append safety, cross-user isolation on a shared channel, and the
+        failed-stream no-poison guarantee. The composition-cycle and host-composition smoke tests stayed green.
+      </p>
+
+      <h2>Services affected</h2>
+      <div class="deps">
+        <a class="dep" href="../services/scout-knowledge.html">Scout.Knowledge</a>
+        <a class="dep" href="../services/scout-llm.html">Scout.Llm</a>
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+      </div>
+      <ul class="body-list">
+        <li><a href="../services/scout-knowledge.html">Scout.Knowledge</a> — grounding hotfix: plugin description neutralised, agent factory builds instructions from configured project names.</li>
+        <li><a href="../services/scout-llm.html">Scout.Llm</a> — new <code>ConversationTurn</code> abstraction, <code>ChatRequest.History</code>, and history replay in <code>ChatGateway</code> on both the direct and agent paths.</li>
+        <li><a href="../services/scout-conversation.html">Scout.Conversation</a> — memory options, key provider, in-memory store, and router wiring with atomic write-back.</li>
+      </ul>
+
+      <h2>Lessons</h2>
+      <ul class="body-list">
+        <li><strong>Tool descriptions are prompt surface.</strong> Parameter <code>[Description]</code> attributes are serialised into the schema the model reads; a throwaway example in a doc string became a behaviour the bot exhibited in production. Keep concrete names out of tool descriptions.</li>
+        <li><strong>Inject grounding where the data already lives.</strong> Baking configured project names into the agent's default instructions kept the fix inside Scout.Knowledge DI, where <code>ProjectsOptions</code> was already in scope — no cross-module edge, no DI cycle, no persona plumbing through the router.</li>
+        <li><strong>Make new state opt-in and behaviour-neutral first.</strong> Splitting the change so the history contract and gateway seeding were byte-identical to the baseline (empty history) let the risky store land last, behind a config flag.</li>
+        <li><strong>Write-back must be conditional.</strong> Persisting the turn pair only on clean stream completion means a failed or cancelled response can never corrupt the conversation, and the test for it was non-negotiable.</li>
+        <li><strong>Keep the memory boundary honest.</strong> The store is documented as in-process RAM, not a durable write boundary — a durable/persisted store was explicitly left out of scope to avoid introducing a new write boundary in this fix.</li>
+      </ul>
+
+      <h3>Explicitly out of scope</h3>
+      <ul class="body-list">
+        <li>A durable/persisted store (it would introduce a new write boundary).</li>
+        <li>Channel + thread group memory (would require a <code>ChatMessage.ThreadId</code> field and a three-adapter ripple).</li>
+        <li>The Capability Engine (a separate, then-stashed effort).</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../services/scout-knowledge.html"><span class="rt">service</span>Scout.Knowledge</a>
+          <a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="rt">adr</span>0013 Streaming Sink</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

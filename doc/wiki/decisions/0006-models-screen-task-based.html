@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0006 — Models Screen — Scout Wiki</title>
+<meta name="description" content="ADR 0006: restructure the Scout Desktop Models screen around tasks (Transcription / Analysis / Translation) instead of a single provider/model pair.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0006</nav>
+
+    <section>
+      <h1>ADR 0006 — Models Screen (Task-Based)</h1>
+      <p class="blockquote">Reframe the Scout Desktop Models screen around tasks — Transcription, Analysis, Translation — each with its own provider/model panel, instead of one global provider/model pair.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-15</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-05-15-models-screen-task-based.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li>Accepted 2026-05-15. Amended 2026-05-16 during implementation (see Amendments below).</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        The original <code>/llm</code> screen in Scout Desktop was single-purpose: it let the user pick one
+        Ollama model that the worker used to compose chat answers. The screen was titled "LLM", its top-level
+        radio group was "Provider" (Ollama / OpenAI / Azure), and the rest of the page was a single
+        endpoint + model picker.
+      </p>
+      <p>
+        That shape is too narrow for where Scout is heading. Scout needs to handle multiple model-driven tasks
+        beyond chat composition — at minimum speech-to-text (Whisper) for voice inputs, and likely translation
+        as a separate cross-cutting concern. Forcing all of that into a single "LLM" screen with one
+        provider/model pair is misleading: the chat-completion model that drives Analysis
+        (<code>llama3.x</code>, <code>qwen2.5</code>, …) is a different class of artifact from the STT model that
+        drives Transcription (Whisper Large v3, Whisper Large v3 Turbo).
+      </p>
+      <p>
+        The redesign reframes the screen around <strong>tasks</strong> rather than <strong>providers</strong>.
+        Each task gets its own panel with the providers and models appropriate for it. The provider/model pair
+        stops being a global selection and becomes per-task, and the screen is renamed accordingly.
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        The page UI is reframed as "Models". The side-nav label and route stay at <code>/llm</code> initially so
+        no router or bookmark breaks, and the title shown at the top of each panel is the active task name
+        (<code>Transcription</code>, <code>Analysis</code>, <code>Translation</code>), not the word "Models". The
+        top of the page becomes a <strong>segmented tab control</strong> with three tabs that replace the old
+        provider radio group: pick the task first, then the model.
+      </p>
+
+      <p class="field-label">Task panels</p>
+      <div class="callout good">
+        <strong>Transcription</strong> — one provider group, <strong>Local Whisper (On Device)</strong>, with two
+        selectable models: Whisper Large v3 and Whisper Large v3 Turbo. No remote Whisper option in this
+        iteration, preserving the local-first default. The panel surfaces a <strong>warning bar</strong> when the
+        worker is running ("Stop transcription to change the transcription model"), gated on the existing worker
+        supervisor state (<code>running</code>).
+      </div>
+      <div class="callout good">
+        <strong>Analysis</strong> — re-uses the current LLM flow verbatim: Ollama provider, endpoint input, model
+        dropdown populated from <code>/api/tags</code>, plus Refresh and Save buttons. No behaviour change beyond
+        being nested under a tab.
+      </div>
+      <div class="callout warn">
+        <strong>Translation</strong> — rendered but marked <strong>coming soon</strong>: a small badge on the tab,
+        a "Coming soon" message in the panel, and the tab is disabled. It surfaces roadmap intent without
+        committing to an adapter.
+      </div>
+
+      <p class="field-label">Persistence</p>
+      <p>
+        A <strong>second namespace</strong> is added to the vault for transcription settings
+        (<code>stt.provider</code>, <code>stt.model</code>). Existing <code>llm.*</code> keys keep their current
+        meaning and continue to drive Analysis. <code>LlmConfigStore</code> gains a sibling
+        <code>TranscriptionConfigStore</code> rather than being widened — two typed stores instead of one
+        polymorphic store, so touching transcription cannot break chat.
+      </p>
+
+      <p class="field-label">Scope boundary</p>
+      <div class="callout danger">
+        No backend changes are in this ADR's scope. Saving a transcription model writes to the vault, but the
+        worker is <strong>not</strong> yet wired to consume those keys. The worker continues to ignore STT
+        configuration until a follow-up ADR lands a Whisper adapter (<code>Scout.Stt.WhisperLocal</code> or
+        equivalent). The screen redesign ships independently of the STT adapter.
+      </div>
+
+      <p class="field-label">Invariant</p>
+      <p>
+        Transcription is <strong>read-only by definition</strong> — Whisper consumes audio and emits text, never
+        writing externally. No change to Scout's read-only invariant.
+      </p>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li>An obvious mental model — pick the task first, then the model — replaces a single misleading "LLM" provider radio group.</li>
+        <li>Per-task provider/model selection makes room for STT and Translation without overloading the chat-completion picker.</li>
+        <li>Two typed config stores give isolation: transcription changes cannot regress chat behaviour.</li>
+        <li>The screen redesign ships independently of the still-unbuilt Whisper worker adapter.</li>
+        <li>Roadmap intent (Translation) is visible in the UI without committing to an adapter.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li>Minor inconsistency between the route name (<code>/llm</code>) and the visible label ("Models") until a separate rename ADR lands.</li>
+        <li>One more component to maintain (the segmented tab control) plus visible-but-inert Translation UI.</li>
+        <li>Visual asymmetry between the card-based Transcription panel and the form-based Analysis panel.</li>
+        <li>A Save action on Transcription that has no runtime effect until the worker is wired up.</li>
+        <li>The warning-bar copy slightly overpromises while the worker does not yet own STT.</li>
+      </ul>
+
+      <h2>Amendments (2026-05-16)</h2>
+      <p>
+        The original draft kept Analysis backed by the legacy <code>LlmComponent</code> and the side-nav label at
+        "LLM". Both moved during implementation:
+      </p>
+      <ul class="body-list">
+        <li>The side-nav label was renamed to <strong>"Models"</strong> the same day, keeping the <code>/llm</code> route stable for bookmark compatibility. The page H1 reflects the active tab name as planned.</li>
+        <li><code>LlmComponent</code> is <strong>no longer mounted</strong> anywhere — the Analysis panel was rewritten to consume <code>LocalModelsStore</code> like Transcription. Selecting a model in Analysis now persists via that store, not via <code>LlmConfigStore</code> (now orphan code pending removal).</li>
+        <li>The "Manage Downloaded Models" path landed as <code>/sources/local-models</code> with a dedicated <code>LocalModelsComponent</code>. See <a href="../decisions/0007-ai-sources-screen.html">ADR 0007</a> and <a href="../decisions/0008-local-models-real-downloads.html">ADR 0008</a>.</li>
+        <li>The <code>stt.provider</code> / <code>stt.model</code> vault keys reserved by this ADR were never wired to the worker. Transcription selection state now lives in <code>LocalModelsStore.selected.transcription</code> (localStorage key <code>scout:local-models</code>). The <code>stt.*</code> keys remain in <code>VaultKey</code> but unused — a cleanup candidate once <code>TranscriptionConfigStore</code> is removed.</li>
+      </ul>
+
+      <h2>Deferrals</h2>
+      <ul class="body-list">
+        <li>Whisper inference on the .NET worker (Whisper.net binding around whisper.cpp). The model file is now downloaded in real time (see <a href="../decisions/0008-local-models-real-downloads.html">ADR 0008</a>), but the worker does not yet read it for transcription. Separate ADR + plan.</li>
+        <li>Translation task: provider choice, model list, language matrix, default behaviour. The tab stays disabled until that ADR.</li>
+        <li>Cloud Whisper providers (OpenAI Whisper API, Azure OpenAI Whisper).</li>
+        <li>Audio source pipeline. Whether Scout listens to Discord voice channels, ingests uploaded files, or both is a product decision that precedes the worker inference ADR.</li>
+      </ul>
+
+      <h2>Open questions</h2>
+      <ul class="body-list">
+        <li>Does the warning bar belong on every task panel, or only when the worker is actively using the model being edited? For now it is gated on <code>worker.state === 'running'</code> on Transcription only.</li>
+        <li>Should <code>LlmConfigStore</code> and <code>TranscriptionConfigStore</code> be removed entirely? Both are orphan code after the Analysis rewrite. Deferred to a cleanup PR.</li>
+      </ul>
+
+      <h2>Testing</h2>
+      <ul class="body-list">
+        <li>Current Vitest patterns are kept. New specs cover the tab component, the Transcription panel, and the <code>TranscriptionConfigStore</code> round-trip.</li>
+        <li>The existing <code>llm.component.spec.ts</code> keeps testing Analysis behaviour (asserting the right title) but is otherwise unchanged.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../decisions/0007-ai-sources-screen.html"><span class="rt">adr</span>0007 AI Sources Screen</a>
+          <a href="../decisions/0008-local-models-real-downloads.html"><span class="rt">adr</span>0008 Local Model Downloads</a>
+          <a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="rt">adr</span>0005 Desktop M1 Scope</a>
+          <a href="../runbooks/local-models.html"><span class="rt">runbook</span>Local Models</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

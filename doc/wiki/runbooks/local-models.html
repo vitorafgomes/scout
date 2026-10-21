@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local Models — Scout Wiki</title>
+<meta name="description" content="Runbook for the AI Sources / Models surface in Scout Desktop: file locations, Connected-badge logic, common Ollama and Whisper failure modes, and where to find error details.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Runbooks</a><span class="sep">/</span>Local Models</nav>
+
+    <section>
+      <h1>Local Models (Ollama)</h1>
+      <p class="blockquote">Run this when the AI Sources / Models surface in Scout Desktop misbehaves — a runtime will not connect, a download fails, or the UI and disk disagree about what is installed.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype runbook">runbook</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>05-operations/local-models-runbook.md</code></span>
+      </div>
+
+      <h2>When to run this</h2>
+      <p>
+        Reach for this runbook when working with the AI Sources / Models surface in the Scout Desktop app and
+        something is broken. Typical triggers:
+      </p>
+      <ul class="body-list">
+        <li>A <strong>Connected</strong> badge stays <em>Not Connected</em> even though Ollama or LM Studio is running.</li>
+        <li>An Ollama pull fails with a manifest or identity-key error, or with <code>model not found</code>.</li>
+        <li>A Whisper GGML download stalls or returns a 4xx.</li>
+        <li>The UI shows a model as downloaded but the file is not actually on disk (or vice-versa).</li>
+      </ul>
+      <p>
+        Background and rationale for this surface live in the two decisions
+        <a href="../decisions/0007-ai-sources-screen.html">0007 AI Sources Screen</a> and
+        <a href="../decisions/0008-local-models-real-downloads.html">0008 Local Model Downloads</a>; this page is the
+        "what do I do when X is broken" companion to those.
+      </p>
+
+      <h2>Preconditions</h2>
+      <ul class="check">
+        <li>You have Scout Desktop open and can reach its DevTools (<code>Ctrl+Shift+I</code> on Linux/Windows, <code>Cmd+Opt+I</code> on macOS).</li>
+        <li>A local runtime is installed: Ollama (HTTP API on <code>http://localhost:11434</code>) and/or LM Studio (<code>http://localhost:1234</code>).</li>
+        <li>You can open a host shell to run <code>curl</code>, <code>which</code>, and (for Ollama identity) <code>ssh-keygen</code>.</li>
+        <li>You know which OS the app runs on — Whisper model paths differ per platform (see the table below).</li>
+      </ul>
+
+      <h2>File locations</h2>
+      <p>Where state and artifacts live. Paths differ by OS for the Whisper store.</p>
+      <table class="wt">
+        <thead><tr><th>What</th><th>Path</th></tr></thead>
+        <tbody>
+          <tr><td>Ollama model store</td><td><code>~/.ollama/models/</code></td></tr>
+          <tr><td>Ollama identity (auto-generated)</td><td><code>~/.ollama/id_ed25519</code></td></tr>
+          <tr><td>Whisper GGML store (Linux)</td><td><code>~/.config/Scout Desktop/whisper-models/</code></td></tr>
+          <tr><td>Whisper GGML store (macOS)</td><td><code>~/Library/Application Support/Scout Desktop/whisper-models/</code></td></tr>
+          <tr><td>Whisper GGML store (Windows)</td><td><code>%APPDATA%\Scout Desktop\whisper-models\</code></td></tr>
+          <tr><td>Renderer state mirror</td><td><code>localStorage['scout:local-models']</code> (DevTools &rarr; Application &rarr; Local Storage)</td></tr>
+          <tr><td>Latest AppImage build</td><td><code>~/WorkSpace/scout/ui/build/dist/Scout Desktop-&lt;version&gt;-linux-x86_64.AppImage</code></td></tr>
+        </tbody>
+      </table>
+
+      <h2>How a Connected badge is computed</h2>
+      <p>Each card's <strong>Connected</strong> state is derived, not stored. Use this to reason about why a badge is or is not lit.</p>
+      <table class="wt">
+        <thead><tr><th>Card</th><th>Connected when</th></tr></thead>
+        <tbody>
+          <tr><td>Ollama</td><td><code>GET http://localhost:11434/api/tags</code> returns 2xx</td></tr>
+          <tr><td>LM Studio</td><td><code>GET http://localhost:1234/v1/models</code> returns 2xx</td></tr>
+          <tr><td>Local Models</td><td>Ollama <strong>or</strong> LM Studio is Connected <strong>and</strong> <code>LocalModelsStore.selected</code> has at least one non-null value</td></tr>
+          <tr><td>Cloud (all)</td><td>Always Not Connected (placeholder cards)</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        If a runtime is running but the badge stays Not Connected, the HTTP endpoint is not reachable from inside the
+        Electron sandbox. Confirm from a host shell with <code>curl http://localhost:11434/api/tags</code>.
+      </div>
+
+      <h2>Steps</h2>
+      <p>Pick the procedure that matches the symptom.</p>
+
+      <h3>1. Ollama pull fails: <code>open ~/.ollama/id_ed25519: no such file or directory</code></h3>
+      <p>
+        Ollama refuses to pull because its identity key has never been generated. <strong>The app handles this
+        automatically</strong> since the 2026-05-16 build: before the first pull, the main process runs
+        <code>ssh-keygen</code> to create the key.
+      </p>
+      <pre class="cfg"><span class="c"># what the app runs automatically before the first pull</span>
+ssh-keygen -t ed25519 -f ~/.ollama/id_ed25519 -N <span class="s">""</span> -q</pre>
+      <p>If this error still fires after the upgrade, work through these in order:</p>
+      <ol class="seq">
+        <li>Confirm <code>ssh-keygen</code> is on PATH — <code>which ssh-keygen</code> should resolve. If missing, install <code>openssh-client</code> (Linux) or rely on Windows 10+'s built-in OpenSSH.</li>
+        <li>Delete any half-written file at <code>~/.ollama/id_ed25519</code> — a zero-byte file can confuse the existence check.</li>
+        <li>Re-launch the app and retry the download.</li>
+      </ol>
+
+      <h3>2. Ollama returns <code>model not found</code></h3>
+      <p>
+        The tag is not in the registry. Check the catalog &rarr; tag mapping in <code>local-models.component.ts</code>
+        against <a href="https://ollama.com/library">ollama.com/library</a>. A known prior correction:
+        <code>qwen-3-vl-2b</code> was originally mapped to <code>qwen2.5vl:3b</code> (non-existent) and now points to
+        <code>qwen2.5:3b</code>.
+      </p>
+
+      <h3>3. Whisper download stalls or returns a 4xx</h3>
+      <p>
+        The Hugging Face URL is hard-coded to <code>ggerganov/whisper.cpp/resolve/main/&lt;file&gt;.bin</code>. If
+        Hugging Face changes the path shape, this breaks — check the URL in
+        <code>packages/main/src/ipc/whisper.ts</code>. Hugging Face also throttles unauthenticated downloads
+        occasionally; in that case the user can simply retry.
+      </p>
+
+      <h3>4. UI shows a model as downloaded but disk does not (or vice-versa)</h3>
+      <p>The local store flag and the disk state can diverge if the user deleted the file outside the app, or an update changed the storage layout.</p>
+      <ul class="body-list">
+        <li><strong>Whisper:</strong> re-launch the app. <code>ngOnInit</code> calls <code>whisperListInstalled()</code>, which reconciles the store against the files actually on disk.</li>
+        <li><strong>Ollama:</strong> there is no automatic reconciliation today. Reset the renderer mirror by hand from the DevTools console, then redo the downloads from the UI.</li>
+      </ul>
+      <pre class="cfg"><span class="c"># DevTools console — reset the Ollama-side local store, then redo downloads</span>
+localStorage.setItem(<span class="s">'scout:local-models'</span>,
+  JSON.stringify({ downloaded: [], selected: { transcription: null, analysis: null } }))</pre>
+
+      <h3>5. Connected badge stays "Not Connected" after install</h3>
+      <p>
+        Symptom: the user installed Ollama or LM Studio <em>after</em> opening the app, and the badge does not refresh.
+        There is no automatic re-scan on focus or on an interval.
+      </p>
+      <ol class="seq">
+        <li>Click the <strong>Scan for X</strong> button on the affected card — that re-runs the endpoint probe.</li>
+        <li>If it still fails, confirm the endpoint from a host shell (<code>curl http://localhost:11434/api/tags</code>) per the callout above.</li>
+      </ol>
+
+      <h2>Where to find error details</h2>
+      <ol class="seq">
+        <li><strong>Per-row inline error</strong> — appears under the offending model row in the Manage Downloaded Models screen.</li>
+        <li><strong>Logs view</strong> (<code>/logs</code>) — every download failure also appends to <code>LogStore</code> via <code>appendDiagnostic</code>, so the verbatim error text (e.g. <code>pull model manifest: ...</code>) is searchable there alongside worker stdout/stderr.</li>
+        <li><strong>DevTools console</strong> — the main process logs through Electron's logger; renderer-side exceptions surface here too.</li>
+        <li><strong>AppImage stdout</strong> — if launched from a terminal, the main process logger writes structured logs to stderr.</li>
+      </ol>
+
+      <h2>Verification</h2>
+      <ul class="check">
+        <li>The relevant card shows <strong>Connected</strong>, or <code>curl http://localhost:11434/api/tags</code> (Ollama) / <code>curl http://localhost:1234/v1/models</code> (LM Studio) returns 2xx from a host shell.</li>
+        <li>The failed download retried from the UI completes and the model appears in the Manage Downloaded Models list.</li>
+        <li>For Whisper, the file exists under the OS-specific store and a re-launch (<code>whisperListInstalled()</code>) keeps it marked installed.</li>
+        <li>The Logs view (<code>/logs</code>) shows no new failure diagnostics after the retry.</li>
+      </ul>
+
+      <h2>Rollback</h2>
+      <p>
+        This runbook only re-syncs state and re-triggers downloads; it makes no irreversible change. If the manual
+        Ollama store reset in step 4 leaves things in a worse state, restore the prior value of
+        <code>localStorage['scout:local-models']</code> (DevTools &rarr; Application &rarr; Local Storage) or re-launch
+        the app and re-select models from the UI.
+      </p>
+
+      <h2>What this runbook does not cover</h2>
+      <ul class="body-list">
+        <li>Worker-side transcription / inference — not built yet.</li>
+        <li>Cloud provider authentication — not built yet.</li>
+        <li>Multi-user / multi-profile isolation — storage is per-OS-user.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../invariants/local-first-default.html"><span class="rt">invariant</span>Local-First Default</a>
+          <a href="../domain/provider.html"><span class="rt">domain</span>LLM Provider</a>
+          <a href="../decisions/0008-local-models-real-downloads.html"><span class="rt">adr</span>0008 Local Model Downloads</a>
+          <a href="../decisions/0007-ai-sources-screen.html"><span class="rt">adr</span>0007 AI Sources Screen</a>
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

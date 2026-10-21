@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local-First Default — Scout Wiki</title>
+<meta name="description" content="Scout invariant: the default LLM provider is Ollama, so a contributor can clone, build, and run Scout with no paid credentials and no cloud account.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Invariants</a><span class="sep">/</span>Local-First Default</nav>
+
+    <section>
+      <h1>Local-First Default</h1>
+      <p class="blockquote">A fresh clone must run end to end with no paid credentials: the default LLM provider is Ollama, talking to a local daemon, and no code path may make a paid cloud provider the out-of-the-box default.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype invariant">invariant</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Llm/Configuration/LlmOptions.cs</code>; README</span>
+      </div>
+
+      <h2>Why this exists</h2>
+      <p>
+        Scout is an open-source, read-only chatops assistant. The fastest way to lose a contributor is to
+        require an API key and a billed cloud account before the project will even start. Picking
+        <a href="https://ollama.com/" >Ollama</a> as the default provider means a clone, a build, and a single
+        <code>ollama serve</code> are enough to get a working chat loop on a developer laptop — no OpenAI key,
+        no Azure subscription, no per-token charges.
+      </p>
+      <p>
+        The principle is broader than one default string. It keeps the whole solution honest about the
+        <a href="../invariants/pluggable-everything.html">pluggable-everything</a> contract: if the local
+        provider works as a first-class citizen, then every cloud provider is genuinely interchangeable rather
+        than the privileged path. It also matches the wiki tagline — Scout is described as
+        <em>local-first</em> — and the README, which lists <code>Ollama</code> as the one provider marked
+        <em>(default)</em>.
+      </p>
+
+      <div class="callout">
+        Local-first is about the <em>default</em>, not a restriction. Any of the eight providers can be
+        selected by configuration. The invariant only guarantees that the zero-configuration path costs nothing
+        and reaches no external paid service.
+      </div>
+
+      <h2>Scope</h2>
+      <p class="field-label">Applies to</p>
+      <ul class="body-list">
+        <li>The default value of <code>LlmOptions.Provider</code> and the fallback used when the configuration key is blank.</li>
+        <li>The default chat and embedding model identifiers and the default Ollama endpoint — all of which must point at a local daemon out of the box.</li>
+        <li>The committed <code>appsettings.json</code> shipped in the repository: it must default to the local provider, never to a credentialed cloud block.</li>
+      </ul>
+      <p class="field-label">Does not cover</p>
+      <ul class="body-list">
+        <li>What a deployed operator chooses at runtime. Overriding <code>Scout:Llm:Provider</code> to a cloud provider is fully supported and expected in production.</li>
+        <li>Whether a contributor has actually installed and started Ollama — that is a setup prerequisite documented in the README and the <a href="../runbooks/local-models.html">Local Models</a> runbook, not something the code can enforce.</li>
+        <li>The model <em>quality</em> of the default. The default exists to be runnable, not to be the best model; function-calling work uses a tool-capable model the operator pulls.</li>
+      </ul>
+
+      <h2>Where it is enforced</h2>
+      <p>
+        The invariant lives in two places: the default on the options class, and the startup fallback that
+        honours that default when the key is missing.
+      </p>
+
+      <h3>The default on the options class</h3>
+      <p>
+        <code>LlmOptions.Provider</code> is initialised to <code>"Ollama"</code>. Because the property carries
+        the default in its initialiser, a configuration section that omits <code>Provider</code> binds to the
+        local provider rather than to nothing.
+      </p>
+      <pre class="cfg"><span class="c">// src/Scout.Llm/Configuration/LlmOptions.cs:16</span>
+<span class="k">public string</span> Provider { <span class="k">get</span>; <span class="k">set</span>; } = <span class="s">"Ollama"</span>;</pre>
+      <p>
+        The Ollama block in turn defaults every connection detail to a local daemon, so even the endpoint and
+        models require no cloud account:
+      </p>
+      <div class="val-list">
+        <span class="val">Endpoint = http://localhost:11434</span>
+        <span class="val">Chat.Model = llama3.1</span>
+        <span class="val">Embeddings.Model = nomic-embed-text</span>
+      </div>
+      <ul class="body-list">
+        <li><code>LlmOptions.cs:207</code> — <code>OllamaOptions.Endpoint</code> defaults to <code>http://localhost:11434</code>.</li>
+        <li><code>LlmOptions.cs:221</code> — <code>ChatModelOptions.Model</code> defaults to <code>llama3.1</code>.</li>
+        <li><code>LlmOptions.cs:229</code> — <code>EmbeddingModelOptions.Model</code> defaults to <code>nomic-embed-text</code>.</li>
+      </ul>
+
+      <h3>The startup fallback</h3>
+      <p>
+        The composition root does not blindly trust the bound options object. It reads the raw
+        <code>Provider</code> key and, when it is null or whitespace, explicitly falls back to a fresh
+        <code>LlmOptions().Provider</code> — i.e. the local default — before the provider switch runs.
+      </p>
+      <pre class="cfg"><span class="c">// src/Scout.Llm/LlmServiceCollectionExtensions.cs:48</span>
+<span class="k">var</span> provider = configuration.GetSection(<span class="s">"Scout:Llm"</span>)[<span class="s">"Provider"</span>];
+<span class="k">if</span> (string.IsNullOrWhiteSpace(provider))
+{
+    provider = <span class="k">new</span> LlmOptions().Provider; <span class="c">// "Ollama"</span>
+}</pre>
+      <ul class="body-list">
+        <li><code>LlmServiceCollectionExtensions.cs:48-52</code> — the blank-key fallback to the local default.</li>
+        <li><code>LlmServiceCollectionExtensions.cs:56-58</code> — the <code>"Ollama"</code> arm of the provider switch, which registers the local provider.</li>
+        <li><code>LlmServiceCollectionExtensions.cs:80-85</code> — the <code>default</code> arm throws <code>InvalidOperationException</code> for any unknown provider name, so a typo fails fast rather than silently degrading.</li>
+      </ul>
+
+      <h2>How it is verified</h2>
+      <p>
+        The default and the fallback are simple, deterministic surfaces that lend themselves to unit testing:
+        constructing <code>LlmOptions</code> and asserting <code>Provider == "Ollama"</code>, and exercising
+        <code>AddScoutLlm</code> with no <code>Provider</code> key to confirm the local provider is registered.
+      </p>
+      <ul class="body-list">
+        <li>Provider selection is covered by the <code>Scout.Llm</code> unit tests described on the <a href="../services/scout-llm.html">Scout.Llm</a> service page; a dedicated assertion pinning the <em>default</em> string to <code>Ollama</code> is pending and should be added alongside any change to this invariant.</li>
+        <li>All assertions use Shouldly per <a href="../invariants/shouldly-only.html">Shouldly-Only Tests</a> and the <a href="../conventions/testing.html">testing convention</a>.</li>
+      </ul>
+
+      <h2>Known exceptions</h2>
+      <ul class="body-list">
+        <li><strong>Runtime override.</strong> Operators routinely set <code>Scout:Llm:Provider</code> to a cloud provider via environment variables or a secrets manager. That is intended behaviour, not a violation — the invariant only constrains the committed default.</li>
+        <li><strong>Embeddings still local by default.</strong> The default embedding model (<code>nomic-embed-text</code>) is also served by the local Ollama daemon, so the Project Knowledge RAG path does not silently reach a paid embeddings endpoint on a fresh clone.</li>
+        <li><strong>No fail-open to cloud.</strong> If the chosen provider is unknown the host throws at startup rather than quietly falling back to a billed provider; the only implicit fallback is to the local default.</li>
+      </ul>
+
+      <h2>Change protocol</h2>
+      <ul class="body-list">
+        <li>Changing the default provider away from a local, credential-free option requires an ADR and a wiki update here; it reverses a stated project principle and would break the zero-configuration contributor path.</li>
+        <li>Adding a new provider must not change the default. New providers are added as additional switch arms in <code>LlmServiceCollectionExtensions</code>, leaving <code>LlmOptions.Provider</code> untouched.</li>
+        <li>Any edit to the committed <code>appsettings.json</code> must keep <code>Scout:Llm:Provider</code> on the local provider and must not commit real credentials — see <a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a>.</li>
+        <li>When the default chat or embedding model identifier changes, update both <code>LlmOptions.cs</code> and the README provider table so the documented and coded defaults stay in lockstep.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../invariants/secrets-never-committed.html"><span class="rt">invariant</span>Secrets Never Committed</a>
+          <a href="../domain/provider.html"><span class="rt">domain</span>LLM Provider</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../runbooks/local-models.html"><span class="rt">runbook</span>Local Models</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

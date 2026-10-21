@@ -9,6 +9,19 @@ export {
 } from './client-kinds.js';
 
 export {
+  LLM_PROVIDER_CATALOG,
+  LLM_PROVIDER_IDS,
+  getLlmProviderDescriptor,
+  findLlmProviderDescriptor,
+  findLlmProviderDescriptorByBackendName,
+  type LlmProviderId,
+  type LlmProviderFieldKind,
+  type LlmProviderFieldDescriptor,
+  type LlmProviderKind,
+  type LlmProviderDescriptor,
+} from './llm-providers.js';
+
+export {
   ScoutError,
   VaultUnavailableError,
   OAuthStateMismatchError,

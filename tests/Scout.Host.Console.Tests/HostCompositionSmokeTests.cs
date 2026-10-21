@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
+using Scout.Contracts;
 using Scout.Conversation;
 using Scout.Conversation.Abstractions;
 using Scout.Llm;
@@ -149,6 +150,23 @@ public sealed class HostCompositionSmokeTests
         // its embedding-free catalog builds under the fail-fast HttpClient and the
         // budget, so it adds no construction-time I/O or cycle.
         kernel.Plugins.ShouldContain(p => p.Name == "Skills");
+    }
+
+    [Fact]
+    public void Resolves_A_Single_Shared_RequestContext_Singleton()
+    {
+        using var host = BuildHost(FullConfig());
+        var provider = host.Services;
+
+        // Every composition root TryAdds the ambient context, so the whole graph
+        // must share ONE instance. Two instances would silently fail closed: the
+        // conductor would write identity into an AsyncLocal the SelfInfo plugin
+        // never reads.
+        var first = ResolveWithin(() => provider.GetRequiredService<IScoutRequestContext>());
+        var second = ResolveWithin(() => provider.GetRequiredService<IScoutRequestContext>());
+
+        first.ShouldBeOfType<AsyncLocalScoutRequestContext>();
+        first.ShouldBeSameAs(second);
     }
 
     [Fact]

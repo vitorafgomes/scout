@@ -8,6 +8,11 @@ namespace Scout.ControlPlane.Features;
 /// </summary>
 public sealed class FeaturesService
 {
+    private const string CredentialStoreUnavailableMessage =
+        "Credential store is unavailable; the credential was NOT saved. "
+        + "Secrets are held in process memory only and no durable at-rest "
+        + "backend is reachable on this host.";
+
     private readonly IFeatureCatalog _catalog;
     private readonly IFeatureStateStore _stateStore;
     private readonly ICredentialStore _credentials;
@@ -70,6 +75,10 @@ public sealed class FeaturesService
             }
         }
 
+        // Fail closed on each write: if a secret would be persisted but the
+        // store has no durable backend, tell the caller it was NOT saved rather
+        // than reporting success. Required-field validation runs first so its
+        // more specific error still takes precedence.
         foreach (var field in metadata.CredentialFields)
         {
             var required = IsRequired(field);
@@ -84,10 +93,19 @@ public sealed class FeaturesService
                 continue;
             }
 
-            await _credentials.StoreAsync(
+            if (!_credentials.IsAvailable)
+            {
+                throw new FeaturePersistFailedException(CredentialStoreUnavailableMessage);
+            }
+
+            var stored = await _credentials.StoreAsync(
                 CredentialKey(metadata.Id, field.Key),
                 value,
                 ct).ConfigureAwait(false);
+            if (!stored)
+            {
+                throw new FeaturePersistFailedException(CredentialStoreUnavailableMessage);
+            }
         }
 
         return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
@@ -159,6 +177,19 @@ public sealed class FeaturesService
             throw new FeatureValidationFailedException(errors);
         }
 
+        // Fail closed before touching the store: if any credential would be
+        // written but no durable backend is reachable, reject up front so no
+        // settings are half-applied and the caller learns the secret was not
+        // saved.
+        var willPersistCredential = metadata.CredentialFields.Any(field =>
+            suppliedCredentials.TryGetValue(field.Key, out var value)
+            && !string.IsNullOrWhiteSpace(value));
+
+        if (willPersistCredential && !_credentials.IsAvailable)
+        {
+            throw new FeaturePersistFailedException(CredentialStoreUnavailableMessage);
+        }
+
         // Persist credentials first, then settings. Both are idempotent per
         // key, so a settings failure after a credential write leaves a
         // re-runnable state, never a partially-applied request.
@@ -178,8 +209,7 @@ public sealed class FeaturesService
                     ct).ConfigureAwait(false);
                 if (!stored)
                 {
-                    throw new FeaturePersistFailedException(
-                        "Credential store is unavailable; no changes were saved.");
+                    throw new FeaturePersistFailedException(CredentialStoreUnavailableMessage);
                 }
             }
         }

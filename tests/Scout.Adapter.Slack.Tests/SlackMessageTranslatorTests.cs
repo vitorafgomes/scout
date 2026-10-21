@@ -127,4 +127,24 @@ public sealed class SlackMessageTranslatorTests
         chatMessage.ChannelId.ShouldBe(ChannelId);
         chatMessage.Timestamp.ShouldBe(FixedTime);
     }
+
+    [Fact]
+    public void TryTranslate_Direct_Message_Sets_IsDirectMessage_True_And_AdapterName()
+    {
+        var inbound = Dm("hi scout");
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.IsDirectMessage.ShouldBeTrue();
+        chatMessage.AdapterName.ShouldBe("Slack");
+    }
+
+    [Fact]
+    public void TryTranslate_Channel_Message_Sets_IsDirectMessage_False()
+    {
+        var inbound = Channel("<@UBOT> status");
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.IsDirectMessage.ShouldBeFalse();
+        chatMessage.AdapterName.ShouldBe("Slack");
+    }
 }

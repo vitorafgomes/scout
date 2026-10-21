@@ -60,8 +60,8 @@ const MID_WIZARD_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
     `
       :host {
         display: block;
-        background: #0f1117;
-        color: #e4e8f0;
+        background: var(--sc-bg);
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -87,10 +87,10 @@ const MID_WIZARD_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
         margin-top: 32px;
       }
       .error {
-        color: #d45a5a;
+        color: var(--sc-danger);
       }
       .loading {
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
     `,
   ],

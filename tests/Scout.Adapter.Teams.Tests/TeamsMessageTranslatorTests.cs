@@ -104,6 +104,26 @@ public sealed class TeamsMessageTranslatorTests
     }
 
     [Fact]
+    public void OneToOne_Sets_IsDirectMessage_True_And_AdapterName()
+    {
+        Sut().TryTranslate(
+            Inbound("is prod healthy?", isGroup: false),
+            out var msg).ShouldBeTrue();
+        msg!.IsDirectMessage.ShouldBeTrue();
+        msg.AdapterName.ShouldBe("Teams");
+    }
+
+    [Fact]
+    public void Group_Sets_IsDirectMessage_False_And_AdapterName()
+    {
+        Sut().TryTranslate(
+            Inbound($"<at>{BotName}</at> status aws", isGroup: true),
+            out var msg).ShouldBeTrue();
+        msg!.IsDirectMessage.ShouldBeFalse();
+        msg.AdapterName.ShouldBe("Teams");
+    }
+
+    [Fact]
     public void ProjectInbound_Maps_Activity_Fields()
     {
         var activity = new Activity

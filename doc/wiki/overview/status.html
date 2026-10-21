@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Status &amp; Pending Work — Scout Wiki</title>
+<meta name="description" content="Pre-alpha status of Scout: what builds and tests green, what is in flight, and the prioritised pending-work list ahead of the first PR.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Overview</a><span class="sep">/</span>Status</nav>
+
+    <section>
+      <h1>Status &amp; Pending Work</h1>
+      <p class="blockquote">Scout is pre-alpha. The core backend pipeline builds and its tests pass on CI; the Desktop UI builds on its own pipeline but is not yet release-ready. A first PR off <code>feat/project-knowledge</code> is still pending.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">overview</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> README Status; vault <code>01-overview/pending-work.md</code></span>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill">pre-alpha</span>
+        <span class="pill">core pipeline green on CI</span>
+        <span class="pill">Desktop UI not release-ready</span>
+        <span class="pill">8 LLM providers</span>
+        <span class="pill">nothing pushed yet</span>
+      </div>
+
+      <h2>Where things stand</h2>
+      <p>
+        The core pipeline — the LLM gateway, conversation core, chat adapters, project knowledge RAG,
+        and skills — builds and its tests pass on CI. The Desktop UI, an Electron provisioning shell,
+        has its own CI pipeline but is not yet in a release state. The solution file is
+        <code>Scout.slnx</code>; all active source lives under <code>src/</code>, and everything under
+        <code>src/old/</code> and <code>tests/old/</code> is deprecated legacy code outside the build.
+      </p>
+      <p>
+        All work to date sits on the local branch <code>feat/project-knowledge</code> and has
+        <strong>not been pushed</strong>. The next milestone is to assemble the first PR against
+        <code>main</code> — see <a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a> and the
+        <a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a>.
+      </p>
+
+      <h2>What builds and tests green</h2>
+      <ul class="check">
+        <li><strong>LLM gateway</strong> — eight providers selectable via <code>Scout:Llm:Provider</code>; build reported 0 warnings with 233 <a href="../services/scout-llm.html">Scout.Llm</a> tests green.</li>
+        <li><strong>Conversation core</strong> — platform-agnostic, per-channel/per-user in-memory history, streaming through the gateway. See <a href="../services/scout-conversation.html">Scout.Conversation</a>.</li>
+        <li><strong>Project knowledge RAG</strong> — chunking, SQLite-backed embeddings via sqlite-vec, and the <code>search_project</code> plugin. See <a href="../services/scout-knowledge.html">Scout.Knowledge</a>.</li>
+        <li><strong>Skills library</strong> — retrieval-based system loading markdown skills (curated adapted set plus authored roles/languages/cloud/architecture skills). See <a href="../services/scout-skills.html">Scout.Skills</a>.</li>
+        <li><strong>Chat adapters</strong> — Discord, Slack (Socket Mode), and Teams, each self-gating on its credentials.</li>
+        <li><strong>Read-only GitHub plugin</strong> — <code>list_repositories</code>, <code>list_pull_requests</code>, <code>list_issues</code>, <code>get_repository</code>. See <a href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a>.</li>
+      </ul>
+
+      <h2>Done this session (committed, not pushed)</h2>
+      <ul class="check">
+        <li><strong>Conversation memory + grounding fix</strong> — bounded in-memory per-conversation history keyed by channel+user, agent grounded on the configured project; review passed. Only effective after a redeploy. See <a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a>.</li>
+        <li><strong>Skills library</strong> — curated 5 adapted skills plus roughly 52 authored ones; <code>*.bkp</code> files gitignored.</li>
+        <li><strong>LLM providers</strong> — Gemini, OpenAI, AzureOpenAI, Mistral, HuggingFace, AzureAIInference, and OpenRouter added alongside Ollama, giving the eight selectable providers.</li>
+        <li><strong>Doc site</strong> — overview, architecture diagram, active projects, roadmap, and an LLM Providers config section committed under <code>scout/doc/</code>.</li>
+      </ul>
+
+      <h2>In flight</h2>
+      <ul class="body-list">
+        <li><strong>Local auto-discovery (read).</strong> A Plan→Impl→Review workflow was running at the last context clear, adding <code>ProjectDiscoveryService</code> and <code>ProjectResolutionService</code> in <a href="../services/scout-knowledge.html">Scout.Knowledge</a> with tests. The feature reads <code>Scout:Projects:Roots</code>, auto-discovers repositories by marker files, lazily indexes on first search, and adds a <code>list_projects</code> tool. Explicit <code>Scout:Projects:Items</code> entries win on name clash.</li>
+        <li><strong>Capability Engine Step 2.</strong> Unified persona + skill retrieval is stashed (partial). See <a href="../roadmap/capability-engine.html">Capability Engine</a> roadmap and the <a href="../architecture/capability-engine.html">architecture page</a>.</li>
+      </ul>
+
+      <h2>Pending work — prioritised</h2>
+      <p class="field-label">Security (do first)</p>
+      <ul class="check">
+        <li>Rotate the three keys exposed during the session: the Gemini API key, the Discord bot token, and the GitHub PAT — they leaked through chat and local <code>.bkp</code> files even though the <code>.bkp</code> files were gitignored, not committed.</li>
+        <li>Delete the <code>.bkp</code> files from the tree after migrating config to <code>appsettings.Development.json</code>.</li>
+        <li>Stop re-adding the <code>CopyToOutputDirectory</code> line in <code>Scout.Host.Console.csproj</code> that ships the secret backup to <code>bin/</code>; it was reverted twice. See <a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> and <a href="../conventions/secrets-handling.html">Secrets Handling</a>.</li>
+      </ul>
+
+      <p class="field-label">New capability — WRITE (PR-gated + allowlist, not built)</p>
+      <ul class="body-list">
+        <li>A decided-but-unbuilt milestone that would reverse the read-only stance to <em>gated-write</em>: Scout creates a branch and commit and opens a PR proposal, but never pushes to <code>main</code>/<code>dev</code> and never merges (merge stays a human gate).</li>
+        <li>Guarded by an allowlist of users authorised to trigger writes, a diff-plus-confirmation step before opening the PR, a minimal fine-grained PAT, and an audit log of every write.</li>
+        <li>Requires updating ADR <a href="../decisions/0009-descriptive-vs-executive-writes.html">0009 Descriptive vs Executive Writes</a>, the doc site, and the read-only check used in review. See the <a href="../invariants/no-executive-writes.html">No Executive Writes</a> invariant.</li>
+      </ul>
+
+      <p class="field-label">Remote repo access (read)</p>
+      <ul class="body-list">
+        <li>Public repositories should always be readable with no config; private ones via the configured GitHub PAT, whose scope decides visibility.</li>
+        <li>Deep analysis of remote repos would fetch/clone and index them like Project Knowledge. The GitHub plugin is currently per-repo, requires owner/repo, and has no default. See <a href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a>.</li>
+      </ul>
+
+      <p class="field-label">Test gaps (from the audit)</p>
+      <ul class="check">
+        <li>A guard test that loads the real <code>src/Scout.Skills/skills/</code> directory and asserts every skill parses (name, description, non-empty body) — content is currently tested only via fixtures.</li>
+        <li>Provider boundary-failure tests (LLM endpoint timeout/5xx degrading gracefully) per the <a href="../conventions/production-readiness.html">Production Readiness</a> convention — current provider tests cover wiring and validation only.</li>
+      </ul>
+
+      <p class="field-label">Deploy &amp; PR</p>
+      <ul class="check">
+        <li>Plan the first PR off <code>feat/project-knowledge</code>; consider squashing the noisy skills import→drop→author history.</li>
+        <li>Run the <code>production-readiness-checks</code> skill before the PR across the LLM HTTP, memory store, knowledge store, and GitHub boundaries.</li>
+        <li>Deploy/restart the bot so the conversation-memory and grounding fix takes effect live.</li>
+        <li>Confirm the active model is tool-capable end-to-end before relying on function-calling.</li>
+      </ul>
+
+      <p class="field-label">Minor / cleanup</p>
+      <ul class="body-list">
+        <li>Remove the duplicated cycle-explanation comment block in <code>src/Scout.Llm/LlmServiceCollectionExtensions.cs</code> (flagged repeatedly).</li>
+        <li>Document <code>Scout:Projects:Roots</code> and the "pick a tool-capable model" caveat for HuggingFace/OpenRouter on the doc site.</li>
+      </ul>
+
+      <h2>How this maps to the wiki</h2>
+      <ul class="body-list">
+        <li>Service-by-service state lives under each <a href="../services/scout-llm.html">Services</a> page.</li>
+        <li>The forward-looking plan is on the <a href="../roadmap/current-focus.html">Roadmap</a> pages.</li>
+        <li>The design rules that gate this work are the <a href="../invariants/no-executive-writes.html">Invariants</a> and the relevant <a href="../decisions/0009-descriptive-vs-executive-writes.html">ADRs</a>.</li>
+        <li>How the pieces were built is recorded under <a href="../history/core-foundation.html">History</a>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../roadmap/current-focus.html"><span class="rt">roadmap</span>Current Focus &amp; Backlog</a>
+          <a href="../overview/project-snapshot.html"><span class="rt">overview</span>Project Snapshot</a>
+          <a href="../roadmap/capability-engine.html"><span class="rt">roadmap</span>Capability Engine</a>
+          <a href="../history/core-foundation.html"><span class="rt">history</span>Core Foundation</a>
+          <a href="../history/conversation-memory-fix.html"><span class="rt">history</span>Conversation Memory Fix</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

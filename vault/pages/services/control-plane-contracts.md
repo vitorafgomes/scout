@@ -1,8 +1,9 @@
 ---
 title: "ControlPlane.Contracts"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs."

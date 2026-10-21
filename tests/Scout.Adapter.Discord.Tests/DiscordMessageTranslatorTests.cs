@@ -95,4 +95,30 @@ public sealed class DiscordMessageTranslatorTests
         chatMessage.ChannelId.ShouldBe(ChannelId.ToString());
         chatMessage.Timestamp.ShouldBe(FixedTime);
     }
+
+    [Fact]
+    public void TryTranslate_Direct_Message_Sets_IsDirectMessage_True_And_AdapterName()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "hi scout", MentionsSelf: false,
+            Timestamp: FixedTime, GuildId: null);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.IsDirectMessage.ShouldBeTrue();
+        chatMessage.AdapterName.ShouldBe("Discord");
+    }
+
+    [Fact]
+    public void TryTranslate_Guild_Message_Sets_IsDirectMessage_False()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111> status", MentionsSelf: true,
+            Timestamp: FixedTime, GuildId: 9999);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.IsDirectMessage.ShouldBeFalse();
+        chatMessage.AdapterName.ShouldBe("Discord");
+    }
 }

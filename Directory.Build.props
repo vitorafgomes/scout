@@ -10,4 +10,10 @@
     <GenerateDocumentationFile Condition="'$(IsTestProject)' != 'true'">true</GenerateDocumentationFile>
     <NoWarn Condition="'$(IsTestProject)' != 'true'">$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- No patched 2.x exists for this advisory (fix is the 3.50.x major line,
+         incompatible with SQLitePCLRaw.core 2.x pulled by SK SqliteVec).
+         Remove once SqliteVec moves to SQLitePCLRaw 3.x. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2m69-gcr7-jv3q" />
+  </ItemGroup>
 </Project>

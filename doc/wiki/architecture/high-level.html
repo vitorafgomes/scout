@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>High-Level Architecture &amp; Per-Turn Flow — Scout Wiki</title>
+<meta name="description" content="Scout's layered architecture across hosts, adapters, conversation, control plane, capabilities and the LLM gateway, plus the streaming per-turn message flow.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Architecture</a><span class="sep">/</span>High-Level</nav>
+
+    <section>
+      <h1>High-Level Architecture &amp; Per-Turn Flow</h1>
+      <p class="lead">Scout is organised in layers around a per-turn conversation model. Every inbound chat message follows one streaming pipeline: a platform adapter normalises the event, the conductor wraps the turn in telemetry, the router selects skills and calls the gateway, and the gateway streams tokens — optionally invoking read-only feature plugins — back to the originating channel only.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">knowledge</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/high-level.md</code>, <code>restructure-architecture.md</code>; <code>doc/index.html</code></span>
+      </div>
+
+      <figure class="arch-figure">
+        <img src="../../architecture.svg" alt="Scout architecture and per-turn flow">
+        <figcaption>Scout architecture &amp; per-turn flow</figcaption>
+      </figure>
+
+      <h2>Layered architecture</h2>
+      <p>
+        The active source tree is grouped into roles, from the shared contracts at the bottom up to the
+        process entry points at the top. The architecture centres on the per-turn conversation model in
+        <code>Scout.Conversation</code> plus a distributed control plane, with pluggable chat adapters, LLM
+        providers, and read-only feature plugins. The layers below match the thirteen projects that ship in
+        the restructured tree.
+      </p>
+
+      <div class="layer-stack">
+        <div class="layer">
+          <div class="layer-label">Hosts<span>Process entry points</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-host-console.html"><span class="s a"></span>Host.Console (primary)</a>
+            <a class="chip" href="../services/scout-host-controlplane.html"><span class="s a"></span>Host.ControlPlane</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Adapters<span>Chat platform connectors</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-adapter-discord.html"><span class="s a"></span>Adapter.Discord</a>
+            <a class="chip" href="../services/scout-adapter-slack.html"><span class="s a"></span>Adapter.Slack</a>
+            <a class="chip" href="../services/scout-adapter-teams.html"><span class="s a"></span>Adapter.Teams</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Conversation<span>Per-turn pipeline core</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-conversation.html"><span class="s a"></span>Scout.Conversation</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Control Plane<span>Provider &amp; feature management</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-controlplane.html"><span class="s a"></span>Scout.ControlPlane</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Capabilities<span>Retrieval &amp; behaviour</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-knowledge.html"><span class="s a"></span>Scout.Knowledge</a>
+            <a class="chip" href="../services/scout-skills.html"><span class="s a"></span>Scout.Skills</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Plugins<span>Read-only feature modules</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-plugin-github.html"><span class="s a"></span>Plugin.GitHub</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">LLM Gateway<span>Gateway &amp; providers</span></div>
+          <div class="layer-body">
+            <a class="chip" href="../services/scout-llm.html"><span class="s a"></span>Scout.Llm</a>
+            <a class="chip" href="../services/scout-llm.html"><span class="s a"></span>Scout.Llm (Ollama)</a>
+          </div>
+        </div>
+        <div class="layer">
+          <div class="layer-label">Foundation<span>Core contracts</span></div>
+          <div class="layer-body">
+            <span class="chip"><span class="s a"></span>Scout.ControlPlane.Contracts</span>
+          </div>
+        </div>
+      </div>
+
+      <p>
+        Two host processes anchor the system. <strong>Host.Console</strong> is the primary chatops host: a
+        config-gated, multi-adapter worker that emits a <code>SCOUT_READY</code> marker on stdout and shuts
+        down on stdin EOF via a parent-death watchdog. <strong>Host.ControlPlane</strong> is a gRPC server
+        over a Unix domain socket (Linux/macOS) or named pipe (Windows) — no TCP port — guarded by a
+        per-session token interceptor for managing providers, models, and features.
+      </p>
+
+      <div class="callout good">
+        <div class="c-title">Cross-cutting invariants</div>
+        <p>
+          <strong>Streaming-first</strong> everywhere (<code>IAsyncEnumerable&lt;string&gt;</code>; blocking
+          calls drain the stream internally). <strong>Cycle-safe DI</strong>: the embedder is built outside
+          the kernel to break the <code>Kernel &rarr; KernelPlugin &rarr; IEmbeddingGenerator &rarr; Kernel</code>
+          loop. <strong>Self-gating</strong>: adapters and plugins register only when configured, so an
+          unconfigured host still starts. <strong>Distributed tracing</strong> via
+          <code>ScoutActivitySource</code>.
+        </p>
+      </div>
+
+      <h2>The layers in detail</h2>
+      <ul class="body-list">
+        <li><strong>Hosts</strong> — process entry points. Host.Console bootstraps the whole stack and runs the per-turn loop; Host.ControlPlane exposes the management surface over secure local gRPC.</li>
+        <li><strong>Adapters</strong> — one config-gated connector per platform. Each implements the inverted <code>IChatAdapter</code>, normalises platform events into <code>ChatMessage</code>, and renders responses through a channel-bound <code>IResponseSink</code>. Rollout order is Discord &rarr; Slack &rarr; Teams.</li>
+        <li><strong>Conversation</strong> — the platform-agnostic per-turn core: <code>ConversationConductor</code>, <code>LlmStreamingRouter</code>, <code>StreamPump</code>, the cumulative-text <code>IResponseSink</code>, and the message/response/citation contracts.</li>
+        <li><strong>Control Plane</strong> — domain services for provider lifecycle, feature registry, and model operations, fronted by the gRPC contracts.</li>
+        <li><strong>Capabilities</strong> — retrieval and behaviour shaping: <code>Scout.Knowledge</code> (vector-backed RAG) and <code>Scout.Skills</code> (embedding-driven skills library) that ground and steer each turn.</li>
+        <li><strong>Plugins</strong> — read-only feature modules contributed as Semantic Kernel function calls; today the GitHub plugin is the reference implementation.</li>
+        <li><strong>LLM Gateway</strong> — <code>Scout.Llm</code> wraps Semantic Kernel behind the provider-agnostic <code>IChatGateway</code>; no SK or connector SDK type leaks to consumers.</li>
+        <li><strong>Foundation</strong> — <code>Scout.ControlPlane.Contracts</code> holds the <code>.proto</code> contracts and generated C# server stubs shared across the control plane.</li>
+      </ul>
+
+      <h2>The per-turn message flow</h2>
+      <p>
+        Every inbound chat message follows the same streaming pipeline. A platform adapter normalises the
+        event into a <code>ChatMessage</code> and a channel-bound <code>IResponseSink</code>, the conductor
+        wraps the turn in telemetry, the router selects skills and calls the gateway, and the gateway streams
+        tokens (optionally invoking read-only feature plugins as Semantic Kernel function calls) back through
+        the sink to the originating channel only.
+      </p>
+
+      <div class="flow" role="img" aria-label="Per-turn message flow diagram">
+        <div class="flow-row">
+          <div class="flow-node"><div class="fn-name">Chat Adapter</div><div class="fn-sub">Discord / Slack / Teams &rarr; ChatMessage + sink</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">ConversationConductor</div><div class="fn-sub">OTel activity, fail-safe</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">LlmStreamingRouter</div><div class="fn-sub">skill select + memory replay</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">ChatGateway</div><div class="fn-sub">SK kernel, agent/direct path</div></div>
+          <div class="flow-arrow">&rarr;</div>
+          <div class="flow-node"><div class="fn-name">LLM + Tools</div><div class="fn-sub">Ollama /v1 &middot; search_project, GitHub&hellip;</div></div>
+        </div>
+        <p class="flow-caption">
+          Tokens stream back through <strong>StreamPump</strong> &rarr; <strong>IResponseSink</strong>, which
+          accumulates cumulative text (never deltas) and emits a single terminal <em>Complete</em> or
+          <em>Fail</em>. Feature plugins (GitHub, Knowledge, Skills) contribute Semantic Kernel functions that
+          the model may call mid-stream; retrieval grounds the answer with citations. Memory is written back
+          <strong>only on clean completion</strong>.
+        </p>
+      </div>
+
+      <h3>Step by step</h3>
+      <ul class="seq">
+        <li><b>Inbound &amp; normalise.</b> A chat adapter receives the platform event (message, mention, slash command), translates it into a <code>ChatMessage</code>, and creates an <code>IResponseSink</code> bound to the originating channel/thread.</li>
+        <li><b>Conduct.</b> The <code>ConversationConductor</code> opens an OpenTelemetry activity for the turn and provides fail-safe handling so a thrown turn never crashes the host.</li>
+        <li><b>Route.</b> The <code>LlmStreamingRouter</code> selects relevant skills, replays bounded per-conversation memory, and assembles a provider-agnostic chat request.</li>
+        <li><b>Gateway.</b> <code>ChatGateway</code> drives the shared Semantic Kernel — through a <code>ChatCompletionAgent</code> when one is registered, otherwise the direct chat path — with function-calling enabled.</li>
+        <li><b>LLM + tools.</b> The model streams tokens from the configured provider (default Ollama over the OpenAI-compatible <code>/v1</code> endpoint) and may call read-only plugin functions mid-stream; retrieval adds citations.</li>
+        <li><b>Stream back.</b> <code>StreamPump</code> owns the single drive loop and pushes cumulative text into the sink, which renders platform-native streaming edits.</li>
+        <li><b>Terminate.</b> The sink emits one terminal <em>Complete</em> or <em>Fail</em>; conversation memory is persisted only on clean completion.</li>
+      </ul>
+
+      <div class="callout">
+        <div class="c-title">Streaming-first is a hard mandate</div>
+        <p>
+          The cumulative <code>IResponseSink</code> was designed against Teams as the least-capable target:
+          it carries cumulative text rather than deltas, the pump owns the drive loop exactly once, and
+          rate-limit handling lives in the sink. <code>StreamAsync</code> is the canonical gateway path;
+          <code>CompleteAsync</code> simply drains the same stream, so there is one code path end to end. See
+          <a href="../invariants/streaming-first.html">Streaming-First</a> and
+          <a href="../decisions/0013-conversation-core-streaming-sink.html">ADR 0013</a>.
+        </p>
+      </div>
+
+      <h2>Read-only by construction</h2>
+      <p>
+        Scout describes and answers work for humans in chat; it never executes mutating operations against
+        external systems. Plugins declare capabilities classified by <code>WriteClass</code>
+        (None / Descriptive / Executive); executive writes are forbidden and the registry enforces the
+        invariant <em>at startup</em>. <code>PluginCapabilities.IsReadOnly</code> has no setter, so a
+        write-capable state is unrepresentable in the type system, and replies are bound only to the
+        originating channel/thread.
+      </p>
+      <p>
+        See <a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a> and
+        <a href="../invariants/no-executive-writes.html">No Executive Writes</a> for the full classification
+        and the per-plugin allow-list.
+
+      </p>
+
+      <h2>LLM gateway &amp; providers</h2>
+      <p>
+        All LLM communication — chat completions and embeddings — flows through Microsoft Semantic Kernel via
+        <code>Scout.Llm</code>. The gateway exposes a provider-agnostic <code>IChatGateway</code> and an
+        <code>ILlmProviderFactory</code>; exactly one provider is selected per run from a single configuration
+        source under <code>Scout:Llm</code>. The default is Ollama (local-first), keeping the contributor
+        experience free of paid credentials. This decision and its <code>SKEXP0070</code> trade-off are
+        recorded in <a href="../decisions/0012-llm-communication-through-semantic-kernel.html">ADR 0012</a>;
+        the full service surface lives on the <a href="../services/scout-llm.html">Scout.Llm</a> page.
+      </p>
+
+      <h2>Control plane &amp; desktop</h2>
+      <p>
+        The desktop application (Electron main + Angular renderer) supervises the chatops host: it spawns
+        Host.Console with a stdin pipe, waits for the <code>SCOUT_READY</code> marker, and feeds credentials
+        from its vault as environment variables (for example
+        <code>SCOUT__ADAPTERS__DISCORD__BOTTOKEN</code>). The renderer talks to the control plane over gRPC on
+        a Unix domain socket or named pipe rather than a TCP port; the Node/Electron client side of that
+        transport is still on the backlog. The transport decision is captured in
+        <a href="../decisions/0011-backend-frontend-grpc-uds.html">ADR 0011</a>.
+      </p>
+
+      <h2>Current state</h2>
+      <p>
+        The restructure on branch <code>feat/scout-llm-gateway</code> has the LLM gateway, conversation core,
+        all three adapters, the chatops host, and the .NET control-plane server implemented, with quality
+        gates (architecture, code review, security audit) run and findings fixed. Linux AppImage packaging
+        works and a Discord bot connects and replies end to end. Notable remaining work: feature plugins
+        beyond GitHub (Kubernetes, CloudStatus, CodeQA, Help) are not yet rebuilt, the Node/Electron gRPC
+        client and onboarding forms for Slack/Teams are pending, and bot identity needs a tightened system
+        prompt so a local model answers as Scout. The full list lives in
+        <a href="../overview/status.html">Status &amp; Pending Work</a> and
+        <a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a>.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="rt">adr</span>0012 LLM via Semantic Kernel</a>
+          <a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="rt">adr</span>0013 Streaming Sink</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

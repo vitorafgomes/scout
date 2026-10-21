@@ -4,9 +4,12 @@ namespace Scout.ControlPlane.Features;
 
 /// <summary>
 /// Process-local fallback for hosts where no OS keyring is reachable
-/// (CI runners, containers, sandboxes). <see cref="IsAvailable"/> is
-/// false so endpoints can warn the user instead of silently persisting
-/// secrets only for the lifetime of the process.
+/// (CI runners, containers, sandboxes). The default instance reports
+/// <see cref="IsAvailable"/> as false and its <see cref="StoreAsync"/>
+/// returns false, so callers fail closed and tell the user the secret was
+/// NOT durably stored rather than silently keeping it for the process
+/// lifetime. No durable at-rest backing exists yet; wiring a real OS
+/// keyring / Electron safeStorage store is tracked as a follow-up.
 /// </summary>
 public sealed class InMemoryCredentialStore : ICredentialStore
 {
@@ -37,6 +40,14 @@ public sealed class InMemoryCredentialStore : ICredentialStore
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(value);
         ct.ThrowIfCancellationRequested();
+
+        // Fail closed: when no durable backend is reachable, report the write
+        // as failed instead of silently keeping the secret for the process
+        // lifetime only. Nothing is retained so ContainsAsync stays false.
+        if (!_isAvailable)
+        {
+            return Task.FromResult(false);
+        }
 
         _entries[key] = value;
         return Task.FromResult(true);

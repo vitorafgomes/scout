@@ -88,11 +88,11 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
         display: block;
       }
       .card {
-        border: 1px solid #252b3b;
+        border: 1px solid var(--sc-border);
         border-radius: 10px;
         padding: 16px;
-        background: #171b26;
-        color: #e4e8f0;
+        background: var(--sc-surface);
+        color: var(--sc-text);
         cursor: pointer;
         outline: none;
         transition:
@@ -101,10 +101,10 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
       }
       .card:hover,
       .card:focus-visible {
-        border-color: #7c5cff;
+        border-color: var(--sc-accent);
       }
       .card:focus-visible {
-        box-shadow: 0 0 0 2px #7c5cff44;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--sc-accent) 27%, transparent);
       }
       .card--coming-soon {
         cursor: default;
@@ -124,7 +124,7 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
       .caption {
         font-size: 13px;
         margin: 8px 0 0;
-        color: #a0aab8;
+        color: var(--sc-text-muted);
       }
       .badge {
         display: inline-flex;
@@ -137,28 +137,28 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
         letter-spacing: 0.02em;
       }
       .badge[data-tone='neutral'] {
-        background: #1e2230;
-        color: #a0aab8;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
       }
       .badge[data-tone='muted'] {
-        background: #141821;
-        color: #6a7a90;
+        background: var(--sc-surface);
+        color: var(--sc-text-dim);
       }
       .badge[data-tone='info'] {
-        background: #1e3a5f;
-        color: #5eb3f0;
+        background: var(--sc-info-bg);
+        color: var(--sc-info);
       }
       .badge[data-tone='success'] {
-        background: #0f3325;
-        color: #38d27a;
+        background: var(--sc-success-bg);
+        color: var(--sc-success-text);
       }
       .badge[data-tone='warn'] {
-        background: #3a2e0f;
-        color: #f0c05e;
+        background: var(--sc-warning-bg);
+        color: var(--sc-warning);
       }
       .badge[data-tone='danger'] {
-        background: #3d1a1a;
-        color: #f07070;
+        background: var(--sc-danger-border);
+        color: var(--sc-danger-text);
       }
       .spinner {
         width: 10px;
@@ -183,7 +183,7 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
         background: transparent;
         border: none;
         padding: 0;
-        color: #7c5cff;
+        color: var(--sc-accent);
         font-size: 13px;
         cursor: pointer;
         text-decoration: underline;

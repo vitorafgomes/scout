@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skills Subsystem (Initiative) — Scout Wiki</title>
+<meta name="description" content="Roadmap to make Scout's Skills auto-injection actually reach the model: fix the agent-path prompt gate, then card-mode injection, retrieval tuning, body rewrites, and an LLM-driven selection fallback.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Roadmap</a><span class="sep">/</span>Skills Subsystem</nav>
+
+    <section>
+      <h1>Skills Subsystem — Improvement Initiative</h1>
+      <p class="blockquote">Make Scout's Skills auto-injection actually reach the model, then tune what reaches it: fix the agent-path prompt gate first, switch to card-mode injection, retune retrieval for a weak embedder, rewrite the bodies for read-only chatops, and add an LLM-driven selection fallback.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype roadmap">roadmap</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>02-architecture/skills-subsystem-improvement-roadmap.md</code></span>
+      </div>
+
+      <h2>Why now</h2>
+      <p>
+        A multi-agent review workflow (<code>scout-skills-optimization</code>: 14 agents across 6 dimensions, each
+        recommendation adversarially verified against the code) produced 30 recommendations, all 30 actionable,
+        on branch <code>feat/project-knowledge</code>. The review surfaced one finding that invalidates the entire
+        feature as shipped.
+      </p>
+      <div class="callout">
+        <p class="field-label">The gate (critical finding)</p>
+        <p>
+          The auto-injected skill content — and the base persona prompt — <strong>never reach the model on the
+          shipped config</strong>. When a project is configured (the live setup), <code>ChatGateway</code> routes
+          through <code>StreamAgentAsync</code>, which calls
+          <code>_agent.InvokeStreamingAsync(messages, thread, options: null, ct)</code> and never references
+          <code>request.SystemPrompt</code>. The composed base prompt plus injected skill body built in
+          <code>LlmStreamingRouter.StreamWithToken</code> is discarded every turn; the response uses only the
+          Project Expert agent's own <code>Instructions</code>. In effect, all embedding-based Skills
+          auto-injection was a silent no-op whenever a project was active.
+        </p>
+      </div>
+      <p>
+        Until the gate is fixed, every downstream retrieval improvement is invisible to the model, so the
+        initiative is sequenced around it.
+      </p>
+
+      <h2>Scope</h2>
+      <p class="field-label">In scope</p>
+      <ul class="body-list">
+        <li>Honoring <code>request.SystemPrompt</code> on the agent path so the composed prompt and injected skill content reach the model.</li>
+        <li>Retrieval tuning for the weak selection embedder (asymmetric prefixes, name-aware indexing, threshold calibration, per-turn selection logging).</li>
+        <li>Switching auto-injection from full body to a condensed card, with <code>load_skill</code> as the single source of the full body.</li>
+        <li>Rewriting the 7 skill bodies and descriptions for Scout's read-only chatops persona.</li>
+        <li>An optional LLM-driven selection fallback, structured injection framing, and a shared skill store with operator-triggered reload.</li>
+      </ul>
+      <p class="field-label">Out of scope</p>
+      <ul class="body-list">
+        <li><code>list_skills</code> grouping/scaling — the catalog is 7 skills, so near-zero ROI; deferred.</li>
+        <li>Replacing the embedding/LLM models themselves — the work uses the right lever per model (see below), not a model swap.</li>
+        <li>OTel exporter wiring — spans/metrics are dropped today (no exporter registered); only the lower-priority config bucket touches it.</li>
+      </ul>
+
+      <h2>Model split (use the right lever)</h2>
+      <p>The subsystem leans on two models with very different strengths; each workstream targets the appropriate one.</p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">nomic-embed-text (weak)</div><div class="t-role">Drives SELECTION — which skill fires. Levers: asymmetric task prefixes, name-aware indexing, threshold calibration.</div></div>
+        <div class="type-row"><div class="t-name">qwen3.5:9b (capable)</div><div class="t-role">Drives everything downstream — LLM classification fallback, calling <code>list_skills</code>/<code>load_skill</code>, absorbing larger or multiple bodies.</div></div>
+      </div>
+
+      <h2>Status</h2>
+      <p>As of 2026-06-01, sourced from the improvement roadmap (branch <code>feat/project-knowledge</code>):</p>
+      <ul class="body-list">
+        <li><strong>Gate fix (A)</strong> — in progress; it is the hard dependency for the entire auto-inject roadmap.</li>
+        <li><strong>Quick wins and bigger moves B–G</strong> — planned and ordered, not yet executed.</li>
+        <li>All 30 recommendations are actionable and were adversarially verified against the code during the review.</li>
+      </ul>
+
+      <h2>Workstreams / Phases</h2>
+      <div class="road-grid">
+
+        <div class="road-block">
+          <h3><span class="num">A</span> Gate fix — honor <code>SystemPrompt</code> on the agent path</h3>
+          <p>Do first. Without it nothing reaches the model. Unblocks everything below.</p>
+          <ul class="check build">
+            <li>In <code>ChatGateway.StreamAgentAsync</code>, pass <code>request.SystemPrompt</code> via <code>ChatCompletionAgentInvokeOptions.AdditionalInstructions</code>.
+              <span class="sub">Verified settable property in SK 1.77.0 Agents.Abstractions.</span></li>
+            <li>Guard null/empty so the agent's own <code>Instructions</code> still apply.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">QW</span> Quick wins (small effort)</h3>
+          <ul class="check">
+            <li>Add a <code>Scout:Skills</code> section to <code>appsettings.json</code> — the contract is invisible today though the binding already exists.
+              <span class="sub">Optional: clamp <code>TopN &gt;= 0</code> and <code>0 &lt;= SimilarityThreshold &lt;= 1</code> in <code>AddScoutSkills</code>.</span></li>
+            <li>nomic asymmetric prefixes: <code>search_document:</code> on skill text, <code>search_query:</code> on the message; add <code>QueryPrefix</code>/<code>DocumentPrefix</code> to <code>SkillsOptions</code>.
+              <span class="sub">Biggest selection lever for the weak embedder.</span></li>
+            <li>Embed name + description, not description alone — <code>Skill.Name</code> carries the discriminating token; one-line change in <code>BuildIndexAsync</code>.</li>
+            <li>Log per-turn selection (top skill, score, threshold, cleared?, runner-up). Names and scores only, never message text.
+              <span class="sub">Prerequisite-evidence: cannot retune 0.55 / TopN without it.</span></li>
+            <li>Add a skills clause to the system prompt telling the model <code>list_skills</code>/<code>load_skill</code> exist. Depends on the gate fix; qwen-dependent.</li>
+            <li>Remove dangling sub-file refs (Scout has no file-read tool) in 5 skills. Subsumed by the body rewrite.</li>
+            <li>Telemetry on the tool path via <code>ILogger&lt;SkillsPlugin&gt;</code>: log <code>list_skills</code> count, <code>load_skill</code> name + hit/miss.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">D</span> Inject a condensed skill card, not the full body</h3>
+          <p>Do early, right after the gate, to stop dumping multi-KB bodies into every turn.</p>
+          <ul class="check">
+            <li>Add <code>SkillsOptions.InjectionMode {Card|FullBody}</code>, default <code>Card</code>.</li>
+            <li>Card emits Name + Description plus a "load via <code>load_skill</code>" pointer; <code>load_skill</code> becomes the single source of the multi-KB body.</li>
+            <li>Resolves the auto-inject vs tool double-surfacing.</li>
+            <li>Router must receive <code>IOptions&lt;SkillsOptions&gt;</code> (<code>Compose</code> is static). qwen-dependent.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">C</span> Rewrite descriptions as retrieval keys</h3>
+          <p>The description is the entire retrieval signal today.</p>
+          <ul class="check">
+            <li>Remove literal quotes in <code>brainstorming.md:3</code>.</li>
+            <li>Sequence after the logging, with name + description indexing in place; re-validate the threshold from real scores.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">B</span> Rewrite skill bodies for read-only chatops</h3>
+          <p>Large. The 7 bodies are verbatim Claude-Code process guides.</p>
+          <ul class="check">
+            <li>They are full of <code>git commit</code> / "delete the code" / "dispatch a subagent" imperatives that contradict Scout's read-only persona.</li>
+            <li>Treat as Scout-owned: keep the mental models, drop write/exec/subagent/DOT-digraph content.</li>
+            <li>Update <code>SKILLS-ATTRIBUTION.md</code> to "adapted from". Subsumes dangling-refs and body-trim.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">E</span> LLM-driven selection fallback</h3>
+          <p>Add when selection robustness is wanted. Latency-gated: runs before the first token.</p>
+          <ul class="check">
+            <li>Cheap embedding pre-filter; on empty / grey-zone, ONE qwen classification call over <code>list_skills</code>.</li>
+            <li>Implement as an <code>ISkillSelector</code> <strong>decorator</strong>, not a ctor edge into <code>SkillSelector</code> — avoids the kernel-to-embedder DI cycle; resolve <code>IChatGateway</code> lazily.</li>
+            <li>Gate behind <code>LlmFallbackEnabled</code> + <code>GreyZoneThreshold</code>.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">F</span> Structured delimiter + budget / dedup</h3>
+          <p>Matters once <code>TopN &gt; 1</code>; after D.</p>
+          <ul class="check">
+            <li>Replace <code># Relevant skill:</code> (collides with skills' own <code>#</code>) with <code>&lt;skills&gt;&lt;skill name="..."&gt;</code> plus a framing preamble neutralizing imperative language.</li>
+            <li>Add a <code>MaxInjectedBytes</code> budget and dedup-by-Name.</li>
+          </ul>
+        </div>
+
+        <div class="road-block">
+          <h3><span class="num">G</span> Lifecycle: shared <code>ISkillStore</code> + hot-reload</h3>
+          <p>Lowest user-visible payoff; do last.</p>
+          <ul class="check">
+            <li>Collapse the two <code>ResolveDirectory</code> / file-load implementations into one singleton.</li>
+            <li>Add operator-triggered reload — preferred over <code>FileSystemWatcher</code>, which would watch the build-output copy rather than the source.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <h3>Sequencing</h3>
+      <p>
+        <strong>A (gate)</strong> first — without it nothing reaches the model. Then <strong>D (card mode)</strong>
+        to stop dumping multi-KB bodies, then <strong>logging</strong> to get real scores, then
+        <strong>C + name/description indexing + prefixes</strong> tuned from those scores, then
+        <strong>B (body rewrite)</strong>. <strong>E (LLM fallback)</strong> when selection robustness is wanted.
+        <strong>F</strong> follows D once <code>TopN &gt; 1</code>; <strong>G</strong> is last.
+      </p>
+
+      <h3>Lower-priority config</h3>
+      <ul class="body-list">
+        <li>Frontmatter metadata (<code>enabled</code>/<code>priority</code>/<code>channels</code>) — the parser already builds the dict but drops extra keys — feeding channel scoping (<code>message.ChannelId</code> is currently dropped in <code>Route</code>).</li>
+        <li>A <code>skills_status</code> KernelFunction.</li>
+        <li>A <code>ScoreAllAsync</code> threshold-calibration probe.</li>
+        <li>OTel spans/metrics are dropped today (no exporter registered): <code>ILogger</code> half works, <code>Meter</code> half does not.</li>
+      </ul>
+
+      <h2>Risks</h2>
+      <ul class="body-list">
+        <li><strong>The gate is a hard dependency.</strong> If A is skipped or regresses, every retrieval improvement (B–G) silently does nothing whenever a project is active — exactly the failure mode that motivated this initiative.</li>
+        <li><strong>Weak selection embedder.</strong> nomic-embed-text is the limiting factor on which skill fires; prefixes, name-aware indexing, and threshold calibration are mitigations, not a guarantee. Retuning cannot proceed without per-turn selection logging first.</li>
+        <li><strong>DI cycle on the LLM fallback.</strong> A ctor edge into <code>SkillSelector</code> would reintroduce the kernel-to-embedder DI cycle; the decorator + lazy <code>IChatGateway</code> resolution is mandatory.</li>
+        <li><strong>Read-only persona drift.</strong> The unrewritten bodies carry write/exec/subagent imperatives that contradict <a href="../invariants/no-executive-writes.html">No Executive Writes</a>; until B lands, injected content can nudge the model toward forbidden actions.</li>
+        <li><strong>Latency on the fallback path.</strong> The qwen classification call in E runs before the first token, so it is latency-gated behind <code>LlmFallbackEnabled</code> + <code>GreyZoneThreshold</code>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/skills-subsystem.html"><span class="rt">arch</span>Skills Subsystem</a>
+          <a href="../services/scout-skills.html"><span class="rt">service</span>Scout.Skills</a>
+          <a href="../roadmap/capability-engine.html"><span class="rt">roadmap</span>Capability Engine</a>
+          <a href="../roadmap/current-focus.html"><span class="rt">roadmap</span>Current Focus &amp; Backlog</a>
+          <a href="../domain/skill.html"><span class="rt">domain</span>Skill</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+/*
+ * Scout Desktop renderer - global design-token foundation.
+ * Dark-only theme. Component styles remain inline for now; this file only
+ * establishes the token set + a minimal base. Do not add component rules here.
+ *
+ * Self-hosted fonts (font-src 'self'): @fontsource ships woff2 locally, the
+ * Angular build rewrites the url() to bundled same-origin assets.
+ */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/jetbrains-mono/latin-400.css';
+@import '@fontsource/jetbrains-mono/latin-500.css';
+
+:root {
+  /* Backgrounds & surfaces (increasing elevation) */
+  --sc-bg: #0f1117;
+  --sc-bg-deep: #0a0d13;
+  --sc-surface: #171b26;
+  --sc-surface-2: #1c2030;
+  --sc-surface-3: #1e2333;
+
+  /* Borders */
+  --sc-border: #252b3b;
+  --sc-border-strong: #2d3348;
+
+  /* Text (three legibility tiers, all >= WCAG AA on --sc-bg and --sc-surface) */
+  --sc-text: #e4e8f0; /* primary  - 15.37:1 / 14.00:1 */
+  --sc-text-muted: #9aa4b8; /* secondary - 7.53:1 / 6.86:1 (replaces failing #7b8299) */
+  --sc-text-dim: #838b9f; /* tertiary  - 5.53:1 / 5.04:1 */
+
+  /* Accent - one violet CTA identity. Legacy CTA blues collapse onto this. */
+  --sc-accent: #7c5cff;
+  --sc-accent-hover: #9375ff;
+  --sc-on-accent: #ffffff; /* standardised text colour on the violet button */
+  --sc-disabled-bg: #3d4258;
+  --sc-disabled-text: #6b7488; /* disabled state - exempt from AA */
+
+  /* Danger */
+  --sc-danger: #d45a5a;
+  --sc-danger-text: #f07070;
+  --sc-danger-bg: #2b1010;
+  --sc-danger-border: #3d1a1a;
+
+  /* Success */
+  --sc-success: #3aaf7b;
+  --sc-success-text: #4ade80;
+  --sc-success-bg: #0f3325;
+
+  /* Warning */
+  --sc-warning: #fbbf24;
+  --sc-warning-text: #fff3cd;
+  --sc-warning-bg: #7a5c00;
+
+  /* Info (blue that is informational, NOT a CTA) */
+  --sc-info: #5eb3f0;
+  --sc-info-bg: #1e3a5f; /* helper: dark info panel background */
+
+  /* Typography - Fira Code dropped, mono standardised on JetBrains Mono */
+  --sc-font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  --sc-font-mono:
+    'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+
+  /* Radii */
+  --sc-radius: 8px;
+  --sc-radius-lg: 12px;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--sc-font-sans);
+  color: var(--sc-text);
+  background: var(--sc-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

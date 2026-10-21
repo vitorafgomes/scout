@@ -65,12 +65,12 @@ import { FeatureCardComponent } from './feature-card.component';
       h1 {
         margin: 0 0 8px;
         font-size: 24px;
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .lede {
         margin: 0;
         font-size: 14px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         max-width: 640px;
       }
       .features-grid {
@@ -80,11 +80,11 @@ import { FeatureCardComponent } from './feature-card.component';
       }
       .unavailable-notice {
         padding: 16px 20px;
-        border: 1px solid #2d3348;
+        border: 1px solid var(--sc-border-strong);
         border-radius: 8px;
-        background: #11131a;
+        background: var(--sc-bg);
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
     `,
   ],

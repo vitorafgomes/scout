@@ -68,7 +68,9 @@ public sealed partial class TeamsMessageTranslator
             UserId: inbound.FromId,
             ChannelId: inbound.ConversationId,
             Text: stripped,
-            Timestamp: inbound.Timestamp);
+            Timestamp: inbound.Timestamp,
+            IsDirectMessage: !inbound.IsGroup,
+            AdapterName: "Teams");
         return true;
     }
 

@@ -1,8 +1,9 @@
 ---
 title: "Knowledge"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent."

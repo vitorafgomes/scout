@@ -23,6 +23,7 @@
                 "output": "assets"
               }
             ],
+            "styles": ["src/styles.css"],
             "polyfills": []
           },
           "configurations": {

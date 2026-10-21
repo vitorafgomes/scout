@@ -58,8 +58,8 @@ const ENABLED_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
       :host {
         display: block;
         padding: 16px 32px;
-        background: #0f1117;
-        border-bottom: 1px solid #252b3b;
+        background: var(--sc-bg);
+        border-bottom: 1px solid var(--sc-border);
       }
       .steps {
         display: flex;
@@ -76,16 +76,16 @@ const ENABLED_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
         gap: 8px;
         padding: 4px 8px;
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .step[data-state='done'] {
-        color: #3aaf7b;
+        color: var(--sc-success);
       }
       .step[data-state='current'] {
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .step[data-state='future'][data-disabled='true'] {
-        color: #3d4258;
+        color: var(--sc-disabled-bg);
       }
       .dot {
         display: inline-flex;
@@ -94,20 +94,20 @@ const ENABLED_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
         width: 20px;
         height: 20px;
         border-radius: 9999px;
-        border: 1px solid #252b3b;
+        border: 1px solid var(--sc-border);
         background: transparent;
         font-size: 11px;
         font-weight: 600;
       }
       .step[data-state='current'] .dot {
-        background: #1e2e45;
-        color: #7c5cff;
-        border-color: #7c5cff;
+        background: var(--sc-surface-3);
+        color: var(--sc-accent);
+        border-color: var(--sc-accent);
       }
       .step[data-state='done'] .dot {
-        background: #0d2b1e;
-        color: #3aaf7b;
-        border-color: #3aaf7b;
+        background: var(--sc-success-bg);
+        color: var(--sc-success);
+        border-color: var(--sc-success);
       }
       .check {
         font-size: 12px;

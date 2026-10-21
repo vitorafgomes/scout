@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { ScoutError } from '@scout/shared';
 
@@ -42,7 +42,7 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
           type="button"
           class="primary"
           data-test="created-continue"
-          [disabled]="!portalOpened()"
+          [disabled]="!canContinue()"
           (click)="continueToToken()"
         >
           I've created the app - Continue
@@ -54,7 +54,7 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -71,7 +71,7 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
         margin: 0 0 4px;
       }
       .subtitle {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         margin: 0 0 24px;
         font-size: 13px;
       }
@@ -87,8 +87,8 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
         flex-wrap: wrap;
       }
       .primary {
-        background: #7c5cff;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -97,39 +97,39 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
         cursor: pointer;
       }
       .primary:disabled {
-        background: #3d4258;
-        color: #7b8299;
+        background: var(--sc-disabled-bg);
+        color: var(--sc-text-muted);
         cursor: not-allowed;
       }
       .secondary {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;
         cursor: pointer;
       }
       .error-block {
-        border: 1px solid #d45a5a;
-        background: #2b1010;
+        border: 1px solid var(--sc-danger);
+        background: var(--sc-danger-bg);
         padding: 16px;
         border-radius: 10px;
         margin-top: 16px;
       }
       .error {
-        color: #d45a5a;
+        color: var(--sc-danger);
         margin: 0 0 12px;
       }
       .copy-fallback {
         font-size: 13px;
-        color: #e4e8f0;
+        color: var(--sc-text);
         margin: 0 0 12px;
       }
       .url {
         display: block;
         font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-        background: #0a0d13;
+        background: var(--sc-bg-deep);
         border-radius: 3px;
         padding: 6px 8px;
         margin-top: 6px;
@@ -148,6 +148,12 @@ export class ProvisionComponent implements OnInit {
   readonly portalOpened = signal<boolean>(false);
   readonly openError = signal<string | null>(null);
   readonly copied = signal<boolean>(false);
+
+  // Enable "Continue" once the user has a way to reach the portal: either the
+  // browser handoff succeeded, or it failed and the copy-the-URL fallback is on
+  // screen. Gating solely on a successful handoff dead-ends first-run on hosts
+  // with no default-browser bridge (sandboxed/Flatpak, missing xdg-open).
+  readonly canContinue = computed<boolean>(() => this.portalOpened() || this.openError() !== null);
 
   ngOnInit(): void {
     this.wizard.goTo('provision');

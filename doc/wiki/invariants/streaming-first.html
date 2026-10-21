@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Streaming-First — Scout Wiki</title>
+<meta name="description" content="Streaming-first invariant: every assistant response in Scout flows as an IAsyncEnumerable token stream; non-streaming paths only drain that one stream.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Invariants</a><span class="sep">/</span>Streaming-First</nav>
+
+    <section>
+      <h1>Streaming-First</h1>
+      <p class="blockquote">Every assistant response must be produced as an <code>IAsyncEnumerable&lt;string&gt;</code> token stream; no code path may render a completion by any means other than draining that single stream.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype invariant">invariant</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Llm/Abstractions/IChatGateway.cs</code>; <code>src/Scout.Conversation/Streaming/</code>; ADR 0013</span>
+      </div>
+
+      <h2>Why this exists</h2>
+      <p>
+        Scout is a multi-platform chatops assistant — Discord today, Slack and Teams next. A streaming-first
+        contract is what lets the assistant edit a growing message as tokens arrive instead of making a user
+        wait for the full completion. More importantly, it is the single decision that keeps the system
+        <strong>one</strong> code path instead of two divergent ones (a "plain" reply and a "streaming" reply
+        that every consumer would have to branch on).
+      </p>
+      <p>
+        The contract starts at the gateway. <code>IChatGateway.StreamAsync</code> is documented as
+        <em>"the primary path"</em>, and <code>CompleteAsync</code> exists only for "the rare caller that needs
+        the whole text at once" — it <em>drains</em> <code>StreamAsync</code> into a single string "so there is
+        one code path." Non-streaming is never a separate implementation; it is the streaming path read to its
+        end.
+      </p>
+      <p>
+        ADR 0013 carries the same rule into the conversation core. The outbound <code>ChatResponse</code> body
+        is "always an async token sequence"; a complete string is modelled as a one-element sequence via
+        <code>FromText</code>, again "so the stream-drive loop has a single code path regardless of the
+        responder." The router never returns a dual-mode union — the plain-XOR-streaming type from the archived
+        design was deleted.
+      </p>
+
+      <h2>Scope</h2>
+      <p class="field-label">Applies to</p>
+      <ul class="body-list">
+        <li>The LLM gateway contract: any new method that returns a model completion must stream, or must be a documented drain over a streaming method.</li>
+        <li>The conversation core: <code>IConversationRouter.Route</code> returns a <code>ChatResponse</code> whose <code>Tokens</code> is "always streaming, never a <code>Task</code> and never null."</li>
+        <li>Every outbound sink: <code>IResponseSink</code> renders cumulative text as tokens accumulate, so platform adapters are driven by the stream rather than buffering and posting once.</li>
+        <li>The single drive loop, <code>StreamPump</code>, which owns the <code>await foreach</code> over tokens for all platforms.</li>
+      </ul>
+      <p class="field-label">Does not cover</p>
+      <ul class="body-list">
+        <li>Embedding generation — embeddings are a one-shot vector call, not a chat completion, and are out of scope of this invariant.</li>
+        <li>Per-platform rate-limit and retry behaviour, which lives in each sink (the transport), not in the streaming core. See ADR 0013.</li>
+        <li>Configuration, provider selection, or kernel construction — those belong to <a href="../invariants/pluggable-everything.html">Pluggable Everything</a> and <a href="../invariants/local-first-default.html">Local-First Default</a>.</li>
+      </ul>
+
+      <h2>Where it is enforced</h2>
+      <p>The invariant is enforced by the shape of the contracts, not by a runtime check. The relevant declarations:</p>
+      <ul class="body-list">
+        <li><code>IChatGateway.cs:16</code> — <code>StreamAsync</code> returns <code>IAsyncEnumerable&lt;string&gt;</code>; the XML doc marks it "The primary path."</li>
+        <li><code>IChatGateway.cs:22</code> — <code>CompleteAsync</code> returns <code>Task&lt;string&gt;</code> and is documented as draining <code>StreamAsync</code> "into a single string so there is one code path."</li>
+        <li><code>Abstractions/ChatResponse.cs:23</code> — <code>Tokens</code> is the <code>IAsyncEnumerable&lt;string&gt;</code> body; the type doc states the body is "always an async token sequence."</li>
+        <li><code>Abstractions/ChatResponse.cs:35</code> — <code>FromText</code> wraps a complete string as a single-element sequence for "the rare responder that produces the whole text at once," keeping the union out of the type.</li>
+        <li><code>Abstractions/IConversationRouter.cs:12</code> — <code>Route</code> returns a non-null streaming <code>ChatResponse</code> directly (not a <code>Task</code>), so routing is always streaming-shaped.</li>
+        <li><code>Routing/LlmStreamingRouter.cs:65</code> — the v1 responder builds its body from <code>IChatGateway.StreamAsync</code> via a deferred <code>IAsyncEnumerable</code>; the gateway is not invoked until the pump enumerates.</li>
+        <li><code>Abstractions/IResponseSink.cs:29</code> — <code>UpdateAsync</code> receives the full cumulative text on every call, so a sink is driven by the stream's progress rather than posting once at the end.</li>
+        <li><code>Streaming/StreamPump.cs:77</code> — the single <code>await foreach</code> over <code>response.Tokens</code> that drives every platform; <code>StreamPump.cs:48</code> is the one entry point (<code>RunAsync</code>).</li>
+      </ul>
+      <p>
+        The drive loop is owned exactly once. <code>StreamPump</code> is "transport-agnostic" and contains no
+        platform-specific code (<code>StreamPump.cs:8</code>); each adapter implements only the thin sink, so a
+        new platform cannot reintroduce a buffer-then-post shortcut without bypassing the pump entirely.
+      </p>
+
+      <h2>How it is verified</h2>
+      <p>
+        The streaming behaviour has direct unit coverage in <code>tests/Scout.Conversation.Tests/</code>, using
+        Shouldly per the <a href="../conventions/testing.html">testing convention</a>.
+      </p>
+      <ul class="body-list">
+        <li><code>Streaming/StreamPumpTests.cs:56</code> — <code>RunAsync_FineGrained_FollowsLifecycle_AndCompletes</code>: the full Begin → Update* → Complete lifecycle over a token stream.</li>
+        <li><code>Streaming/StreamPumpTests.cs:72</code> — interim updates are cumulative and monotonic with a cursor glyph, confirming the sink is fed the growing buffer, not deltas.</li>
+        <li><code>Streaming/StreamPumpTests.cs:133</code> — <code>RunAsync_FinalOnly_Degradation_Skips_Interim_Updates</code>: a non-edit sink still consumes the same stream and emits a single terminal Complete.</li>
+        <li><code>Streaming/StreamPumpTests.cs:153</code> — an empty stream completes with the configured placeholder, so the single-path contract holds even with zero tokens.</li>
+        <li><code>Streaming/StreamPumpFailureTests.cs:81</code> — a mid-stream throw finalizes via <code>FailAsync</code> with the partial buffer and no Complete (boundary failure injection).</li>
+        <li><code>Streaming/StreamPumpFailureTests.cs:103</code> — caller cancellation mid-stream propagates without forcing a terminal edit.</li>
+        <li><code>Streaming/StreamPumpFailureTests.cs:123</code> — a 429 mid-stream finalizes via Complete with a friendly message, logged quietly.</li>
+        <li><code>Routing/LlmStreamingRouterTests.cs:10</code> — the v1 router is exercised as a streaming responder over the gateway.</li>
+      </ul>
+
+      <h2>Known exceptions</h2>
+      <ul class="body-list">
+        <li><strong><code>CompleteAsync</code> / <code>ChatResponse.FromText</code>.</strong> These are the only sanctioned non-streaming entry points, and both are defined <em>in terms of</em> the stream: <code>CompleteAsync</code> drains it, <code>FromText</code> wraps a string as a one-element sequence. They are conveniences, not a second implementation.</li>
+        <li><strong>Final-only rendering on weak platforms.</strong> A sink whose <code>RenderCapabilities</code> has neither <code>FineGrainedEdit</code> nor <code>SupportsInterimCitations</code> accumulates silently and emits a single terminal Complete (<code>StreamPump.cs:63</code>, <code>:86</code>). It still consumes the same token stream — only the visible edits are skipped.</li>
+        <li><strong>Embeddings.</strong> Vector generation is a one-shot call and is explicitly outside this invariant.</li>
+      </ul>
+
+      <h2>Change protocol</h2>
+      <ul class="body-list">
+        <li>Any new way to obtain a model completion must return <code>IAsyncEnumerable&lt;string&gt;</code>, or be a thin drain over an existing streaming method — never a parallel buffered implementation.</li>
+        <li>Do not reintroduce a dual-mode response union (plain XOR streaming). ADR 0013 removed it deliberately; resurrecting it requires a superseding ADR.</li>
+        <li>New platform adapters implement <code>IResponseSink</code> and let <code>StreamPump</code> drive them. Do not add a per-adapter <code>await foreach</code> over tokens — that loop lives once in the pump.</li>
+        <li>Any change to the pump, the router, or the sink contract crosses an external boundary; ship at least one boundary-failure test (timeout, 5xx/429, mid-stream throw, cancellation) per the <a href="../conventions/production-readiness.html">Production Readiness</a> convention.</li>
+        <li>Changes touching <code>IChatGateway</code> or the conversation contracts go through the <code>architect-reviewer</code> gate before a PR against <code>main</code>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="rt">adr</span>0013 Conversation Streaming Sink</a>
+          <a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="rt">adr</span>0012 LLM via Semantic Kernel</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

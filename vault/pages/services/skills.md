@@ -1,8 +1,9 @@
 ---
 title: "Skills"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-21
+changes: "Re-verified against the imported development line on 2026-10-21"
 page_type: service
 status: active
 description: "Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools."

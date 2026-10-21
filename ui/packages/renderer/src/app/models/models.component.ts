@@ -183,7 +183,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -199,8 +199,8 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         gap: 20px;
       }
       .tabs {
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 12px;
         padding: 4px;
         display: inline-flex;
@@ -209,7 +209,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       }
       .tab {
         background: transparent;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         border: none;
         border-radius: 8px;
         padding: 8px 16px;
@@ -222,14 +222,14 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         gap: 6px;
       }
       .tab:hover:not(:disabled) {
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .tab--active {
-        background: #2a3245;
-        color: #e4e8f0;
+        background: var(--sc-border-strong);
+        color: var(--sc-text);
       }
       .tab--soon {
-        color: #c08a3e;
+        color: var(--sc-warning);
       }
       .tab:disabled {
         cursor: not-allowed;
@@ -246,19 +246,19 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       }
       .panel-head .lede {
         margin: 0;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
       }
       .lede--note {
         margin-top: 2px;
       }
       .empty {
-        background: #141822;
-        border: 1px dashed #252b3b;
+        background: var(--sc-surface);
+        border: 1px dashed var(--sc-border);
         border-radius: 14px;
         padding: 32px;
         text-align: center;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
         display: flex;
         flex-direction: column;
@@ -269,7 +269,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         margin: 0;
       }
       .empty-link {
-        color: #6b89c4;
+        color: var(--sc-info);
         text-decoration: none;
         font-weight: 600;
       }
@@ -277,8 +277,8 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         text-decoration: underline;
       }
       .provider {
-        background: #141822;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 14px;
         padding: 20px;
         display: flex;
@@ -294,7 +294,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         width: 44px;
         height: 44px;
         border-radius: 10px;
-        background: #1e2333;
+        background: var(--sc-surface-3);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -318,15 +318,15 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       .badge {
         font-size: 11px;
         font-weight: 600;
-        color: #7b8299;
-        background: rgba(123, 130, 153, 0.12);
-        border: 1px solid rgba(123, 130, 153, 0.25);
+        color: var(--sc-text-muted);
+        background: color-mix(in srgb, var(--sc-text-muted) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sc-text-muted) 25%, transparent);
         border-radius: 999px;
         padding: 2px 8px;
       }
       .provider-desc {
         margin: 0;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 13px;
       }
       .selected-pill {
@@ -335,20 +335,20 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         gap: 6px;
         font-size: 12px;
         font-weight: 600;
-        color: #6b89c4;
-        background: rgba(107, 137, 196, 0.1);
-        border: 1px solid rgba(107, 137, 196, 0.25);
+        color: var(--sc-accent);
+        background: color-mix(in srgb, var(--sc-accent) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sc-accent) 25%, transparent);
         border-radius: 999px;
         padding: 4px 10px;
         align-self: flex-start;
       }
       .nudge {
         margin: 0;
-        color: #c08a3e;
+        color: var(--sc-warning);
         font-size: 12px;
         font-weight: 500;
-        background: rgba(192, 138, 62, 0.08);
-        border: 1px solid rgba(192, 138, 62, 0.25);
+        background: color-mix(in srgb, var(--sc-warning) 8%, transparent);
+        border: 1px solid color-mix(in srgb, var(--sc-warning) 25%, transparent);
         border-radius: 8px;
         padding: 8px 12px;
       }
@@ -361,32 +361,32 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         display: flex;
         gap: 12px;
         align-items: center;
-        background: #171b26;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 12px;
         padding: 14px;
         cursor: pointer;
         text-align: left;
         font-family: inherit;
-        color: #e4e8f0;
+        color: var(--sc-text);
       }
       .option:hover:not(:disabled) {
-        background: #1a1f2c;
+        background: var(--sc-surface-2);
       }
       .option:disabled {
         cursor: not-allowed;
         opacity: 0.7;
       }
       .option--selected {
-        background: rgba(58, 95, 156, 0.15);
-        border-color: #4267ad;
+        background: color-mix(in srgb, var(--sc-accent) 15%, transparent);
+        border-color: var(--sc-accent);
       }
       .option-icon {
         width: 32px;
         height: 32px;
         border-radius: 8px;
-        background: #1e2333;
-        color: #7b8299;
+        background: var(--sc-surface-3);
+        color: var(--sc-text-muted);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -404,10 +404,10 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       }
       .option-desc {
         font-size: 12px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
       }
       .option-check {
-        color: #6b89c4;
+        color: var(--sc-accent);
         margin-left: auto;
       }
       .panel--soon {
@@ -415,13 +415,13 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         padding-top: 40px;
       }
       .soon-card {
-        background: #141822;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border: 1px solid var(--sc-border);
         border-radius: 14px;
         padding: 28px 32px;
         max-width: 420px;
         text-align: center;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -430,7 +430,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       .soon-card h2 {
         margin: 0;
         font-size: 18px;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-weight: 700;
       }
       .soon-card p {

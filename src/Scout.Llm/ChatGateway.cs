@@ -1,4 +1,6 @@
+using System.ClientModel;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -149,6 +151,11 @@ internal sealed class ChatGateway : IChatGateway
             {
                 throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
             }
+            catch (Exception ex) when (IsProviderDown(ex, cancellationToken))
+            {
+                throw new LlmProviderUnavailableException(
+                    "LLM provider unavailable (" + ex.GetType().Name + ").", ex);
+            }
 
             if (!string.IsNullOrEmpty(content))
             {
@@ -227,12 +234,59 @@ internal sealed class ChatGateway : IChatGateway
             {
                 throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
             }
+            catch (Exception ex) when (IsProviderDown(ex, cancellationToken))
+            {
+                throw new LlmProviderUnavailableException(
+                    "LLM provider unavailable (" + ex.GetType().Name + ").", ex);
+            }
 
             if (!string.IsNullOrEmpty(content))
             {
                 yield return content;
             }
         }
+    }
+
+    // Transport-only classification: returns true when the failure means the
+    // provider is unreachable (connection refused, socket/DNS error, or an
+    // internal timeout), false for caller-driven cancellation and reachable-but-
+    // erroring responses (5xx from a live Ollama is a model error, not "down").
+    // Shapes seen in the wild: ClientResultException wrapping HttpRequestException
+    // wrapping SocketException(111); HttpRequestException directly;
+    // HttpOperationException with a null StatusCode; internal timeouts surfacing
+    // as Task/OperationCanceledException while the caller token is not cancelled.
+    private static bool IsProviderDown(Exception ex, CancellationToken cancellationToken)
+    {
+        // Caller cancellation must propagate as cancellation, never be translated.
+        if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        // Internal timeout (no caller cancellation): treat as provider unreachable.
+        if (ex is TaskCanceledException or OperationCanceledException)
+        {
+            return true;
+        }
+
+        // A reachable provider that answered with a status is not "down"; only a
+        // null status (no response at all) counts as a transport failure.
+        if (ex is HttpOperationException httpOp)
+        {
+            return httpOp.StatusCode is null;
+        }
+
+        // Walk the chain for transport markers: ClientResultException (System.ClientModel)
+        // carries the HttpRequestException -> SocketException for a refused connection.
+        for (var current = ex; current is not null; current = current.InnerException)
+        {
+            if (current is HttpRequestException or SocketException or ClientResultException)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task<string> CompleteAsync(

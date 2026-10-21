@@ -23,6 +23,7 @@ public sealed class FeaturesServiceTests
         _store.GetAllAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyDictionary<string, FeatureState>>(
                 new Dictionary<string, FeatureState>(StringComparer.Ordinal)));
+        _credentials.IsAvailable.Returns(true);
         _credentials.StoreAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
         _credentials.ContainsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -42,7 +43,12 @@ public sealed class FeaturesServiceTests
         var snapshots = await Build().ListAsync(CancellationToken.None);
 
         snapshots.Select(s => s.Id)
-            .ShouldBe(new[] { FeatureCatalog.GitHubId, FeatureCatalog.KubernetesId });
+            .ShouldBe(new[]
+            {
+                FeatureCatalog.GitHubId,
+                FeatureCatalog.KubernetesId,
+                FeatureCatalog.CodeReviewId,
+            });
     }
 
     [Fact]
@@ -81,6 +87,76 @@ public sealed class FeaturesServiceTests
         await _credentials.Received(1)
             .StoreAsync("scout/github/pat", "ghp_x", Arg.Any<CancellationToken>());
         snapshot.HasCredentials.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SetCredentialsAsync_StoreUnavailable_FailsClosed()
+    {
+        // Fail-closed guard: an unavailable store must surface a persist
+        // failure, never a silent success. This path was previously unreachable.
+        _credentials.IsAvailable.Returns(false);
+
+        var ex = await Should.ThrowAsync<FeaturePersistFailedException>(() =>
+            Build().SetCredentialsAsync(
+                FeatureCatalog.GitHubId,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["pat"] = "ghp_x" },
+                CancellationToken.None));
+
+        ex.Message.ShouldContain("NOT saved");
+        await _credentials.DidNotReceive()
+            .StoreAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetCredentialsAsync_StoreReportsWriteFailure_FailsClosed()
+    {
+        // Even when IsAvailable claims true, a StoreAsync that returns false
+        // (backend rejected the write) must not be reported as success.
+        _credentials.StoreAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(false));
+
+        await Should.ThrowAsync<FeaturePersistFailedException>(() =>
+            Build().SetCredentialsAsync(
+                FeatureCatalog.GitHubId,
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["pat"] = "ghp_x" },
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SetupAsync_StoreUnavailable_FailsClosedBeforeAnyWrite()
+    {
+        _credentials.IsAvailable.Returns(false);
+
+        var input = new FeatureSetupInput(
+            Credentials: new Dictionary<string, string>(StringComparer.Ordinal) { ["pat"] = "ghp_x" },
+            Settings: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            });
+
+        await Should.ThrowAsync<FeaturePersistFailedException>(() =>
+            Build().SetupAsync(FeatureCatalog.GitHubId, input, CancellationToken.None));
+
+        await _credentials.DidNotReceive()
+            .StoreAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive()
+            .SetAsync(Arg.Any<string>(), Arg.Any<FeatureState>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetupAsync_StoreAvailable_PersistsCredentialsAndSettings()
+    {
+        var input = new FeatureSetupInput(
+            Credentials: new Dictionary<string, string>(StringComparer.Ordinal) { ["pat"] = "ghp_x" },
+            Settings: new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["default_repo_url"] = "https://github.com/octocat/Hello-World",
+            });
+
+        await Build().SetupAsync(FeatureCatalog.GitHubId, input, CancellationToken.None);
+
+        await _credentials.Received(1)
+            .StoreAsync("scout/github/pat", "ghp_x", Arg.Any<CancellationToken>());
     }
 
     [Fact]

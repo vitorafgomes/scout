@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using Scout.Contracts;
 using Scout.Conversation;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Streaming;
@@ -20,7 +21,7 @@ public sealed class ConversationWorkerTests
     {
         var router = Substitute.For<IConversationRouter>();
         var pump = new StreamPump(new StreamPumpOptions());
-        return new ConversationConductor(router, pump);
+        return new ConversationConductor(router, pump, NullScoutRequestContext.Instance);
     }
 
     private sealed class FakeLifetime : IHostApplicationLifetime

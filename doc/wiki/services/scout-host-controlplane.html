@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.Host.ControlPlane — Scout Wiki</title>
+<meta name="description" content="Scout.Host.ControlPlane service page: the ASP.NET Core gRPC host that serves the control-plane over a Unix domain socket or named pipe, with no TCP port.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Host.ControlPlane</nav>
+
+    <section>
+      <h1>Scout.Host.ControlPlane</h1>
+      <p class="blockquote">The ASP.NET Core gRPC host for the control-plane: it binds a Unix domain socket or a Windows named pipe — never a TCP port — gates every call with a per-session token, and exposes provider, model, and feature management to the desktop UI.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Host.ControlPlane/</code>; ADR 0011</span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        Scout.Host.ControlPlane is the executable host that puts the
+        <a href="../services/scout-controlplane.html">Scout.ControlPlane</a> domain on the wire for the desktop
+        front-end. It is a <code>Microsoft.NET.Sdk.Web</code> app (<code>OutputType</code> <code>Exe</code>) that
+        builds a <code>WebApplication</code>, configures Kestrel to listen on a Unix domain socket (Linux/macOS)
+        or a named pipe (Windows) over h2c, registers the three gRPC services plus a token interceptor, and runs.
+      </p>
+      <p>
+        It owns the <strong>transport and the security boundary</strong>, not the business logic: provider
+        lifecycle, model pull/delete, and feature setup all live in <a href="../services/scout-controlplane.html">Scout.ControlPlane</a>.
+        The host's gRPC services are thin adapters that translate wire messages to domain calls and domain
+        exceptions back to gRPC status codes. Per the transport decision in
+        <a href="../decisions/0011-backend-frontend-grpc-uds.html">ADR 0011</a>, there is deliberately
+        <strong>no network-reachable surface</strong>: filesystem permissions plus a session token gate access.
+      </p>
+      <p>
+        This is a control-plane only. It never performs executive writes against external systems — see
+        <a href="../invariants/no-executive-writes.html">No Executive Writes</a>; the operations it exposes
+        manage Scout's own local providers, models, and feature configuration.
+      </p>
+
+      <h2>Public contract</h2>
+      <ul class="body-list">
+        <li><strong><code>AddControlPlaneHost(services, config, token?)</code></strong> — DI composition root in <code>ControlPlaneServiceRegistration</code>. Registers the <code>SessionToken</code> (caller-supplied for tests, else <code>FromEnvironmentOrMint</code>), the <code>TokenAuthInterceptor</code>, gRPC with that interceptor, and the control-plane domain.</li>
+        <li><strong><code>MapControlPlaneServices(endpoints)</code></strong> — maps the three gRPC services: <code>ProvidersGrpcService</code>, <code>ModelsGrpcService</code>, <code>FeaturesGrpcService</code>.</li>
+        <li><strong>Providers RPCs</strong> — <code>ListProviders</code>, <code>GetProviderStatus</code>, <code>StartProvider</code>, <code>StopProvider</code>, <code>RestartProvider</code>, <code>SetAutostart</code>, and the server-streaming <code>WatchProviderStatus</code>.</li>
+        <li><strong>Models RPCs</strong> — the server-streaming <code>PullModel</code> (maps <code>IAsyncEnumerable&lt;PullProgress&gt;</code> onto a stream), <code>DeleteModel</code>, and <code>ListModels</code>.</li>
+        <li><strong>Features RPCs</strong> — <code>ListFeatures</code>, <code>SetCredentials</code>, <code>Setup</code>, <code>DeleteCredentials</code>, <code>Enable</code>, <code>Disable</code>.</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">ControlPlaneServiceRegistration</div><div class="t-role">Shared DI wiring used by <code>Program</code> and tests: registers gRPC, the token interceptor, the session token, and the domain; maps the three services.</div></div>
+        <div class="type-row"><div class="t-name">KestrelTransportConfigurator</div><div class="t-role">Applies the per-OS bind. On Unix it runs the anti-hijack pre-flight before binding and returns the socket path; on Windows it binds the named pipe and returns null. Always h2c (<code>HttpProtocols.Http2</code>).</div></div>
+        <div class="type-row"><div class="t-name">ControlPlaneEndpoint</div><div class="t-role">Resolves the UDS path under <code>$XDG_RUNTIME_DIR</code> (0700 fallback under temp), runs <code>PreflightSocketPath</code>, and <code>HardenSocket</code> to 0600 after Kestrel creates it.</div></div>
+        <div class="type-row"><div class="t-name">NativeUnix</div><div class="t-role"><code>internal</code> P/Invoke surface for <code>geteuid</code> and <code>stat</code> (owner + socket-ness). Tri-state <code>StatOutcome</code>; unsupported arch or unresolved symbol degrades to <code>Unavailable</code> (fail-closed).</div></div>
+        <div class="type-row"><div class="t-name">NamedPipeSecurity</div><div class="t-role">Windows-only: ACLs the named pipe to the current user (<code>CurrentUserOnly = true</code> plus an explicit <code>PipeSecurity</code> owner rule).</div></div>
+        <div class="type-row"><div class="t-name">SessionToken</div><div class="t-role">Per-session bearer token from <code>SCOUT_CONTROLPLANE_TOKEN</code> or a freshly minted 256-bit value; constant-time <code>Matches</code> via <code>FixedTimeEquals</code>. Never logged.</div></div>
+        <div class="type-row"><div class="t-name">TokenAuthInterceptor</div><div class="t-role">gRPC interceptor over all four call kinds. Reads <code>x-scout-token</code> or <code>authorization</code> (optional <code>Bearer</code> prefix); rejects absent/invalid tokens with <code>Unauthenticated</code>.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — the control plane manages Scout's own providers, models, and feature config; it does not mutate external code, infra, or data.</li>
+        <li><a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> — the session token is minted at runtime or handed in via environment out-of-band, held only in memory, and never logged.</li>
+        <li><a href="../invariants/streaming-first.html">Streaming-First</a> — progress and status flows (<code>PullModel</code>, <code>WatchProviderStatus</code>) are gRPC server-streaming RPCs, matching the transport decision.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>Program.cs:35</code> — the native-stat self-test gate: if <code>NativeUnix.SelfTest()</code> fails on a non-Windows platform the host logs <em>critical</em> and refuses to start rather than bind without a trustworthy ownership check.</li>
+        <li><code>Program.cs:49</code> — on <code>ApplicationStarted</code>, logs the UDS bind line and calls <code>HardenSocket</code> to tighten the file to 0600; a chmod failure is logged as a warning, not fatal.</li>
+        <li><code>KestrelTransportConfigurator.cs:32</code> — resolves the socket path, runs <code>PreflightSocketPath</code>, then <code>ListenUnixSocket</code> with <code>HttpProtocols.Http2</code>; Windows takes the named-pipe branch and returns null.</li>
+        <li><code>ControlPlaneEndpoint.cs:54</code> — <code>PreflightSocketPath</code>: refuses to bind when stat is <code>Unavailable</code>, when the path is a non-socket, or when an existing socket is owned by another uid; only a stale socket owned by the current uid is deleted and recreated.</li>
+        <li><code>NativeUnix.cs:62</code> — the <code>IsSupportedArchitecture</code> gate (x64/arm64 only); any other arch returns <code>Unavailable</code> so a future mis-port of the hardcoded <code>struct stat</code> offsets fails closed instead of misreading bytes.</li>
+        <li><code>SessionToken.cs:54</code> — <code>Matches</code> compares the presented token in constant time with <code>CryptographicOperations.FixedTimeEquals</code>, returning false for null/empty input.</li>
+        <li><code>TokenAuthInterceptor.cs:63</code> — <code>Authenticate</code> runs on every unary, client-stream, server-stream, and duplex call; a missing or mismatched token throws <code>Unauthenticated</code> before the domain handler runs.</li>
+        <li><code>ModelsGrpcService.cs:30</code> — <code>PullModel</code> forwards the domain async stream to the server stream and swallows <code>OperationCanceledException</code> when the client cancelled, ending the stream cleanly; <code>HttpRequestException</code> from the backend becomes <code>Internal</code>.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-controlplane.html">Scout.ControlPlane</a>
+        <span class="dep">Scout.ControlPlane.Contracts</span>
+        <span class="dep">Grpc.AspNetCore</span>
+      </div>
+      <p class="field-label">Consumed by</p>
+      <div class="deps">
+        <span class="dep">Electron main process (gRPC client)</span>
+        <a class="dep" href="../architecture/desktop-ui.html">Desktop Provisioning UI</a>
+      </div>
+      <p>
+        The renderer never touches the socket. Per <a href="../decisions/0011-backend-frontend-grpc-uds.html">ADR 0011</a>,
+        the Electron main process is the sole gRPC client and brokers an allow-listed surface to the Angular renderer over
+        <code>contextBridge</code>. The Node/Electron client, TypeScript codegen, and the Windows named-pipe spike are a
+        follow-on phase; the .NET server side described here is implemented and tested.
+      </p>
+
+      <h2>Configuration</h2>
+      <p>
+        The host reads two inputs. <code>Scout:ControlPlane:SocketPath</code> overrides the resolved UDS path (otherwise
+        it is computed under <code>$XDG_RUNTIME_DIR/scout</code>). The session token is read from the
+        <code>SCOUT_CONTROLPLANE_TOKEN</code> environment variable when present, otherwise minted at startup.
+      </p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt) — SocketPath is optional</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"ControlPlane"</span>: {
+    <span class="k">"SocketPath"</span>: <span class="s">"/run/user/1000/scout/controlplane.sock"</span>
+  }
+}
+
+<span class="c"># environment (out-of-band, never on disk world-readable)</span>
+SCOUT_CONTROLPLANE_TOKEN=&lt;per-session token&gt;</pre>
+      <div class="val-list">
+        <span class="val">UDS: $XDG_RUNTIME_DIR/scout/controlplane.sock</span>
+        <span class="val">pipe: scout-controlplane</span>
+        <span class="val">protocol: h2c</span>
+        <span class="val">UDS mode: 0600</span>
+      </div>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li>Unit tests live in <code>tests/Scout.ControlPlane.Tests/</code> (the host's <code>InternalsVisibleTo</code> target). <code>Transport/ControlPlaneEndpointTests.cs</code> and <code>Transport/NativeUnixTests.cs</code> cover socket-path resolution and the pre-flight refusals; <code>Security/SessionTokenTests.cs</code> and <code>Security/TokenAuthInterceptorTests.cs</code> cover token matching and header extraction.</li>
+        <li><code>Integration/ControlPlaneUdsIntegrationTests.cs</code> boots the host on a real temp UDS with a pinned token and a stubbed Ollama backend, including <code>NoTcpListenerExists_AfterStartup</code> which asserts every advertised TCP address refuses a connect and <code>PullModel_ServerStream_ConsumedToCompletion</code>.</li>
+        <li><code>Integration/ControlPlaneBoundaryTests.cs</code> is the production-readiness boundary suite — one test per transport failure mode: backend not listening (no hang), host disappears mid-stream, absent token, bad token (neither executes the domain), and client cancel mid-flight aborting the backend pull. Assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a> and <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-controlplane.html"><span class="rt">service</span>Scout.ControlPlane</a>
+          <a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="rt">adr</span>0011 Backend/Frontend gRPC</a>
+          <a href="../architecture/desktop-ui.html"><span class="rt">arch</span>Desktop Provisioning UI</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../invariants/secrets-never-committed.html"><span class="rt">invariant</span>Secrets Never Committed</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.Plugin.CodeReview — Scout Wiki</title>
+<meta name="description" content="Scout.Plugin.CodeReview service page: the Semantic Kernel code-review plugin with six snippet functions plus read-only repository analysis, running on the configured model with no tool round-trips and no executive writes.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Scout.Plugin.CodeReview</nav>
+
+    <section>
+      <h1>Scout.Plugin.CodeReview</h1>
+      <p class="blockquote">A code-review plugin exposed to the LLM as Semantic Kernel functions: six snippet reviews that run entirely on the configured model, plus read-only repository analysis that reads a bounded set of key files from GitHub. Every call returns a clean, user-safe string and never throws back into the kernel.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Plugin.CodeReview/</code>; reuses <code>Scout:Plugins:GitHub:Token</code>; ADR 0009</span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        Scout.Plugin.CodeReview contributes a single <code>KernelPlugin</code> named <code>"CodeReview"</code>
+        whose functions the LLM can call by name through Semantic Kernel function-calling. Six of them review a
+        piece of supplied text — assess quality, detect vulnerabilities, suggest improvements, generate tests,
+        explain code, and review a pull-request diff — and run as a single model completion with no GitHub access.
+        A seventh, <code>analyze_repository</code>, reads a bounded selection of a repository's key files from
+        GitHub (read-only, GET only) and asks the model to review the project's purpose, architecture, and risks.
+      </p>
+      <p>
+        It owns the review prompts and the GitHub read path and nothing else. It does <strong>not</strong> hold a
+        chat session — each function is one stateless completion — and it does <strong>not</strong> talk to the
+        model directly: it goes through the shared <a href="../services/scout-llm.html">Scout.Llm</a> chat service.
+        Snippet review works whenever an LLM is configured; repository analysis self-gates on the
+        <a href="../services/scout-plugin-github.html">GitHub</a> feature's token, so a host with no token simply
+        exposes the six snippet functions and returns a clear message if the model asks to analyze a repository.
+      </p>
+
+      <h2>Public contract</h2>
+      <ul class="body-list">
+        <li><strong><code>analyze_code_quality</code></strong> — <code>AnalyzeCodeQualityAsync(code, ct)</code>. Readability, naming, structure, error handling, and conventions for a snippet.</li>
+        <li><strong><code>detect_vulnerabilities</code></strong> — <code>DetectVulnerabilitiesAsync(code, ct)</code>. Injection, secrets, unsafe I/O, and auth flaws with severities and fixes.</li>
+        <li><strong><code>suggest_improvements</code></strong> — <code>SuggestImprovementsAsync(code, ct)</code>. Concrete, actionable changes: correctness, performance, clarity, idioms.</li>
+        <li><strong><code>generate_tests</code></strong> — <code>GenerateTestsAsync(code, framework?, ct)</code>. Focused unit tests over main paths and edge cases; optional framework hint (xUnit, pytest, Jest).</li>
+        <li><strong><code>explain_code</code></strong> — <code>ExplainCodeAsync(code, level = "intermediate", ct)</code>. Plain-language explanation at <code>beginner</code>/<code>intermediate</code>/<code>advanced</code>.</li>
+        <li><strong><code>review_pull_request</code></strong> — <code>ReviewPullRequestAsync(diff, ct)</code>. Reviews a unified diff and ends with <code>VERDICT: approve</code> or <code>VERDICT: request-changes</code>. Does not call GitHub.</li>
+        <li><strong><code>analyze_repository</code></strong> — <code>AnalyzeRepositoryAsync(repositoryUrl?, ct)</code>. Reads key files from GitHub and returns a repository-level review; falls back to the configured default URL; requires a GitHub token.</li>
+        <li><strong><code>AddCodeReviewPlugin(services, configuration)</code></strong> — the composition root. Binds <code>Scout:Plugins:CodeReview</code>, always registers the reviewer and the <code>"CodeReview"</code> plugin, and registers the repository fetcher only when a GitHub token is present.</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">CodeReviewPlugin</div><div class="t-role"><code>public sealed partial</code> (split across <code>.cs</code>, <code>.Repository.cs</code>, <code>.Snippets.cs</code>). Holds the seven <code>[KernelFunction]</code> methods. Every method wraps the call so handled failures become a clean error line — a tool call never throws back into the kernel.</div></div>
+        <div class="type-row"><div class="t-name">ICodeReviewer / CodeReviewer</div><div class="t-role"><code>internal sealed</code>. Builds a two-message chat (system prompt per <code>ReviewKind</code> + an untrusted-wrapped user message) and runs one completion with <code>kernel: null</code> — no function-calling, no tool round-trips. An empty response becomes <code>LlmReviewException</code>. The chat service is resolved <em>lazily</em> via a factory to avoid re-entering the kernel under construction.</div></div>
+        <div class="type-row"><div class="t-name">IRepositoryFetcher / GitHubRepositoryFetcher</div><div class="t-role"><code>internal sealed</code>, GET-only over a pre-configured <code>HttpClient</code>. Resolves the default branch, lists the recursive tree, selects key files via <code>KeyFileSelector</code>, and decodes each as strict UTF-8 within size caps. Binary/oversize/undecodable/missing files are skipped best-effort; a truncated tree or non-success status raises <code>CodeReviewFetchException</code>.</div></div>
+        <div class="type-row"><div class="t-name">ReviewKind</div><div class="t-role"><code>enum</code>: <code>Quality</code>, <code>Vulnerabilities</code>, <code>Improvements</code>, <code>Tests</code>, <code>Explain</code>, <code>PullRequest</code>, <code>Repository</code>. Selects the system prompt and how the input is framed.</div></div>
+        <div class="type-row"><div class="t-name">CodeReviewPromptTemplate</div><div class="t-role">Static prompt builder: <code>SystemFor(kind)</code>, plus <code>WrapSnippet</code>/<code>WrapDiff</code>/<code>WrapFiles</code> that fence supplied content as untrusted input within the model's <code>CorpusCharBudget</code>.</div></div>
+        <div class="type-row"><div class="t-name">RepositoryUrlParser / RepositoryCoordinates</div><div class="t-role">Parses a clone or browser URL into <code>(Owner, Repo)</code>; an unparseable URL returns a clean message rather than failing.</div></div>
+        <div class="type-row"><div class="t-name">CodeReviewOptions</div><div class="t-role">Bound from <code>Scout:Plugins:CodeReview</code>: <code>DefaultRepoUrl</code>, <code>Temperature</code>, <code>MaxTokens</code>, <code>MaxFileBytes</code> (200 KB), <code>MaxFiles</code> (12), <code>CorpusCharBudget</code> (60 000). No token is stored here.</div></div>
+        <div class="type-row"><div class="t-name">LlmReviewException / CodeReviewFetchException</div><div class="t-role">Carry user-safe messages; both are caught by the plugin and surfaced as the function's return string.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — the plugin only reads from GitHub (GET only) and runs model completions; no create, comment, merge, push, or branch operation exists on the surface.</li>
+        <li><a href="../invariants/pluggable-everything.html">Pluggable Everything</a> — the feature is a contributed <code>KernelPlugin</code> registered by configuration, not a hard dependency of the kernel.</li>
+        <li><a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a> — repository analysis reuses <code>Scout:Plugins:GitHub:Token</code> from configuration; no token is stored in this feature, and an absent token cleanly disables only the repository function.</li>
+        <li>Reviews run with <code>kernel: null</code>, so untrusted code or diffs supplied for review can never trigger tool calls — the model reviews them as data, not instructions.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>CodeReviewServiceCollectionExtensions.cs:49</code> — the reviewer is registered with a <em>lazy</em> <code>Func&lt;IChatCompletionService&gt;</code>; pulling the chat service eagerly would re-enter the kernel under construction and deadlock.</li>
+        <li><code>CodeReviewServiceCollectionExtensions.cs:55</code> — reads <code>Scout:Plugins:GitHub:Token</code>; the repository fetcher (and its configured <code>HttpClient</code>) is registered only when the token is present.</li>
+        <li><code>CodeReviewServiceCollectionExtensions.cs:80</code> — <code>KernelPluginFactory.CreateFromObject(..., "CodeReview")</code> registers the plugin under the name <code>"CodeReview"</code>.</li>
+        <li><code>CodeReviewer.cs:50</code> — the single completion runs with <code>kernel: null</code>; <code>:44–45</code> add the per-kind system prompt and the untrusted-wrapped user message.</li>
+        <li><code>CodeReviewPlugin.cs:47</code> — <code>IsHandledFailure</code> catches only <code>LlmReviewException</code>, <code>CodeReviewFetchException</code>, <code>HttpRequestException</code>, and <code>OperationCanceledException</code>; <code>:53</code> <code>ErrorLine</code> maps them to a chat-safe message (timeout → "The review timed out.").</li>
+        <li><code>CodeReviewPlugin.Repository.cs:41</code> — a null fetcher returns the token-required message; <code>:52</code> short-circuits an empty snapshot instead of asking the model to review nothing.</li>
+        <li><code>GitHubRepositoryFetcher</code> — GET-only: default branch → recursive tree → <code>KeyFileSelector</code> → strict UTF-8 within caps; a truncated tree and non-success statuses surface as <code>CodeReviewFetchException</code>, while timeouts and transport faults bubble unchanged.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Used by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-llm.html">Scout.Llm</a>
+        <a class="dep" href="../services/scout-host-console.html">Scout.Host.Console</a>
+      </div>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <span class="dep">Microsoft.SemanticKernel</span>
+        <span class="dep">SemanticKernel.Connectors.OpenAI</span>
+        <span class="dep">Microsoft.Extensions.Http</span>
+        <a class="dep" href="../services/scout-plugin-github.html">Scout.Plugin.GitHub token</a>
+        <span class="dep">GitHub REST API (read-only)</span>
+      </div>
+
+      <h2>Configuration</h2>
+      <p>Plugin keys live under <code>Scout:Plugins:CodeReview</code>. None are required — the six snippet functions work with no configuration. Repository analysis reuses the read-only token from <code>Scout:Plugins:GitHub</code>; no token is stored in this section.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Plugins"</span>: {
+    <span class="k">"CodeReview"</span>: {
+      <span class="k">"DefaultRepoUrl"</span>: <span class="s">""</span>,
+      <span class="k">"MaxFileBytes"</span>: <span class="s">200000</span>,
+      <span class="k">"MaxFiles"</span>: <span class="s">12</span>,
+      <span class="k">"CorpusCharBudget"</span>: <span class="s">60000</span>
+    },
+    <span class="k">"GitHub"</span>: { <span class="k">"Token"</span>: <span class="s">""</span> }
+  }
+}</pre>
+      <p>
+        <code>DefaultRepoUrl</code> is used by <code>analyze_repository</code> when the caller passes none.
+        <code>MaxFileBytes</code>, <code>MaxFiles</code>, and <code>CorpusCharBudget</code> bound how much repository
+        text reaches the model. Supply the GitHub token via .NET User Secrets or environment variables
+        (<code>Scout__Plugins__GitHub__Token</code>); never commit a live token.
+      </p>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li><code>tests/Scout.Plugin.CodeReview.Tests/CodeReviewPluginTests.cs</code> — each function's happy path, the token-required and empty-repository messages for <code>analyze_repository</code>, and that an <code>LlmReviewException</code>, a fetch failure, a timeout, and a transport failure each return a clean error line <em>without throwing</em>.</li>
+        <li><code>CodeReviewerTests.cs</code> — the two-message chat is built per <code>ReviewKind</code>, the completion runs with no kernel, and an empty/whitespace model response becomes <code>LlmReviewException</code>.</li>
+        <li><code>CodeReviewServiceCollectionExtensionsTests.cs</code> — the reviewer and plugin are always registered, and the repository fetcher is registered only when a GitHub token is present. This is the per-boundary failure coverage required by <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+        <li><code>CodeReviewPromptTemplateTests.cs</code> — system prompts per kind and the untrusted-input wrapping/corpus budget.</li>
+        <li><code>CodeReviewPluginMetadataTests.cs</code> — the LLM-facing metadata: stable function names and non-empty descriptions on functions and parameters.</li>
+        <li>Assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a>; doubles use NSubstitute (<code>InternalsVisibleTo</code> exposes the internal <code>IRepositoryFetcher</code> seam).</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-plugin-github.html"><span class="rt">service</span>Scout.Plugin.GitHub</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../domain/plugin.html"><span class="rt">domain</span>Semantic Kernel Plugin</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="rt">adr</span>0009 Descriptive vs Executive</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

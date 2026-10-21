@@ -95,8 +95,8 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       :host {
         display: block;
         min-height: 100vh;
-        background: #0f1117;
-        color: #e4e8f0;
+        background: var(--sc-bg);
+        color: var(--sc-text);
       }
       .shell {
         display: grid;
@@ -104,8 +104,8 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
         min-height: 100vh;
       }
       .rail {
-        background: #171b26;
-        border-right: 1px solid #252b3b;
+        background: var(--sc-surface);
+        border-right: 1px solid var(--sc-border);
         padding: 24px 12px;
         display: flex;
         flex-direction: column;
@@ -114,7 +114,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       .brand {
         font-size: 20px;
         font-weight: 700;
-        color: #e4e8f0;
+        color: var(--sc-text);
         padding: 0 8px;
         font-family:
           Inter,
@@ -136,7 +136,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
         gap: 10px;
         padding: 8px 12px;
         border-radius: 6px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         font-size: 14px;
         text-decoration: none;
         font-family:
@@ -146,12 +146,12 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
           sans-serif;
       }
       .nav-link:hover {
-        background: #1e2333;
-        color: #e4e8f0;
+        background: var(--sc-surface-3);
+        color: var(--sc-text);
       }
       .nav-link--active {
-        background: #1e2e45;
-        color: #e4e8f0;
+        background: var(--sc-surface-3);
+        color: var(--sc-text);
       }
       .nav-icon {
         flex-shrink: 0;

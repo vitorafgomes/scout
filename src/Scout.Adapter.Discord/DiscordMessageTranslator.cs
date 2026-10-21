@@ -60,7 +60,9 @@ public sealed partial class DiscordMessageTranslator
             UserId: inbound.AuthorId.ToString(),
             ChannelId: inbound.ChannelId.ToString(),
             Text: stripped,
-            Timestamp: inbound.Timestamp);
+            Timestamp: inbound.Timestamp,
+            IsDirectMessage: isDm,
+            AdapterName: "Discord");
         return true;
     }
 

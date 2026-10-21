@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Snapshot — Scout Wiki</title>
+<meta name="description" content="A five-minute snapshot of Scout: the read-only chatops assistant built on .NET 10 and Semantic Kernel, local-first, with pluggable providers, adapters, and plugins.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Overview</a><span class="sep">/</span>Project Snapshot</nav>
+
+    <section>
+      <h1>Project Snapshot</h1>
+      <p class="blockquote">Scout is a read-only chatops assistant for Discord, Slack, and Microsoft Teams. It answers operational and development questions in chat by querying GitHub, searching indexed local repositories, and calling a configurable LLM provider — and it never writes to any external system.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype">overview</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> README.md; vault <code>01-overview/vision.md</code>; vault <code>02-architecture/high-level.md</code></span>
+      </div>
+
+      <div class="hero">
+        <p>
+          This page is the five-minute answer to <em>"what is Scout?"</em>. Read it first, then follow the
+          links into <a href="../overview/vision.html">Vision</a>, the
+          <a href="../architecture/high-level.html">high-level architecture</a>, and the individual service pages.
+        </p>
+      </div>
+
+      <div class="pill-row">
+        <span class="pill">read-only chatops</span>
+        <span class="pill">.NET 10</span>
+        <span class="pill">Semantic Kernel</span>
+        <span class="pill">local-first (Ollama)</span>
+        <span class="pill">Discord &middot; Slack &middot; Teams</span>
+        <span class="pill">8 LLM providers</span>
+        <span class="pill">MIT license</span>
+        <span class="pill">pre-alpha</span>
+      </div>
+
+      <h2>What Scout is</h2>
+      <p>
+        Scout is a chat bot that runs inside a team's existing chat platform and answers natural-language or
+        slash-command queries by reading from integrated systems. Today it answers by querying GitHub, by searching
+        indexed local repositories through vector similarity, and by composing answers through a configurable LLM
+        provider. Every integration is read-only by contract.
+      </p>
+      <p>
+        Equally important is what Scout is <strong>not</strong>: it is not a ticketing bot, not an incident-response
+        tool, and not a code-generation bot. The LLM is an optional composition layer rather than the product —
+        some plugins return deterministic answers without one. The read-only stance is the single hardest rule in
+        the codebase; see <a href="../invariants/no-executive-writes.html">No Executive Writes</a> and
+        <a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a>.
+      </p>
+
+      <h2>How it is built</h2>
+      <p>
+        Scout is a .NET 10 solution (<code>Scout.slnx</code>). All active source lives under <code>src/</code>;
+        anything under <code>src/old/</code> and <code>tests/old/</code> is deprecated legacy code that is not part
+        of the build. Microsoft Semantic Kernel is the orchestration core: chat completions and embeddings flow
+        through one shared kernel, and feature modules contribute <code>KernelPlugin</code> instances for
+        function-calling. See the architecture overview in
+        <a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a>.
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name">.NET 10</div><div class="t-role">SDK 10.0.100 or later, pinned in <code>global.json</code> with <code>rollForward: latestMinor</code>. No .NET 8/9 artifacts.</div></div>
+        <div class="type-row"><div class="t-name">Semantic Kernel</div><div class="t-role">The orchestration core. One shared kernel hosts chat completion, embeddings, and the plugin set.</div></div>
+        <div class="type-row"><div class="t-name">Desktop UI</div><div class="t-role">Electron 41 + Angular 21 (zoneless, Signals), Bun toolchain. A provisioning shell that supervises <code>Scout.Host.Console</code>.</div></div>
+        <div class="type-row"><div class="t-name">License</div><div class="t-role">MIT &mdash; Copyright (c) 2026 Chiacho Gomes.</div></div>
+      </div>
+
+      <h2>Pluggable everything</h2>
+      <p>
+        Three axes of the system are swappable by configuration alone, with no code change: the LLM provider, the
+        chat adapter, and the feature plugins. This is a project invariant — see
+        <a href="../invariants/pluggable-everything.html">Pluggable Everything</a> and
+        <a href="../invariants/local-first-default.html">Local-First Default</a>.
+      </p>
+      <p class="field-label">LLM providers (select with <code>Scout:Llm:Provider</code>)</p>
+      <div class="val-list">
+        <span class="val">Ollama (default)</span><span class="val">OpenAI</span><span class="val">AzureOpenAI</span><span class="val">AzureAIInference</span>
+        <span class="val">Gemini</span><span class="val">Mistral</span><span class="val">HuggingFace</span><span class="val">OpenRouter</span>
+      </div>
+      <p>
+        Ollama is the default so contributors can run Scout without paid credentials, defaulting to
+        <code>http://localhost:11434</code> with chat model <code>llama3.1</code> and embedding model
+        <code>nomic-embed-text</code>. The gateway lives in <a href="../services/scout-llm.html">Scout.Llm</a>;
+        the design is recorded in <a href="../decisions/0012-llm-communication-through-semantic-kernel.html">ADR 0012</a>.
+      </p>
+
+      <h2>The active services</h2>
+      <p>
+        Eleven backend projects make up the running system. The core pipeline (LLM gateway, conversation, adapters,
+        project knowledge RAG, skills) builds and tests pass on CI.
+      </p>
+      <div class="types">
+        <div class="type-row"><div class="t-name"><a href="../services/scout-llm.html">Scout.Llm</a></div><div class="t-role">LLM gateway. Wraps Semantic Kernel with a streaming-first <code>IChatGateway</code>; selects one of eight providers at startup.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-conversation.html">Scout.Conversation</a></div><div class="t-role">Platform-agnostic conversation core. Per-channel, per-user in-memory history; routes messages through the gateway with streaming.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-knowledge.html">Scout.Knowledge</a></div><div class="t-role">Project knowledge RAG. Chunks local repo files, stores embeddings in SQLite via sqlite-vec, exposes a <code>search_project</code> plugin. Auto-discovery and optional file-watch re-indexing.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-skills.html">Scout.Skills</a></div><div class="t-role">Retrieval-based skills. Loads markdown skill files, selects the most relevant per turn by cosine similarity, injects it into the system prompt; also a <code>Skills</code> plugin.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a></div><div class="t-role">Read-only GitHub plugin. Exposes <code>list_repositories</code>, <code>list_pull_requests</code>, <code>list_issues</code>, <code>get_repository</code>. Self-gates on <code>Scout:Plugins:GitHub:Token</code>.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-controlplane.html">Scout.ControlPlane</a></div><div class="t-role">Domain services for the control plane: provider management, feature catalog, credential store, runtime configuration. Contracts shipped as gRPC/Protobuf.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-adapter-discord.html">Adapter.Discord</a></div><div class="t-role">Discord chat adapter. Self-gates on <code>Scout:Adapters:Discord:BotToken</code>.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-adapter-slack.html">Adapter.Slack</a></div><div class="t-role">Slack adapter using Socket Mode (no public URL). Self-gates on <code>Scout:Adapters:Slack:BotToken</code>.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-adapter-teams.html">Adapter.Teams</a></div><div class="t-role">Microsoft Teams adapter. Self-gates on <code>Scout:Adapters:Teams:AppId</code>.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-host-console.html">Host.Console</a></div><div class="t-role">Main runnable host. Starts configured adapters and the conversation worker; handles the one-shot <code>index &lt;project&gt;</code> command.</div></div>
+        <div class="type-row"><div class="t-name"><a href="../services/scout-host-controlplane.html">Host.ControlPlane</a></div><div class="t-role">ASP.NET Core host for the control-plane gRPC service. Talks to the Desktop UI over a Unix domain socket or named pipe.</div></div>
+      </div>
+      <p>
+        Each chat adapter is self-gating: if its credentials are absent, the adapter is skipped and the host
+        continues with the remaining ones. There is no public TCP port between the backend and the Desktop UI —
+        the link is a Unix domain socket on Linux/macOS or a named pipe on Windows; see
+        <a href="../decisions/0011-backend-frontend-grpc-uds.html">ADR 0011</a>.
+      </p>
+
+      <h2>The read-only invariant</h2>
+      <p>
+        Scout enforces read-only access at the design level. The GitHub plugin exposes only listing and retrieval
+        functions, and no adapter, plugin, or knowledge operation writes to any external system.
+        <code>CONTRIBUTING.md</code> treats this as a hard invariant: any PR introducing a write operation will not
+        be merged. The project draws a precise line between <em>descriptive writes</em> — content another agent must
+        read and decide to act on — and <em>executive writes</em>, which mutate code, infra, configuration, or data
+        without a human gate. Executive writes are forbidden, and boundary cases default to forbidden.
+      </p>
+      <ul class="body-list">
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — the hard, codebase-wide rule.</li>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a> — the full classification and per-plugin allow-list.</li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html">ADR 0009</a> — the decision that records the split.</li>
+      </ul>
+
+      <h2>Where things live</h2>
+      <ul class="body-list">
+        <li>Backend source: <code>src/</code> (solution <code>Scout.slnx</code>); the runnable host is <code>src/Scout.Host.Console</code>.</li>
+        <li>Desktop UI: <code>ui/</code> — an Electron application built with Angular and packaged with electron-builder.</li>
+        <li>Configuration: all keys under the <code>Scout:</code> prefix; secrets via .NET User Secrets or environment variables, never committed. See <a href="../invariants/secrets-never-committed.html">Secrets Never Committed</a>.</li>
+        <li>Project-knowledge database: <code>~/.local/share/Scout/project-knowledge.db</code> on Linux (<code>%LOCALAPPDATA%/Scout/</code> on Windows).</li>
+        <li>Documentation: ADRs and specs live in the Obsidian vault under <code>obsidian-vault/scout/</code>, not in the source repo.</li>
+      </ul>
+
+      <h2>Status</h2>
+      <p>
+        Scout is <strong>pre-alpha</strong>. The core pipeline builds and passes tests on CI; the Desktop UI has its
+        own CI pipeline (running on Ubuntu, macOS, and Windows) but is not yet in a release state. For the current
+        picture of what is done and what is pending, see
+        <a href="../overview/status.html">Status &amp; Pending Work</a> and the
+        <a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a>.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../overview/vision.html"><span class="rt">overview</span>Vision</a>
+          <a href="../overview/status.html"><span class="rt">overview</span>Status &amp; Pending Work</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+          <a href="../invariants/no-executive-writes.html"><span class="rt">invariant</span>No Executive Writes</a>
+          <a href="../invariants/pluggable-everything.html"><span class="rt">invariant</span>Pluggable Everything</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

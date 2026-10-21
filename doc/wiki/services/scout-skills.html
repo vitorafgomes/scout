@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scout.Skills — Scout Wiki</title>
+<meta name="description" content="Scout.Skills service page: the retrieval-based skills subsystem that loads markdown skills, selects the most relevant per turn via cosine similarity, and injects it into the system prompt.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Services</a><span class="sep">/</span>Scout.Skills</nav>
+
+    <section>
+      <h1>Scout.Skills</h1>
+      <p class="blockquote">The retrieval-based skills subsystem: it loads markdown skill files, embeds their descriptions, and selects the most relevant skill per turn via cosine similarity to inject into the system prompt.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype service">service</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> <code>src/Scout.Skills/</code>; README</span>
+      </div>
+
+      <h2>Responsibility</h2>
+      <p>
+        Scout.Skills turns a directory of markdown skill files into per-turn behavioral guidance.
+        Each skill is a <code>name</code>/<code>description</code> frontmatter header plus an instructional
+        body. The subsystem embeds the descriptions, and for every user message it ranks the skills by
+        cosine similarity, keeps those above a threshold, and hands the top matches back to the conversation
+        layer for injection into the system prompt. The retrieval path is best-effort: any failure degrades
+        to "no skills" rather than breaking the turn.
+      </p>
+      <p>
+        It also exposes a second, tool-based surface. A <code>Skills</code> Semantic Kernel plugin lets the
+        model explicitly list available skills and load a named skill's full instructions on demand. That
+        surface is deliberately <strong>embedding-free</strong>: it reads from a plain catalog so the shared
+        kernel can aggregate the plugin without re-entering the embedding generator and forming a DI
+        construction cycle.
+      </p>
+      <p>
+        It does <strong>not</strong> own the system prompt or the conversation turn — that is
+        <a href="../services/scout-conversation.html">Scout.Conversation</a>, which calls the selector and
+        then composes the prompt. It also never writes anything; skills are read from disk only.
+      </p>
+
+      <h2>Public contract</h2>
+      <ul class="body-list">
+        <li><strong><code>ISkillSelector</code></strong> — <code>SelectAsync(message, cancellationToken)</code>: returns the skills whose descriptions best match the message, ordered by descending similarity, limited and thresholded by configuration. Implementations never throw; on any failure they return an empty list.</li>
+        <li><strong><code>ISkillCatalog</code></strong> — <code>All()</code> and <code>Find(name)</code>: embedding-free access to the loaded skills, backing the tool-based plugin so the kernel can aggregate it without the embedder.</li>
+        <li><strong><code>SkillsPlugin</code></strong> — the <code>Skills</code> kernel plugin: <code>list_skills</code> and <code>load_skill</code> <code>[KernelFunction]</code>s for LLM-driven discovery and on-demand loading.</li>
+        <li><strong><code>SkillPromptComposer.Compose(basePrompt, skills)</code></strong> — appends each selected skill's body under a labeled delimiter beneath the base prompt; returns the base prompt unchanged when no skills are supplied.</li>
+        <li><strong><code>AddScoutSkills(services, configuration)</code></strong> — the composition root: binds <code>Scout:Skills</code> and registers the selector, catalog, and plugin (or only the no-op selector when disabled).</li>
+      </ul>
+
+      <h3>Key types</h3>
+      <div class="types">
+        <div class="type-row"><div class="t-name">Skill</div><div class="t-role"><code>sealed record</code> of <code>Name</code>, <code>Description</code> (embedded for retrieval), <code>Body</code> (injected into the prompt), and <code>SourcePath</code>.</div></div>
+        <div class="type-row"><div class="t-name">SkillSelector</div><div class="t-role">Embedding-driven <code>ISkillSelector</code>. Builds the embedded index lazily on first <code>SelectAsync</code>; ranks by cosine, filters by threshold, takes <code>TopN</code>. Never throws.</div></div>
+        <div class="type-row"><div class="t-name">NoOpSkillSelector</div><div class="t-role"><code>ISkillSelector</code> that always returns an empty list. Registered when the feature is disabled so consumers depend on the interface uniformly.</div></div>
+        <div class="type-row"><div class="t-name">SkillCatalog</div><div class="t-role">Embedding-free <code>ISkillCatalog</code>. Loads skills once lazily via <code>SkillFileLoader</code> and caches them for the process lifetime.</div></div>
+        <div class="type-row"><div class="t-name">SkillFileLoader</div><div class="t-role">Parses <code>*.md</code> files: requires opening/closing <code>---</code> fences, <code>name</code> and <code>description</code> keys, and a non-empty body. Malformed files are skipped with a warning; loading never throws.</div></div>
+        <div class="type-row"><div class="t-name">SkillsPlugin</div><div class="t-role">Kernel plugin over the catalog. <code>list_skills</code> returns one <code>name: description</code> line per skill; <code>load_skill</code> returns a named skill's body. Always returns a clean, non-empty string.</div></div>
+        <div class="type-row"><div class="t-name">VectorMath</div><div class="t-role"><code>internal static</code> cosine helper. Returns 0 when vector lengths differ or either magnitude is zero.</div></div>
+      </div>
+
+      <h2>Invariants</h2>
+      <ul class="body-list">
+        <li><a href="../invariants/no-executive-writes.html">No Executive Writes</a> — the subsystem only reads markdown files from disk; it never writes to any external system.</li>
+        <li><a href="../invariants/local-first-default.html">Local-First Default</a> — embeddings flow through the shared embedding generator, which defaults to local Ollama, so skill retrieval needs no paid credentials.</li>
+        <li><a href="../invariants/pluggable-everything.html">Pluggable Everything</a> — the feature is toggled by <code>Scout:Skills:Enabled</code>; when off, only <code>NoOpSkillSelector</code> is registered and consumers are unaffected.</li>
+      </ul>
+
+      <h2>Hot spots</h2>
+      <ul class="body-list">
+        <li><code>SkillSelector.cs:49</code> — <code>SelectAsync</code>: embeds the message, ranks the index by cosine, filters by <code>SimilarityThreshold</code>, takes <code>TopN</code>; the whole body is wrapped in a <code>try</code> that logs and returns <code>[]</code> on any failure.</li>
+        <li><code>SkillSelector.cs:88</code> — <code>BuildIndexAsync</code>: built lazily (<code>SkillSelector.cs:44</code>, <code>ExecutionAndPublication</code>) so DI build and host startup do zero file I/O, embedding, or network work.</li>
+        <li><code>SkillFileLoader.cs:63</code> — <code>TryParse</code>: the frontmatter contract — opening fence at line 0, <code>name</code> + <code>description</code> required, non-empty body — with malformed files skipped via warnings.</li>
+        <li><code>SkillPromptComposer.cs:18</code> — <code>Compose</code>: appends each selected skill body under a <code># Relevant skill:</code> delimiter; returns the base prompt verbatim when no skills are supplied.</li>
+        <li><code>VectorMath.cs:15</code> — <code>Cosine</code>: the similarity primitive used for ranking; guards against mismatched lengths and zero magnitude.</li>
+        <li><code>SkillsServiceCollectionExtensions.cs:43</code> — the <code>Enabled</code> branch: registers loader, selector, catalog, and the <code>Skills</code> kernel plugin; the <code>else</code> arm at <code>SkillsServiceCollectionExtensions.cs:69</code> registers only the no-op selector.</li>
+        <li><code>SkillsServiceCollectionExtensions.cs:48</code> — the selector resolves the embedding generator directly from DI rather than from the shared kernel, and the catalog/plugin at <code>:57</code>–<code>:65</code> stay embedding-free, both deliberate to avoid the kernel-to-embedder construction cycle.</li>
+      </ul>
+
+      <h2>Cross-service dependencies</h2>
+      <p class="field-label">Used by</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-conversation.html">Scout.Conversation</a>
+      </div>
+      <p class="field-label">Depends on</p>
+      <div class="deps">
+        <a class="dep" href="../services/scout-llm.html">Scout.Llm (embedding generator)</a>
+        <span class="dep">Microsoft.SemanticKernel.Abstractions</span>
+        <span class="dep">Microsoft.Extensions.AI.Abstractions</span>
+      </div>
+      <p>
+        Scout.Conversation's <code>LlmStreamingRouter</code> calls <code>ISkillSelector.SelectAsync</code> for the
+        user message, then <code>SkillPromptComposer.Compose</code> to fold the selected skills into the system
+        prompt before streaming the turn. The selector consumes the same
+        <code>IEmbeddingGenerator&lt;string, Embedding&lt;float&gt;&gt;</code> registered by Scout.Llm, and the
+        <code>Skills</code> kernel plugin is aggregated onto the shared kernel for function-calling.
+      </p>
+
+      <h2>Configuration</h2>
+      <p>All keys live under <code>Scout:Skills</code>. Code defaults make the feature work with no section present.</p>
+      <pre class="cfg"><span class="c"># appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Skills"</span>: {
+    <span class="k">"Enabled"</span>: <span class="s">true</span>,
+    <span class="k">"Directory"</span>: <span class="s">"skills"</span>,
+    <span class="k">"TopN"</span>: <span class="s">1</span>,
+    <span class="k">"SimilarityThreshold"</span>: <span class="s">0.55</span>
+  }
+}</pre>
+      <ul class="body-list">
+        <li><code>Enabled</code> (default <code>true</code>) — toggles the whole subsystem; when false only the no-op selector is registered.</li>
+        <li><code>Directory</code> (default <code>skills</code>) — scanned recursively for <code>*.md</code>; resolved relative to <code>AppContext.BaseDirectory</code> when not absolute.</li>
+        <li><code>TopN</code> (default <code>1</code>) — maximum skills injected per turn.</li>
+        <li><code>SimilarityThreshold</code> (default <code>0.55</code>) — minimum cosine similarity for a skill to be selected.</li>
+      </ul>
+
+      <h2>Testing footprint</h2>
+      <ul class="body-list">
+        <li>Unit tests in <code>tests/Scout.Skills.Tests/</code> cover the loader (<code>SkillFileLoaderTests</code>), catalog (<code>SkillCatalogTests</code>), selector ranking and graceful degradation (<code>SkillSelectorTests</code>), prompt composition (<code>SkillPromptComposerTests</code>), the plugin and its metadata (<code>SkillsPluginTests</code>, <code>SkillsPluginMetadataTests</code>), and DI wiring (<code>SkillsServiceCollectionExtensionsTests</code>).</li>
+        <li>The selector is exercised with a <code>FakeEmbeddingGenerator</code> so retrieval is tested without a live embedding backend. Assertions use Shouldly per <a href="../conventions/testing.html">the testing convention</a>.</li>
+        <li>Because the embedding generator is an external boundary, failure tests (embedder throwing / empty index → empty result) are required here per <a href="../conventions/production-readiness.html">Production Readiness</a>.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../architecture/skills-subsystem.html"><span class="rt">arch</span>Skills Subsystem</a>
+          <a href="../domain/skill.html"><span class="rt">domain</span>Skill</a>
+          <a href="../domain/plugin.html"><span class="rt">domain</span>Semantic Kernel Plugin</a>
+          <a href="../services/scout-llm.html"><span class="rt">service</span>Scout.Llm</a>
+          <a href="../services/scout-conversation.html"><span class="rt">service</span>Scout.Conversation</a>
+          <a href="../conventions/code-style.html"><span class="rt">conv</span>Code Style</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

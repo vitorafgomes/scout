@@ -1,67 +1,44 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
-import type { WorkerEvent } from '@scout/shared';
+import { describe, expect, it } from 'vitest';
 
-import { LogStore } from '../../core/log.store';
-import { LogsComponent } from './logs.component';
+import { classifyWorkerLine } from './logs.component';
 
-function makeLogStore() {
-  const eventsSig = signal<readonly WorkerEvent[]>([]);
-  return {
-    events: eventsSig.asReadonly(),
-    _set: (events: readonly WorkerEvent[]) => eventsSig.set(events),
-    clear: () => {},
-    copy: () => {},
-  };
-}
-
-function stderr(line: string): WorkerEvent {
-  return { kind: 'stderr', line, ts: '2026-05-29T16:00:00.000Z' };
-}
-
-async function setup(events: readonly WorkerEvent[]) {
-  const store = makeLogStore();
-  store._set(events);
-
-  TestBed.configureTestingModule({
-    imports: [LogsComponent],
-    providers: [provideZonelessChangeDetection(), { provide: LogStore, useValue: store }],
+describe('classifyWorkerLine', () => {
+  it('maps .NET console logger prefixes on stderr to their real level', () => {
+    expect(classifyWorkerLine('stderr', 'info: Microsoft.Hosting.Lifetime[0]', 'info')).toBe(
+      'info',
+    );
+    expect(classifyWorkerLine('stderr', 'warn: Scout.Skills.SkillSelector[0]', 'info')).toBe(
+      'warn',
+    );
+    expect(classifyWorkerLine('stderr', 'fail: Scout.Llm.ChatGateway[0]', 'info')).toBe('error');
+    expect(classifyWorkerLine('stderr', 'crit: Anything[0]', 'info')).toBe('error');
+    expect(classifyWorkerLine('stderr', 'dbug: Anything[0]', 'info')).toBe('debug');
+    expect(classifyWorkerLine('stderr', 'trce: Anything[0]', 'info')).toBe('debug');
   });
 
-  const fixture = TestBed.createComponent(LogsComponent);
-  fixture.detectChanges();
-  return fixture.componentInstance;
-}
-
-describe('LogsComponent level classification', () => {
-  beforeEach(() => {
-    TestBed.resetTestingModule();
+  it('treats [scout] status markers on stderr as info', () => {
+    expect(
+      classifyWorkerLine('stderr', '[scout] env=Production adapters configured: Discord', 'error'),
+    ).toBe('info');
+    expect(classifyWorkerLine('stderr', '[scout] host started', 'error')).toBe('info');
   });
 
-  it('classifies info-prefixed stderr lines as info, not error', async () => {
-    // The .NET worker host routes every level to stderr by design, so the
-    // level must be read from the line content, not from the stream.
-    const component = await setup([stderr('info: Microsoft.Hosting.Lifetime[0]')]);
-
-    const levels = component.visibleLines().map((l) => l.level);
-    expect(levels).toEqual(['info']);
+  it('inherits the previous entry level on indented continuation lines', () => {
+    expect(
+      classifyWorkerLine('stderr', '      Application started. Press Ctrl+C to shut down.', 'info'),
+    ).toBe('info');
+    expect(classifyWorkerLine('stderr', '      something went wrong', 'error')).toBe('error');
+    expect(classifyWorkerLine('stderr', '   at Scout.Program.Main()', 'error')).toBe('error');
   });
 
-  it('still classifies fail/crit stderr lines as error', async () => {
-    const component = await setup([
-      stderr('fail: Scout.Host.Console.ConversationWorker[0]'),
-      stderr('crit: Scout.Host.Console.ConversationWorker[0]'),
-    ]);
-
-    const levels = component.visibleLines().map((l) => l.level);
-    expect(levels).toEqual(['error', 'error']);
+  it('keeps raw unformatted stderr as error', () => {
+    expect(
+      classifyWorkerLine('stderr', 'Unhandled exception. System.InvalidOperationException', 'info'),
+    ).toBe('error');
   });
 
-  it('classifies warn and debug stderr lines by content', async () => {
-    const component = await setup([stderr('warn: some warning'), stderr('dbug: trace details')]);
-
-    const levels = component.visibleLines().map((l) => l.level);
-    expect(levels).toEqual(['warn', 'debug']);
+  it('classifies stdout markers as info', () => {
+    expect(classifyWorkerLine('stdout', 'SCOUT_READY', 'info')).toBe('info');
+    expect(classifyWorkerLine('stdout', 'SCOUT_HTTP=127.0.0.1:45611', 'info')).toBe('info');
   });
 });

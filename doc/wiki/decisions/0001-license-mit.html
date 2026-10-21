@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0001 — License MIT — Scout Wiki</title>
+<meta name="description" content="ADR 0001: Scout is released under the MIT license to align with the .NET OSS ecosystem and keep permissive, low-friction adoption.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0001</nav>
+
+    <section>
+      <h1>ADR 0001 — License: MIT</h1>
+      <p class="blockquote">Scout is released under the MIT license to align with the .NET open-source ecosystem and keep adoption permissive and low-friction.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-21</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-04-21-license-mit.md</code>; <code>LICENSE</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-04-21. The full text lives in the source repository at <code>LICENSE</code>.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        Scout is an open-source project, so the license is a foundational decision. It shapes three downstream
+        concerns:
+      </p>
+      <ul class="body-list">
+        <li><strong>Dependency compatibility</strong> — which libraries Scout can adopt without a license clash.</li>
+        <li><strong>Consumer freedom</strong> — what users may do with Scout: redistribution, commercial use, embedding.</li>
+        <li><strong>Contributor expectations</strong> — how patents and attribution are handled for incoming work.</li>
+      </ul>
+      <p>
+        For a .NET OSS project of this shape the realistic candidates are MIT and Apache-2.0. Both are
+        OSI-approved, permissive, and GPL-compatible.
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        Scout ships under the <strong>MIT</strong> license. The committed <code>LICENSE</code> file carries the
+        notice <em>Copyright (c) 2026 Chiacho Gomes</em> and the standard MIT permission and warranty-disclaimer text.
+      </p>
+
+      <div class="callout good">
+        <div class="c-title">What MIT permits</div>
+        <p style="margin:0 0 8px 0">Users may, free of charge, deal in the software without restriction, subject only to preserving the copyright and permission notice.</p>
+        <ul class="body-list" style="margin-bottom:0">
+          <li>Use, copy, and modify the software</li>
+          <li>Merge, publish, and distribute it</li>
+          <li>Sublicense and sell copies</li>
+          <li>Embed Scout and relicense derivatives, including for commercial use</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">The single obligation</div>
+        <p style="margin:0">The copyright notice and the permission notice must be included in all copies or substantial portions of the software. The software is provided "as is", without warranty of any kind; the authors and copyright holders are not liable for any claim or damages arising from its use.</p>
+      </div>
+
+      <h2>Rationale</h2>
+      <ul class="body-list">
+        <li><strong>Ecosystem alignment.</strong> Scout's core dependency, <a href="../decisions/0012-llm-communication-through-semantic-kernel.html">Microsoft Semantic Kernel</a>, is MIT. The wider .NET OSS ecosystem (<code>dotnet/runtime</code>, <code>dotnet/aspnetcore</code>, <code>dotnet/efcore</code>, most community libraries) defaults to MIT.</li>
+        <li><strong>Simplicity.</strong> MIT is short, well-understood, and rarely triggers legal review inside companies, so contributors from corporate environments can clear it quickly.</li>
+        <li><strong>Permissive.</strong> Users can embed Scout, relicense derivatives, and use it commercially without obligations beyond preserving the copyright notice.</li>
+      </ul>
+
+      <h2>Alternatives</h2>
+      <div class="callout danger">
+        <div class="c-title">Rejected alternatives</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li><strong>Apache-2.0</strong> — adds an explicit patent grant that matters for company-backed projects holding software patents. Scout is an individual-initiated OSS project, so the patent clause adds weight without a matching benefit. MIT grants no explicit patent rights, but this has not been a practical issue for comparable .NET projects.</li>
+          <li><strong>AGPL-3.0 / GPL-3.0</strong> — copyleft would deter corporate adoption and add friction to embedding Scout in internal tooling, the primary deployment shape, and would clash with several dependencies.</li>
+          <li><strong>Dual-license (MIT + commercial)</strong> — misaligned with Scout's positioning as a community-driven OSS tool.</li>
+        </ul>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li>License-compatible with Semantic Kernel and the mainstream .NET OSS dependency set, so adopting new libraries rarely raises a licensing question.</li>
+        <li>Low legal friction for corporate contributors and consumers; no CLA is required, and the PR template carries a short DCO-style confirmation.</li>
+        <li>All first-party plugins and adapters inherit MIT unless they depend on incompatibly-licensed components (none planned).</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li>No explicit patent grant, unlike Apache-2.0. Accepted as a low practical risk for an individual-initiated project, but it is a deliberate trade-off rather than a non-issue.</li>
+        <li>Permissiveness means derivatives may be closed-source; the project gives up any copyleft guarantee of contributions flowing back upstream.</li>
+      </ul>
+
+      <h2>Enforcement</h2>
+      <ul class="body-list">
+        <li><code>LICENSE</code>, <code>CODE_OF_CONDUCT.md</code>, <code>SECURITY.md</code>, and <code>CONTRIBUTING.md</code> live in the source repository.</li>
+        <li>Contributions are accepted under MIT; the PR template includes a short DCO-style confirmation in place of a CLA.</li>
+        <li>The license badge in the source <code>README.md</code> links to <code>LICENSE</code>.</li>
+        <li>The commercial relicensing of FluentAssertions is the reason <a href="../invariants/shouldly-only.html">tests use Shouldly</a>, which stays MIT — a concrete instance of keeping the dependency tree MIT-aligned.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../overview/vision.html"><span class="rt">overview</span>Vision</a>
+          <a href="../conventions/code-style.html"><span class="rt">convention</span>Code Style</a>
+          <a href="../invariants/shouldly-only.html"><span class="rt">invariant</span>Shouldly-Only Tests</a>
+          <a href="../decisions/0003-shouldly-migration.html"><span class="rt">adr</span>0003 Shouldly Migration</a>
+          <a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="rt">adr</span>0012 LLM via Semantic Kernel</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

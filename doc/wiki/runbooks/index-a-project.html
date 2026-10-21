@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Index a Project — Scout Wiki</title>
+<meta name="description" content="Runbook: index a configured local repository into Scout's project-knowledge database with the one-shot console index command.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Runbooks</a><span class="sep">/</span>Index a Project</nav>
+
+    <section>
+      <h1>Index a Project</h1>
+      <p class="blockquote">Run this when you want Scout to answer questions about a local repository: it chunks the repo, embeds it, and writes the vectors into the project-knowledge database so the <code>search_project</code> plugin can retrieve them.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype runbook">runbook</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> README index command; <code>Scout:Projects</code> config</span>
+      </div>
+
+      <h2>When to run this</h2>
+      <p>
+        The console host exposes a one-shot <code>index</code> command that indexes a single configured
+        project and exits immediately, without starting any chat adapters. Reach for it in these situations:
+      </p>
+      <ul class="body-list">
+        <li><strong>First-time setup</strong> — you have just added a repository to <code>Scout:Projects</code> and want it searchable before the host starts serving chat.</li>
+        <li><strong>Full re-index</strong> — the repository has changed substantially and you want a clean pass rather than waiting for incremental updates.</li>
+        <li><strong>No file-watch</strong> — <code>Scout:Projects:Watch:Enabled</code> is <code>false</code> (the default), so re-indexing is a manual step.</li>
+        <li><strong>Batch / CI provisioning</strong> — you want to populate the knowledge database as a discrete step in a script, with the process exiting on completion.</li>
+      </ul>
+      <p>
+        If incremental file-watch re-indexing is already enabled, ongoing edits are picked up automatically
+        and you only need this command for the initial pass or a deliberate rebuild. See
+        <a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a> for how indexing and
+        retrieval fit together.
+      </p>
+
+      <h2>Preconditions</h2>
+      <ul class="check">
+        <li>.NET SDK <strong>10.0.100 or later</strong> is installed (pinned in <code>global.json</code> with <code>rollForward: latestMinor</code>).</li>
+        <li>The repository to index is registered under <code>Scout:Projects</code> — either as an explicit <code>Items</code> entry or discoverable under a <code>Roots</code> directory (see below).</li>
+        <li>The configured LLM provider can produce embeddings. With the default <code>Ollama</code> provider, Ollama must be running locally (default <code>http://localhost:11434</code>) with the embedding model available (<code>nomic-embed-text</code> by default).</li>
+        <li>The process can write to the knowledge database location (see <strong>Verification</strong>).</li>
+        <li>You are running from the repository root, where <code>Scout.slnx</code> and <code>src/</code> live.</li>
+      </ul>
+
+      <h2>Steps</h2>
+
+      <ol class="seq">
+        <li>
+          <strong>Register the project.</strong>
+          The project name passed to <code>index</code> must match a <code>Name</code> value under
+          <code>Scout:Projects:Items</code>, or an auto-discovered project under one of the directories
+          in <code>Scout:Projects:Roots</code>. <code>Items</code> entries are
+          <code>{ "Name": "...", "RepoPath": "/absolute/path" }</code> pairs.
+          <pre class="cfg"><span class="c">// src/Scout.Host.Console/appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Projects"</span>: {
+    <span class="k">"Items"</span>: [
+      { <span class="k">"Name"</span>: <span class="s">"scout"</span>, <span class="k">"RepoPath"</span>: <span class="s">"/home/me/WorkSpace/Scout"</span> }
+    ],
+    <span class="k">"Roots"</span>: [ <span class="s">"/home/me/WorkSpace"</span> ]
+  }
+}</pre>
+        </li>
+        <li>
+          <strong>Confirm the embedding provider is reachable.</strong>
+          With the default local-first setup, make sure Ollama is up and the embedding model is pulled.
+          The relevant keys live under <code>Scout:Llm</code>; the embedding model defaults to
+          <code>nomic-embed-text</code> and the endpoint to <code>http://localhost:11434</code>.
+        </li>
+        <li>
+          <strong>Run the one-shot index command</strong> from the repository root, passing the project name
+          after the <code>--</code> separator so it reaches the application rather than the <code>dotnet</code> CLI.
+          <pre class="cfg"><span class="c"># index a single configured project, then exit</span>
+dotnet run --project src/Scout.Host.Console -- index &lt;project-name&gt;</pre>
+          For the example above, <code>&lt;project-name&gt;</code> would be <code>scout</code>. The host does
+          <strong>not</strong> start any chat adapter for this command; it indexes the named project and exits.
+        </li>
+        <li>
+          <strong>Override configuration from the environment if needed.</strong>
+          All <code>Scout:</code> keys can be set via environment variables using a double underscore as the
+          separator. This is handy in CI where you do not want secrets or paths in <code>appsettings.json</code>.
+          <pre class="cfg"><span class="c"># example: point the embedding provider at a remote Ollama</span>
+Scout__Llm__Ollama__Endpoint=http://ollama.internal:11434 \
+  dotnet run --project src/Scout.Host.Console -- index &lt;project-name&gt;</pre>
+        </li>
+      </ol>
+
+      <h2>Verification</h2>
+      <p>
+        Indexing writes embeddings into the project-knowledge database. Confirm the run succeeded by checking
+        that the database file exists and has grown after the command completes:
+      </p>
+      <pre class="cfg"><span class="c"># Linux</span>
+~/.local/share/Scout/project-knowledge.db
+
+<span class="c"># Windows</span>
+%LOCALAPPDATA%\Scout\project-knowledge.db</pre>
+      <ul class="body-list">
+        <li>The command exits with code <strong>0</strong> when indexing completes — it is one-shot, so a clean exit (rather than the host staying alive) is the success signal.</li>
+        <li>The knowledge database file is present at the path above and its size reflects the freshly written vectors.</li>
+        <li>Once the host is running normally, the <code>search_project</code> Semantic Kernel plugin exposed by <a href="../services/scout-knowledge.html">Scout.Knowledge</a> can retrieve from the indexed content. Ask the assistant a question whose answer lives only in that repository and confirm it grounds its reply in the indexed files.</li>
+      </ul>
+
+      <h2>Troubleshooting</h2>
+      <ul class="body-list">
+        <li><strong>Project not found</strong> — the name does not match any <code>Scout:Projects:Items</code> <code>Name</code> nor any repository discovered under <code>Scout:Projects:Roots</code>. Check spelling and that the <code>RepoPath</code> is an absolute path that exists.</li>
+        <li><strong>Embedding failures</strong> — the configured provider could not produce embeddings. For the default <code>Ollama</code> provider, verify Ollama is running and the embedding model is pulled; see <a href="../runbooks/local-models.html">Local Models</a>.</li>
+        <li><strong>No effect on running host</strong> — the <code>index</code> command is one-shot and does not start adapters. To serve chat, run the host without the <code>index</code> argument; see <a href="../runbooks/run-console-host.html">Run the Console Host</a>.</li>
+      </ul>
+
+      <h2>Rollback</h2>
+      <p>
+        Indexing only writes into the local project-knowledge database; it never touches the source repository
+        or any external system, consistent with Scout's <a href="../invariants/no-executive-writes.html">No Executive Writes</a> invariant.
+        To discard an index, stop the host and delete the database file at the path shown under
+        <strong>Verification</strong>; it is recreated on the next index run. Removing or correcting a
+        <code>Scout:Projects:Items</code> entry, then re-running the command, replaces the indexed content for
+        that project.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-knowledge.html"><span class="rt">service</span>Scout.Knowledge</a>
+          <a href="../architecture/project-knowledge-rag.html"><span class="rt">arch</span>Project Knowledge RAG</a>
+          <a href="../domain/project-knowledge.html"><span class="rt">domain</span>Project Knowledge</a>
+          <a href="../runbooks/run-console-host.html"><span class="rt">runbook</span>Run the Console Host</a>
+          <a href="../runbooks/local-models.html"><span class="rt">runbook</span>Local Models</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

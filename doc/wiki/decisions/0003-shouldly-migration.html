@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0003 — Shouldly Migration — Scout Wiki</title>
+<meta name="description" content="ADR 0003: standardise every Scout test on Shouldly (MIT) and forbid FluentAssertions, migrating existing usage in a dedicated chore PR.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0003</nav>
+
+    <section>
+      <h1>ADR 0003 — Shouldly over FluentAssertions</h1>
+      <p class="blockquote">Every test in every Scout project uses Shouldly; FluentAssertions is forbidden, and any FluentAssertions code found on sight is migrated in a dedicated chore PR.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-04-21</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-04-21-shouldly-migration.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-04-21. Standardises the assertion library across every Scout test project. Codified in <a href="../invariants/shouldly-only.html">Shouldly-Only Tests</a> and the <a href="../conventions/testing.html">testing convention</a>.</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        The first five test projects — Core, Ollama, Discord, CloudStatus, and CodeQA — all started on
+        <strong>FluentAssertions 6.12.1</strong>, the last permissive release before the library flipped to a
+        commercial license in v8 (January 2025).
+      </p>
+      <p>
+        Pinning v6 defers the problem but does not solve it. Any future upgrade walks straight into a licensing
+        cliff, and the moment anyone adds a new test project, mixing two assertion libraries in the same suite
+        becomes a latent code smell. The user set the rule directly: "never use FluentAssertions, we should use
+        Shouldly".
+      </p>
+
+      <h2>Decision</h2>
+      <p>
+        <strong>Every test in every project owned by the user uses Shouldly.</strong> New code uses Shouldly from
+        the first line; FluentAssertions is forbidden and any FluentAssertions code found on sight gets migrated in
+        a dedicated chore PR.
+      </p>
+
+      <div class="callout good">
+        <div class="c-title">Required — Shouldly everywhere</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li><code>Directory.Packages.props</code> lists <code>Shouldly 4.3.0</code>.</li>
+          <li>Every test <code>csproj</code> references <code>Shouldly</code>.</li>
+          <li>Every <code>tests/.../Usings.cs</code> carries <code>global using Shouldly;</code>.</li>
+        </ul>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">Forbidden — FluentAssertions</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li><code>Directory.Packages.props</code> does <strong>not</strong> list <code>FluentAssertions</code>.</li>
+          <li>No <code>global using FluentAssertions;</code> in any <code>Usings.cs</code>.</li>
+          <li>No new test may introduce a FluentAssertions assertion.</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">Migration is its own PR</div>
+        <p style="margin:0">Migration runs on a dedicated branch (<code>chore/tests-shouldly-migration</code>) and is never mixed with feature work, so the diff stays purely mechanical and reviewable as a no-behavior-change rewrite.</p>
+      </div>
+
+      <h2>Rationale</h2>
+      <ul class="body-list">
+        <li><strong>License.</strong> Shouldly is MIT. FluentAssertions v8+ is commercial. The cheapest way to avoid a future license debate is to never allow it in.</li>
+        <li><strong>Consistency.</strong> One assertion library per codebase. Two frameworks in the same test suite is immediate cognitive overhead and a code-review tax for every PR touching tests.</li>
+        <li><strong>API parity is close enough.</strong> Every assertion FluentAssertions v6 expressed has a Shouldly equivalent (see the pattern-mapping table in the migration PR). A few fluent chains break into two asserts; no expressivity is lost.</li>
+      </ul>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li>PR #22 applied the migration — 37 files and 206 assertions rewritten with zero behavior change.</li>
+        <li>The rule is codified in three places: <code>obsidian-vault/scout/CLAUDE.md</code> (project-level rule), the global memory <code>feedback_shouldly_not_fluentassertions.md</code> (applies to every user repo), and a note on the <code>Shouldly</code> <code>PackageVersion</code> line in <code>Directory.Packages.props</code> explaining why FluentAssertions was removed.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li>Shouldly refuses null actuals on <code>ShouldContain</code> over <code>string?</code>. Tests asserting on nullable messages (e.g. <code>StatusReport.Message</code>) must use the null-forgiving operator on the asserted side.</li>
+        <li><code>ShouldThrowAsync&lt;T&gt;()</code> returns <code>Task&lt;T&gt;</code>. Code that inspects the thrown exception's fields has to capture the awaited result: <code>var ex = await act.ShouldThrowAsync&lt;T&gt;(); ex.Message.ShouldContain(...)</code>.</li>
+      </ul>
+
+      <h2>Alternatives considered</h2>
+      <ul class="body-list">
+        <li><strong>Stay on FluentAssertions v6 forever</strong> — rejected. The pin defers the problem but does not solve it. A contributor pulling <code>Directory.Packages.props</code> into a future project would happily upgrade to v8.</li>
+        <li><strong>NUnit / xUnit built-ins (<code>Assert.Equal</code>, etc.)</strong> — rejected. Too verbose for collection and exception cases; Shouldly's fluent-by-value style is significantly easier to read.</li>
+        <li><strong>AwesomeAssertions (FluentAssertions fork)</strong> — rejected. Forks of newly-commercial libraries have short lifespans; Shouldly has a stable track record and broad adoption in .NET OSS.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../invariants/shouldly-only.html"><span class="rt">invariant</span>Shouldly-Only Tests</a>
+          <a href="../conventions/testing.html"><span class="rt">convention</span>Testing</a>
+          <a href="../decisions/0001-license-mit.html"><span class="rt">adr</span>0001 License MIT</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

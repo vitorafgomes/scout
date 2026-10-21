@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build &amp; Test — Scout Wiki</title>
+<meta name="description" content="Runbook for restoring, building, and testing the Scout backend solution with the exact commands CI runs.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Runbooks</a><span class="sep">/</span>Build &amp; Test</nav>
+
+    <section>
+      <h1>Build &amp; Test</h1>
+      <p class="blockquote">Run this when you need a clean local verification of the Scout backend — before opening a PR, after a fresh clone, or to reproduce a CI failure with the exact commands CI uses.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype runbook">runbook</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> README Build and Test; <code>global.json</code></span>
+      </div>
+
+      <h2>When to run this</h2>
+      <ul class="body-list">
+        <li>After a fresh clone, or when switching branches, to confirm the backend solution restores, compiles, and tests green.</li>
+        <li>Before opening a PR — the test pass is the minimum gate for the backend.</li>
+        <li>To reproduce a CI failure locally: these are the exact commands run by <code>.github/workflows/ci.yml</code>, so a local pass should match CI.</li>
+      </ul>
+      <p>
+        This runbook covers the backend solution only (<code>Scout.slnx</code>, everything under <code>src/</code>).
+        The Electron Desktop UI under <code>ui/</code> has its own toolchain (Bun) and its own CI pipeline
+        (<code>.github/workflows/ui-ci.yml</code>); see <a href="../runbooks/desktop-packaging.html">Desktop Packaging</a> for that path.
+      </p>
+
+      <h2>Preconditions</h2>
+      <ul class="check">
+        <li>.NET SDK <strong>10.0.100 or later</strong> installed. The version is pinned in <code>global.json</code> with <code>rollForward: latestMinor</code>, so a newer 10.0.x SDK is accepted but an older one is not.</li>
+        <li>You are at the repository root, where <code>Scout.slnx</code> and <code>global.json</code> live. Running <code>dotnet</code> here lets <code>global.json</code> select the SDK.</li>
+        <li>Network access for the restore step, so NuGet can pull packages on a cold cache.</li>
+        <li>No secrets are required to build or test. Tests do not call live providers; adapters and plugins are self-gating and stay disabled without credentials.</li>
+      </ul>
+      <p>Confirm the SDK that <code>global.json</code> resolves before you start:</p>
+      <pre class="cfg"><span class="c"># from the repo root</span>
+dotnet --version
+<span class="c"># expect 10.0.100 or a later 10.0.x (latestMinor roll-forward)</span></pre>
+
+      <h2>Steps</h2>
+      <p>Run the three commands in order, from the repository root. These match the README "Build and Test" section verbatim.</p>
+      <ol class="seq">
+        <li>
+          <strong>Restore packages.</strong> Pulls every NuGet dependency for the solution so the next steps run offline.
+          <pre class="cfg">dotnet restore</pre>
+        </li>
+        <li>
+          <strong>Build in Release, without re-restoring.</strong> <code>--no-restore</code> reuses step 1, and <code>--configuration Release</code> matches CI.
+          <pre class="cfg">dotnet build --configuration Release --no-restore</pre>
+        </li>
+        <li>
+          <strong>Run the test suite against the built output.</strong> <code>--no-build</code> reuses step 2, so this fails fast if step 2 did not run or is stale.
+          <pre class="cfg">dotnet test --configuration Release --no-build</pre>
+        </li>
+      </ol>
+      <p>
+        The flags are intentional: each step layers on the previous one (restore → build → test) so work is never repeated and
+        a mismatch surfaces immediately. Tests assert with Shouldly per <a href="../conventions/testing.html">the testing convention</a>.
+      </p>
+
+      <h2>Verification</h2>
+      <ul class="check">
+        <li><code>dotnet restore</code> finishes with no error and reports the restored projects.</li>
+        <li><code>dotnet build --configuration Release --no-restore</code> reports <em>Build succeeded</em> with zero errors.</li>
+        <li><code>dotnet test --configuration Release --no-build</code> reports all tests passed and a zero exit code.</li>
+        <li>A green local run on the same SDK should mirror CI, since <code>.github/workflows/ci.yml</code> runs these same three commands.</li>
+      </ul>
+      <p>
+        Only <code>src/</code> is part of the build. Code under <code>src/old/</code> and <code>tests/old/</code> is deprecated legacy
+        code and is excluded, so failures there are not relevant to this runbook.
+      </p>
+
+      <h2>Rollback</h2>
+      <p>
+        Build and test are read-only operations: they do not mutate source, configuration, or any external system, so there is
+        nothing to undo. If a run leaves stale build artifacts behind, clear them and start the sequence again from step 1.
+      </p>
+      <pre class="cfg"><span class="c"># discard build outputs, then re-run the sequence</span>
+dotnet clean --configuration Release
+dotnet restore</pre>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../conventions/testing.html"><span class="rt">convention</span>Testing</a>
+          <a href="../conventions/production-readiness.html"><span class="rt">convention</span>Production Readiness</a>
+          <a href="../runbooks/run-console-host.html"><span class="rt">runbook</span>Run the Console Host</a>
+          <a href="../services/scout-host-console.html"><span class="rt">service</span>Host.Console</a>
+          <a href="../invariants/shouldly-only.html"><span class="rt">invariant</span>Shouldly-Only Tests</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

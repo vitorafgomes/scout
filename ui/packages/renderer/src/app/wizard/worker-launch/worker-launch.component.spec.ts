@@ -279,6 +279,48 @@ describe('WorkerLaunchComponent', () => {
     expect(cancel).not.toBeNull();
   });
 
+  it('shows a Cancel button during booting from the start', async () => {
+    const { fixture } = await setup({ guildName: 'G', clientId: 'c' });
+    // While booting (no state event yet) the user must have an escape, not just
+    // in the error state.
+    expect(fixture.nativeElement.querySelector('[data-test="cancel-booting"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="retry"]')).toBeNull();
+  });
+
+  it('falls over to error if the worker never reports ready within the timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      const { bridge } = makeBridge({ tokenExists: true });
+      TestBed.configureTestingModule({
+        providers: [
+          provideZonelessChangeDetection(),
+          provideRouter([{ path: '', children: [] }]),
+          { provide: ScoutBridgeService, useValue: bridge },
+          { provide: LogStore, useValue: makeLogStore() },
+          { provide: PersistentStateService, useValue: makePersistentStub() },
+        ],
+      });
+      const store = TestBed.inject(WizardStore);
+      await store.loadFromVault();
+      store.setGuild({ id: 'g1', name: 'G' });
+      const fixture = TestBed.createComponent(WorkerLaunchComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // No 'running'/'crashed' event ever arrives; advance past the client
+      // ready-timeout so Retry/Cancel become reachable instead of a dead screen.
+      vi.advanceTimersByTime(25_001);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('did not report ready in time');
+      expect(fixture.nativeElement.querySelector('[data-test="retry"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('cancel only navigates; worker state and wizard store are untouched', async () => {
     const { bridge, fire } = makeBridge({ tokenExists: true });
     TestBed.configureTestingModule({

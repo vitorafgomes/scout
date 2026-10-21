@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADR 0010 — Host Kernel Accessor — Scout Wiki</title>
+<meta name="description" content="ADR 0010: expose a single read-only ResolvedKernel property on ScoutHost so the Features feature can mutate the shared kernel's plugins at runtime.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Decisions</a><span class="sep">/</span>0010</nav>
+
+    <section>
+      <h1>ADR 0010 — Scout Host Kernel Accessor</h1>
+      <p class="blockquote">Expose a single public read-only <code>ResolvedKernel</code> property on <code>ScoutHost</code> so the Features feature can register and unregister plugins on the live kernel at runtime, instead of opening up kernel construction or splitting the tool surface.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype adr">adr</span>
+        <span class="m"><span class="lbl">status</span><span class="stag accepted">accepted</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-05-23</span>
+        <span class="sources"><span class="lbl">sources</span> vault <code>06-decisions/2026-05-23-scout-host-kernel-accessor.md</code></span>
+      </div>
+
+      <h2>Status</h2>
+      <ul class="check done">
+        <li><b>Accepted</b> — 2026-05-23. Option A approved by the user; lands in the Features feature foundation phase (branch <code>feat/features</code>, Phase 1).</li>
+      </ul>
+
+      <h2>Context</h2>
+      <p>
+        <code>Scout.Core.Hosting.ScoutHost</code> builds its Semantic Kernel lazily inside <code>BuildKernel()</code>.
+        The resulting <code>Kernel</code> is stored in a private <code>Lazy&lt;Kernel&gt;</code> and is not
+        registered in the DI container. Today every <code>IScoutPlugin</code> is registered statically at startup
+        through <code>PluginRegistry</code>, which feeds <code>BuildKernel()</code> once; nothing in the worker
+        mutates <code>kernel.Plugins</code> after host construction.
+      </p>
+      <p>
+        The Features feature — see <a href="../decisions/0009-descriptive-vs-executive-writes.html">ADR 0009</a>
+        for the broader context, and the upcoming <a href="../services/scout-plugin-github.html">Scout.Plugin.GitHub</a>
+        and <code>Scout.Plugin.Kubernetes</code> work — needs to add and remove <code>KernelPlugin</code> instances
+        <strong>at runtime</strong>, in response to the user flipping toggles on the Features screen. The new
+        worker-side <code>IFeatureKernelRegistrar</code> must therefore reach the same <code>Kernel</code> that
+        <code>LlmFallbackRouter</code> already consumes, and mutate its <code>Plugins</code> collection.
+      </p>
+      <p>
+        Three reachable designs were on the table. The user approved Option A.
+      </p>
+
+      <h2>Decision</h2>
+      <p>Add a single public read-only property on <code>Scout.Core.Hosting.ScoutHost</code>:</p>
+      <pre class="cfg"><span class="c">/// &lt;summary&gt;</span>
+<span class="c">/// The runtime Semantic Kernel built lazily on first access. Stable</span>
+<span class="c">/// reference for the lifetime of the host; safe to retain and mutate</span>
+<span class="c">/// .Plugins from external callers that own the synchronisation.</span>
+<span class="c">/// &lt;/summary&gt;</span>
+<span class="k">public</span> Kernel ResolvedKernel =&gt; _kernel.Value;</pre>
+      <p>
+        The accessor returns the same instance <code>BuildKernel()</code> already returns to internal consumers.
+        First access forces the lazy initialisation; all subsequent calls return the cached reference.
+      </p>
+
+      <div class="callout good">
+        <div class="c-title">Permitted — read and synchronised mutation</div>
+        <ul class="body-list" style="margin-bottom:0">
+          <li>Reading <code>ResolvedKernel</code> to obtain the single shared, lifetime-stable <code>Kernel</code> reference.</li>
+          <li>Mutating <code>ResolvedKernel.Plugins</code> <strong>only</strong> through <code>IFeatureKernelRegistrar</code>.</li>
+        </ul>
+      </div>
+
+      <div class="callout danger">
+        <div class="c-title">Forbidden — concurrent or out-of-band mutation</div>
+        <p style="margin:0">External mutation of <code>ResolvedKernel.Plugins</code> outside <code>IFeatureKernelRegistrar</code>.
+        <code>KernelPluginCollection</code> is not thread-safe for concurrent mutation, so all register/unregister
+        operations must funnel through the registrar.</p>
+      </div>
+
+      <div class="callout warn">
+        <div class="c-title">Boundary — single chokepoint</div>
+        <p style="margin:0"><code>IFeatureKernelRegistrar</code> serialises register/unregister operations behind a
+        <code>SemaphoreSlim(1, 1)</code>. It is the single chokepoint that guarantees safe mutation of the
+        shared kernel's plugin collection.</p>
+      </div>
+
+      <h2>Consequences</h2>
+      <p class="field-label">Better</p>
+      <ul class="body-list">
+        <li><strong>One-line public-API addition on <code>Scout.Core</code>.</strong> Minimal blast radius; existing consumers are untouched.</li>
+        <li><strong>Backwards compatible.</strong> Internal callers keep using their private path; the accessor is purely additive.</li>
+        <li><strong>Single source of truth for the LLM's tool surface.</strong> Static <code>IScoutPlugin</code> plugins and dynamic Features plugins share one kernel, one plugin collection, one function-calling decision tree.</li>
+        <li><strong>Cheap to retract.</strong> If a future Option B refactor lands, the accessor can become <code>[Obsolete]</code> and consumers migrate one by one.</li>
+      </ul>
+      <p class="field-label">Worse</p>
+      <ul class="body-list">
+        <li><strong>External mutation of internal state.</strong> The <code>Kernel</code> is conceptually internal to <code>ScoutHost</code>, and exposing it as a property lets any consumer mutate <code>.Plugins</code> without going through the registrar. Mitigation: the registrar is the only documented mutator in this PR, the accessor's XML doc cites it, and the <code>architect-reviewer</code> agent is required on the PR by Scout's quality gate.</li>
+        <li><strong>Surface area on a stable type.</strong> Future refactors that change how the kernel is built (e.g. multi-kernel routing per chat session) must either keep this accessor honest or deprecate it deliberately.</li>
+      </ul>
+
+      <h2>Alternatives</h2>
+      <div class="types">
+        <div class="type-row"><div class="t-name">Option B — register Kernel in DI</div><div class="t-role">Register <code>Kernel</code> in the DI container from <code>AddScout</code>, so every consumer injects it directly and the lazy hoop disappears. Cleaner long-term, but rejected for Phase 1: it ripples through <code>LlmChatServiceCollectionExtensions</code> (which builds a throwaway kernel at registration time to extract <code>IChatCompletionService</code>), forces every <code>IScoutPlugin</code> to be revisited for construction-order assumptions, and explodes the PR scope from "Features foundation" to "kernel injection refactor" with no user-visible change. Revisit when the next non-trivial kernel consumer lands.</div></div>
+        <div class="type-row"><div class="t-name">Option C — separate dynamic-kernel container</div><div class="t-role">Plugins added by the Features feature live in their own <code>KernelPluginCollection</code>, queried alongside the static one. Rejected: it forces plugin authors to learn two parallel registration paths, complicates <code>LlmFallbackRouter</code> (which looks at a single kernel for function calling), and splits one conceptual namespace — "the LLM's tool surface" — into two for no user-visible benefit.</div></div>
+      </div>
+
+      <h2>Enforcement</h2>
+      <ul class="body-list">
+        <li>The PR introducing this accessor (<code>feat/features</code> Phase 1) must run the <code>architect-reviewer</code> agent because it touches <code>Scout.Core</code>. The agent is wired into Scout's PR-template quality gates and the reviewer-author flow.</li>
+        <li><code>Scout.Core.Tests</code> gains one assertion: <code>ResolvedKernel</code> returns the same non-null instance on first and second access (idempotency).</li>
+        <li>Internal callers may eventually migrate to read through <code>ResolvedKernel</code> for consistency, but that is non-blocking cleanup.</li>
+        <li>Quality gate 3 of the PR template requires <code>architect-reviewer</code> for any change touching <code>Scout.Core</code> contracts, the plugin registry, the LLM provider abstraction, or the chat adapter abstraction.</li>
+      </ul>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="rt">adr</span>0009 Descriptive vs Executive</a>
+          <a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="rt">adr</span>0012 LLM via Semantic Kernel</a>
+          <a href="../services/scout-controlplane.html"><span class="rt">service</span>Scout.ControlPlane</a>
+          <a href="../services/scout-host-controlplane.html"><span class="rt">service</span>Host.ControlPlane</a>
+          <a href="../services/scout-plugin-github.html"><span class="rt">service</span>Scout.Plugin.GitHub</a>
+          <a href="../architecture/high-level.html"><span class="rt">arch</span>High-Level &amp; Flow</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -134,7 +134,7 @@ const CLIENT_ID_MIN_LENGTH = 10;
     `
       :host {
         display: block;
-        color: #e4e8f0;
+        color: var(--sc-text);
         font-family:
           Inter,
           -apple-system,
@@ -151,13 +151,13 @@ const CLIENT_ID_MIN_LENGTH = 10;
         margin: 0 0 4px;
       }
       .subtitle {
-        color: #7b8299;
+        color: var(--sc-text-muted);
         margin: 0 0 24px;
         font-size: 13px;
       }
       .blocking-banner {
-        background: #7a5c00;
-        color: #fff3cd;
+        background: var(--sc-warning-bg);
+        color: var(--sc-warning-text);
         padding: 12px 16px;
         border-radius: 6px;
         margin-bottom: 16px;
@@ -173,16 +173,16 @@ const CLIENT_ID_MIN_LENGTH = 10;
         margin-bottom: 8px;
       }
       .input {
-        background: #171b26;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        background: var(--sc-surface);
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 10px 12px;
         font-size: 14px;
         font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
       }
       .input:focus {
-        outline: 2px solid #7c5cff;
+        outline: 2px solid var(--sc-accent);
         outline-offset: 1px;
       }
       .token-row {
@@ -194,22 +194,22 @@ const CLIENT_ID_MIN_LENGTH = 10;
       }
       .reveal {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 0 14px;
         cursor: pointer;
         font-size: 13px;
       }
       .intents {
-        border: 1px solid #252b3b;
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 12px 16px;
         margin: 16px 0;
       }
       .intents legend {
         font-size: 13px;
-        color: #7b8299;
+        color: var(--sc-text-muted);
         padding: 0 6px;
       }
       .checkbox {
@@ -220,12 +220,12 @@ const CLIENT_ID_MIN_LENGTH = 10;
         padding: 4px 0;
       }
       .error {
-        color: #d45a5a;
+        color: var(--sc-danger);
         font-size: 13px;
         margin-top: 6px;
       }
       .submission-error {
-        color: #d45a5a;
+        color: var(--sc-danger);
         font-size: 13px;
       }
       .actions {
@@ -235,8 +235,8 @@ const CLIENT_ID_MIN_LENGTH = 10;
         margin-top: 16px;
       }
       .primary {
-        background: #7c5cff;
-        color: #0f1117;
+        background: var(--sc-accent);
+        color: var(--sc-bg);
         border: none;
         border-radius: 6px;
         padding: 10px 16px;
@@ -245,14 +245,14 @@ const CLIENT_ID_MIN_LENGTH = 10;
         cursor: pointer;
       }
       .primary:disabled {
-        background: #3d4258;
-        color: #7b8299;
+        background: var(--sc-disabled-bg);
+        color: var(--sc-text-muted);
         cursor: not-allowed;
       }
       .secondary {
         background: transparent;
-        color: #e4e8f0;
-        border: 1px solid #252b3b;
+        color: var(--sc-text);
+        border: 1px solid var(--sc-border);
         border-radius: 6px;
         padding: 10px 16px;
         font-size: 14px;

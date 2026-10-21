@@ -87,6 +87,12 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
         builder.Services.RemoveAll<IFeatureActivator>();
         builder.Services.AddSingleton<IFeatureActivator>(new StubFeatureActivator());
 
+        // Available credential store so credential persistence round-trips.
+        // The default in-memory store reports IsAvailable=false and fails closed,
+        // which is asserted separately in the unit tests.
+        builder.Services.RemoveAll<ICredentialStore>();
+        builder.Services.AddSingleton<ICredentialStore>(new InMemoryCredentialStore(isAvailable: true));
+
         // Replace the live Ollama backend seams with hermetic stubs.
         builder.Services.RemoveAll<IOllamaApiClient>();
         builder.Services.AddSingleton<IOllamaApiClient>(ollama);

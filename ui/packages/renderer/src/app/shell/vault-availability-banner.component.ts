@@ -16,8 +16,8 @@ import { ScoutBridgeService } from '../core/scout-bridge';
   styles: [
     `
       .vault-warn-banner {
-        background: #7a5c00;
-        color: #fff3cd;
+        background: var(--sc-warning-bg);
+        color: var(--sc-warning-text);
         padding: 10px 16px;
         font-size: 13px;
         text-align: center;

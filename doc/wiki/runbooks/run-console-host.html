@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Run the Console Host — Scout Wiki</title>
+<meta name="description" content="Runbook for starting Scout.Host.Console: configure appsettings plus env overrides, let self-gating adapters start, and verify the conversation worker is live.">
+<link rel="stylesheet" href="../assets/wiki.css">
+</head>
+<body>
+
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">Menu</button>
+
+<div class="layout">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <a href="../index.html" aria-label="Scout wiki home">
+      <svg class="mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <circle cx="20" cy="20" r="18.5" stroke="#5db4f0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="8.5" stroke="#7ad9b0" stroke-width="2"/>
+        <circle cx="20" cy="20" r="2.4" fill="#5db4f0"/>
+        <path d="M20 1.5V8 M20 32V38.5 M1.5 20H8 M32 20H38.5" stroke="#3a4757" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      </a>
+      <div class="name">Scout<small>Engineering Wiki</small></div>
+    </div>
+    <p class="nav-tagline">LLM-maintained wiki. Read-only chatops assistant &middot; Semantic Kernel &middot; .NET 10 &middot; local-first.</p>
+    <input class="nav-filter" id="navFilter" type="text" placeholder="Filter pages…" aria-label="Filter pages">
+
+    <!-- SCOUT-WIKI-NAV v1 -->
+    <nav id="nav">
+      <div class="nav-group-title">Guide</div>
+      <ul>
+        <li><a href="../index.html">Home &amp; Catalog</a></li>
+        <li><a href="../about.html">About this wiki</a></li>
+        <li><a href="../log.html">Operation log</a></li>
+      </ul>
+
+      <div class="nav-group-title">Overview</div>
+      <ul>
+        <li><a href="../overview/project-snapshot.html">Project Snapshot</a></li>
+        <li><a href="../overview/vision.html">Vision</a></li>
+        <li><a href="../overview/status.html">Status &amp; Pending Work</a></li>
+      </ul>
+
+      <div class="nav-group-title">Architecture</div>
+      <ul>
+        <li><a href="../architecture/high-level.html">High-Level &amp; Per-Turn Flow</a></li>
+        <li><a href="../architecture/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../architecture/project-knowledge-rag.html">Project Knowledge RAG</a></li>
+        <li><a href="../architecture/skills-subsystem.html">Skills Subsystem</a></li>
+        <li><a href="../architecture/desktop-ui.html">Desktop Provisioning UI</a></li>
+      </ul>
+
+      <div class="nav-group-title">Services</div>
+      <ul>
+        <li><a href="../services/scout-llm.html"><span class="dot active-s"></span>Scout.Llm</a></li>
+        <li><a href="../services/scout-conversation.html"><span class="dot active-s"></span>Scout.Conversation</a></li>
+        <li><a href="../services/scout-knowledge.html"><span class="dot active-s"></span>Scout.Knowledge</a></li>
+        <li><a href="../services/scout-skills.html"><span class="dot active-s"></span>Scout.Skills</a></li>
+        <li><a href="../services/scout-plugin-github.html"><span class="dot active-s"></span>Scout.Plugin.GitHub</a></li>
+        <li><a href="../services/scout-plugin-codereview.html"><span class="dot active-s"></span>Scout.Plugin.CodeReview</a></li>
+        <li><a href="../services/scout-controlplane.html"><span class="dot active-s"></span>Scout.ControlPlane</a></li>
+        <li><a href="../services/scout-adapter-discord.html"><span class="dot active-s"></span>Adapter.Discord</a></li>
+        <li><a href="../services/scout-adapter-slack.html"><span class="dot active-s"></span>Adapter.Slack</a></li>
+        <li><a href="../services/scout-adapter-teams.html"><span class="dot active-s"></span>Adapter.Teams</a></li>
+        <li><a href="../services/scout-host-console.html"><span class="dot active-s"></span>Host.Console</a></li>
+        <li><a href="../services/scout-host-controlplane.html"><span class="dot active-s"></span>Host.ControlPlane</a></li>
+      </ul>
+
+      <div class="nav-group-title">Domain</div>
+      <ul>
+        <li><a href="../domain/descriptive-vs-executive-writes.html">Descriptive vs Executive Writes</a></li>
+        <li><a href="../domain/provider.html">LLM Provider</a></li>
+        <li><a href="../domain/adapter.html">Chat Adapter</a></li>
+        <li><a href="../domain/skill.html">Skill</a></li>
+        <li><a href="../domain/plugin.html">Semantic Kernel Plugin</a></li>
+        <li><a href="../domain/project-knowledge.html">Project Knowledge</a></li>
+      </ul>
+
+      <div class="nav-group-title">Invariants</div>
+      <ul>
+        <li><a href="../invariants/no-executive-writes.html"><span class="dot inv-s"></span>No Executive Writes</a></li>
+        <li><a href="../invariants/streaming-first.html"><span class="dot inv-s"></span>Streaming-First</a></li>
+        <li><a href="../invariants/local-first-default.html"><span class="dot inv-s"></span>Local-First Default</a></li>
+        <li><a href="../invariants/pluggable-everything.html"><span class="dot inv-s"></span>Pluggable Everything</a></li>
+        <li><a href="../invariants/shouldly-only.html"><span class="dot inv-s"></span>Shouldly-Only Tests</a></li>
+        <li><a href="../invariants/secrets-never-committed.html"><span class="dot inv-s"></span>Secrets Never Committed</a></li>
+      </ul>
+
+      <div class="nav-group-title">Decisions (ADRs)</div>
+      <ul>
+        <li><a href="../decisions/0001-license-mit.html"><span class="dot adr-s"></span>0001 License MIT</a></li>
+        <li><a href="../decisions/0002-platform-priority.html"><span class="dot adr-s"></span>0002 Platform Priority</a></li>
+        <li><a href="../decisions/0003-shouldly-migration.html"><span class="dot adr-s"></span>0003 Shouldly Migration</a></li>
+        <li><a href="../decisions/0004-web-stack-angular.html"><span class="dot adr-s"></span>0004 Web Stack Angular</a></li>
+        <li><a href="../decisions/0005-scout-desktop-m1-scope.html"><span class="dot adr-s"></span>0005 Desktop M1 Scope</a></li>
+        <li><a href="../decisions/0006-models-screen-task-based.html"><span class="dot adr-s"></span>0006 Models Screen</a></li>
+        <li><a href="../decisions/0007-ai-sources-screen.html"><span class="dot adr-s"></span>0007 AI Sources Screen</a></li>
+        <li><a href="../decisions/0008-local-models-real-downloads.html"><span class="dot adr-s"></span>0008 Local Model Downloads</a></li>
+        <li><a href="../decisions/0009-descriptive-vs-executive-writes.html"><span class="dot adr-s"></span>0009 Descriptive vs Executive</a></li>
+        <li><a href="../decisions/0010-scout-host-kernel-accessor.html"><span class="dot adr-s"></span>0010 Host Kernel Accessor</a></li>
+        <li><a href="../decisions/0011-backend-frontend-grpc-uds.html"><span class="dot adr-s"></span>0011 Backend/Frontend gRPC</a></li>
+        <li><a href="../decisions/0012-llm-communication-through-semantic-kernel.html"><span class="dot adr-s"></span>0012 LLM via Semantic Kernel</a></li>
+        <li><a href="../decisions/0013-conversation-core-streaming-sink.html"><span class="dot adr-s"></span>0013 Conversation Streaming Sink</a></li>
+      </ul>
+
+      <div class="nav-group-title">Conventions</div>
+      <ul>
+        <li><a href="../conventions/testing.html">Testing</a></li>
+        <li><a href="../conventions/code-style.html">Code Style</a></li>
+        <li><a href="../conventions/secrets-handling.html">Secrets Handling</a></li>
+        <li><a href="../conventions/commit-and-pr-policy.html">Commit &amp; PR Policy</a></li>
+        <li><a href="../conventions/production-readiness.html">Production Readiness</a></li>
+      </ul>
+
+      <div class="nav-group-title">Runbooks</div>
+      <ul>
+        <li><a href="../runbooks/build-and-test.html">Build &amp; Test</a></li>
+        <li><a href="../runbooks/run-console-host.html">Run the Console Host</a></li>
+        <li><a href="../runbooks/index-a-project.html">Index a Project</a></li>
+        <li><a href="../runbooks/local-models.html">Local Models</a></li>
+        <li><a href="../runbooks/desktop-packaging.html">Desktop Packaging</a></li>
+      </ul>
+
+      <div class="nav-group-title">Roadmap</div>
+      <ul>
+        <li><a href="../roadmap/current-focus.html">Current Focus &amp; Backlog</a></li>
+        <li><a href="../roadmap/capability-engine.html">Capability Engine</a></li>
+        <li><a href="../roadmap/project-knowledge-optimization.html">Project Knowledge Optimization</a></li>
+        <li><a href="../roadmap/skills-subsystem.html">Skills Subsystem</a></li>
+      </ul>
+
+      <div class="nav-group-title">History</div>
+      <ul>
+        <li><a href="../history/core-foundation.html">Core Foundation</a></li>
+        <li><a href="../history/desktop-m1.html">Desktop M1</a></li>
+        <li><a href="../history/project-knowledge-rag-rollout.html">Project Knowledge RAG Rollout</a></li>
+        <li><a href="../history/conversation-memory-fix.html">Conversation Memory Fix</a></li>
+      </ul>
+
+      <div class="nav-group-title">Incidents</div>
+      <ul>
+        <li><a href="../incidents/none.html">Production Incidents</a></li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+  <div class="content">
+
+    <nav class="breadcrumb"><a href="../index.html">Wiki</a><span class="sep">/</span><a href="../index.html#catalog">Runbooks</a><span class="sep">/</span>Run the Console Host</nav>
+
+    <section>
+      <h1>Run the Console Host</h1>
+      <p class="blockquote">Run this when you want Scout live in chat: <code>Scout.Host.Console</code> starts the configured chat adapters and the conversation worker so messages on Discord, Slack, or Teams reach the LLM.</p>
+
+      <div class="wiki-meta">
+        <span class="ptype runbook">runbook</span>
+        <span class="m"><span class="lbl">status</span><span class="stag active">active</span></span>
+        <span class="m"><span class="lbl">version</span> 1.0</span>
+        <span class="m"><span class="lbl">date</span> 2026-06-01</span>
+        <span class="sources"><span class="lbl">sources</span> README <em>Running the Console Host</em></span>
+      </div>
+
+      <h2>When to run this</h2>
+      <p>
+        <code>Scout.Host.Console</code> is the main runnable host. Start it when you want the bot answering
+        questions in a chat platform: it boots the configured chat adapters and the conversation worker, then
+        keeps running until you stop it. This is the long-running, interactive mode — distinct from the
+        one-shot <code>index &lt;project&gt;</code> command, which indexes a configured project and exits without
+        starting any adapters (see <a href="../runbooks/index-a-project.html">Index a Project</a>).
+      </p>
+      <p>
+        Because every adapter is <strong>self-gating</strong>, you do not have to configure all three platforms.
+        Provide credentials for the platforms you want, leave the rest empty, and the host starts only the
+        adapters whose credentials are present.
+      </p>
+
+      <h2>Preconditions</h2>
+      <ul class="check">
+        <li>.NET SDK <strong>10.0.100 or later</strong> is installed. The version is pinned in <code>global.json</code> with <code>rollForward: latestMinor</code>.</li>
+        <li>The solution builds. If you have not built yet, follow <a href="../runbooks/build-and-test.html">Build &amp; Test</a> first.</li>
+        <li>An LLM provider is reachable. With the default <code>Ollama</code> provider, Ollama must be running locally at <code>http://localhost:11434</code> (see <a href="../runbooks/local-models.html">Local Models</a>).</li>
+        <li>At least one chat adapter has credentials — otherwise the host starts with no adapters. Adapters self-gate on: Discord <code>Scout:Adapters:Discord:BotToken</code>, Slack <code>Scout:Adapters:Slack:BotToken</code>, Teams <code>Scout:Adapters:Teams:AppId</code>.</li>
+        <li>Secrets are supplied out-of-band — never committed. Use .NET User Secrets or environment variables in development; inject via environment variables or a secrets manager in production (see <a href="../conventions/secrets-handling.html">Secrets Handling</a>).</li>
+      </ul>
+
+      <h2>Steps</h2>
+
+      <p class="field-label">1. Configure providers and credentials</p>
+      <p>
+        The host reads configuration from <code>src/Scout.Host.Console/appsettings.json</code> and applies any
+        environment-variable overrides on top of it. All keys live under the <code>Scout:</code> prefix. A minimal
+        local-first setup keeps the default Ollama provider and supplies one adapter token:
+      </p>
+      <pre class="cfg"><span class="c"># src/Scout.Host.Console/appsettings.json (excerpt)</span>
+<span class="k">"Scout"</span>: {
+  <span class="k">"Llm"</span>: {
+    <span class="k">"Provider"</span>: <span class="s">"Ollama"</span>,
+    <span class="k">"Ollama"</span>: {
+      <span class="k">"Endpoint"</span>: <span class="s">"http://localhost:11434"</span>,
+      <span class="k">"Chat"</span>: { <span class="k">"Model"</span>: <span class="s">"llama3.1"</span> },
+      <span class="k">"Embeddings"</span>: { <span class="k">"Model"</span>: <span class="s">"nomic-embed-text"</span> }
+    }
+  },
+  <span class="k">"Adapters"</span>: {
+    <span class="k">"Discord"</span>: { <span class="k">"BotToken"</span>: <span class="s">""</span> },
+    <span class="k">"Slack"</span>:   { <span class="k">"BotToken"</span>: <span class="s">""</span>, <span class="k">"AppLevelToken"</span>: <span class="s">""</span> },
+    <span class="k">"Teams"</span>:   { <span class="k">"AppId"</span>: <span class="s">""</span>, <span class="k">"AppPassword"</span>: <span class="s">""</span>, <span class="k">"TenantId"</span>: <span class="s">""</span> }
+  }
+}</pre>
+
+      <p class="field-label">2. Override secrets at run time (do not commit them)</p>
+      <p>
+        Keep tokens out of the tracked <code>appsettings.json</code>. Environment variables override file values
+        and use a double underscore (<code>__</code>) as the section separator, mapping each <code>:</code> in a
+        configuration key to <code>__</code>:
+      </p>
+      <pre class="cfg"><span class="c"># environment-variable overrides (double-underscore separator)</span>
+<span class="k">Scout__Adapters__Discord__BotToken</span>=<span class="s">&lt;discord-bot-token&gt;</span>
+<span class="k">Scout__Adapters__Slack__BotToken</span>=<span class="s">xoxb-...</span>
+<span class="k">Scout__Adapters__Slack__AppLevelToken</span>=<span class="s">xapp-...</span>
+<span class="k">Scout__Adapters__Teams__AppId</span>=<span class="s">&lt;microsoft-app-id&gt;</span></pre>
+      <p>
+        The same pattern overrides any key — for example <code>Scout__Llm__Provider</code> to switch providers, or
+        <code>Scout__Llm__OpenAI__ApiKey</code> for a cloud provider. In development you may instead use
+        .NET User Secrets, which are layered the same way.
+      </p>
+
+      <p class="field-label">3. Start the host</p>
+      <p>Run from the repository root:</p>
+      <pre class="cfg"><span class="c"># start adapters + conversation worker (long-running)</span>
+dotnet run --project src/Scout.Host.Console</pre>
+      <p>
+        The process stays in the foreground. Each adapter is self-gating: if its credentials are absent the adapter
+        is <strong>skipped</strong> and the host continues with the remaining ones — a missing token disables one
+        platform but does not stop startup.
+      </p>
+
+      <h2>Verification</h2>
+      <ul class="check">
+        <li>The process starts and remains running (it does not exit immediately like the one-shot index command).</li>
+        <li>Adapters with credentials come up; adapters without credentials are skipped rather than failing the host.</li>
+        <li>Send a message to the bot in a configured platform and confirm a streamed reply arrives. Responses stream token-by-token, per the <a href="../invariants/streaming-first.html">Streaming-First</a> invariant.</li>
+        <li>If you switched providers, confirm the active provider name was picked up from <code>Scout:Llm:Provider</code> (an unknown name fails fast at startup, per <a href="../invariants/pluggable-everything.html">Pluggable Everything</a>).</li>
+      </ul>
+
+      <h2>Rollback</h2>
+      <p>
+        There is no persistent state to undo for the run itself — conversation history is per-channel, per-user and
+        held in memory by <a href="../services/scout-conversation.html">Scout.Conversation</a>, so it is discarded
+        when the process stops. To take Scout off a chat platform, stop the foreground process
+        (<kbd>Ctrl+C</kbd>) and clear or blank that platform's token; on the next start the adapter self-gates off.
+        Any project knowledge written during a separate <code>index</code> run is independent of this host process.
+      </p>
+
+      <div class="related">
+        <div class="field-label">Related</div>
+        <div class="related-grid">
+          <a href="../services/scout-host-console.html"><span class="rt">service</span>Host.Console</a>
+          <a href="../runbooks/build-and-test.html"><span class="rt">runbook</span>Build &amp; Test</a>
+          <a href="../runbooks/index-a-project.html"><span class="rt">runbook</span>Index a Project</a>
+          <a href="../runbooks/local-models.html"><span class="rt">runbook</span>Local Models</a>
+          <a href="../conventions/secrets-handling.html"><span class="rt">convention</span>Secrets Handling</a>
+          <a href="../invariants/streaming-first.html"><span class="rt">invariant</span>Streaming-First</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Scout Engineering Wiki &middot; <a href="../index.html">Home</a> &middot; <a href="../about.html">About</a> &middot; <a href="../index.html#catalog">Catalog</a>
+    </footer>
+
+  </div>
+  </main>
+</div>
+
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

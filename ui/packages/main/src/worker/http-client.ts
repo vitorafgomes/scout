@@ -13,6 +13,9 @@ export interface WorkerHttpDeps {
   getEndpoint(): string | null;
   fetch: typeof fetch;
   logger: Logger;
+  // Shared secret for the worker's loopback control surface. When present, it is
+  // sent on every request via the x-scout-token header.
+  token?: string;
 }
 
 interface WorkerErrorBody {
@@ -77,9 +80,16 @@ export class WorkerHttpClient {
 
     let response: Response;
     const init: RequestInit = { method, signal: controller.signal };
+    const headers: Record<string, string> = {};
     if (body !== undefined) {
-      init.headers = { 'Content-Type': 'application/json' };
+      headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
+    }
+    if (this.deps.token !== undefined) {
+      headers['x-scout-token'] = this.deps.token;
+    }
+    if (Object.keys(headers).length > 0) {
+      init.headers = headers;
     }
     try {
       response = await this.deps.fetch(url, init);

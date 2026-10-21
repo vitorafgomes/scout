@@ -9,6 +9,9 @@ public sealed class FeatureCatalog : IFeatureCatalog
     /// <summary>Canonical id for the Kubernetes feature.</summary>
     public const string KubernetesId = "kubernetes";
 
+    /// <summary>Canonical id for the Code Review feature.</summary>
+    public const string CodeReviewId = "code-review";
+
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
@@ -20,7 +23,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Key: "pat",
                 Kind: "password",
                 Label: "Personal Access Token",
-                HelperText: "Required scopes: repo, read:org. Token is stored only on this machine (OS keyring) and never sent to Scout's developers.",
+                HelperText: "Required scopes: repo, read:org. The token is never sent to Scout's developers. Note: it is currently held in this process's memory only (no OS keyring yet), so it is cleared when Scout restarts and must be re-entered.",
                 CreateLinkUrl: "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Scout",
                 CreateLinkLabel: "Create token on GitHub"),
         },
@@ -62,7 +65,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
             "Click 'Create token on GitHub' below. GitHub opens a token-creation page with the scopes 'repo' and 'read:org' already selected.",
             "Scroll to the bottom and click 'Generate token'. Copy the generated value (it is shown only once).",
             "Paste the token into the 'Personal Access Token' field above.",
-            "Click Save. Scout validates the token against GitHub before storing it on this machine's keyring.",
+            "Click Save. Scout validates the token against GitHub, then keeps it in this process's memory only (no OS keyring yet), so you must re-enter it after a restart.",
         });
 
     private static readonly FeatureMetadata Kubernetes = new(
@@ -96,10 +99,46 @@ public sealed class FeatureCatalog : IFeatureCatalog
             "Copy the full YAML output to the clipboard.",
             "Paste it into the 'Kubeconfig YAML' field above.",
             "If your kubeconfig has more than one context, type the context name in the 'Active context (optional)' field. Leave blank to use the default.",
-            "Click Save. Scout calls the cluster's /version endpoint to confirm reachability and credential validity before storing on this machine's keyring.",
+            "Click Save. Scout calls the cluster's /version endpoint to confirm reachability and credential validity, then keeps the kubeconfig in this process's memory only (no OS keyring yet), so you must re-enter it after a restart.",
         });
 
-    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes };
+    private static readonly FeatureMetadata CodeReview = new(
+        Id: CodeReviewId,
+        DisplayName: "Code Review",
+        Description: "Review code snippets and pull request diffs, and analyze a GitHub repository (which reuses the GitHub feature's token).",
+        RequiresCredentials: false,
+        CredentialFields: Array.Empty<FeatureCredentialField>(),
+        SettingsFields: new[]
+        {
+            new FeatureSettingField(
+                Key: "default_repo_url",
+                Kind: "text",
+                Label: "Default repository URL",
+                HelperText: "Used by repository analysis when no URL is given. e.g. https://github.com/octocat/Hello-World.",
+                CreateLinkUrl: null,
+                CreateLinkLabel: null,
+                Required: false),
+        },
+        WriteClass: WriteClass.None,
+        ScopeMatrix: new[]
+        {
+            new FeatureScopeRow(
+                Scope: "public_repo",
+                Actions: new[]
+                {
+                    "Read repository metadata to resolve the default branch (GET)",
+                    "Read the repository file tree (GET)",
+                    "Read selected file contents (GET)",
+                }),
+        },
+        SetupSteps: new[]
+        {
+            "No setup is required for snippet and pull-request review - they run entirely on the configured language model.",
+            "Repository analysis reuses the GitHub feature's token. Configure the GitHub feature to enable it; no separate credential is needed here.",
+            "Optionally set a default repository URL above so repository analysis has a target when none is given.",
+        });
+
+    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes, CodeReview };
 
     private readonly Dictionary<string, FeatureMetadata> _byId = AllFeatures.ToDictionary(
         f => f.Id,
