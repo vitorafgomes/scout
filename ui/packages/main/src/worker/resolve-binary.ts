@@ -22,11 +22,11 @@ function binaryName(platform: NodeJS.Platform): string {
   return platform === 'win32' ? 'Scout.Host.Console.exe' : 'Scout.Host.Console';
 }
 
-function findRepoRoot(startDir: string): string {
+export function findRepoRoot(startDir: string): string {
   let dir = startDir;
   for (let i = 0; i < 20; i++) {
-    const candidate = path.join(dir, 'ui', 'build', 'worker');
-    if (fs.existsSync(candidate)) return dir;
+    if (fs.existsSync(path.join(dir, 'ui', 'build', 'worker'))) return dir;
+    if (fs.existsSync(path.join(dir, 'Scout.slnx'))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -46,4 +46,23 @@ export function resolveWorkerBinary(deps: ResolveBinaryDeps): string {
 
   const repoRoot = findRepoRoot(cwd);
   return path.join(repoRoot, 'ui', 'build', 'worker', rid, binary);
+}
+
+export function resolveControlPlaneBinary(
+  deps: ResolveBinaryDeps,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const override = env['SCOUT_CONTROLPLANE_BIN'];
+  if (override != null && override !== '') return override;
+
+  const { app, resourcesPath, platform, arch, cwd } = deps;
+  const binary = platform === 'win32' ? 'Scout.Host.ControlPlane.exe' : 'Scout.Host.ControlPlane';
+
+  if (app?.isPackaged === true && resourcesPath != null) {
+    return path.join(resourcesPath, 'worker', ridFromPlatformArch(platform, arch), binary);
+  }
+
+  const bin = path.join(findRepoRoot(cwd), 'src', 'Scout.Host.ControlPlane', 'bin');
+  const release = path.join(bin, 'Release', 'net10.0', binary);
+  return fs.existsSync(release) ? release : path.join(bin, 'Debug', 'net10.0', binary);
 }

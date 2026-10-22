@@ -1,8 +1,9 @@
 ---
 title: "Testing"
-version: "1.3"
+version: "1.4"
 date: 2026-10-21
-changes: "Test runner and NSubstitute major bumps; Slack test count after the SlackNet 0.19 bump"
+updated: 2026-10-22
+changes: "UI workflow path filters and the control-plane host build step; UI spec-file counts after the control-plane client tests"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -84,12 +85,13 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 ## UI tests
 
-`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:69` to `:102`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
+`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, build the control-plane host, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:80` to `:119`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
-- 58 spec or test files: 29 in `ui/packages/main/test`, 3 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 25 in `ui/packages/renderer/src/app`.
+- 63 spec or test files: 32 in `ui/packages/main/test`, 3 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 27 in `ui/packages/renderer/src/app`.
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
-- The path filters in `ui-ci.yml:8` and `:15` name `src/Scout.Host.Worker`, which now lives under `src/old`. A change to `src/Scout.Host.Console` alone does not trigger the UI workflow.
+- The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:18` to `:21`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow.
+- The `Build control-plane host` step (`.github/workflows/ui-ci.yml:100`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.
 
 ## Related
 

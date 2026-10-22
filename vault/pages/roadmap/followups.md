@@ -57,3 +57,13 @@ reliability: medium
 
 - **Blocker:** `dotnet format --verify-no-changes --no-restore` times out on the MSBuild build-host pipe with SDK 10.0.106; the step is commented out in `.github/workflows/ci.yml`. Code style is still enforced at compile time by `EnforceCodeStyleInBuild` and `TreatWarningsAsErrors`. The GitHub issue that tracked this was deleted on 2026-10-22; this entry replaces it.
 - **Unblocks when:** a later SDK pin in `global.json` runs the command clean; then restore the step with the exact name `Format check`. Rule B runs the same command locally, so the gap is CI-only.
+
+### Control-plane launcher environment hardening (2026-10-22)
+
+- **Blocker:** none. Found by the review of the phase 1 spike in [[pages/roadmap/control-plane-client]]. The launcher passes the whole parent environment to `Scout.Host.ControlPlane` and sets its own variables last by exact key. On Unix a casing variant of `Scout__ControlPlane__SocketPath`, or an inherited `Kestrel__*` key, is a distinct variable that .NET configuration still binds; the failure is closed (the client cannot reach the host) and needs a same-uid principal. The socket directory check uses `lstat` then `chmod`, leaving a same-uid window.
+- **Fix:** before phase 3 wires the launcher into `main.ts`, drop case-insensitive variants of the launcher's own keys and any `Kestrel__` key from the child environment, and consider `O_NOFOLLOW` plus `fchmod` for the directory.
+
+### Control-plane phase 1 test notes (2026-10-22)
+
+- **Blocker:** none. The wrong-token integration test asserts only the error type; add `not.toContain` of the token on its message. The integration `afterAll` throws a `TypeError` when `beforeAll` fails before launching, which adds noise to an already-reported failure.
+- **Fix:** both in phase 2, alongside the codegen change to the same files.
