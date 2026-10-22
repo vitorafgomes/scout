@@ -4,6 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 import { OllamaUnreachableError } from '@scout/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LLM_CONFIG_STORAGE_KEY } from '../core/llm-config.store';
 import { LOCAL_MODELS_STORAGE_KEY, LocalModelsStore } from '../core/local-models.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { SourcesComponent } from './sources.component';
@@ -12,6 +13,8 @@ interface FakeBridge {
   llmListOllamaModels: ReturnType<typeof vi.fn>;
   llmListLmStudioModels: ReturnType<typeof vi.fn>;
   appOpenExternal: ReturnType<typeof vi.fn>;
+  vaultStore: ReturnType<typeof vi.fn>;
+  vaultHas: ReturnType<typeof vi.fn>;
 }
 
 interface FakeModel {
@@ -30,6 +33,8 @@ function makeBridge(
     listError?: unknown;
     lmStudioModels?: readonly FakeLmStudioModel[];
     lmStudioError?: unknown;
+    vaultStoreError?: unknown;
+    vaultHas?: boolean;
   } = {},
 ): FakeBridge {
   return {
@@ -42,6 +47,10 @@ function makeBridge(
       return { models: opts.lmStudioModels ?? [] };
     }),
     appOpenExternal: vi.fn(async () => undefined),
+    vaultStore: vi.fn(async () => {
+      if (opts.vaultStoreError !== undefined) throw opts.vaultStoreError;
+    }),
+    vaultHas: vi.fn(async () => ({ exists: opts.vaultHas ?? false })),
   };
 }
 
@@ -51,6 +60,8 @@ async function setup(
     listError?: unknown;
     lmStudioModels?: readonly FakeLmStudioModel[];
     lmStudioError?: unknown;
+    vaultStoreError?: unknown;
+    vaultHas?: boolean;
   } = {},
 ): Promise<{
   fixture: ComponentFixture<SourcesComponent>;
@@ -78,6 +89,7 @@ describe('SourcesComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     window.localStorage.removeItem(LOCAL_MODELS_STORAGE_KEY);
+    window.localStorage.removeItem(LLM_CONFIG_STORAGE_KEY);
   });
 
   it('renders both Local and Cloud sections by default', async () => {
@@ -241,9 +253,9 @@ describe('SourcesComponent', () => {
     expect(bridge.llmListOllamaModels).toHaveBeenCalledTimes(1);
   });
 
-  it('cloud cards have disabled primary actions', async () => {
+  it('ChatGPT Plus, OpenRouter and Custom API cards keep disabled primary actions', async () => {
     const { fixture } = await setup();
-    const ids = ['chatgpt-plus', 'openai-api', 'google-gemini', 'openrouter', 'custom-api'];
+    const ids = ['chatgpt-plus', 'openrouter', 'custom-api'];
 
     for (const id of ids) {
       const btn = fixture.nativeElement.querySelector(
@@ -309,5 +321,161 @@ describe('SourcesComponent', () => {
     await fixture.whenStable();
 
     expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: 'https://lmstudio.ai' });
+  });
+  function query<T extends Element>(fixture: ComponentFixture<SourcesComponent>, sel: string): T {
+    return fixture.nativeElement.querySelector(sel) as T;
+  }
+
+  function type(input: HTMLInputElement, value: string): void {
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  async function settle(fixture: ComponentFixture<SourcesComponent>): Promise<void> {
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('click the button to enter the token: the OpenAI API card opens an API-key form and saves the key', async () => {
+    const { fixture, bridge } = await setup();
+    const action = query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]');
+    expect(action.disabled).toBe(false);
+    expect(query(fixture, '[data-test="key-form-openai-api"]')).toBeNull();
+
+    action.click();
+    fixture.detectChanges();
+
+    const keyInput = query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]');
+    expect(keyInput.type).toBe('password');
+    expect(keyInput.getAttribute('autocomplete')).toBe('off');
+    expect(keyInput.closest('label')?.textContent).toContain('API key');
+    const modelInput = query<HTMLInputElement>(fixture, '[data-test="model-openai-api"]');
+    expect(modelInput.value).toBe('gpt-4o-mini');
+
+    type(keyInput, 'sk-typed-key');
+    type(modelInput, 'gpt-4o');
+    query<HTMLButtonElement>(fixture, '[data-test="save-openai-api"]').click();
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.api-key', value: 'sk-typed-key' },
+      { key: 'llm.cloud-model', value: 'gpt-4o' },
+      { key: 'llm.provider', value: 'OpenAI' },
+    ]);
+    expect(query(fixture, '[data-test="key-form-openai-api"]')).toBeNull();
+    const badge = query<HTMLElement>(fixture, '[data-test="badge-openai-api"]');
+    expect(badge.textContent ?? '').toContain('Connected');
+    expect(badge.textContent ?? '').not.toContain('Not Connected');
+    expect(query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent).toContain(
+      'Saved. Restart Scout from the status screen to use OpenAI.',
+    );
+  });
+
+  it('click the button to enter the token: the Google Gemini card opens a form with its default model prefilled and saves the key', async () => {
+    const { fixture, bridge } = await setup();
+    const action = query<HTMLButtonElement>(fixture, '[data-test="action-google-gemini"]');
+    expect(action.disabled).toBe(false);
+
+    action.click();
+    fixture.detectChanges();
+
+    const keyInput = query<HTMLInputElement>(fixture, '[data-test="api-key-google-gemini"]');
+    expect(keyInput.type).toBe('password');
+    const modelInput = query<HTMLInputElement>(fixture, '[data-test="model-google-gemini"]');
+    expect(modelInput.value).toBe('gemini-2.5-flash');
+
+    type(keyInput, 'gemini-typed-key');
+    query<HTMLButtonElement>(fixture, '[data-test="save-google-gemini"]').click();
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.api-key', value: 'gemini-typed-key' },
+      { key: 'llm.cloud-model', value: 'gemini-2.5-flash' },
+      { key: 'llm.provider', value: 'Gemini' },
+    ]);
+    const badge = query<HTMLElement>(fixture, '[data-test="badge-google-gemini"]');
+    expect(badge.textContent ?? '').not.toContain('Not Connected');
+    expect(query<HTMLElement>(fixture, '[data-test="saved-google-gemini"]').textContent).toContain(
+      'Saved. Restart Scout from the status screen to use Gemini.',
+    );
+  });
+
+  it('saving with an empty API key shows an error and stores nothing', async () => {
+    const { fixture, bridge } = await setup();
+    query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]').click();
+    fixture.detectChanges();
+
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]'), '   ');
+    query<HTMLButtonElement>(fixture, '[data-test="save-openai-api"]').click();
+    await settle(fixture);
+
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    const alert = query<HTMLElement>(fixture, '[data-test="key-form-openai-api"] [role="alert"]');
+    expect(alert.textContent).toContain('Enter an API key.');
+    expect(query(fixture, '[data-test="key-form-openai-api"]')).not.toBeNull();
+  });
+
+  it('a failed save shows the error text, keeps the form open and never shows the key', async () => {
+    const { fixture } = await setup({ vaultStoreError: new Error('vault unavailable') });
+    query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]').click();
+    fixture.detectChanges();
+
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]'), 'sk-typed-key');
+    query<HTMLButtonElement>(fixture, '[data-test="save-openai-api"]').click();
+    await settle(fixture);
+
+    const alert = query<HTMLElement>(fixture, '[data-test="key-form-openai-api"] [role="alert"]');
+    expect(alert.textContent).toContain('vault unavailable');
+    expect(fixture.nativeElement.textContent).not.toContain('sk-typed-key');
+    expect(query<HTMLElement>(fixture, '[data-test="badge-openai-api"]').textContent).toContain(
+      'Not Connected',
+    );
+  });
+
+  it('cancel closes the form and clears the typed key', async () => {
+    const { fixture, bridge } = await setup();
+    query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]').click();
+    fixture.detectChanges();
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]'), 'sk-typed-key');
+
+    query<HTMLButtonElement>(fixture, '[data-test="cancel-openai-api"]').click();
+    fixture.detectChanges();
+    expect(query(fixture, '[data-test="key-form-openai-api"]')).toBeNull();
+
+    query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]').click();
+    fixture.detectChanges();
+    expect(query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]').value).toBe('');
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+  });
+
+  it('shows the active keyed cloud provider as Connected on load', async () => {
+    window.localStorage.setItem(
+      LLM_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        provider: 'Gemini',
+        model: 'gemini-2.5-flash',
+        endpoint: 'http://localhost:11434',
+      }),
+    );
+    const { fixture } = await setup({ vaultHas: true });
+
+    expect(
+      query<HTMLElement>(fixture, '[data-test="badge-google-gemini"]').textContent,
+    ).not.toContain('Not Connected');
+    expect(query<HTMLElement>(fixture, '[data-test="badge-openai-api"]').textContent).toContain(
+      'Not Connected',
+    );
+  });
+
+  it('the ChatGPT Plus card is disabled and says it is not supported', async () => {
+    const { fixture } = await setup();
+    const card = query<HTMLElement>(fixture, '[data-test="card-chatgpt-plus"]');
+    const action = query<HTMLButtonElement>(fixture, '[data-test="action-chatgpt-plus"]');
+
+    expect(action.disabled).toBe(true);
+    expect(action.textContent).toContain('Not supported');
+    expect(card.textContent).toContain(
+      'Not supported: a ChatGPT Plus or Pro subscription does not include API access. Use the OpenAI API card with an API key instead.',
+    );
   });
 });

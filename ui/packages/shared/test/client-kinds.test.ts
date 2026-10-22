@@ -41,6 +41,8 @@ describe('VAULT_KEYS', () => {
       'llm.provider',
       'llm.model',
       'llm.endpoint',
+      'llm.api-key',
+      'llm.cloud-model',
       'stt.provider',
       'stt.model',
     ]);
@@ -67,6 +69,10 @@ describe('VAULT_KEYS', () => {
           return 'llm-model';
         case 'llm.endpoint':
           return 'llm-endpoint';
+        case 'llm.api-key':
+          return 'llm-api-key';
+        case 'llm.cloud-model':
+          return 'llm-cloud-model';
         case 'stt.provider':
           return 'stt-provider';
         case 'stt.model':

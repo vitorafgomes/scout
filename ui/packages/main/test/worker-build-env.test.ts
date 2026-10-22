@@ -35,12 +35,104 @@ describe('buildEnv', () => {
     expect(env['SCOUT__LLM__PROVIDER']).toBe('Ollama');
   });
 
-  it('uses vault llm.provider when present', async () => {
-    const env = await buildEnv({
-      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'LmStudio' }),
-    });
-    expect(env['SCOUT__LLM__PROVIDER']).toBe('LmStudio');
+  it('throws naming the provider when vault llm.provider is not one the worker supports', async () => {
+    let thrown: unknown = null;
+    try {
+      await buildEnv({
+        vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'LmStudio' }),
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toContain('LmStudio');
   });
+
+  it('OpenAI: the worker uses OpenAI with the stored API key and cloud model, and no Ollama variables', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.api-key': 'sk-openai-key',
+        'llm.cloud-model': 'gpt-4o',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'OpenAI',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__OPENAI__APIKEY: 'sk-openai-key',
+      SCOUT__LLM__OPENAI__CHAT__MODEL: 'gpt-4o',
+    });
+  });
+
+  it('OpenAI: chat model defaults to gpt-4o-mini when no cloud model is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.api-key': 'sk-openai-key',
+      }),
+    });
+    expect(env['SCOUT__LLM__OPENAI__CHAT__MODEL']).toBe('gpt-4o-mini');
+  });
+
+  it('Gemini: the worker uses Gemini with the stored API key, cloud model and an explicit embeddings model, and no Ollama variables', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.api-key': 'gemini-key',
+        'llm.cloud-model': 'gemini-2.5-pro',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Gemini',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__GEMINI__APIKEY: 'gemini-key',
+      SCOUT__LLM__GEMINI__CHAT__MODEL: 'gemini-2.5-pro',
+      SCOUT__LLM__GEMINI__EMBEDDINGS__MODEL: 'text-embedding-004',
+    });
+  });
+
+  it('Gemini: chat model defaults to gemini-2.5-flash when no cloud model is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.api-key': 'gemini-key',
+      }),
+    });
+    expect(env['SCOUT__LLM__GEMINI__CHAT__MODEL']).toBe('gemini-2.5-flash');
+  });
+
+  for (const provider of ['OpenAI', 'Gemini']) {
+    it(`${provider} without a stored API key: error names the provider, points to AI Sources, and contains no secret`, async () => {
+      const SECRET = 'bot-token-must-not-leak';
+      let thrown: unknown = null;
+      try {
+        await buildEnv({
+          vaultGet: makeVault({
+            'discord.bot-token': SECRET,
+            'llm.provider': provider,
+            'llm.cloud-model': 'some-model',
+          }),
+        });
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(VaultUnavailableError);
+      const message = (thrown as VaultUnavailableError).message;
+      expect(message).toContain(provider);
+      expect(message).toContain('AI Sources');
+      expect(message).not.toContain(SECRET);
+    });
+  }
 
   it('emits SCOUT__LLM__OLLAMA__CHAT__MODEL (not __OLLAMA__MODEL) when llm.model set', async () => {
     const env = await buildEnv({
@@ -65,6 +157,45 @@ describe('buildEnv', () => {
   it('emits DOTNET_ENVIRONMENT=Production', async () => {
     const env = await buildEnv({ vaultGet: makeVault({ 'discord.bot-token': 'tok' }) });
     expect(env['DOTNET_ENVIRONMENT']).toBe('Production');
+  });
+
+  it('local default unchanged: no provider gives the same Ollama env as before, with no APIKEY even when a key is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+        'llm.api-key': 'sk-stored-but-unused',
+        'llm.cloud-model': 'gpt-4o',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__OLLAMA__CHAT__MODEL: 'llama3.1',
+      SCOUT__LLM__OLLAMA__ENDPOINT: 'http://localhost:11434',
+    });
+  });
+
+  it('local default unchanged: provider Ollama gives the same Ollama env as before, with no APIKEY even when a key is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Ollama',
+        'llm.model': 'qwen2.5',
+        'llm.endpoint': 'http://10.0.0.5:11434',
+        'llm.api-key': 'sk-stored-but-unused',
+        'llm.cloud-model': 'gpt-4o',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__OLLAMA__CHAT__MODEL: 'qwen2.5',
+      SCOUT__LLM__OLLAMA__ENDPOINT: 'http://10.0.0.5:11434',
+    });
   });
 
   it('token value does not appear in keys or serialised env snapshot', async () => {

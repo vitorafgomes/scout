@@ -10,18 +10,25 @@ interface VaultStoreCall {
   readonly value: string;
 }
 
-function makeBridge(opts: { vaultHasResult?: boolean } = {}) {
+interface BridgeOptions {
+  readonly vaultHasResult?: boolean;
+  readonly vaultHasByKey?: Readonly<Record<string, boolean>>;
+}
+
+function makeBridge(opts: BridgeOptions = {}) {
   const vaultStoreCalls: VaultStoreCall[] = [];
   const bridge = {
     vaultStore: vi.fn(async (req: { key: string; value: string }) => {
       vaultStoreCalls.push({ key: req.key, value: req.value });
     }),
-    vaultHas: vi.fn(async () => ({ exists: opts.vaultHasResult ?? true })),
+    vaultHas: vi.fn(async (req: { key: string }) => ({
+      exists: opts.vaultHasByKey?.[req.key] ?? opts.vaultHasResult ?? true,
+    })),
   } as unknown as ScoutBridgeService;
   return { bridge, vaultStoreCalls };
 }
 
-function setup(opts: { vaultHasResult?: boolean } = {}) {
+function setup(opts: BridgeOptions = {}) {
   const { bridge, vaultStoreCalls } = makeBridge(opts);
   TestBed.configureTestingModule({
     providers: [
@@ -161,5 +168,102 @@ describe('LlmConfigStore', () => {
     store.setEndpointDraft('http://my-laptop.local:11434');
     expect(store.endpoint()).toBe('http://my-laptop.local:11434');
     expect(vaultStoreCalls).toHaveLength(0);
+  });
+  it('setCloudProvider stores exactly the API key, the cloud model and the provider in the vault', async () => {
+    const { store, vaultStoreCalls } = setup();
+
+    await store.setCloudProvider('OpenAI', 'sk-test-key', 'gpt-4o');
+
+    expect(vaultStoreCalls).toEqual([
+      { key: 'llm.api-key', value: 'sk-test-key' },
+      { key: 'llm.cloud-model', value: 'gpt-4o' },
+      { key: 'llm.provider', value: 'OpenAI' },
+    ]);
+  });
+
+  it('setCloudProvider makes the provider the active cloud provider with its model', async () => {
+    const { store } = setup();
+
+    await store.setCloudProvider('Gemini', 'gemini-key', 'gemini-2.5-flash');
+
+    expect(store.provider()).toBe('Gemini');
+    expect(store.model()).toBe('gemini-2.5-flash');
+    expect(store.activeCloudProvider()).toBe('Gemini');
+    expect(store.isConfigured()).toBe(true);
+  });
+
+  it('setCloudProvider rejects an empty or blank API key and writes nothing', async () => {
+    const { store, vaultStoreCalls } = setup();
+
+    await expect(store.setCloudProvider('OpenAI', '   ', 'gpt-4o-mini')).rejects.toThrow(
+      /API key must be non-empty/,
+    );
+    expect(vaultStoreCalls).toHaveLength(0);
+  });
+
+  it('setCloudProvider rejects an empty or blank model and writes nothing', async () => {
+    const { store, vaultStoreCalls } = setup();
+
+    await expect(store.setCloudProvider('OpenAI', 'sk-test-key', ' ')).rejects.toThrow(
+      /model must be non-empty/,
+    );
+    expect(vaultStoreCalls).toHaveLength(0);
+  });
+
+  it('the key stays secret: the localStorage mirror never contains the API key', async () => {
+    const SECRET = 'sk-secret-must-not-be-mirrored';
+    const { store } = setup();
+
+    await store.setCloudProvider('OpenAI', SECRET, 'gpt-4o-mini');
+
+    const raw = window.localStorage.getItem(LLM_CONFIG_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    expect(raw).not.toContain(SECRET);
+    expect(JSON.parse(raw ?? '{}')).toMatchObject({ provider: 'OpenAI', model: 'gpt-4o-mini' });
+  });
+
+  it('loadFromVault restores a cloud provider as active when the vault holds an API key', async () => {
+    const { store: writer } = setup();
+    await writer.setCloudProvider('OpenAI', 'sk-test-key', 'gpt-4o');
+    TestBed.resetTestingModule();
+
+    const { store } = setup({ vaultHasByKey: { 'llm.api-key': true, 'llm.model': false } });
+    await store.loadFromVault();
+
+    expect(store.provider()).toBe('OpenAI');
+    expect(store.model()).toBe('gpt-4o');
+    expect(store.activeCloudProvider()).toBe('OpenAI');
+  });
+
+  it('loadFromVault treats a cloud provider with no API key in the vault as unconfigured', async () => {
+    window.localStorage.setItem(
+      LLM_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        provider: 'Gemini',
+        model: 'gemini-2.5-flash',
+        endpoint: 'http://localhost:11434',
+      }),
+    );
+
+    const { store } = setup({ vaultHasByKey: { 'llm.api-key': false, 'llm.model': true } });
+    await store.loadFromVault();
+
+    expect(store.provider()).toBeNull();
+    expect(store.activeCloudProvider()).toBeNull();
+    expect(store.isConfigured()).toBe(false);
+    expect(window.localStorage.getItem(LLM_CONFIG_STORAGE_KEY)).toBeNull();
+  });
+
+  it('the local selection always switches the worker back to Ollama', async () => {
+    const { store, vaultStoreCalls } = setup();
+    await store.setCloudProvider('OpenAI', 'sk-test-key', 'gpt-4o');
+    vaultStoreCalls.length = 0;
+
+    await store.setSelection('Ollama', 'llama3.1', 'http://localhost:11434');
+
+    expect(vaultStoreCalls).toContainEqual({ key: 'llm.provider', value: 'Ollama' });
+    expect(vaultStoreCalls.filter((c) => c.key === 'llm.provider')).toHaveLength(1);
+    expect(store.provider()).toBe('Ollama');
+    expect(store.activeCloudProvider()).toBeNull();
   });
 });

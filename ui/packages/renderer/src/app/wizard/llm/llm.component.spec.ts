@@ -78,6 +78,25 @@ describe('LlmComponent', () => {
     window.localStorage.removeItem(LLM_CONFIG_STORAGE_KEY);
   });
 
+  it('does not carry a cloud model into the local selection', async () => {
+    window.localStorage.setItem(
+      LLM_CONFIG_STORAGE_KEY,
+      JSON.stringify({ provider: 'OpenAI', model: 'gpt-4o', endpoint: 'http://localhost:11434' }),
+    );
+    const { fixture, bridge } = await setup({
+      vaultHas: true,
+      listError: new OllamaUnreachableError('http://localhost:11434'),
+    });
+
+    expect(fixture.componentInstance.selectedModel()).toBeNull();
+    expect(fixture.componentInstance.canSave()).toBe(false);
+    const save = fixture.nativeElement.querySelector(
+      '[data-test="save"]',
+    ) as HTMLButtonElement | null;
+    expect(save === null || save.disabled).toBe(true);
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+  });
+
   it('hides Endpoint and Model sections until a provider is selected', async () => {
     const { fixture, bridge } = await setup({ models: [] });
 

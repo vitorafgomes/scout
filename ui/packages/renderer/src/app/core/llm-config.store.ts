@@ -2,7 +2,8 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { ScoutBridgeService } from './scout-bridge';
 
-export type LlmProvider = 'Ollama';
+export type LlmProvider = 'Ollama' | 'OpenAI' | 'Gemini';
+export type CloudLlmProvider = Exclude<LlmProvider, 'Ollama'>;
 
 export interface LlmConfigSnapshot {
   readonly provider: LlmProvider;
@@ -30,7 +31,7 @@ function getStorage(): Storage | null {
 }
 
 function isProvider(value: unknown): value is LlmProvider {
-  return value === 'Ollama';
+  return value === 'Ollama' || value === 'OpenAI' || value === 'Gemini';
 }
 
 function readPersisted(): PersistedShape | null {
@@ -97,6 +98,12 @@ export class LlmConfigStore {
 
   readonly isConfigured = computed<boolean>(() => this._model() !== null);
 
+  /** The cloud provider the next worker start will use, once its API key is confirmed in the vault; null otherwise. */
+  readonly activeCloudProvider = computed<CloudLlmProvider | null>(() => {
+    const provider = this._provider();
+    return provider === null || provider === 'Ollama' ? null : provider;
+  });
+
   // Hydrates the in-memory signals from localStorage and verifies the vault
   // mirror via vault.has. The vault holds the same triple so the main
   // process can read it at worker spawn time without a renderer round-trip.
@@ -112,20 +119,22 @@ export class LlmConfigStore {
       return;
     }
 
-    let modelInVault = false;
+    let requiredInVault = false;
     try {
-      const res = await this.bridge.vaultHas({ key: 'llm.model' });
-      modelInVault = res.exists;
+      const res = await this.bridge.vaultHas({
+        key: persisted.provider === 'Ollama' ? 'llm.model' : 'llm.api-key',
+      });
+      requiredInVault = res.exists;
     } catch {
-      modelInVault = false;
+      requiredInVault = false;
     }
 
-    if (!modelInVault) {
+    if (!requiredInVault) {
       // Storage says configured, vault says no — distrust the mirror,
       // wipe it, and present the user as unconfigured so the wizard
       // re-prompts before the worker spawns.
       console.warn(
-        'llm-config: localStorage advertises a model but vault.has reports missing — treating as unconfigured',
+        'llm-config: localStorage advertises a provider but vault.has reports its model or key missing — treating as unconfigured',
       );
       clearPersisted();
       this._provider.set(null);
@@ -139,7 +148,7 @@ export class LlmConfigStore {
     this._endpoint.set(persisted.endpoint);
   }
 
-  async setSelection(provider: LlmProvider, model: string, endpoint: string): Promise<void> {
+  async setSelection(provider: 'Ollama', model: string, endpoint: string): Promise<void> {
     if (model.length === 0) {
       throw new Error('llm-config: model must be non-empty');
     }
@@ -156,6 +165,27 @@ export class LlmConfigStore {
     this._provider.set(provider);
     this._model.set(model);
     this._endpoint.set(endpoint);
+  }
+
+  /** Stores the API key, chat model and provider in the vault; the key is never mirrored or kept in memory. */
+  async setCloudProvider(provider: CloudLlmProvider, apiKey: string, model: string): Promise<void> {
+    const trimmedKey = apiKey.trim();
+    const trimmedModel = model.trim();
+    if (trimmedKey.length === 0) {
+      throw new Error('llm-config: API key must be non-empty');
+    }
+    if (trimmedModel.length === 0) {
+      throw new Error('llm-config: model must be non-empty');
+    }
+
+    await this.bridge.vaultStore({ key: 'llm.api-key', value: trimmedKey });
+    await this.bridge.vaultStore({ key: 'llm.cloud-model', value: trimmedModel });
+    await this.bridge.vaultStore({ key: 'llm.provider', value: provider });
+
+    writePersisted({ provider, model: trimmedModel, endpoint: this._endpoint() });
+
+    this._provider.set(provider);
+    this._model.set(trimmedModel);
   }
 
   setEndpointDraft(endpoint: string): void {

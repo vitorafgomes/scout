@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI"
-version: "1.1"
+version: "1.2"
 date: 2026-10-22
 updated: 2026-10-22
-changes: "Control-plane launcher and gRPC client added; screens still on the dead HTTP path"
+changes: "Cloud LLM cards for OpenAI and Gemini"
 page_type: service
 status: active
 description: "Electron desktop app (Bun workspace, Angular renderer): onboards a Discord bot, keeps credentials in the OS keychain, spawns and supervises the Scout.Host.Console worker, and manages local Ollama and Whisper models from Node."
@@ -51,7 +51,8 @@ Packaging: `ui/build/scripts/publish-worker.sh:13` publishes `src/Scout.Host.Con
 ## Public contract
 
 - **IPC channels** - 39 `scout:*` channels declared in `ui/packages/shared/src/ipc-contract.ts:5`, grouped as detect, discord, vault, worker, app, diagnostics, llm, whisper, shell, providers and features. The renderer sees only what `ui/packages/preload/src/preload.ts` bridges.
-- **Vault keys** - the closed `VaultKey` union in `ui/packages/shared/src/client-kinds.ts:3` (Discord bot token, client and guild ids, LLM provider, model and endpoint, STT provider and model).
+- **Vault keys** - the closed `VaultKey` union in `ui/packages/shared/src/client-kinds.ts:3` (Discord bot token, client and guild ids, LLM provider, model and endpoint, cloud LLM API key and cloud model, STT provider and model).
+- **Cloud LLM cards** - the OpenAI API and Google Gemini cards on the AI Sources screen take an API key and a chat model and switch the worker to that provider on its next start (`ui/packages/renderer/src/app/sources/sources.component.ts:655`); ChatGPT Plus says it is unsupported, OpenRouter and Custom API stay disabled. [[pages/decisions/0015-cloud-llm-providers-by-api-key]].
 - **Worker handshake** - the main process spawns the worker binary (`ui/packages/main/src/worker/supervisor.ts:181`) and waits for the `SCOUT_READY` marker on stdout (`ui/packages/main/src/worker/log-stream.ts:13`); readiness times out after 45 s.
 - **Routes** - `''`, `provision`, `token`, `oauth`, `launch`, `ready`, `status`, `sources`, `sources/local-models`, `features`, `llm`, `logs` in `ui/packages/renderer/src/app/app.routes.ts:7`.
 

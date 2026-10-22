@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { type CloudLlmProvider, LlmConfigStore } from '../core/llm-config.store';
 import { LocalModelsStore } from '../core/local-models.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
 
@@ -30,6 +31,13 @@ interface CardModel {
 
 const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_LM_STUDIO_ENDPOINT = 'http://localhost:1234';
+
+const CLOUD_PROVIDERS: Readonly<
+  Record<string, { readonly provider: CloudLlmProvider; readonly defaultModel: string }>
+> = Object.freeze({
+  'openai-api': { provider: 'OpenAI', defaultModel: 'gpt-4o-mini' },
+  'google-gemini': { provider: 'Gemini', defaultModel: 'gemini-2.5-flash' },
+});
 
 const ICONS = Object.freeze({
   localModels:
@@ -191,9 +199,14 @@ const ICONS = Object.freeze({
                       <path [attr.d]="card.iconPath" fill="currentColor" />
                     </svg>
                   </div>
-                  <span class="badge badge--off" [attr.data-test]="'badge-' + card.id">
+                  <span
+                    class="badge"
+                    [class.badge--ok]="cloudStateOf(card.id) === 'connected'"
+                    [class.badge--off]="cloudStateOf(card.id) !== 'connected'"
+                    [attr.data-test]="'badge-' + card.id"
+                  >
                     <span class="badge-dot" aria-hidden="true"></span>
-                    Not Connected
+                    {{ cloudStateOf(card.id) === 'connected' ? 'Connected' : 'Not Connected' }}
                   </span>
                 </div>
                 <h3 class="card-title">{{ card.title }}</h3>
@@ -204,7 +217,9 @@ const ICONS = Object.freeze({
                     class="action action--primary action--wide"
                     [attr.data-test]="'action-' + card.id"
                     [disabled]="card.disabled"
-                    [title]="card.disabled ? 'Coming soon' : ''"
+                    [title]="card.disabled && card.id !== 'chatgpt-plus' ? 'Coming soon' : ''"
+                    [attr.aria-expanded]="card.disabled ? null : openForm() === card.id"
+                    (click)="toggleKeyForm(card.id)"
                   >
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                       <path
@@ -223,6 +238,61 @@ const ICONS = Object.freeze({
                       <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
                     </svg>
                   </button>
+                  @if (openForm() === card.id) {
+                    <form
+                      class="key-form"
+                      [attr.data-test]="'key-form-' + card.id"
+                      (submit)="saveKey($event, card.id, keyInput, modelInput)"
+                    >
+                      <label class="field">
+                        <span class="field-label">API key</span>
+                        <input
+                          #keyInput
+                          type="password"
+                          autocomplete="off"
+                          class="text-input"
+                          [attr.data-test]="'api-key-' + card.id"
+                        />
+                      </label>
+                      <label class="field">
+                        <span class="field-label">Model</span>
+                        <input
+                          #modelInput
+                          type="text"
+                          class="text-input"
+                          [value]="defaultModelOf(card.id)"
+                          [attr.data-test]="'model-' + card.id"
+                        />
+                      </label>
+                      @if (formError(); as error) {
+                        <p class="form-error" role="alert">{{ error }}</p>
+                      }
+                      <div class="form-buttons">
+                        <button
+                          type="submit"
+                          class="action action--primary"
+                          [disabled]="saving()"
+                          [attr.data-test]="'save-' + card.id"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          class="action"
+                          [attr.data-test]="'cancel-' + card.id"
+                          (click)="cancelKeyForm()"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  }
+                  @if (savedCard() === card.id) {
+                    <p class="saved" role="status" [attr.data-test]="'saved-' + card.id">
+                      Saved. Restart Scout from the status screen to use
+                      {{ providerOf(card.id) }}.
+                    </p>
+                  }
                 </div>
               </article>
             }
@@ -443,6 +513,52 @@ const ICONS = Object.freeze({
       .secondary:hover {
         text-decoration: underline;
       }
+      .key-form {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .field-label {
+        font-size: 12px;
+        color: #7b8299;
+      }
+      .text-input {
+        background: #0f1117;
+        color: #e4e8f0;
+        border: 1px solid #2a3245;
+        border-radius: 6px;
+        padding: 7px 10px;
+        font-family: inherit;
+        font-size: 13px;
+      }
+      .form-buttons {
+        display: flex;
+        gap: 8px;
+      }
+      .form-buttons .action {
+        flex: 1;
+        background: transparent;
+        color: #e4e8f0;
+        border-color: #2a3245;
+      }
+      .form-buttons .action--primary {
+        background: #1e2333;
+      }
+      .form-error {
+        margin: 0;
+        font-size: 12px;
+        color: #f87171;
+      }
+      .saved {
+        margin: 0;
+        font-size: 12px;
+        color: #4ade80;
+      }
     `,
   ],
 })
@@ -450,8 +566,13 @@ export class SourcesComponent implements OnInit {
   private readonly bridge = inject(ScoutBridgeService);
   private readonly router = inject(Router);
   private readonly localModelsStore = inject(LocalModelsStore);
+  private readonly llmConfig = inject(LlmConfigStore);
 
   readonly filter = signal<FilterKind>('all');
+  readonly openForm = signal<string | null>(null);
+  readonly formError = signal<string | null>(null);
+  readonly saving = signal<boolean>(false);
+  readonly savedCard = signal<string | null>(null);
   readonly scanning = signal<string | null>(null);
   private readonly states = signal<Readonly<Record<string, ConnectionState>>>({
     ollama: 'unknown',
@@ -522,9 +643,9 @@ export class SourcesComponent implements OnInit {
       kind: 'cloud',
       title: 'ChatGPT Plus',
       description:
-        'Sign in with your ChatGPT Plus or Pro subscription to access advanced OpenAI models without API keys.',
+        'Not supported: a ChatGPT Plus or Pro subscription does not include API access. Use the OpenAI API card with an API key instead.',
       iconPath: ICONS.openai,
-      primaryAction: 'Sign in with ChatGPT',
+      primaryAction: 'Not supported',
       secondaryLabel: null,
       secondaryUrl: null,
       primaryIsScan: false,
@@ -541,7 +662,7 @@ export class SourcesComponent implements OnInit {
       secondaryLabel: null,
       secondaryUrl: null,
       primaryIsScan: false,
-      disabled: true,
+      disabled: false,
     },
     {
       id: 'google-gemini',
@@ -553,7 +674,7 @@ export class SourcesComponent implements OnInit {
       secondaryLabel: null,
       secondaryUrl: null,
       primaryIsScan: false,
-      disabled: true,
+      disabled: false,
     },
     {
       id: 'openrouter',
@@ -586,6 +707,7 @@ export class SourcesComponent implements OnInit {
   ngOnInit(): void {
     void this.onScan('ollama');
     void this.onScan('lm-studio');
+    void this.llmConfig.loadFromVault();
   }
 
   setFilter(kind: FilterKind): void {
@@ -597,6 +719,63 @@ export class SourcesComponent implements OnInit {
       return this.localModelsConnected() ? 'connected' : 'not-connected';
     }
     return this.states()[id] ?? 'unknown';
+  }
+
+  cloudStateOf(id: string): ConnectionState {
+    const provider = CLOUD_PROVIDERS[id]?.provider;
+    return provider !== undefined && provider === this.llmConfig.activeCloudProvider()
+      ? 'connected'
+      : 'not-connected';
+  }
+
+  providerOf(id: string): string {
+    return CLOUD_PROVIDERS[id]?.provider ?? '';
+  }
+
+  defaultModelOf(id: string): string {
+    return CLOUD_PROVIDERS[id]?.defaultModel ?? '';
+  }
+
+  toggleKeyForm(id: string): void {
+    if (CLOUD_PROVIDERS[id] === undefined) return;
+    this.formError.set(null);
+    this.savedCard.set(null);
+    this.openForm.update((open) => (open === id ? null : id));
+  }
+
+  cancelKeyForm(): void {
+    this.formError.set(null);
+    this.openForm.set(null);
+  }
+
+  async saveKey(
+    event: Event,
+    id: string,
+    keyInput: HTMLInputElement,
+    modelInput: HTMLInputElement,
+  ): Promise<void> {
+    event.preventDefault();
+    const provider = CLOUD_PROVIDERS[id]?.provider;
+    if (provider === undefined || this.saving()) return;
+    if (keyInput.value.trim().length === 0) {
+      this.formError.set('Enter an API key.');
+      return;
+    }
+    if (modelInput.value.trim().length === 0) {
+      this.formError.set('Enter a model.');
+      return;
+    }
+    this.saving.set(true);
+    this.formError.set(null);
+    try {
+      await this.llmConfig.setCloudProvider(provider, keyInput.value, modelInput.value);
+      this.openForm.set(null);
+      this.savedCard.set(id);
+    } catch (err: unknown) {
+      this.formError.set(err instanceof Error ? err.message : 'Could not save the API key.');
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   isCardDisabled(card: CardModel): boolean {
