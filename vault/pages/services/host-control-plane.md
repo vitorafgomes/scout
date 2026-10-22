@@ -69,4 +69,4 @@ Covered by `tests/Scout.ControlPlane.Tests` (59 test attributes in total, 9 file
 
 ## Related
 
-Direct project references: [[pages/services/control-plane-contracts]], [[pages/services/control-plane]]. Map: [[pages/architecture/project-map]].
+Direct project references: [[pages/services/control-plane-contracts]], [[pages/services/control-plane]]. Map: [[pages/architecture/project-map]]. Consumer: none yet; the desktop client is [[pages/roadmap/control-plane-client]], see [[pages/services/desktop-ui]].

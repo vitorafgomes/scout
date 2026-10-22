@@ -1,9 +1,9 @@
 ---
 title: "Scout Restructure - Architecture, Status and Backlog"
-version: "1.0"
+version: "1.1"
 date: 2026-05-29
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-10-22
+changes: "Backlog re-verified against main on 2026-10-22"
 page_type: longform
 status: active
 description: "Living overview of the ground-up restructure on branch feat/scout-llm-gateway. The previous source tree is archived under src/old/ (frozen reference, not built)."
@@ -80,38 +80,41 @@ once, and exits cleanly (with guidance) when none are configured.
 
 ## Implemented
 
-- [x] `Scout.Llm` gateway (chat + embeddings via SK, streaming-first).
-- [x] `Scout.Conversation` core (cumulative sink, StreamPump, router, conductor).
+Re-verified against `main` 5fb2a15 on 2026-10-22.
+
+- [x] `Scout.Llm` gateway (chat + embeddings via SK, streaming-first). [[pages/services/llm]]
+- [x] `Scout.Conversation` core (cumulative sink, StreamPump, router, conductor). [[pages/services/conversation]]
 - [x] Discord, Slack, Teams adapters (all on the same `IResponseSink`).
-- [x] `Scout.Host.Console` chatops host (config-gated, multi-adapter, `SCOUT_READY`, parent-death watchdog).
-- [x] gRPC control-plane .NET server (contracts + domain + host, UDS/named-pipe + token).
-- [x] Quality gates run: architecture + code review + security audit; findings fixed.
-- [x] Desktop Step 1: launch wired to `Scout.Host.Console` (binary repoint, vault→env `SCOUT__ADAPTERS__DISCORD__BOTTOKEN`, fixed LLM model env key, token-gated launch guard, graceful "backend unavailable" degradation of provider/feature screens).
-- [x] Linux AppImage packaging working (`bun run dist:linux`); publish script cleans output dir; Discord bot connects and replies end to end.
-- [x] Observability: inbound message accepted / ignored-with-reason, routing, completion, and LLM target (provider/endpoint/model) logged at Info (stderr); marker on stdout.
+- [x] `Scout.Host.Console` chatops host (config-gated, multi-adapter, `SCOUT_READY`, parent-death watchdog). [[pages/services/host-console]]
+- [x] gRPC control-plane .NET server (contracts + domain + host, UDS/named-pipe + token). [[pages/services/host-control-plane]]
+- [x] GitHub plugin as SK functions and streaming function-calling (`FunctionChoiceBehavior.Auto()` in `src/Scout.Llm/ChatGateway.cs:257`). [[pages/services/plugin-github]]
+- [x] Skills library (markdown skills, embedding-matched injection, `list_skills` / `load_skill`). [[pages/services/skills]]
+- [x] Project knowledge: SQLite vector store, `search_project` / `find_symbol` / `list_projects`. [[pages/services/knowledge]]
+- [x] Desktop: launch wired to `Scout.Host.Console` (binary repoint, vault to env, token-gated launch guard, graceful "backend unavailable" degradation of the Providers / Features screens). [[pages/services/desktop-ui]]
+- [x] Linux AppImage packaging (`bun run dist:linux`); three-OS package step in `ui-ci.yml`.
+- [x] Observability: inbound accepted / ignored-with-reason, routing, completion and LLM target logged at Info (stderr); readiness marker on stdout.
 
 ## Backlog (what's left)
 
-### Backend↔frontend gRPC (follow-on to the .NET server)
-- [ ] Node/Electron `@grpc/grpc-js` client over `unix:` scheme; **Windows named-pipe spike** (no first-class API — fallbacks: `grpc-js-namedpipes` shim or stdio-JSON-RPC on Windows).
-- [ ] `ts-proto` codegen; replace the hand-written `ipc-contract.ts` shapes.
-- [ ] `MessagePort` streaming to the renderer for progress/status.
-- [ ] Repoint `ui/build/worker` + `resolve-binary` (control-plane) and revive the Providers / Models / Features screens.
+Open as of 2026-10-22. Small deferrals with a known unblock live in [[pages/roadmap/followups]].
+
+### Control plane client (initiative: [[pages/roadmap/control-plane-client]])
+- [ ] Node/Electron `@grpc/grpc-js` client over `unix:`; Windows named-pipe spike.
+- [ ] `ts-proto` codegen from `src/Scout.ControlPlane.Contracts`; replace the hand-written `ipc-contract.ts` shapes.
+- [ ] Launch `Scout.Host.ControlPlane` beside the console worker; move the Providers / Features / Models screens and the Ollama pull onto the control plane.
 
 ### Onboarding (second wave)
 - [ ] Slack onboarding form (bot token + app-level token) in the wizard.
-- [ ] Teams onboarding form (app id / password / tenant); live webhook hosting (CloudAdapter / Azure Bot) is a separate concern.
+- [ ] Teams onboarding form (app id / password / tenant); live webhook hosting stays out of this repository.
 
 ### Chatops capability
-- [ ] Feature plugins not yet rebuilt: GitHub, Kubernetes, CloudStatus, CodeQA, Help. Today the bot only does LLM fallback chat — **no tools**.
-- [ ] Agent router (streaming function-calling) to expose plugins as SK tools.
-- [ ] Bot identity: `llama3.1` hallucinates being "Claude 2" — tighten `Scout:Conversation:SystemPrompt` so it answers as Scout / a local model.
+- [ ] Decide the retired plugins' fate (CloudStatus, CodeQA, Kubernetes, Help under `src/old`): rebuild on SK or drop. The GitHub issues that tracked them were deleted on 2026-10-22.
+- [ ] Bot identity: tighten `Scout:Conversation:SystemPrompt` so a local model answers as Scout.
 
 ### Hardening / release
-- [ ] Full `dotnet format` pass (sandbox can't run the analyzer build-host).
-- [ ] PR strategy for the consolidated branch (one PR vs split).
-- [ ] Code signing + real icons before any distribution (current builds are unsigned, placeholder icons).
-- [ ] gRPC server test coverage was completed (UDS integration + boundary), but the Node client side needs its own tests when built.
+- [ ] Re-enable the `dotnet format` check in `ci.yml` (see [[pages/roadmap/followups]]).
+- [ ] Code signing + real icons before any distribution.
+- [ ] Packaged smoke run on Windows and macOS.
 
 ## Run notes
 
