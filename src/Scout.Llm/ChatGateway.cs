@@ -43,13 +43,20 @@ internal sealed class ChatGateway : IChatGateway
         _agent = agent;
         _logger = logger ?? NullLogger<ChatGateway>.Instance;
 
-        // Human-readable description of what the gateway talks to, for the
-        // communication log. Best-effort: options is optional (e.g. in tests).
-        var llm = options?.Value;
+        _target = DescribeTarget(options?.Value);
+    }
+
+    private static string DescribeTarget(LlmOptions? llm)
+    {
         var provider = llm?.Provider ?? "unknown";
-        var endpoint = llm?.Ollama?.Endpoint ?? "unknown";
-        var model = llm?.Ollama?.Chat?.Model ?? "unknown";
-        _target = $"provider={provider} endpoint={endpoint} model={model}";
+        var (endpoint, model) = provider switch
+        {
+            "Ollama" => (llm?.Ollama?.Endpoint, llm?.Ollama?.Chat?.Model),
+            "OpenAI" => (llm?.OpenAI?.Endpoint ?? "https://api.openai.com/v1", llm?.OpenAI?.Chat?.Model),
+            "Gemini" => ("https://generativelanguage.googleapis.com", llm?.Gemini?.Chat?.Model),
+            _ => ((string?)null, (string?)null),
+        };
+        return $"provider={provider} endpoint={endpoint ?? "unknown"} model={model ?? "unknown"}";
     }
 
     public async IAsyncEnumerable<string> StreamAsync(

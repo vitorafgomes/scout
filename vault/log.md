@@ -1,3 +1,6 @@
+## [2026-10-22] fix | Cloud key takes effect on save; request log names the real provider
+Owner testing showed a key saved 27 s after the worker started, so the worker stayed on Ollama, and the log line printed Ollama fields regardless of provider. Saving now restarts a running worker; ChatGateway's log label describes the active provider. Pages updated: services/llm, invariants/pluggable-boundaries, followups.
+
 ## [2026-10-22] feature | OpenAI and Gemini cards take an API key; ChatGPT Plus marked unsupported
 ADR 0015. The key goes to the OS keychain as llm.api-key, the cloud model to its own key llm.cloud-model so a local download cannot overwrite it, and build-env maps them per provider at worker start. Pages updated: secrets invariant, desktop-ui, ADR 0007 note, followups, index.
 

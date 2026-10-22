@@ -70,5 +70,5 @@ reliability: medium
 
 ### Cloud LLM cards: what is still open (2026-10-22)
 
-- **Blocker:** none. [[pages/decisions/0015-cloud-llm-providers-by-api-key]] wired the OpenAI API and Google Gemini cards and marked ChatGPT Plus unsupported. Still open: OpenRouter (its factory needs a separate embeddings host and key), Custom API (endpoint validation), removing a stored key, restarting the worker after a save, and checking a key against the provider before saving.
+- **Blocker:** none. [[pages/decisions/0015-cloud-llm-providers-by-api-key]] wired the OpenAI API and Google Gemini cards and marked ChatGPT Plus unsupported. Still open: OpenRouter (its factory needs a separate embeddings host and key), Custom API (endpoint validation), removing a stored key, and checking a key against the provider before saving.
 - **Fix:** one change per item; OpenRouter first, since its .NET factory already exists.
