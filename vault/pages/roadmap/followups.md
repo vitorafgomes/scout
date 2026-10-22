@@ -67,3 +67,8 @@ reliability: medium
 
 - **Blocker:** none. The wrong-token integration test asserts only the error type; add `not.toContain` of the token on its message. The integration `afterAll` throws a `TypeError` when `beforeAll` fails before launching, which adds noise to an already-reported failure.
 - **Fix:** both in phase 2, alongside the codegen change to the same files.
+
+### Cloud source cards are placeholders; the ChatGPT Plus card has no legitimate backing (2026-10-22)
+
+- **Blocker:** none for four cards, a vendor policy for one. The AI Sources screen shows five cloud cards (ChatGPT Plus, OpenAI API, Google Gemini, OpenRouter, Custom API), all `disabled: true` in `ui/packages/renderer/src/app/sources/sources.component.ts:531` to `:582`; [[pages/decisions/0007-ai-sources-screen]] reserved them and deferred the wiring. The owner reported the ChatGPT Plus card "not connecting" on 2026-10-22: it is a placeholder, not a failure. OpenAI, Gemini and OpenRouter already have provider factories in [[pages/services/llm]], so those cards need only an API-key form, a vault key and the matching `SCOUT__LLM__*` variables in the worker environment. A ChatGPT Plus or Pro subscription grants no API access; the "Sign in with ChatGPT" token is accepted only by OpenAI's own Codex backend and is not offered to third-party apps.
+- **Fix:** wire the API-key cards through the existing provider factories (one pattern, then one card at a time); remove the ChatGPT Plus card or relabel it as unsupported, unless OpenAI publishes a sanctioned third-party flow.
