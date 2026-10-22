@@ -2,6 +2,8 @@
 The MessageReceived handler filters, starts the conversation and returns, so a streaming reply stops blocking the Discord gateway task; StopAsync waits up to 10 s for in-flight replies. Pages updated: services/adapter-discord, new history/adapter-discord, the moved citation in invariants/secrets-never-in-source.
 ## [2026-10-22] fix | Skill index retried after a failed build; log view keeps a stack at its header's level
 SkillSelector no longer caches a failed index build until restart: it retries after one minute on an injected TimeProvider and still caches a success. The desktop Logs screen gives indented, blank and "--- End of" lines the level of the last header from the same stream, so filtering by error keeps the stack. Pages updated: services/skills, new history/skills.
+## [2026-10-22] fix | Cloud key takes effect on save; request log names the real provider
+Owner testing showed a key saved 27 s after the worker started, so the worker stayed on Ollama, and the log line printed Ollama fields regardless of provider. Saving now restarts a running worker; ChatGateway's log label describes the active provider. Pages updated: services/llm, invariants/pluggable-boundaries, followups.
 
 ## [2026-10-22] feature | OpenAI and Gemini cards take an API key; ChatGPT Plus marked unsupported
 ADR 0015. The key goes to the OS keychain as llm.api-key, the cloud model to its own key llm.cloud-model so a local download cannot overwrite it, and build-env maps them per provider at worker start. Pages updated: secrets invariant, desktop-ui, ADR 0007 note, followups, index.

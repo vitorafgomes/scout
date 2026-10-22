@@ -1,8 +1,9 @@
 ---
 title: "Llm"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-22
+changes: "Request log label now describes the active provider"
 page_type: service
 status: active
 description: "Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout."
@@ -58,7 +59,7 @@ The kernel adds every `KernelPlugin` from DI (`src/Scout.Llm/LlmServiceCollectio
 ## Hot spots
 
 - `src/Scout.Llm/ChatGateway.cs:253` builds `OpenAIPromptExecutionSettings` for every provider.
-- `src/Scout.Llm/ChatGateway.cs:50` logs the Ollama endpoint and model regardless of provider.
+- `src/Scout.Llm/ChatGateway.cs:49` builds the request log label per provider (Ollama, OpenAI, Gemini; `unknown` fields for the others) and never reads an API key.
 - `src/Scout.Llm/LlmServiceCollectionExtensions.cs:54` is the closed provider switch.
 
 ## Testing footprint

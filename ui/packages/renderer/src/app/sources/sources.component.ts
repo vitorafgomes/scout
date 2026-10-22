@@ -289,9 +289,11 @@ const ICONS = Object.freeze({
                   }
                   @if (savedCard() === card.id) {
                     <p class="saved" role="status" [attr.data-test]="'saved-' + card.id">
-                      Saved. Restart Scout from the status screen to use
-                      {{ providerOf(card.id) }}.
+                      {{ savedMessage() }}
                     </p>
+                    @if (restartError(); as error) {
+                      <p class="form-error" role="alert">{{ error }}</p>
+                    }
                   }
                 </div>
               </article>
@@ -573,6 +575,8 @@ export class SourcesComponent implements OnInit {
   readonly formError = signal<string | null>(null);
   readonly saving = signal<boolean>(false);
   readonly savedCard = signal<string | null>(null);
+  readonly savedMessage = signal<string>('');
+  readonly restartError = signal<string | null>(null);
   readonly scanning = signal<string | null>(null);
   private readonly states = signal<Readonly<Record<string, ConnectionState>>>({
     ollama: 'unknown',
@@ -728,10 +732,6 @@ export class SourcesComponent implements OnInit {
       : 'not-connected';
   }
 
-  providerOf(id: string): string {
-    return CLOUD_PROVIDERS[id]?.provider ?? '';
-  }
-
   defaultModelOf(id: string): string {
     return CLOUD_PROVIDERS[id]?.defaultModel ?? '';
   }
@@ -740,6 +740,7 @@ export class SourcesComponent implements OnInit {
     if (CLOUD_PROVIDERS[id] === undefined) return;
     this.formError.set(null);
     this.savedCard.set(null);
+    this.restartError.set(null);
     this.openForm.update((open) => (open === id ? null : id));
   }
 
@@ -769,12 +770,30 @@ export class SourcesComponent implements OnInit {
     this.formError.set(null);
     try {
       await this.llmConfig.setCloudProvider(provider, keyInput.value, modelInput.value);
-      this.openForm.set(null);
-      this.savedCard.set(id);
     } catch (err: unknown) {
       this.formError.set(err instanceof Error ? err.message : 'Could not save the API key.');
+      return;
     } finally {
       this.saving.set(false);
+    }
+    this.openForm.set(null);
+    this.savedCard.set(id);
+    await this.restartIfRunning(provider);
+  }
+
+  private async restartIfRunning(provider: CloudLlmProvider): Promise<void> {
+    try {
+      const { state } = await this.bridge.workerStatus();
+      if (state !== 'running' && state !== 'starting') {
+        this.savedMessage.set(`Saved. Scout will use ${provider} the next time it starts.`);
+        return;
+      }
+      this.savedMessage.set(`Saved. Restarting Scout to use ${provider}.`);
+      await this.bridge.workerStop();
+      await this.bridge.workerStart();
+    } catch (err: unknown) {
+      this.savedMessage.set(`Saved. Restart Scout from the status screen to use ${provider}.`);
+      this.restartError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
     }
   }
 

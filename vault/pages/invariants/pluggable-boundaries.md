@@ -1,8 +1,9 @@
 ---
 title: "Adapters, LLM providers and plugins are swapped by configuration"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-22
+changes: "Log label gap narrowed to providers other than Ollama, OpenAI and Gemini"
 page_type: invariant
 status: active
 description: "Chat adapters, LLM providers and plugins sit behind abstractions and are selected or gated by Scout: configuration; the core names no vendor. The set of options is closed at compile time."
@@ -56,7 +57,7 @@ Scout is open source and ships to users who have different chat platforms and di
 - **The provider list is closed.** The switch at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:54` has no registry or discovery; a new provider means editing it.
 - **Vendor packages are linked in.** `src/Scout.Llm/Scout.Llm.csproj` references the connectors for all providers, and `Scout.Conversation` and the adapters inherit them through the project reference. `Scout.Host.Console` references all three adapters and the GitHub plugin at compile time (`src/Scout.Host.Console/Scout.Host.Console.csproj:15`), so swapping is by configuration, not by deployment.
 - **OpenAI types leak into the core.** `src/Scout.Llm/ChatGateway.cs:253` builds `OpenAIPromptExecutionSettings` for every provider, and so does `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`.
-- **Log label is Ollama-only.** `src/Scout.Llm/ChatGateway.cs:50` reports the Ollama endpoint and model whatever provider is active.
+- **Log label covers three providers.** `src/Scout.Llm/ChatGateway.cs:49` describes Ollama, OpenAI and Gemini; any other provider logs its name with `unknown` endpoint and model.
 - **Teams has no live inbound path.** `TeamsChatAdapter.ProcessActivityAsync` (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:107`) has no production caller; the webhook is deliberately not wired (`src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:18`).
 
 ## Related
