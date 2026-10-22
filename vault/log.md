@@ -1,3 +1,6 @@
+## [2026-10-22] lint | Full wiki pass, then the vault made true to main
+Health check on main 5fb2a15: build, 766 .NET tests, 261 UI tests and both CI workflows green; 80 pages, 0 broken links, 0 orphans, 0 schema errors, 289 citations resolve; report in archive/lint-2026-10-22.md. Findings fixed on branch docs/vault-truth: root CLAUDE.md no longer claims the UI talks gRPC (it spawns the console worker; the control plane has no client), restructure backlog re-verified, domain/cloud-status and domain/code-qa archived as src/old records, new services/desktop-ui written from the code, new roadmap/control-plane-client initiative (owner decision: the gRPC control plane stays and the Electron client gets built), dotnet format follow-up replaces the deleted GitHub issue. Six stale GitHub issues deleted by the owner. Open soft finding: 20 index descriptions over 150 chars.
+
 ## [2026-10-21] integrate | Follow-ups
 Added pages/roadmap/followups.md to index.md under a new Roadmap section, with backlinks from pages/services/knowledge.md (hot spots) and pages/conventions/testing.md (ui-ci).
 

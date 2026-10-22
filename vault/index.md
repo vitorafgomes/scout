@@ -1,12 +1,12 @@
 ---
 title: "Scout Vault Index"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded on 2026-10-21: migrated technical notes plus code-derived service, invariant and convention pages"
+changes: "Added the Desktop UI service page and the control-plane client initiative on 2026-10-22"
 page_type: index
 status: active
 description: "Content catalogue for the Scout LLM wiki."
-updated: 2026-10-21
+updated: 2026-10-22
 source:
   - chat
   - obsidian-vault/scout (technical notes migrated 2026-10-21)
@@ -65,6 +65,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/adapter-teams|Adapter.Teams]] - Microsoft Teams adapter: the Bot Framework turn handler, translator and streaming sink; the inbound webhook is deliberately not wired in this repository.
 - [[pages/services/control-plane-contracts|ControlPlane.Contracts]] - The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs.
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
+- [[pages/services/desktop-ui|Desktop UI]] - Electron app: onboards a Discord bot, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, manages local models from Node.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
 - [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub plugin, runs the adapters, or runs a one-shot project index.
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.
@@ -99,8 +100,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Domain
 
-- [[pages/domain/cloud-status|`Plugin.CloudStatus`]] *(stub)* - Read-only cloud health plugin. Answers questions about whether Azure, AWS, and Oracle Cloud services are healthy, degraded, or down.
-- [[pages/domain/code-qa|`Plugin.CodeQA`]] *(stub)* - Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG).
+- [[pages/domain/cloud-status|`Plugin.CloudStatus`]] *(archived)* - Retired first cut under src/old. Read-only cloud health plugin. Answers questions about whether Azure, AWS, and Oracle Cloud services are healthy, degraded, or down.
+- [[pages/domain/code-qa|`Plugin.CodeQA`]] *(archived)* - Retired first cut under src/old. Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG).
 - [[pages/domain/daily-assistant-plugins|Daily-Assistant Plugins - Wave 1 Reference]] - What actually shipped in Wave 1 of the daily-assistant plugin roadmap (plugin-roadmap-daily-assistant (private note)): the tools the chat LLM can call, their data sources, config, and how to use...
 
 ## Conventions
@@ -115,6 +116,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Roadmap
 
 - [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
+- [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
 
 ## History
 

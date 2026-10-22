@@ -1,11 +1,11 @@
 ---
 title: "`Plugin.CodeQA`"
-version: "1.0"
+version: "1.1"
 date: 2026-04-21
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-10-22
+changes: "Archived: describes the retired first cut under src/old"
 page_type: knowledge
-status: stub
+status: archived
 description: "Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG)."
 source:
   - "obsidian-vault/scout/03-domain/code-qa.md"
@@ -13,6 +13,8 @@ reliability: medium
 ---
 
 # `Plugin.CodeQA`
+
+> **Archived 2026-10-22.** This page describes `Scout.Plugin.CodeQA` from the retired first cut, which lives under `src/old/` and is not built. Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record.
 
 Read-only code Q&A plugin. Answers natural-language questions about a
 configured GitHub repository using retrieval-augmented generation (RAG).

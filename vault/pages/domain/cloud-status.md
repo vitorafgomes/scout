@@ -1,11 +1,11 @@
 ---
 title: "`Plugin.CloudStatus`"
-version: "1.0"
+version: "1.1"
 date: 2026-04-21
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-10-22
+changes: "Archived: describes the retired first cut under src/old"
 page_type: knowledge
-status: stub
+status: archived
 description: "Read-only cloud health plugin. Answers questions about whether Azure, AWS, and Oracle Cloud services are healthy, degraded, or down."
 source:
   - "obsidian-vault/scout/03-domain/cloud-status.md"
@@ -13,6 +13,8 @@ reliability: medium
 ---
 
 # `Plugin.CloudStatus`
+
+> **Archived 2026-10-22.** This page describes `Scout.Plugin.CloudStatus` from the retired first cut, which lives under `src/old/` and is not built. Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record.
 
 Read-only cloud health plugin. Answers questions about whether Azure, AWS,
 and Oracle Cloud services are healthy, degraded, or down.
