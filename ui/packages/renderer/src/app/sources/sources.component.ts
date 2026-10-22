@@ -777,6 +777,7 @@ export class SourcesComponent implements OnInit {
       this.saving.set(false);
     }
     this.openForm.set(null);
+    this.savedMessage.set('Saved.');
     this.savedCard.set(id);
     await this.restartIfRunning(provider);
   }
