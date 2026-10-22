@@ -1,8 +1,8 @@
 ---
 title: "Testing"
-version: "1.1"
+version: "1.3"
 date: 2026-10-21
-changes: "Test package versions refreshed with their citations; noted that ui-ci does not run the format check"
+changes: "Test runner and NSubstitute major bumps; Slack test count after the SlackNet 0.19 bump"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -18,9 +18,9 @@ reliability: high
 
 Versions come from `Directory.Packages.props` (central package management).
 
-- xUnit 2.9.3 (`Directory.Packages.props:55`) with `xunit.runner.visualstudio` 3.1.5 and `Microsoft.NET.Test.Sdk` 18.11.0 (`:56`, `:57`).
+- xUnit 2.9.3 (`Directory.Packages.props:55`) with `xunit.runner.visualstudio` 4.0.1 (still runs xUnit v1, v2 and v3 test projects) and `Microsoft.NET.Test.Sdk` 18.11.0 (`:56`, `:57`).
 - Shouldly 4.3.0 for assertions (`Directory.Packages.props:60`). FluentAssertions was removed because v8 went commercial; do not mix two assertion libraries (comment at `:58`).
-- NSubstitute 5.3.0 for substitutes (`Directory.Packages.props:61`).
+- NSubstitute 6.2.0 for substitutes (`Directory.Packages.props:61`).
 - `Microsoft.Extensions.TimeProvider.Testing` 10.11.0 for a fake clock (`Directory.Packages.props:62`); the adapter and conversation tests use it.
 - `coverlet.collector` 10.1.0 for coverage (`Directory.Packages.props:63`).
 - `Grpc.Net.Client` for the control-plane integration tests (`tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj`).
@@ -38,7 +38,7 @@ Versions come from `Directory.Packages.props` (central package management).
 
 ## Layout and counts
 
-One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 631 in the ten projects of `Scout.slnx`.
+One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 635 in the ten projects of `Scout.slnx`.
 
 | Test project | Attributes | Covers |
 |---|---|---|
@@ -46,7 +46,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Knowledge.Tests` | 103 | [[pages/services/knowledge]] |
 | `Scout.Conversation.Tests` | 74 | [[pages/services/conversation]] |
 | `Scout.ControlPlane.Tests` | 59 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
-| `Scout.Adapter.Slack.Tests` | 54 | [[pages/services/adapter-slack]] |
+| `Scout.Adapter.Slack.Tests` | 58 | [[pages/services/adapter-slack]] |
 | `Scout.Adapter.Teams.Tests` | 50 | [[pages/services/adapter-teams]] |
 | `Scout.Plugin.GitHub.Tests` | 47 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Discord.Tests` | 34 | [[pages/services/adapter-discord]] |
@@ -84,7 +84,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 ## UI tests
 
-`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:69` to `:96`). It does not run `bun run format`, which fails on main ([[pages/roadmap/followups]]).
+`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:69` to `:102`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
 - 58 spec or test files: 29 in `ui/packages/main/test`, 3 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 25 in `ui/packages/renderer/src/app`.

@@ -1,9 +1,9 @@
 ---
 title: "Electron Provisioning UI - feasibility study: Open questions"
-version: "1.0"
+version: "1.1"
 date: 2026-04-22
 updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+changes: "Angular version mentions moved from 21 to 22"
 page_type: longform
 status: active
 description: "Open questions remaining from the Electron provisioning feasibility study."
@@ -67,10 +67,10 @@ reliability: medium
   default (deprecated path), with Jest and Vitest as the current
   community directions. `bun test` is a fourth option but has no
   first-class Angular support. `TODO: decide` — pick based on current
-  Angular 21.x + Bun ecosystem maturity. Default lean: Vitest, since
+  Angular 22.x + Bun ecosystem maturity. Default lean: Vitest, since
   it aligns with Angular's esbuild-era tooling and plays better with
   Bun than Karma.
-- **Angular SSR / hydration.** Angular 21 ships full SSR + hydration
+- **Angular SSR / hydration.** Angular 22 ships full SSR + hydration
   for server-rendered apps. For an Electron renderer this is almost
   certainly **not** relevant (offline desktop, no SEO, no cold HTML
   payload concern). `TODO: verify` the decision and document the

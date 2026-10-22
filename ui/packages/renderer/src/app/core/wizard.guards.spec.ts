@@ -28,7 +28,10 @@ function setup(tokenExists: boolean) {
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
-      provideRouter([{ path: '', children: [] }, { path: 'launch', children: [] }]),
+      provideRouter([
+        { path: '', children: [] },
+        { path: 'launch', children: [] },
+      ]),
       { provide: ScoutBridgeService, useValue: bridge },
       { provide: PersistentStateService, useValue: makePersistentStub() },
     ],
@@ -45,18 +48,18 @@ describe('requireBotTokenGuard', () => {
     const { store } = setup(true);
     await store.loadFromVault();
 
-    const result = TestBed.runInInjectionContext(() => requireBotTokenGuard(
-      {} as never, {} as never,
-    ));
+    const result = TestBed.runInInjectionContext(() =>
+      requireBotTokenGuard({} as never, {} as never),
+    );
     expect(result).toBe(true);
   });
 
   it('redirects to / when hasProvisioning is false (no token, no guild)', () => {
     const { router } = setup(false);
 
-    const result = TestBed.runInInjectionContext(() => requireBotTokenGuard(
-      {} as never, {} as never,
-    ));
+    const result = TestBed.runInInjectionContext(() =>
+      requireBotTokenGuard({} as never, {} as never),
+    );
 
     expect(result).not.toBe(true);
     expect(result).toEqual(router.parseUrl('/'));
@@ -68,9 +71,9 @@ describe('requireBotTokenGuard', () => {
     store.setClientId('cid');
     store.setGuild({ id: 'g1', name: 'My Guild' });
 
-    const result = TestBed.runInInjectionContext(() => requireBotTokenGuard(
-      {} as never, {} as never,
-    ));
+    const result = TestBed.runInInjectionContext(() =>
+      requireBotTokenGuard({} as never, {} as never),
+    );
     expect(result).toBe(true);
   });
 });

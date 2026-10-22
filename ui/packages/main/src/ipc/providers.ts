@@ -51,11 +51,9 @@ export function registerProvidersHandlers(
     CHANNEL.providerStart,
     async (_event, req: ProviderStartRequest): Promise<ProviderStatusDto> => {
       try {
-        return await client.post<ProviderStatusDto>(
-          `/providers/${req.id}/start`,
-          undefined,
-          { timeoutMs: START_TIMEOUT_MS },
-        );
+        return await client.post<ProviderStatusDto>(`/providers/${req.id}/start`, undefined, {
+          timeoutMs: START_TIMEOUT_MS,
+        });
       } catch (err: unknown) {
         logger.warn('providers: start failed', { id: req.id, err: String(err) });
         throwSerialized(err);

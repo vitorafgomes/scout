@@ -69,10 +69,7 @@ function formatBytes(n: number): string {
       <nav class="crumb" aria-label="Breadcrumb">
         <a routerLink="/sources" class="crumb-link" data-test="crumb-back">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-            <path
-              d="m15 18-6-6 6-6 1.4 1.4L11.8 12l4.6 4.6Z"
-              fill="currentColor"
-            />
+            <path d="m15 18-6-6 6-6 1.4 1.4L11.8 12l4.6 4.6Z" fill="currentColor" />
           </svg>
           AI Sources
         </a>
@@ -108,10 +105,7 @@ function formatBytes(n: number): string {
           (click)="setTab('analysis')"
         >
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <path
-              d="m12 3 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z"
-              fill="currentColor"
-            />
+            <path d="m12 3 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z" fill="currentColor" />
           </svg>
           Local Analysis
         </button>
@@ -121,19 +115,19 @@ function formatBytes(n: number): string {
         <header class="panel-head">
           <div class="panel-icon" aria-hidden="true">
             @if (tab() === 'transcription') {
-            <svg viewBox="0 0 24 24" width="22" height="22">
-              <path
-                d="M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Zm-3 7a6 6 0 0 0 12 0h-2a4 4 0 0 1-8 0Zm5 8h2v3h-2Z"
-                fill="currentColor"
-              />
-            </svg>
+              <svg viewBox="0 0 24 24" width="22" height="22">
+                <path
+                  d="M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Zm-3 7a6 6 0 0 0 12 0h-2a4 4 0 0 1-8 0Zm5 8h2v3h-2Z"
+                  fill="currentColor"
+                />
+              </svg>
             } @else {
-            <svg viewBox="0 0 24 24" width="22" height="22">
-              <path
-                d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm0 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm3-8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm0 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
-                fill="currentColor"
-              />
-            </svg>
+              <svg viewBox="0 0 24 24" width="22" height="22">
+                <path
+                  d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm0 9a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Zm3-8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm0 9a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"
+                  fill="currentColor"
+                />
+              </svg>
             }
           </div>
           <div class="panel-titles">
@@ -161,194 +155,200 @@ function formatBytes(n: number): string {
             <dd data-test="metric-downloaded">{{ downloadedCount() }}</dd>
           </div>
           @if (tab() === 'transcription') {
-          <div>
-            <dt>GPU</dt>
-            <dd>GPU off</dd>
-          </div>
-          <div>
-            <dt>STORAGE</dt>
-            <dd data-test="metric-storage">{{ storageLabel() }}</dd>
-          </div>
+            <div>
+              <dt>GPU</dt>
+              <dd>GPU off</dd>
+            </div>
+            <div>
+              <dt>STORAGE</dt>
+              <dd data-test="metric-storage">{{ storageLabel() }}</dd>
+            </div>
           } @else {
-          <div>
-            <dt>STORAGE</dt>
-            <dd data-test="metric-storage">{{ storageLabel() }}</dd>
-          </div>
-          <div>
-            <dt>AUTOSTART</dt>
-            <dd>Autostart on</dd>
-          </div>
+            <div>
+              <dt>STORAGE</dt>
+              <dd data-test="metric-storage">{{ storageLabel() }}</dd>
+            </div>
+            <div>
+              <dt>AUTOSTART</dt>
+              <dd>Autostart on</dd>
+            </div>
           }
         </dl>
 
         @if (tab() === 'analysis') {
-        <div class="autostart">
-          <div>
-            <div class="autostart-title">Autostart</div>
-            <div class="autostart-sub">
-              If enabled, the server starts when a model is requested.
-            </div>
-          </div>
-          <button
-            type="button"
-            class="toggle"
-            [class.toggle--on]="llmStatus()?.autostart === true"
-            [disabled]="autostartBusy()"
-            data-test="autostart-toggle"
-            (click)="onToggleAutostart()"
-            aria-label="Toggle autostart">
-          </button>
-        </div>
-
-        <div class="panel-actions">
-          <button
-            type="button"
-            class="btn btn--primary"
-            data-test="start-btn"
-            [disabled]="busy() || llmStatus()?.running === true || llmStatus()?.installed === false"
-            (click)="onStart()">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path d="M8 5v14l11-7Z" fill="currentColor" />
-            </svg>
-            Start
-          </button>
-          <button
-            type="button"
-            class="btn btn--ghost"
-            data-test="stop-btn"
-            [disabled]="busy() || llmStatus()?.running !== true"
-            (click)="onStop()">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path d="M6 6h12v12H6Z" fill="currentColor" />
-            </svg>
-            Stop
-          </button>
-          <button
-            type="button"
-            class="btn btn--ghost"
-            data-test="restart-btn"
-            [disabled]="busy() || llmStatus()?.managedByWorker !== true || llmStatus()?.running !== true"
-            [title]="restartDisabledTooltip()"
-            (click)="onRestart()">
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path
-                d="M12 5V2L7 7l5 5V8a4 4 0 1 1-4 4H6a6 6 0 1 0 6-6Z"
-                fill="currentColor"
-              />
-            </svg>
-            Restart
-          </button>
-          <span class="panel-host">localhost</span>
-        </div>
-        @if (actionError() !== null) {
-        <p class="row-error" data-test="action-error">{{ actionError() }}</p>
-        }
-        }
-
-        <div class="catalog-inline">
-        @for (m of catalog(); track m.id) {
-        <article
-          class="row"
-          [class.row--selected]="isSelected(m.id)"
-          [attr.data-test]="'row-' + m.id"
-        >
-          <div class="row-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="20" height="20">
-              <path
-                d="M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Z"
-                fill="currentColor"
-              />
-            </svg>
-          </div>
-          <div class="row-body">
-            <div class="row-title">
-              <span class="row-name">{{ m.title }}</span>
-              @for (b of m.badges; track b) {
-              <span class="tag tag--{{ b }}">{{ badgeLabel(b) }}</span>
-              }
-            </div>
-            <p class="row-desc">{{ m.description }}</p>
-            <p class="row-meta">
-              ~{{ formatSize(m.sizeBytes) }} <span class="dot">·</span>
-              ~{{ formatSize(m.ramBytes) }} RAM
-            </p>
-            @if (errorOf(m.id); as err) {
-            <p class="row-error" [attr.data-test]="'error-' + m.id">
-              <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
-                <path
-                  d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 5h2v7h-2Zm0 9h2v2h-2Z"
-                  fill="currentColor"
-                />
-              </svg>
-              <span>{{ err }}</span>
-              <a routerLink="/logs" class="row-error-link" data-test="goto-logs">See logs</a>
-            </p>
-            }
-          </div>
-          <div class="row-action">
-            @if (progressOf(m.id) !== null) {
-            <div class="dl" [attr.data-test]="'progress-' + m.id" aria-live="polite">
-              <div class="dl-bar">
-                <div class="dl-fill" [style.width.%]="progressOf(m.id)"></div>
+          <div class="autostart">
+            <div>
+              <div class="autostart-title">Autostart</div>
+              <div class="autostart-sub">
+                If enabled, the server starts when a model is requested.
               </div>
-              <span class="dl-pct">{{ progressOf(m.id) }}%</span>
             </div>
-            } @else if (isDownloaded(m.id)) {
-            <div class="row-controls">
-              @if (isSelected(m.id)) {
-              <span class="check" [attr.data-test]="'check-' + m.id" aria-label="Selected">
-                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-                  <path
-                    d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </span>
-              } @else {
-              <button
-                type="button"
-                class="btn btn--ghost"
-                [attr.data-test]="'select-' + m.id"
-                (click)="onSelect(m.id)"
-              >
-                Use this
-              </button>
-              }
-              <button
-                type="button"
-                class="icon-btn"
-                [attr.data-test]="'remove-' + m.id"
-                title="Remove this model"
-                aria-label="Remove model"
-                (click)="onRemove(m.id)"
-              >
-                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                  <path
-                    d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Zm3-4h6l1 2h4v2H4V5h4Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </button>
-            </div>
-            } @else {
+            <button
+              type="button"
+              class="toggle"
+              [class.toggle--on]="llmStatus()?.autostart === true"
+              [disabled]="autostartBusy()"
+              data-test="autostart-toggle"
+              (click)="onToggleAutostart()"
+              aria-label="Toggle autostart"
+            ></button>
+          </div>
+
+          <div class="panel-actions">
+            <button
+              type="button"
+              class="btn btn--primary"
+              data-test="start-btn"
+              [disabled]="
+                busy() || llmStatus()?.running === true || llmStatus()?.installed === false
+              "
+              (click)="onStart()"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M8 5v14l11-7Z" fill="currentColor" />
+              </svg>
+              Start
+            </button>
             <button
               type="button"
               class="btn btn--ghost"
-              [attr.data-test]="'download-' + m.id"
-              (click)="onDownload(m.id)"
+              data-test="stop-btn"
+              [disabled]="busy() || llmStatus()?.running !== true"
+              (click)="onStop()"
             >
               <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                <path
-                  d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3 1.4 1.42L12 17.42 6.3 11.7l1.4-1.41L11 13.6V4a1 1 0 0 1 1-1Zm-7 16h14v2H5Z"
-                  fill="currentColor"
-                />
+                <path d="M6 6h12v12H6Z" fill="currentColor" />
               </svg>
-              Download
+              Stop
             </button>
-            }
+            <button
+              type="button"
+              class="btn btn--ghost"
+              data-test="restart-btn"
+              [disabled]="
+                busy() || llmStatus()?.managedByWorker !== true || llmStatus()?.running !== true
+              "
+              [title]="restartDisabledTooltip()"
+              (click)="onRestart()"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M12 5V2L7 7l5 5V8a4 4 0 1 1-4 4H6a6 6 0 1 0 6-6Z" fill="currentColor" />
+              </svg>
+              Restart
+            </button>
+            <span class="panel-host">localhost</span>
           </div>
-        </article>
+          @if (actionError() !== null) {
+            <p class="row-error" data-test="action-error">{{ actionError() }}</p>
+          }
         }
+
+        <div class="catalog-inline">
+          @for (m of catalog(); track m.id) {
+            <article
+              class="row"
+              [class.row--selected]="isSelected(m.id)"
+              [attr.data-test]="'row-' + m.id"
+            >
+              <div class="row-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20">
+                  <path
+                    d="M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </div>
+              <div class="row-body">
+                <div class="row-title">
+                  <span class="row-name">{{ m.title }}</span>
+                  @for (b of m.badges; track b) {
+                    <span class="tag tag--{{ b }}">{{ badgeLabel(b) }}</span>
+                  }
+                </div>
+                <p class="row-desc">{{ m.description }}</p>
+                <p class="row-meta">
+                  ~{{ formatSize(m.sizeBytes) }} <span class="dot">·</span> ~{{
+                    formatSize(m.ramBytes)
+                  }}
+                  RAM
+                </p>
+                @if (errorOf(m.id); as err) {
+                  <p class="row-error" [attr.data-test]="'error-' + m.id">
+                    <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                      <path
+                        d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 5h2v7h-2Zm0 9h2v2h-2Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    <span>{{ err }}</span>
+                    <a routerLink="/logs" class="row-error-link" data-test="goto-logs">See logs</a>
+                  </p>
+                }
+              </div>
+              <div class="row-action">
+                @if (progressOf(m.id) !== null) {
+                  <div class="dl" [attr.data-test]="'progress-' + m.id" aria-live="polite">
+                    <div class="dl-bar">
+                      <div class="dl-fill" [style.width.%]="progressOf(m.id)"></div>
+                    </div>
+                    <span class="dl-pct">{{ progressOf(m.id) }}%</span>
+                  </div>
+                } @else if (isDownloaded(m.id)) {
+                  <div class="row-controls">
+                    @if (isSelected(m.id)) {
+                      <span class="check" [attr.data-test]="'check-' + m.id" aria-label="Selected">
+                        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                          <path
+                            d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </span>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn btn--ghost"
+                        [attr.data-test]="'select-' + m.id"
+                        (click)="onSelect(m.id)"
+                      >
+                        Use this
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      [attr.data-test]="'remove-' + m.id"
+                      title="Remove this model"
+                      aria-label="Remove model"
+                      (click)="onRemove(m.id)"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                        <path
+                          d="M6 7h12v13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2Zm3-4h6l1 2h4v2H4V5h4Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="btn btn--ghost"
+                    [attr.data-test]="'download-' + m.id"
+                    (click)="onDownload(m.id)"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                      <path
+                        d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3 1.4 1.42L12 17.42 6.3 11.7l1.4-1.41L11 13.6V4a1 1 0 0 1 1-1Zm-7 16h14v2H5Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    Download
+                  </button>
+                }
+              </div>
+            </article>
+          }
         </div>
       </section>
 
@@ -860,9 +860,7 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
   readonly downloadedCount = computed<number>(() => this.store.downloadedFor(this.tab()).length);
 
   readonly storageLabel = computed<string>(() => {
-    const bytes = this.store
-      .downloadedFor(this.tab())
-      .reduce((sum, m) => sum + m.sizeBytes, 0);
+    const bytes = this.store.downloadedFor(this.tab()).reduce((sum, m) => sum + m.sizeBytes, 0);
     return formatBytes(bytes);
   });
 
@@ -1146,13 +1144,10 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
   private describeError(err: unknown): string {
     if (err instanceof ProviderLifecycleUnsupportedError)
       return 'This runtime does not support remote start/stop.';
-    if (err instanceof ProviderNotManagedError)
-      return 'Cannot restart externally-started daemon.';
-    if (err instanceof ProviderStartTimeoutError)
-      return 'Daemon did not become reachable in time.';
+    if (err instanceof ProviderNotManagedError) return 'Cannot restart externally-started daemon.';
+    if (err instanceof ProviderStartTimeoutError) return 'Daemon did not become reachable in time.';
     if (err instanceof ProviderUnreachableError) return 'Could not reach the daemon.';
-    if (err instanceof WorkerHttpUnavailableError)
-      return 'Worker is not running. Restart the app.';
+    if (err instanceof WorkerHttpUnavailableError) return 'Worker is not running. Restart the app.';
     if (err instanceof Error) return err.message;
     return 'Unknown error';
   }

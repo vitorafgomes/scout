@@ -40,8 +40,7 @@ export const appRoutes: Routes = [
   },
   {
     path: 'sources',
-    loadComponent: () =>
-      import('./sources/sources.component').then((m) => m.SourcesComponent),
+    loadComponent: () => import('./sources/sources.component').then((m) => m.SourcesComponent),
   },
   {
     path: 'sources/local-models',
@@ -50,8 +49,7 @@ export const appRoutes: Routes = [
   },
   {
     path: 'features',
-    loadComponent: () =>
-      import('./features/features.component').then((m) => m.FeaturesComponent),
+    loadComponent: () => import('./features/features.component').then((m) => m.FeaturesComponent),
   },
   {
     path: 'llm',

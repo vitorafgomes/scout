@@ -1,13 +1,7 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 
 export type DiscordCardState =
-  | 'not-installed'
-  | 'idle'
-  | 'provisioning'
-  | 'connecting'
-  | 'connected'
-  | 'disconnected'
-  | 'error';
+  'not-installed' | 'idle' | 'provisioning' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
 export type PlatformKind = 'discord' | 'slack' | 'teams';
 

@@ -49,27 +49,24 @@ export function registerWhisperHandlers(
   fetchFn: typeof fetch,
   logger: Logger,
 ): () => void {
-  ipcMain.handle(
-    CHANNEL.whisperListInstalled,
-    async (): Promise<WhisperListInstalledResponse> => {
-      const root = whisperRootDir();
-      try {
-        await mkdir(root, { recursive: true });
-        const entries = await readdir(root);
-        const installed: WhisperVariant[] = [];
-        for (const [variant, filename] of Object.entries(VARIANT_TO_FILE)) {
-          if (entries.includes(filename)) {
-            const ok = await fileExists(path.join(root, filename));
-            if (ok) installed.push(variant as WhisperVariant);
-          }
+  ipcMain.handle(CHANNEL.whisperListInstalled, async (): Promise<WhisperListInstalledResponse> => {
+    const root = whisperRootDir();
+    try {
+      await mkdir(root, { recursive: true });
+      const entries = await readdir(root);
+      const installed: WhisperVariant[] = [];
+      for (const [variant, filename] of Object.entries(VARIANT_TO_FILE)) {
+        if (entries.includes(filename)) {
+          const ok = await fileExists(path.join(root, filename));
+          if (ok) installed.push(variant as WhisperVariant);
         }
-        return { installed };
-      } catch (cause: unknown) {
-        logger.warn('whisper: listInstalled failed', { err: String(cause) });
-        return { installed: [] };
       }
-    },
-  );
+      return { installed };
+    } catch (cause: unknown) {
+      logger.warn('whisper: listInstalled failed', { err: String(cause) });
+      return { installed: [] };
+    }
+  });
 
   ipcMain.handle(
     CHANNEL.whisperDownloadModel,

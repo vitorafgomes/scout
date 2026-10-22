@@ -85,7 +85,9 @@ describe('LocalModelsComponent', () => {
 
   it('renders Transcription tab by default with both Whisper rows', async () => {
     const { fixture } = await setup();
-    expect(fixture.nativeElement.querySelector('[data-test="row-whisper-large-v3"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="row-whisper-large-v3"]'),
+    ).not.toBeNull();
     expect(
       fixture.nativeElement.querySelector('[data-test="row-whisper-large-v3-turbo"]'),
     ).not.toBeNull();
@@ -268,9 +270,7 @@ describe('LocalModelsComponent', () => {
     ).click();
     fixture.detectChanges();
 
-    const btn = fixture.nativeElement.querySelector(
-      '[data-test="start-btn"]',
-    ) as HTMLButtonElement;
+    const btn = fixture.nativeElement.querySelector('[data-test="start-btn"]') as HTMLButtonElement;
     btn.click();
     await fixture.whenStable();
     fixture.detectChanges();

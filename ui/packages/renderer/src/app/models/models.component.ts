@@ -1,17 +1,8 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { LogStore } from '../core/log.store';
-import {
-  type LocalModelCatalogEntry,
-  type LocalModelKind,
-} from '../core/local-models.catalog';
+import { type LocalModelCatalogEntry, type LocalModelKind } from '../core/local-models.catalog';
 import { LocalModelsStore } from '../core/local-models.store';
 
 type TaskTab = 'transcription' | 'analysis' | 'translation';
@@ -65,117 +56,118 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
       </nav>
 
       @if (tab() === 'transcription' || tab() === 'analysis') {
-      <section class="panel" [attr.data-test]="'panel-' + tab()">
-        <header class="panel-head">
-          <h1>{{ headerTitle() }}</h1>
-          <p class="lede">{{ headerLede() }}</p>
-          @if (tab() === 'analysis') {
-          <p class="lede lede--note">
-            When both ChatGPT Sign-In and an OpenAI API key are available, the provider group you
-            choose decides which credential is used.
-          </p>
-          }
-        </header>
-
-        @if (downloaded().length === 0) {
-        <div class="empty" data-test="empty-state">
-          <p>No models downloaded yet.</p>
-          <a routerLink="/sources/local-models" class="empty-link" data-test="empty-cta">
-            Go to AI Sources → Local Models to download one.
-          </a>
-        </div>
-        } @else {
-        @if (narrowsToSelectedOnly() && selectedId() === null) {
-        <p class="nudge" data-test="no-active-model-nudge">
-          No model in use for this task. Pick one below.
-        </p>
-        }
-        <article class="provider">
-          <header class="provider-head">
-            <div class="icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22">
-                <path
-                  d="M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Z"
-                  fill="currentColor"
-                />
-              </svg>
-            </div>
-            <div class="provider-body">
-              <div class="provider-title">
-                <h2>{{ providerTitle() }}</h2>
-                <span class="badge">On Device</span>
-              </div>
-              <p class="provider-desc">{{ providerSub() }}</p>
-            </div>
+        <section class="panel" [attr.data-test]="'panel-' + tab()">
+          <header class="panel-head">
+            <h1>{{ headerTitle() }}</h1>
+            <p class="lede">{{ headerLede() }}</p>
+            @if (tab() === 'analysis') {
+              <p class="lede lede--note">
+                When both ChatGPT Sign-In and an OpenAI API key are available, the provider group
+                you choose decides which credential is used.
+              </p>
+            }
           </header>
 
-          @if (selectedTitle() !== null) {
-          <div class="selected-pill" data-test="selected-pill">
-            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+          @if (downloaded().length === 0) {
+            <div class="empty" data-test="empty-state">
+              <p>No models downloaded yet.</p>
+              <a routerLink="/sources/local-models" class="empty-link" data-test="empty-cta">
+                Go to AI Sources → Local Models to download one.
+              </a>
+            </div>
+          } @else {
+            @if (narrowsToSelectedOnly() && selectedId() === null) {
+              <p class="nudge" data-test="no-active-model-nudge">
+                No model in use for this task. Pick one below.
+              </p>
+            }
+            <article class="provider">
+              <header class="provider-head">
+                <div class="icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22">
+                    <path
+                      d="M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </div>
+                <div class="provider-body">
+                  <div class="provider-title">
+                    <h2>{{ providerTitle() }}</h2>
+                    <span class="badge">On Device</span>
+                  </div>
+                  <p class="provider-desc">{{ providerSub() }}</p>
+                </div>
+              </header>
+
+              @if (selectedTitle() !== null) {
+                <div class="selected-pill" data-test="selected-pill">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                    <path
+                      d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>Selected: {{ selectedTitle() }}</span>
+                </div>
+              }
+
+              <div class="options">
+                @for (m of visibleOptions(); track m.id) {
+                  <button
+                    type="button"
+                    class="option"
+                    [class.option--selected]="selectedId() === m.id"
+                    [disabled]="locked()"
+                    [attr.data-test]="'option-' + m.id"
+                    (click)="onPick(m.id)"
+                  >
+                    <div class="option-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path
+                          d="M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Zm-3 7a6 6 0 0 0 12 0h-2a4 4 0 0 1-8 0Zm5 8h2v3h-2Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    </div>
+                    <div class="option-body">
+                      <div class="option-title">{{ m.title }}</div>
+                      <div class="option-desc">{{ m.description }}</div>
+                    </div>
+                    @if (selectedId() === m.id) {
+                      <svg
+                        class="option-check"
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                    }
+                  </button>
+                }
+              </div>
+            </article>
+          }
+        </section>
+      }
+      @if (tab() === 'translation') {
+        <section class="panel panel--soon" data-test="panel-translation">
+          <div class="soon-card">
+            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
               <path
-                d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
+                d="M9 21v-2h6v2Zm2-4-5-9a6 6 0 1 1 11 0l-5 9Zm-1-4h6V8a3 3 0 1 0-6 0Z"
                 fill="currentColor"
               />
             </svg>
-            <span>Selected: {{ selectedTitle() }}</span>
+            <h2>Translation</h2>
+            <p>Coming soon. Translation models will land in a future release.</p>
           </div>
-          }
-
-          <div class="options">
-            @for (m of visibleOptions(); track m.id) {
-            <button
-              type="button"
-              class="option"
-              [class.option--selected]="selectedId() === m.id"
-              [disabled]="locked()"
-              [attr.data-test]="'option-' + m.id"
-              (click)="onPick(m.id)"
-            >
-              <div class="option-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20">
-                  <path
-                    d="M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Zm-3 7a6 6 0 0 0 12 0h-2a4 4 0 0 1-8 0Zm5 8h2v3h-2Z"
-                    fill="currentColor"
-                  />
-                </svg>
-              </div>
-              <div class="option-body">
-                <div class="option-title">{{ m.title }}</div>
-                <div class="option-desc">{{ m.description }}</div>
-              </div>
-              @if (selectedId() === m.id) {
-              <svg
-                class="option-check"
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                aria-hidden="true"
-              >
-                <path
-                  d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z"
-                  fill="currentColor"
-                />
-              </svg>
-              }
-            </button>
-            }
-          </div>
-        </article>
-        }
-      </section>
-      } @if (tab() === 'translation') {
-      <section class="panel panel--soon" data-test="panel-translation">
-        <div class="soon-card">
-          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-            <path
-              d="M9 21v-2h6v2Zm2-4-5-9a6 6 0 1 1 11 0l-5 9Zm-1-4h6V8a3 3 0 1 0-6 0Z"
-              fill="currentColor"
-            />
-          </svg>
-          <h2>Translation</h2>
-          <p>Coming soon. Translation models will land in a future release.</p>
-        </div>
-      </section>
+        </section>
       }
     </main>
   `,

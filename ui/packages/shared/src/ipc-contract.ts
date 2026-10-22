@@ -366,17 +366,11 @@ export interface ScoutBridge {
   llmListOllamaModels(req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse>;
   llmPullOllamaModel(req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse>;
   onLlmPullOllamaProgress(listener: (event: LlmPullOllamaProgressEvent) => void): () => void;
-  llmDeleteOllamaModel(
-    req: LlmDeleteOllamaModelRequest,
-  ): Promise<LlmDeleteOllamaModelResponse>;
-  llmListLmStudioModels(
-    req: LlmListLmStudioModelsRequest,
-  ): Promise<LlmListLmStudioModelsResponse>;
+  llmDeleteOllamaModel(req: LlmDeleteOllamaModelRequest): Promise<LlmDeleteOllamaModelResponse>;
+  llmListLmStudioModels(req: LlmListLmStudioModelsRequest): Promise<LlmListLmStudioModelsResponse>;
   whisperListInstalled(): Promise<WhisperListInstalledResponse>;
   whisperDownloadModel(req: WhisperDownloadModelRequest): Promise<WhisperDownloadModelResponse>;
-  onWhisperDownloadProgress(
-    listener: (event: WhisperDownloadProgressEvent) => void,
-  ): () => void;
+  onWhisperDownloadProgress(listener: (event: WhisperDownloadProgressEvent) => void): () => void;
   whisperDeleteModel(req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse>;
   providersList(): Promise<ProvidersListResponse>;
   providerStatus(req: ProviderStatusRequest): Promise<ProviderStatusDto>;

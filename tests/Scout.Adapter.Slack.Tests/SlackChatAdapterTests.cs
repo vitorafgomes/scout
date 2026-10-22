@@ -15,7 +15,8 @@ public sealed class SlackChatAdapterTests
 {
     private const string BotUserId = "UBOT";
 
-    private static (SlackChatAdapter Adapter, ISlackSocketModeClient Socket, IChatApi Chat) Build()
+    private static (SlackChatAdapter Adapter, ISlackSocketModeClient Socket, IChatApi Chat) Build(
+        ISlackSocketModeClient? socketModeClient = null)
     {
         var api = Substitute.For<ISlackApiClient>();
         var auth = Substitute.For<IAuthApi>();
@@ -28,7 +29,7 @@ public sealed class SlackChatAdapterTests
             .Returns(new PostMessageResponse { Channel = "C1", Ts = "1.1" });
         api.Chat.Returns(chat);
 
-        var socket = Substitute.For<ISlackSocketModeClient>();
+        var socket = socketModeClient ?? Substitute.For<ISlackSocketModeClient>();
 
         var adapter = new SlackChatAdapter(
             api, socket, new SlackMessageTranslator(),
@@ -74,7 +75,66 @@ public sealed class SlackChatAdapterTests
 
         await adapter.StopAsync(CancellationToken.None);
 
-        socket.Received(1).Disconnect();
+        await socket.Received(1).DisconnectAsync();
+    }
+
+    [Fact]
+    public async Task StopAsync_Waits_For_Socket_Mode_Disconnect_To_Finish()
+    {
+        var (adapter, socket, _) = Build();
+        var disconnect = new TaskCompletionSource();
+        socket.DisconnectAsync().Returns(disconnect.Task);
+        await adapter.StartAsync((_, _, _) => Task.CompletedTask, CancellationToken.None);
+
+        var stop = adapter.StopAsync(CancellationToken.None);
+
+        stop.IsCompleted.ShouldBeFalse();
+        disconnect.SetResult();
+        await stop;
+    }
+
+    [Fact]
+    public async Task StopAsync_When_Socket_Mode_Disconnect_Fails_Surfaces_The_Fault_And_Stops_Handling()
+    {
+        var (adapter, socket, _) = Build();
+        socket.DisconnectAsync().Returns(Task.FromException(new IOException("connection reset")));
+        var invoked = false;
+        await adapter.StartAsync((_, _, _) => { invoked = true; return Task.CompletedTask; },
+            CancellationToken.None);
+
+        var fault = await Should.ThrowAsync<IOException>(() => adapter.StopAsync(CancellationToken.None));
+        await adapter.OnMessageReceivedAsync(Message("hello scout"));
+
+        fault.Message.ShouldBe("connection reset");
+        invoked.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task StopAsync_When_Socket_Mode_Disconnect_Never_Completes_Returns_On_Cancellation()
+    {
+        var (adapter, socket, _) = Build();
+        socket.DisconnectAsync().Returns(new TaskCompletionSource().Task);
+        await adapter.StartAsync((_, _, _) => Task.CompletedTask, CancellationToken.None);
+        using var shutdown = new CancellationTokenSource();
+
+        var stop = adapter.StopAsync(shutdown.Token);
+        await shutdown.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => stop.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    [Fact]
+    public async Task DisposeAsync_When_Socket_Mode_Disconnect_Fails_Still_Disposes_The_Socket_Client()
+    {
+        var socket = Substitute.For<ISlackSocketModeClient>();
+        socket.DisconnectAsync().Returns(Task.FromException(new IOException("connection reset")));
+        var (adapter, _, _) = Build(socket);
+        await adapter.StartAsync((_, _, _) => Task.CompletedTask, CancellationToken.None);
+
+        var fault = await Should.ThrowAsync<IOException>(async () => await adapter.DisposeAsync());
+
+        fault.Message.ShouldBe("connection reset");
+        await socket.Received(1).DisposeAsync();
     }
 
     [Fact]
