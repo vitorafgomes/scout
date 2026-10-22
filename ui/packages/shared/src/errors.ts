@@ -85,6 +85,18 @@ export class WorkerHttpUnavailableError extends ScoutError {
   }
 }
 
+export class ControlPlaneUnavailableError extends ScoutError {
+  constructor(message = 'Control plane not reachable', options?: ErrorOptions) {
+    super('control-plane/unavailable', message, options);
+  }
+}
+
+export class ControlPlaneUnauthenticatedError extends ScoutError {
+  constructor(message = 'Control plane rejected the session token', options?: ErrorOptions) {
+    super('control-plane/unauthenticated', message, options);
+  }
+}
+
 export class ProviderUnreachableError extends ScoutError {
   constructor(message = 'Provider endpoint unreachable', options?: ErrorOptions) {
     super('providers/unreachable', message, options);

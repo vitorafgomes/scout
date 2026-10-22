@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI"
-version: "1.0"
+version: "1.1"
 date: 2026-10-22
 updated: 2026-10-22
-changes: "Initial service page written from the ui/ code"
+changes: "Control-plane launcher and gRPC client added; screens still on the dead HTTP path"
 page_type: service
 status: active
 description: "Electron desktop app (Bun workspace, Angular renderer): onboards a Discord bot, keeps credentials in the OS keychain, spawns and supervises the Scout.Host.Console worker, and manages local Ollama and Whisper models from Node."
@@ -77,11 +77,11 @@ sequenceDiagram
     M-->>R: scout:worker.events (log)
 ```
 
-The vault to environment mapping is `ui/packages/main/src/worker/build-env.ts`; the binary is resolved per platform and packaging mode in `ui/packages/main/src/worker/resolve-binary.ts:22`. Crash handling is a bounded restart policy with backoff (`ui/packages/main/src/worker/supervisor.ts:132`).
+The vault to environment mapping is `ui/packages/main/src/worker/build-env.ts`; the binary is resolved per platform and packaging mode in `ui/packages/main/src/worker/resolve-binary.ts:38`. Crash handling is a bounded restart policy with backoff (`ui/packages/main/src/worker/supervisor.ts:132`).
 
-## Current gap: the control plane has no client
+## Current gap: the screens do not use the control plane yet
 
-The Providers and Features IPC handlers call the worker over HTTP through `ui/packages/main/src/worker/http-client.ts:68`, whose endpoint is learned from a `SCOUT_HTTP=` stdout line (`ui/packages/main/src/worker/log-stream.ts:14`). Only the retired `src/old/Scout.Host.Worker` ever printed that line; the current `Scout.Host.Console` does not, so the endpoint stays `null` and every call throws `WorkerHttpUnavailableError`. The Providers and Features screens therefore render their "backend unavailable" state on every run. The .NET side of the replacement, [[pages/services/control-plane]] behind [[pages/services/host-control-plane]] over gRPC, is complete and tested but has no consumer; `ui/` contains no gRPC dependency. Closing this is [[pages/roadmap/control-plane-client]].
+The Providers and Features IPC handlers call the worker over HTTP through `ui/packages/main/src/worker/http-client.ts:68`, whose endpoint is learned from a `SCOUT_HTTP=` stdout line (`ui/packages/main/src/worker/log-stream.ts:14`). Only the retired `src/old/Scout.Host.Worker` ever printed that line; the current `Scout.Host.Console` does not, so the endpoint stays `null` and every call throws `WorkerHttpUnavailableError`. The Providers and Features screens therefore render their "backend unavailable" state on every run. The replacement exists on both sides but is not wired: `ui/packages/main/src/control-plane/launcher.ts` starts [[pages/services/host-control-plane]] with a per-session token and socket, and `ui/packages/main/src/control-plane/client.ts` calls it over gRPC on Linux and macOS (the Consumers section of the host page has the detail and the Windows verdict). Nothing in `ui/packages/main/src/main.ts` calls either yet, so the screens stay on the dead HTTP path. Moving them is phase 3 of [[pages/roadmap/control-plane-client]].
 
 Until then the main process does the control plane's job itself: `ui/packages/main/src/ipc/llm-pull.ts` pulls Ollama models and `ui/packages/main/src/ipc/whisper.ts` downloads Whisper weights, both from Node.
 

@@ -20,6 +20,8 @@ export {
   ExternalHostNotAllowedError,
   OllamaUnreachableError,
   WorkerHttpUnavailableError,
+  ControlPlaneUnavailableError,
+  ControlPlaneUnauthenticatedError,
   ProviderUnreachableError,
   ProviderUnknownError,
   ProviderLifecycleUnsupportedError,

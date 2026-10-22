@@ -5,14 +5,20 @@ on:
     branches: [main]
     paths:
       - 'ui/**'
-      - 'src/Scout.Host.Worker/**'
+      - 'src/Scout.Host.Console/**'
+      - 'src/Scout.Host.ControlPlane/**'
+      - 'src/Scout.ControlPlane/**'
+      - 'src/Scout.ControlPlane.Contracts/**'
       - '.github/workflows/ui-ci.yml'
       - 'global.json'
   pull_request:
     branches: [main]
     paths:
       - 'ui/**'
-      - 'src/Scout.Host.Worker/**'
+      - 'src/Scout.Host.Console/**'
+      - 'src/Scout.Host.ControlPlane/**'
+      - 'src/Scout.ControlPlane/**'
+      - 'src/Scout.ControlPlane.Contracts/**'
       - '.github/workflows/ui-ci.yml'
       - 'global.json'
   workflow_dispatch:
@@ -90,6 +96,10 @@ jobs:
         working-directory: ui
         shell: bash
         run: bun run format
+
+      - name: Build control-plane host
+        shell: bash
+        run: dotnet build src/Scout.Host.ControlPlane/Scout.Host.ControlPlane.csproj --configuration Release
 
       - name: Test (UI)
         working-directory: ui
