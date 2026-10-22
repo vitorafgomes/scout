@@ -535,11 +535,37 @@ describe('SourcesComponent', () => {
 
     await saveOpenAiKey(fixture);
 
-    const alert = query<HTMLElement>(fixture, '[data-test="card-openai-api"] [role="alert"]');
-    expect(alert.textContent).toContain('Worker binary not found');
+    const alert = fixture.nativeElement.querySelector(
+      '[data-test="card-openai-api"] [role="alert"]',
+    ) as HTMLElement | null;
+    expect(alert, 'restart error alert should render').not.toBeNull();
+    expect(alert?.textContent).toContain('Worker binary not found');
     expect(fixture.nativeElement.textContent).not.toContain('sk-typed-key');
     const badge = query<HTMLElement>(fixture, '[data-test="badge-openai-api"]');
     expect(badge.textContent ?? '').toContain('Connected');
     expect(badge.textContent ?? '').not.toContain('Not Connected');
+  });
+  it('a second save does not show the previous saved message while the worker status is pending', async () => {
+    const { fixture, bridge } = await setup({ workerState: 'idle' });
+    await saveOpenAiKey(fixture);
+    const saved = (): string =>
+      query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent ?? '';
+    expect(saved()).toContain('Saved. Scout will use OpenAI the next time it starts.');
+
+    let resolveStatus: (value: { state: string; restarts: number }) => void = () => undefined;
+    bridge.workerStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve;
+        }),
+    );
+    await saveOpenAiKey(fixture);
+
+    expect(saved()).not.toContain('the next time it starts');
+
+    resolveStatus({ state: 'running', restarts: 0 });
+    await settle(fixture);
+    await settle(fixture);
+    expect(saved()).toContain('Saved. Restarting Scout to use OpenAI.');
   });
 });

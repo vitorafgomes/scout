@@ -72,3 +72,8 @@ reliability: medium
 
 - **Blocker:** none. [[pages/decisions/0015-cloud-llm-providers-by-api-key]] wired the OpenAI API and Google Gemini cards and marked ChatGPT Plus unsupported. Still open: OpenRouter (its factory needs a separate embeddings host and key), Custom API (endpoint validation), removing a stored key, and checking a key against the provider before saving.
 - **Fix:** one change per item; OpenRouter first, since its .NET factory already exists.
+
+### A provider billing failure is reported as a rate limit (2026-10-22)
+
+- **Blocker:** none. Found when the owner's OpenAI key returned HTTP 429 `insufficient_quota`. `src/Scout.Llm/ChatGateway.cs:157` and `:235` turn every HTTP 429 into `LlmRateLimitException`, so the Discord user is told to wait and retry, which is wrong for an account with no credit, and the provider's reason is not logged.
+- **Fix:** read the provider error code on a 429; post a billing or quota message for `insufficient_quota` (no retry advice) and log the inner exception; keep the rate-limit message for real throttling. One failing-call test per case.

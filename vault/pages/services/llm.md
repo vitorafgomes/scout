@@ -47,18 +47,18 @@ flowchart LR
     gw --> out["IAsyncEnumerable of text chunks"]
 ```
 
-The kernel adds every `KernelPlugin` from DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:96`). The gateway streams through the Project Expert agent when one is registered (`src/Scout.Llm/ChatGateway.cs:71`) and through plain chat otherwise (`:82`). HTTP 429 becomes `LlmRateLimitException` (`:150`, `:228`). The embedding generator is built from the factory, not from the kernel, to avoid a construction cycle (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:117`).
+The kernel adds every `KernelPlugin` from DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:96`). The gateway streams through the Project Expert agent when one is registered (`src/Scout.Llm/ChatGateway.cs:78`) and through plain chat otherwise (`:89`). HTTP 429 becomes `LlmRateLimitException` (`:157`, `:235`). The embedding generator is built from the factory, not from the kernel, to avoid a construction cycle (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:117`).
 
 ## Invariants
 
 - [[pages/invariants/pluggable-boundaries]]: the provider switch is the swap point; the list is closed.
 - [[pages/invariants/local-first-default]]: blank provider resolves to Ollama (`:48`).
 - [[pages/invariants/secrets-never-in-source]]: every `ApiKey` defaults to empty (`src/Scout.Llm/Configuration/LlmOptions.cs:51`).
-- [[pages/invariants/no-executive-writes]]: the gateway offers all kernel functions with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:257`) and has no allow-list.
+- [[pages/invariants/no-executive-writes]]: the gateway offers all kernel functions with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:264`) and has no allow-list.
 
 ## Hot spots
 
-- `src/Scout.Llm/ChatGateway.cs:253` builds `OpenAIPromptExecutionSettings` for every provider.
+- `src/Scout.Llm/ChatGateway.cs:260` builds `OpenAIPromptExecutionSettings` for every provider.
 - `src/Scout.Llm/ChatGateway.cs:49` builds the request log label per provider (Ollama, OpenAI, Gemini; `unknown` fields for the others) and never reads an API key.
 - `src/Scout.Llm/LlmServiceCollectionExtensions.cs:54` is the closed provider switch.
 
