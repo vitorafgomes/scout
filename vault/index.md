@@ -97,6 +97,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0012-llm-communication-through-semantic-kernel|All LLM communication routes through Semantic Kernel (Scout.Llm gateway)]] - Decision that all LLM communication in Scout routes through Semantic Kernel.
 - [[pages/decisions/0013-conversation-core-streaming-sink|Conversation core - cumulative streaming sink and pump-owned drive loop]] - Decision on the conversation core's cumulative streaming sink and pump-owned streaming across chat platforms.
 - [[pages/decisions/0014-per-request-identity-gating|ADR - Per-request identity and disclosure gating (SelfInfo Path B)]] - Plugins run inside a singleton Semantic Kernel with singleton KernelPlugin instances, so they had no way to know *who* was asking or *where*.
+- [[pages/decisions/0015-cloud-llm-providers-by-api-key|ADR 0015 - Cloud LLM providers configured by API key from the desktop]] - OpenAI and Gemini cards take an API key stored in the OS keychain; ChatGPT Plus is unsupported.
 
 ## Domain
 

@@ -8,6 +8,8 @@ export type VaultKey =
   | 'llm.provider'
   | 'llm.model'
   | 'llm.endpoint'
+  | 'llm.api-key'
+  | 'llm.cloud-model'
   | 'stt.provider'
   | 'stt.model';
 
@@ -19,6 +21,8 @@ export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
   'llm.provider',
   'llm.model',
   'llm.endpoint',
+  'llm.api-key',
+  'llm.cloud-model',
   'stt.provider',
   'stt.model',
 ] as const);

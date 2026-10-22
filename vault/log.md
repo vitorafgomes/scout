@@ -1,3 +1,6 @@
+## [2026-10-22] feature | OpenAI and Gemini cards take an API key; ChatGPT Plus marked unsupported
+ADR 0015. The key goes to the OS keychain as llm.api-key, the cloud model to its own key llm.cloud-model so a local download cannot overwrite it, and build-env maps them per provider at worker start. Pages updated: secrets invariant, desktop-ui, ADR 0007 note, followups, index.
+
 ## [2026-10-22] feature | Control-plane client phase 1: Electron launches the host and calls it over gRPC/UDS
 `ui/packages/main/src/control-plane/` adds a launcher (per-session token, explicit socket, socket-directory ownership check) and a `@grpc/grpc-js` client; `ListProviders` round-trips against the real `Scout.Host.ControlPlane` in `bun test`, about 0.7 s. `ui-ci.yml` builds the host before the UI tests and its path filters now name the current projects. Windows refuses on both sides until a named-pipe decision. Pages updated: host-control-plane (Consumers), desktop-ui, roadmap/control-plane-client, followups, testing.
 ## [2026-10-22] query | Why the ChatGPT Plus source card does not connect

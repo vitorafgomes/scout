@@ -334,12 +334,10 @@ export class LlmComponent implements OnInit {
 
   ngOnInit(): void {
     void this.llmConfig.loadFromVault().then(() => {
-      const persistedProvider = this.llmConfig.provider();
-      this.selectedProvider.set(persistedProvider);
+      if (this.llmConfig.provider() !== 'Ollama') return;
+      this.selectedProvider.set('Ollama');
       this.selectedModel.set(this.llmConfig.model());
-      if (persistedProvider !== null) {
-        void this.refreshModels();
-      }
+      void this.refreshModels();
     });
   }
 
@@ -392,7 +390,7 @@ export class LlmComponent implements OnInit {
     const model = this.selectedModel();
     if (provider === null || model === null || !this.endpointValid()) return;
     try {
-      await this.llmConfig.setSelection(provider, model, this.endpoint());
+      await this.llmConfig.setSelection('Ollama', model, this.endpoint());
       this.saved.set(true);
     } catch (err: unknown) {
       this.loadError.set(this.describeError(err));

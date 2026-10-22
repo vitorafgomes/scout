@@ -21,8 +21,6 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   }
 
   const llmProvider = (await vaultGet('llm.provider')) ?? 'Ollama';
-  const llmModel = await vaultGet('llm.model');
-  const llmEndpoint = await vaultGet('llm.endpoint');
 
   const env: Record<string, string> = {
     SCOUT__LLM__PROVIDER: llmProvider,
@@ -30,8 +28,38 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
   };
 
-  if (llmModel !== null) env['SCOUT__LLM__OLLAMA__CHAT__MODEL'] = llmModel;
-  if (llmEndpoint !== null) env['SCOUT__LLM__OLLAMA__ENDPOINT'] = llmEndpoint;
+  switch (llmProvider) {
+    case 'Ollama': {
+      const llmModel = await vaultGet('llm.model');
+      const llmEndpoint = await vaultGet('llm.endpoint');
+      if (llmModel !== null) env['SCOUT__LLM__OLLAMA__CHAT__MODEL'] = llmModel;
+      if (llmEndpoint !== null) env['SCOUT__LLM__OLLAMA__ENDPOINT'] = llmEndpoint;
+      return env;
+    }
+    case 'OpenAI':
+      env['SCOUT__LLM__OPENAI__APIKEY'] = await requireApiKey(vaultGet, llmProvider);
+      env['SCOUT__LLM__OPENAI__CHAT__MODEL'] = (await vaultGet('llm.cloud-model')) ?? 'gpt-4o-mini';
+      return env;
+    case 'Gemini':
+      env['SCOUT__LLM__GEMINI__APIKEY'] = await requireApiKey(vaultGet, llmProvider);
+      env['SCOUT__LLM__GEMINI__CHAT__MODEL'] =
+        (await vaultGet('llm.cloud-model')) ?? 'gemini-2.5-flash';
+      env['SCOUT__LLM__GEMINI__EMBEDDINGS__MODEL'] = 'text-embedding-004';
+      return env;
+    default:
+      throw new Error(`llm.provider "${llmProvider}" is not supported by the desktop app`);
+  }
+}
 
-  return env;
+async function requireApiKey(
+  vaultGet: BuildEnvDeps['vaultGet'],
+  provider: string,
+): Promise<string> {
+  const apiKey = await vaultGet('llm.api-key');
+  if (apiKey === null) {
+    throw new VaultUnavailableError(
+      `No API key stored for ${provider}: add the key on the AI Sources screen first`,
+    );
+  }
+  return apiKey;
 }

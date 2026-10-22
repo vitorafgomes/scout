@@ -1,9 +1,9 @@
 ---
 title: "AI Sources screen for inference backend discovery"
-version: "1.0"
+version: "1.1"
 date: 2026-05-16
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-10-22
+changes: "Note pointing to ADR 0015 for the OpenAI and Gemini cards"
 page_type: adr
 status: accepted
 description: "Decision to add an AI Sources screen for discovering inference backends, complementing the task-based Models screen."
@@ -93,6 +93,8 @@ neutrally.
   lives there. Tradeoff: one extra IPC hop per click.
 
 ## Cloud card slots (visual only)
+
+> Resolved in part on 2026-10-22 by [[pages/decisions/0015-cloud-llm-providers-by-api-key]]: the OpenAI API and Google Gemini cards now take an API key, and ChatGPT Plus is marked unsupported. OpenRouter and Custom API remain as described here.
 
 ChatGPT Plus / OpenAI API / Google Gemini / OpenRouter / Custom API
 all render with the same visual treatment but `disabled: true` on
