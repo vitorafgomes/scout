@@ -2,7 +2,13 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FeatureDto } from '@scout/shared';
+import {
+  ControlPlaneNotImplementedError,
+  ControlPlaneUnavailableError,
+  encodeIpcErrorMessage,
+  serializeError,
+  type FeatureDto,
+} from '@scout/shared';
 
 import { FeaturesStore } from '../core/features.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -40,6 +46,12 @@ const kubernetes: FeatureDto = {
   scopeMatrix: null,
   setupSteps: null,
 };
+
+function asRendererReceives(channel: string, err: Error): Error {
+  return new Error(
+    `Error invoking remote method '${channel}': Error: ${encodeIpcErrorMessage(serializeError(err))}`,
+  );
+}
 
 async function setup(): Promise<{
   fixture: ComponentFixture<FeaturesComponent>;
@@ -86,6 +98,62 @@ describe('FeaturesComponent', () => {
 
     expect(fixture.nativeElement.querySelector('[data-test="card-github"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="card-kubernetes"]')).not.toBeNull();
+  });
+
+  it('shows the GitHub and Kubernetes features in the grid with the honest notes under it', async () => {
+    const { fixture } = await setup();
+
+    const grid = fixture.nativeElement.querySelector('[data-test="features-grid"]') as HTMLElement;
+    const notes = fixture.nativeElement.querySelector(
+      '[data-test="features-notes"]',
+    ) as HTMLElement;
+    const lede = fixture.nativeElement.querySelector('.lede') as HTMLElement;
+
+    expect(grid.textContent).toContain('GitHub');
+    expect(grid.textContent).toContain('Kubernetes');
+    expect(notes.textContent).toContain(
+      'Credentials you save here are kept only while Scout is open.',
+    );
+    expect(notes.textContent).toContain(
+      'Turning a feature on is not available yet; the chat bot does not use these settings yet.',
+    );
+    expect(lede.textContent).not.toContain('keyring');
+  });
+
+  it('a card says turning the feature on is not available yet when the control plane does not implement it', async () => {
+    const bridge = {
+      featuresList: vi.fn(async () => ({
+        features: [{ ...kubernetes, hasCredentials: true, status: 'disabled' as const }],
+      })),
+      featureEnable: vi.fn(async () => {
+        throw asRendererReceives('scout:features.enable', new ControlPlaneNotImplementedError());
+      }),
+      featureDisable: vi.fn(),
+      featureSetCredentials: vi.fn(),
+      featureSetup: vi.fn(),
+      featureDeleteCredentials: vi.fn(),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+        FeaturesStore,
+      ],
+    });
+    const fixture = TestBed.createComponent(FeaturesComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    (
+      fixture.nativeElement.querySelector('[data-test="toggle-kubernetes"]') as HTMLInputElement
+    ).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const err = fixture.nativeElement.querySelector('[data-test="err-kubernetes"]') as HTMLElement;
+    expect(err.textContent?.trim()).toBe('Turning this feature on is not available yet.');
   });
 
   it('opens the credential dialog when a card requests it', async () => {
@@ -145,10 +213,11 @@ describe('FeaturesComponent', () => {
     expect(bridge.featureDisable).toHaveBeenCalledWith({ id: 'github' });
   });
 
-  it('renders backend-unavailable notice and hides feature grid when worker HTTP endpoint absent', async () => {
-    const unavailableErr = Object.assign(new Error('Worker HTTP endpoint not available'), {
-      code: 'worker/http-unavailable',
-    });
+  it('says the control plane is not running and hides the grid when it is unavailable', async () => {
+    const unavailableErr = asRendererReceives(
+      'scout:features.list',
+      new ControlPlaneUnavailableError('socket did not appear'),
+    );
     const bridge = {
       featuresList: vi.fn(async () => {
         throw unavailableErr;
@@ -173,7 +242,12 @@ describe('FeaturesComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('[data-test="backend-unavailable"]')).not.toBeNull();
+    const notice = fixture.nativeElement.querySelector(
+      '[data-test="backend-unavailable"]',
+    ) as HTMLElement;
+    expect(notice.textContent?.trim()).toBe(
+      'The Scout control plane is not running, so features cannot be shown.',
+    );
     expect(fixture.nativeElement.querySelector('[data-test="features-grid"]')).toBeNull();
   });
 });

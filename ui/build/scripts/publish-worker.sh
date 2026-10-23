@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Publishes Scout.Host.Worker as a self-contained single-file binary for the
-# requested RID and places the output under ui/build/worker/<RID>/.
+# Publishes the chat host (Scout.Host.Console) and the control-plane host
+# (Scout.Host.ControlPlane) as self-contained single-file binaries for the
+# requested RID and places both under ui/build/worker/<RID>/.
 #
 # Usage:  ./publish-worker.sh [RID]
 # If RID is omitted the script detects it from the current OS/arch.
@@ -10,7 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 UI_ROOT="${REPO_ROOT}/ui"
-CSPROJ="${REPO_ROOT}/src/Scout.Host.Console/Scout.Host.Console.csproj"
+HOSTS=("Scout.Host.Console" "Scout.Host.ControlPlane")
 
 detect_rid() {
   local os arch
@@ -65,39 +66,41 @@ OUTPUT_DIR="${UI_ROOT}/build/worker/${RID}"
 rm -rf "${OUTPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
-echo "publishing Scout.Host.Console for ${RID} -> ${OUTPUT_DIR}"
+for HOST in "${HOSTS[@]}"; do
+  echo "publishing ${HOST} for ${RID} -> ${OUTPUT_DIR}"
 
-dotnet publish "${CSPROJ}" \
-  --configuration Release \
-  --runtime "${RID}" \
-  --self-contained true \
-  -p:PublishSingleFile=true \
-  -p:IncludeNativeLibrariesForSelfExtract=true \
-  -p:EnableCompressionInSingleFile=true \
-  --output "${OUTPUT_DIR}"
+  dotnet publish "${REPO_ROOT}/src/${HOST}/${HOST}.csproj" \
+    --configuration Release \
+    --runtime "${RID}" \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:IncludeNativeLibrariesForSelfExtract=true \
+    -p:EnableCompressionInSingleFile=true \
+    --output "${OUTPUT_DIR}"
 
-if [[ "${RID}" == win-x64 ]]; then
-  BINARY="${OUTPUT_DIR}/Scout.Host.Console.exe"
-else
-  BINARY="${OUTPUT_DIR}/Scout.Host.Console"
-fi
+  if [[ "${RID}" == win-x64 ]]; then
+    BINARY="${OUTPUT_DIR}/${HOST}.exe"
+  else
+    BINARY="${OUTPUT_DIR}/${HOST}"
+  fi
 
-if [[ ! -f "${BINARY}" ]]; then
-  echo "error: expected binary not found at ${BINARY}" >&2
-  exit 1
-fi
-
-SIZE="$(stat -c%s "${BINARY}" 2>/dev/null || stat -f%z "${BINARY}")"
-if [[ "${SIZE}" -eq 0 ]]; then
-  echo "error: binary at ${BINARY} has zero size" >&2
-  exit 1
-fi
-
-if [[ "${RID}" != win-x64 ]]; then
-  if [[ ! -x "${BINARY}" ]]; then
-    echo "error: binary at ${BINARY} is not executable" >&2
+  if [[ ! -f "${BINARY}" ]]; then
+    echo "error: expected binary not found at ${BINARY}" >&2
     exit 1
   fi
-fi
 
-echo "ok: ${BINARY} (${SIZE} bytes)"
+  SIZE="$(stat -c%s "${BINARY}" 2>/dev/null || stat -f%z "${BINARY}")"
+  if [[ "${SIZE}" -eq 0 ]]; then
+    echo "error: binary at ${BINARY} has zero size" >&2
+    exit 1
+  fi
+
+  if [[ "${RID}" != win-x64 ]]; then
+    if [[ ! -x "${BINARY}" ]]; then
+      echo "error: binary at ${BINARY} is not executable" >&2
+      exit 1
+    fi
+  fi
+
+  echo "ok: ${BINARY} (${SIZE} bytes)"
+done

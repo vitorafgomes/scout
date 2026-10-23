@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { load } from 'js-yaml';
+import { resolveControlPlaneBinary, resolveProtoDir } from '../src/worker/resolve-binary.js';
 
-const CONFIG_PATH = join(import.meta.dirname, '../../../build/electron-builder.yml');
+const UI_ROOT = join(import.meta.dirname, '../../..');
+const CONFIG_PATH = join(UI_ROOT, 'build/electron-builder.yml');
 
 interface LinuxTarget {
   target: string;
@@ -121,4 +123,46 @@ describe('electron-builder.yml', () => {
   it('win config has no certificateFile (unsigned)', () => {
     expect(config.win.certificateFile).toBeUndefined();
   });
+});
+
+describe('the packaged app finds the control-plane host and its protos', () => {
+  const RESOURCES = '/opt/scout/resources';
+  const packaged = {
+    app: { isPackaged: true },
+    resourcesPath: RESOURCES,
+    platform: 'linux' as const,
+    arch: 'x64' as const,
+    cwd: '/any',
+  };
+
+  it('ships the control-plane protos where resolveProtoDir looks for them', () => {
+    const protos = config.extraResources.find((r) => r.to === 'protos');
+
+    expect(protos).toBeDefined();
+    const source = join(UI_ROOT, protos!.from);
+    expect(existsSync(join(source, 'features.proto'))).toBe(true);
+    expect(existsSync(join(source, 'providers.proto'))).toBe(true);
+    expect(resolveProtoDir(packaged)).toBe(join(RESOURCES, protos!.to));
+  });
+
+  it('resolves the packaged control-plane host inside the worker resources folder', () => {
+    const worker = config.extraResources.find((r) => r.from === 'build/worker');
+
+    expect(resolveControlPlaneBinary(packaged, {})).toBe(
+      join(RESOURCES, worker!.to, 'linux-x64', 'Scout.Host.ControlPlane'),
+    );
+  });
+
+  it.each(['publish-worker.sh', 'publish-worker.ps1'])(
+    '%s publishes both the chat host and the control-plane host',
+    (script) => {
+      const text = readFileSync(join(UI_ROOT, 'build/scripts', script), 'utf8');
+      const hosts = /\$?HOSTS\s*=\s*@?\(([^)]*)\)/i.exec(text)?.[1] ?? '';
+
+      expect(hosts.match(/Scout\.Host\.[A-Za-z]+/g)).toEqual([
+        'Scout.Host.Console',
+        'Scout.Host.ControlPlane',
+      ]);
+    },
+  );
 });

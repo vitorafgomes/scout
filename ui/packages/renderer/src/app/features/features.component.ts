@@ -16,16 +16,12 @@ import { FeatureCardComponent } from './feature-card.component';
     <main class="page">
       <header class="header">
         <h1>Features</h1>
-        <p class="lede">
-          Connect Scout to external tools. Each feature stores its credentials in the OS keyring and
-          can be toggled independently.
-        </p>
+        <p class="lede">Connect Scout to external tools.</p>
       </header>
 
       @if (store.backendUnavailable()) {
         <div class="unavailable-notice" data-test="backend-unavailable">
-          Backend control plane arrives in the next step. Features will appear once the worker is
-          running.
+          The Scout control plane is not running, so features cannot be shown.
         </div>
       } @else {
         <div class="features-grid" data-test="features-grid">
@@ -37,6 +33,12 @@ import { FeatureCardComponent } from './feature-card.component';
               (clearCredentials)="store.clearCredentials(f.id)"
             />
           }
+        </div>
+        <div class="notes" data-test="features-notes">
+          <p>Credentials you save here are kept only while Scout is open.</p>
+          <p>
+            Turning a feature on is not available yet; the chat bot does not use these settings yet.
+          </p>
         </div>
       }
 
@@ -82,6 +84,14 @@ import { FeatureCardComponent } from './feature-card.component';
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 16px;
+      }
+      .notes {
+        margin-top: 16px;
+        font-size: 13px;
+        color: #7b8299;
+      }
+      .notes p {
+        margin: 0 0 4px;
       }
       .unavailable-notice {
         padding: 16px 20px;

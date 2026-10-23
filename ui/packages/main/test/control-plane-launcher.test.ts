@@ -1,12 +1,16 @@
 import { describe, it, expect, mock, afterEach } from 'bun:test';
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
+import { spawn as nodeSpawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { launchControlPlane } from '../src/control-plane/launcher.js';
+import { ControlPlaneUnavailableError } from '@scout/shared';
+import { connectControlPlane, launchControlPlane } from '../src/control-plane/launcher.js';
 import type { ControlPlaneLauncherDeps } from '../src/control-plane/launcher.js';
 import type { Logger } from '../src/util/logger.js';
-import { resolveControlPlaneBinary } from '../src/worker/resolve-binary.js';
+import { findRepoRoot, resolveControlPlaneBinary } from '../src/worker/resolve-binary.js';
 
 interface FakeChild extends EventEmitter {
   pid: number;
@@ -208,6 +212,44 @@ describe('launchControlPlane', () => {
     expect(calls[0]?.env['Scout__Providers__Ollama__PingTimeout']).toBe('00:00:00.100');
   });
 
+  it('drops inherited variables that would move the listener or override the socket and token', () => {
+    const hostile: Record<string, string> = {
+      scout__controlplane__socketpath: '/evil',
+      'Scout:ControlPlane:SocketPath': '/evil2',
+      scout_controlplane_token: 'f'.repeat(64),
+      DOTNET_Scout__ControlPlane__SocketPath: '/evil3',
+      Kestrel__Endpoints__Http__Url: 'http://0.0.0.0:5000',
+      'kestrel:Endpoints:Https:Url': 'https://0.0.0.0:5001',
+      ASPNETCORE_Kestrel__Endpoints__Other__Url: 'http://0.0.0.0:5002',
+      ASPNETCORE_URLS: 'http://*:80',
+      ASPNETCORE_HTTP_PORTS: '8080',
+      ASPNETCORE_HTTPS_PORTS: '8443',
+      DOTNET_URLS: 'http://*:81',
+      URLS: 'http://*:82',
+    };
+    const kept = { ASPNETCORE_ENVIRONMENT: 'Development', SCOUT_TEST_KEEP: 'kept' };
+    const saved = { ...process.env };
+    Object.assign(process.env, hostile, kept);
+    try {
+      const { deps, calls } = makeDeps({ mintToken: () => TOKEN });
+
+      const launched = launchControlPlane(deps);
+
+      if (launched.kind !== 'launched') throw new Error(`expected a launch, got ${launched.kind}`);
+      const env = calls[0]!.env;
+      expect(Object.keys(hostile).filter((key) => key in env)).toEqual([]);
+      expect(env['Scout__ControlPlane__SocketPath']).toBe(launched.socketPath);
+      expect(env['SCOUT_CONTROLPLANE_TOKEN']).toBe(TOKEN);
+      expect([env['ASPNETCORE_ENVIRONMENT'], env['SCOUT_TEST_KEEP']]).toEqual([
+        'Development',
+        'kept',
+      ]);
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
+  });
+
   it('reports unsupported on win32 instead of spawning', () => {
     const { deps, calls } = makeDeps({ platform: 'win32' });
 
@@ -217,6 +259,163 @@ describe('launchControlPlane', () => {
     expect(result.kind).toBe('unsupported');
     if (result.kind !== 'unsupported') throw new Error('expected unsupported');
     expect(result.reason).toContain('named pipe');
+  });
+});
+
+describe('connectControlPlane', () => {
+  const PROTO_DIR = '/unused/protos';
+
+  async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+    return promise.then(
+      () => null,
+      (err: unknown) => err,
+    );
+  }
+
+  it('a missing host binary leaves the control plane unavailable without a crash and without logging the token', async () => {
+    if (process.platform === 'win32') {
+      const { deps } = makeDeps({ platform: 'win32' });
+      expect(
+        await rejectionOf(connectControlPlane({ ...deps, protoDir: PROTO_DIR }).client),
+      ).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const { deps, lines } = makeDeps({
+      spawn: nodeSpawn,
+      resolveBinary: () => path.join(os.tmpdir(), 'scout-missing', 'Scout.Host.ControlPlane'),
+      mintToken: () => TOKEN,
+    });
+
+    const startedAt = Date.now();
+    const connection = connectControlPlane({ ...deps, protoDir: PROTO_DIR, socketWaitMs: 2_000 });
+    const error = await rejectionOf(connection.client);
+    connection.dispose();
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+    expect(
+      lines.some((line) => line.startsWith('warn') && line.includes('control-plane: unavailable')),
+    ).toBe(true);
+    expect(lines.filter((line) => line.includes(TOKEN))).toEqual([]);
+  });
+
+  it('a host that exits before opening its socket leaves the control plane unavailable', async () => {
+    const { deps, child } = makeDeps();
+
+    const connection = connectControlPlane({ ...deps, protoDir: PROTO_DIR, socketWaitMs: 5_000 });
+    setTimeout(() => child.emit('exit', 1, null), 10);
+    const error = await rejectionOf(connection.client);
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect((error as Error).message).toContain('exited before it opened its socket');
+  });
+
+  it('a socket that never appears leaves the control plane unavailable after the bounded wait', async () => {
+    const { deps } = makeDeps();
+
+    const connection = connectControlPlane({ ...deps, protoDir: PROTO_DIR, socketWaitMs: 100 });
+    const error = await rejectionOf(connection.client);
+    connection.dispose();
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect((error as Error).message).toContain('did not appear within 100 ms');
+  });
+
+  it('a socket wait that times out kills the host it launched', async () => {
+    const { deps, child } = makeDeps();
+
+    const error = await rejectionOf(
+      connectControlPlane({ ...deps, protoDir: PROTO_DIR, socketWaitMs: 50 }).client,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(child.killed).toBe(true);
+  });
+
+  describe('with a host listening on the socket', () => {
+    const REAL_PROTO_DIR = path.join(
+      findRepoRoot(process.cwd()),
+      'src',
+      'Scout.ControlPlane.Contracts',
+      'protos',
+    );
+    let server: grpc.Server | null = null;
+
+    afterEach(() => {
+      server?.forceShutdown();
+      server = null;
+    });
+
+    async function connectToListeningHost() {
+      const made = makeDeps();
+      const socketPath = path.join(made.socketDir, `controlplane-${process.pid}.sock`);
+      const definition = protoLoader.loadSync(path.join(REAL_PROTO_DIR, 'features.proto'));
+      const loaded = grpc.loadPackageDefinition(definition) as unknown as {
+        scout: { controlplane: { v1: { Features: grpc.ServiceClientConstructor } } };
+      };
+      server = new grpc.Server();
+      server.addService(loaded.scout.controlplane.v1.Features.service, {
+        ListFeatures: (_call: unknown, callback: grpc.sendUnaryData<unknown>) =>
+          callback(null, { features: [] }),
+      });
+      const connection = connectControlPlane({
+        ...made.deps,
+        protoDir: REAL_PROTO_DIR,
+        socketWaitMs: 5_000,
+      });
+      await new Promise<void>((resolve, reject) => {
+        server!.bindAsync(`unix:${socketPath}`, grpc.ServerCredentials.createInsecure(), (err) =>
+          err ? reject(err) : resolve(),
+        );
+      });
+      const client = await connection.client;
+      expect(await client.listFeatures()).toEqual([]);
+      return { connection, client, child: made.child };
+    }
+
+    it('a host that exits mid-session makes the next Features call fail fast as unavailable', async () => {
+      if (process.platform === 'win32') return;
+      const { client, child } = await connectToListeningHost();
+
+      child.emit('exit', 1, null);
+      const startedAt = Date.now();
+      const error = await rejectionOf(client.listFeatures());
+
+      expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+      expect(Date.now() - startedAt).toBeLessThan(1_000);
+    });
+
+    it('dispose kills the host and closes the client', async () => {
+      if (process.platform === 'win32') return;
+      const { connection, client, child } = await connectToListeningHost();
+
+      connection.dispose();
+      const error = await rejectionOf(client.listFeatures());
+
+      expect(child.killed).toBe(true);
+      expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    });
+  });
+
+  it('a launch that throws becomes ControlPlaneUnavailableError instead of escaping', async () => {
+    const { deps, calls } = makeDeps({ socketDir: path.join(os.tmpdir(), 'd'.repeat(100)) });
+
+    const error = await rejectionOf(connectControlPlane({ ...deps, protoDir: PROTO_DIR }).client);
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect((error as Error).message).toContain('100 characters');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('win32 is unavailable and names named pipes', async () => {
+    const { deps, calls } = makeDeps({ platform: 'win32' });
+
+    const error = await rejectionOf(connectControlPlane({ ...deps, protoDir: PROTO_DIR }).client);
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect((error as Error).message).toContain('named pipe');
+    expect(calls).toHaveLength(0);
   });
 });
 

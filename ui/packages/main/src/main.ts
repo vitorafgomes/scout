@@ -35,7 +35,12 @@ import { createProductionDeps } from './detect/deps.js';
 import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
-import { resolveWorkerBinary } from './worker/resolve-binary.js';
+import {
+  resolveControlPlaneBinary,
+  resolveProtoDir,
+  resolveWorkerBinary,
+} from './worker/resolve-binary.js';
+import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import { buildEnv, migrateLegacyApiKey } from './worker/build-env.js';
 import type { Supervisor } from './worker/supervisor.js';
 
@@ -97,6 +102,7 @@ const CSP_DEV = [
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: Supervisor | null = null;
+let controlPlane: ControlPlaneConnection | null = null;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 let unregisterApp: (() => void) | null = null;
@@ -216,9 +222,25 @@ app
       logger.child({ module: 'providers' }),
     );
 
+    const binaryDeps = {
+      app,
+      resourcesPath: process.resourcesPath,
+      platform: process.platform,
+      arch: process.arch,
+      cwd: __dirname,
+    };
+    const connection = connectControlPlane({
+      spawn,
+      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
+      protoDir: resolveProtoDir(binaryDeps),
+      logger: logger.child({ module: 'control-plane' }),
+      platform: process.platform,
+    });
+    controlPlane = connection;
+
     unregisterFeatures = registerFeaturesHandlers(
       ipcMain,
-      workerHttpClient,
+      () => connection.client,
       logger.child({ module: 'features' }),
     );
 
@@ -313,6 +335,7 @@ app.on('before-quit', (event) => {
     unregisterProviderKeys?.();
     chatGptAuth?.stop();
     unregisterChatGpt?.();
+    controlPlane?.dispose();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -338,6 +361,7 @@ app.on('before-quit', (event) => {
       unregisterProviderKeys?.();
       chatGptAuth?.stop();
       unregisterChatGpt?.();
+      controlPlane?.dispose();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

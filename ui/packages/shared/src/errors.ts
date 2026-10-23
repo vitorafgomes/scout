@@ -106,6 +106,12 @@ export class ControlPlaneUnauthenticatedError extends ScoutError {
   }
 }
 
+export class ControlPlaneNotImplementedError extends ScoutError {
+  constructor(message = 'Turning this feature on is not available yet.', options?: ErrorOptions) {
+    super('control-plane/not-implemented', message, options);
+  }
+}
+
 export class ProviderUnreachableError extends ScoutError {
   constructor(message = 'Provider endpoint unreachable', options?: ErrorOptions) {
     super('providers/unreachable', message, options);
@@ -206,6 +212,31 @@ export function deserializeError(payload: SerializedScoutError): ScoutError {
     default:
       return new ScoutError(payload.code, payload.message);
   }
+}
+
+const IPC_CODE_MARKER = /\[scout:([a-z0-9-]+\/[a-z0-9-]+)\] ([\s\S]*)$/;
+
+/**
+ * Builds the message an IPC handler throws so the error code survives Electron's invoke
+ * boundary, which forwards only the message text to the renderer.
+ */
+export function encodeIpcErrorMessage(serialized: SerializedScoutError): string {
+  return `[scout:${serialized.code}] ${serialized.message}`;
+}
+
+/**
+ * Recovers the error code and the original message from an IPC rejection: an own string
+ * `code` wins, otherwise the code is read from the marker that encodeIpcErrorMessage wrote.
+ */
+export function readIpcError(err: unknown): { code: string | null; message: string } {
+  const message = err instanceof Error ? err.message : String(err);
+  const marked = IPC_CODE_MARKER.exec(message);
+  const ownCode =
+    typeof err === 'object' && err !== null && typeof (err as { code?: unknown }).code === 'string'
+      ? (err as { code: string }).code
+      : null;
+  if (marked === null) return { code: ownCode, message };
+  return { code: ownCode ?? marked[1] ?? null, message: marked[2] ?? message };
 }
 
 function extractExtras(err: ScoutError): Readonly<Record<string, unknown>> | undefined {

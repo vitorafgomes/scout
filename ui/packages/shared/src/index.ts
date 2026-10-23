@@ -27,6 +27,7 @@ export {
   WorkerHttpUnavailableError,
   ControlPlaneUnavailableError,
   ControlPlaneUnauthenticatedError,
+  ControlPlaneNotImplementedError,
   ProviderUnreachableError,
   ProviderUnknownError,
   ProviderLifecycleUnsupportedError,
@@ -35,6 +36,8 @@ export {
   ProviderRequestFailedError,
   serializeError,
   deserializeError,
+  encodeIpcErrorMessage,
+  readIpcError,
   type SerializedScoutError,
 } from './errors.js';
 

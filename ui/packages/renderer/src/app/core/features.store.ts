@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import type { FeatureDto, FeatureId } from '@scout/shared';
+import { readIpcError, type FeatureDto, type FeatureId } from '@scout/shared';
 
 import { ScoutBridgeService } from './scout-bridge';
 
@@ -13,12 +13,16 @@ interface StoreState {
   readonly busy: ReadonlySet<FeatureId>;
 }
 
-function isHttpUnavailable(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    (err as { code?: unknown }).code === 'worker/http-unavailable'
-  );
+const UNAVAILABLE_CODES: readonly (string | null)[] = [
+  'worker/http-unavailable',
+  'control-plane/unavailable',
+];
+
+const TURN_ON_NOT_AVAILABLE = 'Turning this feature on is not available yet.';
+
+function errorText(err: unknown): string {
+  const { code, message } = readIpcError(err);
+  return code === 'control-plane/not-implemented' ? TURN_ON_NOT_AVAILABLE : message;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -28,8 +32,6 @@ export class FeaturesStore {
   private readonly _features = signal<readonly FeatureDto[]>([]);
   private readonly _busy = signal<ReadonlySet<FeatureId>>(new Set());
   private readonly _lastError = signal<string | null>(null);
-  // True when the last load() failed because the worker HTTP endpoint is not
-  // yet available. The component renders a friendly empty-state in this case.
   private readonly _backendUnavailable = signal<boolean>(false);
 
   readonly lastError = this._lastError.asReadonly();
@@ -47,12 +49,12 @@ export class FeaturesStore {
       this._lastError.set(null);
       this._backendUnavailable.set(false);
     } catch (err: unknown) {
-      if (isHttpUnavailable(err)) {
+      if (UNAVAILABLE_CODES.includes(readIpcError(err).code)) {
         this._backendUnavailable.set(true);
         this._lastError.set(null);
       } else {
         this._backendUnavailable.set(false);
-        this._lastError.set(err instanceof Error ? err.message : String(err));
+        this._lastError.set(errorText(err));
       }
     }
   }
@@ -74,9 +76,9 @@ export class FeaturesStore {
       this.patchOne(id, {
         enabled: current.enabled,
         status: 'error',
-        lastError: err instanceof Error ? err.message : String(err),
+        lastError: errorText(err),
       });
-      this._lastError.set(err instanceof Error ? err.message : String(err));
+      this._lastError.set(errorText(err));
     } finally {
       this.markBusy(id, false);
     }
@@ -91,9 +93,9 @@ export class FeaturesStore {
     } catch (err: unknown) {
       this.patchOne(id, {
         status: 'error',
-        lastError: err instanceof Error ? err.message : String(err),
+        lastError: errorText(err),
       });
-      this._lastError.set(err instanceof Error ? err.message : String(err));
+      this._lastError.set(errorText(err));
     } finally {
       this.markBusy(id, false);
     }
@@ -112,9 +114,9 @@ export class FeaturesStore {
     } catch (err: unknown) {
       this.patchOne(id, {
         status: 'error',
-        lastError: err instanceof Error ? err.message : String(err),
+        lastError: errorText(err),
       });
-      this._lastError.set(err instanceof Error ? err.message : String(err));
+      this._lastError.set(errorText(err));
     } finally {
       this.markBusy(id, false);
     }
@@ -129,9 +131,9 @@ export class FeaturesStore {
     } catch (err: unknown) {
       this.patchOne(id, {
         status: 'error',
-        lastError: err instanceof Error ? err.message : String(err),
+        lastError: errorText(err),
       });
-      this._lastError.set(err instanceof Error ? err.message : String(err));
+      this._lastError.set(errorText(err));
     } finally {
       this.markBusy(id, false);
     }
