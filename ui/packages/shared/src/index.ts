@@ -116,4 +116,7 @@ export {
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
+  type GitHubPendingSignIn,
+  type GitHubSaveTokenRequest,
+  type GitHubStatus,
 } from './ipc-contract.js';

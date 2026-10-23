@@ -61,6 +61,11 @@ describe('buildBridge', () => {
       'featureDeleteCredentials',
       'featureEnable',
       'featureDisable',
+      'githubSignIn',
+      'githubStatus',
+      'githubCancel',
+      'githubSignOut',
+      'githubSaveToken',
     ];
 
     const actualKeys = Object.keys(bridge).sort();

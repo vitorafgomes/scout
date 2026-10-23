@@ -229,5 +229,25 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     featureDisable(req) {
       return ipc.invoke(CHANNEL.featureDisable, req) as ReturnType<ScoutBridge['featureDisable']>;
     },
+
+    githubSignIn() {
+      return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
+    },
+
+    githubStatus() {
+      return ipc.invoke(CHANNEL.githubStatus) as ReturnType<ScoutBridge['githubStatus']>;
+    },
+
+    githubCancel() {
+      return ipc.invoke(CHANNEL.githubCancel) as ReturnType<ScoutBridge['githubCancel']>;
+    },
+
+    githubSignOut() {
+      return ipc.invoke(CHANNEL.githubSignOut) as ReturnType<ScoutBridge['githubSignOut']>;
+    },
+
+    githubSaveToken(req) {
+      return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
+    },
   };
 }

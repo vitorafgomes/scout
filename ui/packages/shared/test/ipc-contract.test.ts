@@ -36,6 +36,11 @@ describe('CHANNEL constant', () => {
         'featureSetCredentials',
         'featureSetup',
         'featuresList',
+        'githubCancel',
+        'githubSaveToken',
+        'githubSignIn',
+        'githubSignOut',
+        'githubStatus',
         'llmDeleteOllamaModel',
         'llmDetectEnvironment',
         'llmListLmStudioModels',
@@ -119,6 +124,11 @@ describe('ChannelName type', () => {
       'scout:features.deleteCredentials': true,
       'scout:features.enable': true,
       'scout:features.disable': true,
+      'scout:github.signIn': true,
+      'scout:github.status': true,
+      'scout:github.cancel': true,
+      'scout:github.signOut': true,
+      'scout:github.saveToken': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });

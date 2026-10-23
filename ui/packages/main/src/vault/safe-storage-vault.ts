@@ -3,7 +3,8 @@ import type { VaultKey } from '@scout/shared';
 import type { Logger } from '../util/logger.js';
 
 /** Keys only the main process reads or writes; they are not in VAULT_KEYS, so the renderer's vault channels reject them. */
-export type MainOnlyVaultKey = 'chatgpt.session' | 'chatgpt.client-id' | 'chatgpt.host-id';
+export type MainOnlyVaultKey =
+  'chatgpt.session' | 'chatgpt.client-id' | 'chatgpt.host-id' | 'github.session' | 'github.token';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 

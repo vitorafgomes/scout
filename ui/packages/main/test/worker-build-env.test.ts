@@ -307,6 +307,23 @@ describe('buildEnv', () => {
     const serialised = JSON.stringify(Object.keys(env));
     expect(serialised).not.toContain(SECRET);
   });
+
+  it('passes the GitHub credential variables to the worker when GitHub is connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+    });
+    expect(env['SCOUT__PLUGINS__GITHUB__TOKENFILE']).toBe('/user-data/github-token.json');
+  });
+
+  it('leaves the GitHub variables out when GitHub is not connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: {},
+    });
+    expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__GITHUB'))).toEqual([]);
+  });
+
   it('one key per provider: OpenAI reads its own key, not the Gemini one', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({

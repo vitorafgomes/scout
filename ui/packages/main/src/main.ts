@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, powerMonitor, shell, session } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -29,6 +29,13 @@ import { registerFeaturesHandlers } from './ipc/features.js';
 import { registerProviderKeyHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
+import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
+import {
+  GITHUB_APP_CLIENT_ID,
+  GITHUB_APP_SLUG,
+  GitHubAuth,
+  abortableSleep,
+} from './oauth/github-auth.js';
 import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
@@ -117,6 +124,8 @@ let unregisterFeatures: (() => void) | null = null;
 let unregisterProviderKeys: (() => void) | null = null;
 let unregisterChatGpt: (() => void) | null = null;
 let chatGptAuth: ChatGptAuth | null = null;
+let unregisterGitHub: (() => void) | null = null;
+let gitHubAuth: GitHubAuth | null = null;
 
 app
   .whenReady()
@@ -189,6 +198,32 @@ app
       logger.warn('chatgpt: start failed', { err: String(err) });
     });
 
+    const gitHubTokenFile = path.join(app.getPath('userData'), 'github-token.json');
+    const gitHubLogger = logger.child({ module: 'github' });
+    const auth = new GitHubAuth({
+      fetch: globalThis.fetch,
+      vault,
+      tokenFilePath: gitHubTokenFile,
+      fs: { writeFile: fsWriteFile, rename: fsRename, rm: fsRm },
+      now: () => Date.now(),
+      sleep: abortableSleep,
+      clientId: process.env['SCOUT_GITHUB_APP_CLIENT_ID'] || GITHUB_APP_CLIENT_ID,
+      appSlug: process.env['SCOUT_GITHUB_APP_SLUG'] || GITHUB_APP_SLUG,
+      onConnectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, gitHubLogger);
+      },
+      onResume: (listener) => {
+        powerMonitor.on('resume', listener);
+        return () => powerMonitor.removeListener('resume', listener);
+      },
+      logger: gitHubLogger,
+    });
+    gitHubAuth = auth;
+    unregisterGitHub = registerGitHubHandlers(ipcMain, auth, gitHubLogger);
+    auth.start().catch((err: unknown) => {
+      gitHubLogger.warn('github: start failed', { err: String(err) });
+    });
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -201,7 +236,12 @@ app
           cwd: __dirname,
         }),
       // env is assembled by buildEnv; never logged — it contains secrets
-      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key), chatGptTokenFile }),
+      buildEnv: async () =>
+        buildEnv({
+          vaultGet: (key) => vault.get(key),
+          chatGptTokenFile,
+          gitHubEnv: await auth.workerEnv(),
+        }),
     });
 
     unregisterWorker = registerWorkerHandlers(
@@ -336,6 +376,8 @@ app.on('before-quit', (event) => {
     chatGptAuth?.stop();
     unregisterChatGpt?.();
     controlPlane?.dispose();
+    gitHubAuth?.stop();
+    unregisterGitHub?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -362,6 +404,8 @@ app.on('before-quit', (event) => {
       chatGptAuth?.stop();
       unregisterChatGpt?.();
       controlPlane?.dispose();
+      gitHubAuth?.stop();
+      unregisterGitHub?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

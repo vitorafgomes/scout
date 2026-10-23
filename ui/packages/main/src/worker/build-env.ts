@@ -8,6 +8,7 @@ import {
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
   chatGptTokenFile?: string;
+  gitHubEnv?: Readonly<Record<string, string>>;
 }
 
 // Assembles the environment variables passed to Scout.Host.Console at spawn
@@ -33,6 +34,7 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     DOTNET_ENVIRONMENT: 'Production',
     SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
   };
+  Object.assign(env, deps.gitHubEnv);
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

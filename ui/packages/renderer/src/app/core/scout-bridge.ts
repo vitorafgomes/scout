@@ -54,6 +54,9 @@ import {
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
+  type GitHubPendingSignIn,
+  type GitHubSaveTokenRequest,
+  type GitHubStatus,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -155,6 +158,11 @@ function createFakeBridge(): ScoutBridge {
     featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
+    githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubCancel: (): Promise<void> => rejectNotAvailable(),
+    githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
   };
 }
 
@@ -328,6 +336,26 @@ export class ScoutBridgeService {
 
   async featureDisable(req: FeatureIdRequest): Promise<FeatureDto> {
     return this.bridge.featureDisable(req);
+  }
+
+  async githubSignIn(): Promise<GitHubPendingSignIn> {
+    return this.bridge.githubSignIn();
+  }
+
+  async githubStatus(): Promise<GitHubStatus> {
+    return this.bridge.githubStatus();
+  }
+
+  async githubCancel(): Promise<void> {
+    return this.bridge.githubCancel();
+  }
+
+  async githubSignOut(): Promise<GitHubStatus> {
+    return this.bridge.githubSignOut();
+  }
+
+  async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
+    return this.bridge.githubSaveToken(req);
   }
 }
 

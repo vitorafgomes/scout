@@ -49,6 +49,11 @@ export const CHANNEL = {
   featureDeleteCredentials: 'scout:features.deleteCredentials',
   featureEnable: 'scout:features.enable',
   featureDisable: 'scout:features.disable',
+  githubSignIn: 'scout:github.signIn',
+  githubStatus: 'scout:github.status',
+  githubCancel: 'scout:github.cancel',
+  githubSignOut: 'scout:github.signOut',
+  githubSaveToken: 'scout:github.saveToken',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -392,6 +397,29 @@ export interface FeatureSetupRequest {
   readonly settings: Readonly<Record<string, string | null>>;
 }
 
+/** The one-time code the owner types on GitHub's device page; never a token. */
+export interface GitHubPendingSignIn {
+  readonly userCode: string;
+  readonly verificationUri: string;
+}
+
+export interface GitHubStatus {
+  readonly configured: boolean;
+  readonly connected: boolean;
+  readonly method: 'browser' | 'token' | null;
+  readonly login: string | null;
+  readonly warning: string | null;
+  readonly installed: boolean;
+  readonly installUrl: string | null;
+  readonly pending: GitHubPendingSignIn | null;
+  readonly error: { readonly code: string; readonly message: string } | null;
+}
+
+/** A token the owner pastes; travels renderer to main once and is never sent back. */
+export interface GitHubSaveTokenRequest {
+  readonly token: string;
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -439,4 +467,9 @@ export interface ScoutBridge {
   featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto>;
   featureEnable(req: FeatureIdRequest): Promise<FeatureDto>;
   featureDisable(req: FeatureIdRequest): Promise<FeatureDto>;
+  githubSignIn(): Promise<GitHubPendingSignIn>;
+  githubStatus(): Promise<GitHubStatus>;
+  githubCancel(): Promise<void>;
+  githubSignOut(): Promise<GitHubStatus>;
+  githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus>;
 }

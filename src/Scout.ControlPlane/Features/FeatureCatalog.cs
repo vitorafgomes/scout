@@ -20,9 +20,9 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Key: "pat",
                 Kind: "password",
                 Label: "Personal Access Token",
-                HelperText: "Required scopes: repo, read:org. Token is stored only on this machine (OS keyring) and never sent to Scout's developers.",
-                CreateLinkUrl: "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Scout",
-                CreateLinkLabel: "Create token on GitHub"),
+                HelperText: "Only for a Scout host without the desktop sign-in. Use a fine-grained token with read-only access to Metadata, Contents, Pull requests and Issues.",
+                CreateLinkUrl: null,
+                CreateLinkLabel: null),
         },
         SettingsFields: new[]
         {
@@ -39,30 +39,24 @@ public sealed class FeatureCatalog : IFeatureCatalog
         ScopeMatrix: new[]
         {
             new FeatureScopeRow(
-                Scope: "repo",
-                Actions: new[]
-                {
-                    "List private and public repositories",
-                    "Read pull requests with diff and file list",
-                    "Read issues with comments",
-                    "Create issues (descriptive write per ADR)",
-                }),
+                Scope: "Metadata: read",
+                Actions: new[] { "List the repositories the Scout GitHub App is installed on" }),
             new FeatureScopeRow(
-                Scope: "public_repo",
-                Actions: new[] { "Subset of repo limited to public repositories only" }),
+                Scope: "Contents: read",
+                Actions: new[] { "Read the README, languages and top-level files of a repository" }),
             new FeatureScopeRow(
-                Scope: "read:org",
-                Actions: new[] { "List repositories from organizations you belong to" }),
+                Scope: "Pull requests: read",
+                Actions: new[] { "List open pull requests" }),
             new FeatureScopeRow(
-                Scope: "read:user",
-                Actions: new[] { "Identify the token owner (validation only)" }),
+                Scope: "Issues: read",
+                Actions: new[] { "List open issues" }),
         },
         SetupSteps: new[]
         {
-            "Click 'Create token on GitHub' below. GitHub opens a token-creation page with the scopes 'repo' and 'read:org' already selected.",
-            "Scroll to the bottom and click 'Generate token'. Copy the generated value (it is shown only once).",
-            "Paste the token into the 'Personal Access Token' field above.",
-            "Click Save. Scout validates the token against GitHub before storing it on this machine's keyring.",
+            "Click 'Connect with GitHub'. Scout shows a one-time code.",
+            "Click 'Open GitHub', sign in with your GitHub account and enter the code.",
+            "Approve the Scout GitHub App. It asks for read access only; Scout never writes to GitHub.",
+            "If the card says so, click 'Install Scout on your GitHub account' and pick the repositories Scout may read.",
         });
 
     private static readonly FeatureMetadata Kubernetes = new(

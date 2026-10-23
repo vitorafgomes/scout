@@ -6,12 +6,13 @@ import { FeaturesStore, type FeatureViewModel } from '../core/features.store';
 
 import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
+import { GitHubConnectComponent } from './github-connect.component';
 
 @Component({
   selector: 'sc-features',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FeatureCardComponent, CredentialDialogComponent],
+  imports: [FeatureCardComponent, CredentialDialogComponent, GitHubConnectComponent],
   template: `
     <main class="page">
       <header class="header">
@@ -28,16 +29,23 @@ import { FeatureCardComponent } from './feature-card.component';
           @for (f of store.features(); track f.id) {
             <sc-feature-card
               [feature]="f"
+              [connection]="f.id === 'github' ? githubConnection() : null"
               (toggle)="store.toggle(f.id)"
               (openCredentialDialog)="openDialog(f)"
               (clearCredentials)="store.clearCredentials(f.id)"
-            />
+            >
+              @if (f.id === 'github') {
+                <sc-github-connect
+                  (connectedChange)="githubConnection.set($event ? 'connected' : 'not-connected')"
+                />
+              }
+            </sc-feature-card>
           }
         </div>
         <div class="notes" data-test="features-notes">
-          <p>Credentials you save here are kept only while Scout is open.</p>
           <p>
-            Turning a feature on is not available yet; the chat bot does not use these settings yet.
+            GitHub is used by the chat bot once connected. Other features cannot be turned on yet;
+            their credentials are kept only while Scout is open.
           </p>
         </div>
       }
@@ -107,6 +115,7 @@ import { FeatureCardComponent } from './feature-card.component';
 export class FeaturesComponent implements OnInit {
   readonly store = inject(FeaturesStore);
   readonly activeDialog = signal<FeatureViewModel | null>(null);
+  readonly githubConnection = signal<'connected' | 'not-connected' | 'unknown'>('unknown');
 
   async ngOnInit(): Promise<void> {
     await this.store.load();
