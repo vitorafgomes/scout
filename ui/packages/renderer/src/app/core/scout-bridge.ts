@@ -3,6 +3,9 @@ import {
   ScoutError,
   type AppGetVersionResponse,
   type AppOpenExternalRequest,
+  type ChatGptListModelsResponse,
+  type ChatGptSignOutResponse,
+  type ChatGptStatus,
   type DetectClientsResponse,
   type DiagnosticsExportResponse,
   type DiscordBuildOAuthUrlRequest,
@@ -27,6 +30,8 @@ import {
   type ScoutBridge,
   type VaultDeleteRequest,
   type VaultDeleteResponse,
+  type VaultGetPublicRequest,
+  type VaultGetPublicResponse,
   type VaultHasRequest,
   type VaultHasResponse,
   type VaultIsAvailableResponse,
@@ -42,11 +47,22 @@ import {
   type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
+  type ProviderKeyValidateRequest,
+  type ProviderKeyValidateResponse,
+  type LlmListModelsRequest,
+  type LlmListModelsResponse,
   type FeatureDto,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
+  type GitHubPendingSignIn,
+  type GitHubSaveTokenRequest,
+  type GitHubStatus,
+  type KubernetesDetection,
+  type KubernetesStatus,
+  type KubernetesUseRequest,
+  type AccessAllowedUsers,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -78,9 +94,16 @@ function createFakeBridge(): ScoutBridge {
       _req: DiscordStartOAuthInstallRequest,
     ): Promise<DiscordStartOAuthInstallResponse> => rejectNotAvailable(),
     discordCancelOAuthInstall: (): Promise<void> => rejectNotAvailable(),
+    chatgptSignIn: (): Promise<ChatGptStatus> => rejectNotAvailable(),
+    chatgptCancelSignIn: (): Promise<void> => rejectNotAvailable(),
+    chatgptListModels: (): Promise<ChatGptListModelsResponse> => rejectNotAvailable(),
+    chatgptSignOut: (): Promise<ChatGptSignOutResponse> => rejectNotAvailable(),
+    chatgptStatus: (): Promise<ChatGptStatus> => rejectNotAvailable(),
     vaultStore: (_req: VaultStoreRequest): Promise<void> => rejectNotAvailable(),
     vaultHas: (_req: VaultHasRequest): Promise<VaultHasResponse> => rejectNotAvailable(),
     vaultDelete: (_req: VaultDeleteRequest): Promise<VaultDeleteResponse> => rejectNotAvailable(),
+    vaultGetPublic: (_req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> =>
+      rejectNotAvailable(),
     vaultIsAvailable: (): Promise<VaultIsAvailableResponse> => rejectNotAvailable(),
     workerStart: (): Promise<WorkerStartResponse> => rejectNotAvailable(),
     workerStop: (): Promise<WorkerStopResponse> => rejectNotAvailable(),
@@ -132,6 +155,10 @@ function createFakeBridge(): ScoutBridge {
     providerRestart: (_req: ProviderRestartRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
     providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> => rejectNotAvailable(),
+    validateProviderKey: (_req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> =>
+      rejectNotAvailable(),
+    llmListModels: (_req: LlmListModelsRequest): Promise<LlmListModelsResponse> =>
+      rejectNotAvailable(),
     featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
     featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
       rejectNotAvailable(),
@@ -139,6 +166,17 @@ function createFakeBridge(): ScoutBridge {
     featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
+    githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubCancel: (): Promise<void> => rejectNotAvailable(),
+    githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
+    kubernetesDetect: (): Promise<KubernetesDetection> => rejectNotAvailable(),
+    kubernetesUse: (_req: KubernetesUseRequest): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesStatus: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesDisconnect: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    accessGet: (): Promise<AccessAllowedUsers> => rejectNotAvailable(),
+    accessSet: (_req: AccessAllowedUsers): Promise<AccessAllowedUsers> => rejectNotAvailable(),
   };
 }
 
@@ -166,6 +204,10 @@ export class ScoutBridgeService {
     return this.bridge.vaultDelete(req);
   }
 
+  async vaultGetPublic(req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> {
+    return this.bridge.vaultGetPublic(req);
+  }
+
   async appOpenExternal(req: AppOpenExternalRequest): Promise<void> {
     return this.bridge.appOpenExternal(req);
   }
@@ -178,6 +220,26 @@ export class ScoutBridgeService {
 
   async discordCancelOAuthInstall(): Promise<void> {
     return this.bridge.discordCancelOAuthInstall();
+  }
+
+  async chatgptSignIn(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptSignIn();
+  }
+
+  async chatgptListModels(): Promise<ChatGptListModelsResponse> {
+    return this.bridge.chatgptListModels();
+  }
+
+  async chatgptCancelSignIn(): Promise<void> {
+    return this.bridge.chatgptCancelSignIn();
+  }
+
+  async chatgptSignOut(): Promise<ChatGptSignOutResponse> {
+    return this.bridge.chatgptSignOut();
+  }
+
+  async chatgptStatus(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptStatus();
   }
 
   async workerStart(): Promise<WorkerStartResponse> {
@@ -262,6 +324,14 @@ export class ScoutBridgeService {
     return this.bridge.providerSetAutostart(req);
   }
 
+  async validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> {
+    return this.bridge.validateProviderKey(req);
+  }
+
+  async llmListModels(req: LlmListModelsRequest): Promise<LlmListModelsResponse> {
+    return this.bridge.llmListModels(req);
+  }
+
   async featuresList(): Promise<FeaturesListResponse> {
     return this.bridge.featuresList();
   }
@@ -284,6 +354,50 @@ export class ScoutBridgeService {
 
   async featureDisable(req: FeatureIdRequest): Promise<FeatureDto> {
     return this.bridge.featureDisable(req);
+  }
+
+  async githubSignIn(): Promise<GitHubPendingSignIn> {
+    return this.bridge.githubSignIn();
+  }
+
+  async githubStatus(): Promise<GitHubStatus> {
+    return this.bridge.githubStatus();
+  }
+
+  async githubCancel(): Promise<void> {
+    return this.bridge.githubCancel();
+  }
+
+  async githubSignOut(): Promise<GitHubStatus> {
+    return this.bridge.githubSignOut();
+  }
+
+  async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
+    return this.bridge.githubSaveToken(req);
+  }
+
+  async kubernetesDetect(): Promise<KubernetesDetection> {
+    return this.bridge.kubernetesDetect();
+  }
+
+  async kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesUse(req);
+  }
+
+  async kubernetesStatus(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesStatus();
+  }
+
+  async kubernetesDisconnect(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesDisconnect();
+  }
+
+  async accessGet(): Promise<AccessAllowedUsers> {
+    return this.bridge.accessGet();
+  }
+
+  async accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers> {
+    return this.bridge.accessSet(req);
   }
 }
 

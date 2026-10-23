@@ -1,4 +1,4 @@
-import type { DetectedClient, VaultKey } from './client-kinds.js';
+import type { CloudLlmProvider, DetectedClient, PublicVaultKey, VaultKey } from './client-kinds.js';
 
 export type { VaultKey };
 
@@ -7,9 +7,15 @@ export const CHANNEL = {
   discordBuildOAuthUrl: 'scout:discord.buildOAuthUrl',
   discordStartOAuthInstall: 'scout:discord.startOAuthInstall',
   discordCancelOAuthInstall: 'scout:discord.cancelOAuthInstall',
+  chatgptSignIn: 'scout:chatgpt.signIn',
+  chatgptListModels: 'scout:chatgpt.listModels',
+  chatgptCancelSignIn: 'scout:chatgpt.cancelSignIn',
+  chatgptSignOut: 'scout:chatgpt.signOut',
+  chatgptStatus: 'scout:chatgpt.status',
   vaultStore: 'scout:vault.store',
   vaultHas: 'scout:vault.has',
   vaultDelete: 'scout:vault.delete',
+  vaultGetPublic: 'scout:vault.getPublic',
   vaultIsAvailable: 'scout:vault.isAvailable',
   workerStart: 'scout:worker.start',
   workerStop: 'scout:worker.stop',
@@ -24,6 +30,7 @@ export const CHANNEL = {
   llmPullOllamaProgress: 'scout:llm.pullOllamaProgress',
   llmDeleteOllamaModel: 'scout:llm.deleteOllamaModel',
   llmListLmStudioModels: 'scout:llm.listLmStudioModels',
+  llmListModels: 'scout:llm.listModels',
   whisperListInstalled: 'scout:whisper.listInstalled',
   whisperDownloadModel: 'scout:whisper.downloadModel',
   whisperDownloadProgress: 'scout:whisper.downloadProgress',
@@ -36,12 +43,24 @@ export const CHANNEL = {
   providerStop: 'scout:providers.stop',
   providerRestart: 'scout:providers.restart',
   providerSetAutostart: 'scout:providers.setAutostart',
+  providersValidateKey: 'scout:providers.validateKey',
   featuresList: 'scout:features.list',
   featureSetCredentials: 'scout:features.setCredentials',
   featureSetup: 'scout:features.setup',
   featureDeleteCredentials: 'scout:features.deleteCredentials',
   featureEnable: 'scout:features.enable',
   featureDisable: 'scout:features.disable',
+  githubSignIn: 'scout:github.signIn',
+  githubStatus: 'scout:github.status',
+  githubCancel: 'scout:github.cancel',
+  githubSignOut: 'scout:github.signOut',
+  githubSaveToken: 'scout:github.saveToken',
+  kubernetesDetect: 'scout:kubernetes.detect',
+  kubernetesUse: 'scout:kubernetes.use',
+  kubernetesStatus: 'scout:kubernetes.status',
+  kubernetesDisconnect: 'scout:kubernetes.disconnect',
+  accessGet: 'scout:access.get',
+  accessSet: 'scout:access.set',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -73,6 +92,26 @@ export interface DiscordOAuthResult {
 
 export type DiscordStartOAuthInstallResponse = DiscordOAuthResult;
 
+/** The only ChatGPT sign-in state the renderer ever sees; tokens stay in the main process. */
+export interface ChatGptStatus {
+  readonly signedIn: boolean;
+  readonly email: string | null;
+  readonly planUsageGranted: boolean;
+}
+
+export interface ChatGptSignOutResponse {
+  readonly revocationConfirmed: boolean;
+}
+
+export interface ChatGptModel {
+  readonly slug: string;
+  readonly displayName: string;
+}
+
+export interface ChatGptListModelsResponse {
+  readonly models: readonly ChatGptModel[];
+}
+
 export interface VaultStoreRequest {
   readonly key: VaultKey;
   readonly value: string;
@@ -92,6 +131,14 @@ export interface VaultDeleteRequest {
 
 export interface VaultDeleteResponse {
   readonly deleted: boolean;
+}
+
+export interface VaultGetPublicRequest {
+  readonly key: PublicVaultKey;
+}
+
+export interface VaultGetPublicResponse {
+  readonly value: string | null;
 }
 
 export interface VaultIsAvailableResponse {
@@ -281,6 +328,33 @@ export interface ProvidersListResponse {
   readonly providers: readonly ProviderStatusDto[];
 }
 
+export interface ProviderKeyValidateRequest {
+  readonly provider: CloudLlmProvider;
+  readonly apiKey: string;
+}
+
+export type ProviderKeyValidateResponse =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'invalid-key' | 'unreachable' | 'unexpected';
+      readonly status?: number;
+    };
+
+export interface LlmListModelsRequest {
+  readonly provider: CloudLlmProvider;
+}
+
+/** A chat model the connected provider offers; `id` is what Scout writes to `llm.cloud-model`. */
+export interface LlmModel {
+  readonly id: string;
+  readonly displayName: string;
+}
+
+export interface LlmListModelsResponse {
+  readonly models: readonly LlmModel[];
+}
+
 export type FeatureId = 'github' | 'kubernetes';
 export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
 export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
@@ -344,6 +418,71 @@ export interface FeatureSetupRequest {
   readonly settings: Readonly<Record<string, string | null>>;
 }
 
+/** The one-time code the owner types on GitHub's device page; never a token. */
+export interface GitHubPendingSignIn {
+  readonly userCode: string;
+  readonly verificationUri: string;
+}
+
+export interface GitHubStatus {
+  readonly configured: boolean;
+  readonly connected: boolean;
+  readonly method: 'browser' | 'token' | null;
+  readonly login: string | null;
+  readonly warning: string | null;
+  readonly installed: boolean;
+  readonly installUrl: string | null;
+  readonly pending: GitHubPendingSignIn | null;
+  readonly error: { readonly code: string; readonly message: string } | null;
+}
+
+/** A token the owner pastes; travels renderer to main once and is never sent back. */
+export interface GitHubSaveTokenRequest {
+  readonly token: string;
+}
+
+export type KubernetesAuthKind =
+  'token' | 'client-certificate' | 'exec' | 'auth-provider' | 'basic' | 'unknown';
+
+/** One context of the kubeconfig on this computer; never carries a credential. */
+export interface KubernetesContextInfo {
+  readonly name: string;
+  readonly cluster: string;
+  readonly server: string;
+  readonly namespace?: string;
+  readonly auth: KubernetesAuthKind;
+  /** The command and arguments an exec context runs to get a token, shown before consent. */
+  readonly execCommand?: string;
+}
+
+export interface KubernetesDetection {
+  readonly path: string | null;
+  readonly contexts: readonly KubernetesContextInfo[];
+  readonly error: string | null;
+}
+
+/** An allowed kubeconfig context and the label the model and chat users see instead of its name. */
+export interface KubernetesLabelledContext {
+  readonly name: string;
+  readonly label: string;
+}
+
+/** The contexts the owner allowed; main validates each against the file it located itself. */
+export interface KubernetesUseRequest {
+  readonly contexts: readonly KubernetesLabelledContext[];
+}
+
+export interface KubernetesStatus {
+  readonly path: string | null;
+  readonly contexts: readonly KubernetesLabelledContext[];
+  readonly connected: boolean;
+}
+
+/** The platform user ids allowed to use Scout from chat; main validates and stores them. */
+export interface AccessAllowedUsers {
+  readonly userIds: readonly string[];
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -351,9 +490,15 @@ export interface ScoutBridge {
     req: DiscordStartOAuthInstallRequest,
   ): Promise<DiscordStartOAuthInstallResponse>;
   discordCancelOAuthInstall(): Promise<void>;
+  chatgptSignIn(): Promise<ChatGptStatus>;
+  chatgptCancelSignIn(): Promise<void>;
+  chatgptListModels(): Promise<ChatGptListModelsResponse>;
+  chatgptSignOut(): Promise<ChatGptSignOutResponse>;
+  chatgptStatus(): Promise<ChatGptStatus>;
   vaultStore(req: VaultStoreRequest): Promise<void>;
   vaultHas(req: VaultHasRequest): Promise<VaultHasResponse>;
   vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse>;
+  vaultGetPublic(req: VaultGetPublicRequest): Promise<VaultGetPublicResponse>;
   vaultIsAvailable(): Promise<VaultIsAvailableResponse>;
   workerStart(): Promise<WorkerStartResponse>;
   workerStop(): Promise<WorkerStopResponse>;
@@ -378,10 +523,23 @@ export interface ScoutBridge {
   providerStop(req: ProviderStopRequest): Promise<ProviderStatusDto>;
   providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
+  validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse>;
+  llmListModels(req: LlmListModelsRequest): Promise<LlmListModelsResponse>;
   featuresList(): Promise<FeaturesListResponse>;
   featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
   featureSetup(req: FeatureSetupRequest): Promise<FeatureDto>;
   featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto>;
   featureEnable(req: FeatureIdRequest): Promise<FeatureDto>;
   featureDisable(req: FeatureIdRequest): Promise<FeatureDto>;
+  githubSignIn(): Promise<GitHubPendingSignIn>;
+  githubStatus(): Promise<GitHubStatus>;
+  githubCancel(): Promise<void>;
+  githubSignOut(): Promise<GitHubStatus>;
+  githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus>;
+  kubernetesDetect(): Promise<KubernetesDetection>;
+  kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus>;
+  kubernetesStatus(): Promise<KubernetesStatus>;
+  kubernetesDisconnect(): Promise<KubernetesStatus>;
+  accessGet(): Promise<AccessAllowedUsers>;
+  accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers>;
 }

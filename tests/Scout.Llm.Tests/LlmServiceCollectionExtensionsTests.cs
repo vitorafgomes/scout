@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using Scout.Llm.Abstractions;
 
 namespace Scout.Llm.Tests;
@@ -44,6 +45,16 @@ public sealed class LlmServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddScoutLlm_With_No_Provider_Configured_Selects_Ollama()
+    {
+        var empty = new ConfigurationBuilder().Build();
+
+        using var provider = new ServiceCollection().AddScoutLlm(empty).BuildServiceProvider();
+
+        provider.GetRequiredService<ILlmProviderFactory>().Name.ShouldBe("Ollama");
+    }
+
+    [Fact]
     public void AddScoutLlm_Resolves_Shared_Kernel()
     {
         using var provider = new ServiceCollection().AddScoutLlm(Config()).BuildServiceProvider();
@@ -61,6 +72,17 @@ public sealed class LlmServiceCollectionExtensionsTests
         using var provider = new ServiceCollection().AddScoutLlm(Config()).BuildServiceProvider();
 
         provider.GetRequiredService<IChatCompletionService>().ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void No_Guard_Key_Leaves_The_Providers_Own_Chat_Service_In_The_Kernel()
+    {
+        using var provider = new ServiceCollection().AddScoutLlm(Config()).BuildServiceProvider();
+
+        var kernelChat = provider.GetRequiredService<Kernel>().GetRequiredService<IChatCompletionService>();
+
+        kernelChat.ShouldBeOfType<OpenAIChatCompletionService>();
+        provider.GetRequiredService<IChatCompletionService>().ShouldBeSameAs(kernelChat);
     }
 
     [Fact]
@@ -177,6 +199,15 @@ public sealed class LlmServiceCollectionExtensionsTests
             })
             .Build();
 
+    private static IConfiguration ChatGptPlanConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "ChatGptPlan",
+                ["Scout:Llm:ChatGptPlan:TokenFile"] = "/nonexistent/scout-chatgpt-token.json",
+            })
+            .Build();
+
     public static TheoryData<string, Func<IConfiguration>> ProviderConfigs() => new()
     {
         { "OpenAI", OpenAIConfig },
@@ -185,6 +216,7 @@ public sealed class LlmServiceCollectionExtensionsTests
         { "Mistral", MistralConfig },
         { "HuggingFace", HuggingFaceConfig },
         { "AzureAIInference", AzureAIInferenceConfig },
+        { "ChatGptPlan", ChatGptPlanConfig },
     };
 
     [Theory]
@@ -208,6 +240,43 @@ public sealed class LlmServiceCollectionExtensionsTests
         Should.NotThrow(() => new ServiceCollection().AddScoutLlm(config()));
     }
 
+    public static TheoryData<string, Func<IConfiguration>> AllProviderConfigs()
+    {
+        var all = new TheoryData<string, Func<IConfiguration>>
+        {
+            { "Ollama", () => Config() },
+            { "Gemini", GeminiConfig },
+        };
+        foreach (var row in ProviderConfigs())
+        {
+            all.Add((string)row[0], (Func<IConfiguration>)row[1]);
+        }
+
+        return all;
+    }
+
+    [Theory]
+    [MemberData(nameof(AllProviderConfigs))]
+    public void With_A_Guard_Key_Every_Providers_Kernel_Chat_Service_Is_The_Read_Only_Guard(
+        string expectedName, Func<IConfiguration> config)
+    {
+        _ = expectedName;
+        var guarded = new ConfigurationBuilder()
+            .AddConfiguration(config())
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Guard:TypeSafe:ApiKey"] = "ts-key",
+            })
+            .Build();
+        using var provider = new ServiceCollection().AddScoutLlm(guarded).BuildServiceProvider();
+        var kernel = provider.GetRequiredService<Kernel>();
+
+        kernel.GetRequiredService<IChatCompletionService>()
+            .ShouldBeOfType<Scout.Llm.Guard.ReadOnlyGuardChatCompletionService>();
+        kernel.Services.GetService<Microsoft.SemanticKernel.TextGeneration.ITextGenerationService>().ShouldBeNull();
+        kernel.Services.GetService<IChatClient>().ShouldBeNull();
+    }
+
     [Fact]
     public void AddScoutLlm_Throws_For_Unknown_Provider()
     {
@@ -223,6 +292,7 @@ public sealed class LlmServiceCollectionExtensionsTests
         ex.Message.ShouldContain("Mistral");
         ex.Message.ShouldContain("HuggingFace");
         ex.Message.ShouldContain("AzureAIInference");
+        ex.Message.ShouldContain("ChatGptPlan");
     }
 
     [Fact]

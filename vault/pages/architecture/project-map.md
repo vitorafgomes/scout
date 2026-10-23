@@ -1,8 +1,9 @@
 ---
 title: "Project map"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-23
+changes: "Plugin.Kubernetes added"
 page_type: longform
 status: active
 description: "Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it."
@@ -12,7 +13,7 @@ reliability: high
 
 # Project map
 
-> Twelve source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. Projects under `src/old` and `tests/old` are not in the solution.
+> Thirteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. Projects under `src/old` and `tests/old` are not in the solution.
 
 Derived from the `ProjectReference` items in each `.csproj`. Package references are listed on the service pages.
 
@@ -26,12 +27,13 @@ Derived from the `ProjectReference` items in each `.csproj`. Package references 
 | [[pages/services/adapter-slack]] | adapter | Conversation | `Scout.Adapter.Slack.Tests` |
 | [[pages/services/adapter-teams]] | adapter | Conversation | `Scout.Adapter.Teams.Tests` |
 | [[pages/services/plugin-github]] | plugin | none | `Scout.Plugin.GitHub.Tests` |
+| [[pages/services/plugin-kubernetes]] | plugin | none | `Scout.Plugin.Kubernetes.Tests` |
 | [[pages/services/control-plane-contracts]] | contracts | none | none of its own (`Scout.ControlPlane.Tests`) |
 | [[pages/services/control-plane]] | library | none | `Scout.ControlPlane.Tests` |
-| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, three adapters, Plugin.GitHub | `Scout.Host.Console.Tests` |
+| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, three adapters, Plugin.GitHub, Plugin.Kubernetes | `Scout.Host.Console.Tests` |
 | [[pages/services/host-control-plane]] | host | Contracts, ControlPlane | none of its own (`Scout.ControlPlane.Tests`) |
 
-`Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills` and `Scout.Plugin.GitHub` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:35` to `:50`).
+`Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.GitHub` and `Scout.Plugin.Kubernetes` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:36` to `:52`).
 
 ```mermaid
 flowchart TD
@@ -42,6 +44,7 @@ flowchart TD
     HC --> Slack[Adapter.Slack]
     HC --> Teams[Adapter.Teams]
     HC --> GH[Plugin.GitHub]
+    HC --> K8S[Plugin.Kubernetes]
     Conversation --> Llm
     Conversation --> Skills
     Discord --> Conversation

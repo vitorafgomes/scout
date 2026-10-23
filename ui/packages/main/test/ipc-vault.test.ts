@@ -265,6 +265,51 @@ describe('registerVaultHandlers', () => {
       expect(ipcMain.handlers.has(CHANNEL.vaultHas)).toBe(false);
       expect(ipcMain.handlers.has(CHANNEL.vaultDelete)).toBe(false);
       expect(ipcMain.handlers.has(CHANNEL.vaultIsAvailable)).toBe(false);
+      expect(ipcMain.handlers.has(CHANNEL.vaultGetPublic)).toBe(false);
     });
+  });
+
+  describe('vaultGetPublic: only non-secret keys can be read back', () => {
+    function spyVault() {
+      const vault = createVault(makeVaultDeps());
+      const getCalls: string[] = [];
+      const realGet = vault.get.bind(vault);
+      vault.get = async (key) => {
+        getCalls.push(key);
+        return realGet(key);
+      };
+      return { vault, getCalls };
+    }
+
+    it('returns the stored llm.provider and llm.cloud-model, and null when absent', async () => {
+      const { vault } = spyVault();
+      await vault.store('llm.provider', 'OpenAI');
+      registerVaultHandlers(ipcMain, vault, captureLogger);
+      const handler = ipcMain.handlers.get(CHANNEL.vaultGetPublic)!;
+
+      expect(await handler(NULL_EVENT, { key: 'llm.provider' })).toEqual({ value: 'OpenAI' });
+      expect(await handler(NULL_EVENT, { key: 'llm.cloud-model' })).toEqual({ value: null });
+    });
+
+    for (const key of ['llm.openai.api-key', 'guard.typesafe-api-key', 'discord.bot-token']) {
+      it(`rejects ${key} with vault/invalid-key and never reads the vault`, async () => {
+        const { vault, getCalls } = spyVault();
+        await vault.store('llm.openai.api-key', 'sk-secret');
+        await vault.store('discord.bot-token', 'bot-secret');
+        registerVaultHandlers(ipcMain, vault, captureLogger);
+        const handler = ipcMain.handlers.get(CHANNEL.vaultGetPublic)!;
+
+        let caught: (Error & { code?: string }) | undefined;
+        try {
+          await handler(NULL_EVENT, { key });
+        } catch (e: unknown) {
+          caught = e as Error & { code?: string };
+        }
+
+        expect(caught?.code).toBe('vault/invalid-key');
+        expect(caught?.message).not.toContain('secret');
+        expect(getCalls).toEqual([]);
+      });
+    }
   });
 });

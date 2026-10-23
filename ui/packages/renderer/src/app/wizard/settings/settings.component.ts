@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { readIpcError } from '@scout/shared';
+
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
 
@@ -11,6 +13,49 @@ import { WizardStore } from '../../core/wizard.store';
   template: `
     <main class="settings">
       <h1>Settings</h1>
+
+      <section class="card" data-test="access-section">
+        <h2>Who can use Scout</h2>
+        <p class="description" data-test="access-help">
+          Discord: turn on Developer Mode, right-click a user, Copy User ID. Slack: profile, More,
+          Copy member ID. Teams: the user's Bot Framework user ID, which starts with 29:.
+        </p>
+        <form class="access-add" (submit)="$event.preventDefault(); addUser()">
+          <input
+            type="text"
+            aria-label="User ID"
+            placeholder="User ID"
+            data-test="access-input"
+            [value]="newUserId()"
+            (input)="newUserId.set($any($event.target).value)"
+          />
+          <button
+            type="submit"
+            data-test="access-add"
+            [disabled]="accessBusy() || newUserId().trim() === ''"
+          >
+            Add
+          </button>
+        </form>
+        @if (accessError(); as error) {
+          <p class="error" role="alert" data-test="access-error">{{ error }}</p>
+        }
+        <ul class="access-list">
+          @for (id of allowedUserIds(); track id) {
+            <li>
+              <code [attr.data-test]="'access-user-' + id">{{ id }}</code>
+              <button
+                type="button"
+                [attr.data-test]="'access-remove-' + id"
+                [disabled]="accessBusy()"
+                (click)="removeUser(id)"
+              >
+                Remove
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
 
       <section class="card">
         <h2>Provisioning</h2>
@@ -110,6 +155,37 @@ import { WizardStore } from '../../core/wizard.store';
       .destructive:hover {
         background: #2b1010;
       }
+      .access-add {
+        display: flex;
+        gap: 8px;
+      }
+      .access-add input {
+        flex: 1;
+        background: #0f1117;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        color: #e4e8f0;
+        padding: 6px 10px;
+      }
+      .access-list {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .access-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+      }
+      .error {
+        color: #d45a5a;
+        font-size: 13px;
+        margin: 8px 0 0;
+      }
     `,
   ],
 })
@@ -119,12 +195,44 @@ export class SettingsComponent implements OnInit {
   private readonly router = inject(Router);
 
   readonly version = signal<string | null>(null);
+  readonly allowedUserIds = signal<readonly string[]>([]);
+  readonly newUserId = signal('');
+  readonly accessBusy = signal(false);
+  readonly accessError = signal<string | null>(null);
 
   ngOnInit(): void {
     void this.bridge
       .appGetVersion()
       .then((res) => this.version.set(res.version))
       .catch(() => this.version.set(null));
+    void this.bridge
+      .accessGet()
+      .then((res) => this.allowedUserIds.set(res.userIds))
+      .catch((err: unknown) => this.accessError.set(readIpcError(err).message));
+  }
+
+  async addUser(): Promise<void> {
+    if (await this.saveAllowedUsers([...this.allowedUserIds(), this.newUserId()])) {
+      this.newUserId.set('');
+    }
+  }
+
+  async removeUser(id: string): Promise<void> {
+    await this.saveAllowedUsers(this.allowedUserIds().filter((existing) => existing !== id));
+  }
+
+  private async saveAllowedUsers(userIds: readonly string[]): Promise<boolean> {
+    this.accessBusy.set(true);
+    this.accessError.set(null);
+    try {
+      this.allowedUserIds.set((await this.bridge.accessSet({ userIds })).userIds);
+      return true;
+    } catch (err: unknown) {
+      this.accessError.set(readIpcError(err).message);
+      return false;
+    } finally {
+      this.accessBusy.set(false);
+    }
   }
 
   async reprovision(): Promise<void> {

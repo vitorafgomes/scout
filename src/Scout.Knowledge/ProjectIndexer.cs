@@ -43,7 +43,9 @@ public sealed class ProjectIndexer(
 
     /// <summary>
     /// Read, chunk, embed, and build the chunk records for a single file. Returns an empty
-    /// list when the file yields no chunks or fails to read/embed (logged, never thrown).
+    /// list when the file yields no chunks or fails to read/embed (logged, never thrown),
+    /// except <see cref="NotSupportedException"/> from a provider without embeddings,
+    /// which propagates so indexing stops at the first file.
     /// </summary>
     /// <param name="project">The owning project; supplies name and repo root.</param>
     /// <param name="absolutePath">Absolute path to the file on disk.</param>
@@ -88,7 +90,7 @@ public sealed class ProjectIndexer(
 
             return records;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException and not NotSupportedException)
         {
             logger.LogWarning(ex, "Skipping file that failed to index: {Path}", relPath);
             return Array.Empty<ChunkRecord>();

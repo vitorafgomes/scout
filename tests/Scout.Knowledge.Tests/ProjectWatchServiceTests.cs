@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -43,7 +44,8 @@ public sealed class ProjectWatchServiceTests : IDisposable
     private ProjectWatchService Service(
         IProjectKnowledgeStore store,
         IEmbeddingGenerator<string, Embedding<float>>? generator = null,
-        string? repoPath = null)
+        string? repoPath = null,
+        ILogger<ProjectWatchService>? logger = null)
     {
         var options = Options.Create(new ProjectsOptions
         {
@@ -55,7 +57,7 @@ public sealed class ProjectWatchServiceTests : IDisposable
             Indexer(generator ?? StubGenerator(), store),
             store,
             options,
-            NullLogger<ProjectWatchService>.Instance);
+            logger ?? NullLogger<ProjectWatchService>.Instance);
     }
 
     private static async Task PollUntilAsync(Func<bool> condition)
@@ -104,6 +106,55 @@ public sealed class ProjectWatchServiceTests : IDisposable
             Arg.Any<CancellationToken>());
 
         await service.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Changes_Without_Embeddings_Log_Reindexing_Off_Once_Without_Stack()
+    {
+        var generator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        generator
+            .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<GeneratedEmbeddings<Embedding<float>>>(_ => throw new NotSupportedException("Embeddings are not available."));
+        var logger = new RecordingLogger();
+        using var service = Service(Substitute.For<IProjectKnowledgeStore>(), generator, logger: logger);
+        await StartAndWaitReadyAsync(service);
+        logger.Entries.Clear();
+
+        File.WriteAllText(Path.Combine(_repoPath, "Foo.cs"), "public class Foo { }\n");
+        await PollUntilAsync(() => generator.ReceivedCalls().Any());
+        File.WriteAllText(Path.Combine(_repoPath, "Bar.cs"), "public class Bar { }\n");
+        await PollUntilAsync(() => generator.ReceivedCalls().Count() >= 2);
+        await service.StopAsync(CancellationToken.None);
+
+        var entry = logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Information);
+        entry.Message.ShouldBe("Project re-indexing is off: the AI provider has no embeddings.");
+        entry.Exception.ShouldBeNull();
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class RecordingLogger : ILogger<ProjectWatchService>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (Entries)
+            {
+                Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
+            }
+        }
     }
 
     [Fact]

@@ -36,6 +36,10 @@ extraResources:
     to: worker
     filter:
       - "**/*"
+  - from: ../src/Scout.ControlPlane.Contracts/protos
+    to: protos
+    filter:
+      - "*.proto"
 
 electronLanguages:
   - en-US

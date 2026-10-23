@@ -43,7 +43,8 @@ public sealed class StreamPump
     /// (<see cref="LlmRateLimitException"/>) finalizes via
     /// <see cref="IResponseSink.CompleteAsync"/> with a friendly user-facing
     /// message, and so does a provider quota or billing refusal
-    /// (<see cref="LlmQuotaExceededException"/>); any other mid-stream failure is reported via
+    /// (<see cref="LlmQuotaExceededException"/>) or a sign-in the provider needs
+    /// renewed (<see cref="LlmSignInRequiredException"/>); any other mid-stream failure is reported via
     /// <see cref="IResponseSink.FailAsync"/>. Neither escapes.
     /// </summary>
     public async Task RunAsync(
@@ -126,6 +127,17 @@ public sealed class StreamPump
             var body = buffer.Length == 0
                 ? _options.QuotaExceededMessage
                 : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.QuotaExceededMessage;
+            await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
+        }
+        catch (LlmSignInRequiredException)
+        {
+            _options.Logger?.LogWarning(
+                "StreamPump stopped: the AI provider needs the user to sign in again; finalizing with a user-facing message.");
+            var body = buffer.Length == 0
+                ? _options.SignInRequiredMessage
+                : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.SignInRequiredMessage;
             await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
                 .ConfigureAwait(false);
             return;

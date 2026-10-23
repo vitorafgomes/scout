@@ -1,7 +1,7 @@
 ---
 title: "Control plane client"
 version: "1.0"
-updated: 2026-10-22
+updated: 2026-10-23
 date: 2026-10-22
 changes: "Initial initiative page"
 page_type: roadmap
@@ -33,8 +33,9 @@ Providers and Features screens render live data from the control plane on Linux 
 
 ## Status
 
-- **As of 2026-10-22:** phase 1 done on Linux: the desktop main process launches the real host and round-trips `ListProviders` over gRPC/UDS in `bun test`. The macOS and Windows legs of `ui-ci.yml` have not run it yet. Detail on the Consumers section of [[pages/services/host-control-plane]].
-- **Next milestone:** green macOS and Windows CI legs, then phase 2 (codegen and packaged protos).
+- **As of 2026-10-23:** the Features screen runs on the control plane on Linux, verified against the real host in `bun test`; macOS is expected to behave the same, but its `ui-ci.yml` leg has not run the new tests. The app starts the host at launch, and the packaged app ships the host binary and the protos. Turning a feature on is refused by the host (`NullFeatureActivator`), and the screen says so. Detail on the Consumers section of [[pages/services/host-control-plane]] and the Control plane section of [[pages/services/desktop-ui]].
+- **As of 2026-10-22:** phase 1 done on Linux: the desktop main process launches the real host and round-trips `ListProviders` over gRPC/UDS in `bun test`.
+- **Next milestone:** the Providers screen on the control plane (phase 3, second screen); green macOS and Windows CI legs.
 - **Blocker:** none.
 
 ## Workstreams / phases
@@ -45,12 +46,12 @@ Providers and Features screens render live data from the control plane on Linux 
 - **Success criteria:** the test passes on Linux and macOS in `ui-ci.yml`; a written verdict on Windows named pipes (shim, or stdio fallback).
 
 ### Phase 2 - Contract codegen
-- **Status:** not started
+- **Status:** packaged protos done on 2026-10-23 (`resources/protos`, loaded at runtime by `@grpc/proto-loader`); `ts-proto` codegen not started, so `FeatureDto` and the client's wire shapes are still written by hand.
 - **Scope:** `ts-proto` wired into the `shared` package build; generated types replace the matching `ipc-contract.ts` shapes; a CI check that regenerated code matches the committed code.
 - **Success criteria:** `bun run typecheck` clean with no hand-written duplicate of a proto message.
 
 ### Phase 3 - Screens on the control plane
-- **Status:** not started
+- **Status:** Features done on Linux and macOS on 2026-10-23 (macOS not yet run in CI); Providers next, then llm and whisper. The host has no restart policy yet; the launcher environment hardening landed with it.
 - **Scope:** providers, features, llm and whisper handlers call the client; `ui/packages/main/src/worker/http-client.ts` and the `SCOUT_HTTP=` marker are deleted; Ollama pull progress streams through the gRPC server stream.
 - **Success criteria:** Providers and Features screens render live data; the "backend unavailable" state appears only when the control-plane host is down.
 

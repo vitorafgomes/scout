@@ -42,9 +42,12 @@ describe('VAULT_KEYS', () => {
       'llm.model',
       'llm.endpoint',
       'llm.api-key',
+      'llm.openai.api-key',
+      'llm.gemini.api-key',
       'llm.cloud-model',
       'stt.provider',
       'stt.model',
+      'guard.typesafe-api-key',
     ]);
   });
 
@@ -71,12 +74,18 @@ describe('VAULT_KEYS', () => {
           return 'llm-endpoint';
         case 'llm.api-key':
           return 'llm-api-key';
+        case 'llm.openai.api-key':
+          return 'llm-openai-api-key';
+        case 'llm.gemini.api-key':
+          return 'llm-gemini-api-key';
         case 'llm.cloud-model':
           return 'llm-cloud-model';
         case 'stt.provider':
           return 'stt-provider';
         case 'stt.model':
           return 'stt-model';
+        case 'guard.typesafe-api-key':
+          return 'guard-typesafe-api-key';
         default: {
           const _exhaustive: never = key;
           return _exhaustive;

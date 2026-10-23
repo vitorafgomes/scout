@@ -13,56 +13,73 @@ import type { FeatureViewModel } from '../core/features.store';
           <h3 class="title">{{ feature.displayName }}</h3>
           <p class="desc">{{ feature.description }}</p>
         </div>
-        <span
-          class="badge"
-          [class.badge--ok]="feature.status === 'enabled'"
-          [class.badge--warn]="feature.status === 'needs-credentials'"
-          [class.badge--off]="feature.status === 'disabled'"
-          [class.badge--err]="feature.status === 'error'"
-          [attr.data-test]="'badge-' + feature.id"
-        >
-          {{ badgeLabel() }}
-        </span>
+        @if (connection !== null) {
+          @if (connection !== 'unknown') {
+            <span
+              class="badge"
+              [class.badge--ok]="connection === 'connected'"
+              [class.badge--off]="connection === 'not-connected'"
+              [attr.data-test]="'badge-' + feature.id"
+            >
+              {{ connection === 'connected' ? 'Connected' : 'Not connected' }}
+            </span>
+          }
+        } @else {
+          <span
+            class="badge"
+            [class.badge--ok]="feature.status === 'enabled'"
+            [class.badge--warn]="feature.status === 'needs-credentials'"
+            [class.badge--off]="feature.status === 'disabled'"
+            [class.badge--err]="feature.status === 'error'"
+            [attr.data-test]="'badge-' + feature.id"
+          >
+            {{ badgeLabel() }}
+          </span>
+        }
       </header>
 
-      @if (feature.status === 'error' && feature.lastError !== null) {
+      @if (connection === null && feature.status === 'error' && feature.lastError !== null) {
         <p class="err" [attr.data-test]="'err-' + feature.id">{{ feature.lastError }}</p>
       }
 
-      <footer class="actions">
-        <label class="toggle">
-          <input
-            type="checkbox"
-            [checked]="feature.enabled"
-            [disabled]="toggleDisabled()"
-            [attr.data-test]="'toggle-' + feature.id"
-            (change)="toggle.emit()"
-          />
-          <span>{{ feature.enabled ? 'Enabled' : 'Disabled' }}</span>
-        </label>
+      <ng-content />
 
-        @if (feature.hasCredentials) {
+      @if (connection === null) {
+        <footer class="actions">
+          <label class="toggle">
+            <input
+              type="checkbox"
+              [checked]="feature.enabled"
+              [disabled]="toggleDisabled()"
+              [attr.data-test]="'toggle-' + feature.id"
+              (change)="toggle.emit()"
+            />
+            <span>{{ feature.enabled ? 'Enabled' : 'Disabled' }}</span>
+          </label>
+
+          @if (feature.hasCredentials) {
+            <button
+              type="button"
+              class="btn btn--secondary"
+              [attr.data-test]="'clear-' + feature.id"
+              [disabled]="feature.busy"
+              (click)="clearCredentials.emit()"
+            >
+              Clear credentials
+            </button>
+          }
+
           <button
             type="button"
-            class="btn btn--secondary"
-            [attr.data-test]="'clear-' + feature.id"
+            class="btn btn--primary"
+            [attr.data-test]="'cta-' + feature.id"
             [disabled]="feature.busy"
-            (click)="clearCredentials.emit()"
+            (click)="openCredentialDialog.emit()"
           >
-            Clear credentials
+            {{ feature.hasCredentials ? 'Update credentials' : 'Add credentials' }}
           </button>
-        }
-
-        <button
-          type="button"
-          class="btn btn--primary"
-          [attr.data-test]="'cta-' + feature.id"
-          [disabled]="feature.busy"
-          (click)="openCredentialDialog.emit()"
-        >
-          {{ feature.hasCredentials ? 'Update credentials' : 'Add credentials' }}
-        </button>
-      </footer>
+        </footer>
+      }
     </article>
   `,
   styles: [
@@ -165,6 +182,8 @@ import type { FeatureViewModel } from '../core/features.store';
 })
 export class FeatureCardComponent {
   @Input({ required: true }) feature!: FeatureViewModel;
+  /** Set for a feature whose connection the main process owns: replaces the control-plane badge and hides the toggle and credential actions. */
+  @Input() connection: 'connected' | 'not-connected' | 'unknown' | null = null;
 
   @Output() readonly toggle = new EventEmitter<void>();
   @Output() readonly openCredentialDialog = new EventEmitter<void>();

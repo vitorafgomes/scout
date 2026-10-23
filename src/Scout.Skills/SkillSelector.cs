@@ -10,7 +10,9 @@ namespace Scout.Skills;
 /// <see cref="SelectAsync"/> call, so DI build and host startup perform zero
 /// file I/O, embedding, or network work. A successful build is cached for the
 /// process lifetime; a failed build is not, and is attempted again on a later
-/// call once <see cref="IndexRetryInterval"/> has passed.
+/// call once <see cref="IndexRetryInterval"/> has passed. When the provider has no
+/// embeddings (<see cref="NotSupportedException"/>), auto-selection stays off for
+/// the process and is never retried.
 /// Never throws: returns an empty list on any failure.
 /// </summary>
 public sealed class SkillSelector : ISkillSelector
@@ -27,6 +29,7 @@ public sealed class SkillSelector : ISkillSelector
     private readonly Lock _indexGate = new();
     private Task<IReadOnlyList<IndexedSkill>?>? _index;
     private DateTimeOffset _retryAfter;
+    private bool _buildFailureLogged;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SkillSelector"/> class.
@@ -132,9 +135,26 @@ public sealed class SkillSelector : ISkillSelector
             _logger.LogInformation("Indexed {Count} skill(s) from {Directory}.", indexed.Count, directory);
             return indexed;
         }
+        catch (NotSupportedException)
+        {
+            _retryAfter = DateTimeOffset.MaxValue;
+            _logger.LogInformation(
+                "Skill auto-selection is off: the AI provider has no embeddings; skills stay available through list_skills and load_skill.");
+            return null;
+        }
         catch (Exception ex)
         {
             _retryAfter = _timeProvider.GetUtcNow() + IndexRetryInterval;
+            if (_buildFailureLogged)
+            {
+                _logger.LogWarning(
+                    "Skill index build failed again ({Reason}); retrying after {RetryAfter}.",
+                    ex.Message,
+                    _retryAfter);
+                return null;
+            }
+
+            _buildFailureLogged = true;
             _logger.LogWarning(
                 ex,
                 "Failed to build skill index; running with no skills until a retry after {RetryAfter}.",

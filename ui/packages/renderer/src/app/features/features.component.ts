@@ -3,40 +3,71 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import type { FeatureId } from '@scout/shared';
 
 import { FeaturesStore, type FeatureViewModel } from '../core/features.store';
+import { ScoutBridgeService } from '../core/scout-bridge';
 
 import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
+import { GitHubConnectComponent } from './github-connect.component';
+import { KubernetesConnectComponent } from './kubernetes-connect.component';
+
+type Connection = 'connected' | 'not-connected' | 'unknown';
+
+export const NO_ALLOWED_USERS_WARNING =
+  'Nobody can use this connection from chat until you add allowed users in Settings.';
 
 @Component({
   selector: 'sc-features',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FeatureCardComponent, CredentialDialogComponent],
+  imports: [
+    FeatureCardComponent,
+    CredentialDialogComponent,
+    GitHubConnectComponent,
+    KubernetesConnectComponent,
+  ],
   template: `
     <main class="page">
       <header class="header">
         <h1>Features</h1>
-        <p class="lede">
-          Connect Scout to external tools. Each feature stores its credentials in the OS keyring and
-          can be toggled independently.
-        </p>
+        <p class="lede">Connect Scout to external tools.</p>
       </header>
 
       @if (store.backendUnavailable()) {
         <div class="unavailable-notice" data-test="backend-unavailable">
-          Backend control plane arrives in the next step. Features will appear once the worker is
-          running.
+          The Scout control plane is not running, so features cannot be shown.
         </div>
       } @else {
         <div class="features-grid" data-test="features-grid">
           @for (f of store.features(); track f.id) {
             <sc-feature-card
               [feature]="f"
+              [connection]="connectionOf(f.id)"
               (toggle)="store.toggle(f.id)"
               (openCredentialDialog)="openDialog(f)"
               (clearCredentials)="store.clearCredentials(f.id)"
-            />
+            >
+              @if (f.id === 'github') {
+                <sc-github-connect
+                  (connectedChange)="githubConnection.set($event ? 'connected' : 'not-connected')"
+                />
+              }
+              @if (f.id === 'kubernetes') {
+                <sc-kubernetes-connect
+                  (connectedChange)="
+                    kubernetesConnection.set($event ? 'connected' : 'not-connected')
+                  "
+                />
+              }
+              @if (connectionOf(f.id) === 'connected' && noAllowedUsers()) {
+                <p class="access-warning" [attr.data-test]="'access-warning-' + f.id">
+                  {{ noAllowedUsersWarning }}
+                </p>
+              }
+            </sc-feature-card>
           }
+        </div>
+        <div class="notes" data-test="features-notes">
+          <p>GitHub and Kubernetes are used by the chat bot once connected.</p>
         </div>
       }
 
@@ -83,6 +114,19 @@ import { FeatureCardComponent } from './feature-card.component';
         grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
         gap: 16px;
       }
+      .notes {
+        margin-top: 16px;
+        font-size: 13px;
+        color: #7b8299;
+      }
+      .notes p {
+        margin: 0 0 4px;
+      }
+      .access-warning {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: #e0b04a;
+      }
       .unavailable-notice {
         padding: 16px 20px;
         border: 1px solid #2d3348;
@@ -96,9 +140,29 @@ import { FeatureCardComponent } from './feature-card.component';
 })
 export class FeaturesComponent implements OnInit {
   readonly store = inject(FeaturesStore);
+  private readonly bridge = inject(ScoutBridgeService);
+  readonly noAllowedUsers = signal(false);
+  readonly noAllowedUsersWarning = NO_ALLOWED_USERS_WARNING;
   readonly activeDialog = signal<FeatureViewModel | null>(null);
+  readonly githubConnection = signal<Connection>('unknown');
+  readonly kubernetesConnection = signal<Connection>('unknown');
+
+  connectionOf(id: FeatureId): Connection | null {
+    switch (id) {
+      case 'github':
+        return this.githubConnection();
+      case 'kubernetes':
+        return this.kubernetesConnection();
+      default:
+        return null;
+    }
+  }
 
   async ngOnInit(): Promise<void> {
+    void this.bridge.accessGet().then(
+      (res) => this.noAllowedUsers.set(res.userIds.length === 0),
+      () => this.noAllowedUsers.set(false),
+    );
     await this.store.load();
   }
 

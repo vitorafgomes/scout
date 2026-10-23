@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  ControlPlaneUnavailableError,
   DiscordTokenExchangeError,
   ExternalHostNotAllowedError,
   OAuthLoopbackPortInUseError,
@@ -11,6 +12,8 @@ import {
   WorkerBinaryMissingError,
   WorkerSpawnError,
   deserializeError,
+  encodeIpcErrorMessage,
+  readIpcError,
   serializeError,
   type SerializedScoutError,
 } from '../src/errors.js';
@@ -186,5 +189,36 @@ describe('deserializeError fallbacks', () => {
     const restored = deserializeError(payload);
     expect(restored).toBeInstanceOf(DiscordTokenExchangeError);
     expect((restored as DiscordTokenExchangeError).reason).toBe('unknown');
+  });
+});
+
+describe('error code across the Electron invoke boundary', () => {
+  function asRendererSees(channel: string, handlerMessage: string): Error {
+    return new Error(`Error invoking remote method '${channel}': Error: ${handlerMessage}`);
+  }
+
+  test('the renderer reads back the code and the original message the main process threw', () => {
+    const handlerMessage = encodeIpcErrorMessage(
+      serializeError(new ControlPlaneUnavailableError('Control plane not reachable')),
+    );
+
+    const read = readIpcError(asRendererSees('scout:features.list', handlerMessage));
+
+    expect(read).toEqual({
+      code: 'control-plane/unavailable',
+      message: 'Control plane not reachable',
+    });
+  });
+
+  test('an own code property wins over the message marker', () => {
+    const err = Object.assign(new Error('[scout:control-plane/unavailable] down'), {
+      code: 'control-plane/not-implemented',
+    });
+
+    expect(readIpcError(err).code).toBe('control-plane/not-implemented');
+  });
+
+  test('an error without a code or marker keeps its message and has no code', () => {
+    expect(readIpcError(new Error('boom'))).toEqual({ code: null, message: 'boom' });
   });
 });

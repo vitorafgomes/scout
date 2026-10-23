@@ -3,6 +3,7 @@ import {
   CHANNEL,
   FEATURE_IDS,
   ScoutError,
+  encodeIpcErrorMessage,
   serializeError,
   type FeatureDto,
   type FeatureId,
@@ -11,12 +12,22 @@ import {
   type FeatureSetupRequest,
   type FeaturesListResponse,
 } from '@scout/shared';
-import type { WorkerHttpClient } from '../worker/http-client.js';
+import type { ControlPlaneClient } from '../control-plane/client.js';
 import type { Logger } from '../util/logger.js';
+
+export type FeaturesClient = Pick<
+  ControlPlaneClient,
+  | 'listFeatures'
+  | 'setFeatureCredentials'
+  | 'setupFeature'
+  | 'deleteFeatureCredentials'
+  | 'enableFeature'
+  | 'disableFeature'
+>;
 
 function throwSerialized(err: unknown): never {
   const serialized = serializeError(err);
-  throw Object.assign(new Error(serialized.message), { code: serialized.code });
+  throw Object.assign(new Error(encodeIpcErrorMessage(serialized)), { code: serialized.code });
 }
 
 function assertFeatureId(id: string): asserts id is FeatureId {
@@ -27,12 +38,12 @@ function assertFeatureId(id: string): asserts id is FeatureId {
 
 export function registerFeaturesHandlers(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
-  client: WorkerHttpClient,
+  getClient: () => Promise<FeaturesClient>,
   logger: Logger,
 ): () => void {
   ipcMain.handle(CHANNEL.featuresList, async (): Promise<FeaturesListResponse> => {
     try {
-      const features = await client.get<FeatureDto[]>('/features');
+      const features = await (await getClient()).listFeatures();
       return { features };
     } catch (err: unknown) {
       logger.warn('features: list failed', { err: String(err) });
@@ -45,7 +56,7 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureSetCredentialsRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
-        return await client.post<FeatureDto>(`/features/${req.id}/credentials`, req.body);
+        return await (await getClient()).setFeatureCredentials(req.id, req.body);
       } catch (err: unknown) {
         logger.warn('features: setCredentials failed', { id: req.id, err: String(err) });
         throwSerialized(err);
@@ -58,10 +69,7 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureSetupRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
-        return await client.post<FeatureDto>(`/features/${req.id}/setup`, {
-          credentials: req.credentials,
-          settings: req.settings,
-        });
+        return await (await getClient()).setupFeature(req.id, req.credentials, req.settings);
       } catch (err: unknown) {
         logger.warn('features: setup failed', { id: req.id, err: String(err) });
         throwSerialized(err);
@@ -74,7 +82,7 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureIdRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
-        return await client.delete<FeatureDto>(`/features/${req.id}/credentials`);
+        return await (await getClient()).deleteFeatureCredentials(req.id);
       } catch (err: unknown) {
         logger.warn('features: deleteCredentials failed', { id: req.id, err: String(err) });
         throwSerialized(err);
@@ -87,7 +95,7 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureIdRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
-        return await client.post<FeatureDto>(`/features/${req.id}/enable`);
+        return await (await getClient()).enableFeature(req.id);
       } catch (err: unknown) {
         logger.warn('features: enable failed', { id: req.id, err: String(err) });
         throwSerialized(err);
@@ -100,7 +108,7 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureIdRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
-        return await client.post<FeatureDto>(`/features/${req.id}/disable`);
+        return await (await getClient()).disableFeature(req.id);
       } catch (err: unknown) {
         logger.warn('features: disable failed', { id: req.id, err: String(err) });
         throwSerialized(err);

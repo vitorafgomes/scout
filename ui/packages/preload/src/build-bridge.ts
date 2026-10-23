@@ -30,6 +30,28 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    chatgptSignIn() {
+      return ipc.invoke(CHANNEL.chatgptSignIn) as ReturnType<ScoutBridge['chatgptSignIn']>;
+    },
+
+    chatgptCancelSignIn() {
+      return ipc.invoke(CHANNEL.chatgptCancelSignIn) as ReturnType<
+        ScoutBridge['chatgptCancelSignIn']
+      >;
+    },
+
+    chatgptListModels() {
+      return ipc.invoke(CHANNEL.chatgptListModels) as ReturnType<ScoutBridge['chatgptListModels']>;
+    },
+
+    chatgptSignOut() {
+      return ipc.invoke(CHANNEL.chatgptSignOut) as ReturnType<ScoutBridge['chatgptSignOut']>;
+    },
+
+    chatgptStatus() {
+      return ipc.invoke(CHANNEL.chatgptStatus) as ReturnType<ScoutBridge['chatgptStatus']>;
+    },
+
     vaultStore(req) {
       return ipc.invoke(CHANNEL.vaultStore, req) as ReturnType<ScoutBridge['vaultStore']>;
     },
@@ -40,6 +62,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     vaultDelete(req) {
       return ipc.invoke(CHANNEL.vaultDelete, req) as ReturnType<ScoutBridge['vaultDelete']>;
+    },
+
+    vaultGetPublic(req) {
+      return ipc.invoke(CHANNEL.vaultGetPublic, req) as ReturnType<ScoutBridge['vaultGetPublic']>;
     },
 
     vaultIsAvailable() {
@@ -170,6 +196,16 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    validateProviderKey(req) {
+      return ipc.invoke(CHANNEL.providersValidateKey, req) as ReturnType<
+        ScoutBridge['validateProviderKey']
+      >;
+    },
+
+    llmListModels(req) {
+      return ipc.invoke(CHANNEL.llmListModels, req) as ReturnType<ScoutBridge['llmListModels']>;
+    },
+
     featuresList() {
       return ipc.invoke(CHANNEL.featuresList) as ReturnType<ScoutBridge['featuresList']>;
     },
@@ -196,6 +232,52 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     featureDisable(req) {
       return ipc.invoke(CHANNEL.featureDisable, req) as ReturnType<ScoutBridge['featureDisable']>;
+    },
+
+    githubSignIn() {
+      return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
+    },
+
+    githubStatus() {
+      return ipc.invoke(CHANNEL.githubStatus) as ReturnType<ScoutBridge['githubStatus']>;
+    },
+
+    githubCancel() {
+      return ipc.invoke(CHANNEL.githubCancel) as ReturnType<ScoutBridge['githubCancel']>;
+    },
+
+    githubSignOut() {
+      return ipc.invoke(CHANNEL.githubSignOut) as ReturnType<ScoutBridge['githubSignOut']>;
+    },
+
+    githubSaveToken(req) {
+      return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
+    },
+
+    kubernetesDetect() {
+      return ipc.invoke(CHANNEL.kubernetesDetect) as ReturnType<ScoutBridge['kubernetesDetect']>;
+    },
+
+    kubernetesUse(req) {
+      return ipc.invoke(CHANNEL.kubernetesUse, req) as ReturnType<ScoutBridge['kubernetesUse']>;
+    },
+
+    kubernetesStatus() {
+      return ipc.invoke(CHANNEL.kubernetesStatus) as ReturnType<ScoutBridge['kubernetesStatus']>;
+    },
+
+    kubernetesDisconnect() {
+      return ipc.invoke(CHANNEL.kubernetesDisconnect) as ReturnType<
+        ScoutBridge['kubernetesDisconnect']
+      >;
+    },
+
+    accessGet() {
+      return ipc.invoke(CHANNEL.accessGet) as ReturnType<ScoutBridge['accessGet']>;
+    },
+
+    accessSet(req) {
+      return ipc.invoke(CHANNEL.accessSet, req) as ReturnType<ScoutBridge['accessSet']>;
     },
   };
 }

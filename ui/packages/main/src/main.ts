@@ -1,8 +1,14 @@
-import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, powerMonitor, shell, session } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readlink as fsReadlink, unlink as fsUnlink } from 'node:fs/promises';
+import {
+  readlink as fsReadlink,
+  unlink as fsUnlink,
+  writeFile as fsWriteFile,
+  rename as fsRename,
+  rm as fsRm,
+} from 'node:fs/promises';
 import os from 'node:os';
 import { createLogger } from './util/logger.js';
 import { tryRecoverStaleLock } from './util/singleton-lock.js';
@@ -20,14 +26,32 @@ import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
+import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
+import { registerChatGptHandlers } from './ipc/chatgpt.js';
+import { ChatGptAuth } from './oauth/chatgpt-auth.js';
+import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
+import { readKubernetesSelection, registerKubernetesHandlers } from './ipc/kubernetes.js';
+import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
+import { detectKubeconfig } from './kubernetes/kubeconfig.js';
+import {
+  GITHUB_APP_CLIENT_ID,
+  GITHUB_APP_SLUG,
+  GitHubAuth,
+  abortableSleep,
+} from './oauth/github-auth.js';
 import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
 import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
-import { resolveWorkerBinary } from './worker/resolve-binary.js';
-import { buildEnv } from './worker/build-env.js';
+import {
+  resolveControlPlaneBinary,
+  resolveProtoDir,
+  resolveWorkerBinary,
+} from './worker/resolve-binary.js';
+import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
+import { buildEnv, migrateLegacyApiKey } from './worker/build-env.js';
 import type { Supervisor } from './worker/supervisor.js';
 
 const logger = createLogger('main');
@@ -88,6 +112,7 @@ const CSP_DEV = [
 
 let mainWindow: BrowserWindow | null = null;
 let supervisor: Supervisor | null = null;
+let controlPlane: ControlPlaneConnection | null = null;
 let unregisterVault: (() => void) | null = null;
 let unregisterDetect: (() => void) | null = null;
 let unregisterApp: (() => void) | null = null;
@@ -99,6 +124,13 @@ let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
+let unregisterProviderKeys: (() => void) | null = null;
+let unregisterChatGpt: (() => void) | null = null;
+let chatGptAuth: ChatGptAuth | null = null;
+let unregisterGitHub: (() => void) | null = null;
+let unregisterKubernetes: (() => void) | null = null;
+let unregisterAccess: (() => void) | null = null;
+let gitHubAuth: GitHubAuth | null = null;
 
 app
   .whenReady()
@@ -124,6 +156,11 @@ app
 
     const vault = createVault(createProductionVaultDeps(logger.child({ module: 'vault' })));
     unregisterVault = registerVaultHandlers(ipcMain, vault, logger.child({ module: 'vault' }));
+    await migrateLegacyApiKey(vault).catch((err: unknown) => {
+      logger.warn('vault: legacy API key not migrated', {
+        error: err instanceof Error ? err.name : typeof err,
+      });
+    });
 
     unregisterDetect = registerDetectHandler(
       ipcMain,
@@ -145,6 +182,73 @@ app
       logger.child({ module: 'discord' }),
     );
 
+    const chatGptTokenFile = path.join(app.getPath('userData'), 'chatgpt-token.json');
+    chatGptAuth = new ChatGptAuth({
+      fetch: globalThis.fetch,
+      awaitCallback,
+      findFreePort,
+      openExternal: (url) => shell.openExternal(url),
+      vault,
+      tokenFilePath: chatGptTokenFile,
+      fs: { writeFile: fsWriteFile, rename: fsRename, rm: fsRm },
+      now: () => Date.now(),
+      logger: logger.child({ module: 'chatgpt' }),
+    });
+    unregisterChatGpt = registerChatGptHandlers(
+      ipcMain,
+      chatGptAuth,
+      logger.child({ module: 'chatgpt' }),
+    );
+    chatGptAuth.start().catch((err: unknown) => {
+      logger.warn('chatgpt: start failed', { err: String(err) });
+    });
+
+    const gitHubTokenFile = path.join(app.getPath('userData'), 'github-token.json');
+    const gitHubLogger = logger.child({ module: 'github' });
+    const auth = new GitHubAuth({
+      fetch: globalThis.fetch,
+      vault,
+      tokenFilePath: gitHubTokenFile,
+      fs: { writeFile: fsWriteFile, rename: fsRename, rm: fsRm },
+      now: () => Date.now(),
+      sleep: abortableSleep,
+      clientId: process.env['SCOUT_GITHUB_APP_CLIENT_ID'] || GITHUB_APP_CLIENT_ID,
+      appSlug: process.env['SCOUT_GITHUB_APP_SLUG'] || GITHUB_APP_SLUG,
+      onConnectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, gitHubLogger);
+      },
+      onResume: (listener) => {
+        powerMonitor.on('resume', listener);
+        return () => powerMonitor.removeListener('resume', listener);
+      },
+      logger: gitHubLogger,
+    });
+    gitHubAuth = auth;
+    unregisterGitHub = registerGitHubHandlers(ipcMain, auth, gitHubLogger);
+    auth.start().catch((err: unknown) => {
+      gitHubLogger.warn('github: start failed', { err: String(err) });
+    });
+
+    const kubernetesLogger = logger.child({ module: 'kubernetes' });
+    unregisterKubernetes = registerKubernetesHandlers(ipcMain, {
+      vault,
+      detect: () =>
+        detectKubeconfig({ env: process.env, homedir: os.homedir(), logger: kubernetesLogger }),
+      onSelectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, kubernetesLogger);
+      },
+      logger: kubernetesLogger,
+    });
+
+    const accessLogger = logger.child({ module: 'access' });
+    unregisterAccess = registerAccessHandlers(ipcMain, {
+      vault,
+      onAllowedUsersChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, accessLogger);
+      },
+      logger: accessLogger,
+    });
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -157,7 +261,14 @@ app
           cwd: __dirname,
         }),
       // env is assembled by buildEnv; never logged — it contains secrets
-      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key) }),
+      buildEnv: async () =>
+        buildEnv({
+          vaultGet: (key) => vault.get(key),
+          chatGptTokenFile,
+          gitHubEnv: await auth.workerEnv(),
+          kubernetesSelection: await readKubernetesSelection(vault),
+          allowedUserIds: await readAllowedUserIds(vault),
+        }),
     });
 
     unregisterWorker = registerWorkerHandlers(
@@ -178,13 +289,44 @@ app
       logger.child({ module: 'providers' }),
     );
 
+    const binaryDeps = {
+      app,
+      resourcesPath: process.resourcesPath,
+      platform: process.platform,
+      arch: process.arch,
+      cwd: __dirname,
+    };
+    const connection = connectControlPlane({
+      spawn,
+      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
+      protoDir: resolveProtoDir(binaryDeps),
+      logger: logger.child({ module: 'control-plane' }),
+      platform: process.platform,
+    });
+    controlPlane = connection;
+
     unregisterFeatures = registerFeaturesHandlers(
       ipcMain,
-      workerHttpClient,
+      () => connection.client,
       logger.child({ module: 'features' }),
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
+    const unregisterKeyCheck = registerProviderKeyHandlers(
+      ipcMain,
+      globalThis.fetch,
+      logger.child({ module: 'provider-keys' }),
+    );
+    const unregisterModelList = registerProviderModelHandlers(
+      ipcMain,
+      globalThis.fetch,
+      vault,
+      logger.child({ module: 'provider-keys' }),
+    );
+    unregisterProviderKeys = () => {
+      unregisterKeyCheck();
+      unregisterModelList();
+    };
     unregisterLmStudio = registerLmStudioHandlers(
       ipcMain,
       globalThis.fetch,
@@ -267,6 +409,14 @@ app.on('before-quit', (event) => {
     runningWorker.status.state === 'idle'
   ) {
     // No running worker — unregister synchronously and allow the quit.
+    unregisterProviderKeys?.();
+    chatGptAuth?.stop();
+    unregisterChatGpt?.();
+    controlPlane?.dispose();
+    gitHubAuth?.stop();
+    unregisterGitHub?.();
+    unregisterKubernetes?.();
+    unregisterAccess?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -289,6 +439,14 @@ app.on('before-quit', (event) => {
       logger.warn('before-quit: worker stop failed', { err: String(err) });
     })
     .finally(() => {
+      unregisterProviderKeys?.();
+      chatGptAuth?.stop();
+      unregisterChatGpt?.();
+      controlPlane?.dispose();
+      gitHubAuth?.stop();
+      unregisterGitHub?.();
+      unregisterKubernetes?.();
+      unregisterAccess?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

@@ -66,3 +66,13 @@ export function resolveControlPlaneBinary(
   const release = path.join(bin, 'Release', 'net10.0', binary);
   return fs.existsSync(release) ? release : path.join(bin, 'Debug', 'net10.0', binary);
 }
+
+export function resolveProtoDir(
+  deps: Pick<ResolveBinaryDeps, 'app' | 'resourcesPath' | 'cwd'>,
+): string {
+  const { app, resourcesPath, cwd } = deps;
+  if (app?.isPackaged === true && resourcesPath != null) {
+    return path.join(resourcesPath, 'protos');
+  }
+  return path.join(findRepoRoot(cwd), 'src', 'Scout.ControlPlane.Contracts', 'protos');
+}

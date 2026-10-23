@@ -21,9 +21,15 @@ describe('buildBridge', () => {
       'discordBuildOAuthUrl',
       'discordStartOAuthInstall',
       'discordCancelOAuthInstall',
+      'chatgptSignIn',
+      'chatgptCancelSignIn',
+      'chatgptListModels',
+      'chatgptSignOut',
+      'chatgptStatus',
       'vaultStore',
       'vaultHas',
       'vaultDelete',
+      'vaultGetPublic',
       'vaultIsAvailable',
       'workerStart',
       'workerStop',
@@ -48,12 +54,25 @@ describe('buildBridge', () => {
       'providerStop',
       'providerRestart',
       'providerSetAutostart',
+      'validateProviderKey',
+      'llmListModels',
       'featuresList',
       'featureSetCredentials',
       'featureSetup',
       'featureDeleteCredentials',
       'featureEnable',
       'featureDisable',
+      'githubSignIn',
+      'githubStatus',
+      'githubCancel',
+      'githubSignOut',
+      'githubSaveToken',
+      'kubernetesDetect',
+      'kubernetesUse',
+      'kubernetesStatus',
+      'kubernetesDisconnect',
+      'accessGet',
+      'accessSet',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -72,6 +91,29 @@ describe('buildBridge', () => {
     expect(ipc.invoke).toHaveBeenCalledTimes(1);
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.detectClients);
     expect(result).toBe(expected);
+  });
+
+  it('the ChatGPT methods reach the renderer only through their own channels, with no payload', async () => {
+    const ipc = makeFakeIpc();
+    const status = { signedIn: true, email: 'owner@example.com', planUsageGranted: true };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation((channel: string) =>
+      Promise.resolve(channel === CHANNEL.chatgptSignOut ? { revocationConfirmed: true } : status),
+    );
+
+    const bridge = buildBridge(ipc);
+
+    expect(await bridge.chatgptSignIn()).toEqual(status);
+    expect(await bridge.chatgptStatus()).toEqual(status);
+    expect(await bridge.chatgptSignOut()).toEqual({ revocationConfirmed: true });
+    await bridge.chatgptCancelSignIn();
+    await bridge.chatgptListModels();
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.chatgptSignIn],
+      [CHANNEL.chatgptStatus],
+      [CHANNEL.chatgptSignOut],
+      [CHANNEL.chatgptCancelSignIn],
+      [CHANNEL.chatgptListModels],
+    ]);
   });
 
   it('discordBuildOAuthUrl passes the request payload through without mutation', async () => {
@@ -182,6 +224,44 @@ describe('buildBridge', () => {
     const result = await bridge.vaultHas(req);
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.vaultHas, req);
+    expect(result).toBe(expected);
+  });
+
+  it('validateProviderKey sends the request on the validateKey channel and returns the verdict', async () => {
+    const ipc = makeFakeIpc();
+    const req = { provider: 'OpenAI' as const, apiKey: 'sk-test' };
+    const expected = { ok: false as const, reason: 'invalid-key' as const };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.validateProviderKey(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.providersValidateKey, req);
+    expect(result).toBe(expected);
+  });
+
+  it('llmListModels sends the provider on the llm.listModels channel and returns the models', async () => {
+    const ipc = makeFakeIpc();
+    const req = { provider: 'Gemini' as const };
+    const expected = { models: [{ id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }] };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const result = await buildBridge(ipc).llmListModels(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.llmListModels, req);
+    expect(result).toBe(expected);
+  });
+
+  it('vaultGetPublic sends the key on the getPublic channel and returns the value', async () => {
+    const ipc = makeFakeIpc();
+    const req = { key: 'llm.provider' as const };
+    const expected = { value: 'OpenAI' };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.vaultGetPublic(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.vaultGetPublic, req);
     expect(result).toBe(expected);
   });
 
@@ -322,5 +402,46 @@ describe('buildBridge', () => {
     await bridge.featureDeleteCredentials(req);
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureDeleteCredentials, req);
+  });
+
+  it('kubernetesUse sends the selected contexts on the use channel and returns the status', async () => {
+    const ipc = makeFakeIpc();
+    const status = {
+      path: '/home/me/.kube/config',
+      contexts: [{ name: 'dev', label: 'dev' }],
+      connected: true,
+    };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
+
+    const result = await buildBridge(ipc).kubernetesUse({
+      contexts: [{ name: 'dev', label: 'dev' }],
+    });
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.kubernetesUse, {
+      contexts: [{ name: 'dev', label: 'dev' }],
+    });
+    expect(result).toBe(status);
+  });
+
+  it('accessSet sends the allowed users on the access.set channel and returns the stored list', async () => {
+    const ipc = makeFakeIpc();
+    const stored = { userIds: ['111'] };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(stored));
+
+    const result = await buildBridge(ipc).accessSet({ userIds: [' 111 '] });
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessSet, { userIds: [' 111 '] });
+    expect(result).toBe(stored);
+  });
+
+  it('accessGet invokes the access.get channel', async () => {
+    const ipc = makeFakeIpc();
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({ userIds: [] }),
+    );
+
+    await buildBridge(ipc).accessGet();
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessGet);
   });
 });

@@ -87,7 +87,7 @@ Re-verified against `main` 5fb2a15 on 2026-10-22.
 - [x] Discord, Slack, Teams adapters (all on the same `IResponseSink`).
 - [x] `Scout.Host.Console` chatops host (config-gated, multi-adapter, `SCOUT_READY`, parent-death watchdog). [[pages/services/host-console]]
 - [x] gRPC control-plane .NET server (contracts + domain + host, UDS/named-pipe + token). [[pages/services/host-control-plane]]
-- [x] GitHub plugin as SK functions and streaming function-calling (`FunctionChoiceBehavior.Auto()` in `src/Scout.Llm/ChatGateway.cs:343`). [[pages/services/plugin-github]]
+- [x] GitHub plugin as SK functions and streaming function-calling (`FunctionChoiceBehavior.Auto()` in `src/Scout.Llm/ChatGateway.cs:345`). [[pages/services/plugin-github]]
 - [x] Skills library (markdown skills, embedding-matched injection, `list_skills` / `load_skill`). [[pages/services/skills]]
 - [x] Project knowledge: SQLite vector store, `search_project` / `find_symbol` / `list_projects`. [[pages/services/knowledge]]
 - [x] Desktop: launch wired to `Scout.Host.Console` (binary repoint, vault to env, token-gated launch guard, graceful "backend unavailable" degradation of the Providers / Features screens). [[pages/services/desktop-ui]]

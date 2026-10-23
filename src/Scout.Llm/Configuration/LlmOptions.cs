@@ -5,7 +5,8 @@ namespace Scout.Llm.Configuration;
 /// provider is selected by <see cref="Provider"/>; provider-specific blocks
 /// (<see cref="Ollama"/>, <see cref="Gemini"/>, <see cref="OpenAI"/>,
 /// <see cref="OpenRouter"/>, <see cref="AzureOpenAI"/>, <see cref="Mistral"/>,
-/// <see cref="HuggingFace"/>, <see cref="AzureAIInference"/>) carry the settings
+/// <see cref="HuggingFace"/>, <see cref="AzureAIInference"/>,
+/// <see cref="ChatGptPlan"/>) carry the settings
 /// for each implementation.
 /// Single source of truth for both chat and embeddings.
 /// </summary>
@@ -38,6 +39,22 @@ public sealed class LlmOptions
 
     /// <summary>Settings for the Azure AI Inference provider. Null when not configured.</summary>
     public AzureAIInferenceOptions? AzureAIInference { get; set; }
+
+    /// <summary>Settings for the ChatGPT plan provider. Null when not configured.</summary>
+    public ChatGptPlanOptions? ChatGptPlan { get; set; }
+}
+
+/// <summary>Settings for the ChatGPT plan provider. Chat reaches the OpenAI
+/// Responses API with the access token of the user's ChatGPT plan, read from
+/// <see cref="TokenFile"/> on each request. The plan offers no embeddings.</summary>
+public sealed class ChatGptPlanOptions
+{
+    /// <summary>Path of the JSON file holding <c>access_token</c> and
+    /// <c>expires_at</c>, written by the desktop after sign-in. Required.</summary>
+    public string TokenFile { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new() { Model = "gpt-5.6-luna" };
 }
 
 /// <summary>Settings for the generic OpenAI-compatible LLM provider. When

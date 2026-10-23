@@ -2,7 +2,13 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FeatureDto } from '@scout/shared';
+import {
+  ControlPlaneNotImplementedError,
+  ControlPlaneUnavailableError,
+  encodeIpcErrorMessage,
+  serializeError,
+  type FeatureDto,
+} from '@scout/shared';
 
 import { FeaturesStore } from './features.store';
 import { ScoutBridgeService } from './scout-bridge';
@@ -60,6 +66,12 @@ const githubEnabled: FeatureDto = {
   enabled: true,
   status: 'enabled',
 };
+
+function asRendererReceives(channel: string, err: Error): Error {
+  return new Error(
+    `Error invoking remote method '${channel}': Error: ${encodeIpcErrorMessage(serializeError(err))}`,
+  );
+}
 
 describe('FeaturesStore', () => {
   beforeEach(() => {
@@ -230,5 +242,45 @@ describe('FeaturesStore', () => {
     await store.load();
     expect(store.backendUnavailable()).toBe(false);
     expect(store.features().length).toBe(1);
+  });
+
+  it('load shows the control plane as unavailable from the error Electron delivers, which has no code property', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.list',
+          new ControlPlaneUnavailableError('socket did not appear'),
+        );
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(store.backendUnavailable()).toBe(true);
+    expect(store.lastError()).toBeNull();
+  });
+
+  it('turning a feature on that the control plane does not implement says it is not available yet, not the raw error', async () => {
+    const githubWithCredentials: FeatureDto = {
+      ...githubDisabled,
+      hasCredentials: true,
+      status: 'disabled',
+    };
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubWithCredentials] })),
+      featureEnable: vi.fn(async () => {
+        throw asRendererReceives('scout:features.enable', new ControlPlaneNotImplementedError());
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.toggle('github');
+
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(false);
+    expect(view.lastError).toBe('Turning this feature on is not available yet.');
+    expect(store.lastError()).toBe('Turning this feature on is not available yet.');
   });
 });

@@ -39,26 +39,27 @@ Versions come from `Directory.Packages.props` (central package management).
 
 ## Layout and counts
 
-One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 635 in the ten projects of `Scout.slnx`.
+One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 758 in the eleven projects of `Scout.slnx`.
 
 | Test project | Attributes | Covers |
 |---|---|---|
-| `Scout.Llm.Tests` | 171 | [[pages/services/llm]] |
-| `Scout.Knowledge.Tests` | 103 | [[pages/services/knowledge]] |
-| `Scout.Conversation.Tests` | 74 | [[pages/services/conversation]] |
-| `Scout.ControlPlane.Tests` | 59 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
+| `Scout.Llm.Tests` | 217 | [[pages/services/llm]] |
+| `Scout.Knowledge.Tests` | 107 | [[pages/services/knowledge]] |
+| `Scout.Conversation.Tests` | 76 | [[pages/services/conversation]] |
+| `Scout.ControlPlane.Tests` | 66 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
 | `Scout.Adapter.Slack.Tests` | 58 | [[pages/services/adapter-slack]] |
+| `Scout.Plugin.GitHub.Tests` | 55 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Teams.Tests` | 50 | [[pages/services/adapter-teams]] |
-| `Scout.Plugin.GitHub.Tests` | 47 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Discord.Tests` | 37 | [[pages/services/adapter-discord]] |
-| `Scout.Skills.Tests` | 34 | [[pages/services/skills]] |
-| `Scout.Host.Console.Tests` | 20 | [[pages/services/host-console]] |
+| `Scout.Skills.Tests` | 36 | [[pages/services/skills]] |
+| `Scout.Plugin.Kubernetes.Tests` | 35 | [[pages/services/plugin-kubernetes]] |
+| `Scout.Host.Console.Tests` | 21 | [[pages/services/host-console]] |
 
 `tests/old` holds 653 further attributes for the retired code under `src/old`. It is not in `Scout.slnx`, so CI does not build or run it. Exclude it from any count.
 
 ## Patterns in use
 
-- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:115` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
+- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:117` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
 - **Self-gating tests.** Each optional module has a test for "not configured means not registered" (for example `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24`).
 - **Boundary fakes.** SDK edges are faked: a fake HTTP handler for GitHub (`tests/Scout.Plugin.GitHub.Tests/Fakes/`), a recording sender for Teams (`tests/Scout.Adapter.Teams.Tests/Streaming/RecordingSender.cs`), a recording sink for the conversation core (`tests/Scout.Conversation.Tests/Fakes/RecordingResponseSink.cs`), a fake embedder for skills (`tests/Scout.Skills.Tests/FakeEmbeddingGenerator.cs`).
 - **One failing-call test per external boundary (Rule I).** A failing-call test makes the real client library raise its real exception, by placing a fake `HttpMessageHandler` under the real connector, instead of constructing the exception by hand: `tests/Scout.Llm.Tests/ChatGatewayRateLimitTests.cs:151` drives the real OpenAI connector into a 429, which a hand-made `HttpOperationException` had hidden ([[pages/history/llm]]).

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'bun:test';
-import { buildEnv } from '../src/worker/build-env.js';
-import { VaultUnavailableError } from '@scout/shared';
+import { describe, it, expect, spyOn } from 'bun:test';
+import { buildEnv, migrateLegacyApiKey } from '../src/worker/build-env.js';
+import { VaultUnavailableError, type VaultKey } from '@scout/shared';
 
 function makeVault(
   entries: Record<string, string | null>,
@@ -198,10 +198,407 @@ describe('buildEnv', () => {
     });
   });
 
+  it('read-only guard: a stored TypeSafe key reaches the worker on Ollama', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.model': 'llama3.1',
+        'guard.typesafe-api-key': 'ts-key',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__GUARD__TYPESAFE__APIKEY: 'ts-key',
+      SCOUT__LLM__OLLAMA__CHAT__MODEL: 'llama3.1',
+    });
+  });
+
+  it('read-only guard: a stored TypeSafe key reaches the worker on OpenAI', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.api-key': 'sk-openai-key',
+        'guard.typesafe-api-key': 'ts-key',
+      }),
+    });
+    expect(env['SCOUT__GUARD__TYPESAFE__APIKEY']).toBe('ts-key');
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-key');
+  });
+
+  it('read-only guard: with no TypeSafe key stored the worker gets no guard variable', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.api-key': 'g',
+      }),
+    });
+    expect('SCOUT__GUARD__TYPESAFE__APIKEY' in env).toBe(false);
+  });
+
+  it('read-only guard: the TypeSafe key is never written to the console', async () => {
+    const SECRET = 'ts-key-must-not-be-logged';
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) =>
+      spyOn(console, level).mockImplementation(() => undefined),
+    );
+    try {
+      await buildEnv({
+        vaultGet: makeVault({ 'discord.bot-token': 'tok', 'guard.typesafe-api-key': SECRET }),
+      });
+      const logged = JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
+      expect(logged).not.toContain(SECRET);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  it('ChatGptPlan: the worker gets the token file path and the stored cloud model, and no API key or Ollama variables', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'ChatGptPlan',
+        'llm.cloud-model': 'gpt-6.1-sol',
+        'llm.api-key': 'sk-stored-but-unused',
+        'llm.model': 'llama3.1',
+      }),
+      chatGptTokenFile: '/home/owner/.config/Scout/chatgpt-token.json',
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'ChatGptPlan',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__CHATGPTPLAN__TOKENFILE: '/home/owner/.config/Scout/chatgpt-token.json',
+      SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL: 'gpt-6.1-sol',
+      SCOUT__ACCESS__REQUIREALLOWLIST: 'true',
+    });
+  });
+
+  it('ChatGptPlan: chat model defaults to gpt-5.6-luna when no cloud model is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'ChatGptPlan' }),
+      chatGptTokenFile: '/tmp/chatgpt-token.json',
+    });
+    expect(env['SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL']).toBe('gpt-5.6-luna');
+  });
+
+  it('None: the worker starts with no AI provider and no provider variables instead of falling back to Ollama', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'None',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+        'llm.cloud-model': 'gpt-5.6-luna',
+      }),
+      chatGptTokenFile: '/tmp/chatgpt-token.json',
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'None',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+
   it('token value does not appear in keys or serialised env snapshot', async () => {
     const SECRET = 'super-secret-do-not-log';
     const env = await buildEnv({ vaultGet: makeVault({ 'discord.bot-token': SECRET }) });
     const serialised = JSON.stringify(Object.keys(env));
     expect(serialised).not.toContain(SECRET);
   });
+
+  it('passes the GitHub credential variables to the worker when GitHub is connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+    });
+    expect(env['SCOUT__PLUGINS__GITHUB__TOKENFILE']).toBe('/user-data/github-token.json');
+  });
+
+  it('leaves the GitHub variables out when GitHub is not connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: {},
+    });
+    expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__GITHUB'))).toEqual([]);
+  });
+
+  it('gives the worker the kubeconfig path and a NAME and LABEL pair per allowed context', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: {
+        path: '/home/me/.kube/config',
+        contexts: [
+          { name: 'AKSDEV01-admin', label: 'dev' },
+          { name: 'AKSPRD01-admin', label: 'prod' },
+        ],
+      },
+    });
+
+    expect(
+      Object.entries(env).filter(([key]) => key.startsWith('SCOUT__PLUGINS__KUBERNETES')),
+    ).toEqual([
+      ['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH', '/home/me/.kube/config'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__NAME', 'AKSDEV01-admin'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__LABEL', 'dev'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__NAME', 'AKSPRD01-admin'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__LABEL', 'prod'],
+    ]);
+  });
+
+  it('leaves the Kubernetes variables out when Kubernetes is not connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: null,
+    });
+
+    expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__KUBERNETES'))).toEqual(
+      [],
+    );
+  });
+
+  it('one key per provider: OpenAI reads its own key, not the Gemini one', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-own');
+    expect(JSON.stringify(env)).not.toContain('gemini-own');
+  });
+
+  it('one key per provider: Gemini reads its own key, not the OpenAI one', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env['SCOUT__LLM__GEMINI__APIKEY']).toBe('gemini-own');
+    expect(JSON.stringify(env)).not.toContain('sk-openai-own');
+  });
+
+  it('one key per provider: OpenAI active with only a Gemini key stored fails naming OpenAI', async () => {
+    let thrown: unknown = null;
+    try {
+      await buildEnv({
+        vaultGet: makeVault({
+          'discord.bot-token': 'tok',
+          'llm.provider': 'OpenAI',
+          'llm.gemini.api-key': 'gemini-own',
+        }),
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(VaultUnavailableError);
+    expect((thrown as Error).message).toContain('OpenAI');
+    expect((thrown as Error).message).not.toContain('gemini-own');
+  });
+
+  it('a provider own key wins over the legacy shared key', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.api-key': 'sk-legacy',
+      }),
+    });
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-own');
+  });
+
+  it('provider None: the worker gets SCOUT__LLM__PROVIDER=None and no provider variables, even with keys and models stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'None',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.cloud-model': 'gpt-4o',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'None',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+
+  it('no provider and both provider keys stored still gives the plain Ollama env', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+});
+
+describe('buildEnv allowed users', () => {
+  const accessKeys = (env: Record<string, string>): string[] =>
+    Object.keys(env).filter((key) => key.startsWith('SCOUT__ACCESS__'));
+
+  it('gives the worker each allowed user id', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      allowedUserIds: ['111', 'U02ABC'],
+    });
+
+    expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__0']).toBe('111');
+    expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__1']).toBe('U02ABC');
+  });
+
+  it('fails closed when GitHub is connected: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('fails closed when a Kubernetes selection exists: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: {
+        path: '/home/me/.kube/config',
+        contexts: [{ name: 'prod-admin', label: 'prod' }],
+      },
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('fails closed when the ChatGPT plan is the provider: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'ChatGptPlan' }),
+      chatGptTokenFile: '/user-data/chatgpt-token.json',
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('local first: with no owner credential and no allowed users the worker gets no access variable', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'Ollama' }),
+      gitHubEnv: {},
+      kubernetesSelection: null,
+      allowedUserIds: [],
+    });
+
+    expect(accessKeys(env)).toEqual([]);
+  });
+});
+
+function makeVaultStore(initial: Partial<Record<VaultKey, string>>) {
+  const entries = new Map<VaultKey, string>(Object.entries(initial) as [VaultKey, string][]);
+  const writes: string[] = [];
+  return {
+    entries,
+    writes,
+    vault: {
+      get: async (key: VaultKey) => entries.get(key) ?? null,
+      store: async (key: VaultKey, value: string) => {
+        writes.push(`store ${key}`);
+        entries.set(key, value);
+      },
+      delete: async (key: VaultKey) => {
+        writes.push(`delete ${key}`);
+        return entries.delete(key);
+      },
+    },
+  };
+}
+
+describe('migrateLegacyApiKey', () => {
+  for (const [provider, ownKey] of [
+    ['OpenAI', 'llm.openai.api-key'],
+    ['Gemini', 'llm.gemini.api-key'],
+  ] as const) {
+    it(`existing users keep their key: the legacy key moves to the ${provider} slot and the legacy entry is deleted`, async () => {
+      const { entries, vault } = makeVaultStore({
+        'llm.provider': provider,
+        'llm.api-key': 'legacy-key',
+      });
+
+      await migrateLegacyApiKey(vault);
+
+      expect(entries.get(ownKey)).toBe('legacy-key');
+      expect(entries.has('llm.api-key')).toBe(false);
+    });
+  }
+
+  it('is idempotent: a second run writes nothing', async () => {
+    const { entries, writes, vault } = makeVaultStore({
+      'llm.provider': 'OpenAI',
+      'llm.api-key': 'legacy-key',
+    });
+    await migrateLegacyApiKey(vault);
+    writes.length = 0;
+
+    await migrateLegacyApiKey(vault);
+
+    expect(writes).toEqual([]);
+    expect(entries.get('llm.openai.api-key')).toBe('legacy-key');
+  });
+
+  it('a provider that already has its own key keeps it, and the stale legacy key is deleted', async () => {
+    const { entries, vault } = makeVaultStore({
+      'llm.provider': 'OpenAI',
+      'llm.openai.api-key': 'own-key',
+      'llm.api-key': 'legacy-key',
+    });
+
+    await migrateLegacyApiKey(vault);
+
+    expect(entries.get('llm.openai.api-key')).toBe('own-key');
+    expect(entries.has('llm.api-key')).toBe(false);
+  });
+
+  it('a failed copy rejects and never deletes the legacy key, so the only stored key survives', async () => {
+    const { entries, writes, vault } = makeVaultStore({
+      'llm.provider': 'Gemini',
+      'llm.api-key': 'legacy-key',
+    });
+    const failingVault = {
+      ...vault,
+      store: async () => {
+        throw new Error('keyring locked');
+      },
+    };
+
+    await expect(migrateLegacyApiKey(failingVault)).rejects.toThrow('keyring locked');
+
+    expect(writes).not.toContain('delete llm.api-key');
+    expect(entries.get('llm.api-key')).toBe('legacy-key');
+  });
+
+  for (const provider of ['Ollama', null]) {
+    it(`is a no-op when the provider is ${String(provider)}`, async () => {
+      const { entries, writes, vault } = makeVaultStore({
+        ...(provider === null ? {} : { 'llm.provider': provider }),
+        'llm.api-key': 'legacy-key',
+      });
+
+      await migrateLegacyApiKey(vault);
+
+      expect(writes).toEqual([]);
+      expect(entries.get('llm.api-key')).toBe('legacy-key');
+    });
+  }
 });

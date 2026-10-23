@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -37,7 +38,8 @@ public sealed class SkillSelectorTests : IDisposable
         FakeEmbeddingGenerator embedder,
         int topN = 1,
         double threshold = 0.55,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<SkillSelector>? logger = null)
     {
         var options = Options.Create(new SkillsOptions
         {
@@ -46,7 +48,8 @@ public sealed class SkillSelectorTests : IDisposable
             SimilarityThreshold = threshold,
         });
         var loader = new SkillFileLoader(NullLogger<SkillFileLoader>.Instance);
-        return new SkillSelector(loader, embedder, options, NullLogger<SkillSelector>.Instance, timeProvider);
+        return new SkillSelector(
+            loader, embedder, options, logger ?? NullLogger<SkillSelector>.Instance, timeProvider);
     }
 
     private FakeEmbeddingGenerator TwoSkillEmbedder()
@@ -76,6 +79,74 @@ public sealed class SkillSelectorTests : IDisposable
         whileFailing.ShouldBeEmpty();
         afterInterval.Select(s => s.Name).ShouldBe(["alpha"]);
         embedder.IndexBatchCallCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task No_Embeddings_Turns_Auto_Selection_Off_With_One_Information_Line_And_No_Retry()
+    {
+        var embedder = TwoSkillEmbedder();
+        embedder.IndexFailure = new NotSupportedException("Embeddings are not available.");
+        embedder.IndexFailuresRemaining = 100;
+        var clock = new FakeTimeProvider();
+        var logger = new RecordingLogger();
+        var selector = Selector(embedder, threshold: 0.0, timeProvider: clock, logger: logger);
+
+        for (var i = 0; i < 3; i++)
+        {
+            (await selector.SelectAsync("query", default)).ShouldBeEmpty();
+            clock.Advance(SkillSelector.IndexRetryInterval + TimeSpan.FromSeconds(1));
+        }
+
+        embedder.IndexBatchCallCount.ShouldBe(1);
+        var entry = logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Information);
+        entry.Message.ShouldBe(
+            "Skill auto-selection is off: the AI provider has no embeddings; skills stay available through list_skills and load_skill.");
+        entry.Exception.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Repeated_Index_Failures_Log_The_Stack_Once_Then_Short_Lines()
+    {
+        var embedder = TwoSkillEmbedder();
+        embedder.IndexFailuresRemaining = 3;
+        var clock = new FakeTimeProvider();
+        var logger = new RecordingLogger();
+        var selector = Selector(embedder, threshold: 0.0, timeProvider: clock, logger: logger);
+
+        for (var i = 0; i < 3; i++)
+        {
+            await selector.SelectAsync("query", default);
+            clock.Advance(SkillSelector.IndexRetryInterval + TimeSpan.FromSeconds(1));
+        }
+
+        embedder.IndexBatchCallCount.ShouldBe(3);
+        var warnings = logger.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+        warnings.Count.ShouldBe(3);
+        warnings[0].Exception.ShouldBeOfType<HttpRequestException>();
+        warnings[1].Exception.ShouldBeNull();
+        warnings[2].Exception.ShouldBeNull();
+        warnings[1].Message.ShouldContain("429 Too Many Requests");
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class RecordingLogger : ILogger<SkillSelector>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
     }
 
     [Fact]

@@ -1,8 +1,9 @@
 ---
 title: "Conversation"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-23
+changes: "Allowed-users gate in the conductor (ADR 0021)"
 page_type: service
 status: active
 description: "Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive."
@@ -18,6 +19,7 @@ reliability: high
 
 - [[pages/invariants/pluggable-boundaries]]
 - [[pages/invariants/no-executive-writes]]
+- [[pages/decisions/0021-allowed-users]] - who may use Scout at all
 - [[pages/services/llm]]
 - [[pages/services/skills]]
 - [[pages/conventions/testing]]
@@ -28,10 +30,10 @@ Owns the adapter contract, message and response shapes, routing, per-channel mem
 
 ## Public contract
 
-- **Entry point:** `AddScoutConversation(IServiceCollection, IConfiguration)` at `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:22`.
+- **Entry point:** `AddScoutConversation(IServiceCollection, IConfiguration)` at `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:23`.
 - **Adapter side:** `IChatAdapter` (`src/Scout.Conversation/Abstractions/IChatAdapter.cs:11`), `IResponseSink` with `BeginAsync`, `UpdateAsync`, `CompleteAsync`, `FailAsync` (`src/Scout.Conversation/Abstractions/IResponseSink.cs:17`), `RenderCapabilities` (`src/Scout.Conversation/Abstractions/RenderCapabilities.cs:10`), `ChatMessage` (`src/Scout.Conversation/Abstractions/ChatMessage.cs:7`), `Citation` (`src/Scout.Conversation/Abstractions/Citation.cs:10`).
-- **Core:** `ConversationConductor.HandleAsync` (`src/Scout.Conversation/ConversationConductor.cs:36`), `IConversationRouter` (`src/Scout.Conversation/Abstractions/IConversationRouter.cs:9`) implemented by `LlmStreamingRouter` (`src/Scout.Conversation/Routing/LlmStreamingRouter.cs:20`), `StreamPump.RunAsync` (`src/Scout.Conversation/Streaming/StreamPump.cs:49`), `IConversationMemoryStore` with an in-memory store (`src/Scout.Conversation/Memory/InMemoryConversationMemoryStore.cs:20`), `ScoutActivitySource` for tracing (`src/Scout.Conversation/Telemetry/ScoutActivitySource.cs:9`).
-- **Configuration keys:** `Scout:Conversation` (`SystemPrompt`, `Temperature`, `MaxTokens`; `src/Scout.Conversation/Routing/LlmStreamingRouterOptions.cs:7`), `Scout:Conversation:Memory` (`Enabled`, `MaxTurns`, `MaxReplayedChars`, `IdleTtl`; `src/Scout.Conversation/Memory/ConversationMemoryOptions.cs:11`).
+- **Core:** `ConversationConductor.HandleAsync` (`src/Scout.Conversation/ConversationConductor.cs:47`), `IConversationRouter` (`src/Scout.Conversation/Abstractions/IConversationRouter.cs:9`) implemented by `LlmStreamingRouter` (`src/Scout.Conversation/Routing/LlmStreamingRouter.cs:20`), `StreamPump.RunAsync` (`src/Scout.Conversation/Streaming/StreamPump.cs:50`), `IConversationMemoryStore` with an in-memory store (`src/Scout.Conversation/Memory/InMemoryConversationMemoryStore.cs:20`), `ScoutActivitySource` for tracing (`src/Scout.Conversation/Telemetry/ScoutActivitySource.cs:9`).
+- **Configuration keys:** `Scout:Conversation` (`SystemPrompt`, `Temperature`, `MaxTokens`; `src/Scout.Conversation/Routing/LlmStreamingRouterOptions.cs:7`), `Scout:Conversation:Memory` (`Enabled`, `MaxTurns`, `MaxReplayedChars`, `IdleTtl`; `src/Scout.Conversation/Memory/ConversationMemoryOptions.cs:11`), `Scout:Access` (`AllowedUserIds`, `RequireAllowList`; `src/Scout.Conversation/Access/AccessOptions.cs:8`, bound at `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:33`).
 - **External boundaries:** none directly; all I/O goes through `IChatGateway` and `IResponseSink`.
 
 ## How it works
@@ -52,7 +54,10 @@ sequenceDiagram
     P->>A: sink.UpdateAsync / CompleteAsync
 ```
 
-`Route` defers all work to enumeration (`src/Scout.Conversation/Routing/LlmStreamingRouter.cs:59`). History is written only after a stream completes without error, so a failed turn never enters memory (`:101`). Failures reach the user through `sink.FailAsync` (`src/Scout.Conversation/ConversationConductor.cs:70`).
+`Route` defers all work to enumeration (`src/Scout.Conversation/Routing/LlmStreamingRouter.cs:59`). History is written only after a stream completes without error, so a failed turn never enters memory (`:101`). Failures reach the user through `sink.FailAsync` (`src/Scout.Conversation/ConversationConductor.cs:91`).
+
+- **Allowed users:** before anything else, `HandleAsync` checks `ChatMessage.UserId` against `Scout:Access` (`src/Scout.Conversation/ConversationConductor.cs:60`, rule at `:101`). A sender outside a non-empty list gets "Scout only answers its configured users."; with an empty list and `RequireAllowList` set, everyone gets "Scout has no allowed users yet. The owner can add them in the Scout desktop app under Settings."; otherwise the message is routed as before. A refusal is `BeginAsync` then `CompleteAsync` with that text, no router, pump, model or plugin call, and one Information log line with the channel id only. The desktop sets `RequireAllowList` when an owner credential is connected ([[pages/decisions/0021-allowed-users]]).
+- **Sign-in required:** an `LlmSignInRequiredException` from the provider completes the reply with `StreamPumpOptions.SignInRequiredMessage` (`src/Scout.Conversation/Streaming/StreamPumpOptions.cs:56`, caught at `src/Scout.Conversation/Streaming/StreamPump.cs:134`), so the chat user is told to sign in again instead of seeing a generic error.
 
 ## Invariants
 
@@ -61,12 +66,12 @@ sequenceDiagram
 
 ## Hot spots
 
-- `src/Scout.Conversation/Streaming/StreamPump.cs:49`: edit throttling, timeout and truncation for every platform.
-- `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:45`: `NoOpSkillSelector` is a `TryAdd` fallback, so `AddScoutSkills` must run first (`src/Scout.Host.Console/HostComposition.cs:39`).
+- `src/Scout.Conversation/Streaming/StreamPump.cs:50`: edit throttling, timeout and truncation for every platform.
+- `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:47`: `NoOpSkillSelector` is a `TryAdd` fallback, so `AddScoutSkills` must run first (`src/Scout.Host.Console/HostComposition.cs:40`).
 
 ## Testing footprint
 
-`tests/Scout.Conversation.Tests` (74 test attributes, 11 files): conductor, router and memory interplay, key derivation, memory store expiry, DI registration, and the stream pump including failure paths. Fakes: `Fakes/RecordingResponseSink.cs`.
+`tests/Scout.Conversation.Tests` (83 test attributes, 92 test cases, 12 files): conductor, the allowed-users gate (`ConversationConductorAccessTests.cs`), router and memory interplay, key derivation, memory store expiry, DI registration including `Scout:Access` binding, and the stream pump including failure paths. Fakes: `Fakes/RecordingResponseSink.cs`, `Fakes/RecordingLogger.cs`.
 
 ## Related
 

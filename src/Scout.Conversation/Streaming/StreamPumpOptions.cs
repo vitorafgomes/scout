@@ -48,4 +48,11 @@ public sealed record StreamPumpOptions
     /// </summary>
     public string QuotaExceededMessage { get; init; } =
         "The AI provider rejected the request: the account has no credit left or reached its spending limit. Add credit with the provider or choose another one on the AI Sources screen in Scout.";
+
+    /// <summary>
+    /// User-facing text appended when the provider needs the user to sign in
+    /// again. Rendered verbatim via the terminal Complete call.
+    /// </summary>
+    public string SignInRequiredMessage { get; init; } =
+        "ChatGPT sign-in is missing or expired. Sign in again on the AI Sources screen in Scout.";
 }

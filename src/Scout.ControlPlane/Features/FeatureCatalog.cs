@@ -20,9 +20,9 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Key: "pat",
                 Kind: "password",
                 Label: "Personal Access Token",
-                HelperText: "Required scopes: repo, read:org. Token is stored only on this machine (OS keyring) and never sent to Scout's developers.",
-                CreateLinkUrl: "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Scout",
-                CreateLinkLabel: "Create token on GitHub"),
+                HelperText: "Only for a Scout host without the desktop sign-in. Use a fine-grained token with read-only access to Metadata, Contents, Pull requests and Issues.",
+                CreateLinkUrl: null,
+                CreateLinkLabel: null),
         },
         SettingsFields: new[]
         {
@@ -39,64 +39,42 @@ public sealed class FeatureCatalog : IFeatureCatalog
         ScopeMatrix: new[]
         {
             new FeatureScopeRow(
-                Scope: "repo",
-                Actions: new[]
-                {
-                    "List private and public repositories",
-                    "Read pull requests with diff and file list",
-                    "Read issues with comments",
-                    "Create issues (descriptive write per ADR)",
-                }),
+                Scope: "Metadata: read",
+                Actions: new[] { "List the repositories the Scout GitHub App is installed on" }),
             new FeatureScopeRow(
-                Scope: "public_repo",
-                Actions: new[] { "Subset of repo limited to public repositories only" }),
+                Scope: "Contents: read",
+                Actions: new[] { "Read the README, languages and top-level files of a repository" }),
             new FeatureScopeRow(
-                Scope: "read:org",
-                Actions: new[] { "List repositories from organizations you belong to" }),
+                Scope: "Pull requests: read",
+                Actions: new[] { "List open pull requests" }),
             new FeatureScopeRow(
-                Scope: "read:user",
-                Actions: new[] { "Identify the token owner (validation only)" }),
+                Scope: "Issues: read",
+                Actions: new[] { "List open issues" }),
         },
         SetupSteps: new[]
         {
-            "Click 'Create token on GitHub' below. GitHub opens a token-creation page with the scopes 'repo' and 'read:org' already selected.",
-            "Scroll to the bottom and click 'Generate token'. Copy the generated value (it is shown only once).",
-            "Paste the token into the 'Personal Access Token' field above.",
-            "Click Save. Scout validates the token against GitHub before storing it on this machine's keyring.",
+            "Click 'Connect with GitHub'. Scout shows a one-time code.",
+            "Click 'Open GitHub', sign in with your GitHub account and enter the code.",
+            "Approve the Scout GitHub App. It asks for read access only; Scout never writes to GitHub.",
+            "If the card says so, click 'Install Scout on your GitHub account' and pick the repositories Scout may read.",
         });
 
     private static readonly FeatureMetadata Kubernetes = new(
         Id: KubernetesId,
         DisplayName: "Kubernetes",
-        Description: "Describe pods, nodes and workloads across configured clusters.",
-        RequiresCredentials: true,
-        CredentialFields: new[]
-        {
-            new FeatureCredentialField(
-                Key: "kubeconfig",
-                Kind: "textarea",
-                Label: "Kubeconfig YAML",
-                HelperText: "Paste the contents of your kubeconfig file. Embed credentials inline (certificate-authority-data, client-certificate-data, token) - external file references and exec-plugin auth are not supported.",
-                CreateLinkUrl: null,
-                CreateLinkLabel: null),
-            new FeatureCredentialField(
-                Key: "context",
-                Kind: "text",
-                Label: "Active context (optional)",
-                HelperText: "Leave blank to use the default context from the kubeconfig. Filled in automatically when the kubeconfig has multiple contexts.",
-                CreateLinkUrl: null,
-                CreateLinkLabel: null),
-        },
+        Description: "Read pods, deployments and events from your clusters. Uses the Kubernetes configuration on this computer, with your consent; read-only.",
+        RequiresCredentials: false,
+        CredentialFields: Array.Empty<FeatureCredentialField>(),
         SettingsFields: Array.Empty<FeatureSettingField>(),
         WriteClass: WriteClass.None,
         ScopeMatrix: null,
         SetupSteps: new[]
         {
-            "Run 'kubectl config view --raw --flatten' on a terminal that already has working cluster access. The '--flatten' flag inlines certificates and tokens so the kubeconfig is self-contained.",
-            "Copy the full YAML output to the clipboard.",
-            "Paste it into the 'Kubeconfig YAML' field above.",
-            "If your kubeconfig has more than one context, type the context name in the 'Active context (optional)' field. Leave blank to use the default.",
-            "Click Save. Scout calls the cluster's /version endpoint to confirm reachability and credential validity before storing on this machine's keyring.",
+            "Scout looks for the Kubernetes configuration on this computer: the first file named in KUBECONFIG, otherwise ~/.kube/config.",
+            "Tick the contexts Scout may use and click 'Use selected contexts'. Nothing is used before you do.",
+            "A context whose user runs a command to get a token shows that command before you agree.",
+            "Scout only reads: namespaces, pods, deployments and events. It never reads logs or secrets and never changes a cluster.",
+            "Your credentials may allow changes, so a read-only user bound to the 'view' cluster role is safer.",
         });
 
     private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes };

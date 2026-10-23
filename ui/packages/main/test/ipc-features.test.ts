@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
-import { CHANNEL, ProviderUnreachableError, type FeatureDto } from '@scout/shared';
+import {
+  CHANNEL,
+  ControlPlaneNotImplementedError,
+  ControlPlaneUnavailableError,
+  readIpcError,
+  type FeatureDto,
+} from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { registerFeaturesHandlers } from '../src/ipc/features.js';
-import type { WorkerHttpClient } from '../src/worker/http-client.js';
+import type { FeaturesClient } from '../src/ipc/features.js';
 import type { Logger } from '../src/util/logger.js';
 
 type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<unknown>;
@@ -55,21 +61,46 @@ const githubDto: FeatureDto = {
   setupSteps: null,
 };
 
-interface StubClient {
-  get: ReturnType<typeof mock>;
-  post: ReturnType<typeof mock>;
-  put: ReturnType<typeof mock>;
-  delete: ReturnType<typeof mock>;
-}
+type StubClient = { [K in keyof FeaturesClient]: ReturnType<typeof mock> };
 
 function makeClient(overrides: Partial<StubClient> = {}): StubClient {
   return {
-    get: mock(async () => undefined),
-    post: mock(async () => undefined),
-    put: mock(async () => undefined),
-    delete: mock(async () => undefined),
+    listFeatures: mock(async () => [githubDto]),
+    setFeatureCredentials: mock(async () => githubDto),
+    setupFeature: mock(async () => githubDto),
+    deleteFeatureCredentials: mock(async () => githubDto),
+    enableFeature: mock(async () => githubDto),
+    disableFeature: mock(async () => githubDto),
     ...overrides,
   };
+}
+
+function register(ipcMain: FakeIpcMain, client: StubClient, logger: Logger): () => void {
+  return registerFeaturesHandlers(ipcMain, async () => client as unknown as FeaturesClient, logger);
+}
+
+async function rejection(promise: Promise<unknown>): Promise<unknown> {
+  return promise.then(
+    () => null,
+    (err: unknown) => err,
+  );
+}
+
+function makeRecordingLogger(): { logger: Logger; lines: string[] } {
+  const lines: string[] = [];
+  const record =
+    (level: string) =>
+    (...args: unknown[]): void => {
+      lines.push(`${level} ${JSON.stringify(args)}`);
+    };
+  const logger: Logger = {
+    debug: record('debug'),
+    info: record('info'),
+    warn: record('warn'),
+    error: record('error'),
+    child: () => logger,
+  };
+  return { logger, lines };
 }
 
 describe('registerFeaturesHandlers', () => {
@@ -81,162 +112,139 @@ describe('registerFeaturesHandlers', () => {
     logger = noopLogger();
   });
 
-  describe('case 1: featuresList wraps GET /features into FeaturesListResponse', () => {
-    it('returns { features: [...] }', async () => {
-      const client = makeClient({ get: mock(async () => [githubDto]) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
+  it('featuresList returns the control plane features as { features }', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
 
-      const handler = ipcMain.handlers.get(CHANNEL.featuresList)!;
-      const result = await handler(NULL_EVENT);
+    const result = await ipcMain.handlers.get(CHANNEL.featuresList)!(NULL_EVENT);
 
-      expect(client.get).toHaveBeenCalledWith('/features');
-      expect(result).toEqual({ features: [githubDto] });
+    expect(result).toEqual({ features: [githubDto] });
+  });
+
+  it('featureSetCredentials forwards the id and the credential body', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
+
+    const result = await ipcMain.handlers.get(CHANNEL.featureSetCredentials)!(NULL_EVENT, {
+      id: 'github',
+      body: { pat: 'abc' },
+    });
+
+    expect(client.setFeatureCredentials).toHaveBeenCalledWith('github', { pat: 'abc' });
+    expect(result).toEqual(githubDto);
+  });
+
+  it('featureSetup forwards credentials and settings', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
+
+    const result = await ipcMain.handlers.get(CHANNEL.featureSetup)!(NULL_EVENT, {
+      id: 'github',
+      credentials: { pat: 'ghp_xxx' },
+      settings: { default_repo_url: 'https://github.com/acme/repo' },
+    });
+
+    expect(client.setupFeature).toHaveBeenCalledWith(
+      'github',
+      { pat: 'ghp_xxx' },
+      { default_repo_url: 'https://github.com/acme/repo' },
+    );
+    expect(result).toEqual(githubDto);
+  });
+
+  it('featureDeleteCredentials, featureEnable and featureDisable forward the id', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
+
+    await ipcMain.handlers.get(CHANNEL.featureDeleteCredentials)!(NULL_EVENT, { id: 'github' });
+    await ipcMain.handlers.get(CHANNEL.featureEnable)!(NULL_EVENT, { id: 'kubernetes' });
+    await ipcMain.handlers.get(CHANNEL.featureDisable)!(NULL_EVENT, { id: 'github' });
+
+    expect(client.deleteFeatureCredentials).toHaveBeenCalledWith('github');
+    expect(client.enableFeature).toHaveBeenCalledWith('kubernetes');
+    expect(client.disableFeature).toHaveBeenCalledWith('github');
+  });
+
+  it('an unknown feature id is rejected with features/invalid-id before reaching the control plane', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
+
+    const thrown = await rejection(
+      ipcMain.handlers.get(CHANNEL.featureEnable)!(NULL_EVENT, { id: 'unknown-thing' }),
+    );
+
+    expect((thrown as { code?: string }).code).toBe('features/invalid-id');
+    expect(client.enableFeature).not.toHaveBeenCalled();
+  });
+
+  it('a control plane that is not running reaches the renderer as control-plane/unavailable', async () => {
+    registerFeaturesHandlers(
+      ipcMain,
+      () => Promise.reject(new ControlPlaneUnavailableError('socket did not appear')),
+      logger,
+    );
+
+    const thrown = await rejection(ipcMain.handlers.get(CHANNEL.featuresList)!(NULL_EVENT));
+
+    expect(readIpcError(new Error((thrown as Error).message))).toEqual({
+      code: 'control-plane/unavailable',
+      message: 'socket did not appear',
     });
   });
 
-  describe('case 2: featureSetCredentials posts to /features/:id/credentials with body', () => {
-    it('forwards the body verbatim', async () => {
-      const client = makeClient({ post: mock(async () => githubDto) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featureSetCredentials)!;
-      const result = await handler(NULL_EVENT, { id: 'github', body: { token: 'abc' } });
-
-      expect(client.post).toHaveBeenCalledWith('/features/github/credentials', { token: 'abc' });
-      expect(result).toEqual(githubDto);
+  it('turning a feature on that the host does not implement reaches the renderer as control-plane/not-implemented', async () => {
+    const client = makeClient({
+      enableFeature: mock(async () => {
+        throw new ControlPlaneNotImplementedError();
+      }),
     });
+    register(ipcMain, client, logger);
+
+    const thrown = await rejection(
+      ipcMain.handlers.get(CHANNEL.featureEnable)!(NULL_EVENT, { id: 'github' }),
+    );
+
+    expect(readIpcError(new Error((thrown as Error).message)).code).toBe(
+      'control-plane/not-implemented',
+    );
   });
 
-  describe('case 2b: featureSetup posts to /features/:id/setup with credentials and settings', () => {
-    it('forwards both sections in the request body', async () => {
-      const client = makeClient({ post: mock(async () => githubDto) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
+  it('a credential value is never written to the log when saving it fails', async () => {
+    const secret = 'ghp_SECRET_VALUE_123';
+    const { logger: recording, lines } = makeRecordingLogger();
+    const client = makeClient({
+      setFeatureCredentials: mock(async () => {
+        throw new Error('invalid argument');
+      }),
+      setupFeature: mock(async () => {
+        throw new Error('invalid argument');
+      }),
+    });
+    register(ipcMain, client, recording);
 
-      const handler = ipcMain.handlers.get(CHANNEL.featureSetup)!;
-      const result = await handler(NULL_EVENT, {
+    await rejection(
+      ipcMain.handlers.get(CHANNEL.featureSetCredentials)!(NULL_EVENT, {
         id: 'github',
-        credentials: { pat: 'ghp_xxx' },
-        settings: { default_repo_url: 'https://github.com/acme/repo' },
-      });
+        body: { pat: secret },
+      }),
+    );
+    await rejection(
+      ipcMain.handlers.get(CHANNEL.featureSetup)!(NULL_EVENT, {
+        id: 'github',
+        credentials: { pat: secret },
+        settings: {},
+      }),
+    );
 
-      expect(client.post).toHaveBeenCalledWith('/features/github/setup', {
-        credentials: { pat: 'ghp_xxx' },
-        settings: { default_repo_url: 'https://github.com/acme/repo' },
-      });
-      expect(result).toEqual(githubDto);
-    });
+    expect(lines.length).toBe(2);
+    expect(lines.join('\n')).not.toContain(secret);
   });
 
-  describe('case 3: featureDeleteCredentials issues DELETE /features/:id/credentials', () => {
-    it('delegates to client.delete', async () => {
-      const client = makeClient({ delete: mock(async () => githubDto) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
+  it('the returned unregister removes every handler', () => {
+    const unregister = register(ipcMain, makeClient(), logger);
 
-      const handler = ipcMain.handlers.get(CHANNEL.featureDeleteCredentials)!;
-      const result = await handler(NULL_EVENT, { id: 'github' });
-
-      expect(client.delete).toHaveBeenCalledWith('/features/github/credentials');
-      expect(result).toEqual(githubDto);
-    });
-  });
-
-  describe('case 4: featureEnable / featureDisable post to the correct path', () => {
-    it('enable posts to /features/:id/enable', async () => {
-      const client = makeClient({ post: mock(async () => githubDto) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featureEnable)!;
-      await handler(NULL_EVENT, { id: 'github' });
-
-      expect(client.post).toHaveBeenCalledWith('/features/github/enable');
-    });
-
-    it('disable posts to /features/:id/disable', async () => {
-      const client = makeClient({ post: mock(async () => githubDto) });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featureDisable)!;
-      await handler(NULL_EVENT, { id: 'github' });
-
-      expect(client.post).toHaveBeenCalledWith('/features/github/disable');
-    });
-  });
-
-  describe('case 5: unknown feature id is rejected with features/invalid-id', () => {
-    it('throws before reaching the worker', async () => {
-      const client = makeClient();
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featureEnable)!;
-      let thrown: unknown = null;
-      try {
-        await handler(NULL_EVENT, { id: 'unknown-thing' });
-      } catch (err: unknown) {
-        thrown = err;
-      }
-      expect(thrown).not.toBeNull();
-      expect((thrown as { code?: string }).code).toBe('features/invalid-id');
-      expect(client.post).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('case 6: worker error code propagates through serialization', () => {
-    it('preserves the worker error code on the rejection', async () => {
-      const workerErr = new ProviderUnreachableError('worker-down');
-      const client = makeClient({
-        get: mock(async () => {
-          throw workerErr;
-        }),
-      });
-      registerFeaturesHandlers(ipcMain, client as unknown as WorkerHttpClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featuresList)!;
-      let thrown: unknown = null;
-      try {
-        await handler(NULL_EVENT);
-      } catch (err: unknown) {
-        thrown = err;
-      }
-      expect(thrown).not.toBeNull();
-      expect((thrown as { code?: string }).code).toBe('providers/unreachable');
-    });
-  });
-
-  describe('case 7: returned unregister removes every handler', () => {
-    it('clears all channels', () => {
-      const client = makeClient();
-      const unregister = registerFeaturesHandlers(
-        ipcMain,
-        client as unknown as WorkerHttpClient,
-        logger,
-      );
-
-      expect(ipcMain.handlers.size).toBe(6);
-      unregister();
-      expect(ipcMain.handlers.size).toBe(0);
-    });
-  });
-
-  describe('case 8: null http endpoint surfaces worker/http-unavailable', () => {
-    it('featuresList rejects with code worker/http-unavailable when endpoint is null', async () => {
-      const { WorkerHttpClient: RealClient } = await import('../src/worker/http-client.js');
-      const nullEndpointClient = new RealClient({
-        getEndpoint: () => null,
-        fetch: globalThis.fetch,
-        logger,
-      });
-      registerFeaturesHandlers(ipcMain, nullEndpointClient, logger);
-
-      const handler = ipcMain.handlers.get(CHANNEL.featuresList)!;
-      let thrown: unknown = null;
-      try {
-        await handler(NULL_EVENT);
-      } catch (err) {
-        thrown = err;
-      }
-
-      expect(thrown).not.toBeNull();
-      expect((thrown as { code?: string }).code).toBe('worker/http-unavailable');
-    });
+    expect(ipcMain.handlers.size).toBe(6);
+    unregister();
+    expect(ipcMain.handlers.size).toBe(0);
   });
 });
