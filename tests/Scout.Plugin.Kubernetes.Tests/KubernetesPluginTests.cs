@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Web;
 using k8s;
 using Microsoft.SemanticKernel;
 using Scout.Plugin.Kubernetes.Tests.Fakes;
@@ -302,8 +303,9 @@ public sealed class KubernetesPluginTests : IDisposable
         await _plugin.ListDeploymentsAsync("shop");
         await _plugin.ListNamespacesAsync();
 
-        _api.Requests.Count.ShouldBe(2);
-        _api.Requests.ShouldAllBe(r => r.PathAndQuery.Contains("limit=100"));
+        _api.Requests
+            .Select(r => HttpUtility.ParseQueryString(new Uri(new Uri("http://cluster"), r.PathAndQuery).Query)["limit"])
+            .ShouldBe(["100", "100"]);
     }
 
     [Theory]
@@ -432,19 +434,34 @@ public sealed class KubernetesPluginTests : IDisposable
     {
         _api.Route("/api/v1/pods", PodList);
         var builds = 0;
+        var firstBuildEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseFirstBuild = new ManualResetEventSlim();
         using var plugin = new KubernetesPlugin(
             new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = ["dev"] },
             context =>
             {
-                Interlocked.Increment(ref builds);
-                Thread.Sleep(300);
+                if (Interlocked.Increment(ref builds) == 1)
+                {
+                    firstBuildEntered.SetResult();
+                    releaseFirstBuild.Wait(TimeSpan.FromSeconds(10));
+                }
+
                 return new k8s.Kubernetes(KubernetesClientConfiguration.BuildConfigFromConfigFile(_api.KubeconfigPath, context));
             });
 
-        var results = await Task.WhenAll(
-            Task.Run(() => plugin.ListPodsAsync()),
-            Task.Run(() => plugin.ListPodsAsync()));
+        var first = Task.Run(() => plugin.ListPodsAsync());
+        await firstBuildEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Task<string>? second = null;
+        var secondCaller = new Thread(() => second = plugin.ListPodsAsync());
+        secondCaller.Start();
+        var secondEnteredWhileFirstBuilds = SpinWait.SpinUntil(
+            () => (secondCaller.ThreadState & (ThreadState.WaitSleepJoin | ThreadState.Stopped)) != 0,
+            TimeSpan.FromSeconds(10));
+        releaseFirstBuild.Set();
+        secondCaller.Join();
+        var results = await Task.WhenAll(first, second!);
 
+        secondEnteredWhileFirstBuilds.ShouldBeTrue();
         builds.ShouldBe(1);
         results.ShouldAllBe(r => r.StartsWith("shop/web-1 ", StringComparison.Ordinal));
     }

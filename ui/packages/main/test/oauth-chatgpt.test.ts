@@ -259,12 +259,33 @@ function makeAuth(overrides: Partial<ChatGptAuthDeps> = {}): ChatGptAuth {
   });
 }
 
-async function readTokenFile(): Promise<Record<string, unknown> | null> {
+async function readTokenFile(): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(tokenFile, 'utf8')) as Record<string, unknown>;
+}
+
+async function tokenFileReadError(): Promise<string | undefined> {
   try {
-    return JSON.parse(await readFile(tokenFile, 'utf8')) as Record<string, unknown>;
-  } catch {
-    return null;
+    await readFile(tokenFile);
+    return undefined;
+  } catch (err: unknown) {
+    return (err as NodeJS.ErrnoException).code;
   }
+}
+
+async function eventually(condition: () => Promise<boolean>): Promise<boolean> {
+  const deadline = Date.now() + 1000;
+  while (!(await condition())) {
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  return true;
+}
+
+async function portIsFree(port: number): Promise<boolean> {
+  return findFreePort(port, 0).then(
+    (found) => found === port,
+    () => false,
+  );
 }
 
 function tokenPosts(): RecordedCall[] {
@@ -501,7 +522,7 @@ describe('ChatGPT sign-in through the browser', () => {
       expect(thrown).toBeInstanceOf(ChatGptAuthError);
       expect(thrown).toMatchObject({ reason: 'invalid_id_token' });
       expect(vault.entries.has('chatgpt.session')).toBe(false);
-      expect(await readTokenFile()).toBeNull();
+      expect(await tokenFileReadError()).toBe('ENOENT');
     });
   }
 });
@@ -580,16 +601,15 @@ describe('ChatGPT sign-in cancel', () => {
     const auth = makeAuth({ findFreePort: async () => port });
 
     const pending = auth.signIn().catch((err: unknown) => err);
-    while (scenario.authorizeUrls.length === 0) await new Promise((r) => setTimeout(r, 5));
+    expect(await eventually(async () => scenario.authorizeUrls.length > 0)).toBe(true);
     auth.cancelSignIn();
     const outcome = await Promise.race([
       pending,
       new Promise((r) => setTimeout(() => r('still waiting for the browser'), 1000)),
     ]);
-    await new Promise((r) => setTimeout(r, 20));
 
     expect(outcome).toBeInstanceOf(OAuthUserCancelledError);
-    expect(await findFreePort(port, 0)).toBe(port);
+    expect(await eventually(() => portIsFree(port))).toBe(true);
     expect(tokenPosts()).toHaveLength(0);
     expect((await auth.status()).signedIn).toBe(false);
   });
@@ -603,10 +623,9 @@ describe('ChatGPT sign-in failing calls', () => {
 
     let thrown: unknown = null;
     await auth.signIn().catch((err: unknown) => (thrown = err));
-    await new Promise((r) => setTimeout(r, 20));
 
     expect(thrown).toMatchObject({ message: expect.stringContaining('no browser available') });
-    expect(await findFreePort(port, 0)).toBe(port);
+    expect(await eventually(() => portIsFree(port))).toBe(true);
     expect(tokenPosts()).toHaveLength(0);
   });
 
@@ -621,7 +640,7 @@ describe('ChatGPT sign-in failing calls', () => {
     expect(thrown).toBeInstanceOf(ChatGptAuthError);
     expect(thrown).toMatchObject({ reason: 'network_error' });
     expect(vault.entries.has('chatgpt.session')).toBe(false);
-    expect(await readTokenFile()).toBeNull();
+    expect(await tokenFileReadError()).toBe('ENOENT');
   });
 
   it('JWKS: when the signing keys cannot be fetched, sign-in fails with jwks_unavailable and stores nothing', async () => {
@@ -694,7 +713,7 @@ describe('ChatGPT session stays signed in (refresh)', () => {
         email: null,
         planUsageGranted: false,
       });
-      expect(await readTokenFile()).toBeNull();
+      expect(await tokenFileReadError()).toBe('ENOENT');
       expect(vault.entries.get('chatgpt.client-id')).toBe(ISSUED_CLIENT_ID);
     });
   }
@@ -734,7 +753,7 @@ describe('ChatGPT session stays signed in (refresh)', () => {
     } finally {
       jest.useRealTimers();
     }
-    await new Promise((r) => setTimeout(r, 20));
+    await auth.settled();
     auth.stop();
 
     expect(tokenPosts()).toHaveLength(2);
@@ -757,12 +776,11 @@ describe('ChatGPT session stays signed in (refresh)', () => {
       await auth.start().catch(() => undefined);
       for (let n = 0; n < ticks; n++) {
         jest.advanceTimersByTime(60_000);
-        await new Promise((r) => process.nextTick(r));
+        await auth.settled();
       }
     } finally {
       jest.useRealTimers();
     }
-    await new Promise((r) => setTimeout(r, 20));
     auth.stop();
     return scenario.logLines.filter((l) => l.includes('"lvl":"warn"'));
   }
@@ -818,7 +836,7 @@ describe('ChatGPT session stays signed in (refresh)', () => {
     await Promise.all([auth.signOut(), auth.refreshIfDue()]);
 
     expect((await auth.status()).signedIn).toBe(false);
-    expect(await readTokenFile()).toBeNull();
+    expect(await tokenFileReadError()).toBe('ENOENT');
   });
 });
 
@@ -838,7 +856,7 @@ describe('ChatGPT sign-out', () => {
     });
     expect(result).toEqual({ revocationConfirmed: true });
     expect(vault.entries.has('chatgpt.session')).toBe(false);
-    expect(await readTokenFile()).toBeNull();
+    expect(await tokenFileReadError()).toBe('ENOENT');
     expect(vault.entries.get('chatgpt.client-id')).toBe(ISSUED_CLIENT_ID);
     expect(vault.entries.get('chatgpt.host-id')).toBe(hostId ?? 'missing');
   });
@@ -854,7 +872,7 @@ describe('ChatGPT sign-out', () => {
 
     expect(result).toEqual({ revocationConfirmed: false });
     expect(vault.entries.has('chatgpt.session')).toBe(false);
-    expect(await readTokenFile()).toBeNull();
+    expect(await tokenFileReadError()).toBe('ENOENT');
   });
 
   it('revoke: when OpenAI refuses the revocation, still clears locally and reports it unconfirmed', async () => {

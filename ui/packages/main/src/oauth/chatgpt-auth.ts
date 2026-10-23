@@ -80,13 +80,14 @@ export class ChatGptAuth {
   private pendingSignIn: AbortController | null = null;
   private tokenFileStale = false;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private tick: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: ChatGptAuthDeps) {}
 
   /** Rewrites the token file from the stored session, refreshes when due, then checks again every minute. */
   async start(): Promise<void> {
     this.timer = setInterval(() => {
-      this.refreshIfDue().catch((err: unknown) => {
+      this.tick = this.refreshIfDue().catch((err: unknown) => {
         if (err instanceof VaultUnavailableError) return;
         this.deps.logger.warn('chatgpt: refresh check failed', { error: errorName(err) });
       });
@@ -102,6 +103,11 @@ export class ChatGptAuth {
   stop(): void {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
+  }
+
+  /** Resolves when the latest timer-driven refresh check has finished, its warning included; exists so tests can await it. */
+  settled(): Promise<void> {
+    return this.tick;
   }
 
   async status(): Promise<ChatGptStatus> {
