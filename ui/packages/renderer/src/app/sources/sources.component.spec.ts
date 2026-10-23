@@ -15,6 +15,7 @@ interface FakeBridge {
   appOpenExternal: ReturnType<typeof vi.fn>;
   vaultStore: ReturnType<typeof vi.fn>;
   vaultHas: ReturnType<typeof vi.fn>;
+  vaultDelete: ReturnType<typeof vi.fn>;
   workerStatus: ReturnType<typeof vi.fn>;
   workerStop: ReturnType<typeof vi.fn>;
   workerStart: ReturnType<typeof vi.fn>;
@@ -37,7 +38,10 @@ function makeBridge(
     lmStudioModels?: readonly FakeLmStudioModel[];
     lmStudioError?: unknown;
     vaultStoreError?: unknown;
+    vaultHasError?: unknown;
+    vaultDeleteError?: unknown;
     vaultHas?: boolean;
+    vaultKeys?: readonly string[];
     workerState?: string;
     workerStartError?: unknown;
   } = {},
@@ -55,7 +59,19 @@ function makeBridge(
     vaultStore: vi.fn(async () => {
       if (opts.vaultStoreError !== undefined) throw opts.vaultStoreError;
     }),
-    vaultHas: vi.fn(async () => ({ exists: opts.vaultHas ?? false })),
+    vaultHas: vi.fn(async (req: { key: string }) => {
+      if (opts.vaultHasError !== undefined) throw opts.vaultHasError;
+      return {
+        exists:
+          opts.vaultKeys !== undefined
+            ? opts.vaultKeys.includes(req.key)
+            : (opts.vaultHas ?? false),
+      };
+    }),
+    vaultDelete: vi.fn(async () => {
+      if (opts.vaultDeleteError !== undefined) throw opts.vaultDeleteError;
+      return { deleted: true };
+    }),
     workerStatus: vi.fn(async () => ({ state: opts.workerState ?? 'idle', restarts: 0 })),
     workerStop: vi.fn(async () => ({ exitCode: 0 })),
     workerStart: vi.fn(async () => {
@@ -72,7 +88,10 @@ async function setup(
     lmStudioModels?: readonly FakeLmStudioModel[];
     lmStudioError?: unknown;
     vaultStoreError?: unknown;
+    vaultHasError?: unknown;
+    vaultDeleteError?: unknown;
     vaultHas?: boolean;
+    vaultKeys?: readonly string[];
     workerState?: string;
     workerStartError?: unknown;
   } = {},
@@ -112,7 +131,7 @@ describe('SourcesComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="section-cloud"]')).not.toBeNull();
   });
 
-  it('renders all eight provider cards', async () => {
+  it('renders all nine provider cards', async () => {
     const { fixture } = await setup();
     const expectedIds = [
       'local-models',
@@ -121,6 +140,7 @@ describe('SourcesComponent', () => {
       'chatgpt-plus',
       'openai-api',
       'google-gemini',
+      'typesafe-jev',
       'openrouter',
       'custom-api',
     ];
@@ -567,5 +587,206 @@ describe('SourcesComponent', () => {
     await settle(fixture);
     await settle(fixture);
     expect(saved()).toContain('Saved. Restarting Scout to use OpenAI.');
+  });
+
+  it('the TypeSafe (Jev) card stores the guard key without changing the LLM provider and shows Connected', async () => {
+    const { fixture, bridge } = await setup();
+    const card = query<HTMLElement>(fixture, '[data-test="card-typesafe-jev"]');
+    expect(card.textContent).toContain('TypeSafe (Jev)');
+    expect(card.textContent).toContain(
+      "Read-only guard: TypeSafe's Jev model checks each request, with the recent conversation, and refuses ones that ask Scout to change something.",
+    );
+    expect(query<HTMLElement>(fixture, '[data-test="badge-typesafe-jev"]').textContent).toContain(
+      'Not Connected',
+    );
+    const action = query<HTMLButtonElement>(fixture, '[data-test="action-typesafe-jev"]');
+    expect(action.textContent).toContain('Add API Key');
+
+    action.click();
+    fixture.detectChanges();
+
+    const keyInput = query<HTMLInputElement>(fixture, '[data-test="api-key-typesafe-jev"]');
+    expect(keyInput.type).toBe('password');
+    expect(query(fixture, '[data-test="model-typesafe-jev"]')).toBeNull();
+    type(keyInput, 'ts-typed-key');
+    query<HTMLButtonElement>(fixture, '[data-test="save-typesafe-jev"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'guard.typesafe-api-key', value: 'ts-typed-key' },
+    ]);
+    expect(query(fixture, '[data-test="key-form-typesafe-jev"]')).toBeNull();
+    const badge = query<HTMLElement>(fixture, '[data-test="badge-typesafe-jev"]');
+    expect(badge.textContent ?? '').toContain('Connected');
+    expect(badge.textContent ?? '').not.toContain('Not Connected');
+    expect(query<HTMLElement>(fixture, '[data-test="saved-typesafe-jev"]').textContent).toContain(
+      'Saved. Scout will use the read-only guard the next time it starts.',
+    );
+  });
+
+  it('the TypeSafe (Jev) card with an empty key shows an error in an alert and stores nothing', async () => {
+    const { fixture, bridge } = await setup();
+    query<HTMLButtonElement>(fixture, '[data-test="action-typesafe-jev"]').click();
+    fixture.detectChanges();
+
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-typesafe-jev"]'), '  ');
+    query<HTMLButtonElement>(fixture, '[data-test="save-typesafe-jev"]').click();
+    await settle(fixture);
+
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    const alert = query<HTMLElement>(fixture, '[data-test="key-form-typesafe-jev"] [role="alert"]');
+    expect(alert.textContent).toContain('Enter an API key.');
+  });
+
+  it('the TypeSafe (Jev) card shows Connected on load when the vault already holds the guard key', async () => {
+    const { fixture } = await setup({ vaultKeys: ['guard.typesafe-api-key'] });
+
+    const badge = query<HTMLElement>(fixture, '[data-test="badge-typesafe-jev"]');
+    expect(badge.textContent ?? '').toContain('Connected');
+    expect(badge.textContent ?? '').not.toContain('Not Connected');
+  });
+
+  it('the TypeSafe (Jev) card stays Not Connected on load when only a cloud LLM key is stored', async () => {
+    const { fixture } = await setup({ vaultKeys: ['llm.api-key'] });
+
+    expect(query<HTMLElement>(fixture, '[data-test="badge-typesafe-jev"]').textContent).toContain(
+      'Not Connected',
+    );
+  });
+
+  it('saving the TypeSafe (Jev) key while Scout is running restarts it so the guard applies', async () => {
+    const { fixture, bridge } = await setup({ workerState: 'running' });
+    query<HTMLButtonElement>(fixture, '[data-test="action-typesafe-jev"]').click();
+    fixture.detectChanges();
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-typesafe-jev"]'), 'ts-typed-key');
+    query<HTMLButtonElement>(fixture, '[data-test="save-typesafe-jev"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(query<HTMLElement>(fixture, '[data-test="saved-typesafe-jev"]').textContent).toContain(
+      'Saved. Restarting Scout to use the read-only guard.',
+    );
+    expect(fixture.nativeElement.textContent).not.toContain('ts-typed-key');
+  });
+
+  const guardBadge = (fixture: ComponentFixture<SourcesComponent>): string =>
+    query<HTMLElement>(fixture, '[data-test="badge-typesafe-jev"]').textContent ?? '';
+
+  async function disconnectGuard(fixture: ComponentFixture<SourcesComponent>): Promise<void> {
+    query<HTMLButtonElement>(fixture, '[data-test="disconnect-typesafe-jev"]').click();
+    await settle(fixture);
+    await settle(fixture);
+  }
+
+  it('the TypeSafe (Jev) card offers Disconnect only while Connected', async () => {
+    const notConnected = await setup();
+    expect(query(notConnected.fixture, '[data-test="disconnect-typesafe-jev"]')).toBeNull();
+    TestBed.resetTestingModule();
+
+    const { fixture } = await setup({ vaultKeys: ['guard.typesafe-api-key'] });
+    const button = query<HTMLButtonElement>(fixture, '[data-test="disconnect-typesafe-jev"]');
+    expect(button.getAttribute('aria-label')).toBe('Disconnect TypeSafe (Jev)');
+    expect(button.textContent).toContain('Disconnect');
+  });
+
+  it('disconnecting TypeSafe (Jev) deletes only the guard key, turns the badge Not Connected and says the guard is off', async () => {
+    const { fixture, bridge } = await setup({
+      vaultKeys: ['guard.typesafe-api-key', 'llm.api-key'],
+    });
+
+    await disconnectGuard(fixture);
+
+    expect(bridge.vaultDelete.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'guard.typesafe-api-key' },
+    ]);
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    expect(guardBadge(fixture)).toContain('Not Connected');
+    expect(
+      query<HTMLElement>(fixture, '[data-test="card-typesafe-jev"] [role="status"]').textContent,
+    ).toContain('Disconnected. The read-only guard is off.');
+    expect(query(fixture, '[data-test="disconnect-typesafe-jev"]')).toBeNull();
+  });
+
+  it('disconnecting TypeSafe (Jev) while Scout is running restarts it (stop, then start)', async () => {
+    const { fixture, bridge } = await setup({
+      vaultKeys: ['guard.typesafe-api-key'],
+      workerState: 'running',
+    });
+
+    await disconnectGuard(fixture);
+
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(fixture.componentInstance.savedMessage()).not.toContain('Saved.');
+    expect(fixture.nativeElement.textContent).not.toContain('Saved.');
+  });
+
+  it('disconnecting TypeSafe (Jev) while Scout is stopped leaves it stopped', async () => {
+    const { fixture, bridge } = await setup({
+      vaultKeys: ['guard.typesafe-api-key'],
+      workerState: 'idle',
+    });
+
+    await disconnectGuard(fixture);
+
+    expect(bridge.vaultDelete).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(bridge.workerStart).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.savedMessage()).not.toContain('Saved.');
+    expect(fixture.nativeElement.textContent).not.toContain('Saved.');
+  });
+
+  it('a failed TypeSafe (Jev) key save shows the error in an alert and the badge stays Not Connected', async () => {
+    const { fixture } = await setup({ vaultStoreError: new Error('keychain locked') });
+    query<HTMLButtonElement>(fixture, '[data-test="action-typesafe-jev"]').click();
+    fixture.detectChanges();
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-typesafe-jev"]'), 'ts-typed-key');
+
+    query<HTMLButtonElement>(fixture, '[data-test="save-typesafe-jev"]').click();
+    await settle(fixture);
+
+    const alert = query<HTMLElement>(fixture, '[data-test="key-form-typesafe-jev"] [role="alert"]');
+    expect(alert.textContent).toContain('keychain locked');
+    expect(guardBadge(fixture)).toContain('Not Connected');
+    expect(fixture.nativeElement.textContent).not.toContain('ts-typed-key');
+  });
+
+  it('when the vault check fails on load the TypeSafe (Jev) card says so in an alert and still offers Disconnect', async () => {
+    const { fixture } = await setup({ vaultHasError: new Error('vault unavailable') });
+
+    expect(guardBadge(fixture)).toContain('Not Connected');
+    const alert = fixture.nativeElement.querySelector(
+      '[data-test="card-typesafe-jev"] [role="alert"]',
+    ) as HTMLElement | null;
+    expect(alert?.textContent ?? '').toContain(
+      'Could not check the TypeSafe key; the read-only guard may still be on.',
+    );
+    const disconnect = fixture.nativeElement.querySelector(
+      '[data-test="disconnect-typesafe-jev"]',
+    ) as HTMLButtonElement | null;
+    expect(disconnect?.getAttribute('aria-label') ?? '').toBe('Disconnect TypeSafe (Jev)');
+  });
+
+  it('a failed TypeSafe (Jev) disconnect shows the error in an alert and the badge stays Connected', async () => {
+    const { fixture, bridge } = await setup({
+      vaultKeys: ['guard.typesafe-api-key'],
+      vaultDeleteError: new Error('keychain locked'),
+      workerState: 'running',
+    });
+
+    await disconnectGuard(fixture);
+
+    expect(
+      query<HTMLElement>(fixture, '[data-test="card-typesafe-jev"] [role="alert"]').textContent,
+    ).toContain('keychain locked');
+    expect(guardBadge(fixture)).not.toContain('Not Connected');
+    expect(guardBadge(fixture)).toContain('Connected');
+    expect(bridge.workerStop).not.toHaveBeenCalled();
   });
 });

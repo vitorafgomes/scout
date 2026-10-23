@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, spyOn } from 'bun:test';
 import { buildEnv } from '../src/worker/build-env.js';
 import { VaultUnavailableError } from '@scout/shared';
 
@@ -196,6 +196,63 @@ describe('buildEnv', () => {
       SCOUT__LLM__OLLAMA__CHAT__MODEL: 'qwen2.5',
       SCOUT__LLM__OLLAMA__ENDPOINT: 'http://10.0.0.5:11434',
     });
+  });
+
+  it('read-only guard: a stored TypeSafe key reaches the worker on Ollama', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.model': 'llama3.1',
+        'guard.typesafe-api-key': 'ts-key',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__GUARD__TYPESAFE__APIKEY: 'ts-key',
+      SCOUT__LLM__OLLAMA__CHAT__MODEL: 'llama3.1',
+    });
+  });
+
+  it('read-only guard: a stored TypeSafe key reaches the worker on OpenAI', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.api-key': 'sk-openai-key',
+        'guard.typesafe-api-key': 'ts-key',
+      }),
+    });
+    expect(env['SCOUT__GUARD__TYPESAFE__APIKEY']).toBe('ts-key');
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-key');
+  });
+
+  it('read-only guard: with no TypeSafe key stored the worker gets no guard variable', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.api-key': 'g',
+      }),
+    });
+    expect('SCOUT__GUARD__TYPESAFE__APIKEY' in env).toBe(false);
+  });
+
+  it('read-only guard: the TypeSafe key is never written to the console', async () => {
+    const SECRET = 'ts-key-must-not-be-logged';
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) =>
+      spyOn(console, level).mockImplementation(() => undefined),
+    );
+    try {
+      await buildEnv({
+        vaultGet: makeVault({ 'discord.bot-token': 'tok', 'guard.typesafe-api-key': SECRET }),
+      });
+      const logged = JSON.stringify(spies.flatMap((spy) => spy.mock.calls));
+      expect(logged).not.toContain(SECRET);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
   });
 
   it('token value does not appear in keys or serialised env snapshot', async () => {

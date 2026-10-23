@@ -1,13 +1,17 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.TextGeneration;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
+using Scout.Llm.Guard;
 using Scout.Llm.Providers.AzureAIInference;
 using Scout.Llm.Providers.AzureOpenAI;
 using Scout.Llm.Providers.Gemini;
@@ -31,7 +35,9 @@ public static class LlmServiceCollectionExtensions
     /// Register the Scout LLM gateway. Binds <c>Scout:Llm</c>, selects the
     /// provider, builds one shared kernel, and exposes
     /// <see cref="IChatCompletionService"/> and
-    /// <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/> from it.
+    /// <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/> from it. When
+    /// <c>Scout:Guard:TypeSafe:ApiKey</c> is set, the kernel's chat service is the
+    /// read-only guard wrapping the provider's own.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// Thrown at startup when <c>LlmOptions.Provider</c> names an unknown provider.
@@ -49,6 +55,14 @@ public static class LlmServiceCollectionExtensions
         if (string.IsNullOrWhiteSpace(provider))
         {
             provider = new LlmOptions().Provider;
+        }
+
+        var guarded = !string.IsNullOrWhiteSpace(
+            configuration.GetSection(TypeSafeGuardOptions.Section)["ApiKey"]);
+        if (guarded)
+        {
+            services.Configure<TypeSafeGuardOptions>(configuration.GetSection(TypeSafeGuardOptions.Section));
+            services.AddHttpClient<TypeSafeClient>(client => client.Timeout = TimeSpan.FromSeconds(5));
         }
 
         switch (provider)
@@ -89,6 +103,10 @@ public static class LlmServiceCollectionExtensions
             var factory = sp.GetRequiredService<ILlmProviderFactory>();
             var builder = Kernel.CreateBuilder();
             factory.AddToKernel(builder);
+            if (guarded)
+            {
+                AddReadOnlyGuard(builder.Services, sp);
+            }
 
             // Register every plugin contributed by feature modules (e.g. GitHub)
             // onto the shared kernel so the LLM can invoke them via
@@ -129,5 +147,26 @@ public static class LlmServiceCollectionExtensions
                 sp.GetService<ChatCompletionAgent>()));
 
         return services;
+    }
+
+    private static void AddReadOnlyGuard(IServiceCollection kernelServices, IServiceProvider services)
+    {
+        var chat = kernelServices.Where(d => d.ServiceType == typeof(IChatCompletionService)).ToList();
+        if (chat.Count != 1 || chat[0].IsKeyedService || chat[0].ImplementationFactory is not { } innerFactory)
+        {
+            throw new InvalidOperationException(
+                "The read-only guard needs exactly one unkeyed, factory-registered chat-completion " +
+                "service in the kernel.");
+        }
+
+        kernelServices.Remove(chat[0]);
+        kernelServices.RemoveAll<ITextGenerationService>();
+        kernelServices.AddSingleton<IChatCompletionService>(kernelProvider =>
+            new ReadOnlyGuardChatCompletionService(
+                (IChatCompletionService)innerFactory(kernelProvider),
+                services.GetRequiredService<TypeSafeClient>(),
+                services.GetRequiredService<IOptions<TypeSafeGuardOptions>>().Value.Threshold,
+                services.GetService<ILogger<ReadOnlyGuardChatCompletionService>>()
+                    ?? NullLogger<ReadOnlyGuardChatCompletionService>.Instance));
     }
 }

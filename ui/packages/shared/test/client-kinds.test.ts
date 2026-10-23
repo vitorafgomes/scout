@@ -45,6 +45,7 @@ describe('VAULT_KEYS', () => {
       'llm.cloud-model',
       'stt.provider',
       'stt.model',
+      'guard.typesafe-api-key',
     ]);
   });
 
@@ -77,6 +78,8 @@ describe('VAULT_KEYS', () => {
           return 'stt-provider';
         case 'stt.model':
           return 'stt-model';
+        case 'guard.typesafe-api-key':
+          return 'guard-typesafe-api-key';
         default: {
           const _exhaustive: never = key;
           return _exhaustive;

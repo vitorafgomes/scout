@@ -28,6 +28,9 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
   };
 
+  const guardKey = await vaultGet('guard.typesafe-api-key');
+  if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;
+
   switch (llmProvider) {
     case 'Ollama': {
       const llmModel = await vaultGet('llm.model');

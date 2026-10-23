@@ -11,7 +11,8 @@ export type VaultKey =
   | 'llm.api-key'
   | 'llm.cloud-model'
   | 'stt.provider'
-  | 'stt.model';
+  | 'stt.model'
+  | 'guard.typesafe-api-key';
 
 export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
   'discord.bot-token',
@@ -25,6 +26,7 @@ export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
   'llm.cloud-model',
   'stt.provider',
   'stt.model',
+  'guard.typesafe-api-key',
 ] as const);
 
 export const CLIENT_KINDS: readonly ClientKind[] = Object.freeze([

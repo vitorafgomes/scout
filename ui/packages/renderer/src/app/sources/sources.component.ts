@@ -30,6 +30,7 @@ interface CardModel {
 }
 
 const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434';
+const GUARD_CARD_ID = 'typesafe-jev';
 const DEFAULT_LM_STUDIO_ENDPOINT = 'http://localhost:1234';
 
 const CLOUD_PROVIDERS: Readonly<
@@ -49,6 +50,7 @@ const ICONS = Object.freeze({
   gemini: 'M12 2 14 10 22 12 14 14 12 22 10 14 2 12 10 10Z',
   openRouter: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 4 4 4-4 4-4-4Zm0 4 4 4-4 4-4-4Z',
   customApi: 'M4 7h10v2H4Zm0 4h6v2H4Zm0 4h10v2H4ZM20 6l-1.5 1.5L20 9h-3v2h3l-1.5 1.5L20 14l4-4Z',
+  shield: 'M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5Z',
 });
 
 @Component({
@@ -238,7 +240,73 @@ const ICONS = Object.freeze({
                       <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
                     </svg>
                   </button>
-                  @if (openForm() === card.id) {
+                  @if (
+                    card.id === guardCardId &&
+                    (cloudStateOf(card.id) === 'connected' || guardCheckFailed())
+                  ) {
+                    <button
+                      type="button"
+                      class="action"
+                      data-test="disconnect-typesafe-jev"
+                      aria-label="Disconnect TypeSafe (Jev)"
+                      [disabled]="saving()"
+                      (click)="disconnectGuard()"
+                    >
+                      Disconnect
+                    </button>
+                  }
+                  @if (card.id === guardCardId) {
+                    @if (guardNotice(); as notice) {
+                      <p class="saved" role="status" data-test="disconnected-typesafe-jev">
+                        {{ notice }}
+                      </p>
+                      @if (restartError(); as error) {
+                        <p class="form-error" role="alert">{{ error }}</p>
+                      }
+                    }
+                    @if (guardError(); as error) {
+                      <p class="form-error" role="alert" data-test="guard-error">{{ error }}</p>
+                    }
+                  }
+                  @if (openForm() === card.id && card.id === guardCardId) {
+                    <form
+                      class="key-form"
+                      [attr.data-test]="'key-form-' + card.id"
+                      (submit)="saveGuardKey($event, guardKeyInput)"
+                    >
+                      <label class="field">
+                        <span class="field-label">API key</span>
+                        <input
+                          #guardKeyInput
+                          type="password"
+                          autocomplete="off"
+                          class="text-input"
+                          [attr.data-test]="'api-key-' + card.id"
+                        />
+                      </label>
+                      @if (formError(); as error) {
+                        <p class="form-error" role="alert">{{ error }}</p>
+                      }
+                      <div class="form-buttons">
+                        <button
+                          type="submit"
+                          class="action action--primary"
+                          [disabled]="saving()"
+                          [attr.data-test]="'save-' + card.id"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          class="action"
+                          [attr.data-test]="'cancel-' + card.id"
+                          (click)="cancelKeyForm()"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  } @else if (openForm() === card.id) {
                     <form
                       class="key-form"
                       [attr.data-test]="'key-form-' + card.id"
@@ -578,6 +646,11 @@ export class SourcesComponent implements OnInit {
   readonly savedMessage = signal<string>('');
   readonly restartError = signal<string | null>(null);
   readonly scanning = signal<string | null>(null);
+  readonly guardCardId = GUARD_CARD_ID;
+  private readonly guardConnected = signal<boolean>(false);
+  readonly guardNotice = signal<string | null>(null);
+  readonly guardError = signal<string | null>(null);
+  readonly guardCheckFailed = signal<boolean>(false);
   private readonly states = signal<Readonly<Record<string, ConnectionState>>>({
     ollama: 'unknown',
     'lm-studio': 'not-connected',
@@ -681,6 +754,19 @@ export class SourcesComponent implements OnInit {
       disabled: false,
     },
     {
+      id: GUARD_CARD_ID,
+      kind: 'cloud',
+      title: 'TypeSafe (Jev)',
+      description:
+        "Read-only guard: TypeSafe's Jev model checks each request, with the recent conversation, and refuses ones that ask Scout to change something.",
+      iconPath: ICONS.shield,
+      primaryAction: 'Add API Key',
+      secondaryLabel: null,
+      secondaryUrl: null,
+      primaryIsScan: false,
+      disabled: false,
+    },
+    {
       id: 'openrouter',
       kind: 'cloud',
       title: 'OpenRouter',
@@ -712,6 +798,7 @@ export class SourcesComponent implements OnInit {
     void this.onScan('ollama');
     void this.onScan('lm-studio');
     void this.llmConfig.loadFromVault();
+    void this.loadGuardState();
   }
 
   setFilter(kind: FilterKind): void {
@@ -726,6 +813,9 @@ export class SourcesComponent implements OnInit {
   }
 
   cloudStateOf(id: string): ConnectionState {
+    if (id === GUARD_CARD_ID) {
+      return this.guardConnected() ? 'connected' : 'not-connected';
+    }
     const provider = CLOUD_PROVIDERS[id]?.provider;
     return provider !== undefined && provider === this.llmConfig.activeCloudProvider()
       ? 'connected'
@@ -737,10 +827,12 @@ export class SourcesComponent implements OnInit {
   }
 
   toggleKeyForm(id: string): void {
-    if (CLOUD_PROVIDERS[id] === undefined) return;
+    if (CLOUD_PROVIDERS[id] === undefined && id !== GUARD_CARD_ID) return;
     this.formError.set(null);
     this.savedCard.set(null);
     this.restartError.set(null);
+    this.guardNotice.set(null);
+    this.guardError.set(null);
     this.openForm.update((open) => (open === id ? null : id));
   }
 
@@ -782,18 +874,77 @@ export class SourcesComponent implements OnInit {
     await this.restartIfRunning(provider);
   }
 
-  private async restartIfRunning(provider: CloudLlmProvider): Promise<void> {
+  async saveGuardKey(event: Event, keyInput: HTMLInputElement): Promise<void> {
+    event.preventDefault();
+    if (this.saving()) return;
+    const key = keyInput.value.trim();
+    if (key.length === 0) {
+      this.formError.set('Enter an API key.');
+      return;
+    }
+    this.saving.set(true);
+    this.formError.set(null);
+    try {
+      await this.bridge.vaultStore({ key: 'guard.typesafe-api-key', value: key });
+    } catch (err: unknown) {
+      this.formError.set(err instanceof Error ? err.message : 'Could not save the API key.');
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    this.guardConnected.set(true);
+    this.guardCheckFailed.set(false);
+    this.openForm.set(null);
+    this.savedMessage.set('Saved.');
+    this.savedCard.set(GUARD_CARD_ID);
+    await this.restartIfRunning('the read-only guard');
+  }
+
+  async disconnectGuard(): Promise<void> {
+    if (this.saving()) return;
+    this.saving.set(true);
+    this.savedCard.set(null);
+    this.restartError.set(null);
+    this.guardNotice.set(null);
+    this.guardError.set(null);
+    try {
+      await this.bridge.vaultDelete({ key: 'guard.typesafe-api-key' });
+    } catch (err: unknown) {
+      this.guardError.set(err instanceof Error ? err.message : 'Could not remove the API key.');
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    this.guardConnected.set(false);
+    this.guardCheckFailed.set(false);
+    this.guardNotice.set('Disconnected. The read-only guard is off.');
+    await this.restartIfRunning('the read-only guard');
+    this.savedMessage.set('');
+  }
+
+  private async loadGuardState(): Promise<void> {
+    try {
+      const { exists } = await this.bridge.vaultHas({ key: 'guard.typesafe-api-key' });
+      this.guardConnected.set(exists);
+    } catch {
+      this.guardConnected.set(false);
+      this.guardCheckFailed.set(true);
+      this.guardError.set('Could not check the TypeSafe key; the read-only guard may still be on.');
+    }
+  }
+
+  private async restartIfRunning(target: string): Promise<void> {
     try {
       const { state } = await this.bridge.workerStatus();
       if (state !== 'running' && state !== 'starting') {
-        this.savedMessage.set(`Saved. Scout will use ${provider} the next time it starts.`);
+        this.savedMessage.set(`Saved. Scout will use ${target} the next time it starts.`);
         return;
       }
-      this.savedMessage.set(`Saved. Restarting Scout to use ${provider}.`);
+      this.savedMessage.set(`Saved. Restarting Scout to use ${target}.`);
       await this.bridge.workerStop();
       await this.bridge.workerStart();
     } catch (err: unknown) {
-      this.savedMessage.set(`Saved. Restart Scout from the status screen to use ${provider}.`);
+      this.savedMessage.set(`Saved. Restart Scout from the status screen to use ${target}.`);
       this.restartError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
     }
   }
