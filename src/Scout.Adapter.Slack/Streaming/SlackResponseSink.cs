@@ -37,7 +37,7 @@ public sealed class SlackResponseSink : IResponseSink
     // edits responsive and matches the locked contract for this adapter.
     internal const int MaxBodyLength = 3000;
     internal const string CursorGlyph = "▌"; // left half block, same as Discord.
-    internal const string ConnectionErrorFooter = "\n\n(connection error)";
+    internal const string ErrorFooter = "\n\n(the AI provider returned an error; see Scout logs)";
     internal const string TruncationMarker = "... (truncated)\n\n";
 
     // Used when a rate-limit response carries no usable Retry-After hint.
@@ -184,9 +184,9 @@ public sealed class SlackResponseSink : IResponseSink
         _logger.LogWarning("Slack response failed: {Reason}", reason);
 
         var body = finalTextSoFar.Length == 0
-            ? ConnectionErrorFooter.TrimStart()
-            : TruncateHead(finalTextSoFar, MaxBodyLength - ConnectionErrorFooter.Length)
-                + ConnectionErrorFooter;
+            ? ErrorFooter.TrimStart()
+            : TruncateHead(finalTextSoFar, MaxBodyLength - ErrorFooter.Length)
+                + ErrorFooter;
 
         await EditWithRateLimitRetryAsync(body, cancellationToken).ConfigureAwait(false);
     }

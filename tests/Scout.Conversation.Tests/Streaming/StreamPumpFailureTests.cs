@@ -148,6 +148,35 @@ public sealed class StreamPumpFailureTests
     }
 
     [Fact]
+    public async Task Quota_Exceeded_MidStream_Tells_The_User_The_Account_Has_No_Credit()
+    {
+        var time = Clock();
+        var logger = new RecordingLogger();
+        var sink = new RecordingResponseSink(FineGrained);
+        var response = new ChatResponse(
+            AsyncSequence.ThenThrow(
+                new LlmQuotaExceededException("credit_balance_exhausted"),
+                default,
+                "par", "tial"));
+
+        await Should.NotThrowAsync(
+            () => Pump(time, logger).RunAsync(response, sink, CancellationToken.None));
+
+        sink.Completed.ShouldBeTrue();
+        sink.Failed.ShouldBeFalse();
+        sink.TerminalCount.ShouldBe(1);
+        sink.FinalText.ShouldBe("partial\n\n" + new StreamPumpOptions().QuotaExceededMessage);
+        sink.FinalText!.ShouldContain("no credit left");
+        sink.FinalText!.ShouldNotContain("try again");
+        sink.FinalText!.ShouldNotContain("rate limit");
+        sink.FinalText!.ShouldNotContain("connection error");
+
+        var warning = logger.EntriesAt(LogLevel.Warning).ShouldHaveSingleItem();
+        warning.Message.ShouldContain("credit_balance_exhausted");
+        warning.Exception.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Generic_Failure_MidStream_Still_Warns_With_Stack_And_Fails()
     {
         var time = Clock();

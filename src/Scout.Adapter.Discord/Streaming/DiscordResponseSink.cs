@@ -28,7 +28,7 @@ public sealed class DiscordResponseSink : IResponseSink
 {
     internal const int MaxEmbedDescriptionLength = 4096;
     internal const string CursorGlyph = "▌";
-    internal const string ConnectionErrorFooter = "\n\n(connection error)";
+    internal const string ErrorFooter = "\n\n(the AI provider returned an error; see Scout logs)";
     internal const string TruncationMarker = "... (truncated)\n\n";
 
     // Used when a rate-limit response carries no usable retry hint.
@@ -165,9 +165,9 @@ public sealed class DiscordResponseSink : IResponseSink
         _logger.LogWarning("Discord response failed: {Reason}", reason);
 
         var body = finalTextSoFar.Length == 0
-            ? ConnectionErrorFooter.TrimStart()
-            : TruncateHead(finalTextSoFar, MaxEmbedDescriptionLength - ConnectionErrorFooter.Length)
-                + ConnectionErrorFooter;
+            ? ErrorFooter.TrimStart()
+            : TruncateHead(finalTextSoFar, MaxEmbedDescriptionLength - ErrorFooter.Length)
+                + ErrorFooter;
 
         await WriteWithRateLimitRetryAsync(_edit, body, cancellationToken).ConfigureAwait(false);
     }

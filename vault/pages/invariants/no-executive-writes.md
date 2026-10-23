@@ -29,7 +29,7 @@ reliability: high
 
 ## The gap
 
-Nothing in code stops a plugin from exposing a write function. The kernel takes every `KernelPlugin` registered in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:96`) and offers all of their functions to the model with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:264`, `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:84`). There is no allow-list, no read-only marker on a function, and no test that fails when a write function appears. Read-only holds today because the write methods do not exist, and for no other reason.
+Nothing in code stops a plugin from exposing a write function. The kernel takes every `KernelPlugin` registered in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:96`) and offers all of their functions to the model with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:343`, `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:84`). There is no allow-list, no read-only marker on a function, and no test that fails when a write function appears. Read-only holds today because the write methods do not exist, and for no other reason.
 
 ## Why this exists
 

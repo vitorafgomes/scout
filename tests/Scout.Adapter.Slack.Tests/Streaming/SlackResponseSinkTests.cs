@@ -99,7 +99,8 @@ public sealed class SlackResponseSinkTests
 
         edits.ShouldHaveSingleItem();
         edits[0].ShouldStartWith("partial answer");
-        edits[0].ShouldEndWith("(connection error)");
+        edits[0].ShouldEndWith("(the AI provider returned an error; see Scout logs)");
+        edits[0].ShouldNotContain("connection error");
     }
 
     [Fact]
@@ -111,7 +112,7 @@ public sealed class SlackResponseSinkTests
         await sink.FailAsync(string.Empty, "boom", CancellationToken.None);
 
         edits.ShouldHaveSingleItem();
-        edits[0].ShouldBe("(connection error)");
+        edits[0].ShouldBe("(the AI provider returned an error; see Scout logs)");
     }
 
     [Fact]

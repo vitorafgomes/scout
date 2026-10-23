@@ -40,4 +40,12 @@ public sealed record StreamPumpOptions
     /// </summary>
     public string RateLimitMessage { get; init; } =
         "I've hit the model's rate limit right now — please wait a moment and try again.";
+
+    /// <summary>
+    /// User-facing text appended when the provider refuses the request because the
+    /// account has no credit or reached its spending limit. Rendered verbatim via
+    /// the terminal Complete call; it carries no retry advice.
+    /// </summary>
+    public string QuotaExceededMessage { get; init; } =
+        "The AI provider rejected the request: the account has no credit left or reached its spending limit. Add credit with the provider or choose another one on the AI Sources screen in Scout.";
 }
