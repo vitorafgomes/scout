@@ -3,8 +3,11 @@ import { CLOUD_API_KEY_VAULT_KEYS, type ProviderKeyValidateResponse } from '@sco
 
 import { ScoutBridgeService } from './scout-bridge';
 
-export type LlmProvider = 'Ollama' | 'OpenAI' | 'Gemini' | 'None';
-export type CloudLlmProvider = Exclude<LlmProvider, 'Ollama' | 'None'>;
+export type LlmProvider = 'Ollama' | 'OpenAI' | 'Gemini' | 'ChatGptPlan' | 'None';
+/** Cloud providers connected by an API key. */
+export type CloudLlmProvider = 'OpenAI' | 'Gemini';
+/** Every cloud provider Scout can answer with: the keyed ones and the ChatGPT plan sign-in. */
+export type ActiveCloudProvider = CloudLlmProvider | 'ChatGptPlan';
 
 export interface LlmConfigSnapshot {
   readonly provider: LlmProvider;
@@ -16,12 +19,18 @@ const STORAGE_KEY = 'scout:llm-config';
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_PROVIDER: LlmProvider = 'Ollama';
 const CLOUD_PROVIDERS: readonly CloudLlmProvider[] = ['OpenAI', 'Gemini'];
+const ACTIVE_CLOUD_PROVIDERS: readonly ActiveCloudProvider[] = ['OpenAI', 'Gemini', 'ChatGptPlan'];
 
 /** The chat model a cloud provider gets when Scout switches to it without the user choosing one. */
-export const DEFAULT_CLOUD_MODELS: Readonly<Record<CloudLlmProvider, string>> = Object.freeze({
+export const DEFAULT_CLOUD_MODELS: Readonly<Record<ActiveCloudProvider, string>> = Object.freeze({
   OpenAI: 'gpt-4o-mini',
   Gemini: 'gemini-2.5-flash',
+  ChatGptPlan: 'gpt-5.6-luna',
 });
+
+function isActiveCloudProvider(value: unknown): value is ActiveCloudProvider {
+  return value === 'OpenAI' || value === 'Gemini' || value === 'ChatGptPlan';
+}
 
 interface PersistedShape {
   readonly provider: Exclude<LlmProvider, 'None'>;
@@ -39,7 +48,7 @@ function getStorage(): Storage | null {
 }
 
 function isProvider(value: unknown): value is Exclude<LlmProvider, 'None'> {
-  return value === 'Ollama' || value === 'OpenAI' || value === 'Gemini';
+  return value === 'Ollama' || isActiveCloudProvider(value);
 }
 
 function readPersisted(): PersistedShape | null {
@@ -104,16 +113,16 @@ export class LlmConfigStore {
   readonly model = this._model.asReadonly();
   readonly endpoint = this._endpoint.asReadonly();
 
-  private readonly _connectedProviders = signal<ReadonlySet<CloudLlmProvider>>(new Set());
-  /** Cloud providers whose own API key is in the vault, whether or not Scout uses them. */
+  private readonly _connectedProviders = signal<ReadonlySet<ActiveCloudProvider>>(new Set());
+  /** Cloud providers Scout could answer with: an API key in the vault, or a ChatGPT sign-in with plan usage. */
   readonly connectedProviders = this._connectedProviders.asReadonly();
 
   readonly isConfigured = computed<boolean>(() => this._model() !== null);
 
   /** The cloud provider the next worker start will use, once its API key is confirmed in the vault; null otherwise. */
-  readonly activeCloudProvider = computed<CloudLlmProvider | null>(() => {
+  readonly activeCloudProvider = computed<ActiveCloudProvider | null>(() => {
     const provider = this._provider();
-    return provider === 'OpenAI' || provider === 'Gemini' ? provider : null;
+    return isActiveCloudProvider(provider) ? provider : null;
   });
 
   // Paints from the localStorage mirror first, then lets the vault decide:
@@ -130,18 +139,19 @@ export class LlmConfigStore {
       this._endpoint.set(persisted.endpoint);
     }
 
-    const connected = new Set<CloudLlmProvider>();
+    const connected = new Set<ActiveCloudProvider>();
     for (const provider of CLOUD_PROVIDERS) {
       const res = await this.bridge
         .vaultHas({ key: CLOUD_API_KEY_VAULT_KEYS[provider] })
         .catch(() => ({ exists: false }));
       if (res.exists) connected.add(provider);
     }
+    if (this._connectedProviders().has('ChatGptPlan')) connected.add('ChatGptPlan');
     this._connectedProviders.set(connected);
 
     const vaultProvider = await this.readPublic('llm.provider');
-    if (vaultProvider === 'OpenAI' || vaultProvider === 'Gemini') {
-      if (!connected.has(vaultProvider)) {
+    if (isActiveCloudProvider(vaultProvider)) {
+      if (vaultProvider !== 'ChatGptPlan' && !connected.has(vaultProvider)) {
         this.resetUnconfigured();
         return;
       }
@@ -184,9 +194,10 @@ export class LlmConfigStore {
     }
 
     let requiredInVault = false;
-    if (persisted.provider === 'Ollama') {
+    if (persisted.provider === 'Ollama' || persisted.provider === 'ChatGptPlan') {
+      const key = persisted.provider === 'Ollama' ? 'llm.model' : 'llm.cloud-model';
       try {
-        requiredInVault = (await this.bridge.vaultHas({ key: 'llm.model' })).exists;
+        requiredInVault = (await this.bridge.vaultHas({ key })).exists;
       } catch {
         requiredInVault = false;
       }
@@ -252,7 +263,7 @@ export class LlmConfigStore {
   }
 
   /** Makes a connected cloud provider the one the next worker start uses, with this chat model. */
-  async use(provider: CloudLlmProvider, model: string): Promise<void> {
+  async use(provider: ActiveCloudProvider, model: string): Promise<void> {
     const trimmedModel = model.trim();
     if (trimmedModel.length === 0) {
       throw new Error('llm-config: model must be non-empty');
@@ -269,25 +280,50 @@ export class LlmConfigStore {
   /** Deletes the provider's stored key; when it was the provider in use, Scout switches to another connected cloud provider or to None, never to Ollama. Returns whether it was in use. */
   async disconnect(provider: CloudLlmProvider): Promise<boolean> {
     const wasActive = this._provider() === provider;
-    if (wasActive) {
-      const other = CLOUD_PROVIDERS.find(
-        (candidate) => candidate !== provider && this._connectedProviders().has(candidate),
-      );
-      if (other !== undefined) {
-        await this.use(other, DEFAULT_CLOUD_MODELS[other]);
-      } else {
-        await this.bridge.vaultStore({ key: 'llm.provider', value: 'None' });
-        clearPersisted();
-        this._provider.set('None');
-        this._model.set(null);
-      }
-    }
+    if (wasActive) await this.moveOffActive(provider);
     await this.bridge.vaultDelete({ key: CLOUD_API_KEY_VAULT_KEYS[provider] });
     if (wasActive) await this.bridge.vaultDelete({ key: 'llm.api-key' });
     this._connectedProviders.update(
       (set) => new Set([...set].filter((connected) => connected !== provider)),
     );
     return wasActive;
+  }
+
+  /** Points the next worker start at the ChatGPT plan with this chat model; the sign-in tokens never pass through the renderer. */
+  async useChatGptPlan(model: string): Promise<void> {
+    await this.use('ChatGptPlan', model);
+  }
+
+  /** Records whether the ChatGPT sign-in can answer (signed in with plan usage); it never changes the provider in use. */
+  setChatGptConnected(connected: boolean): void {
+    this._connectedProviders.update((set) => {
+      const next = new Set(set);
+      if (connected) next.add('ChatGptPlan');
+      else next.delete('ChatGptPlan');
+      return next;
+    });
+  }
+
+  /** After a ChatGPT sign-out: when it was the provider in use, Scout switches to another connected cloud provider or to None, never to Ollama. Returns whether it was in use. */
+  async disconnectChatGpt(): Promise<boolean> {
+    const wasActive = this._provider() === 'ChatGptPlan';
+    this.setChatGptConnected(false);
+    if (wasActive) await this.moveOffActive('ChatGptPlan');
+    return wasActive;
+  }
+
+  private async moveOffActive(provider: ActiveCloudProvider): Promise<void> {
+    const other = ACTIVE_CLOUD_PROVIDERS.find(
+      (candidate) => candidate !== provider && this._connectedProviders().has(candidate),
+    );
+    if (other !== undefined) {
+      await this.use(other, DEFAULT_CLOUD_MODELS[other]);
+      return;
+    }
+    await this.bridge.vaultStore({ key: 'llm.provider', value: 'None' });
+    clearPersisted();
+    this._provider.set('None');
+    this._model.set(null);
   }
 
   /** Makes the local Ollama server the provider in use; its stored model and endpoint are left as they are. */

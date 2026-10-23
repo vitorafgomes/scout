@@ -21,6 +21,11 @@ describe('buildBridge', () => {
       'discordBuildOAuthUrl',
       'discordStartOAuthInstall',
       'discordCancelOAuthInstall',
+      'chatgptSignIn',
+      'chatgptCancelSignIn',
+      'chatgptListModels',
+      'chatgptSignOut',
+      'chatgptStatus',
       'vaultStore',
       'vaultHas',
       'vaultDelete',
@@ -74,6 +79,29 @@ describe('buildBridge', () => {
     expect(ipc.invoke).toHaveBeenCalledTimes(1);
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.detectClients);
     expect(result).toBe(expected);
+  });
+
+  it('the ChatGPT methods reach the renderer only through their own channels, with no payload', async () => {
+    const ipc = makeFakeIpc();
+    const status = { signedIn: true, email: 'owner@example.com', planUsageGranted: true };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation((channel: string) =>
+      Promise.resolve(channel === CHANNEL.chatgptSignOut ? { revocationConfirmed: true } : status),
+    );
+
+    const bridge = buildBridge(ipc);
+
+    expect(await bridge.chatgptSignIn()).toEqual(status);
+    expect(await bridge.chatgptStatus()).toEqual(status);
+    expect(await bridge.chatgptSignOut()).toEqual({ revocationConfirmed: true });
+    await bridge.chatgptCancelSignIn();
+    await bridge.chatgptListModels();
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.chatgptSignIn],
+      [CHANNEL.chatgptStatus],
+      [CHANNEL.chatgptSignOut],
+      [CHANNEL.chatgptCancelSignIn],
+      [CHANNEL.chatgptListModels],
+    ]);
   });
 
   it('discordBuildOAuthUrl passes the request payload through without mutation', async () => {

@@ -33,7 +33,30 @@ interface FakeBridge {
   workerStatus: ReturnType<typeof vi.fn>;
   workerStop: ReturnType<typeof vi.fn>;
   workerStart: ReturnType<typeof vi.fn>;
+  chatgptStatus: ReturnType<typeof vi.fn>;
+  chatgptSignIn: ReturnType<typeof vi.fn>;
+  chatgptSignOut: ReturnType<typeof vi.fn>;
+  chatgptCancelSignIn: ReturnType<typeof vi.fn>;
+  chatgptListModels: ReturnType<typeof vi.fn>;
 }
+
+const PLAN_MODELS = [
+  { slug: 'gpt-6.1-sol', displayName: 'GPT-6.1 Sol' },
+  { slug: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna' },
+];
+
+interface FakeChatGptStatus {
+  signedIn: boolean;
+  email: string | null;
+  planUsageGranted: boolean;
+}
+
+const CHATGPT_OUT: FakeChatGptStatus = { signedIn: false, email: null, planUsageGranted: false };
+const CHATGPT_IN: FakeChatGptStatus = {
+  signedIn: true,
+  email: 'owner@example.com',
+  planUsageGranted: true,
+};
 
 interface FakeModel {
   name: string;
@@ -61,6 +84,11 @@ function makeBridge(
     vaultDeleteError?: unknown;
     workerState?: string;
     workerStartError?: unknown;
+    chatgpt?: FakeChatGptStatus;
+    chatgptSignInResult?: FakeChatGptStatus;
+    chatgptSignInError?: unknown;
+    revocationConfirmed?: boolean;
+    modelsError?: unknown;
   } = {},
 ): FakeBridge {
   return {
@@ -99,6 +127,17 @@ function makeBridge(
       if (opts.workerStartError !== undefined) throw opts.workerStartError;
       return { pid: 42 };
     }),
+    chatgptStatus: vi.fn(async () => opts.chatgpt ?? CHATGPT_OUT),
+    chatgptSignIn: vi.fn(async () => {
+      if (opts.chatgptSignInError !== undefined) throw opts.chatgptSignInError;
+      return opts.chatgptSignInResult ?? CHATGPT_IN;
+    }),
+    chatgptSignOut: vi.fn(async () => ({ revocationConfirmed: opts.revocationConfirmed ?? true })),
+    chatgptCancelSignIn: vi.fn(async () => undefined),
+    chatgptListModels: vi.fn(async () => {
+      if (opts.modelsError !== undefined) throw opts.modelsError;
+      return { models: PLAN_MODELS };
+    }),
   };
 }
 
@@ -118,6 +157,11 @@ async function setup(
     vaultDeleteError?: unknown;
     workerState?: string;
     workerStartError?: unknown;
+    chatgpt?: FakeChatGptStatus;
+    chatgptSignInResult?: FakeChatGptStatus;
+    chatgptSignInError?: unknown;
+    revocationConfirmed?: boolean;
+    modelsError?: unknown;
   } = {},
 ): Promise<{
   fixture: ComponentFixture<SourcesComponent>;
@@ -326,9 +370,9 @@ describe('SourcesComponent', () => {
     expect(bridge.llmListOllamaModels).toHaveBeenCalledTimes(1);
   });
 
-  it('ChatGPT Plus, OpenRouter and Custom API cards keep disabled primary actions', async () => {
+  it('OpenRouter and Custom API cards keep disabled primary actions', async () => {
     const { fixture } = await setup();
-    const ids = ['chatgpt-plus', 'openrouter', 'custom-api'];
+    const ids = ['openrouter', 'custom-api'];
 
     for (const id of ids) {
       const btn = fixture.nativeElement.querySelector(
@@ -865,16 +909,367 @@ describe('SourcesComponent', () => {
     expect(text(fixture, '[data-test="badge-ollama"]')).not.toContain('In use');
   });
 
-  it('the ChatGPT Plus card is disabled and says it is not supported', async () => {
+  async function useChatGptCard(
+    opts: Parameters<typeof setup>[0],
+  ): Promise<{ fixture: ComponentFixture<SourcesComponent>; bridge: FakeBridge }> {
+    const result = await setup({ chatgpt: CHATGPT_IN, ...opts });
+    query<HTMLButtonElement>(result.fixture, '[data-test="chatgpt-use"]').click();
+    await settle(result.fixture);
+    await settle(result.fixture);
+    return result;
+  }
+
+  it('the ChatGPT Plus card, not connected, offers "Continue with ChatGPT" and describes plan usage', async () => {
     const { fixture } = await setup();
     const card = query<HTMLElement>(fixture, '[data-test="card-chatgpt-plus"]');
-    const action = query<HTMLButtonElement>(fixture, '[data-test="action-chatgpt-plus"]');
+    const signIn = query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]');
 
-    expect(action.disabled).toBe(true);
-    expect(action.textContent).toContain('Not supported');
-    expect(card.textContent).toContain(
-      'Not supported: a ChatGPT Plus or Pro subscription does not include API access. Use the OpenAI API card with an API key instead.',
+    expect(signIn.disabled).toBe(false);
+    expect(signIn.textContent?.trim()).toBe('Continue with ChatGPT');
+    expect(query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent).toContain(
+      'Not Connected',
     );
+    expect(card.textContent).toContain(
+      "Sign in with your ChatGPT Plus or Pro plan. Usage counts against your plan's limits.",
+    );
+    expect(card.textContent).not.toContain('Not supported');
+  });
+
+  it('"Continue with ChatGPT" signs in through the main process and the card shows the account, Use and Sign out', async () => {
+    const { fixture, bridge } = await setup({
+      vaultHasByKey: { 'llm.openai.api-key': true },
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4o' },
+    });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').click();
+    await settle(fixture);
+
+    expect(bridge.chatgptSignIn).toHaveBeenCalledTimes(1);
+    expect(
+      query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('Connected');
+    expect(query<HTMLElement>(fixture, '[data-test="chatgpt-account"]').textContent).toContain(
+      'owner@example.com',
+    );
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-out"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-in"]')).toBeNull();
+  });
+
+  it('a failed sign-in stays Not Connected and shows the reason in an alert', async () => {
+    const { fixture } = await setup({
+      chatgptSignInError: new Error('OAuth flow cancelled by user'),
+    });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').click();
+    await settle(fixture);
+
+    expect(query<HTMLElement>(fixture, '[data-test="chatgpt-error"]').textContent).toContain(
+      'OAuth flow cancelled by user',
+    );
+    expect(query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').disabled).toBe(false);
+  });
+
+  it('signed in without plan usage: no Use button, and the card says Scout cannot answer through it', async () => {
+    const { fixture } = await setup({ chatgpt: { ...CHATGPT_IN, planUsageGranted: false } });
+
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).toBeNull();
+    expect(
+      query<HTMLElement>(fixture, '[data-test="chatgpt-no-plan-usage"]').textContent,
+    ).toContain('OpenAI did not grant plan usage to Scout');
+  });
+
+  it('Use writes the ChatGptPlan provider and the default model, then restarts a running Scout', async () => {
+    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent).toContain(
+      'Restarting Scout',
+    );
+  });
+
+  it('in use, the card shows the model and Sign out, and no Use button', async () => {
+    const { fixture } = await useChatGptCard({ workerState: 'idle' });
+
+    expect(
+      query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('In use');
+    expect(query<HTMLElement>(fixture, '[data-test="chatgpt-model"]').textContent).toContain(
+      'gpt-5.6-luna',
+    );
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-out"]')).not.toBeNull();
+  });
+
+  it('Sign out while ChatGPT is in use moves Scout to no provider (never Ollama) and restarts a running Scout', async () => {
+    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
+    bridge.vaultStore.mockClear();
+    bridge.workerStop.mockClear();
+    bridge.workerStart.mockClear();
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-out"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.chatgptSignOut).toHaveBeenCalledTimes(1);
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.provider', value: 'None' },
+    ]);
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(
+      query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent?.trim(),
+    ).toBe(
+      'Signed out of ChatGPT. No AI provider is connected; Scout will say so until you connect one.',
+    );
+    expect(
+      query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').textContent?.trim(),
+    ).toBe('Continue with ChatGPT');
+  });
+
+  it('Sign out while ChatGPT is not in use changes no provider and does not restart Scout', async () => {
+    const { fixture, bridge } = await setup({ chatgpt: CHATGPT_IN, workerState: 'running' });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-out"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.chatgptSignOut).toHaveBeenCalledTimes(1);
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(bridge.workerStart).not.toHaveBeenCalled();
+    expect(
+      query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('Signed out of ChatGPT.');
+  });
+
+  it('offers "Sign in again" when ChatGPT is still the chosen provider but the session has ended', async () => {
+    window.localStorage.setItem(
+      LLM_CONFIG_STORAGE_KEY,
+      JSON.stringify({
+        provider: 'ChatGptPlan',
+        model: 'gpt-5.6-luna',
+        endpoint: 'http://localhost:11434',
+      }),
+    );
+    const { fixture } = await setup({
+      vaultHas: true,
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+    });
+
+    expect(
+      query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').textContent?.trim(),
+    ).toBe('Sign in again');
+  });
+
+  it('Cancel while waiting for the browser aborts the sign-in and returns the card to Not Connected without an error', async () => {
+    const { fixture, bridge } = await setup();
+    let rejectSignIn: (err: Error) => void = () => undefined;
+    bridge.chatgptSignIn.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSignIn = reject;
+        }),
+    );
+    bridge.chatgptCancelSignIn.mockImplementationOnce(async () => {
+      rejectSignIn(new Error('OAuth flow aborted before the callback arrived'));
+    });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').click();
+    await settle(fixture);
+    expect(query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').disabled).toBe(true);
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-cancel"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.chatgptCancelSignIn).toHaveBeenCalledTimes(1);
+    const signIn = query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]');
+    expect(signIn.disabled).toBe(false);
+    expect(signIn.textContent?.trim()).toBe('Continue with ChatGPT');
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-cancel"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-error"]')).toBeNull();
+    expect(query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent).toContain(
+      'Not Connected',
+    );
+  });
+
+  function modelSelect(fixture: ComponentFixture<SourcesComponent>): HTMLSelectElement {
+    return query<HTMLSelectElement>(fixture, '[data-test="chatgpt-model-select"]');
+  }
+
+  async function pickModel(
+    fixture: ComponentFixture<SourcesComponent>,
+    slug: string,
+  ): Promise<void> {
+    const select = modelSelect(fixture);
+    select.value = slug;
+    select.dispatchEvent(new Event('change'));
+    await settle(fixture);
+    await settle(fixture);
+  }
+
+  it('signed in, the Model list shows the plan models by display name with the default preselected', async () => {
+    const { fixture, bridge } = await setup({ chatgpt: CHATGPT_IN });
+    await settle(fixture);
+
+    expect(bridge.chatgptListModels).toHaveBeenCalledTimes(1);
+    const options = Array.from(modelSelect(fixture).options).map((o) => [
+      o.value,
+      o.textContent?.trim(),
+    ]);
+    expect(options).toEqual([
+      ['gpt-6.1-sol', 'GPT-6.1 Sol'],
+      ['gpt-5.6-luna', 'GPT-5.6 Luna'],
+    ]);
+    expect(modelSelect(fixture).value).toBe('gpt-5.6-luna');
+  });
+
+  it('Use applies the model picked in the list', async () => {
+    const { fixture, bridge } = await setup({ chatgpt: CHATGPT_IN });
+    await settle(fixture);
+    await pickModel(fixture, 'gpt-6.1-sol');
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-use"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-6.1-sol' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+  });
+
+  it('choosing another model while in use writes llm.cloud-model and restarts a running Scout', async () => {
+    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
+    bridge.vaultStore.mockClear();
+    bridge.workerStop.mockClear();
+    bridge.workerStart.mockClear();
+
+    await pickModel(fixture, 'gpt-6.1-sol');
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toContainEqual({
+      key: 'llm.cloud-model',
+      value: 'gpt-6.1-sol',
+    });
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(query<HTMLElement>(fixture, '[data-test="chatgpt-model"]').textContent).toContain(
+      'gpt-6.1-sol',
+    );
+  });
+
+  it('when the model list fails, the card says so in an alert and keeps the current model', async () => {
+    const { fixture } = await setup({
+      chatgpt: CHATGPT_IN,
+      modelsError: new Error('Could not reach OpenAI to list ChatGPT models.'),
+    });
+    await settle(fixture);
+
+    expect(
+      query<HTMLElement>(fixture, '[data-test="chatgpt-models-error"]').textContent?.trim(),
+    ).toBe('Could not load the ChatGPT model list.');
+    expect(
+      query<HTMLElement>(fixture, '[data-test="chatgpt-models-error"]').getAttribute('role'),
+    ).toBe('alert');
+    expect(modelSelect(fixture).value).toBe('gpt-5.6-luna');
+  });
+
+  it('Sign out whose remote revocation was not confirmed says so', async () => {
+    const { fixture } = await setup({ chatgpt: CHATGPT_IN, revocationConfirmed: false });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-out"]').click();
+    await settle(fixture);
+
+    expect(query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent).toContain(
+      'OpenAI did not confirm the remote sign-out',
+    );
+    expect(query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent).toContain(
+      'Not Connected',
+    );
+  });
+
+  it('it answers with the provider that is connected: signing in to ChatGPT while no cloud provider is in use makes it the provider in use and restarts a running Scout', async () => {
+    const { fixture, bridge } = await setup({
+      workerState: 'running',
+      publicValues: { 'llm.provider': 'None' },
+    });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+    expect(
+      query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('In use');
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('Sign out while ChatGPT is in use switches to another connected cloud provider and says so', async () => {
+    const { fixture, bridge } = await setup({
+      chatgpt: CHATGPT_IN,
+      workerState: 'running',
+      vaultHasByKey: { 'llm.openai.api-key': true },
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+    });
+
+    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-out"]').click();
+    await settle(fixture);
+    await settle(fixture);
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-4o-mini' },
+      { key: 'llm.provider', value: 'OpenAI' },
+    ]);
+    expect(
+      query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('Signed out of ChatGPT. Scout now answers with OpenAI.');
+    expect(query<HTMLElement>(fixture, '[data-test="badge-openai-api"]').textContent).toContain(
+      'In use',
+    );
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('disconnecting the OpenAI key in use switches to the signed-in ChatGPT plan', async () => {
+    const { fixture, bridge } = await setup({
+      chatgpt: CHATGPT_IN,
+      workerState: 'idle',
+      vaultHasByKey: { 'llm.openai.api-key': true },
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4o' },
+    });
+
+    await click(fixture, '[data-test="disconnect-openai-api"]');
+
+    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
+      'Disconnected. Scout now answers with ChatGPT.',
+    );
+    expect(
+      query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent?.trim(),
+    ).toBe('In use');
   });
 
   it('the TypeSafe (Jev) card stores the guard key without changing the LLM provider and shows Connected', async () => {

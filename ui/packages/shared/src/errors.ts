@@ -45,6 +45,15 @@ export class DiscordTokenExchangeError extends ScoutError {
   }
 }
 
+export class ChatGptAuthError extends ScoutError {
+  readonly reason: string;
+
+  constructor(reason: string, message: string, options?: ErrorOptions) {
+    super('chatgpt/auth-failed', message, options);
+    this.reason = reason;
+  }
+}
+
 export class WorkerBinaryMissingError extends ScoutError {
   constructor(message = 'Worker binary not found on disk', options?: ErrorOptions) {
     super('worker/binary-missing', message, options);

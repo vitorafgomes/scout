@@ -30,6 +30,28 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    chatgptSignIn() {
+      return ipc.invoke(CHANNEL.chatgptSignIn) as ReturnType<ScoutBridge['chatgptSignIn']>;
+    },
+
+    chatgptCancelSignIn() {
+      return ipc.invoke(CHANNEL.chatgptCancelSignIn) as ReturnType<
+        ScoutBridge['chatgptCancelSignIn']
+      >;
+    },
+
+    chatgptListModels() {
+      return ipc.invoke(CHANNEL.chatgptListModels) as ReturnType<ScoutBridge['chatgptListModels']>;
+    },
+
+    chatgptSignOut() {
+      return ipc.invoke(CHANNEL.chatgptSignOut) as ReturnType<ScoutBridge['chatgptSignOut']>;
+    },
+
+    chatgptStatus() {
+      return ipc.invoke(CHANNEL.chatgptStatus) as ReturnType<ScoutBridge['chatgptStatus']>;
+    },
+
     vaultStore(req) {
       return ipc.invoke(CHANNEL.vaultStore, req) as ReturnType<ScoutBridge['vaultStore']>;
     },

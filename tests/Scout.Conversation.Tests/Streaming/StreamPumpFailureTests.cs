@@ -177,6 +177,32 @@ public sealed class StreamPumpFailureTests
     }
 
     [Fact]
+    public async Task Sign_In_Required_MidStream_Tells_The_User_To_Sign_In_Again()
+    {
+        var time = Clock();
+        var logger = new RecordingLogger();
+        var sink = new RecordingResponseSink(FineGrained);
+        var response = new ChatResponse(
+            AsyncSequence.ThenThrow(
+                new LlmSignInRequiredException(),
+                default,
+                "par", "tial"));
+
+        await Should.NotThrowAsync(
+            () => Pump(time, logger).RunAsync(response, sink, CancellationToken.None));
+
+        sink.Completed.ShouldBeTrue();
+        sink.Failed.ShouldBeFalse();
+        sink.TerminalCount.ShouldBe(1);
+        sink.FinalText.ShouldBe(
+            "partial\n\nChatGPT sign-in is missing or expired. Sign in again on the AI Sources screen in Scout.");
+        sink.FinalText!.ShouldNotContain("connection error");
+
+        var warning = logger.EntriesAt(LogLevel.Warning).ShouldHaveSingleItem();
+        warning.Exception.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Generic_Failure_MidStream_Still_Warns_With_Stack_And_Fails()
     {
         var time = Clock();

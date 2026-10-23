@@ -14,6 +14,7 @@ using Scout.Llm.Configuration;
 using Scout.Llm.Guard;
 using Scout.Llm.Providers.AzureAIInference;
 using Scout.Llm.Providers.AzureOpenAI;
+using Scout.Llm.Providers.ChatGptPlan;
 using Scout.Llm.Providers.Gemini;
 using Scout.Llm.Providers.HuggingFace;
 using Scout.Llm.Providers.Mistral;
@@ -38,7 +39,8 @@ public static class LlmServiceCollectionExtensions
     /// <see cref="IChatCompletionService"/> and
     /// <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/> from it. When
     /// <c>Scout:Guard:TypeSafe:ApiKey</c> is set, the kernel's chat service is the
-    /// read-only guard wrapping the provider's own.
+    /// read-only guard wrapping the provider's own; with provider <c>None</c> no
+    /// model answers, so no guard is registered and TypeSafe is never called.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// Thrown at startup when <c>LlmOptions.Provider</c> names an unknown provider.
@@ -58,7 +60,7 @@ public static class LlmServiceCollectionExtensions
             provider = new LlmOptions().Provider;
         }
 
-        var guarded = !string.IsNullOrWhiteSpace(
+        var guarded = provider != "None" && !string.IsNullOrWhiteSpace(
             configuration.GetSection(TypeSafeGuardOptions.Section)["ApiKey"]);
         if (guarded)
         {
@@ -92,6 +94,9 @@ public static class LlmServiceCollectionExtensions
             case "AzureAIInference":
                 services.AddAzureAIInferenceLlmProvider();
                 break;
+            case "ChatGptPlan":
+                services.AddChatGptPlanLlmProvider();
+                break;
             case "None":
                 services.AddNoneLlmProvider();
                 break;
@@ -99,7 +104,7 @@ public static class LlmServiceCollectionExtensions
                 throw new InvalidOperationException(
                     $"Unknown LLM provider '{provider}'. Supported providers: Ollama, " +
                     "Gemini, OpenAI, OpenRouter, AzureOpenAI, Mistral, HuggingFace, " +
-                    "AzureAIInference, None.");
+                    "AzureAIInference, ChatGptPlan, None.");
         }
 
         services.AddSingleton(sp =>

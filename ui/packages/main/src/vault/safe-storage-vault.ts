@@ -2,6 +2,11 @@ import { VaultUnavailableError } from '@scout/shared';
 import type { VaultKey } from '@scout/shared';
 import type { Logger } from '../util/logger.js';
 
+/** Keys only the main process reads or writes; they are not in VAULT_KEYS, so the renderer's vault channels reject them. */
+export type MainOnlyVaultKey = 'chatgpt.session' | 'chatgpt.client-id' | 'chatgpt.host-id';
+
+export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
+
 export interface SafeStorageSubset {
   isEncryptionAvailable(): boolean;
   encryptString(plaintext: string): Buffer;
@@ -25,10 +30,10 @@ export interface VaultAvailability {
 export interface Vault {
   isAvailable(): boolean;
   availability(): VaultAvailability;
-  store(key: VaultKey, value: string): Promise<void>;
-  get(key: VaultKey): Promise<string | null>;
-  has(key: VaultKey): Promise<boolean>;
-  delete(key: VaultKey): Promise<boolean>;
+  store(key: StoredVaultKey, value: string): Promise<void>;
+  get(key: StoredVaultKey): Promise<string | null>;
+  has(key: StoredVaultKey): Promise<boolean>;
+  delete(key: StoredVaultKey): Promise<boolean>;
 }
 
 interface VaultFileV1 {
@@ -91,7 +96,7 @@ export function createVault(deps: VaultDeps): Vault {
       return { available: true };
     },
 
-    store(key: VaultKey, value: string): Promise<void> {
+    store(key: StoredVaultKey, value: string): Promise<void> {
       if (!safeStorage.isEncryptionAvailable()) {
         return Promise.reject(new VaultUnavailableError());
       }
@@ -105,7 +110,7 @@ export function createVault(deps: VaultDeps): Vault {
       });
     },
 
-    get(key: VaultKey): Promise<string | null> {
+    get(key: StoredVaultKey): Promise<string | null> {
       if (!safeStorage.isEncryptionAvailable()) {
         return Promise.reject(new VaultUnavailableError());
       }
@@ -118,14 +123,14 @@ export function createVault(deps: VaultDeps): Vault {
       });
     },
 
-    has(key: VaultKey): Promise<boolean> {
+    has(key: StoredVaultKey): Promise<boolean> {
       return enqueue(async (): Promise<boolean> => {
         const entries = await loadEntries();
         return key in entries;
       });
     },
 
-    delete(key: VaultKey): Promise<boolean> {
+    delete(key: StoredVaultKey): Promise<boolean> {
       return enqueue(async (): Promise<boolean> => {
         const entries = await loadEntries();
         if (!(key in entries)) {

@@ -1,6 +1,7 @@
 namespace Scout.Knowledge.Tests;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -192,6 +193,104 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
             result = await service.SearchAsync("proj", "anything", CancellationToken.None));
 
         result.ShouldBe("Could not search project 'proj' right now.");
+    }
+
+    private const string NoEmbeddingsMessage = "Project search is not available with the current AI provider.";
+
+    private static IEmbeddingGenerator<string, Embedding<float>> NoEmbeddingsEmbedder()
+    {
+        var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        embedder
+            .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<GeneratedEmbeddings<Embedding<float>>>(_ => throw new NotSupportedException("Embeddings are not available."));
+        return embedder;
+    }
+
+    [Fact]
+    public async Task SearchAsync_says_project_search_is_unavailable_when_the_provider_has_no_embeddings()
+    {
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var service = new ProjectKnowledgeService(NoEmbeddingsEmbedder(), store, Resolution(store), logger);
+
+        var result = await service.SearchAsync("proj", "anything", CancellationToken.None);
+
+        result.ShouldBe(NoEmbeddingsMessage);
+        logger.Exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_on_an_unindexed_project_without_embeddings_stops_indexing_and_says_search_is_unavailable()
+    {
+        File.WriteAllText(Path.Combine(_repo, "a.md"), "first file");
+        File.WriteAllText(Path.Combine(_repo, "b.md"), "second file");
+        var embedder = NoEmbeddingsEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store.HasProjectAsync("proj", Arg.Any<CancellationToken>()).Returns(false);
+        var indexerLogger = new RecordingLogger<ProjectIndexer>();
+        var resolutionLogger = new RecordingLogger<ProjectResolutionService>();
+        var serviceLogger = new RecordingLogger<ProjectKnowledgeService>();
+        var resolution = new ProjectResolutionService(
+            Options.Create(new ProjectsOptions { Items = { new ProjectEntry { Name = "proj", RepoPath = _repo } } }),
+            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
+            new ProjectIndexer(new FileChunker(), embedder, store, indexerLogger),
+            store,
+            resolutionLogger);
+        var service = new ProjectKnowledgeService(embedder, store, resolution, serviceLogger);
+
+        var result = await service.SearchAsync("proj", "anything", CancellationToken.None);
+
+        result.ShouldBe(NoEmbeddingsMessage);
+        await embedder.Received(1).GenerateAsync(
+            Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
+        await store.DidNotReceive().ReplaceProjectAsync(
+            Arg.Any<string>(), Arg.Any<IReadOnlyList<ChunkRecord>>(), Arg.Any<CancellationToken>());
+        indexerLogger.Exceptions.ShouldBeEmpty();
+        resolutionLogger.Exceptions.ShouldBeEmpty();
+        serviceLogger.Exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_on_an_unindexed_project_without_embeddings_says_search_is_unavailable()
+    {
+        File.WriteAllText(Path.Combine(_repo, "a.md"), "first file");
+        var embedder = NoEmbeddingsEmbedder();
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store.HasProjectAsync("proj", Arg.Any<CancellationToken>()).Returns(false);
+        var resolution = new ProjectResolutionService(
+            Options.Create(new ProjectsOptions { Items = { new ProjectEntry { Name = "proj", RepoPath = _repo } } }),
+            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
+            new ProjectIndexer(new FileChunker(), embedder, store, NullLogger<ProjectIndexer>.Instance),
+            store,
+            NullLogger<ProjectResolutionService>.Instance);
+        var service = new ProjectKnowledgeService(embedder, store, resolution, NullLogger<ProjectKnowledgeService>.Instance);
+
+        var result = await service.FindSymbolAsync("proj", "Anything", kind: null, CancellationToken.None);
+
+        result.ShouldBe(NoEmbeddingsMessage);
+    }
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<Exception> Exceptions { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (exception is not null)
+            {
+                Exceptions.Add(exception);
+            }
+        }
     }
 
     [Fact]

@@ -71,6 +71,26 @@ public sealed class ChatGatewayTargetLogTests
     }
 
     [Fact]
+    public async Task ChatGptPlan_Request_Log_Line_Describes_The_Plan_And_Never_The_Token_File()
+    {
+        var options = new LlmOptions
+        {
+            Provider = "ChatGptPlan",
+            ChatGptPlan = new ChatGptPlanOptions
+            {
+                TokenFile = "/home/user/.config/scout/chatgpt-token.json",
+                Chat = new ChatModelOptions { Model = "gpt-5.6-luna" },
+            },
+        };
+
+        var message = await LoggedRequestLine(options);
+
+        message.ShouldBe(
+            "LLM request -> provider=ChatGptPlan endpoint=https://api.openai.com/v1/responses model=gpt-5.6-luna (inputChars=5).");
+        message.ShouldNotContain("chatgpt-token.json");
+    }
+
+    [Fact]
     public async Task Gemini_Request_Log_Line_Describes_Gemini_And_Never_The_Key()
     {
         var options = new LlmOptions

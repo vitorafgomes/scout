@@ -255,6 +255,52 @@ describe('buildEnv', () => {
     }
   });
 
+  it('ChatGptPlan: the worker gets the token file path and the stored cloud model, and no API key or Ollama variables', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'ChatGptPlan',
+        'llm.cloud-model': 'gpt-6.1-sol',
+        'llm.api-key': 'sk-stored-but-unused',
+        'llm.model': 'llama3.1',
+      }),
+      chatGptTokenFile: '/home/owner/.config/Scout/chatgpt-token.json',
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'ChatGptPlan',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+      SCOUT__LLM__CHATGPTPLAN__TOKENFILE: '/home/owner/.config/Scout/chatgpt-token.json',
+      SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL: 'gpt-6.1-sol',
+    });
+  });
+
+  it('ChatGptPlan: chat model defaults to gpt-5.6-luna when no cloud model is stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'ChatGptPlan' }),
+      chatGptTokenFile: '/tmp/chatgpt-token.json',
+    });
+    expect(env['SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL']).toBe('gpt-5.6-luna');
+  });
+
+  it('None: the worker starts with no AI provider and no provider variables instead of falling back to Ollama', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'None',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+        'llm.cloud-model': 'gpt-5.6-luna',
+      }),
+      chatGptTokenFile: '/tmp/chatgpt-token.json',
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'None',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+
   it('token value does not appear in keys or serialised env snapshot', async () => {
     const SECRET = 'super-secret-do-not-log';
     const env = await buildEnv({ vaultGet: makeVault({ 'discord.bot-token': SECRET }) });

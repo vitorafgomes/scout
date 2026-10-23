@@ -7,9 +7,10 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import type { ProviderKeyValidateResponse } from '@scout/shared';
+import type { ChatGptModel, ChatGptStatus, ProviderKeyValidateResponse } from '@scout/shared';
 
 import {
+  type ActiveCloudProvider,
   type CloudLlmProvider,
   DEFAULT_CLOUD_MODELS,
   LlmConfigStore,
@@ -51,6 +52,15 @@ interface CardModel {
 const DEFAULT_OLLAMA_ENDPOINT = 'http://localhost:11434';
 const GUARD_CARD_ID = 'typesafe-jev';
 const DEFAULT_LM_STUDIO_ENDPOINT = 'http://localhost:1234';
+const CHATGPT_SIGNED_OUT: ChatGptStatus = Object.freeze({
+  signedIn: false,
+  email: null,
+  planUsageGranted: false,
+});
+
+function providerLabel(provider: ActiveCloudProvider): string {
+  return provider === 'ChatGptPlan' ? 'ChatGPT' : provider;
+}
 
 const CLOUD_PROVIDERS: Readonly<
   Record<string, { readonly provider: CloudLlmProvider; readonly defaultModel: string }>
@@ -246,6 +256,130 @@ const ICONS = Object.freeze({
         <section data-test="section-cloud">
           <h2 class="section-title"><span class="section-rule"></span>Cloud APIs</h2>
           <div class="grid">
+            <article class="card" data-test="card-chatgpt-plus">
+              <div class="card-head">
+                <div class="icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22">
+                    <path [attr.d]="chatgptIcon" fill="currentColor" />
+                  </svg>
+                </div>
+                <span
+                  class="badge"
+                  [class.badge--ok]="chatgpt().signedIn"
+                  [class.badge--off]="!chatgpt().signedIn"
+                  data-test="badge-chatgpt-plus"
+                >
+                  <span class="badge-dot" aria-hidden="true"></span>
+                  {{
+                    chatgptInUse() ? 'In use' : chatgpt().signedIn ? 'Connected' : 'Not Connected'
+                  }}
+                </span>
+              </div>
+              <h3 class="card-title">ChatGPT Plus</h3>
+              <p class="card-desc">
+                Sign in with your ChatGPT Plus or Pro plan. Usage counts against your plan's limits.
+              </p>
+              <div class="card-actions">
+                @if (chatgpt().signedIn) {
+                  <p class="account" data-test="chatgpt-account">
+                    {{ chatgpt().email ?? 'Signed in' }}
+                  </p>
+                  @if (chatgpt().planUsageGranted) {
+                    <label class="field">
+                      <span class="field-label">Model</span>
+                      <select
+                        class="text-input"
+                        data-test="chatgpt-model-select"
+                        (change)="onChatGptModelChange($event)"
+                      >
+                        @if (!chatgptChoiceListed()) {
+                          <option [value]="chatgptModelChoice()" selected>
+                            {{ chatgptModelChoice() }}
+                          </option>
+                        }
+                        @for (model of chatgptModels(); track model.slug) {
+                          <option
+                            [value]="model.slug"
+                            [selected]="model.slug === chatgptModelChoice()"
+                          >
+                            {{ model.displayName }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+                    @if (chatgptModelsFailed()) {
+                      <p class="form-error" role="alert" data-test="chatgpt-models-error">
+                        Could not load the ChatGPT model list.
+                      </p>
+                    }
+                  }
+                  @if (chatgptInUse()) {
+                    <p class="saved" data-test="chatgpt-model">
+                      Answering with {{ chatgptModel() }}
+                    </p>
+                  } @else if (chatgpt().planUsageGranted) {
+                    <button
+                      type="button"
+                      class="action action--primary"
+                      data-test="chatgpt-use"
+                      (click)="useChatGpt()"
+                    >
+                      Use
+                    </button>
+                  } @else {
+                    <p class="form-error" role="alert" data-test="chatgpt-no-plan-usage">
+                      OpenAI did not grant plan usage to Scout for this account, so Scout cannot
+                      answer through it.
+                    </p>
+                  }
+                  <button
+                    type="button"
+                    class="action"
+                    data-test="chatgpt-sign-out"
+                    (click)="signOutChatGpt()"
+                  >
+                    Sign out
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="action action--primary"
+                    data-test="chatgpt-sign-in"
+                    [disabled]="chatgptBusy()"
+                    (click)="signInChatGpt()"
+                  >
+                    {{
+                      chatgptBusy()
+                        ? 'Waiting for the browser...'
+                        : chatgptNeedsSignInAgain()
+                          ? 'Sign in again'
+                          : 'Continue with ChatGPT'
+                    }}
+                  </button>
+                  @if (chatgptBusy()) {
+                    <button
+                      type="button"
+                      class="action"
+                      data-test="chatgpt-cancel"
+                      (click)="cancelChatGptSignIn()"
+                    >
+                      Cancel
+                    </button>
+                  }
+                }
+                @if (chatgptError(); as error) {
+                  <p class="form-error" role="alert" data-test="chatgpt-error">{{ error }}</p>
+                }
+                @if (savedCard() === 'chatgpt-plus') {
+                  <p class="saved" role="status" data-test="saved-chatgpt-plus">
+                    {{ savedMessage() }}
+                  </p>
+                  @if (actionError(); as error) {
+                    <p class="form-error" role="alert">{{ error }}</p>
+                  }
+                }
+              </div>
+            </article>
             @for (card of cloudCards; track card.id) {
               <article class="card" [attr.data-test]="'card-' + card.id">
                 <div class="card-head">
@@ -833,6 +967,11 @@ const ICONS = Object.freeze({
         font-size: 12px;
         color: #e4e8f0;
       }
+      .account {
+        margin: 0;
+        font-size: 13px;
+        color: #e4e8f0;
+      }
       .saved {
         margin: 0;
         font-size: 12px;
@@ -856,6 +995,30 @@ export class SourcesComponent implements OnInit {
   readonly actionError = signal<string | null>(null);
   readonly activeModel = this.llmConfig.model;
   readonly scanning = signal<string | null>(null);
+  readonly chatgpt = signal<ChatGptStatus>(CHATGPT_SIGNED_OUT);
+  readonly chatgptBusy = signal<boolean>(false);
+  private chatgptCancelled = false;
+  readonly chatgptModels = signal<readonly ChatGptModel[]>([]);
+  readonly chatgptModelsFailed = signal<boolean>(false);
+  private readonly chatgptPickedModel = signal<string | null>(null);
+  readonly chatgptError = signal<string | null>(null);
+  readonly chatgptIcon = ICONS.openai;
+  readonly chatgptModel = computed<string | null>(() => this.llmConfig.model());
+  readonly chatgptInUse = computed<boolean>(
+    () => this.chatgpt().signedIn && this.llmConfig.provider() === 'ChatGptPlan',
+  );
+  readonly chatgptModelChoice = computed<string>(
+    () =>
+      this.chatgptPickedModel() ??
+      (this.chatgptInUse() ? this.chatgptModel() : null) ??
+      DEFAULT_CLOUD_MODELS.ChatGptPlan,
+  );
+  readonly chatgptChoiceListed = computed<boolean>(() =>
+    this.chatgptModels().some((model) => model.slug === this.chatgptModelChoice()),
+  );
+  readonly chatgptNeedsSignInAgain = computed<boolean>(
+    () => !this.chatgpt().signedIn && this.llmConfig.provider() === 'ChatGptPlan',
+  );
   readonly guardCardId = GUARD_CARD_ID;
   private readonly guardConnected = signal<boolean>(false);
   readonly guardNotice = signal<string | null>(null);
@@ -925,19 +1088,6 @@ export class SourcesComponent implements OnInit {
   ]);
 
   readonly cloudCards: readonly CardModel[] = Object.freeze([
-    {
-      id: 'chatgpt-plus',
-      kind: 'cloud',
-      title: 'ChatGPT Plus',
-      description:
-        'Not supported: a ChatGPT Plus or Pro subscription does not include API access. Use the OpenAI API card with an API key instead.',
-      iconPath: ICONS.openai,
-      primaryAction: 'Not supported',
-      secondaryLabel: null,
-      secondaryUrl: null,
-      primaryIsScan: false,
-      disabled: true,
-    },
     {
       id: 'openai-api',
       kind: 'cloud',
@@ -1009,6 +1159,108 @@ export class SourcesComponent implements OnInit {
     void this.onScan('lm-studio');
     void this.llmConfig.loadFromVault();
     void this.loadGuardState();
+    this.bridge.chatgptStatus().then(
+      (status) => this.applyChatGptStatus(status),
+      () => this.applyChatGptStatus(CHATGPT_SIGNED_OUT),
+    );
+  }
+
+  private applyChatGptStatus(status: ChatGptStatus): void {
+    this.chatgpt.set(status);
+    this.llmConfig.setChatGptConnected(status.signedIn && status.planUsageGranted);
+    void this.loadChatGptModels();
+  }
+
+  async loadChatGptModels(): Promise<void> {
+    if (!this.chatgpt().planUsageGranted) return;
+    try {
+      const { models } = await this.bridge.chatgptListModels();
+      this.chatgptModels.set(models);
+      this.chatgptModelsFailed.set(false);
+    } catch {
+      this.chatgptModelsFailed.set(true);
+    }
+  }
+
+  async onChatGptModelChange(event: Event): Promise<void> {
+    this.chatgptPickedModel.set((event.target as HTMLSelectElement).value);
+    if (this.chatgptInUse()) await this.useChatGpt();
+  }
+
+  async signInChatGpt(): Promise<void> {
+    if (this.chatgptBusy()) return;
+    this.chatgptBusy.set(true);
+    this.chatgptCancelled = false;
+    this.chatgptError.set(null);
+    this.savedCard.set(null);
+    let status: ChatGptStatus;
+    try {
+      status = await this.bridge.chatgptSignIn();
+    } catch (err: unknown) {
+      if (!this.chatgptCancelled) {
+        this.chatgptError.set(
+          err instanceof Error ? err.message : 'Could not sign in with ChatGPT.',
+        );
+      }
+      return;
+    } finally {
+      this.chatgptBusy.set(false);
+    }
+    this.applyChatGptStatus(status);
+    if (
+      status.signedIn &&
+      status.planUsageGranted &&
+      this.llmConfig.activeCloudProvider() === null
+    ) {
+      await this.useChatGpt();
+    }
+  }
+
+  async useChatGpt(): Promise<void> {
+    this.chatgptError.set(null);
+    await this.applyModel('chatgpt-plus', 'ChatGptPlan', this.chatgptModelChoice());
+  }
+
+  async cancelChatGptSignIn(): Promise<void> {
+    this.chatgptCancelled = true;
+    await this.bridge.chatgptCancelSignIn().catch(() => undefined);
+  }
+
+  async signOutChatGpt(): Promise<void> {
+    this.chatgptError.set(null);
+    this.actionError.set(null);
+    let signedOut: string;
+    try {
+      const { revocationConfirmed } = await this.bridge.chatgptSignOut();
+      this.chatgpt.set(CHATGPT_SIGNED_OUT);
+      signedOut = revocationConfirmed
+        ? 'Signed out of ChatGPT.'
+        : 'Signed out on this computer, but OpenAI did not confirm the remote sign-out.';
+      this.savedMessage.set(signedOut);
+      this.savedCard.set('chatgpt-plus');
+    } catch (err: unknown) {
+      this.chatgptError.set(err instanceof Error ? err.message : 'Could not sign out of ChatGPT.');
+      return;
+    }
+    let wasInUse: boolean;
+    try {
+      wasInUse = await this.llmConfig.disconnectChatGpt();
+    } catch (err: unknown) {
+      this.actionError.set(err instanceof Error ? err.message : 'Could not change the provider.');
+      return;
+    }
+    if (!wasInUse) return;
+    const next = this.llmConfig.activeCloudProvider();
+    const settled =
+      next === null
+        ? `${signedOut} No AI provider is connected; Scout will say so until you connect one.`
+        : `${signedOut} Scout now answers with ${providerLabel(next)}.`;
+    this.savedMessage.set(settled);
+    await this.restartIfRunning({
+      restarting: settled,
+      idle: settled,
+      failed: `${settled} Restart Scout from the status screen to apply it.`,
+    });
   }
 
   setFilter(kind: FilterKind): void {
@@ -1159,7 +1411,7 @@ export class SourcesComponent implements OnInit {
     const settled =
       next === null
         ? 'Disconnected. No AI provider is connected; Scout will say so until you connect one.'
-        : `Disconnected. Scout now answers with ${next}.`;
+        : `Disconnected. Scout now answers with ${providerLabel(next)}.`;
     await this.restartIfRunning({
       restarting: settled,
       idle: settled,
@@ -1248,21 +1500,27 @@ export class SourcesComponent implements OnInit {
     }
   }
 
-  private async applyModel(id: string, provider: CloudLlmProvider, model: string): Promise<void> {
+  private async applyModel(
+    id: string,
+    provider: ActiveCloudProvider,
+    model: string,
+  ): Promise<void> {
     if (this.saving()) return;
     this.beginAction(id);
     try {
       await this.llmConfig.use(provider, model);
     } catch (err: unknown) {
-      this.actionError.set(err instanceof Error ? err.message : `Could not switch to ${provider}.`);
+      this.actionError.set(
+        err instanceof Error ? err.message : `Could not switch to ${providerLabel(provider)}.`,
+      );
       return;
     } finally {
       this.saving.set(false);
     }
     await this.restartIfRunning({
-      restarting: `Restarting Scout to use ${provider}.`,
-      idle: `Scout will use ${provider} the next time it starts.`,
-      failed: `Restart Scout from the status screen to use ${provider}.`,
+      restarting: `Restarting Scout to use ${providerLabel(provider)}.`,
+      idle: `Scout will use ${providerLabel(provider)} the next time it starts.`,
+      failed: `Restart Scout from the status screen to use ${providerLabel(provider)}.`,
     });
   }
 

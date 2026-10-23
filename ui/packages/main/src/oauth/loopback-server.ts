@@ -12,6 +12,7 @@ import type { Logger } from '../util/logger.js';
 export interface LoopbackResult {
   code: string;
   state: string;
+  clientId?: string;
 }
 
 export interface LoopbackOptions {
@@ -20,6 +21,8 @@ export interface LoopbackOptions {
   hostname: '127.0.0.1';
   timeoutMs: number;
   logger: Logger;
+  callbackPath?: string;
+  signal?: AbortSignal;
   httpFactory?: (listener: RequestListener) => Server;
 }
 
@@ -31,6 +34,7 @@ type Outcome = { kind: 'resolve'; value: LoopbackResult } | { kind: 'reject'; er
 
 export async function awaitCallback(opts: LoopbackOptions): Promise<LoopbackResult> {
   const { expectedState, port, hostname, timeoutMs, logger } = opts;
+  const callbackPath = opts.callbackPath ?? '/callback';
   const factory = opts.httpFactory ?? ((listener) => createServer(listener));
 
   return new Promise<LoopbackResult>((resolve, reject) => {
@@ -62,7 +66,7 @@ export async function awaitCallback(opts: LoopbackOptions): Promise<LoopbackResu
       const raw = req.url ?? '/';
       const parsed = new URL(raw, `http://${hostname}:${port}`);
 
-      if (parsed.pathname !== '/callback') {
+      if (parsed.pathname !== callbackPath) {
         res.writeHead(404, { 'Content-Type': 'text/html' });
         res.end(HTML_NOT_FOUND);
         logger.warn('loopback: unexpected path', { path: parsed.pathname });
@@ -105,7 +109,11 @@ export async function awaitCallback(opts: LoopbackOptions): Promise<LoopbackResu
 
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(HTML_SUCCESS);
-      settle({ kind: 'resolve', value: { code, state } });
+      const clientId = parsed.searchParams.get('client_id');
+      settle({
+        kind: 'resolve',
+        value: clientId === null ? { code, state } : { code, state, clientId },
+      });
     });
 
     server.on('error', (err) => {
@@ -115,6 +123,17 @@ export async function awaitCallback(opts: LoopbackOptions): Promise<LoopbackResu
     server.listen(port, hostname, () => {
       logger.info('loopback: listening', { port, hostname });
     });
+
+    opts.signal?.addEventListener(
+      'abort',
+      () => {
+        settle({
+          kind: 'reject',
+          error: new OAuthUserCancelledError('OAuth flow aborted before the callback arrived'),
+        });
+      },
+      { once: true },
+    );
 
     // After timeoutMs of silence, treat as user cancellation.
     const timeoutHandle = setTimeout(() => {

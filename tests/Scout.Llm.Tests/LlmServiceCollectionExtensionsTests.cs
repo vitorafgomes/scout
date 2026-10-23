@@ -45,6 +45,16 @@ public sealed class LlmServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddScoutLlm_With_No_Provider_Configured_Selects_Ollama()
+    {
+        var empty = new ConfigurationBuilder().Build();
+
+        using var provider = new ServiceCollection().AddScoutLlm(empty).BuildServiceProvider();
+
+        provider.GetRequiredService<ILlmProviderFactory>().Name.ShouldBe("Ollama");
+    }
+
+    [Fact]
     public void AddScoutLlm_Resolves_Shared_Kernel()
     {
         using var provider = new ServiceCollection().AddScoutLlm(Config()).BuildServiceProvider();
@@ -189,6 +199,15 @@ public sealed class LlmServiceCollectionExtensionsTests
             })
             .Build();
 
+    private static IConfiguration ChatGptPlanConfig() =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "ChatGptPlan",
+                ["Scout:Llm:ChatGptPlan:TokenFile"] = "/nonexistent/scout-chatgpt-token.json",
+            })
+            .Build();
+
     public static TheoryData<string, Func<IConfiguration>> ProviderConfigs() => new()
     {
         { "OpenAI", OpenAIConfig },
@@ -197,6 +216,7 @@ public sealed class LlmServiceCollectionExtensionsTests
         { "Mistral", MistralConfig },
         { "HuggingFace", HuggingFaceConfig },
         { "AzureAIInference", AzureAIInferenceConfig },
+        { "ChatGptPlan", ChatGptPlanConfig },
     };
 
     [Theory]
@@ -272,6 +292,7 @@ public sealed class LlmServiceCollectionExtensionsTests
         ex.Message.ShouldContain("Mistral");
         ex.Message.ShouldContain("HuggingFace");
         ex.Message.ShouldContain("AzureAIInference");
+        ex.Message.ShouldContain("ChatGptPlan");
     }
 
     [Fact]

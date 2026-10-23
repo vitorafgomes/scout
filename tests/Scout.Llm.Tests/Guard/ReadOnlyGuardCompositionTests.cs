@@ -11,6 +11,7 @@ using Scout.Knowledge;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
 using Scout.Llm.Guard;
+using Scout.Llm.Providers.None;
 using Scout.Llm.Providers.Ollama;
 
 namespace Scout.Llm.Tests.Guard;
@@ -54,6 +55,30 @@ public sealed class ReadOnlyGuardCompositionTests
         kernelChat.ShouldBeOfType<ReadOnlyGuardChatCompletionService>();
         provider.GetRequiredService<IChatCompletionService>().ShouldBeSameAs(kernelChat);
         kernel.Services.GetService<ITextGenerationService>().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task With_Provider_None_And_A_Guard_Key_No_Guard_Is_Registered_And_TypeSafe_Is_Never_Called()
+    {
+        var typeSafe = StubTypeSafeHandler.Answering(0.9);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "None",
+                ["Scout:Guard:TypeSafe:ApiKey"] = "ts-key",
+            })
+            .Build();
+        var services = new ServiceCollection().AddScoutLlm(configuration);
+        services.AddHttpClient<TypeSafeClient>().ConfigurePrimaryHttpMessageHandler(() => typeSafe);
+        using var provider = services.BuildServiceProvider();
+
+        var kernelChat = provider.GetRequiredService<Kernel>().GetRequiredService<IChatCompletionService>();
+        var reply = await provider.GetRequiredService<IChatGateway>()
+            .CompleteAsync(new ChatRequest { UserMessage = "restart the prod service" }, CancellationToken.None);
+
+        kernelChat.ShouldBeOfType<NoneChatCompletionService>();
+        reply.ShouldBe(NoneLlmProviderFactory.NoProviderMessage);
+        typeSafe.Calls.ShouldBe(0);
     }
 
     [Fact]

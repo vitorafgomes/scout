@@ -10,6 +10,7 @@ public sealed class ProjectKnowledgeService
 {
     private const int TopResults = 5;
     private const int FindSymbolTopResults = 10;
+    private const string NoEmbeddingsMessage = "Project search is not available with the current AI provider.";
 
     private readonly IEmbeddingGenerator<string, Embedding<float>> embedder;
     private readonly IProjectKnowledgeStore store;
@@ -53,7 +54,16 @@ public sealed class ProjectKnowledgeService
             return "Provide a project and a question.";
         }
 
-        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        ProjectEntry? entry;
+        try
+        {
+            entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        }
+        catch (NotSupportedException)
+        {
+            return this.NoEmbeddings(project);
+        }
+
         if (entry is null)
         {
             return $"Unknown project '{project}'.";
@@ -74,6 +84,10 @@ public sealed class ProjectKnowledgeService
 
             var blocks = hits.Select(FormatHit);
             return string.Join("\n\n", blocks);
+        }
+        catch (NotSupportedException)
+        {
+            return this.NoEmbeddings(project);
         }
         catch (Exception ex)
         {
@@ -105,7 +119,16 @@ public sealed class ProjectKnowledgeService
             return "Provide a project and a symbol.";
         }
 
-        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        ProjectEntry? entry;
+        try
+        {
+            entry = await this.resolution.ResolveAsync(project, cancellationToken);
+        }
+        catch (NotSupportedException)
+        {
+            return this.NoEmbeddings(project);
+        }
+
         if (entry is null)
         {
             return $"Unknown project '{project}'.";
@@ -131,6 +154,12 @@ public sealed class ProjectKnowledgeService
             this.logger.LogWarning(ex, "Failed to find symbol {Symbol} in project {Project}.", symbol, project);
             return $"Could not find symbol '{symbol}' in project '{project}' right now.";
         }
+    }
+
+    private string NoEmbeddings(string project)
+    {
+        this.logger.LogInformation("Project search for {Project} skipped: the AI provider has no embeddings.", project);
+        return NoEmbeddingsMessage;
     }
 
     private static string FormatHit(ChunkRecord record)

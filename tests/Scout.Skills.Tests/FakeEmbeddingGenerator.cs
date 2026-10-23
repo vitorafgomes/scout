@@ -40,6 +40,9 @@ internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embed
         set => Volatile.Write(ref _indexFailuresRemaining, value);
     }
 
+    /// <summary>The exception a failing index batch throws.</summary>
+    public Exception IndexFailure { get; set; } = new HttpRequestException("429 Too Many Requests");
+
     /// <summary>When set, an index batch waits on this task before answering.</summary>
     public Task? IndexGate { get; set; }
 
@@ -64,7 +67,7 @@ internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embed
 
             if (Interlocked.Decrement(ref _indexFailuresRemaining) >= 0)
             {
-                throw new HttpRequestException("429 Too Many Requests");
+                throw IndexFailure;
             }
         }
 

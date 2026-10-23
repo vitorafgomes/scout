@@ -7,6 +7,7 @@ import {
 
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
+  chatGptTokenFile?: string;
 }
 
 // Assembles the environment variables passed to Scout.Host.Console at spawn
@@ -55,6 +56,14 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
       env['SCOUT__LLM__GEMINI__CHAT__MODEL'] =
         (await vaultGet('llm.cloud-model')) ?? 'gemini-2.5-flash';
       env['SCOUT__LLM__GEMINI__EMBEDDINGS__MODEL'] = 'text-embedding-004';
+      return env;
+    case 'ChatGptPlan':
+      if (deps.chatGptTokenFile === undefined) {
+        throw new Error('ChatGptPlan needs the path of the ChatGPT token file');
+      }
+      env['SCOUT__LLM__CHATGPTPLAN__TOKENFILE'] = deps.chatGptTokenFile;
+      env['SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL'] =
+        (await vaultGet('llm.cloud-model')) ?? 'gpt-5.6-luna';
       return env;
     default:
       throw new Error(`llm.provider "${llmProvider}" is not supported by the desktop app`);

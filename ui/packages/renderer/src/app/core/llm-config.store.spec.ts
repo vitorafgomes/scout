@@ -497,6 +497,136 @@ describe('LlmConfigStore', () => {
     expect(window.localStorage.getItem(LLM_CONFIG_STORAGE_KEY)).toBeNull();
   });
 
+  it('useChatGptPlan points the worker at the ChatGPT plan with the model, and writes no API key', async () => {
+    const { store, vaultStoreCalls } = setup();
+
+    await store.useChatGptPlan('gpt-5.6-luna');
+
+    expect(vaultStoreCalls).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+    expect(store.provider()).toBe('ChatGptPlan');
+    expect(store.model()).toBe('gpt-5.6-luna');
+  });
+
+  it('loadFromVault keeps the ChatGPT plan selected on reload, checked against the stored model rather than an API key', async () => {
+    const { store: writer } = setup();
+    await writer.useChatGptPlan('gpt-5.6-luna');
+    TestBed.resetTestingModule();
+
+    const { store, bridge } = setup({
+      vaultHasByKey: { 'llm.cloud-model': true, 'llm.api-key': false },
+      publicReadError: new Error('getPublic unavailable'),
+    });
+    await store.loadFromVault();
+
+    expect(bridge.vaultHas).toHaveBeenCalledWith({ key: 'llm.cloud-model' });
+    expect(store.provider()).toBe('ChatGptPlan');
+    expect(store.model()).toBe('gpt-5.6-luna');
+  });
+
+  it('the vault says ChatGptPlan: it is the provider in use with its stored model, whether or not the sign-in is known yet', async () => {
+    const { store } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': false, 'llm.gemini.api-key': false },
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-6.1-sol' },
+    });
+
+    await store.loadFromVault();
+
+    expect(store.activeCloudProvider()).toBe('ChatGptPlan');
+    expect(store.model()).toBe('gpt-6.1-sol');
+  });
+
+  it('ChatGPT counts as a connected provider: disconnecting OpenAI in use switches to the signed-in ChatGPT plan with its default model', async () => {
+    const { store, vaultStoreCalls } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': true, 'llm.gemini.api-key': false },
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4o' },
+    });
+    await store.loadFromVault();
+    store.setChatGptConnected(true);
+
+    await store.disconnect('OpenAI');
+
+    expect(vaultStoreCalls).toEqual([
+      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
+      { key: 'llm.provider', value: 'ChatGptPlan' },
+    ]);
+    expect(store.activeCloudProvider()).toBe('ChatGptPlan');
+  });
+
+  it('a status refresh that marks ChatGPT connected keeps it connected across loadFromVault and never changes the provider', async () => {
+    const { store, vaultStoreCalls } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': false, 'llm.gemini.api-key': false },
+      publicValues: { 'llm.provider': 'None' },
+    });
+    store.setChatGptConnected(true);
+
+    await store.loadFromVault();
+
+    expect(store.connectedProviders().has('ChatGptPlan')).toBe(true);
+    expect(store.provider()).toBe('None');
+    expect(vaultStoreCalls).toEqual([]);
+  });
+
+  it('connecting a key while ChatGPT is in use does not switch', async () => {
+    const { store, vaultStoreCalls } = setup();
+    await store.useChatGptPlan('gpt-5.6-luna');
+    vaultStoreCalls.length = 0;
+
+    await store.connect('OpenAI', 'sk-test-key');
+
+    expect(vaultStoreCalls).toEqual([{ key: 'llm.openai.api-key', value: 'sk-test-key' }]);
+    expect(store.activeCloudProvider()).toBe('ChatGptPlan');
+  });
+
+  it('signing out of ChatGPT in use switches to another connected cloud provider', async () => {
+    const { store, vaultStoreCalls } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': false, 'llm.gemini.api-key': true },
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+    });
+    await store.loadFromVault();
+    store.setChatGptConnected(true);
+
+    const wasActive = await store.disconnectChatGpt();
+
+    expect(wasActive).toBe(true);
+    expect(vaultStoreCalls).toEqual([
+      { key: 'llm.cloud-model', value: 'gemini-2.5-flash' },
+      { key: 'llm.provider', value: 'Gemini' },
+    ]);
+    expect(store.connectedProviders().has('ChatGptPlan')).toBe(false);
+  });
+
+  it('signing out of ChatGPT in use with no other connected provider writes None, never Ollama', async () => {
+    const { store, vaultStoreCalls } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': false, 'llm.gemini.api-key': false },
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+    });
+    await store.loadFromVault();
+    store.setChatGptConnected(true);
+
+    await store.disconnectChatGpt();
+
+    expect(vaultStoreCalls).toEqual([{ key: 'llm.provider', value: 'None' }]);
+    expect(store.provider()).toBe('None');
+  });
+
+  it('signing out of ChatGPT when it is not in use changes no provider', async () => {
+    const { store, vaultStoreCalls } = setup({
+      vaultHasByKey: { 'llm.openai.api-key': true, 'llm.gemini.api-key': false },
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4o' },
+    });
+    await store.loadFromVault();
+    store.setChatGptConnected(true);
+
+    const wasActive = await store.disconnectChatGpt();
+
+    expect(wasActive).toBe(false);
+    expect(vaultStoreCalls).toEqual([]);
+    expect(store.activeCloudProvider()).toBe('OpenAI');
+  });
+
   it('the local selection always switches the worker back to Ollama', async () => {
     const { store, vaultStoreCalls } = setup();
     await store.use('OpenAI', 'gpt-4o');

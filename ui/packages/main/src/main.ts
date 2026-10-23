@@ -2,7 +2,13 @@ import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readlink as fsReadlink, unlink as fsUnlink } from 'node:fs/promises';
+import {
+  readlink as fsReadlink,
+  unlink as fsUnlink,
+  writeFile as fsWriteFile,
+  rename as fsRename,
+  rm as fsRm,
+} from 'node:fs/promises';
 import os from 'node:os';
 import { createLogger } from './util/logger.js';
 import { tryRecoverStaleLock } from './util/singleton-lock.js';
@@ -21,6 +27,8 @@ import { registerWhisperHandlers } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
 import { registerProviderKeyHandlers } from './ipc/provider-keys.js';
+import { registerChatGptHandlers } from './ipc/chatgpt.js';
+import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
@@ -101,6 +109,8 @@ let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
 let unregisterProviderKeys: (() => void) | null = null;
+let unregisterChatGpt: (() => void) | null = null;
+let chatGptAuth: ChatGptAuth | null = null;
 
 app
   .whenReady()
@@ -152,6 +162,27 @@ app
       logger.child({ module: 'discord' }),
     );
 
+    const chatGptTokenFile = path.join(app.getPath('userData'), 'chatgpt-token.json');
+    chatGptAuth = new ChatGptAuth({
+      fetch: globalThis.fetch,
+      awaitCallback,
+      findFreePort,
+      openExternal: (url) => shell.openExternal(url),
+      vault,
+      tokenFilePath: chatGptTokenFile,
+      fs: { writeFile: fsWriteFile, rename: fsRename, rm: fsRm },
+      now: () => Date.now(),
+      logger: logger.child({ module: 'chatgpt' }),
+    });
+    unregisterChatGpt = registerChatGptHandlers(
+      ipcMain,
+      chatGptAuth,
+      logger.child({ module: 'chatgpt' }),
+    );
+    chatGptAuth.start().catch((err: unknown) => {
+      logger.warn('chatgpt: start failed', { err: String(err) });
+    });
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -164,7 +195,7 @@ app
           cwd: __dirname,
         }),
       // env is assembled by buildEnv; never logged — it contains secrets
-      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key) }),
+      buildEnv: () => buildEnv({ vaultGet: (key) => vault.get(key), chatGptTokenFile }),
     });
 
     unregisterWorker = registerWorkerHandlers(
@@ -280,6 +311,8 @@ app.on('before-quit', (event) => {
   ) {
     // No running worker — unregister synchronously and allow the quit.
     unregisterProviderKeys?.();
+    chatGptAuth?.stop();
+    unregisterChatGpt?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -303,6 +336,8 @@ app.on('before-quit', (event) => {
     })
     .finally(() => {
       unregisterProviderKeys?.();
+      chatGptAuth?.stop();
+      unregisterChatGpt?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

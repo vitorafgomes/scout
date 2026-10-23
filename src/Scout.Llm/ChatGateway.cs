@@ -33,6 +33,7 @@ internal sealed class ChatGateway : IChatGateway
         "organization_spend_limit_exceeded",
         "project_spend_limit_exceeded",
         "organization_usage_limit_exceeded",
+        "subscription_sharing_usage_limit_exceeded",
     };
 
     private readonly IChatCompletionService _chat;
@@ -64,6 +65,7 @@ internal sealed class ChatGateway : IChatGateway
             "Ollama" => (llm?.Ollama?.Endpoint, llm?.Ollama?.Chat?.Model),
             "OpenAI" => (llm?.OpenAI?.Endpoint ?? "https://api.openai.com/v1", llm?.OpenAI?.Chat?.Model),
             "Gemini" => ("https://generativelanguage.googleapis.com", llm?.Gemini?.Chat?.Model),
+            "ChatGptPlan" => ("https://api.openai.com/v1/responses", llm?.ChatGptPlan?.Chat?.Model),
             _ => ((string?)null, (string?)null),
         };
         return $"provider={provider} endpoint={endpoint ?? "unknown"} model={model ?? "unknown"}";

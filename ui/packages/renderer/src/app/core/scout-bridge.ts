@@ -3,6 +3,9 @@ import {
   ScoutError,
   type AppGetVersionResponse,
   type AppOpenExternalRequest,
+  type ChatGptListModelsResponse,
+  type ChatGptSignOutResponse,
+  type ChatGptStatus,
   type DetectClientsResponse,
   type DiagnosticsExportResponse,
   type DiscordBuildOAuthUrlRequest,
@@ -82,6 +85,11 @@ function createFakeBridge(): ScoutBridge {
       _req: DiscordStartOAuthInstallRequest,
     ): Promise<DiscordStartOAuthInstallResponse> => rejectNotAvailable(),
     discordCancelOAuthInstall: (): Promise<void> => rejectNotAvailable(),
+    chatgptSignIn: (): Promise<ChatGptStatus> => rejectNotAvailable(),
+    chatgptCancelSignIn: (): Promise<void> => rejectNotAvailable(),
+    chatgptListModels: (): Promise<ChatGptListModelsResponse> => rejectNotAvailable(),
+    chatgptSignOut: (): Promise<ChatGptSignOutResponse> => rejectNotAvailable(),
+    chatgptStatus: (): Promise<ChatGptStatus> => rejectNotAvailable(),
     vaultStore: (_req: VaultStoreRequest): Promise<void> => rejectNotAvailable(),
     vaultHas: (_req: VaultHasRequest): Promise<VaultHasResponse> => rejectNotAvailable(),
     vaultDelete: (_req: VaultDeleteRequest): Promise<VaultDeleteResponse> => rejectNotAvailable(),
@@ -190,6 +198,26 @@ export class ScoutBridgeService {
 
   async discordCancelOAuthInstall(): Promise<void> {
     return this.bridge.discordCancelOAuthInstall();
+  }
+
+  async chatgptSignIn(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptSignIn();
+  }
+
+  async chatgptListModels(): Promise<ChatGptListModelsResponse> {
+    return this.bridge.chatgptListModels();
+  }
+
+  async chatgptCancelSignIn(): Promise<void> {
+    return this.bridge.chatgptCancelSignIn();
+  }
+
+  async chatgptSignOut(): Promise<ChatGptSignOutResponse> {
+    return this.bridge.chatgptSignOut();
+  }
+
+  async chatgptStatus(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptStatus();
   }
 
   async workerStart(): Promise<WorkerStartResponse> {

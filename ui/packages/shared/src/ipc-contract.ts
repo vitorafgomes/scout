@@ -7,6 +7,11 @@ export const CHANNEL = {
   discordBuildOAuthUrl: 'scout:discord.buildOAuthUrl',
   discordStartOAuthInstall: 'scout:discord.startOAuthInstall',
   discordCancelOAuthInstall: 'scout:discord.cancelOAuthInstall',
+  chatgptSignIn: 'scout:chatgpt.signIn',
+  chatgptListModels: 'scout:chatgpt.listModels',
+  chatgptCancelSignIn: 'scout:chatgpt.cancelSignIn',
+  chatgptSignOut: 'scout:chatgpt.signOut',
+  chatgptStatus: 'scout:chatgpt.status',
   vaultStore: 'scout:vault.store',
   vaultHas: 'scout:vault.has',
   vaultDelete: 'scout:vault.delete',
@@ -74,6 +79,26 @@ export interface DiscordOAuthResult {
 }
 
 export type DiscordStartOAuthInstallResponse = DiscordOAuthResult;
+
+/** The only ChatGPT sign-in state the renderer ever sees; tokens stay in the main process. */
+export interface ChatGptStatus {
+  readonly signedIn: boolean;
+  readonly email: string | null;
+  readonly planUsageGranted: boolean;
+}
+
+export interface ChatGptSignOutResponse {
+  readonly revocationConfirmed: boolean;
+}
+
+export interface ChatGptModel {
+  readonly slug: string;
+  readonly displayName: string;
+}
+
+export interface ChatGptListModelsResponse {
+  readonly models: readonly ChatGptModel[];
+}
 
 export interface VaultStoreRequest {
   readonly key: VaultKey;
@@ -374,6 +399,11 @@ export interface ScoutBridge {
     req: DiscordStartOAuthInstallRequest,
   ): Promise<DiscordStartOAuthInstallResponse>;
   discordCancelOAuthInstall(): Promise<void>;
+  chatgptSignIn(): Promise<ChatGptStatus>;
+  chatgptCancelSignIn(): Promise<void>;
+  chatgptListModels(): Promise<ChatGptListModelsResponse>;
+  chatgptSignOut(): Promise<ChatGptSignOutResponse>;
+  chatgptStatus(): Promise<ChatGptStatus>;
   vaultStore(req: VaultStoreRequest): Promise<void>;
   vaultHas(req: VaultHasRequest): Promise<VaultHasResponse>;
   vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse>;
