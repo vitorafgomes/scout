@@ -28,7 +28,7 @@ public static class KubernetesServiceCollectionExtensions
         var options = configuration.GetSection(ConfigSection).Get<KubernetesOptions>();
         if (options is null
             || string.IsNullOrWhiteSpace(options.KubeconfigPath)
-            || !options.Contexts.Any(c => !string.IsNullOrWhiteSpace(c)))
+            || !options.Contexts.Any(c => !string.IsNullOrWhiteSpace(c.Name)))
         {
             return services;
         }

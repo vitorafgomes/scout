@@ -36,7 +36,7 @@ public sealed class KubernetesPluginTests : IDisposable
         _plugin = new KubernetesPlugin(new KubernetesOptions
         {
             KubeconfigPath = _api.KubeconfigPath,
-            Contexts = ["dev", "staging", "offline", "sso"],
+            Contexts = Allowed("dev", "staging", "offline", "sso"),
         });
     }
 
@@ -85,7 +85,7 @@ public sealed class KubernetesPluginTests : IDisposable
 
         var result = await _plugin.ListPodsAsync(context: "prod");
 
-        result.ShouldBe("Context prod is not one Scout may read. Allowed contexts: dev, staging, offline, sso.");
+        result.ShouldBe("That is not a context Scout may read. Allowed contexts: dev, staging, offline, sso.");
         _api.Requests.ShouldBeEmpty();
     }
 
@@ -137,7 +137,7 @@ public sealed class KubernetesPluginTests : IDisposable
         using var plugin = new KubernetesPlugin(new KubernetesOptions
         {
             KubeconfigPath = Path.Combine(Path.GetTempPath(), $"scout-missing-{Guid.NewGuid():N}"),
-            Contexts = ["dev"],
+            Contexts = Allowed("dev"),
         });
 
         var result = await plugin.ListPodsAsync();
@@ -232,7 +232,7 @@ public sealed class KubernetesPluginTests : IDisposable
     [Fact]
     public void List_Contexts_Lists_Only_The_Allowed_Contexts_With_The_Default_First()
     {
-        _plugin.ListContexts().ShouldBe("dev (default)\nstaging\noffline\nsso");
+        _plugin.ListContexts().ShouldBe("dev\nstaging\noffline\nsso");
     }
 
     [Fact]
@@ -403,7 +403,7 @@ public sealed class KubernetesPluginTests : IDisposable
         _api.Route("/api/v1/pods", PodList);
         _api.Delay = TimeSpan.FromSeconds(2);
         using var plugin = new KubernetesPlugin(
-            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = ["dev"] },
+            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = Allowed("dev") },
             context =>
             {
                 var config = KubernetesClientConfiguration.BuildConfigFromConfigFile(_api.KubeconfigPath, context);
@@ -419,7 +419,7 @@ public sealed class KubernetesPluginTests : IDisposable
     [Fact]
     public async Task A_Hung_Credential_Command_Fails_After_15_Seconds_Not_2_Minutes()
     {
-        using var plugin = new KubernetesPlugin(new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = ["hung"] });
+        using var plugin = new KubernetesPlugin(new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = Allowed("hung") });
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
         var result = await plugin.ListPodsAsync();
@@ -437,7 +437,7 @@ public sealed class KubernetesPluginTests : IDisposable
         var firstBuildEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var releaseFirstBuild = new ManualResetEventSlim();
         using var plugin = new KubernetesPlugin(
-            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = ["dev"] },
+            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = Allowed("dev") },
             context =>
             {
                 if (Interlocked.Increment(ref builds) == 1)
@@ -471,7 +471,7 @@ public sealed class KubernetesPluginTests : IDisposable
     {
         var path = Path.Combine(Path.GetDirectoryName(_api.KubeconfigPath)!, "later");
         _api.Route("/api/v1/pods", PodList);
-        using var plugin = new KubernetesPlugin(new KubernetesOptions { KubeconfigPath = path, Contexts = ["dev"] });
+        using var plugin = new KubernetesPlugin(new KubernetesOptions { KubeconfigPath = path, Contexts = Allowed("dev") });
 
         var before = await plugin.ListPodsAsync();
         File.Copy(_api.KubeconfigPath, path);
@@ -485,7 +485,7 @@ public sealed class KubernetesPluginTests : IDisposable
     public async Task An_Http_Failure_Without_A_Response_Says_The_Cluster_Could_Not_Be_Read()
     {
         using var plugin = new KubernetesPlugin(
-            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = ["dev"] },
+            new KubernetesOptions { KubeconfigPath = _api.KubeconfigPath, Contexts = Allowed("dev") },
             context => new k8s.Kubernetes(
                 KubernetesClientConfiguration.BuildConfigFromConfigFile(_api.KubeconfigPath, context),
                 new ThrowsWithoutResponse()));
@@ -500,6 +500,80 @@ public sealed class KubernetesPluginTests : IDisposable
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => throw new k8s.Autorest.HttpOperationException("no response");
     }
+
+    [Fact]
+    public void List_Contexts_Returns_The_Labels_And_Never_The_Context_Names()
+    {
+        using var plugin = AzurePlugin();
+
+        plugin.ListContexts().ShouldBe("dev\nprod\nqa");
+    }
+
+    [Fact]
+    public async Task A_Label_Selects_Its_Context_Case_Insensitively()
+    {
+        _api.Route("/api/v1/pods", PodList);
+        using var plugin = AzurePlugin();
+
+        await plugin.ListPodsAsync(context: " PROD ");
+
+        _api.Requests.ShouldHaveSingleItem().Authorization.ShouldBe($"Bearer {FakeKubernetesApi.AzureProdToken}");
+    }
+
+    [Theory]
+    [InlineData("AKSPRD01-admin")]
+    [InlineData("staging")]
+    public async Task A_Value_That_Is_Not_An_Approved_Label_Is_Refused_And_No_Request_Is_Sent(string context)
+    {
+        _api.Route("/api/v1/pods", PodList);
+        using var plugin = AzurePlugin();
+
+        var result = await plugin.ListPodsAsync(context: context);
+
+        result.ShouldBe("That is not a context Scout may read. Allowed contexts: dev, prod, qa.");
+        _api.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task No_Reply_Names_The_Context_Or_Its_Server()
+    {
+        _api.Route("/api/v1/pods", PodList);
+        _api.Route("/api/v1/namespaces", "{}", HttpStatusCode.Forbidden);
+        using var plugin = AzurePlugin();
+
+        var replies = new[]
+        {
+            plugin.ListContexts(),
+            await plugin.ListPodsAsync(context: "prod"),
+            await plugin.ListNamespacesAsync(context: "dev"),
+            await plugin.ListDeploymentsAsync("shop", context: "qa"),
+            await plugin.ListEventsAsync(context: "prod"),
+            await plugin.DescribePodAsync("shop", "web-1", context: "dev"),
+            await plugin.ListPodsAsync(context: "AKSDEV01-admin"),
+        };
+
+        replies.ShouldContain("The credentials for context dev cannot read namespaces.");
+        replies.ShouldContain("Could not reach the cluster for context qa.");
+        foreach (var reply in replies)
+        {
+            reply.ShouldNotContain("example.invalid", Case.Insensitive);
+            reply.ShouldNotContain("-admin", Case.Insensitive);
+        }
+    }
+
+    private KubernetesPlugin AzurePlugin() => new(new KubernetesOptions
+    {
+        KubeconfigPath = _api.KubeconfigPath,
+        Contexts =
+        [
+            new KubernetesContextOption { Name = "AKSDEV01-admin", Label = "dev" },
+            new KubernetesContextOption { Name = "AKSPRD01-admin", Label = "prod" },
+            new KubernetesContextOption { Name = "AKSQA01-admin", Label = "qa" },
+        ],
+    });
+
+    private static List<KubernetesContextOption> Allowed(params string[] names)
+        => names.Select(n => new KubernetesContextOption { Name = n }).ToList();
 
     private static string SinglePod() => """
         {"kind":"Pod","apiVersion":"v1",

@@ -3,8 +3,10 @@ import {
   CHANNEL,
   ScoutError,
   encodeIpcErrorMessage,
+  kubernetesLabelError,
   serializeError,
   type KubernetesDetection,
+  type KubernetesLabelledContext,
   type KubernetesStatus,
   type KubernetesUseRequest,
 } from '@scout/shared';
@@ -28,15 +30,22 @@ export async function readKubernetesSelection(
   const raw = await vault.get(SELECTION_KEY);
   if (raw === null) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<KubernetesSelection>;
-    const contexts = Array.isArray(parsed.contexts)
-      ? parsed.contexts.filter((c): c is string => typeof c === 'string')
-      : [];
+    const parsed = JSON.parse(raw) as { path?: unknown; contexts?: unknown };
+    const contexts = Array.isArray(parsed.contexts) ? parsed.contexts.flatMap(storedContext) : [];
     if (typeof parsed.path !== 'string' || contexts.length === 0) return null;
     return { path: parsed.path, contexts };
   } catch {
     return null;
   }
+}
+
+/** A stored context: `{name, label}`, or a bare name from before labels, which keeps its name as label. */
+function storedContext(entry: unknown): KubernetesLabelledContext[] {
+  if (typeof entry === 'string') return [{ name: entry, label: entry }];
+  if (typeof entry !== 'object' || entry === null) return [];
+  const { name, label } = entry as { name?: unknown; label?: unknown };
+  if (typeof name !== 'string') return [];
+  return [{ name, label: typeof label === 'string' && label.trim() !== '' ? label : name }];
 }
 
 export function registerKubernetesHandlers(
@@ -66,11 +75,19 @@ export function registerKubernetesHandlers(
 
   async function use(req: KubernetesUseRequest | undefined): Promise<KubernetesStatus> {
     const requested = Array.isArray(req?.contexts)
-      ? [...new Set(req.contexts.filter((c): c is string => typeof c === 'string'))]
+      ? req.contexts
+          .filter(
+            (c): c is KubernetesLabelledContext =>
+              typeof c?.name === 'string' && typeof c?.label === 'string',
+          )
+          .map((c) => ({ name: c.name, label: c.label.trim() }))
+          .filter((c, i, all) => all.findIndex((other) => other.name === c.name) === i)
       : [];
     if (requested.length === 0) {
       throw new ScoutError('kubernetes/no-context', 'Select at least one context.');
     }
+    const labelError = kubernetesLabelError(requested);
+    if (labelError !== null) throw new ScoutError('kubernetes/invalid-label', labelError);
     const detection = await deps.detect();
     if (detection.path === null || detection.error !== null) {
       throw new ScoutError(
@@ -79,11 +96,11 @@ export function registerKubernetesHandlers(
       );
     }
     const known = new Set(detection.contexts.map((c) => c.name));
-    const unknown = requested.find((c) => !known.has(c));
+    const unknown = requested.find((c) => !known.has(c.name));
     if (unknown !== undefined) {
       throw new ScoutError(
         'kubernetes/unknown-context',
-        `The context ${unknown} is not in ${detection.path}.`,
+        `The context ${unknown.name} is not in ${detection.path}.`,
       );
     }
     const selection: KubernetesSelection = { path: detection.path, contexts: requested };

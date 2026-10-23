@@ -2,6 +2,7 @@ import {
   CLOUD_API_KEY_VAULT_KEYS,
   VaultUnavailableError,
   type CloudLlmProvider,
+  type KubernetesLabelledContext,
   type VaultKey,
 } from '@scout/shared';
 
@@ -13,10 +14,10 @@ export interface BuildEnvDeps {
   allowedUserIds?: readonly string[];
 }
 
-/** The kubeconfig path and the contexts the owner allowed Scout to read. */
+/** The kubeconfig path and the contexts the owner allowed Scout to read, with their labels. */
 export interface KubernetesSelection {
   readonly path: string;
-  readonly contexts: readonly string[];
+  readonly contexts: readonly KubernetesLabelledContext[];
 }
 
 // Assembles the environment variables passed to Scout.Host.Console at spawn
@@ -46,7 +47,8 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   if (deps.kubernetesSelection != null) {
     env['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH'] = deps.kubernetesSelection.path;
     deps.kubernetesSelection.contexts.forEach((context, i) => {
-      env[`SCOUT__PLUGINS__KUBERNETES__CONTEXTS__${i}`] = context;
+      env[`SCOUT__PLUGINS__KUBERNETES__CONTEXTS__${i}__NAME`] = context.name;
+      env[`SCOUT__PLUGINS__KUBERNETES__CONTEXTS__${i}__LABEL`] = context.label;
     });
   }
 

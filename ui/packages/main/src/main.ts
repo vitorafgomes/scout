@@ -26,7 +26,7 @@ import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
-import { registerProviderKeyHandlers } from './ipc/provider-keys.js';
+import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
@@ -312,11 +312,21 @@ app
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
-    unregisterProviderKeys = registerProviderKeyHandlers(
+    const unregisterKeyCheck = registerProviderKeyHandlers(
       ipcMain,
       globalThis.fetch,
       logger.child({ module: 'provider-keys' }),
     );
+    const unregisterModelList = registerProviderModelHandlers(
+      ipcMain,
+      globalThis.fetch,
+      vault,
+      logger.child({ module: 'provider-keys' }),
+    );
+    unregisterProviderKeys = () => {
+      unregisterKeyCheck();
+      unregisterModelList();
+    };
     unregisterLmStudio = registerLmStudioHandlers(
       ipcMain,
       globalThis.fetch,

@@ -1,11 +1,44 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import type { LlmModel } from '@scout/shared';
 
+import { type ActiveCloudProvider, LlmConfigStore } from '../core/llm-config.store';
 import { LogStore } from '../core/log.store';
-import { type LocalModelCatalogEntry, type LocalModelKind } from '../core/local-models.catalog';
+import { type LocalModelCatalogEntry, ollamaTagForCatalogId } from '../core/local-models.catalog';
 import { LocalModelsStore } from '../core/local-models.store';
+import { ScoutBridgeService } from '../core/scout-bridge';
 
 type TaskTab = 'transcription' | 'analysis' | 'translation';
+
+interface CloudBlock {
+  readonly provider: ActiveCloudProvider;
+  readonly key: string;
+  readonly title: string;
+  readonly label: string;
+}
+
+type ModelList =
+  | { readonly state: 'loading' }
+  | { readonly state: 'failed' }
+  | { readonly state: 'ready'; readonly models: readonly LlmModel[] };
+
+const CLOUD_BLOCKS: readonly CloudBlock[] = Object.freeze([
+  { provider: 'ChatGptPlan', key: 'chatgpt', title: 'ChatGPT Plus', label: 'ChatGPT' },
+  { provider: 'OpenAI', key: 'openai', title: 'OpenAI API', label: 'OpenAI' },
+  { provider: 'Gemini', key: 'gemini', title: 'Google Gemini', label: 'Gemini' },
+]);
+
+const OPTION_ICON =
+  'M9 4a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Zm-3 7a6 6 0 0 0 12 0h-2a4 4 0 0 1-8 0Zm5 8h2v3h-2Z';
+const CHECK_ICON =
+  'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-1 14-5-5 1.4-1.4L11 13.2l6.6-6.6L19 8Z';
 
 @Component({
   selector: 'sc-models',
@@ -55,17 +88,11 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         </button>
       </nav>
 
-      @if (tab() === 'transcription' || tab() === 'analysis') {
-        <section class="panel" [attr.data-test]="'panel-' + tab()">
+      @if (tab() === 'transcription') {
+        <section class="panel" data-test="panel-transcription">
           <header class="panel-head">
-            <h1>{{ headerTitle() }}</h1>
-            <p class="lede">{{ headerLede() }}</p>
-            @if (tab() === 'analysis') {
-              <p class="lede lede--note">
-                When both ChatGPT Sign-In and an OpenAI API key are available, the provider group
-                you choose decides which credential is used.
-              </p>
-            }
+            <h1>Transcription</h1>
+            <p class="lede">Choose which model handles speech-to-text</p>
           </header>
 
           @if (downloaded().length === 0) {
@@ -76,11 +103,6 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
               </a>
             </div>
           } @else {
-            @if (narrowsToSelectedOnly() && selectedId() === null) {
-              <p class="nudge" data-test="no-active-model-nudge">
-                No model in use for this task. Pick one below.
-              </p>
-            }
             <article class="provider">
               <header class="provider-head">
                 <div class="icon" aria-hidden="true">
@@ -93,10 +115,10 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
                 </div>
                 <div class="provider-body">
                   <div class="provider-title">
-                    <h2>{{ providerTitle() }}</h2>
+                    <h2>Local Whisper</h2>
                     <span class="badge">On Device</span>
                   </div>
-                  <p class="provider-desc">{{ providerSub() }}</p>
+                  <p class="provider-desc">Runs locally without a cloud provider.</p>
                 </div>
               </header>
 
@@ -113,7 +135,7 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
               }
 
               <div class="options">
-                @for (m of visibleOptions(); track m.id) {
+                @for (m of downloaded(); track m.id) {
                   <button
                     type="button"
                     class="option"
@@ -152,6 +174,167 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
                 }
               </div>
             </article>
+          }
+        </section>
+      }
+      @if (tab() === 'analysis') {
+        <section class="panel" data-test="panel-analysis">
+          <header class="panel-head">
+            <h1>Analysis</h1>
+            <p class="lede">Choose which model handles AI analysis and chat</p>
+            <p class="lede lede--note">
+              Each provider you connect in AI Sources lists its models here. When both ChatGPT
+              Sign-In and an OpenAI API key are connected, the provider group you choose from
+              decides which credential is used.
+            </p>
+          </header>
+
+          @if (!anySelected()) {
+            <p class="nudge" data-test="no-active-model-nudge">
+              No model in use for this task. Pick one below.
+            </p>
+          }
+
+          @if (localAnalysis().length === 0) {
+            <div class="empty" data-test="empty-state">
+              <p>No models downloaded yet.</p>
+              <a routerLink="/sources/local-models" class="empty-link" data-test="empty-cta">
+                Go to AI Sources → Local Models to download one.
+              </a>
+            </div>
+          } @else {
+            <article class="provider" data-test="provider-ollama">
+              <header class="provider-head">
+                <div class="icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22">
+                    <path
+                      d="M12 3c-2.5 0-4 1.8-4 4v1H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7c0-2.2-1.5-4-4-4Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </div>
+                <div class="provider-body">
+                  <div class="provider-title">
+                    <h2>Local LLM</h2>
+                    <span class="badge">On Device</span>
+                  </div>
+                  <p class="provider-desc">On-device models for private analysis and chat.</p>
+                </div>
+              </header>
+              @if (localSelectedTitle(); as title) {
+                <div class="selected-pill" data-test="selected-pill">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                    <path [attr.d]="checkIcon" fill="currentColor" />
+                  </svg>
+                  <span>Selected: {{ title }}</span>
+                </div>
+              }
+              <div class="options">
+                @for (m of localAnalysis(); track m.id) {
+                  <button
+                    type="button"
+                    class="option"
+                    [class.option--selected]="isLocalSelected(m.id)"
+                    [disabled]="saving()"
+                    [attr.data-test]="'option-' + m.id"
+                    (click)="chooseLocal(m.id)"
+                  >
+                    <div class="option-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="20" height="20">
+                        <path [attr.d]="optionIcon" fill="currentColor" />
+                      </svg>
+                    </div>
+                    <div class="option-body">
+                      <div class="option-title">{{ m.title }}</div>
+                      <div class="option-desc">{{ m.description }}</div>
+                    </div>
+                    @if (isLocalSelected(m.id)) {
+                      <svg
+                        class="option-check"
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        aria-hidden="true"
+                      >
+                        <path [attr.d]="checkIcon" fill="currentColor" />
+                      </svg>
+                    }
+                  </button>
+                }
+              </div>
+            </article>
+          }
+
+          @for (block of cloudBlocks(); track block.provider) {
+            <article class="provider" [attr.data-test]="'provider-' + block.key">
+              <header class="provider-head">
+                <div class="provider-body">
+                  <div class="provider-title">
+                    <h2>{{ block.title }}</h2>
+                    <span class="badge">Cloud</span>
+                  </div>
+                </div>
+              </header>
+              @if (cloudSelectedModel(block.provider); as model) {
+                <div class="selected-pill" [attr.data-test]="'selected-pill-' + block.key">
+                  <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+                    <path [attr.d]="checkIcon" fill="currentColor" />
+                  </svg>
+                  <span>Selected: {{ model }}</span>
+                </div>
+              }
+              @switch (listOf(block.provider).state) {
+                @case ('failed') {
+                  <p class="form-error" role="alert" [attr.data-test]="'models-error-' + block.key">
+                    Could not load the {{ block.label }} model list.
+                  </p>
+                }
+                @case ('ready') {
+                  <div class="options">
+                    @for (m of modelsOf(block.provider); track m.id) {
+                      <button
+                        type="button"
+                        class="option"
+                        [class.option--selected]="cloudSelectedModel(block.provider) === m.id"
+                        [disabled]="saving()"
+                        [attr.data-test]="'model-' + block.key + '-' + m.id"
+                        (click)="chooseCloud(block, m.id)"
+                      >
+                        <div class="option-body">
+                          <div class="option-title">{{ m.displayName }}</div>
+                          @if (m.displayName !== m.id) {
+                            <div class="option-desc">{{ m.id }}</div>
+                          }
+                        </div>
+                        @if (cloudSelectedModel(block.provider) === m.id) {
+                          <svg
+                            class="option-check"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            aria-hidden="true"
+                          >
+                            <path [attr.d]="checkIcon" fill="currentColor" />
+                          </svg>
+                        }
+                      </button>
+                    }
+                  </div>
+                }
+                @default {
+                  <p class="provider-desc" [attr.data-test]="'models-loading-' + block.key">
+                    Loading models...
+                  </p>
+                }
+              }
+            </article>
+          }
+
+          @if (statusMessage(); as message) {
+            <p class="status" role="status" data-test="analysis-status">{{ message }}</p>
+          }
+          @if (actionError(); as error) {
+            <p class="form-error" role="alert" data-test="analysis-error">{{ error }}</p>
           }
         </section>
       }
@@ -398,6 +581,16 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
         font-size: 12px;
         color: #7b8299;
       }
+      .form-error {
+        margin: 0;
+        color: #e06c75;
+        font-size: 12px;
+      }
+      .status {
+        margin: 0;
+        color: #7b8299;
+        font-size: 12px;
+      }
       .option-check {
         color: #6b89c4;
         margin-left: auto;
@@ -433,27 +626,33 @@ type TaskTab = 'transcription' | 'analysis' | 'translation';
     `,
   ],
 })
-export class ModelsComponent {
+export class ModelsComponent implements OnInit {
   readonly store = inject(LocalModelsStore);
   private readonly logStore = inject(LogStore);
+  private readonly llmConfig = inject(LlmConfigStore);
+  private readonly bridge = inject(ScoutBridgeService);
+  private readonly route = inject(ActivatedRoute);
 
-  readonly tab = signal<TaskTab>('transcription');
+  readonly optionIcon = OPTION_ICON;
+  readonly checkIcon = CHECK_ICON;
+
+  readonly tab = signal<TaskTab>(
+    this.route.snapshot.queryParamMap.get('tab') === 'analysis' ? 'analysis' : 'transcription',
+  );
+  readonly saving = signal<boolean>(false);
+  readonly statusMessage = signal<string | null>(null);
+  readonly actionError = signal<string | null>(null);
+  private readonly lists = signal<Partial<Record<ActiveCloudProvider, ModelList>>>({});
 
   readonly locked = computed<boolean>(
     () => this.tab() === 'transcription' && this.logStore.status().state === 'running',
   );
 
-  readonly downloaded = computed<readonly LocalModelCatalogEntry[]>(() => {
-    const t = this.tab();
-    if (t !== 'transcription' && t !== 'analysis') return [];
-    return this.store.downloadedFor(t);
-  });
+  readonly downloaded = computed<readonly LocalModelCatalogEntry[]>(() =>
+    this.store.downloadedFor('transcription'),
+  );
 
-  readonly selectedId = computed<string | null>(() => {
-    const t = this.tab();
-    if (t !== 'transcription' && t !== 'analysis') return null;
-    return this.store.selectedFor(t);
-  });
+  readonly selectedId = computed<string | null>(() => this.store.selectedFor('transcription'));
 
   readonly selectedTitle = computed<string | null>(() => {
     const id = this.selectedId();
@@ -461,48 +660,136 @@ export class ModelsComponent {
     return this.downloaded().find((m) => m.id === id)?.title ?? null;
   });
 
-  // Analysis/Translation render only the in-use model when one is selected;
-  // Transcription always shows the full downloaded list.
-  readonly narrowsToSelectedOnly = computed<boolean>(
-    () => this.tab() === 'analysis' || this.tab() === 'translation',
+  readonly localAnalysis = computed<readonly LocalModelCatalogEntry[]>(() =>
+    this.store.downloadedFor('analysis'),
   );
 
-  readonly visibleOptions = computed<readonly LocalModelCatalogEntry[]>(() => {
-    const all = this.downloaded();
-    if (!this.narrowsToSelectedOnly()) return all;
-    const sel = this.selectedId();
-    if (sel === null) return all;
-    return all.filter((m) => m.id === sel);
+  private readonly ollamaInUse = computed<boolean>(() => {
+    const provider = this.llmConfig.provider();
+    return provider === null || provider === 'Ollama';
   });
+
+  readonly localSelectedTitle = computed<string | null>(() => {
+    if (!this.ollamaInUse()) return null;
+    const id = this.store.selectedFor('analysis');
+    return this.localAnalysis().find((m) => m.id === id)?.title ?? null;
+  });
+
+  readonly cloudBlocks = computed<readonly CloudBlock[]>(() =>
+    CLOUD_BLOCKS.filter((block) => this.llmConfig.connectedProviders().has(block.provider)),
+  );
+
+  readonly anySelected = computed<boolean>(
+    () =>
+      this.localSelectedTitle() !== null ||
+      this.cloudBlocks().some((block) => this.cloudSelectedModel(block.provider) !== null),
+  );
+
+  async ngOnInit(): Promise<void> {
+    await this.llmConfig.loadFromVault();
+    const chatgpt = await this.bridge.chatgptStatus().catch(() => null);
+    this.llmConfig.setChatGptConnected(
+      chatgpt !== null && chatgpt.signedIn && chatgpt.planUsageGranted,
+    );
+    await Promise.all(this.cloudBlocks().map((block) => this.loadModels(block.provider)));
+  }
 
   setTab(tab: TaskTab): void {
     this.tab.set(tab);
   }
 
-  headerTitle(): string {
-    return this.tab() === 'transcription' ? 'Transcription' : 'Analysis';
-  }
-
-  headerLede(): string {
-    return this.tab() === 'transcription'
-      ? 'Choose which model handles speech-to-text'
-      : 'Choose which model handles AI analysis and chat';
-  }
-
-  providerTitle(): string {
-    return this.tab() === 'transcription' ? 'Local Whisper' : 'Local LLM';
-  }
-
-  providerSub(): string {
-    return this.tab() === 'transcription'
-      ? 'Runs locally without a cloud provider.'
-      : 'On-device models for private analysis and chat.';
-  }
-
   onPick(id: string): void {
     if (this.locked()) return;
-    const t = this.tab();
-    if (t !== 'transcription' && t !== 'analysis') return;
-    this.store.select(t as LocalModelKind, id);
+    this.store.select('transcription', id);
+  }
+
+  isLocalSelected(id: string): boolean {
+    return this.ollamaInUse() && this.store.selectedFor('analysis') === id;
+  }
+
+  cloudSelectedModel(provider: ActiveCloudProvider): string | null {
+    return this.llmConfig.provider() === provider ? this.llmConfig.model() : null;
+  }
+
+  listOf(provider: ActiveCloudProvider): ModelList {
+    return this.lists()[provider] ?? { state: 'loading' };
+  }
+
+  modelsOf(provider: ActiveCloudProvider): readonly LlmModel[] {
+    const list = this.listOf(provider);
+    return list.state === 'ready' ? list.models : [];
+  }
+
+  async chooseLocal(id: string): Promise<void> {
+    const tag = ollamaTagForCatalogId(id);
+    if (tag === null || this.saving() || this.isLocalSelected(id)) return;
+    this.beginAction();
+    try {
+      this.store.select('analysis', id);
+      await this.llmConfig.useOllama();
+      await this.bridge.vaultStore({ key: 'llm.model', value: tag });
+    } catch (err: unknown) {
+      this.actionError.set(err instanceof Error ? err.message : 'Could not switch to Ollama.');
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    await this.restartIfRunning('Ollama');
+  }
+
+  async chooseCloud(block: CloudBlock, model: string): Promise<void> {
+    if (this.saving() || this.cloudSelectedModel(block.provider) === model) return;
+    this.beginAction();
+    try {
+      await this.llmConfig.use(block.provider, model);
+    } catch (err: unknown) {
+      this.actionError.set(
+        err instanceof Error ? err.message : `Could not switch to ${block.label}.`,
+      );
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    await this.restartIfRunning(block.label);
+  }
+
+  private async loadModels(provider: ActiveCloudProvider): Promise<void> {
+    this.lists.update((lists) => ({ ...lists, [provider]: { state: 'loading' } }));
+    let list: ModelList;
+    try {
+      const models =
+        provider === 'ChatGptPlan'
+          ? (await this.bridge.chatgptListModels()).models.map((m) => ({
+              id: m.slug,
+              displayName: m.displayName,
+            }))
+          : (await this.bridge.llmListModels({ provider })).models;
+      list = { state: 'ready', models };
+    } catch {
+      list = { state: 'failed' };
+    }
+    this.lists.update((lists) => ({ ...lists, [provider]: list }));
+  }
+
+  private beginAction(): void {
+    this.saving.set(true);
+    this.statusMessage.set(null);
+    this.actionError.set(null);
+  }
+
+  private async restartIfRunning(label: string): Promise<void> {
+    try {
+      const { state } = await this.bridge.workerStatus();
+      if (state !== 'running' && state !== 'starting') {
+        this.statusMessage.set(`Scout will use ${label} the next time it starts.`);
+        return;
+      }
+      this.statusMessage.set(`Restarting Scout to use ${label}.`);
+      await this.bridge.workerStop();
+      await this.bridge.workerStart();
+    } catch (err: unknown) {
+      this.statusMessage.set(`Restart Scout from the status screen to use ${label}.`);
+      this.actionError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
+    }
   }
 }

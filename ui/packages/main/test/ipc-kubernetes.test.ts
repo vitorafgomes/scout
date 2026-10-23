@@ -71,6 +71,8 @@ function makeWorker(state: WorkerStatus['state']): {
   };
 }
 
+const labelled = (name: string, label = name): { name: string; label: string } => ({ name, label });
+
 describe('Kubernetes IPC', () => {
   let home: TempHome;
   let kubeconfigPath: string;
@@ -133,14 +135,16 @@ describe('Kubernetes IPC', () => {
     await s.call(CHANNEL.kubernetesDetect);
     await s.call(CHANNEL.kubernetesStatus);
     const before = kubernetesVars(await s.env());
-    await s.call(CHANNEL.kubernetesUse, { contexts: ['dev', 'eks'] });
+    await s.call(CHANNEL.kubernetesUse, { contexts: [labelled('dev'), labelled('eks', 'aws')] });
     const after = kubernetesVars(await s.env());
 
     expect(before).toEqual({});
     expect(after).toEqual({
       SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH: kubeconfigPath,
-      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0: 'dev',
-      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1: 'eks',
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__NAME: 'dev',
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__LABEL: 'dev',
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__NAME: 'eks',
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__LABEL: 'aws',
     });
   });
 
@@ -159,13 +163,23 @@ describe('Kubernetes IPC', () => {
   it('use stores the path main located and the contexts, and restarts the running worker', async () => {
     const s = setup('running');
 
-    const status = await s.call(CHANNEL.kubernetesUse, { contexts: ['dev', 'dev', 'prod'] });
+    const status = await s.call(CHANNEL.kubernetesUse, {
+      contexts: [
+        labelled('dev', ' Dev cluster '),
+        labelled('dev', 'again'),
+        labelled('prod', 'live'),
+      ],
+    });
     await s.restarted();
 
-    expect(status).toEqual({ path: kubeconfigPath, contexts: ['dev', 'prod'], connected: true });
+    const stored = [
+      { name: 'dev', label: 'Dev cluster' },
+      { name: 'prod', label: 'live' },
+    ];
+    expect(status).toEqual({ path: kubeconfigPath, contexts: stored, connected: true });
     expect(JSON.parse(s.vault.entries.get('kubernetes.selection')!)).toEqual({
       path: kubeconfigPath,
-      contexts: ['dev', 'prod'],
+      contexts: stored,
     });
     expect(s.worker.calls).toEqual(['stop', 'start']);
   });
@@ -173,7 +187,9 @@ describe('Kubernetes IPC', () => {
   it('refuses a context that is not in the kubeconfig and stores nothing', async () => {
     const s = setup();
 
-    const err = await rejection(s.call(CHANNEL.kubernetesUse, { contexts: ['dev', 'nope'] }));
+    const err = await rejection(
+      s.call(CHANNEL.kubernetesUse, { contexts: [labelled('dev'), labelled('nope')] }),
+    );
 
     expect(err).toEqual({
       code: 'kubernetes/unknown-context',
@@ -181,6 +197,50 @@ describe('Kubernetes IPC', () => {
     });
     expect(s.vault.entries.size).toBe(0);
     expect(s.worker.calls).toEqual([]);
+  });
+
+  it.each([
+    [
+      'an invalid label',
+      [labelled('dev', 'dev/eu')],
+      'The label for dev must be 1 to 32 letters, digits, spaces or hyphens.',
+    ],
+    [
+      'a duplicate label',
+      [labelled('dev', 'prod'), labelled('prod', 'PROD')],
+      'The label PROD is used more than once.',
+    ],
+  ])('refuses %s and stores nothing', async (_case, contexts, message) => {
+    const s = setup();
+
+    const err = await rejection(s.call(CHANNEL.kubernetesUse, { contexts }));
+
+    expect(err).toEqual({ code: 'kubernetes/invalid-label', message });
+    expect(s.vault.entries.size).toBe(0);
+    expect(s.worker.calls).toEqual([]);
+  });
+
+  it('reads a selection stored before labels, using each context name as its label', async () => {
+    const s = setup();
+    s.vault.entries.set(
+      'kubernetes.selection',
+      JSON.stringify({ path: kubeconfigPath, contexts: ['dev', 'prod'] }),
+    );
+
+    const status = await s.call(CHANNEL.kubernetesStatus);
+
+    expect(status).toEqual({
+      path: kubeconfigPath,
+      contexts: [
+        { name: 'dev', label: 'dev' },
+        { name: 'prod', label: 'prod' },
+      ],
+      connected: true,
+    });
+    expect(kubernetesVars(await s.env())).toMatchObject({
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__NAME: 'prod',
+      SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__LABEL: 'prod',
+    });
   });
 
   it('refuses an empty selection', async () => {
@@ -196,7 +256,7 @@ describe('Kubernetes IPC', () => {
     const s = setup();
     await home.dispose();
 
-    const err = await rejection(s.call(CHANNEL.kubernetesUse, { contexts: ['dev'] }));
+    const err = await rejection(s.call(CHANNEL.kubernetesUse, { contexts: [labelled('dev')] }));
 
     expect(err).toEqual({
       code: 'kubernetes/no-config',
@@ -206,7 +266,7 @@ describe('Kubernetes IPC', () => {
 
   it('disconnect clears the selection, removes the worker variables and restarts the worker', async () => {
     const s = setup('running');
-    await s.call(CHANNEL.kubernetesUse, { contexts: ['dev'] });
+    await s.call(CHANNEL.kubernetesUse, { contexts: [labelled('dev')] });
     await s.restarted();
     s.worker.calls.length = 0;
 
@@ -224,7 +284,9 @@ describe('Kubernetes IPC', () => {
 
     const payloads = [
       await s.call(CHANNEL.kubernetesDetect),
-      await s.call(CHANNEL.kubernetesUse, { contexts: ['dev', 'prod', 'eks', 'gke', 'legacy'] }),
+      await s.call(CHANNEL.kubernetesUse, {
+        contexts: ['dev', 'prod', 'eks', 'gke', 'legacy'].map((name) => labelled(name)),
+      }),
       await s.call(CHANNEL.kubernetesStatus),
       await s.call(CHANNEL.kubernetesDisconnect),
     ];

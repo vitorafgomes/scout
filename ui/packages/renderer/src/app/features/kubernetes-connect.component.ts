@@ -4,11 +4,13 @@ import {
   EventEmitter,
   OnInit,
   Output,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 
 import {
+  kubernetesLabelError,
   readIpcError,
   type KubernetesAuthKind,
   type KubernetesDetection,
@@ -41,8 +43,7 @@ export const READ_ONLY_USER_COMMANDS = [
       <section class="connect" data-test="kubernetes-connect-section">
         @if (s.connected) {
           <p class="note" data-test="kubernetes-connected">
-            Using {{ s.contexts.length }}
-            {{ s.contexts.length === 1 ? 'context' : 'contexts' }} from {{ s.path }}
+            Using {{ labelsOf(s) }} from {{ s.path }}
           </p>
           <div class="row">
             <button
@@ -87,14 +88,30 @@ export const READ_ONLY_USER_COMMANDS = [
                       Runs {{ c.execCommand }} to get a token
                     </p>
                   }
+                  @if (selected().has(c.name)) {
+                    <label class="label-field">
+                      <span>Label</span>
+                      <input
+                        #labelInput
+                        type="text"
+                        class="input"
+                        [value]="selected().get(c.name)"
+                        [attr.data-test]="'kubernetes-label-' + c.name"
+                        (input)="setLabel(c.name, labelInput.value)"
+                      />
+                    </label>
+                  }
                 </li>
               }
             </ul>
+            @if (labelError(); as error) {
+              <p class="err" data-test="kubernetes-label-error">{{ error }}</p>
+            }
             <button
               type="button"
               class="btn btn--primary"
               data-test="kubernetes-use"
-              [disabled]="selected().size === 0 || busy()"
+              [disabled]="selected().size === 0 || labelError() !== null || busy()"
               (click)="use()"
             >
               Use selected contexts
@@ -155,6 +172,22 @@ export const READ_ONLY_USER_COMMANDS = [
         gap: 6px;
         align-items: center;
         font-size: 13px;
+        color: #e4e8f0;
+      }
+      .label-field {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin: 4px 0 0 22px;
+        font-size: 12px;
+        color: #7b8299;
+      }
+      .input {
+        font-size: 12px;
+        padding: 4px 6px;
+        border-radius: 6px;
+        border: 1px solid #252b3b;
+        background: #11131a;
         color: #e4e8f0;
       }
       .exec {
@@ -220,7 +253,11 @@ export class KubernetesConnectComponent implements OnInit {
 
   readonly status = signal<KubernetesStatus | null>(null);
   readonly detection = signal<KubernetesDetection | null>(null);
-  readonly selected = signal<ReadonlySet<string>>(new Set());
+  /** The ticked context names, each with the label the owner typed (prefilled with the name). */
+  readonly selected = signal<ReadonlyMap<string, string>>(new Map());
+  readonly labelError = computed(() =>
+    kubernetesLabelError([...this.selected()].map(([name, label]) => ({ name, label }))),
+  );
   readonly busy = signal(false);
   readonly actionError = signal<string | null>(null);
   readonly authLabel = AUTH_LABEL;
@@ -233,13 +270,24 @@ export class KubernetesConnectComponent implements OnInit {
   }
 
   toggle(name: string): void {
-    const next = new Set(this.selected());
-    if (!next.delete(name)) next.add(name);
+    const next = new Map(this.selected());
+    if (!next.delete(name)) next.set(name, name);
     this.selected.set(next);
   }
 
+  setLabel(name: string, label: string): void {
+    this.selected.set(new Map(this.selected()).set(name, label));
+  }
+
+  labelsOf(status: KubernetesStatus): string {
+    return status.contexts.map((c) => c.label).join(', ');
+  }
+
   async use(): Promise<void> {
-    const contexts = [...this.selected()];
+    const selected = this.selected();
+    const contexts = (this.detection()?.contexts ?? [])
+      .filter((c) => selected.has(c.name))
+      .map((c) => ({ name: c.name, label: (selected.get(c.name) ?? c.name).trim() }));
     await this.run(() => this.load(this.bridge.kubernetesUse({ contexts })));
   }
 
@@ -256,7 +304,7 @@ export class KubernetesConnectComponent implements OnInit {
     this.status.set(status);
     this.connectedChange.emit(status.connected);
     if (!status.connected) {
-      this.selected.set(new Set());
+      this.selected.set(new Map());
       this.detection.set(await this.bridge.kubernetesDetect());
     }
   }

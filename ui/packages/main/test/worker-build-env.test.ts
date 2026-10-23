@@ -325,18 +325,26 @@ describe('buildEnv', () => {
     expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__GITHUB'))).toEqual([]);
   });
 
-  it('gives the worker the kubeconfig path and each allowed context when Kubernetes is connected', async () => {
+  it('gives the worker the kubeconfig path and a NAME and LABEL pair per allowed context', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
-      kubernetesSelection: { path: '/home/me/.kube/config', contexts: ['dev', 'prod'] },
+      kubernetesSelection: {
+        path: '/home/me/.kube/config',
+        contexts: [
+          { name: 'AKSDEV01-admin', label: 'dev' },
+          { name: 'AKSPRD01-admin', label: 'prod' },
+        ],
+      },
     });
 
     expect(
       Object.entries(env).filter(([key]) => key.startsWith('SCOUT__PLUGINS__KUBERNETES')),
     ).toEqual([
       ['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH', '/home/me/.kube/config'],
-      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0', 'dev'],
-      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1', 'prod'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__NAME', 'AKSDEV01-admin'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0__LABEL', 'dev'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__NAME', 'AKSPRD01-admin'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1__LABEL', 'prod'],
     ]);
   });
 
@@ -467,7 +475,10 @@ describe('buildEnv allowed users', () => {
   it('fails closed when a Kubernetes selection exists: the worker must require an allow list', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
-      kubernetesSelection: { path: '/home/me/.kube/config', contexts: ['prod-admin'] },
+      kubernetesSelection: {
+        path: '/home/me/.kube/config',
+        contexts: [{ name: 'prod-admin', label: 'prod' }],
+      },
     });
 
     expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');

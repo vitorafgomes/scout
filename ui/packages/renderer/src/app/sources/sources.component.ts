@@ -6,8 +6,8 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { Router } from '@angular/router';
-import type { ChatGptModel, ChatGptStatus, ProviderKeyValidateResponse } from '@scout/shared';
+import { Router, RouterLink } from '@angular/router';
+import type { ChatGptStatus, ProviderKeyValidateResponse } from '@scout/shared';
 
 import {
   type ActiveCloudProvider,
@@ -22,7 +22,7 @@ type FilterKind = 'all' | 'local' | 'cloud';
 type CardKind = 'local' | 'cloud';
 type ConnectionState = 'connected' | 'not-connected' | 'unknown';
 type CloudState = 'in-use' | 'connected' | 'not-connected';
-type CloudForm = 'key' | 'model';
+type CloudForm = 'key';
 
 interface RestartMessages {
   readonly restarting: string;
@@ -62,12 +62,11 @@ function providerLabel(provider: ActiveCloudProvider): string {
   return provider === 'ChatGptPlan' ? 'ChatGPT' : provider;
 }
 
-const CLOUD_PROVIDERS: Readonly<
-  Record<string, { readonly provider: CloudLlmProvider; readonly defaultModel: string }>
-> = Object.freeze({
-  'openai-api': { provider: 'OpenAI', defaultModel: DEFAULT_CLOUD_MODELS.OpenAI },
-  'google-gemini': { provider: 'Gemini', defaultModel: DEFAULT_CLOUD_MODELS.Gemini },
-});
+const CLOUD_PROVIDERS: Readonly<Record<string, { readonly provider: CloudLlmProvider }>> =
+  Object.freeze({
+    'openai-api': { provider: 'OpenAI' },
+    'google-gemini': { provider: 'Gemini' },
+  });
 
 /** The OpenAI, Google Gemini, OpenRouter and Ollama marks are from Simple Icons (CC0-1.0); the others are generic. */
 const ICONS = Object.freeze({
@@ -89,6 +88,7 @@ const ICONS = Object.freeze({
 @Component({
   selector: 'sc-sources',
   standalone: true,
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="page">
@@ -284,35 +284,6 @@ const ICONS = Object.freeze({
                   <p class="account" data-test="chatgpt-account">
                     {{ chatgpt().email ?? 'Signed in' }}
                   </p>
-                  @if (chatgpt().planUsageGranted) {
-                    <label class="field">
-                      <span class="field-label">Model</span>
-                      <select
-                        class="text-input"
-                        data-test="chatgpt-model-select"
-                        (change)="onChatGptModelChange($event)"
-                      >
-                        @if (!chatgptChoiceListed()) {
-                          <option [value]="chatgptModelChoice()" selected>
-                            {{ chatgptModelChoice() }}
-                          </option>
-                        }
-                        @for (model of chatgptModels(); track model.slug) {
-                          <option
-                            [value]="model.slug"
-                            [selected]="model.slug === chatgptModelChoice()"
-                          >
-                            {{ model.displayName }}
-                          </option>
-                        }
-                      </select>
-                    </label>
-                    @if (chatgptModelsFailed()) {
-                      <p class="form-error" role="alert" data-test="chatgpt-models-error">
-                        Could not load the ChatGPT model list.
-                      </p>
-                    }
-                  }
                   @if (chatgptInUse()) {
                     <p class="saved" data-test="chatgpt-model">
                       Answering with {{ chatgptModel() }}
@@ -323,15 +294,15 @@ const ICONS = Object.freeze({
                         Settings.
                       </p>
                     }
-                  } @else if (chatgpt().planUsageGranted) {
-                    <button
-                      type="button"
-                      class="action action--primary"
-                      data-test="chatgpt-use"
-                      (click)="useChatGpt()"
+                  }
+                  @if (chatgpt().planUsageGranted) {
+                    <a
+                      class="model-link"
+                      routerLink="/llm"
+                      [queryParams]="{ tab: 'analysis' }"
+                      data-test="choose-model-chatgpt-plus"
+                      >Choose a model in Models → Analysis</a
                     >
-                      Use
-                    </button>
                   } @else {
                     <p class="form-error" role="alert" data-test="chatgpt-no-plan-usage">
                       OpenAI did not grant plan usage to Scout for this account, so Scout cannot
@@ -417,17 +388,6 @@ const ICONS = Object.freeze({
                           <button
                             type="button"
                             class="action"
-                            [attr.data-test]="'change-model-' + card.id"
-                            [attr.aria-label]="'Change ' + card.title + ' model'"
-                            [attr.aria-expanded]="formOf(card.id) === 'model'"
-                            [disabled]="saving()"
-                            (click)="toggleForm(card.id, 'model')"
-                          >
-                            Change model
-                          </button>
-                          <button
-                            type="button"
-                            class="action"
                             [attr.data-test]="'disconnect-' + card.id"
                             [attr.aria-label]="'Disconnect ' + card.title"
                             [disabled]="saving()"
@@ -439,16 +399,6 @@ const ICONS = Object.freeze({
                       }
                       @case ('connected') {
                         <div class="form-buttons">
-                          <button
-                            type="button"
-                            class="action action--primary"
-                            [attr.data-test]="'use-' + card.id"
-                            [attr.aria-label]="'Use ' + card.title"
-                            [disabled]="saving()"
-                            (click)="useProvider(card.id)"
-                          >
-                            Use
-                          </button>
                           <button
                             type="button"
                             class="action"
@@ -500,6 +450,15 @@ const ICONS = Object.freeze({
                         </button>
                       }
                     }
+                    @if (cloudStateOf(card.id) !== 'not-connected') {
+                      <a
+                        class="model-link"
+                        routerLink="/llm"
+                        [queryParams]="{ tab: 'analysis' }"
+                        [attr.data-test]="'choose-model-' + card.id"
+                        >Choose a model in Models → Analysis</a
+                      >
+                    }
                     @if (formOf(card.id) === 'key') {
                       <form
                         class="key-form"
@@ -532,45 +491,6 @@ const ICONS = Object.freeze({
                             type="button"
                             class="action"
                             [attr.data-test]="'cancel-' + card.id"
-                            (click)="cancelForm()"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    }
-                    @if (formOf(card.id) === 'model') {
-                      <form
-                        class="key-form"
-                        [attr.data-test]="'model-form-' + card.id"
-                        (submit)="saveModel($event, card.id, modelInput)"
-                      >
-                        <label class="field">
-                          <span class="field-label">Model</span>
-                          <input
-                            #modelInput
-                            type="text"
-                            class="text-input"
-                            [value]="activeModel() ?? defaultModelOf(card.id)"
-                            [attr.data-test]="'model-' + card.id"
-                          />
-                        </label>
-                        @if (formError(); as error) {
-                          <p class="form-error" role="alert">{{ error }}</p>
-                        }
-                        <div class="form-buttons">
-                          <button
-                            type="submit"
-                            class="action action--primary"
-                            [disabled]="saving()"
-                            [attr.data-test]="'save-model-' + card.id"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            class="action"
-                            [attr.data-test]="'cancel-model-' + card.id"
                             (click)="cancelForm()"
                           >
                             Cancel
@@ -978,6 +898,15 @@ const ICONS = Object.freeze({
         font-size: 13px;
         color: #e4e8f0;
       }
+      .model-link {
+        color: #6b89c4;
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .model-link:hover {
+        text-decoration: underline;
+      }
       .saved {
         margin: 0;
         font-size: 12px;
@@ -1004,24 +933,12 @@ export class SourcesComponent implements OnInit {
   readonly chatgpt = signal<ChatGptStatus>(CHATGPT_SIGNED_OUT);
   readonly chatgptBusy = signal<boolean>(false);
   private chatgptCancelled = false;
-  readonly chatgptModels = signal<readonly ChatGptModel[]>([]);
-  readonly chatgptModelsFailed = signal<boolean>(false);
-  private readonly chatgptPickedModel = signal<string | null>(null);
   readonly chatgptError = signal<string | null>(null);
   readonly noAllowedUsers = signal(false);
   readonly chatgptIcon = ICONS.openai;
   readonly chatgptModel = computed<string | null>(() => this.llmConfig.model());
   readonly chatgptInUse = computed<boolean>(
     () => this.chatgpt().signedIn && this.llmConfig.provider() === 'ChatGptPlan',
-  );
-  readonly chatgptModelChoice = computed<string>(
-    () =>
-      this.chatgptPickedModel() ??
-      (this.chatgptInUse() ? this.chatgptModel() : null) ??
-      DEFAULT_CLOUD_MODELS.ChatGptPlan,
-  );
-  readonly chatgptChoiceListed = computed<boolean>(() =>
-    this.chatgptModels().some((model) => model.slug === this.chatgptModelChoice()),
   );
   readonly chatgptNeedsSignInAgain = computed<boolean>(
     () => !this.chatgpt().signedIn && this.llmConfig.provider() === 'ChatGptPlan',
@@ -1179,23 +1096,6 @@ export class SourcesComponent implements OnInit {
   private applyChatGptStatus(status: ChatGptStatus): void {
     this.chatgpt.set(status);
     this.llmConfig.setChatGptConnected(status.signedIn && status.planUsageGranted);
-    void this.loadChatGptModels();
-  }
-
-  async loadChatGptModels(): Promise<void> {
-    if (!this.chatgpt().planUsageGranted) return;
-    try {
-      const { models } = await this.bridge.chatgptListModels();
-      this.chatgptModels.set(models);
-      this.chatgptModelsFailed.set(false);
-    } catch {
-      this.chatgptModelsFailed.set(true);
-    }
-  }
-
-  async onChatGptModelChange(event: Event): Promise<void> {
-    this.chatgptPickedModel.set((event.target as HTMLSelectElement).value);
-    if (this.chatgptInUse()) await this.useChatGpt();
   }
 
   async signInChatGpt(): Promise<void> {
@@ -1223,13 +1123,8 @@ export class SourcesComponent implements OnInit {
       status.planUsageGranted &&
       this.llmConfig.activeCloudProvider() === null
     ) {
-      await this.useChatGpt();
+      await this.applyModel('chatgpt-plus', 'ChatGptPlan', DEFAULT_CLOUD_MODELS.ChatGptPlan);
     }
-  }
-
-  async useChatGpt(): Promise<void> {
-    this.chatgptError.set(null);
-    await this.applyModel('chatgpt-plus', 'ChatGptPlan', this.chatgptModelChoice());
   }
 
   async cancelChatGptSignIn(): Promise<void> {
@@ -1310,10 +1205,6 @@ export class SourcesComponent implements OnInit {
     }
   }
 
-  defaultModelOf(id: string): string {
-    return CLOUD_PROVIDERS[id]?.defaultModel ?? '';
-  }
-
   formOf(id: string): CloudForm | null {
     const open = this.openForm();
     return open !== null && open.id === id ? open.kind : null;
@@ -1363,7 +1254,9 @@ export class SourcesComponent implements OnInit {
     this.openForm.set(null);
     this.savedCard.set(id);
     if (wasInUse || this.llmConfig.activeCloudProvider() !== provider) {
-      this.savedMessage.set(`Connected. Choose Use to switch Scout to ${provider}.`);
+      this.savedMessage.set(
+        `Connected. Choose a model in Models → Analysis to switch Scout to ${provider}.`,
+      );
       return;
     }
     this.savedMessage.set('');
@@ -1372,23 +1265,6 @@ export class SourcesComponent implements OnInit {
       idle: `Connected. Scout will use ${provider} the next time it starts.`,
       failed: `Connected. Restart Scout from the status screen to use ${provider}.`,
     });
-  }
-
-  async useProvider(id: string): Promise<void> {
-    const entry = CLOUD_PROVIDERS[id];
-    if (entry === undefined) return;
-    await this.applyModel(id, entry.provider, entry.defaultModel);
-  }
-
-  async saveModel(event: Event, id: string, modelInput: HTMLInputElement): Promise<void> {
-    event.preventDefault();
-    const provider = CLOUD_PROVIDERS[id]?.provider;
-    if (provider === undefined) return;
-    if (modelInput.value.trim().length === 0) {
-      this.formError.set('Enter a model.');
-      return;
-    }
-    await this.applyModel(id, provider, modelInput.value);
   }
 
   async disconnectProvider(id: string): Promise<void> {

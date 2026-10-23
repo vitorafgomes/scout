@@ -15,6 +15,8 @@ internal sealed class FakeKubernetesApi : IDisposable
     public const string DevToken = "dev-token-0123456789-secret";
     public const string StagingToken = "staging-token-0123456789-secret";
     public const string ExecEnvValue = "exec-env-value-secret";
+    public const string AzureDevToken = "aks-dev-token-secret";
+    public const string AzureProdToken = "aks-prod-token-secret";
 
     private readonly HttpListener _listener = new();
     private readonly Dictionary<string, (HttpStatusCode Status, string Body)> _routes = new(StringComparer.Ordinal);
@@ -117,6 +119,15 @@ internal sealed class FakeKubernetesApi : IDisposable
         - name: closed
           cluster:
             server: http://127.0.0.1:{closedPort}
+        - name: aksdev01-dns-1a2b.hcp.example.invalid
+          cluster:
+            server: http://127.0.0.1:{port}
+        - name: aksprd01-dns-3c4d.hcp.example.invalid
+          cluster:
+            server: http://127.0.0.1:{port}
+        - name: aksqa01-dns-5e6f.hcp.example.invalid
+          cluster:
+            server: http://127.0.0.1:{closedPort}
         contexts:
         - name: dev
           context:
@@ -142,7 +153,25 @@ internal sealed class FakeKubernetesApi : IDisposable
           context:
             cluster: fake
             user: hung-user
+        - name: AKSDEV01-admin
+          context:
+            cluster: aksdev01-dns-1a2b.hcp.example.invalid
+            user: clusterAdmin_rg_AKSDEV01-admin
+        - name: AKSPRD01-admin
+          context:
+            cluster: aksprd01-dns-3c4d.hcp.example.invalid
+            user: clusterAdmin_rg_AKSPRD01-admin
+        - name: AKSQA01-admin
+          context:
+            cluster: aksqa01-dns-5e6f.hcp.example.invalid
+            user: clusterAdmin_rg_AKSDEV01-admin
         users:
+        - name: clusterAdmin_rg_AKSDEV01-admin
+          user:
+            token: {AzureDevToken}
+        - name: clusterAdmin_rg_AKSPRD01-admin
+          user:
+            token: {AzureProdToken}
         - name: dev-user
           user:
             token: {DevToken}

@@ -105,6 +105,9 @@ export {
   type ProvidersListResponse,
   type ProviderKeyValidateRequest,
   type ProviderKeyValidateResponse,
+  type LlmListModelsRequest,
+  type LlmListModelsResponse,
+  type LlmModel,
   type FeatureId,
   FEATURE_IDS,
   type FeatureStatus,
@@ -122,7 +125,10 @@ export {
   type KubernetesAuthKind,
   type KubernetesContextInfo,
   type KubernetesDetection,
+  type KubernetesLabelledContext,
   type KubernetesStatus,
   type KubernetesUseRequest,
   type AccessAllowedUsers,
 } from './ipc-contract.js';
+
+export { kubernetesLabelError } from './kubernetes-labels.js';

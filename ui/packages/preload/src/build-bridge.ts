@@ -202,6 +202,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    llmListModels(req) {
+      return ipc.invoke(CHANNEL.llmListModels, req) as ReturnType<ScoutBridge['llmListModels']>;
+    },
+
     featuresList() {
       return ipc.invoke(CHANNEL.featuresList) as ReturnType<ScoutBridge['featuresList']>;
     },

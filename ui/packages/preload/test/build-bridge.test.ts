@@ -55,6 +55,7 @@ describe('buildBridge', () => {
       'providerRestart',
       'providerSetAutostart',
       'validateProviderKey',
+      'llmListModels',
       'featuresList',
       'featureSetCredentials',
       'featureSetup',
@@ -239,6 +240,18 @@ describe('buildBridge', () => {
     expect(result).toBe(expected);
   });
 
+  it('llmListModels sends the provider on the llm.listModels channel and returns the models', async () => {
+    const ipc = makeFakeIpc();
+    const req = { provider: 'Gemini' as const };
+    const expected = { models: [{ id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' }] };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const result = await buildBridge(ipc).llmListModels(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.llmListModels, req);
+    expect(result).toBe(expected);
+  });
+
   it('vaultGetPublic sends the key on the getPublic channel and returns the value', async () => {
     const ipc = makeFakeIpc();
     const req = { key: 'llm.provider' as const };
@@ -393,12 +406,20 @@ describe('buildBridge', () => {
 
   it('kubernetesUse sends the selected contexts on the use channel and returns the status', async () => {
     const ipc = makeFakeIpc();
-    const status = { path: '/home/me/.kube/config', contexts: ['dev'], connected: true };
+    const status = {
+      path: '/home/me/.kube/config',
+      contexts: [{ name: 'dev', label: 'dev' }],
+      connected: true,
+    };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
 
-    const result = await buildBridge(ipc).kubernetesUse({ contexts: ['dev'] });
+    const result = await buildBridge(ipc).kubernetesUse({
+      contexts: [{ name: 'dev', label: 'dev' }],
+    });
 
-    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.kubernetesUse, { contexts: ['dev'] });
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.kubernetesUse, {
+      contexts: [{ name: 'dev', label: 'dev' }],
+    });
     expect(result).toBe(status);
   });
 

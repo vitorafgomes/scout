@@ -30,6 +30,7 @@ export const CHANNEL = {
   llmPullOllamaProgress: 'scout:llm.pullOllamaProgress',
   llmDeleteOllamaModel: 'scout:llm.deleteOllamaModel',
   llmListLmStudioModels: 'scout:llm.listLmStudioModels',
+  llmListModels: 'scout:llm.listModels',
   whisperListInstalled: 'scout:whisper.listInstalled',
   whisperDownloadModel: 'scout:whisper.downloadModel',
   whisperDownloadProgress: 'scout:whisper.downloadProgress',
@@ -340,6 +341,20 @@ export type ProviderKeyValidateResponse =
       readonly status?: number;
     };
 
+export interface LlmListModelsRequest {
+  readonly provider: CloudLlmProvider;
+}
+
+/** A chat model the connected provider offers; `id` is what Scout writes to `llm.cloud-model`. */
+export interface LlmModel {
+  readonly id: string;
+  readonly displayName: string;
+}
+
+export interface LlmListModelsResponse {
+  readonly models: readonly LlmModel[];
+}
+
 export type FeatureId = 'github' | 'kubernetes';
 export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
 export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
@@ -446,14 +461,20 @@ export interface KubernetesDetection {
   readonly error: string | null;
 }
 
+/** An allowed kubeconfig context and the label the model and chat users see instead of its name. */
+export interface KubernetesLabelledContext {
+  readonly name: string;
+  readonly label: string;
+}
+
 /** The contexts the owner allowed; main validates each against the file it located itself. */
 export interface KubernetesUseRequest {
-  readonly contexts: readonly string[];
+  readonly contexts: readonly KubernetesLabelledContext[];
 }
 
 export interface KubernetesStatus {
   readonly path: string | null;
-  readonly contexts: readonly string[];
+  readonly contexts: readonly KubernetesLabelledContext[];
   readonly connected: boolean;
 }
 
@@ -503,6 +524,7 @@ export interface ScoutBridge {
   providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
   validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse>;
+  llmListModels(req: LlmListModelsRequest): Promise<LlmListModelsResponse>;
   featuresList(): Promise<FeaturesListResponse>;
   featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
   featureSetup(req: FeatureSetupRequest): Promise<FeatureDto>;

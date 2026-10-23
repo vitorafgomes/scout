@@ -62,7 +62,7 @@ public sealed class HostCompositionSmokeTests
                 ["Scout:Adapters:Discord:BotToken"] = "discord-dummy-not-real",
                 ["Scout:Plugins:GitHub:Token"] = "github-dummy-not-real",
                 ["Scout:Plugins:Kubernetes:KubeconfigPath"] = "/nonexistent/scout-test/kubeconfig",
-                ["Scout:Plugins:Kubernetes:Contexts:0"] = "dev",
+                ["Scout:Plugins:Kubernetes:Contexts:0:Name"] = "dev",
                 ["Scout:Projects:Items:0:Name"] = "scout",
                 ["Scout:Projects:Items:0:RepoPath"] = "/repos/scout",
             })

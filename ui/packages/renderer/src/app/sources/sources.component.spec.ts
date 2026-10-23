@@ -89,7 +89,6 @@ function makeBridge(
     chatgptSignInResult?: FakeChatGptStatus;
     chatgptSignInError?: unknown;
     revocationConfirmed?: boolean;
-    modelsError?: unknown;
     allowedUserIds?: readonly string[];
   } = {},
 ): FakeBridge {
@@ -137,7 +136,6 @@ function makeBridge(
     chatgptSignOut: vi.fn(async () => ({ revocationConfirmed: opts.revocationConfirmed ?? true })),
     chatgptCancelSignIn: vi.fn(async () => undefined),
     chatgptListModels: vi.fn(async () => {
-      if (opts.modelsError !== undefined) throw opts.modelsError;
       return { models: PLAN_MODELS };
     }),
     accessGet: vi.fn(async () => ({ userIds: opts.allowedUserIds ?? [] })),
@@ -164,7 +162,6 @@ async function setup(
     chatgptSignInResult?: FakeChatGptStatus;
     chatgptSignInError?: unknown;
     revocationConfirmed?: boolean;
-    modelsError?: unknown;
     allowedUserIds?: readonly string[];
   } = {},
 ): Promise<{
@@ -505,7 +502,7 @@ describe('SourcesComponent', () => {
   const BOTH_KEYS = { 'llm.openai.api-key': true, 'llm.gemini.api-key': true };
   const GEMINI_IN_VAULT = { 'llm.provider': 'Gemini', 'llm.cloud-model': 'gemini-2.5-pro' };
 
-  it('the three states: a card with no key offers Connect; a stored key shows Connected with Use, Disconnect and Change key; the provider in use shows In use with its model, Change model and Disconnect', async () => {
+  it('the three states: a card with no key offers Connect; a stored key shows Connected with Disconnect, Change key and the Models link; the provider in use shows In use with its model, Disconnect and the Models link', async () => {
     const empty = await setup();
     expect(text(empty.fixture, '[data-test="badge-openai-api"]')).toContain('Not Connected');
     expect(buttonsOf(empty.fixture, 'openai-api')).toEqual(['Connect']);
@@ -522,19 +519,32 @@ describe('SourcesComponent', () => {
     const openAiBadge = text(fixture, '[data-test="badge-openai-api"]');
     expect(openAiBadge).toContain('Connected');
     expect(openAiBadge).not.toContain('Not Connected');
-    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Use', 'Disconnect', 'Change key']);
+    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Disconnect', 'Change key']);
+    expect(text(fixture, '[data-test="choose-model-openai-api"]').trim()).toBe(
+      'Choose a model in Models → Analysis',
+    );
     expect(
       query<HTMLElement>(fixture, '[data-test="disconnect-openai-api"]').getAttribute('aria-label'),
     ).toBe('Disconnect OpenAI API');
 
     expect(text(fixture, '[data-test="badge-google-gemini"]')).toContain('In use');
     expect(text(fixture, '[data-test="card-google-gemini"]')).toContain('gemini-2.5-pro');
-    expect(buttonsOf(fixture, 'google-gemini')).toEqual(['Change model', 'Disconnect']);
-    expect(
-      query<HTMLElement>(fixture, '[data-test="change-model-google-gemini"]').getAttribute(
-        'aria-label',
-      ),
-    ).toBe('Change Google Gemini model');
+    expect(buttonsOf(fixture, 'google-gemini')).toEqual(['Disconnect']);
+    expect(query(fixture, '[data-test="choose-model-google-gemini"]')).not.toBeNull();
+    expect(query(fixture, '[data-test="choose-model-openai-api"]')).not.toBeNull();
+  });
+
+  it('AI Sources keeps connect and disconnect only: the OpenAI and Gemini cards have no Use, Change model or model field, and the link opens Models on the Analysis tab', async () => {
+    useGeminiWithBothKeys();
+    const { fixture } = await setup({ vaultHasByKey: BOTH_KEYS, publicValues: GEMINI_IN_VAULT });
+
+    for (const id of ['openai-api', 'google-gemini']) {
+      expect(query(fixture, `[data-test="use-${id}"]`)).toBeNull();
+      expect(query(fixture, `[data-test="change-model-${id}"]`)).toBeNull();
+      expect(query(fixture, `[data-test="model-${id}"]`)).toBeNull();
+    }
+    const link = query<HTMLAnchorElement>(fixture, '[data-test="choose-model-openai-api"]');
+    expect(link.getAttribute('href')).toBe('/llm?tab=analysis');
   });
 
   it('Connect while another cloud provider is in use stores only the OpenAI key after the provider accepts it, does not switch and does not restart Scout', async () => {
@@ -562,8 +572,10 @@ describe('SourcesComponent', () => {
     ]);
     expect(keyField()).toBeNull();
     expect(text(fixture, '[data-test="badge-openai-api"]')).not.toContain('Not Connected');
-    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Use', 'Disconnect', 'Change key']);
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain('Connected.');
+    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Disconnect', 'Change key']);
+    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
+      'Connected. Choose a model in Models → Analysis to switch Scout to OpenAI.',
+    );
     expect(fixture.nativeElement.textContent).not.toContain('sk-typed-key');
     expect(bridge.workerStop).not.toHaveBeenCalled();
     expect(text(fixture, '[data-test="badge-google-gemini"]')).toContain('In use');
@@ -662,101 +674,6 @@ describe('SourcesComponent', () => {
     expect(bridge.vaultStore).not.toHaveBeenCalled();
   });
 
-  it('Use while Scout is running switches the provider and restarts Scout (stop, then start)', async () => {
-    const { fixture, bridge } = await setup({
-      workerState: 'running',
-      vaultHasByKey: { 'llm.openai.api-key': true },
-    });
-
-    await click(fixture, '[data-test="use-openai-api"]');
-
-    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
-      { key: 'llm.cloud-model', value: 'gpt-4o-mini' },
-      { key: 'llm.provider', value: 'OpenAI' },
-    ]);
-    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
-      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(text(fixture, '[data-test="badge-openai-api"]')).toContain('In use');
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
-      'Restarting Scout to use OpenAI.',
-    );
-  });
-
-  it('Use while Scout is not running leaves it stopped and says the provider applies on next start', async () => {
-    const { fixture, bridge } = await setup({
-      workerState: 'idle',
-      vaultHasByKey: { 'llm.openai.api-key': true },
-    });
-
-    await click(fixture, '[data-test="use-openai-api"]');
-
-    expect(bridge.workerStop).not.toHaveBeenCalled();
-    expect(bridge.workerStart).not.toHaveBeenCalled();
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
-      'Scout will use OpenAI the next time it starts.',
-    );
-  });
-
-  it('a failed restart after Use shows the error in an alert and keeps the provider in use', async () => {
-    const { fixture } = await setup({
-      workerState: 'running',
-      workerStartError: new Error('Worker binary not found'),
-      vaultHasByKey: { 'llm.openai.api-key': true },
-    });
-
-    await click(fixture, '[data-test="use-openai-api"]');
-
-    expect(text(fixture, '[data-test="card-openai-api"] [role="alert"]')).toContain(
-      'Worker binary not found',
-    );
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
-      'Restart Scout from the status screen to use OpenAI.',
-    );
-    expect(text(fixture, '[data-test="badge-openai-api"]')).toContain('In use');
-  });
-
-  it('Change model does not show the previous message while the worker status is pending', async () => {
-    const { fixture, bridge } = await setup({
-      workerState: 'idle',
-      vaultHasByKey: { 'llm.openai.api-key': true },
-    });
-    await click(fixture, '[data-test="use-openai-api"]');
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain('the next time it starts');
-
-    let resolveStatus: (value: { state: string; restarts: number }) => void = () => undefined;
-    bridge.workerStatus.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveStatus = resolve;
-        }),
-    );
-    query<HTMLButtonElement>(fixture, '[data-test="change-model-openai-api"]').click();
-    fixture.detectChanges();
-    const modelField = query<HTMLInputElement>(fixture, '[data-test="model-openai-api"]');
-    expect(modelField.value).toBe('gpt-4o-mini');
-    type(modelField, 'gpt-4o');
-    await click(fixture, '[data-test="save-model-openai-api"]');
-
-    expect(bridge.vaultStore.mock.calls.at(-2)?.[0]).toEqual({
-      key: 'llm.cloud-model',
-      value: 'gpt-4o',
-    });
-    expect(text(fixture, '[data-test="saved-openai-api"]')).not.toContain(
-      'the next time it starts',
-    );
-
-    resolveStatus({ state: 'running', restarts: 0 });
-    await settle(fixture);
-    await settle(fixture);
-    expect(text(fixture, '[data-test="saved-openai-api"]')).toContain(
-      'Restarting Scout to use OpenAI.',
-    );
-    expect(text(fixture, '[data-test="card-openai-api"]')).toContain('gpt-4o');
-  });
-
   it('there is a way to disconnect: Disconnect on the provider in use deletes its key, switches Scout to the other connected provider and restarts it', async () => {
     useGeminiWithBothKeys();
     const { fixture, bridge } = await setup({
@@ -830,7 +747,7 @@ describe('SourcesComponent', () => {
     const badge = text(fixture, '[data-test="badge-openai-api"]');
     expect(badge).toContain('Connected');
     expect(badge).not.toContain('In use');
-    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Use', 'Disconnect', 'Change key']);
+    expect(buttonsOf(fixture, 'openai-api')).toEqual(['Disconnect', 'Change key']);
   });
 
   it('Disconnect on a provider that is not in use deletes only its key and does not restart a running Scout', async () => {
@@ -913,14 +830,14 @@ describe('SourcesComponent', () => {
     expect(text(fixture, '[data-test="badge-ollama"]')).not.toContain('In use');
   });
 
-  async function useChatGptCard(
+  async function chatGptInUse(
     opts: Parameters<typeof setup>[0],
   ): Promise<{ fixture: ComponentFixture<SourcesComponent>; bridge: FakeBridge }> {
-    const result = await setup({ chatgpt: CHATGPT_IN, ...opts });
-    query<HTMLButtonElement>(result.fixture, '[data-test="chatgpt-use"]').click();
-    await settle(result.fixture);
-    await settle(result.fixture);
-    return result;
+    return setup({
+      chatgpt: CHATGPT_IN,
+      publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+      ...opts,
+    });
   }
 
   it('the ChatGPT Plus card, not connected, offers "Continue with ChatGPT" and describes plan usage', async () => {
@@ -939,7 +856,7 @@ describe('SourcesComponent', () => {
     expect(card.textContent).not.toContain('Not supported');
   });
 
-  it('"Continue with ChatGPT" signs in through the main process and the card shows the account, Use and Sign out', async () => {
+  it('"Continue with ChatGPT" signs in through the main process and the card shows the account, the Models link and Sign out', async () => {
     const { fixture, bridge } = await setup({
       vaultHasByKey: { 'llm.openai.api-key': true },
       publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4o' },
@@ -955,7 +872,9 @@ describe('SourcesComponent', () => {
     expect(query<HTMLElement>(fixture, '[data-test="chatgpt-account"]').textContent).toContain(
       'owner@example.com',
     );
-    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).not.toBeNull();
+    expect(text(fixture, '[data-test="choose-model-chatgpt-plus"]').trim()).toBe(
+      'Choose a model in Models → Analysis',
+    );
     expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-out"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-in"]')).toBeNull();
   });
@@ -974,34 +893,19 @@ describe('SourcesComponent', () => {
     expect(query<HTMLButtonElement>(fixture, '[data-test="chatgpt-sign-in"]').disabled).toBe(false);
   });
 
-  it('signed in without plan usage: no Use button, and the card says Scout cannot answer through it', async () => {
+  it('signed in without plan usage: no Models link, and the card says Scout cannot answer through it', async () => {
     const { fixture } = await setup({ chatgpt: { ...CHATGPT_IN, planUsageGranted: false } });
 
-    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="choose-model-chatgpt-plus"]'),
+    ).toBeNull();
     expect(
       query<HTMLElement>(fixture, '[data-test="chatgpt-no-plan-usage"]').textContent,
     ).toContain('OpenAI did not grant plan usage to Scout');
   });
 
-  it('Use writes the ChatGptPlan provider and the default model, then restarts a running Scout', async () => {
-    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
-
-    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
-      { key: 'llm.cloud-model', value: 'gpt-5.6-luna' },
-      { key: 'llm.provider', value: 'ChatGptPlan' },
-    ]);
-    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
-      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent).toContain(
-      'Restarting Scout',
-    );
-  });
-
-  it('in use, the card shows the model and Sign out, and no Use button', async () => {
-    const { fixture } = await useChatGptCard({ workerState: 'idle' });
+  it('the ChatGPT card no longer has a Model select: in use, it shows the model, the Models link and Sign out, and never loads the model list', async () => {
+    const { fixture, bridge } = await chatGptInUse({ workerState: 'idle' });
 
     expect(
       query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent?.trim(),
@@ -1009,12 +913,17 @@ describe('SourcesComponent', () => {
     expect(query<HTMLElement>(fixture, '[data-test="chatgpt-model"]').textContent).toContain(
       'gpt-5.6-luna',
     );
-    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-use"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="chatgpt-model-select"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('select')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="choose-model-chatgpt-plus"]'),
+    ).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-out"]')).not.toBeNull();
+    expect(bridge.chatgptListModels).not.toHaveBeenCalled();
   });
 
   it('Sign out while ChatGPT is in use moves Scout to no provider (never Ollama) and restarts a running Scout', async () => {
-    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
+    const { fixture, bridge } = await chatGptInUse({ workerState: 'running' });
     bridge.vaultStore.mockClear();
     bridge.workerStop.mockClear();
     bridge.workerStart.mockClear();
@@ -1156,90 +1065,6 @@ describe('SourcesComponent', () => {
     expect(query<HTMLElement>(fixture, '[data-test="badge-chatgpt-plus"]').textContent).toContain(
       'Not Connected',
     );
-  });
-
-  function modelSelect(fixture: ComponentFixture<SourcesComponent>): HTMLSelectElement {
-    return query<HTMLSelectElement>(fixture, '[data-test="chatgpt-model-select"]');
-  }
-
-  async function pickModel(
-    fixture: ComponentFixture<SourcesComponent>,
-    slug: string,
-  ): Promise<void> {
-    const select = modelSelect(fixture);
-    select.value = slug;
-    select.dispatchEvent(new Event('change'));
-    await settle(fixture);
-    await settle(fixture);
-  }
-
-  it('signed in, the Model list shows the plan models by display name with the default preselected', async () => {
-    const { fixture, bridge } = await setup({ chatgpt: CHATGPT_IN });
-    await settle(fixture);
-
-    expect(bridge.chatgptListModels).toHaveBeenCalledTimes(1);
-    const options = Array.from(modelSelect(fixture).options).map((o) => [
-      o.value,
-      o.textContent?.trim(),
-    ]);
-    expect(options).toEqual([
-      ['gpt-6.1-sol', 'GPT-6.1 Sol'],
-      ['gpt-5.6-luna', 'GPT-5.6 Luna'],
-    ]);
-    expect(modelSelect(fixture).value).toBe('gpt-5.6-luna');
-  });
-
-  it('Use applies the model picked in the list', async () => {
-    const { fixture, bridge } = await setup({ chatgpt: CHATGPT_IN });
-    await settle(fixture);
-    await pickModel(fixture, 'gpt-6.1-sol');
-
-    query<HTMLButtonElement>(fixture, '[data-test="chatgpt-use"]').click();
-    await settle(fixture);
-    await settle(fixture);
-
-    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toEqual([
-      { key: 'llm.cloud-model', value: 'gpt-6.1-sol' },
-      { key: 'llm.provider', value: 'ChatGptPlan' },
-    ]);
-  });
-
-  it('choosing another model while in use writes llm.cloud-model and restarts a running Scout', async () => {
-    const { fixture, bridge } = await useChatGptCard({ workerState: 'running' });
-    bridge.vaultStore.mockClear();
-    bridge.workerStop.mockClear();
-    bridge.workerStart.mockClear();
-
-    await pickModel(fixture, 'gpt-6.1-sol');
-
-    expect(bridge.vaultStore.mock.calls.map((c) => c[0])).toContainEqual({
-      key: 'llm.cloud-model',
-      value: 'gpt-6.1-sol',
-    });
-    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
-    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
-      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(query<HTMLElement>(fixture, '[data-test="chatgpt-model"]').textContent).toContain(
-      'gpt-6.1-sol',
-    );
-  });
-
-  it('when the model list fails, the card says so in an alert and keeps the current model', async () => {
-    const { fixture } = await setup({
-      chatgpt: CHATGPT_IN,
-      modelsError: new Error('Could not reach OpenAI to list ChatGPT models.'),
-    });
-    await settle(fixture);
-
-    expect(
-      query<HTMLElement>(fixture, '[data-test="chatgpt-models-error"]').textContent?.trim(),
-    ).toBe('Could not load the ChatGPT model list.');
-    expect(
-      query<HTMLElement>(fixture, '[data-test="chatgpt-models-error"]').getAttribute('role'),
-    ).toBe('alert');
-    expect(modelSelect(fixture).value).toBe('gpt-5.6-luna');
   });
 
   it('Sign out whose remote revocation was not confirmed says so', async () => {

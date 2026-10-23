@@ -11,8 +11,18 @@ public sealed class KubernetesOptions
     public string KubeconfigPath { get; set; } = string.Empty;
 
     /// <summary>
-    /// The contexts the owner allowed Scout to read. The first is the default; any other
-    /// context is refused before a client is built.
+    /// The contexts the owner allowed Scout to read, each with the label the model and chat
+    /// users see. The first is the default; any other value is refused before a client is built.
     /// </summary>
-    public string[] Contexts { get; set; } = [];
+    public List<KubernetesContextOption> Contexts { get; set; } = [];
+}
+
+/// <summary>One allowed kubeconfig context and the label shown instead of its name.</summary>
+public sealed class KubernetesContextOption
+{
+    /// <summary>The context name in the kubeconfig. Never shown to the model or in chat.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The name the model and chat users use for this context; blank means <see cref="Name"/>.</summary>
+    public string Label { get; set; } = string.Empty;
 }

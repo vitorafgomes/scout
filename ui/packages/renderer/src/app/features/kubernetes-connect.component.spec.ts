@@ -112,6 +112,17 @@ function el(fixture: ComponentFixture<FeaturesComponent>, test: string): HTMLEle
   return fixture.nativeElement.querySelector(`[data-test="${test}"]`) as HTMLElement | null;
 }
 
+async function type(
+  fixture: ComponentFixture<FeaturesComponent>,
+  test: string,
+  value: string,
+): Promise<void> {
+  const input = el(fixture, test) as HTMLInputElement;
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+  await settle(fixture);
+}
+
 function text(fixture: ComponentFixture<FeaturesComponent>, test: string): string {
   return el(fixture, test)?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 }
@@ -140,9 +151,55 @@ describe('Kubernetes card', () => {
     (el(fixture, 'kubernetes-use') as HTMLButtonElement).click();
     await settle(fixture);
 
-    expect(bridge.kubernetesUse).toHaveBeenCalledExactlyOnceWith({ contexts: ['eks'] });
-    expect(text(fixture, 'kubernetes-connected')).toBe(`Using 1 context from ${PATH}`);
+    expect(bridge.kubernetesUse).toHaveBeenCalledExactlyOnceWith({
+      contexts: [{ name: 'eks', label: 'eks' }],
+    });
+    expect(text(fixture, 'kubernetes-connected')).toBe(`Using eks from ${PATH}`);
     expect(text(fixture, 'badge-kubernetes')).toBe('Connected');
+  });
+
+  it('gives each ticked context a label prefilled with its name and uses the label the owner typed', async () => {
+    const bridge = makeBridge(detected);
+    const fixture = await render(bridge);
+
+    expect(el(fixture, 'kubernetes-label-dev')).toBeNull();
+    (el(fixture, 'kubernetes-context-dev') as HTMLInputElement).click();
+    await settle(fixture);
+    const label = el(fixture, 'kubernetes-label-dev') as HTMLInputElement;
+    expect(label.value).toBe('dev');
+
+    await type(fixture, 'kubernetes-label-dev', ' Dev EU ');
+    (el(fixture, 'kubernetes-use') as HTMLButtonElement).click();
+    await settle(fixture);
+
+    expect(bridge.kubernetesUse).toHaveBeenCalledExactlyOnceWith({
+      contexts: [{ name: 'dev', label: 'Dev EU' }],
+    });
+    expect(text(fixture, 'kubernetes-connected')).toBe(`Using Dev EU from ${PATH}`);
+  });
+
+  it('an invalid or duplicate label blocks Use with an inline error', async () => {
+    const bridge = makeBridge(detected);
+    const fixture = await render(bridge);
+    (el(fixture, 'kubernetes-context-dev') as HTMLInputElement).click();
+    (el(fixture, 'kubernetes-context-eks') as HTMLInputElement).click();
+    await settle(fixture);
+    const useButton = (): HTMLButtonElement => el(fixture, 'kubernetes-use') as HTMLButtonElement;
+
+    await type(fixture, 'kubernetes-label-eks', 'DEV');
+    expect(text(fixture, 'kubernetes-label-error')).toBe('The label DEV is used more than once.');
+    expect(useButton().disabled).toBe(true);
+
+    await type(fixture, 'kubernetes-label-eks', 'prod/eu');
+    expect(text(fixture, 'kubernetes-label-error')).toBe(
+      'The label for eks must be 1 to 32 letters, digits, spaces or hyphens.',
+    );
+    expect(useButton().disabled).toBe(true);
+
+    await type(fixture, 'kubernetes-label-eks', 'prod');
+    expect(el(fixture, 'kubernetes-label-error')).toBeNull();
+    expect(useButton().disabled).toBe(false);
+    expect(bridge.kubernetesUse).not.toHaveBeenCalled();
   });
 
   it('shows the command an exec context runs before consent, and the server and auth of each', async () => {
@@ -189,11 +246,20 @@ describe('Kubernetes card', () => {
     expect(el(fixture, 'kubernetes-use')).toBeNull();
   });
 
-  it('when connected says how many contexts from which file, and disconnect goes back to the question', async () => {
-    const bridge = makeBridge(detected, { path: PATH, contexts: ['dev', 'eks'], connected: true });
+  it('when connected lists the labels and the file, never the context names or servers, and disconnect goes back to the question', async () => {
+    const bridge = makeBridge(detected, {
+      path: PATH,
+      contexts: [
+        { name: 'dev', label: 'qa' },
+        { name: 'eks', label: 'prod' },
+      ],
+      connected: true,
+    });
     const fixture = await render(bridge);
 
-    expect(text(fixture, 'kubernetes-connected')).toBe(`Using 2 contexts from ${PATH}`);
+    expect(text(fixture, 'kubernetes-connected')).toBe(`Using qa, prod from ${PATH}`);
+    expect(text(fixture, 'card-kubernetes')).not.toContain('eks');
+    expect(text(fixture, 'card-kubernetes')).not.toContain('example.com');
 
     (el(fixture, 'kubernetes-disconnect') as HTMLButtonElement).click();
     await settle(fixture);
@@ -207,7 +273,11 @@ describe('Kubernetes card', () => {
 
   it('a connected Kubernetes card warns that nobody can use it from chat while no user is allowed', async () => {
     const fixture = await render(
-      makeBridge(detected, { path: PATH, contexts: ['dev'], connected: true }, []),
+      makeBridge(
+        detected,
+        { path: PATH, contexts: [{ name: 'dev', label: 'dev' }], connected: true },
+        [],
+      ),
     );
 
     expect(text(fixture, 'access-warning-kubernetes')).toBe(
@@ -217,9 +287,13 @@ describe('Kubernetes card', () => {
 
   it('a connected Kubernetes card does not warn once a user is allowed, and a disconnected one never warns', async () => {
     const allowed = await render(
-      makeBridge(detected, { path: PATH, contexts: ['dev'], connected: true }, ['111']),
+      makeBridge(
+        detected,
+        { path: PATH, contexts: [{ name: 'dev', label: 'dev' }], connected: true },
+        ['111'],
+      ),
     );
-    expect(text(allowed, 'kubernetes-connected')).toBe(`Using 1 context from ${PATH}`);
+    expect(text(allowed, 'kubernetes-connected')).toBe(`Using dev from ${PATH}`);
     expect(el(allowed, 'access-warning-kubernetes')).toBeNull();
 
     TestBed.resetTestingModule();

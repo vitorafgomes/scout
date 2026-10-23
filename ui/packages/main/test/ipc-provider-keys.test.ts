@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
-import { CHANNEL } from '@scout/shared';
-import { registerProviderKeyHandlers } from '../src/ipc/provider-keys.js';
+import { CHANNEL, readIpcError } from '@scout/shared';
+import {
+  registerProviderKeyHandlers,
+  registerProviderModelHandlers,
+} from '../src/ipc/provider-keys.js';
 import { createLogger } from '../src/util/logger.js';
 
 type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<unknown>;
@@ -227,5 +230,209 @@ describe('registerProviderKeyHandlers - validateKey', () => {
     expect(ipc.handlers.has(CHANNEL.providersValidateKey)).toBe(true);
     unregister();
     expect(ipc.handlers.has(CHANNEL.providersValidateKey)).toBe(false);
+  });
+});
+
+const OPENAI_MODELS_BODY = JSON.stringify({
+  object: 'list',
+  data: [
+    { id: 'gpt-4o-mini', object: 'model' },
+    { id: 'o3-mini', object: 'model' },
+    { id: 'chatgpt-4o-latest', object: 'model' },
+    { id: 'gpt-4.1', object: 'model' },
+    { id: 'text-embedding-3-small', object: 'model' },
+    { id: 'whisper-1', object: 'model' },
+    { id: 'tts-1', object: 'model' },
+    { id: 'gpt-4o-mini-tts', object: 'model' },
+    { id: 'dall-e-3', object: 'model' },
+    { id: 'omni-moderation-latest', object: 'model' },
+    { id: 'gpt-4o-realtime-preview', object: 'model' },
+    { id: 'gpt-4o-audio-preview', object: 'model' },
+    { id: 'gpt-image-1', object: 'model' },
+    { id: 'gpt-4o-transcribe', object: 'model' },
+    { id: 'gpt-4o-search-preview', object: 'model' },
+    { id: 'babbage-002', object: 'model' },
+  ],
+});
+
+const GEMINI_MODELS_BODY = JSON.stringify({
+  models: [
+    {
+      name: 'models/gemini-2.5-flash',
+      displayName: 'Gemini 2.5 Flash',
+      supportedGenerationMethods: ['generateContent', 'countTokens'],
+    },
+    {
+      name: 'models/text-embedding-004',
+      displayName: 'Text Embedding 004',
+      supportedGenerationMethods: ['embedContent'],
+    },
+    {
+      name: 'models/gemini-2.5-pro',
+      displayName: 'Gemini 2.5 Pro',
+      supportedGenerationMethods: ['generateContent'],
+    },
+    {
+      name: 'models/imagen-4.0-generate-001',
+      displayName: 'Imagen 4',
+      supportedGenerationMethods: ['predict'],
+    },
+  ],
+});
+
+describe('registerProviderModelHandlers - listModels', () => {
+  let ipc: FakeIpcMain;
+  let calls: FetchCall[];
+  let logLines: string[];
+  let stored: Record<string, string>;
+
+  function register(fetchFn: (url: string, init?: RequestInit) => Promise<Response>): void {
+    const logger = createLogger('test', { level: 'debug', sink: (line) => logLines.push(line) });
+    const recording = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return fetchFn(url, init);
+    }) as unknown as typeof fetch;
+    const vault = { get: async (key: string) => stored[key] ?? null };
+    registerProviderModelHandlers(ipc, recording, vault, logger, 50);
+  }
+
+  function listModels(req: unknown): Promise<unknown> {
+    const fn = ipc.handlers.get(CHANNEL.llmListModels);
+    if (!fn) throw new Error('listModels handler not registered');
+    return fn(null as unknown as IpcMainInvokeEvent, req);
+  }
+
+  async function failureOf(req: unknown): Promise<{ code: string | null; message: string }> {
+    try {
+      await listModels(req);
+    } catch (err) {
+      return readIpcError(err);
+    }
+    throw new Error('expected listModels to fail');
+  }
+
+  function headersOf(call: FetchCall | undefined): Headers {
+    return new Headers(call?.init?.headers);
+  }
+
+  beforeEach(() => {
+    ipc = makeFakeIpcMain();
+    calls = [];
+    logLines = [];
+    stored = { 'llm.openai.api-key': KEY, 'llm.gemini.api-key': KEY };
+  });
+
+  it('OpenAI: lists only chat models (gpt-, o, chatgpt- ids) with the stored key as a Bearer token, and no log line carries the key', async () => {
+    register(async () => new Response(OPENAI_MODELS_BODY, { status: 200 }));
+
+    const res = await listModels({ provider: 'OpenAI' });
+
+    expect(res).toEqual({
+      models: [
+        { id: 'chatgpt-4o-latest', displayName: 'chatgpt-4o-latest' },
+        { id: 'gpt-4.1', displayName: 'gpt-4.1' },
+        { id: 'gpt-4o-mini', displayName: 'gpt-4o-mini' },
+        { id: 'o3-mini', displayName: 'o3-mini' },
+      ],
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('https://api.openai.com/v1/models');
+    expect(calls[0]?.init?.method).toBe('GET');
+    expect(headersOf(calls[0]).get('authorization')).toBe(`Bearer ${KEY}`);
+    expect(JSON.stringify(res)).not.toContain(KEY);
+    expect(logLines.length).toBeGreaterThan(0);
+    for (const line of logLines) expect(line).not.toContain(KEY);
+  });
+
+  it('Gemini: lists only models that support generateContent, id without "models/" and the API display name, with the key in x-goog-api-key and never in the URL', async () => {
+    register(async () => new Response(GEMINI_MODELS_BODY, { status: 200 }));
+
+    const res = await listModels({ provider: 'Gemini' });
+
+    expect(res).toEqual({
+      models: [
+        { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' },
+        { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' },
+      ],
+    });
+    expect(
+      calls[0]?.url.startsWith('https://generativelanguage.googleapis.com/v1beta/models'),
+    ).toBe(true);
+    expect(calls[0]?.url).not.toContain(KEY);
+    expect(headersOf(calls[0]).get('x-goog-api-key')).toBe(KEY);
+    expect(headersOf(calls[0]).get('authorization')).toBeNull();
+    for (const line of logLines) expect(line).not.toContain(KEY);
+  });
+
+  it('failing call: a 401 is reported as the key rejected, without the key in the error', async () => {
+    register(async () => new Response('{"error":{}}', { status: 401 }));
+
+    const failure = await failureOf({ provider: 'OpenAI' });
+
+    expect(failure.code).toBe('providers/key-rejected');
+    expect(failure.message).toBe('OpenAI rejected the stored key.');
+  });
+
+  it('a Gemini 400 whose body says API_KEY_INVALID is reported as the key rejected', async () => {
+    register(
+      async () =>
+        new Response(
+          JSON.stringify({ error: { code: 400, details: [{ reason: 'API_KEY_INVALID' }] } }),
+          { status: 400 },
+        ),
+    );
+
+    expect((await failureOf({ provider: 'Gemini' })).code).toBe('providers/key-rejected');
+  });
+
+  it('failing call: a network error is reported as unreachable, and neither the error nor any log line carries the key', async () => {
+    register(async () => {
+      throw new TypeError(`fetch failed: invalid header value ${KEY}`);
+    });
+
+    const failure = await failureOf({ provider: 'OpenAI' });
+
+    expect(failure.code).toBe('providers/unreachable');
+    expect(failure.message).toBe('OpenAI could not be reached.');
+    expect(failure.message).not.toContain(KEY);
+    expect(logLines.length).toBeGreaterThan(0);
+    for (const line of logLines) expect(line).not.toContain(KEY);
+  });
+
+  it('a provider that does not answer within the timeout is reported as unreachable', async () => {
+    register(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+
+    expect((await failureOf({ provider: 'Gemini' })).code).toBe('providers/unreachable');
+  });
+
+  it('a 500 is reported as a failed request with its status', async () => {
+    register(async () => new Response('oops', { status: 500 }));
+
+    const failure = await failureOf({ provider: 'Gemini' });
+
+    expect(failure.code).toBe('providers/request-failed');
+    expect(failure.message).toContain('HTTP 500');
+  });
+
+  it('a provider with no stored key is not connected and nothing is sent', async () => {
+    stored = {};
+    register(async () => new Response(OPENAI_MODELS_BODY, { status: 200 }));
+
+    expect((await failureOf({ provider: 'OpenAI' })).code).toBe('providers/not-connected');
+    expect(calls).toHaveLength(0);
+  });
+
+  it('an unknown provider is refused without a network call', async () => {
+    register(async () => new Response(OPENAI_MODELS_BODY, { status: 200 }));
+
+    expect((await failureOf({ provider: 'OpenRouter' })).code).toBe('providers/invalid-request');
+    expect(calls).toHaveLength(0);
   });
 });

@@ -31,7 +31,7 @@ public sealed partial class KubernetesPlugin : IDisposable
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
 
     private readonly string _kubeconfigPath;
-    private readonly string[] _contexts;
+    private readonly (string Label, string Name)[] _contexts;
     private readonly Func<string, IKubernetes> _buildClient;
     private readonly ConcurrentDictionary<string, Lazy<IKubernetes>> _clients = new(StringComparer.Ordinal);
 
@@ -52,28 +52,32 @@ public sealed partial class KubernetesPlugin : IDisposable
         ArgumentNullException.ThrowIfNull(options);
         _buildClient = buildClient ?? BuildClient;
         _kubeconfigPath = options.KubeconfigPath;
-        _contexts = options.Contexts.Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
+        _contexts = options.Contexts
+            .Where(c => !string.IsNullOrWhiteSpace(c.Name))
+            .Select(c => (Label: string.IsNullOrWhiteSpace(c.Label) ? c.Name.Trim() : c.Label.Trim(), Name: c.Name.Trim()))
+            .DistinctBy(c => c.Label, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         if (_contexts.Length == 0)
         {
             throw new ArgumentException("At least one allowed context is required.", nameof(options));
         }
     }
 
-    /// <summary>List the contexts Scout may read.</summary>
-    /// <returns>One context per line; the first is the default.</returns>
+    /// <summary>List the labels of the contexts Scout may read.</summary>
+    /// <returns>One label per line; the first is the default.</returns>
     [KernelFunction("list_contexts")]
-    [Description("List the Kubernetes contexts Scout may read. The first one is used when a function is called without a context.")]
+    [Description("List the labels of the Kubernetes contexts Scout may read, one per line. The first one is used when a function is called without a context.")]
     public string ListContexts()
-        => string.Join("\n", _contexts.Select((c, i) => i == 0 ? $"{c} (default)" : c));
+        => string.Join("\n", _contexts.Select(c => c.Label));
 
     /// <summary>List the namespaces of a cluster.</summary>
-    /// <param name="context">An allowed context; omitted means the default.</param>
+    /// <param name="context">An allowed context label; omitted means the default.</param>
     /// <param name="ct">Cancels the request.</param>
     /// <returns>One namespace per line with its phase, or a clean message.</returns>
     [KernelFunction("list_namespaces")]
     [Description("List the namespaces of a Kubernetes cluster.")]
     public Task<string> ListNamespacesAsync(
-        [Description("Kubernetes context from list_contexts. Omit for the default context.")] string? context = null,
+        [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
         => RunAsync(context, "namespaces", ct, async client =>
         {
@@ -85,14 +89,14 @@ public sealed partial class KubernetesPlugin : IDisposable
 
     /// <summary>List pods with phase, readiness, restarts and the reason a container is waiting.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
-    /// <param name="context">An allowed context; omitted means the default.</param>
+    /// <param name="context">An allowed context label; omitted means the default.</param>
     /// <param name="ct">Cancels the request.</param>
     /// <returns>One pod per line, or a clean message.</returns>
     [KernelFunction("list_pods")]
     [Description("List pods with phase, ready containers, restarts and why a container is waiting or stopped (for example CrashLoopBackOff or ImagePullBackOff).")]
     public Task<string> ListPodsAsync(
         [Description("Namespace. Omit to list pods in all namespaces.")] string? @namespace = null,
-        [Description("Kubernetes context from list_contexts. Omit for the default context.")] string? context = null,
+        [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
@@ -109,7 +113,7 @@ public sealed partial class KubernetesPlugin : IDisposable
     /// <summary>Describe one pod: its containers and the last events about it.</summary>
     /// <param name="namespace">The pod's namespace.</param>
     /// <param name="name">The pod's name.</param>
-    /// <param name="context">An allowed context; omitted means the default.</param>
+    /// <param name="context">An allowed context label; omitted means the default.</param>
     /// <param name="ct">Cancels the requests.</param>
     /// <returns>A pod summary, one line per container and up to 20 events, newest first.</returns>
     [KernelFunction("describe_pod")]
@@ -117,7 +121,7 @@ public sealed partial class KubernetesPlugin : IDisposable
     public Task<string> DescribePodAsync(
         [Description("The pod's namespace.")] string @namespace,
         [Description("The pod's name.")] string name,
-        [Description("Kubernetes context from list_contexts. Omit for the default context.")] string? context = null,
+        [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
         => (Refusal(@namespace, "namespace", NamespacePattern(), 63) ?? Refusal(name, "pod name", PodNamePattern(), 253)) is { } refusal
             ? Task.FromResult(refusal)
@@ -139,14 +143,14 @@ public sealed partial class KubernetesPlugin : IDisposable
 
     /// <summary>List deployments with ready and desired replicas.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
-    /// <param name="context">An allowed context; omitted means the default.</param>
+    /// <param name="context">An allowed context label; omitted means the default.</param>
     /// <param name="ct">Cancels the request.</param>
     /// <returns>One deployment per line, or a clean message.</returns>
     [KernelFunction("list_deployments")]
     [Description("List deployments with ready and desired replicas.")]
     public Task<string> ListDeploymentsAsync(
         [Description("Namespace. Omit to list deployments in all namespaces.")] string? @namespace = null,
-        [Description("Kubernetes context from list_contexts. Omit for the default context.")] string? context = null,
+        [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
@@ -166,7 +170,7 @@ public sealed partial class KubernetesPlugin : IDisposable
     /// <summary>List recent events, warnings first.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
     /// <param name="sinceMinutes">Only events seen in this many minutes, from 1 to 1440.</param>
-    /// <param name="context">An allowed context; omitted means the default.</param>
+    /// <param name="context">An allowed context label; omitted means the default.</param>
     /// <param name="ct">Cancels the request.</param>
     /// <returns>Warnings first, then normal events, each newest first; or a clean message.</returns>
     [KernelFunction("list_events")]
@@ -174,7 +178,7 @@ public sealed partial class KubernetesPlugin : IDisposable
     public Task<string> ListEventsAsync(
         [Description("Namespace. Omit to list events in all namespaces.")] string? @namespace = null,
         [Description("Only events seen in the last this many minutes, from 1 to 1440.")] int sinceMinutes = 10,
-        [Description("Kubernetes context from list_contexts. Omit for the default context.")] string? context = null,
+        [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
@@ -234,16 +238,19 @@ public sealed partial class KubernetesPlugin : IDisposable
         CancellationToken ct,
         Func<IKubernetes, Task<string>> read)
     {
-        var context = string.IsNullOrWhiteSpace(requested) ? _contexts[0] : requested.Trim();
-        if (!_contexts.Contains(context, StringComparer.Ordinal))
+        var match = string.IsNullOrWhiteSpace(requested)
+            ? _contexts[0]
+            : _contexts.FirstOrDefault(c => string.Equals(c.Label, requested.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (match.Name is null)
         {
-            return $"Context {context} is not one Scout may read. Allowed contexts: {string.Join(", ", _contexts)}.";
+            return $"That is not a context Scout may read. Allowed contexts: {string.Join(", ", _contexts.Select(c => c.Label))}.";
         }
 
+        var context = match.Label;
         IKubernetes client;
         try
         {
-            client = GetClient(context);
+            client = GetClient(match.Name);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

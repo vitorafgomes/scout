@@ -49,6 +49,8 @@ import {
   type ProviderAutostartRequest,
   type ProviderKeyValidateRequest,
   type ProviderKeyValidateResponse,
+  type LlmListModelsRequest,
+  type LlmListModelsResponse,
   type FeatureDto,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
@@ -154,6 +156,8 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> => rejectNotAvailable(),
     validateProviderKey: (_req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> =>
+      rejectNotAvailable(),
+    llmListModels: (_req: LlmListModelsRequest): Promise<LlmListModelsResponse> =>
       rejectNotAvailable(),
     featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
     featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
@@ -322,6 +326,10 @@ export class ScoutBridgeService {
 
   async validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> {
     return this.bridge.validateProviderKey(req);
+  }
+
+  async llmListModels(req: LlmListModelsRequest): Promise<LlmListModelsResponse> {
+    return this.bridge.llmListModels(req);
   }
 
   async featuresList(): Promise<FeaturesListResponse> {
