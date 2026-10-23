@@ -1,6 +1,8 @@
+using System.ClientModel;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -25,6 +27,14 @@ namespace Scout.Llm;
 /// </summary>
 internal sealed class ChatGateway : IChatGateway
 {
+    private static readonly HashSet<string> QuotaErrorCodes = new(StringComparer.Ordinal)
+    {
+        "credit_balance_exhausted",
+        "organization_spend_limit_exceeded",
+        "project_spend_limit_exceeded",
+        "organization_usage_limit_exceeded",
+    };
+
     private readonly IChatCompletionService _chat;
     private readonly Kernel? _kernel;
     private readonly ChatCompletionAgent? _agent;
@@ -151,10 +161,9 @@ internal sealed class ChatGateway : IChatGateway
 
                 content = e.Current.Content;
             }
-            catch (HttpOperationException ex)
-                when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            catch (Exception ex) when (TranslateTooManyRequests(ex) is { } translated)
             {
-                throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
+                throw translated;
             }
 
             if (!string.IsNullOrEmpty(content))
@@ -229,10 +238,9 @@ internal sealed class ChatGateway : IChatGateway
 
                 content = e.Current.Message.Content;
             }
-            catch (HttpOperationException ex)
-                when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            catch (Exception ex) when (TranslateTooManyRequests(ex) is { } translated)
             {
-                throw new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
+                throw translated;
             }
 
             if (!string.IsNullOrEmpty(content))
@@ -241,6 +249,77 @@ internal sealed class ChatGateway : IChatGateway
             }
         }
     }
+
+    // Maps a provider HTTP 429 to a domain exception so no SDK exception type
+    // leaves this project. The streaming OpenAI connector raises the SDK's
+    // ClientResultException while enumerating; other connectors raise
+    // HttpOperationException. Returns null for anything that is not a 429, so the
+    // original exception propagates unchanged. Must never throw: it runs inside
+    // an exception filter, where a throw would be swallowed.
+    private static Exception? TranslateTooManyRequests(Exception ex)
+    {
+        var status = ex switch
+        {
+            ClientResultException client => client.Status,
+            HttpOperationException http => (int?)http.StatusCode,
+            _ => null,
+        };
+        if (status != (int)HttpStatusCode.TooManyRequests)
+        {
+            return null;
+        }
+
+        return QuotaErrorCode(ex) is { } code
+            ? new LlmQuotaExceededException(code, ex)
+            : new LlmRateLimitException("LLM rate limit (HTTP 429).", ex);
+    }
+
+    // Reads the OpenAI-shaped error body {"error":{"type":...,"code":...}} and
+    // returns the provider code when the 429 is a quota or billing refusal. An
+    // unreadable or unexpected body means throttling.
+    private static string? QuotaErrorCode(Exception ex)
+    {
+        try
+        {
+            var body = ex switch
+            {
+                ClientResultException client => client.GetRawResponse()?.Content?.ToString(),
+                HttpOperationException http => http.ResponseContent,
+                _ => null,
+            };
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return null;
+            }
+
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var code = StringProperty(error, "code");
+            if (code is not null && QuotaErrorCodes.Contains(code))
+            {
+                return code;
+            }
+
+            return StringProperty(error, "type") == "insufficient_quota"
+                ? code ?? "insufficient_quota"
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static string? StringProperty(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public async Task<string> CompleteAsync(
         ChatRequest request,

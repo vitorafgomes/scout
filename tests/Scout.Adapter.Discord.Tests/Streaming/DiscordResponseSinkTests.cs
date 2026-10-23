@@ -97,7 +97,8 @@ public sealed class DiscordResponseSinkTests
 
         edits.ShouldHaveSingleItem();
         edits[0].ShouldStartWith("partial answer");
-        edits[0].ShouldEndWith("(connection error)");
+        edits[0].ShouldEndWith("(the AI provider returned an error; see Scout logs)");
+        edits[0].ShouldNotContain("connection error");
     }
 
     [Fact]

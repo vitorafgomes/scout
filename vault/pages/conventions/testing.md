@@ -3,7 +3,7 @@ title: "Testing"
 version: "1.4"
 date: 2026-10-21
 updated: 2026-10-22
-changes: "UI workflow path filters and the control-plane host build step; UI spec-file counts after the control-plane client tests"
+changes: "Rule I failing-call tests raise the real client exception through a fake HttpMessageHandler"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -43,7 +43,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 | Test project | Attributes | Covers |
 |---|---|---|
-| `Scout.Llm.Tests` | 159 | [[pages/services/llm]] |
+| `Scout.Llm.Tests` | 166 | [[pages/services/llm]] |
 | `Scout.Knowledge.Tests` | 103 | [[pages/services/knowledge]] |
 | `Scout.Conversation.Tests` | 74 | [[pages/services/conversation]] |
 | `Scout.ControlPlane.Tests` | 59 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
@@ -61,6 +61,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 - **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:115` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
 - **Self-gating tests.** Each optional module has a test for "not configured means not registered" (for example `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24`).
 - **Boundary fakes.** SDK edges are faked: a fake HTTP handler for GitHub (`tests/Scout.Plugin.GitHub.Tests/Fakes/`), a recording sender for Teams (`tests/Scout.Adapter.Teams.Tests/Streaming/RecordingSender.cs`), a recording sink for the conversation core (`tests/Scout.Conversation.Tests/Fakes/RecordingResponseSink.cs`), a fake embedder for skills (`tests/Scout.Skills.Tests/FakeEmbeddingGenerator.cs`).
+- **One failing-call test per external boundary (Rule I).** A failing-call test makes the real client library raise its real exception, by placing a fake `HttpMessageHandler` under the real connector, instead of constructing the exception by hand: `tests/Scout.Llm.Tests/ChatGatewayRateLimitTests.cs:151` drives the real OpenAI connector into a 429, which a hand-made `HttpOperationException` had hidden ([[pages/history/llm]]).
 - **Regression tests named for the bug.** `tests/Scout.Llm.Tests/CompositionCycleRegressionTests.cs` pins the kernel and embedder construction cycle.
 - **Real integration.** `tests/Scout.ControlPlane.Tests/Integration/ControlPlaneUdsIntegrationTests.cs` starts the control-plane host on a real Unix socket; the `uds` collection (`tests/Scout.ControlPlane.Tests/Integration/UdsCollection.cs:10`) serialises those tests. SQLite tests use a real file (`tests/Scout.Knowledge.Tests/SqliteProjectKnowledgeStoreTests.cs`).
 - **No live services.** No test calls Discord, Slack, Teams, GitHub, Azure or an LLM.

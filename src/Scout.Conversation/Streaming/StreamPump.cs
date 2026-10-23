@@ -42,7 +42,8 @@ public sealed class StreamPump
     /// without forcing a terminal edit. A model rate limit
     /// (<see cref="LlmRateLimitException"/>) finalizes via
     /// <see cref="IResponseSink.CompleteAsync"/> with a friendly user-facing
-    /// message; any other mid-stream failure is reported via
+    /// message, and so does a provider quota or billing refusal
+    /// (<see cref="LlmQuotaExceededException"/>); any other mid-stream failure is reported via
     /// <see cref="IResponseSink.FailAsync"/>. Neither escapes.
     /// </summary>
     public async Task RunAsync(
@@ -113,6 +114,18 @@ public sealed class StreamPump
             var body = buffer.Length == 0
                 ? _options.RateLimitMessage
                 : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.RateLimitMessage;
+            await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
+        }
+        catch (LlmQuotaExceededException ex)
+        {
+            _options.Logger?.LogWarning(
+                "StreamPump stopped: the AI provider refused the request for quota or billing (code {ProviderCode}); finalizing with a user-facing message.",
+                ex.Code);
+            var body = buffer.Length == 0
+                ? _options.QuotaExceededMessage
+                : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.QuotaExceededMessage;
             await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
                 .ConfigureAwait(false);
             return;
