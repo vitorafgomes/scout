@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
 
@@ -35,7 +36,8 @@ public sealed class SkillSelectorTests : IDisposable
     private SkillSelector Selector(
         FakeEmbeddingGenerator embedder,
         int topN = 1,
-        double threshold = 0.55)
+        double threshold = 0.55,
+        TimeProvider? timeProvider = null)
     {
         var options = Options.Create(new SkillsOptions
         {
@@ -44,7 +46,72 @@ public sealed class SkillSelectorTests : IDisposable
             SimilarityThreshold = threshold,
         });
         var loader = new SkillFileLoader(NullLogger<SkillFileLoader>.Instance);
-        return new SkillSelector(loader, embedder, options, NullLogger<SkillSelector>.Instance);
+        return new SkillSelector(loader, embedder, options, NullLogger<SkillSelector>.Instance, timeProvider);
+    }
+
+    private FakeEmbeddingGenerator TwoSkillEmbedder()
+    {
+        WriteSkill("alpha", "alpha description", "alpha body");
+        WriteSkill("beta", "beta description", "beta body");
+        return new FakeEmbeddingGenerator(new Dictionary<string, float[]>
+        {
+            ["alpha description"] = [1f, 0f],
+            ["beta description"] = [0f, 1f],
+            ["query"] = [1f, 0f],
+        });
+    }
+
+    [Fact]
+    public async Task A_Failed_Index_Build_Is_Retried_After_The_Interval()
+    {
+        var embedder = TwoSkillEmbedder();
+        embedder.IndexFailuresRemaining = 1;
+        var clock = new FakeTimeProvider();
+        var selector = Selector(embedder, threshold: 0.0, timeProvider: clock);
+
+        var whileFailing = await selector.SelectAsync("query", default);
+        clock.Advance(SkillSelector.IndexRetryInterval + TimeSpan.FromSeconds(1));
+        var afterInterval = await selector.SelectAsync("query", default);
+
+        whileFailing.ShouldBeEmpty();
+        afterInterval.Select(s => s.Name).ShouldBe(["alpha"]);
+        embedder.IndexBatchCallCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_Failed_Index_Build_Is_Not_Retried_Before_The_Interval()
+    {
+        var embedder = TwoSkillEmbedder();
+        embedder.IndexFailuresRemaining = 1;
+        var clock = new FakeTimeProvider();
+        var selector = Selector(embedder, threshold: 0.0, timeProvider: clock);
+
+        await selector.SelectAsync("query", default);
+        clock.Advance(SkillSelector.IndexRetryInterval - TimeSpan.FromSeconds(1));
+        var stillFailing = await selector.SelectAsync("query", default);
+
+        embedder.BatchCallCount.ShouldBe(1, "a failing index must not add an embeddings call to every message");
+        stillFailing.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Concurrent_First_Calls_Build_The_Index_Once()
+    {
+        var embedder = TwoSkillEmbedder();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        embedder.IndexGate = gate.Task;
+        var selector = Selector(embedder, threshold: 0.0);
+
+        var first = Task.Run(() => selector.SelectAsync("query", default));
+        await embedder.IndexBatchEntered.WaitAsync(TimeSpan.FromSeconds(10));
+        var others = Enumerable.Range(0, 4)
+            .Select(_ => Task.Run(() => selector.SelectAsync("query", default)))
+            .ToList();
+        gate.SetResult();
+        var results = await Task.WhenAll(others.Prepend(first));
+
+        embedder.IndexBatchCallCount.ShouldBe(1);
+        results.ShouldAllBe(r => r.Count == 1 && r[0].Name == "alpha");
     }
 
     [Fact]

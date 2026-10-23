@@ -3,7 +3,7 @@ import { UpperCasePipe } from '@angular/common';
 import type { WorkerEvent } from '@scout/shared';
 
 import { LogStore } from '../../core/log.store';
-import { type LogLevel, detectLevel } from '../../core/log-level';
+import { type LogLevel, detectLevels } from '../../core/log-level';
 
 const LEVELS: readonly LogLevel[] = Object.freeze(['info', 'warn', 'error', 'debug'] as const);
 
@@ -183,14 +183,13 @@ export class LogsComponent {
   >(() => {
     const source = this._frozenSnapshot() ?? this.logStore.events();
     const filters = this.enabledLevels();
+    const lines = source.filter(
+      (e): e is Extract<WorkerEvent, { kind: 'stdout' | 'stderr' }> =>
+        e.kind === 'stdout' || e.kind === 'stderr',
+    );
     const out: { id: string; ts: string; level: LogLevel; text: string }[] = [];
     let counter = 0;
-    for (const ev of source) {
-      if (ev.kind !== 'stdout' && ev.kind !== 'stderr') continue;
-      // The .NET worker host routes every level to stderr by design (to keep
-      // stdout clean for the readiness marker), so the level must come from the
-      // line content, not the stream.
-      const level = detectLevel(ev.line);
+    for (const { event: ev, level } of detectLevels(lines)) {
       if (!filters[level]) continue;
       out.push({ id: `${ev.ts}-${counter++}`, ts: ev.ts, level, text: ev.line });
     }

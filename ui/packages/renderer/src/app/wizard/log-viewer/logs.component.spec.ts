@@ -64,4 +64,24 @@ describe('LogsComponent level classification', () => {
     const levels = component.visibleLines().map((l) => l.level);
     expect(levels).toEqual(['warn', 'debug']);
   });
+
+  it('keeps the whole stack of a fail block visible when only errors are shown', async () => {
+    const block = [
+      'fail: Scout.Host.Console.ConversationWorker[0]',
+      '      Message handling failed',
+      '      System.InvalidOperationException: provider rejected the request',
+      '         at Scout.Llm.ChatGateway.StreamAsync()',
+      '      --- End of stack trace from previous location ---',
+      '         at Scout.Host.Console.ConversationWorker.HandleAsync()',
+    ];
+    const component = await setup([
+      ...block.map(stderr),
+      stderr('info: Microsoft.Hosting.Lifetime[0]'),
+      stderr('      Application started.'),
+    ]);
+
+    component.enabledLevels.set({ info: false, warn: false, error: true, debug: false });
+
+    expect(component.visibleLines().map((l) => l.text)).toEqual(block);
+  });
 });

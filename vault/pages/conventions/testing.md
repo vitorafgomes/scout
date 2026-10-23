@@ -51,7 +51,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Adapter.Teams.Tests` | 50 | [[pages/services/adapter-teams]] |
 | `Scout.Plugin.GitHub.Tests` | 47 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Discord.Tests` | 37 | [[pages/services/adapter-discord]] |
-| `Scout.Skills.Tests` | 31 | [[pages/services/skills]] |
+| `Scout.Skills.Tests` | 34 | [[pages/services/skills]] |
 | `Scout.Host.Console.Tests` | 20 | [[pages/services/host-console]] |
 
 `tests/old` holds 653 further attributes for the retired code under `src/old`. It is not in `Scout.slnx`, so CI does not build or run it. Exclude it from any count.

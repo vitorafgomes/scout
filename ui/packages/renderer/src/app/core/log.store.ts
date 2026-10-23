@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy, inject, signal } from '@angular/core';
 import type { WorkerEvent, WorkerStatus } from '@scout/shared';
 import { ScoutBridgeService } from './scout-bridge';
-import { detectLevel } from './log-level';
+import { detectLevels } from './log-level';
 
 const MAX_EVENTS = 2000;
 
@@ -44,12 +44,12 @@ export class LogStore implements OnDestroy {
   }
 
   copy(): void {
-    const lines = this.events()
-      .filter(
-        (e): e is Extract<WorkerEvent, { kind: 'stdout' | 'stderr' }> =>
-          e.kind === 'stdout' || e.kind === 'stderr',
-      )
-      .map((e) => `[${e.ts}] [${detectLevel(e.line).toUpperCase()}] ${e.line}`)
+    const events = this.events().filter(
+      (e): e is Extract<WorkerEvent, { kind: 'stdout' | 'stderr' }> =>
+        e.kind === 'stdout' || e.kind === 'stderr',
+    );
+    const lines = detectLevels(events)
+      .map(({ event, level }) => `[${event.ts}] [${level.toUpperCase()}] ${event.line}`)
       .join('\n');
 
     void navigator.clipboard.writeText(lines);
