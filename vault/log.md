@@ -1,3 +1,6 @@
+## [2026-10-22] fix | Discord gateway handler no longer awaits the conversation
+The MessageReceived handler filters, starts the conversation and returns, so a streaming reply stops blocking the Discord gateway task; StopAsync waits up to 10 s for in-flight replies. Pages updated: services/adapter-discord, new history/adapter-discord, the moved citation in invariants/secrets-never-in-source.
+
 ## [2026-10-22] feature | OpenAI and Gemini cards take an API key; ChatGPT Plus marked unsupported
 ADR 0015. The key goes to the OS keychain as llm.api-key, the cloud model to its own key llm.cloud-model so a local download cannot overwrite it, and build-env maps them per provider at worker start. Pages updated: secrets invariant, desktop-ui, ADR 0007 note, followups, index.
 
