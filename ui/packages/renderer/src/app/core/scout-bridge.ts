@@ -57,6 +57,9 @@ import {
   type GitHubPendingSignIn,
   type GitHubSaveTokenRequest,
   type GitHubStatus,
+  type KubernetesDetection,
+  type KubernetesStatus,
+  type KubernetesUseRequest,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -163,6 +166,10 @@ function createFakeBridge(): ScoutBridge {
     githubCancel: (): Promise<void> => rejectNotAvailable(),
     githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
+    kubernetesDetect: (): Promise<KubernetesDetection> => rejectNotAvailable(),
+    kubernetesUse: (_req: KubernetesUseRequest): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesStatus: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesDisconnect: (): Promise<KubernetesStatus> => rejectNotAvailable(),
   };
 }
 
@@ -356,6 +363,22 @@ export class ScoutBridgeService {
 
   async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
     return this.bridge.githubSaveToken(req);
+  }
+
+  async kubernetesDetect(): Promise<KubernetesDetection> {
+    return this.bridge.kubernetesDetect();
+  }
+
+  async kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesUse(req);
+  }
+
+  async kubernetesStatus(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesStatus();
+  }
+
+  async kubernetesDisconnect(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesDisconnect();
   }
 }
 

@@ -66,6 +66,10 @@ describe('buildBridge', () => {
       'githubCancel',
       'githubSignOut',
       'githubSaveToken',
+      'kubernetesDetect',
+      'kubernetesUse',
+      'kubernetesStatus',
+      'kubernetesDisconnect',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -383,5 +387,16 @@ describe('buildBridge', () => {
     await bridge.featureDeleteCredentials(req);
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.featureDeleteCredentials, req);
+  });
+
+  it('kubernetesUse sends the selected contexts on the use channel and returns the status', async () => {
+    const ipc = makeFakeIpc();
+    const status = { path: '/home/me/.kube/config', contexts: ['dev'], connected: true };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
+
+    const result = await buildBridge(ipc).kubernetesUse({ contexts: ['dev'] });
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.kubernetesUse, { contexts: ['dev'] });
+    expect(result).toBe(status);
   });
 });

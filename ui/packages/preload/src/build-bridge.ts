@@ -249,5 +249,23 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     githubSaveToken(req) {
       return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
     },
+
+    kubernetesDetect() {
+      return ipc.invoke(CHANNEL.kubernetesDetect) as ReturnType<ScoutBridge['kubernetesDetect']>;
+    },
+
+    kubernetesUse(req) {
+      return ipc.invoke(CHANNEL.kubernetesUse, req) as ReturnType<ScoutBridge['kubernetesUse']>;
+    },
+
+    kubernetesStatus() {
+      return ipc.invoke(CHANNEL.kubernetesStatus) as ReturnType<ScoutBridge['kubernetesStatus']>;
+    },
+
+    kubernetesDisconnect() {
+      return ipc.invoke(CHANNEL.kubernetesDisconnect) as ReturnType<
+        ScoutBridge['kubernetesDisconnect']
+      >;
+    },
   };
 }

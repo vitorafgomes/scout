@@ -9,6 +9,13 @@ export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
   chatGptTokenFile?: string;
   gitHubEnv?: Readonly<Record<string, string>>;
+  kubernetesSelection?: KubernetesSelection | null;
+}
+
+/** The kubeconfig path and the contexts the owner allowed Scout to read. */
+export interface KubernetesSelection {
+  readonly path: string;
+  readonly contexts: readonly string[];
 }
 
 // Assembles the environment variables passed to Scout.Host.Console at spawn
@@ -35,6 +42,12 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
   };
   Object.assign(env, deps.gitHubEnv);
+  if (deps.kubernetesSelection != null) {
+    env['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH'] = deps.kubernetesSelection.path;
+    deps.kubernetesSelection.contexts.forEach((context, i) => {
+      env[`SCOUT__PLUGINS__KUBERNETES__CONTEXTS__${i}`] = context;
+    });
+  }
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

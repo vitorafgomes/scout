@@ -7,12 +7,20 @@ import { FeaturesStore, type FeatureViewModel } from '../core/features.store';
 import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
 import { GitHubConnectComponent } from './github-connect.component';
+import { KubernetesConnectComponent } from './kubernetes-connect.component';
+
+type Connection = 'connected' | 'not-connected' | 'unknown';
 
 @Component({
   selector: 'sc-features',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FeatureCardComponent, CredentialDialogComponent, GitHubConnectComponent],
+  imports: [
+    FeatureCardComponent,
+    CredentialDialogComponent,
+    GitHubConnectComponent,
+    KubernetesConnectComponent,
+  ],
   template: `
     <main class="page">
       <header class="header">
@@ -29,7 +37,7 @@ import { GitHubConnectComponent } from './github-connect.component';
           @for (f of store.features(); track f.id) {
             <sc-feature-card
               [feature]="f"
-              [connection]="f.id === 'github' ? githubConnection() : null"
+              [connection]="connectionOf(f.id)"
               (toggle)="store.toggle(f.id)"
               (openCredentialDialog)="openDialog(f)"
               (clearCredentials)="store.clearCredentials(f.id)"
@@ -39,14 +47,18 @@ import { GitHubConnectComponent } from './github-connect.component';
                   (connectedChange)="githubConnection.set($event ? 'connected' : 'not-connected')"
                 />
               }
+              @if (f.id === 'kubernetes') {
+                <sc-kubernetes-connect
+                  (connectedChange)="
+                    kubernetesConnection.set($event ? 'connected' : 'not-connected')
+                  "
+                />
+              }
             </sc-feature-card>
           }
         </div>
         <div class="notes" data-test="features-notes">
-          <p>
-            GitHub is used by the chat bot once connected. Other features cannot be turned on yet;
-            their credentials are kept only while Scout is open.
-          </p>
+          <p>GitHub and Kubernetes are used by the chat bot once connected.</p>
         </div>
       }
 
@@ -115,7 +127,19 @@ import { GitHubConnectComponent } from './github-connect.component';
 export class FeaturesComponent implements OnInit {
   readonly store = inject(FeaturesStore);
   readonly activeDialog = signal<FeatureViewModel | null>(null);
-  readonly githubConnection = signal<'connected' | 'not-connected' | 'unknown'>('unknown');
+  readonly githubConnection = signal<Connection>('unknown');
+  readonly kubernetesConnection = signal<Connection>('unknown');
+
+  connectionOf(id: FeatureId): Connection | null {
+    switch (id) {
+      case 'github':
+        return this.githubConnection();
+      case 'kubernetes':
+        return this.kubernetesConnection();
+      default:
+        return null;
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     await this.store.load();

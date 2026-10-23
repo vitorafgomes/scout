@@ -324,6 +324,32 @@ describe('buildEnv', () => {
     expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__GITHUB'))).toEqual([]);
   });
 
+  it('gives the worker the kubeconfig path and each allowed context when Kubernetes is connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: { path: '/home/me/.kube/config', contexts: ['dev', 'prod'] },
+    });
+
+    expect(
+      Object.entries(env).filter(([key]) => key.startsWith('SCOUT__PLUGINS__KUBERNETES')),
+    ).toEqual([
+      ['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH', '/home/me/.kube/config'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__0', 'dev'],
+      ['SCOUT__PLUGINS__KUBERNETES__CONTEXTS__1', 'prod'],
+    ]);
+  });
+
+  it('leaves the Kubernetes variables out when Kubernetes is not connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: null,
+    });
+
+    expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__KUBERNETES'))).toEqual(
+      [],
+    );
+  });
+
   it('one key per provider: OpenAI reads its own key, not the Gemini one', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({

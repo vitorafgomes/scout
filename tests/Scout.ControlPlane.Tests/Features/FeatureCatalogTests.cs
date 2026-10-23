@@ -7,12 +7,13 @@ namespace Scout.ControlPlane.Tests.Features;
 public sealed class FeatureCatalogTests
 {
     private static readonly FeatureMetadata GitHub = new FeatureCatalog().Find(FeatureCatalog.GitHubId)!;
+    private static readonly FeatureMetadata Kubernetes = new FeatureCatalog().Find(FeatureCatalog.KubernetesId)!;
 
     private static IEnumerable<string> AllText(FeatureMetadata feature)
         => new[] { feature.Description }
             .Concat(feature.CredentialFields.SelectMany(f => new[] { f.Label, f.HelperText, f.CreateLinkUrl, f.CreateLinkLabel }))
-            .Concat(feature.ScopeMatrix!.SelectMany(r => r.Actions.Prepend(r.Scope)))
-            .Concat(feature.SetupSteps!)
+            .Concat((feature.ScopeMatrix ?? []).SelectMany(r => r.Actions.Prepend(r.Scope)))
+            .Concat(feature.SetupSteps ?? [])
             .OfType<string>();
 
     [Fact]
@@ -47,5 +48,33 @@ public sealed class FeatureCatalogTests
     public void GitHub_Keeps_The_Token_Field_For_Hosts_Without_The_Desktop_Sign_In()
     {
         GitHub.CredentialFields.ShouldHaveSingleItem().Key.ShouldBe("pat");
+    }
+
+    [Fact]
+    public void Kubernetes_Uses_The_Configuration_On_This_Computer_With_Consent_And_Read_Only()
+    {
+        Kubernetes.Description.ShouldContain("Kubernetes configuration on this computer");
+        Kubernetes.Description.ShouldContain("with your consent");
+        Kubernetes.Description.ShouldContain("read-only");
+        Kubernetes.WriteClass.ShouldBe(WriteClass.None);
+    }
+
+    [Fact]
+    public void Kubernetes_Text_Promises_No_Keyring_And_Drops_The_Paste_Instructions()
+    {
+        AllText(Kubernetes).Count().ShouldBeGreaterThan(5);
+        foreach (var text in AllText(Kubernetes))
+        {
+            text.ShouldNotContain("keyring", Case.Insensitive);
+            text.ShouldNotContain("not supported", Case.Insensitive);
+            text.ShouldNotContain("--flatten", Case.Insensitive);
+        }
+    }
+
+    [Fact]
+    public void Kubernetes_Asks_For_No_Credentials_Because_The_Desktop_Card_Uses_The_Local_Kubeconfig()
+    {
+        Kubernetes.CredentialFields.ShouldBeEmpty();
+        Kubernetes.RequiresCredentials.ShouldBeFalse();
     }
 }

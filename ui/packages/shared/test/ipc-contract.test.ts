@@ -41,6 +41,10 @@ describe('CHANNEL constant', () => {
         'githubSignIn',
         'githubSignOut',
         'githubStatus',
+        'kubernetesDetect',
+        'kubernetesDisconnect',
+        'kubernetesStatus',
+        'kubernetesUse',
         'llmDeleteOllamaModel',
         'llmDetectEnvironment',
         'llmListLmStudioModels',
@@ -129,6 +133,10 @@ describe('ChannelName type', () => {
       'scout:github.cancel': true,
       'scout:github.signOut': true,
       'scout:github.saveToken': true,
+      'scout:kubernetes.detect': true,
+      'scout:kubernetes.use': true,
+      'scout:kubernetes.status': true,
+      'scout:kubernetes.disconnect': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });

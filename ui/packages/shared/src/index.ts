@@ -119,4 +119,9 @@ export {
   type GitHubPendingSignIn,
   type GitHubSaveTokenRequest,
   type GitHubStatus,
+  type KubernetesAuthKind,
+  type KubernetesContextInfo,
+  type KubernetesDetection,
+  type KubernetesStatus,
+  type KubernetesUseRequest,
 } from './ipc-contract.js';

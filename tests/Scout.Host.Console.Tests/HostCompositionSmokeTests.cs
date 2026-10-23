@@ -52,8 +52,8 @@ public sealed class HostCompositionSmokeTests
         ["Scout:Conversation:SystemPrompt"] = "You are Scout.",
     };
 
-    // Full host config: an adapter, the GitHub plugin, and a project so the
-    // Discord adapter, the GitHub plugin, and the Project Expert agent path all
+    // Full host config: an adapter, the GitHub and Kubernetes plugins, and a project so
+    // the Discord adapter, both plugins, and the Project Expert agent path all
     // participate. Dummy credentials only; the wiring is what is under test.
     private static IConfiguration FullConfig() =>
         new ConfigurationBuilder()
@@ -61,6 +61,8 @@ public sealed class HostCompositionSmokeTests
             {
                 ["Scout:Adapters:Discord:BotToken"] = "discord-dummy-not-real",
                 ["Scout:Plugins:GitHub:Token"] = "github-dummy-not-real",
+                ["Scout:Plugins:Kubernetes:KubeconfigPath"] = "/nonexistent/scout-test/kubeconfig",
+                ["Scout:Plugins:Kubernetes:Contexts:0"] = "dev",
                 ["Scout:Projects:Items:0:Name"] = "scout",
                 ["Scout:Projects:Items:0:RepoPath"] = "/repos/scout",
             })
@@ -152,6 +154,16 @@ public sealed class HostCompositionSmokeTests
     }
 
     [Fact]
+    public void FullConfig_Puts_The_Kubernetes_Plugin_On_The_Kernel_Without_Reading_The_Kubeconfig()
+    {
+        using var host = BuildHost(FullConfig());
+
+        var kernel = ResolveWithin(() => host.Services.GetRequiredService<Kernel>());
+
+        kernel.Plugins.ShouldContain(p => p.Name == "Kubernetes");
+    }
+
+    [Fact]
     public void Resolves_SkillSelector_Without_Indexing_Or_Network()
     {
         using var host = BuildHost(FullConfig());
@@ -181,6 +193,7 @@ public sealed class HostCompositionSmokeTests
         // Project Expert agent is not registered. The host still builds regardless.
         var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
         kernel.Plugins.ShouldNotContain(p => p.Name == "ProjectKnowledge");
+        kernel.Plugins.ShouldNotContain(p => p.Name == "Kubernetes");
 
         // The host still builds and the worker still resolves.
         var hostedServices = ResolveWithin(

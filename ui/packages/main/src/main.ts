@@ -30,6 +30,8 @@ import { registerProviderKeyHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
+import { readKubernetesSelection, registerKubernetesHandlers } from './ipc/kubernetes.js';
+import { detectKubeconfig } from './kubernetes/kubeconfig.js';
 import {
   GITHUB_APP_CLIENT_ID,
   GITHUB_APP_SLUG,
@@ -125,6 +127,7 @@ let unregisterProviderKeys: (() => void) | null = null;
 let unregisterChatGpt: (() => void) | null = null;
 let chatGptAuth: ChatGptAuth | null = null;
 let unregisterGitHub: (() => void) | null = null;
+let unregisterKubernetes: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
 
 app
@@ -224,6 +227,17 @@ app
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
 
+    const kubernetesLogger = logger.child({ module: 'kubernetes' });
+    unregisterKubernetes = registerKubernetesHandlers(ipcMain, {
+      vault,
+      detect: () =>
+        detectKubeconfig({ env: process.env, homedir: os.homedir(), logger: kubernetesLogger }),
+      onSelectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, kubernetesLogger);
+      },
+      logger: kubernetesLogger,
+    });
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -241,6 +255,7 @@ app
           vaultGet: (key) => vault.get(key),
           chatGptTokenFile,
           gitHubEnv: await auth.workerEnv(),
+          kubernetesSelection: await readKubernetesSelection(vault),
         }),
     });
 
@@ -378,6 +393,7 @@ app.on('before-quit', (event) => {
     controlPlane?.dispose();
     gitHubAuth?.stop();
     unregisterGitHub?.();
+    unregisterKubernetes?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -406,6 +422,7 @@ app.on('before-quit', (event) => {
       controlPlane?.dispose();
       gitHubAuth?.stop();
       unregisterGitHub?.();
+      unregisterKubernetes?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

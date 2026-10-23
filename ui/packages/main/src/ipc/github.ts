@@ -11,7 +11,7 @@ import type { GitHubAuth } from '../oauth/github-auth.js';
 import type { Supervisor } from '../worker/supervisor.js';
 import type { Logger } from '../util/logger.js';
 
-/** Restarts the worker when it is running, so it picks up a GitHub connect or disconnect. */
+/** Restarts the worker when it is running, so it picks up a connection change. */
 export async function restartWorkerIfRunning(
   worker: Pick<Supervisor, 'status' | 'stop' | 'start'>,
   logger: Logger,
@@ -19,11 +19,11 @@ export async function restartWorkerIfRunning(
   const { state } = worker.status;
   if (state !== 'running' && state !== 'starting') return;
   try {
-    logger.info('github: restarting the worker to apply the GitHub connection');
+    logger.info('restarting the worker to apply a connection change');
     await worker.stop();
     await worker.start();
   } catch (err: unknown) {
-    logger.warn('github: worker restart failed', { code: serializeError(err).code });
+    logger.warn('worker restart failed', { code: serializeError(err).code });
   }
 }
 

@@ -8,7 +8,9 @@ import {
   encodeIpcErrorMessage,
   serializeError,
   type FeatureDto,
+  type FeatureId,
   type GitHubStatus,
+  type KubernetesStatus,
 } from '@scout/shared';
 
 import { FeaturesStore } from '../core/features.store';
@@ -48,6 +50,22 @@ const kubernetes: FeatureDto = {
   setupSteps: null,
 };
 
+// A feature whose card still uses the control-plane toggle and credential dialog; both
+// catalog features now have a main-owned connection instead.
+const controlPlaneOnly: FeatureDto = {
+  ...kubernetes,
+  id: 'other' as FeatureId,
+  displayName: 'Other',
+  description: 'Other integration',
+};
+
+const kubernetesDisconnected: KubernetesStatus = { path: null, contexts: [], connected: false };
+
+const kubernetesBridge = {
+  kubernetesStatus: vi.fn(async () => kubernetesDisconnected),
+  kubernetesDetect: vi.fn(async () => ({ path: null, contexts: [], error: null })),
+};
+
 const notConnected: GitHubStatus = {
   configured: true,
   connected: false,
@@ -79,13 +97,14 @@ async function setup(): Promise<{
   };
 }> {
   const bridge = {
-    featuresList: vi.fn(async () => ({ features: [github, kubernetes] })),
+    featuresList: vi.fn(async () => ({ features: [github, kubernetes, controlPlaneOnly] })),
     featureEnable: vi.fn(async () => github),
     featureDisable: vi.fn(async () => ({ ...github, enabled: false, status: 'disabled' as const })),
     featureSetCredentials: vi.fn(async () => github),
     featureSetup: vi.fn(async () => github),
-    featureDeleteCredentials: vi.fn(async () => kubernetes),
+    featureDeleteCredentials: vi.fn(async () => controlPlaneOnly),
     githubStatus: vi.fn(async () => notConnected),
+    ...kubernetesBridge,
   };
 
   TestBed.configureTestingModule({
@@ -127,7 +146,7 @@ describe('FeaturesComponent', () => {
     expect(grid.textContent).toContain('GitHub');
     expect(grid.textContent).toContain('Kubernetes');
     expect(notes.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'GitHub is used by the chat bot once connected. Other features cannot be turned on yet; their credentials are kept only while Scout is open.',
+      'GitHub and Kubernetes are used by the chat bot once connected.',
     );
     expect(lede.textContent).not.toContain('keyring');
   });
@@ -135,7 +154,7 @@ describe('FeaturesComponent', () => {
   it('a card says turning the feature on is not available yet when the control plane does not implement it', async () => {
     const bridge = {
       featuresList: vi.fn(async () => ({
-        features: [{ ...kubernetes, hasCredentials: true, status: 'disabled' as const }],
+        features: [{ ...controlPlaneOnly, hasCredentials: true, status: 'disabled' as const }],
       })),
       featureEnable: vi.fn(async () => {
         throw asRendererReceives('scout:features.enable', new ControlPlaneNotImplementedError());
@@ -145,6 +164,7 @@ describe('FeaturesComponent', () => {
       featureSetup: vi.fn(),
       featureDeleteCredentials: vi.fn(),
       githubStatus: vi.fn(async () => notConnected),
+      ...kubernetesBridge,
     };
     TestBed.configureTestingModule({
       providers: [
@@ -158,23 +178,19 @@ describe('FeaturesComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    (
-      fixture.nativeElement.querySelector('[data-test="toggle-kubernetes"]') as HTMLInputElement
-    ).click();
+    (fixture.nativeElement.querySelector('[data-test="toggle-other"]') as HTMLInputElement).click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const err = fixture.nativeElement.querySelector('[data-test="err-kubernetes"]') as HTMLElement;
+    const err = fixture.nativeElement.querySelector('[data-test="err-other"]') as HTMLElement;
     expect(err.textContent?.trim()).toBe('Turning this feature on is not available yet.');
   });
 
   it('opens the credential dialog when a card requests it', async () => {
     const { fixture } = await setup();
 
-    const cta = fixture.nativeElement.querySelector(
-      '[data-test="cta-kubernetes"]',
-    ) as HTMLButtonElement;
+    const cta = fixture.nativeElement.querySelector('[data-test="cta-other"]') as HTMLButtonElement;
     cta.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -186,9 +202,7 @@ describe('FeaturesComponent', () => {
   it('forwards dialog submit to store.setup and closes the dialog', async () => {
     const { fixture, bridge } = await setup();
 
-    (
-      fixture.nativeElement.querySelector('[data-test="cta-kubernetes"]') as HTMLButtonElement
-    ).click();
+    (fixture.nativeElement.querySelector('[data-test="cta-other"]') as HTMLButtonElement).click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -208,7 +222,7 @@ describe('FeaturesComponent', () => {
     fixture.detectChanges();
 
     expect(bridge.featureSetup).toHaveBeenCalledWith({
-      id: 'kubernetes',
+      id: 'other',
       credentials: { raw: '{"token":"abc"}' },
       settings: {},
     });
@@ -216,20 +230,21 @@ describe('FeaturesComponent', () => {
   });
 
   it('forwards toggle event to store.toggle', async () => {
-    const enabledKubernetes = {
-      ...kubernetes,
+    const enabledOther = {
+      ...controlPlaneOnly,
       hasCredentials: true,
       enabled: true,
       status: 'enabled' as const,
     };
     const bridge = {
-      featuresList: vi.fn(async () => ({ features: [github, enabledKubernetes] })),
+      featuresList: vi.fn(async () => ({ features: [github, enabledOther] })),
       featureEnable: vi.fn(),
-      featureDisable: vi.fn(async () => ({ ...enabledKubernetes, enabled: false })),
+      featureDisable: vi.fn(async () => ({ ...enabledOther, enabled: false })),
       featureSetCredentials: vi.fn(),
       featureSetup: vi.fn(),
       featureDeleteCredentials: vi.fn(),
       githubStatus: vi.fn(async () => notConnected),
+      ...kubernetesBridge,
     };
     TestBed.configureTestingModule({
       providers: [
@@ -243,13 +258,11 @@ describe('FeaturesComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    (
-      fixture.nativeElement.querySelector('[data-test="toggle-kubernetes"]') as HTMLInputElement
-    ).click();
+    (fixture.nativeElement.querySelector('[data-test="toggle-other"]') as HTMLInputElement).click();
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(bridge.featureDisable).toHaveBeenCalledWith({ id: 'kubernetes' });
+    expect(bridge.featureDisable).toHaveBeenCalledWith({ id: 'other' });
   });
 
   it('says the control plane is not running and hides the grid when it is unavailable', async () => {
@@ -267,6 +280,7 @@ describe('FeaturesComponent', () => {
       featureSetup: vi.fn(),
       featureDeleteCredentials: vi.fn(),
       githubStatus: vi.fn(async () => notConnected),
+      ...kubernetesBridge,
     };
 
     TestBed.configureTestingModule({

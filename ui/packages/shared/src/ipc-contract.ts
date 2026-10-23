@@ -54,6 +54,10 @@ export const CHANNEL = {
   githubCancel: 'scout:github.cancel',
   githubSignOut: 'scout:github.signOut',
   githubSaveToken: 'scout:github.saveToken',
+  kubernetesDetect: 'scout:kubernetes.detect',
+  kubernetesUse: 'scout:kubernetes.use',
+  kubernetesStatus: 'scout:kubernetes.status',
+  kubernetesDisconnect: 'scout:kubernetes.disconnect',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -420,6 +424,37 @@ export interface GitHubSaveTokenRequest {
   readonly token: string;
 }
 
+export type KubernetesAuthKind =
+  'token' | 'client-certificate' | 'exec' | 'auth-provider' | 'basic' | 'unknown';
+
+/** One context of the kubeconfig on this computer; never carries a credential. */
+export interface KubernetesContextInfo {
+  readonly name: string;
+  readonly cluster: string;
+  readonly server: string;
+  readonly namespace?: string;
+  readonly auth: KubernetesAuthKind;
+  /** The command and arguments an exec context runs to get a token, shown before consent. */
+  readonly execCommand?: string;
+}
+
+export interface KubernetesDetection {
+  readonly path: string | null;
+  readonly contexts: readonly KubernetesContextInfo[];
+  readonly error: string | null;
+}
+
+/** The contexts the owner allowed; main validates each against the file it located itself. */
+export interface KubernetesUseRequest {
+  readonly contexts: readonly string[];
+}
+
+export interface KubernetesStatus {
+  readonly path: string | null;
+  readonly contexts: readonly string[];
+  readonly connected: boolean;
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -472,4 +507,8 @@ export interface ScoutBridge {
   githubCancel(): Promise<void>;
   githubSignOut(): Promise<GitHubStatus>;
   githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus>;
+  kubernetesDetect(): Promise<KubernetesDetection>;
+  kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus>;
+  kubernetesStatus(): Promise<KubernetesStatus>;
+  kubernetesDisconnect(): Promise<KubernetesStatus>;
 }

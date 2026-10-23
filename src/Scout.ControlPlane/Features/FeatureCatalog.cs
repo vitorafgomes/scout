@@ -62,35 +62,19 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata Kubernetes = new(
         Id: KubernetesId,
         DisplayName: "Kubernetes",
-        Description: "Describe pods, nodes and workloads across configured clusters.",
-        RequiresCredentials: true,
-        CredentialFields: new[]
-        {
-            new FeatureCredentialField(
-                Key: "kubeconfig",
-                Kind: "textarea",
-                Label: "Kubeconfig YAML",
-                HelperText: "Paste the contents of your kubeconfig file. Embed credentials inline (certificate-authority-data, client-certificate-data, token) - external file references and exec-plugin auth are not supported.",
-                CreateLinkUrl: null,
-                CreateLinkLabel: null),
-            new FeatureCredentialField(
-                Key: "context",
-                Kind: "text",
-                Label: "Active context (optional)",
-                HelperText: "Leave blank to use the default context from the kubeconfig. Filled in automatically when the kubeconfig has multiple contexts.",
-                CreateLinkUrl: null,
-                CreateLinkLabel: null),
-        },
+        Description: "Read pods, deployments and events from your clusters. Uses the Kubernetes configuration on this computer, with your consent; read-only.",
+        RequiresCredentials: false,
+        CredentialFields: Array.Empty<FeatureCredentialField>(),
         SettingsFields: Array.Empty<FeatureSettingField>(),
         WriteClass: WriteClass.None,
         ScopeMatrix: null,
         SetupSteps: new[]
         {
-            "Run 'kubectl config view --raw --flatten' on a terminal that already has working cluster access. The '--flatten' flag inlines certificates and tokens so the kubeconfig is self-contained.",
-            "Copy the full YAML output to the clipboard.",
-            "Paste it into the 'Kubeconfig YAML' field above.",
-            "If your kubeconfig has more than one context, type the context name in the 'Active context (optional)' field. Leave blank to use the default.",
-            "Click Save. Scout calls the cluster's /version endpoint to confirm reachability and credential validity before storing on this machine's keyring.",
+            "Scout looks for the Kubernetes configuration on this computer: the first file named in KUBECONFIG, otherwise ~/.kube/config.",
+            "Tick the contexts Scout may use and click 'Use selected contexts'. Nothing is used before you do.",
+            "A context whose user runs a command to get a token shows that command before you agree.",
+            "Scout only reads: namespaces, pods, deployments and events. It never reads logs or secrets and never changes a cluster.",
+            "Your credentials may allow changes, so a read-only user bound to the 'view' cluster role is safer.",
         });
 
     private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes };

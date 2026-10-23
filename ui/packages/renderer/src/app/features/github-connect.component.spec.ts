@@ -82,6 +82,8 @@ function makeBridge(first: GitHubStatus) {
       return current;
     }),
     appOpenExternal: vi.fn(async () => undefined),
+    kubernetesStatus: vi.fn(async () => ({ path: null, contexts: [], connected: false })),
+    kubernetesDetect: vi.fn(async () => ({ path: null, contexts: [], error: null })),
   };
 }
 
@@ -233,8 +235,7 @@ describe('GitHub card', () => {
     expect(el(fixture, 'badge-github')?.textContent?.trim()).toBe('Connected');
     expect(github).not.toContain('Needs credentials');
     expect(el(fixture, 'toggle-github')).toBeNull();
-    expect(el(fixture, 'badge-kubernetes')?.textContent?.trim()).toBe('Needs credentials');
-    expect(el(fixture, 'toggle-kubernetes')).not.toBeNull();
+    expect(el(fixture, 'badge-kubernetes')?.textContent?.trim()).toBe('Not connected');
   });
 
   it('a GitHub card that is not connected says Not connected and has no toggle', async () => {
@@ -244,11 +245,13 @@ describe('GitHub card', () => {
     expect(el(fixture, 'toggle-github')).toBeNull();
   });
 
-  it('replaces the credential dialog button on the GitHub card only', async () => {
+  it('replaces the credential dialog button on the GitHub card with the GitHub connect section', async () => {
     const fixture = await render(makeBridge(notConnected));
 
     expect(el(fixture, 'cta-github')).toBeNull();
-    expect(el(fixture, 'cta-kubernetes')).not.toBeNull();
+    expect(
+      el(fixture, 'card-github')?.querySelector('[data-test="github-connect-section"]'),
+    ).not.toBeNull();
   });
 
   describe('polling', () => {

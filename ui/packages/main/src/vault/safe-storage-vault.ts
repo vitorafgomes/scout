@@ -4,7 +4,12 @@ import type { Logger } from '../util/logger.js';
 
 /** Keys only the main process reads or writes; they are not in VAULT_KEYS, so the renderer's vault channels reject them. */
 export type MainOnlyVaultKey =
-  'chatgpt.session' | 'chatgpt.client-id' | 'chatgpt.host-id' | 'github.session' | 'github.token';
+  | 'chatgpt.session'
+  | 'chatgpt.client-id'
+  | 'chatgpt.host-id'
+  | 'github.session'
+  | 'github.token'
+  | 'kubernetes.selection';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 
