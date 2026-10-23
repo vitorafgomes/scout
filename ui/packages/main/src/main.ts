@@ -31,6 +31,7 @@ import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
 import { readKubernetesSelection, registerKubernetesHandlers } from './ipc/kubernetes.js';
+import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
 import { detectKubeconfig } from './kubernetes/kubeconfig.js';
 import {
   GITHUB_APP_CLIENT_ID,
@@ -128,6 +129,7 @@ let unregisterChatGpt: (() => void) | null = null;
 let chatGptAuth: ChatGptAuth | null = null;
 let unregisterGitHub: (() => void) | null = null;
 let unregisterKubernetes: (() => void) | null = null;
+let unregisterAccess: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
 
 app
@@ -238,6 +240,15 @@ app
       logger: kubernetesLogger,
     });
 
+    const accessLogger = logger.child({ module: 'access' });
+    unregisterAccess = registerAccessHandlers(ipcMain, {
+      vault,
+      onAllowedUsersChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, accessLogger);
+      },
+      logger: accessLogger,
+    });
+
     supervisor = createSupervisor({
       spawn,
       logger: logger.child({ module: 'supervisor' }),
@@ -256,6 +267,7 @@ app
           chatGptTokenFile,
           gitHubEnv: await auth.workerEnv(),
           kubernetesSelection: await readKubernetesSelection(vault),
+          allowedUserIds: await readAllowedUserIds(vault),
         }),
     });
 
@@ -394,6 +406,7 @@ app.on('before-quit', (event) => {
     gitHubAuth?.stop();
     unregisterGitHub?.();
     unregisterKubernetes?.();
+    unregisterAccess?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -423,6 +436,7 @@ app.on('before-quit', (event) => {
       gitHubAuth?.stop();
       unregisterGitHub?.();
       unregisterKubernetes?.();
+      unregisterAccess?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

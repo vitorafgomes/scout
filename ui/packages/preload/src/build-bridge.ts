@@ -267,5 +267,13 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
         ScoutBridge['kubernetesDisconnect']
       >;
     },
+
+    accessGet() {
+      return ipc.invoke(CHANNEL.accessGet) as ReturnType<ScoutBridge['accessGet']>;
+    },
+
+    accessSet(req) {
+      return ipc.invoke(CHANNEL.accessSet, req) as ReturnType<ScoutBridge['accessSet']>;
+    },
   };
 }

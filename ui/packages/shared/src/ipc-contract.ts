@@ -58,6 +58,8 @@ export const CHANNEL = {
   kubernetesUse: 'scout:kubernetes.use',
   kubernetesStatus: 'scout:kubernetes.status',
   kubernetesDisconnect: 'scout:kubernetes.disconnect',
+  accessGet: 'scout:access.get',
+  accessSet: 'scout:access.set',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -455,6 +457,11 @@ export interface KubernetesStatus {
   readonly connected: boolean;
 }
 
+/** The platform user ids allowed to use Scout from chat; main validates and stores them. */
+export interface AccessAllowedUsers {
+  readonly userIds: readonly string[];
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
@@ -511,4 +518,6 @@ export interface ScoutBridge {
   kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus>;
   kubernetesStatus(): Promise<KubernetesStatus>;
   kubernetesDisconnect(): Promise<KubernetesStatus>;
+  accessGet(): Promise<AccessAllowedUsers>;
+  accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers>;
 }

@@ -272,6 +272,7 @@ describe('buildEnv', () => {
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__CHATGPTPLAN__TOKENFILE: '/home/owner/.config/Scout/chatgpt-token.json',
       SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL: 'gpt-6.1-sol',
+      SCOUT__ACCESS__REQUIREALLOWLIST: 'true',
     });
   });
 
@@ -437,6 +438,59 @@ describe('buildEnv', () => {
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
     });
+  });
+});
+
+describe('buildEnv allowed users', () => {
+  const accessKeys = (env: Record<string, string>): string[] =>
+    Object.keys(env).filter((key) => key.startsWith('SCOUT__ACCESS__'));
+
+  it('gives the worker each allowed user id', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      allowedUserIds: ['111', 'U02ABC'],
+    });
+
+    expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__0']).toBe('111');
+    expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__1']).toBe('U02ABC');
+  });
+
+  it('fails closed when GitHub is connected: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('fails closed when a Kubernetes selection exists: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      kubernetesSelection: { path: '/home/me/.kube/config', contexts: ['prod-admin'] },
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('fails closed when the ChatGPT plan is the provider: the worker must require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'ChatGptPlan' }),
+      chatGptTokenFile: '/user-data/chatgpt-token.json',
+    });
+
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('local first: with no owner credential and no allowed users the worker gets no access variable', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'Ollama' }),
+      gitHubEnv: {},
+      kubernetesSelection: null,
+      allowedUserIds: [],
+    });
+
+    expect(accessKeys(env)).toEqual([]);
   });
 });
 

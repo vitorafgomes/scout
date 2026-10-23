@@ -17,6 +17,8 @@ describe('CHANNEL constant', () => {
   test('exposes exactly the expected channels', () => {
     expect(Object.keys(CHANNEL).sort()).toEqual(
       [
+        'accessGet',
+        'accessSet',
         'appGetVersion',
         'appOpenExternal',
         'appQuit',
@@ -137,6 +139,8 @@ describe('ChannelName type', () => {
       'scout:kubernetes.use': true,
       'scout:kubernetes.status': true,
       'scout:kubernetes.disconnect': true,
+      'scout:access.get': true,
+      'scout:access.set': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });

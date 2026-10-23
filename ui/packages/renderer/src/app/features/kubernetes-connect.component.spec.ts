@@ -62,9 +62,14 @@ const detected: KubernetesDetection = {
 
 const disconnected: KubernetesStatus = { path: null, contexts: [], connected: false };
 
-function makeBridge(detection: KubernetesDetection, first: KubernetesStatus = disconnected) {
+function makeBridge(
+  detection: KubernetesDetection,
+  first: KubernetesStatus = disconnected,
+  allowedUserIds: readonly string[] = [],
+) {
   let current = first;
   return {
+    accessGet: vi.fn(async () => ({ userIds: allowedUserIds })),
     featuresList: vi.fn(async () => ({ features: [feature('github'), feature('kubernetes')] })),
     githubStatus: vi.fn(async () => github),
     kubernetesStatus: vi.fn(async () => current),
@@ -198,5 +203,28 @@ describe('Kubernetes card', () => {
       'Use the Kubernetes configuration on this computer?',
     );
     expect(text(fixture, 'badge-kubernetes')).toBe('Not connected');
+  });
+
+  it('a connected Kubernetes card warns that nobody can use it from chat while no user is allowed', async () => {
+    const fixture = await render(
+      makeBridge(detected, { path: PATH, contexts: ['dev'], connected: true }, []),
+    );
+
+    expect(text(fixture, 'access-warning-kubernetes')).toBe(
+      'Nobody can use this connection from chat until you add allowed users in Settings.',
+    );
+  });
+
+  it('a connected Kubernetes card does not warn once a user is allowed, and a disconnected one never warns', async () => {
+    const allowed = await render(
+      makeBridge(detected, { path: PATH, contexts: ['dev'], connected: true }, ['111']),
+    );
+    expect(text(allowed, 'kubernetes-connected')).toBe(`Using 1 context from ${PATH}`);
+    expect(el(allowed, 'access-warning-kubernetes')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const disconnectedCard = await render(makeBridge(detected, disconnected, []));
+    expect(text(disconnectedCard, 'badge-kubernetes')).toBe('Not connected');
+    expect(el(disconnectedCard, 'access-warning-kubernetes')).toBeNull();
   });
 });

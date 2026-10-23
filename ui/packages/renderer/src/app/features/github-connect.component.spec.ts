@@ -52,9 +52,10 @@ const connected: GitHubStatus = {
   installed: true,
 };
 
-function makeBridge(first: GitHubStatus) {
+function makeBridge(first: GitHubStatus, allowedUserIds: readonly string[] = []) {
   let current = first;
   return {
+    accessGet: vi.fn(async () => ({ userIds: allowedUserIds })),
     setStatus(next: GitHubStatus): void {
       current = next;
     },
@@ -236,6 +237,22 @@ describe('GitHub card', () => {
     expect(github).not.toContain('Needs credentials');
     expect(el(fixture, 'toggle-github')).toBeNull();
     expect(el(fixture, 'badge-kubernetes')?.textContent?.trim()).toBe('Not connected');
+  });
+
+  it('a connected GitHub card warns that nobody can use it from chat while no user is allowed', async () => {
+    const fixture = await render(makeBridge(connected, []));
+
+    expect(el(fixture, 'access-warning-github')?.textContent?.trim()).toBe(
+      'Nobody can use this connection from chat until you add allowed users in Settings.',
+    );
+    expect(el(fixture, 'access-warning-kubernetes')).toBeNull();
+  });
+
+  it('a connected GitHub card does not warn once a user is allowed', async () => {
+    const fixture = await render(makeBridge(connected, ['111']));
+
+    expect(el(fixture, 'badge-github')?.textContent?.trim()).toBe('Connected');
+    expect(el(fixture, 'access-warning-github')).toBeNull();
   });
 
   it('a GitHub card that is not connected says Not connected and has no toggle', async () => {

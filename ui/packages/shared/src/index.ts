@@ -124,4 +124,5 @@ export {
   type KubernetesDetection,
   type KubernetesStatus,
   type KubernetesUseRequest,
+  type AccessAllowedUsers,
 } from './ipc-contract.js';

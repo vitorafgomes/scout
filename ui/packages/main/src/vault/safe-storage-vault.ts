@@ -9,7 +9,8 @@ export type MainOnlyVaultKey =
   | 'chatgpt.host-id'
   | 'github.session'
   | 'github.token'
-  | 'kubernetes.selection';
+  | 'kubernetes.selection'
+  | 'access.allowed-users';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 

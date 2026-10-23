@@ -10,6 +10,7 @@ export interface BuildEnvDeps {
   chatGptTokenFile?: string;
   gitHubEnv?: Readonly<Record<string, string>>;
   kubernetesSelection?: KubernetesSelection | null;
+  allowedUserIds?: readonly string[];
 }
 
 /** The kubeconfig path and the contexts the owner allowed Scout to read. */
@@ -48,6 +49,15 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
       env[`SCOUT__PLUGINS__KUBERNETES__CONTEXTS__${i}`] = context;
     });
   }
+
+  deps.allowedUserIds?.forEach((id, i) => {
+    env[`SCOUT__ACCESS__ALLOWEDUSERIDS__${i}`] = id;
+  });
+  const ownerCredentialConnected =
+    Object.keys(deps.gitHubEnv ?? {}).length > 0 ||
+    deps.kubernetesSelection != null ||
+    llmProvider === 'ChatGptPlan';
+  if (ownerCredentialConnected) env['SCOUT__ACCESS__REQUIREALLOWLIST'] = 'true';
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

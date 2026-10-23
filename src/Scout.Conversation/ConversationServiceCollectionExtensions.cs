@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Routing;
 using Scout.Conversation.Streaming;
@@ -29,6 +30,7 @@ public static class ConversationServiceCollectionExtensions
         services.Configure<LlmStreamingRouterOptions>(configuration.GetSection(ConfigSection));
         services.Configure<ConversationMemoryOptions>(
             configuration.GetSection(ConversationMemoryOptions.ConfigSection));
+        services.Configure<AccessOptions>(configuration.GetSection(AccessOptions.ConfigSection));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IConversationKeyProvider, ConversationKeyProvider>();

@@ -60,6 +60,7 @@ import {
   type KubernetesDetection,
   type KubernetesStatus,
   type KubernetesUseRequest,
+  type AccessAllowedUsers,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -170,6 +171,8 @@ function createFakeBridge(): ScoutBridge {
     kubernetesUse: (_req: KubernetesUseRequest): Promise<KubernetesStatus> => rejectNotAvailable(),
     kubernetesStatus: (): Promise<KubernetesStatus> => rejectNotAvailable(),
     kubernetesDisconnect: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    accessGet: (): Promise<AccessAllowedUsers> => rejectNotAvailable(),
+    accessSet: (_req: AccessAllowedUsers): Promise<AccessAllowedUsers> => rejectNotAvailable(),
   };
 }
 
@@ -379,6 +382,14 @@ export class ScoutBridgeService {
 
   async kubernetesDisconnect(): Promise<KubernetesStatus> {
     return this.bridge.kubernetesDisconnect();
+  }
+
+  async accessGet(): Promise<AccessAllowedUsers> {
+    return this.bridge.accessGet();
+  }
+
+  async accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers> {
+    return this.bridge.accessSet(req);
   }
 }
 

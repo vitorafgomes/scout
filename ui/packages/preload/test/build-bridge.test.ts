@@ -70,6 +70,8 @@ describe('buildBridge', () => {
       'kubernetesUse',
       'kubernetesStatus',
       'kubernetesDisconnect',
+      'accessGet',
+      'accessSet',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -398,5 +400,27 @@ describe('buildBridge', () => {
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.kubernetesUse, { contexts: ['dev'] });
     expect(result).toBe(status);
+  });
+
+  it('accessSet sends the allowed users on the access.set channel and returns the stored list', async () => {
+    const ipc = makeFakeIpc();
+    const stored = { userIds: ['111'] };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(stored));
+
+    const result = await buildBridge(ipc).accessSet({ userIds: [' 111 '] });
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessSet, { userIds: [' 111 '] });
+    expect(result).toBe(stored);
+  });
+
+  it('accessGet invokes the access.get channel', async () => {
+    const ipc = makeFakeIpc();
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({ userIds: [] }),
+    );
+
+    await buildBridge(ipc).accessGet();
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessGet);
   });
 });

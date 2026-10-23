@@ -38,6 +38,7 @@ interface FakeBridge {
   chatgptSignOut: ReturnType<typeof vi.fn>;
   chatgptCancelSignIn: ReturnType<typeof vi.fn>;
   chatgptListModels: ReturnType<typeof vi.fn>;
+  accessGet: ReturnType<typeof vi.fn>;
 }
 
 const PLAN_MODELS = [
@@ -89,6 +90,7 @@ function makeBridge(
     chatgptSignInError?: unknown;
     revocationConfirmed?: boolean;
     modelsError?: unknown;
+    allowedUserIds?: readonly string[];
   } = {},
 ): FakeBridge {
   return {
@@ -138,6 +140,7 @@ function makeBridge(
       if (opts.modelsError !== undefined) throw opts.modelsError;
       return { models: PLAN_MODELS };
     }),
+    accessGet: vi.fn(async () => ({ userIds: opts.allowedUserIds ?? [] })),
   };
 }
 
@@ -162,6 +165,7 @@ async function setup(
     chatgptSignInError?: unknown;
     revocationConfirmed?: boolean;
     modelsError?: unknown;
+    allowedUserIds?: readonly string[];
   } = {},
 ): Promise<{
   fixture: ComponentFixture<SourcesComponent>;
@@ -1052,6 +1056,55 @@ describe('SourcesComponent', () => {
     expect(
       query<HTMLElement>(fixture, '[data-test="saved-chatgpt-plus"]').textContent?.trim(),
     ).toBe('Signed out of ChatGPT.');
+  });
+
+  describe('ChatGPT card and allowed users', () => {
+    const NO_ALLOWED_USERS =
+      'Nobody can use this connection from chat until you add allowed users in Settings.';
+
+    async function inUse(allowedUserIds: readonly string[]) {
+      window.localStorage.setItem(
+        LLM_CONFIG_STORAGE_KEY,
+        JSON.stringify({
+          provider: 'ChatGptPlan',
+          model: 'gpt-5.6-luna',
+          endpoint: 'http://localhost:11434',
+        }),
+      );
+      return setup({
+        vaultHas: true,
+        chatgpt: CHATGPT_IN,
+        allowedUserIds,
+        publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-5.6-luna' },
+      });
+    }
+
+    it('warns that nobody can use the plan from chat while ChatGPT is in use and no user is allowed', async () => {
+      const { fixture } = await inUse([]);
+
+      const warning = fixture.nativeElement.querySelector(
+        '[data-test="access-warning-chatgpt"]',
+      ) as HTMLElement | null;
+      expect(warning?.textContent?.replace(/\s+/g, ' ').trim()).toBe(NO_ALLOWED_USERS);
+    });
+
+    it('does not warn once a user is allowed', async () => {
+      const { fixture } = await inUse(['111']);
+
+      expect(fixture.nativeElement.querySelector('[data-test="chatgpt-model"]')).not.toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('[data-test="access-warning-chatgpt"]'),
+      ).toBeNull();
+    });
+
+    it('does not warn while the plan is signed in but not in use, because the bot stays open', async () => {
+      const { fixture } = await setup({ chatgpt: CHATGPT_IN, allowedUserIds: [] });
+
+      expect(fixture.nativeElement.querySelector('[data-test="chatgpt-sign-out"]')).not.toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('[data-test="access-warning-chatgpt"]'),
+      ).toBeNull();
+    });
   });
 
   it('offers "Sign in again" when ChatGPT is still the chosen provider but the session has ended', async () => {

@@ -62,6 +62,7 @@ const controlPlaneOnly: FeatureDto = {
 const kubernetesDisconnected: KubernetesStatus = { path: null, contexts: [], connected: false };
 
 const kubernetesBridge = {
+  accessGet: vi.fn(async () => ({ userIds: [] })),
   kubernetesStatus: vi.fn(async () => kubernetesDisconnected),
   kubernetesDetect: vi.fn(async () => ({ path: null, contexts: [], error: null })),
 };

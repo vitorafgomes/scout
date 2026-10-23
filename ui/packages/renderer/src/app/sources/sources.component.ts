@@ -317,6 +317,12 @@ const ICONS = Object.freeze({
                     <p class="saved" data-test="chatgpt-model">
                       Answering with {{ chatgptModel() }}
                     </p>
+                    @if (noAllowedUsers()) {
+                      <p class="form-error" data-test="access-warning-chatgpt">
+                        Nobody can use this connection from chat until you add allowed users in
+                        Settings.
+                      </p>
+                    }
                   } @else if (chatgpt().planUsageGranted) {
                     <button
                       type="button"
@@ -1002,6 +1008,7 @@ export class SourcesComponent implements OnInit {
   readonly chatgptModelsFailed = signal<boolean>(false);
   private readonly chatgptPickedModel = signal<string | null>(null);
   readonly chatgptError = signal<string | null>(null);
+  readonly noAllowedUsers = signal(false);
   readonly chatgptIcon = ICONS.openai;
   readonly chatgptModel = computed<string | null>(() => this.llmConfig.model());
   readonly chatgptInUse = computed<boolean>(
@@ -1162,6 +1169,10 @@ export class SourcesComponent implements OnInit {
     this.bridge.chatgptStatus().then(
       (status) => this.applyChatGptStatus(status),
       () => this.applyChatGptStatus(CHATGPT_SIGNED_OUT),
+    );
+    this.bridge.accessGet().then(
+      (res) => this.noAllowedUsers.set(res.userIds.length === 0),
+      () => this.noAllowedUsers.set(false),
     );
   }
 

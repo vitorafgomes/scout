@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import type { FeatureId } from '@scout/shared';
 
 import { FeaturesStore, type FeatureViewModel } from '../core/features.store';
+import { ScoutBridgeService } from '../core/scout-bridge';
 
 import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
@@ -10,6 +11,9 @@ import { GitHubConnectComponent } from './github-connect.component';
 import { KubernetesConnectComponent } from './kubernetes-connect.component';
 
 type Connection = 'connected' | 'not-connected' | 'unknown';
+
+export const NO_ALLOWED_USERS_WARNING =
+  'Nobody can use this connection from chat until you add allowed users in Settings.';
 
 @Component({
   selector: 'sc-features',
@@ -53,6 +57,11 @@ type Connection = 'connected' | 'not-connected' | 'unknown';
                     kubernetesConnection.set($event ? 'connected' : 'not-connected')
                   "
                 />
+              }
+              @if (connectionOf(f.id) === 'connected' && noAllowedUsers()) {
+                <p class="access-warning" [attr.data-test]="'access-warning-' + f.id">
+                  {{ noAllowedUsersWarning }}
+                </p>
               }
             </sc-feature-card>
           }
@@ -113,6 +122,11 @@ type Connection = 'connected' | 'not-connected' | 'unknown';
       .notes p {
         margin: 0 0 4px;
       }
+      .access-warning {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: #e0b04a;
+      }
       .unavailable-notice {
         padding: 16px 20px;
         border: 1px solid #2d3348;
@@ -126,6 +140,9 @@ type Connection = 'connected' | 'not-connected' | 'unknown';
 })
 export class FeaturesComponent implements OnInit {
   readonly store = inject(FeaturesStore);
+  private readonly bridge = inject(ScoutBridgeService);
+  readonly noAllowedUsers = signal(false);
+  readonly noAllowedUsersWarning = NO_ALLOWED_USERS_WARNING;
   readonly activeDialog = signal<FeatureViewModel | null>(null);
   readonly githubConnection = signal<Connection>('unknown');
   readonly kubernetesConnection = signal<Connection>('unknown');
@@ -142,6 +159,10 @@ export class FeaturesComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    void this.bridge.accessGet().then(
+      (res) => this.noAllowedUsers.set(res.userIds.length === 0),
+      () => this.noAllowedUsers.set(false),
+    );
     await this.store.load();
   }
 

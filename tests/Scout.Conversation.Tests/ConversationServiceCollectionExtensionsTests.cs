@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Streaming;
+using Scout.Conversation.Tests.Fakes;
 using Scout.Llm.Abstractions;
 using Scout.Skills;
 
@@ -104,5 +105,29 @@ public sealed class ConversationServiceCollectionExtensionsTests
         options.Enabled.ShouldBeFalse();
         options.MaxTurns.ShouldBe(3);
         options.MaxReplayedChars.ShouldBe(1234);
+    }
+
+    [Theory]
+    [InlineData("Scout:Access:RequireAllowList", "true",
+        "Scout has no allowed users yet. The owner can add them in the Scout desktop app under Settings.")]
+    [InlineData("Scout:Access:AllowedUserIds:0", "111", "Scout only answers its configured users.")]
+    public async Task Resolved_Conductor_Applies_The_Scout_Access_Section(
+        string key, string value, string expectedReply)
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [key] = value })
+            .Build();
+        var gateway = Substitute.For<IChatGateway>();
+        var services = new ServiceCollection();
+        services.AddSingleton(gateway);
+        services.AddScoutConversation(config);
+        using var provider = services.BuildServiceProvider();
+        var sink = new RecordingResponseSink(new RenderCapabilities { FineGrainedEdit = true });
+
+        await provider.GetRequiredService<ConversationConductor>().HandleAsync(
+            new ChatMessage("222", "c1", "hi"), sink, CancellationToken.None);
+
+        sink.FinalText.ShouldBe(expectedReply);
+        gateway.ReceivedCalls().ShouldBeEmpty();
     }
 }
