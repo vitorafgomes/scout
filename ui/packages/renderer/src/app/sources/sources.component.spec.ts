@@ -15,6 +15,9 @@ interface FakeBridge {
   appOpenExternal: ReturnType<typeof vi.fn>;
   vaultStore: ReturnType<typeof vi.fn>;
   vaultHas: ReturnType<typeof vi.fn>;
+  workerStatus: ReturnType<typeof vi.fn>;
+  workerStop: ReturnType<typeof vi.fn>;
+  workerStart: ReturnType<typeof vi.fn>;
 }
 
 interface FakeModel {
@@ -35,6 +38,8 @@ function makeBridge(
     lmStudioError?: unknown;
     vaultStoreError?: unknown;
     vaultHas?: boolean;
+    workerState?: string;
+    workerStartError?: unknown;
   } = {},
 ): FakeBridge {
   return {
@@ -51,6 +56,12 @@ function makeBridge(
       if (opts.vaultStoreError !== undefined) throw opts.vaultStoreError;
     }),
     vaultHas: vi.fn(async () => ({ exists: opts.vaultHas ?? false })),
+    workerStatus: vi.fn(async () => ({ state: opts.workerState ?? 'idle', restarts: 0 })),
+    workerStop: vi.fn(async () => ({ exitCode: 0 })),
+    workerStart: vi.fn(async () => {
+      if (opts.workerStartError !== undefined) throw opts.workerStartError;
+      return { pid: 42 };
+    }),
   };
 }
 
@@ -62,6 +73,8 @@ async function setup(
     lmStudioError?: unknown;
     vaultStoreError?: unknown;
     vaultHas?: boolean;
+    workerState?: string;
+    workerStartError?: unknown;
   } = {},
 ): Promise<{
   fixture: ComponentFixture<SourcesComponent>;
@@ -367,7 +380,7 @@ describe('SourcesComponent', () => {
     expect(badge.textContent ?? '').toContain('Connected');
     expect(badge.textContent ?? '').not.toContain('Not Connected');
     expect(query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent).toContain(
-      'Saved. Restart Scout from the status screen to use OpenAI.',
+      'Saved. Scout will use OpenAI the next time it starts.',
     );
   });
 
@@ -396,7 +409,7 @@ describe('SourcesComponent', () => {
     const badge = query<HTMLElement>(fixture, '[data-test="badge-google-gemini"]');
     expect(badge.textContent ?? '').not.toContain('Not Connected');
     expect(query<HTMLElement>(fixture, '[data-test="saved-google-gemini"]').textContent).toContain(
-      'Saved. Restart Scout from the status screen to use Gemini.',
+      'Saved. Scout will use Gemini the next time it starts.',
     );
   });
 
@@ -477,5 +490,82 @@ describe('SourcesComponent', () => {
     expect(card.textContent).toContain(
       'Not supported: a ChatGPT Plus or Pro subscription does not include API access. Use the OpenAI API card with an API key instead.',
     );
+  });
+  async function saveOpenAiKey(fixture: ComponentFixture<SourcesComponent>): Promise<void> {
+    query<HTMLButtonElement>(fixture, '[data-test="action-openai-api"]').click();
+    fixture.detectChanges();
+    type(query<HTMLInputElement>(fixture, '[data-test="api-key-openai-api"]'), 'sk-typed-key');
+    query<HTMLButtonElement>(fixture, '[data-test="save-openai-api"]').click();
+    await settle(fixture);
+    await settle(fixture);
+  }
+
+  it('saving while Scout is running restarts it (stop, then start) so the new provider is used', async () => {
+    const { fixture, bridge } = await setup({ workerState: 'running' });
+
+    await saveOpenAiKey(fixture);
+
+    expect(bridge.workerStop).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(bridge.workerStop.mock.invocationCallOrder[0]).toBeLessThan(
+      bridge.workerStart.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent).toContain(
+      'Saved. Restarting Scout to use OpenAI.',
+    );
+  });
+
+  it('saving while Scout is not running leaves it stopped and says the provider applies on next start', async () => {
+    const { fixture, bridge } = await setup({ workerState: 'idle' });
+
+    await saveOpenAiKey(fixture);
+
+    expect(bridge.workerStop).not.toHaveBeenCalled();
+    expect(bridge.workerStart).not.toHaveBeenCalled();
+    expect(query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent).toContain(
+      'Saved. Scout will use OpenAI the next time it starts.',
+    );
+  });
+
+  it('a failed restart shows the error in an alert and keeps the card Connected because the key is saved', async () => {
+    const { fixture } = await setup({
+      workerState: 'running',
+      workerStartError: new Error('Worker binary not found'),
+    });
+
+    await saveOpenAiKey(fixture);
+
+    const alert = fixture.nativeElement.querySelector(
+      '[data-test="card-openai-api"] [role="alert"]',
+    ) as HTMLElement | null;
+    expect(alert, 'restart error alert should render').not.toBeNull();
+    expect(alert?.textContent).toContain('Worker binary not found');
+    expect(fixture.nativeElement.textContent).not.toContain('sk-typed-key');
+    const badge = query<HTMLElement>(fixture, '[data-test="badge-openai-api"]');
+    expect(badge.textContent ?? '').toContain('Connected');
+    expect(badge.textContent ?? '').not.toContain('Not Connected');
+  });
+  it('a second save does not show the previous saved message while the worker status is pending', async () => {
+    const { fixture, bridge } = await setup({ workerState: 'idle' });
+    await saveOpenAiKey(fixture);
+    const saved = (): string =>
+      query<HTMLElement>(fixture, '[data-test="saved-openai-api"]').textContent ?? '';
+    expect(saved()).toContain('Saved. Scout will use OpenAI the next time it starts.');
+
+    let resolveStatus: (value: { state: string; restarts: number }) => void = () => undefined;
+    bridge.workerStatus.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStatus = resolve;
+        }),
+    );
+    await saveOpenAiKey(fixture);
+
+    expect(saved()).not.toContain('the next time it starts');
+
+    resolveStatus({ state: 'running', restarts: 0 });
+    await settle(fixture);
+    await settle(fixture);
+    expect(saved()).toContain('Saved. Restarting Scout to use OpenAI.');
   });
 });
