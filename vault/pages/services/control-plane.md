@@ -1,8 +1,9 @@
 ---
 title: "ControlPlane"
-version: "1.0"
+version: "1.2"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-10-23
+changes: "Kubernetes catalog entry describes the kubeconfig on this computer, with consent"
 page_type: service
 status: active
 description: "Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features."
@@ -54,7 +55,7 @@ The daemon is launched with the control-plane session token removed from the chi
 
 ## Invariants
 
-- [[pages/invariants/no-executive-writes]]: start, stop, pull and delete mutate the host; the feature catalog asks for a write-capable GitHub scope (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:42`).
+- [[pages/invariants/no-executive-writes]]: start, stop, pull and delete mutate the host. The GitHub catalog entry lists only the read-only GitHub App permissions Metadata, Contents, Pull requests and Issues (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:42`, guarded by `tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:19`), and its setup steps describe "Connect with GitHub" ([[pages/decisions/0019-github-app-device-flow]]). The `pat` credential field stays for a host without the desktop sign-in. The Kubernetes entry says it reads pods, deployments and events using the Kubernetes configuration on this computer, with consent, read-only (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:65`, guarded by `tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:54`); its setup steps name `KUBECONFIG` and `~/.kube/config`, recommend a read-only user, and no longer promise a keyring or ask for a pasted kubeconfig (`tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:63`). It asks for no credentials (`tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:75`): the desktop card reads the local kubeconfig, and a host without the desktop configures `Scout:Plugins:Kubernetes` ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]).
 - [[pages/invariants/secrets-never-in-source]]: credentials go to `ICredentialStore` (in memory by default), not to the JSON state file, whose record holds only `Enabled`, `LastError` and `Settings` (`src/Scout.ControlPlane/Features/IFeatureStateStore.cs:9`).
 - [[pages/invariants/local-first-default]]: the default endpoint is localhost (`src/Scout.ControlPlane/Providers/OllamaProviderOptions.cs:12`).
 
@@ -66,7 +67,7 @@ The daemon is launched with the control-plane session token removed from the chi
 
 ## Testing footprint
 
-`tests/Scout.ControlPlane.Tests` (59 test attributes, 9 files, shared with the host and contracts): `Providers/` (Ollama service with a harness and stubs, providers service), `Features/FeaturesServiceTests.cs`. Integration tests live under `Integration/` and are described in [[pages/services/host-control-plane]].
+`tests/Scout.ControlPlane.Tests` (66 test attributes, 10 files, shared with the host and contracts): `Providers/` (Ollama service with a harness and stubs, providers service), `Features/FeaturesServiceTests.cs`. Integration tests live under `Integration/` and are described in [[pages/services/host-control-plane]].
 
 ## Related
 

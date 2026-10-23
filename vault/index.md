@@ -6,7 +6,7 @@ changes: "Added the Desktop UI service page and the control-plane client initiat
 page_type: index
 status: active
 description: "Content catalogue for the Scout LLM wiki."
-updated: 2026-10-22
+updated: 2026-10-23
 source:
   - chat
   - obsidian-vault/scout (technical notes migrated 2026-10-21)
@@ -67,17 +67,18 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
 - [[pages/services/desktop-ui|Desktop UI]] - Electron app: onboards a Discord bot, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, manages local models from Node.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
-- [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub plugin, runs the adapters, or runs a one-shot project index.
+- [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub and Kubernetes plugins, runs the adapters, or runs a one-shot project index.
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.
 - [[pages/services/knowledge|Knowledge]] - Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent.
 - [[pages/services/llm|Llm]] - Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout.
-- [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; self-gates off when no token is configured.
+- [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; authenticates from a token or the desktop's token file, self-gates off when neither is set.
+- [[pages/services/plugin-kubernetes|Plugin.Kubernetes]] - Read-only Kubernetes plugin: six GET-only Semantic Kernel functions over the owner's kubeconfig, only for the contexts the owner allowed; self-gates off without a path and a context.
 - [[pages/services/skills|Skills]] - Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools.
 
 ## Invariants
 
 - [[pages/invariants/local-first-default|Ollama is the default LLM provider]] - With no provider configured Scout selects Ollama on localhost, so a fresh clone runs without paid credentials. The fallback is coded in two places; no test exercises it.
-- [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]] - Scout may write content that a human or another agent reads and decides on; it never mutates code, infrastructure, configuration or data on the host. The code upholds this by omission, not by a gate.
+- [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]] - Scout may write content that a human or another agent reads and decides on; it never mutates code, infrastructure, configuration or data on the host. The code upholds this by omission, plus an optional model-judged guard on requests (ADR 0016).
 - [[pages/invariants/pluggable-boundaries|Adapters, LLM providers and plugins are swapped by configuration]] - Chat adapters, LLM providers and plugins sit behind abstractions and are selected or gated by Scout: configuration; the core names no vendor. The set of options is closed at compile time.
 - [[pages/invariants/secrets-never-in-source|Secrets never live in source]] - Tokens and API keys come from user-secrets in development and environment variables in production; committed appsettings ship empty values. Only .gitignore and a convention hold this; no code or test does.
 
@@ -98,6 +99,12 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0013-conversation-core-streaming-sink|Conversation core - cumulative streaming sink and pump-owned drive loop]] - Decision on the conversation core's cumulative streaming sink and pump-owned streaming across chat platforms.
 - [[pages/decisions/0014-per-request-identity-gating|ADR - Per-request identity and disclosure gating (SelfInfo Path B)]] - Plugins run inside a singleton Semantic Kernel with singleton KernelPlugin instances, so they had no way to know *who* was asking or *where*.
 - [[pages/decisions/0015-cloud-llm-providers-by-api-key|ADR 0015 - Cloud LLM providers configured by API key from the desktop]] - OpenAI and Gemini cards take an API key stored in the OS keychain; ChatGPT Plus is unsupported.
+- [[pages/decisions/0016-jev-read-only-guard|ADR 0016 - TypeSafe's Jev as a read-only guard in front of the model]] - With a TypeSafe key, Jev judges each request and Scout refuses the ones that ask it to change something.
+- [[pages/decisions/0017-provider-connect-disconnect|ADR 0017 - Connect and disconnect cloud LLM providers, one key per provider]] - Each cloud provider keeps its own key, checked before it is stored; disconnecting the one in use switches to another connected provider or to None, never Ollama.
+- [[pages/decisions/0018-chatgpt-plan-sign-in|ADR 0018 - ChatGPT plan through Sign in with ChatGPT]] - The ChatGPT Plus card signs in through the browser; the worker answers through the Responses API inside Semantic Kernel.
+- [[pages/decisions/0019-github-app-device-flow|ADR 0019 - GitHub through a read-only GitHub App and the device flow]] - Connect with GitHub through a read-only App and the device flow, or paste a token (warned when it can write); one credential at a time, held by main.
+- [[pages/decisions/0020-kubernetes-from-local-kubeconfig|ADR 0020 - Kubernetes from the kubeconfig on this computer, with consent per context]] - Scout reads the owner's kubeconfig in place for the contexts the owner ticks, GET only, with no logs, secrets, exec or watch.
+- [[pages/decisions/0021-allowed-users|ADR 0021 - Only allowed users can use Scout once an owner credential is connected]] - The conductor answers only the user ids listed in Settings; an empty list refuses everyone while GitHub, Kubernetes or the ChatGPT plan is connected and answers everyone otherwise.
 
 ## Domain
 
@@ -117,6 +124,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Roadmap
 
 - [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
+- [[pages/roadmap/chatgpt-plan-provider|ChatGPT plan provider]] - Initiative: answer through the owner's ChatGPT plan via the official browser sign-in.
 - [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
 
 ## History

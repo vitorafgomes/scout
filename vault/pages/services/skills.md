@@ -31,7 +31,7 @@ Owns skill file parsing, the catalog, the selector and prompt composition. Does 
 - **Abstractions:** `ISkillSelector` (`src/Scout.Skills/ISkillSelector.cs:8`), `ISkillCatalog` (`src/Scout.Skills/ISkillCatalog.cs:9`), record `Skill` (`src/Scout.Skills/Skill.cs:15`), `NoOpSkillSelector` (`src/Scout.Skills/NoOpSkillSelector.cs:7`), `SkillPromptComposer` (`src/Scout.Skills/SkillPromptComposer.cs:9`).
 - **Model tools:** plugin `Skills` with `list_skills` (`src/Scout.Skills/SkillsPlugin.cs:27`) and `load_skill` (`:40`), registered as a `KernelPlugin` (`src/Scout.Skills/SkillsServiceCollectionExtensions.cs:63`).
 - **Configuration keys:** `Scout:Skills` with `Enabled` (default true), `Directory` (default `skills`, relative to the binary directory), `TopN`, `SimilarityThreshold` (`src/Scout.Skills/SkillsOptions.cs:8`).
-- **External boundaries:** filesystem read of `*.md` under the skills directory (`src/Scout.Skills/SkillFileLoader.cs:41`, `:68`); embedding calls through `IEmbeddingGenerator` (`src/Scout.Skills/SkillSelector.cs:23`).
+- **External boundaries:** filesystem read of `*.md` under the skills directory (`src/Scout.Skills/SkillFileLoader.cs:41`, `:68`); embedding calls through `IEmbeddingGenerator` (`src/Scout.Skills/SkillSelector.cs:25`).
 
 ## How it works
 
@@ -46,7 +46,7 @@ flowchart LR
 
 Loading is lazy and never throws; malformed files are skipped with a warning (`src/Scout.Skills/SkillFileLoader.cs:31`). The catalog depends on the loader only, so the kernel can include the plugin without re-entering the embedder (`src/Scout.Skills/SkillsServiceCollectionExtensions.cs:54`). When disabled, only `NoOpSkillSelector` is registered (`:69`).
 
-The selector builds its index on the first message and caches a successful build, including an empty one when no skill files exist; a build that throws (an embeddings 429, for example) is not cached: that message gets no skills, and the next message builds again once `IndexRetryInterval` (one minute, `src/Scout.Skills/SkillSelector.cs:20`) has passed on the injected `TimeProvider` (`src/Scout.Skills/SkillSelector.cs:95`, `src/Scout.Skills/SkillSelector.cs:137`), so a persistent failure costs one embeddings call per minute, not one per message.
+The selector builds its index on the first message and caches a successful build, including an empty one when no skill files exist; a build that throws (an embeddings 429, for example) is not cached: that message gets no skills, and the next message builds again once `IndexRetryInterval` (one minute, `src/Scout.Skills/SkillSelector.cs:22`) has passed on the injected `TimeProvider` (`src/Scout.Skills/SkillSelector.cs:98`, `src/Scout.Skills/SkillSelector.cs:147`), so a persistent failure costs one embeddings call per minute, not one per message.
 
 ## Invariants
 
@@ -55,12 +55,12 @@ The selector builds its index on the first message and caches a successful build
 
 ## Hot spots
 
-- `src/Scout.Skills/SkillSelector.cs:95`: index build on first use under a lock, with the failed-build retry gate; cosine scoring at `src/Scout.Skills/SkillSelector.cs:79`.
+- `src/Scout.Skills/SkillSelector.cs:98`: index build on first use under a lock, with the failed-build retry gate; cosine scoring at `src/Scout.Skills/SkillSelector.cs:82`.
 - `src/Scout.Skills/SkillFileLoader.cs:41`: recursive scan of the whole directory.
 
 ## Testing footprint
 
-`tests/Scout.Skills.Tests` (34 test attributes, 7 files): loader parsing and skips, catalog lookup, selector ranking with a fake embedder (`FakeEmbeddingGenerator.cs`), the index built once under concurrent first calls, retried after a failure only once the interval has passed (a `FakeTimeProvider`), prompt composition, plugin metadata and behaviour, and DI registration including the disabled path.
+`tests/Scout.Skills.Tests` (36 test attributes, 7 files): loader parsing and skips, catalog lookup, selector ranking with a fake embedder (`FakeEmbeddingGenerator.cs`), the index built once under concurrent first calls, retried after a failure only once the interval has passed (a `FakeTimeProvider`), prompt composition, plugin metadata and behaviour, and DI registration including the disabled path.
 
 ## Related
 

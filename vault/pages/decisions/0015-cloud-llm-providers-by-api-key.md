@@ -1,8 +1,9 @@
 ---
 title: "ADR 0015 - Cloud LLM providers configured by API key from the desktop"
-version: "1.0"
+version: "1.1"
 date: 2026-10-22
-changes: "Initial ADR"
+updated: 2026-10-23
+changes: "One-key-slot bullet superseded by ADR 0017; ChatGPT Plus bullet superseded by ADR 0018"
 page_type: adr
 status: accepted
 description: "The AI Sources screen configures OpenAI and Gemini by API key stored in the OS keychain and passed to the worker as environment variables; subscription sign-in is not supported."
@@ -22,7 +23,11 @@ reliability: high
 
 ## Status
 
+> Superseded in part on 2026-10-23 by [[pages/decisions/0018-chatgpt-plan-sign-in]]: the ChatGPT Plus card is now supported through OpenAI's Sign in with ChatGPT.
+
 Accepted on 2026-10-22 at the owner's request. Resolves the cloud-card deferral of [[pages/decisions/0007-ai-sources-screen]] for OpenAI and Gemini.
+
+Partly superseded on 2026-10-23: the "One key slot" bullet below is replaced by [[pages/decisions/0017-provider-connect-disconnect]] (one key per provider, checked before it is stored, and a way to disconnect). The rest of this ADR stands.
 
 ## Context
 
