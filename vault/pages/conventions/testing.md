@@ -43,7 +43,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 | Test project | Attributes | Covers |
 |---|---|---|
-| `Scout.Llm.Tests` | 166 | [[pages/services/llm]] |
+| `Scout.Llm.Tests` | 171 | [[pages/services/llm]] |
 | `Scout.Knowledge.Tests` | 103 | [[pages/services/knowledge]] |
 | `Scout.Conversation.Tests` | 74 | [[pages/services/conversation]] |
 | `Scout.ControlPlane.Tests` | 59 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
