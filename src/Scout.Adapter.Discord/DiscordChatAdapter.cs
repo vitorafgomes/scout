@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
@@ -17,11 +18,16 @@ namespace Scout.Adapter.Discord;
 /// </summary>
 public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 {
+    // ponytail: fixed 10 s ceiling on waiting for in-flight replies at stop; make it configurable if a host needs a longer drain.
+    private static readonly TimeSpan InFlightDrainTimeout = TimeSpan.FromSeconds(10);
+
     private readonly string _botToken;
     private readonly DiscordMessageTranslator _translator;
     private readonly ILogger<DiscordChatAdapter> _logger;
     private readonly DiscordSocketClient _client;
     private readonly DiscordAdapterLifecycle _lifecycle = new();
+    private readonly ConcurrentDictionary<long, Task> _inFlight = new();
+    private long _nextConversationId;
 
     private Func<ChatMessage, IResponseSink, CancellationToken, Task>? _handler;
 
@@ -62,6 +68,16 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         Func<ChatMessage, IResponseSink, CancellationToken, Task> handler,
         CancellationToken cancellationToken)
     {
+        Arm(handler, cancellationToken);
+
+        await _client.LoginAsync(TokenType.Bot, _botToken).ConfigureAwait(false);
+        await _client.StartAsync().ConfigureAwait(false);
+    }
+
+    internal void Arm(
+        Func<ChatMessage, IResponseSink, CancellationToken, Task> handler,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(handler);
 
         // Throws if already started or stopped (single-login) and arms the
@@ -74,9 +90,6 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         _client.Ready += OnReadyAsync;
         _client.Disconnected += OnDisconnectedAsync;
         _client.Connected += OnConnectedAsync;
-
-        await _client.LoginAsync(TokenType.Bot, _botToken).ConfigureAwait(false);
-        await _client.StartAsync().ConfigureAwait(false);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -94,6 +107,18 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         _client.Log -= OnDiscordLogAsync;
         _handler = null;
 
+        try
+        {
+            await Task.WhenAll(_inFlight.Values)
+                .WaitAsync(InFlightDrainTimeout, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+        {
+            _logger.LogWarning(
+                "Discord adapter stopping with {Count} conversation(s) still running.", _inFlight.Count);
+        }
+
         await _client.StopAsync().ConfigureAwait(false);
         await _client.LogoutAsync().ConfigureAwait(false);
     }
@@ -105,21 +130,14 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         await _client.DisposeAsync().ConfigureAwait(false);
     }
 
-    private async Task OnMessageReceivedAsync(SocketMessage message)
+    private Task OnMessageReceivedAsync(SocketMessage message)
     {
-        var handler = _handler;
-        if (handler is null || !_lifecycle.IsRunning)
-        {
-            return;
-        }
-        var lifetimeToken = _lifecycle.LifetimeToken;
-
         try
         {
             var botUserId = _client.CurrentUser?.Id ?? 0UL;
             if (botUserId == 0)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             var guildId = (message.Channel as SocketGuildChannel)?.Guild.Id;
@@ -133,32 +151,71 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 timestamp: message.Timestamp,
                 guildId: guildId);
 
-            if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage, out var reason))
-            {
-                _logger.LogInformation(
-                    "Discord message {MessageId} ignored: {Reason} (in a server channel the bot only replies when @-mentioned; DMs always work).",
-                    message.Id, reason);
-                return;
-            }
-
-            _logger.LogInformation(
-                "Discord message {MessageId} accepted from channel {ChannelId} (textLen={Length}); dispatching to conversation.",
-                message.Id, message.Channel.Id, chatMessage!.Text.Length);
-
-            // Bind the sink to the originating channel only and pass the
-            // lifetime token so the conversation cancels on host shutdown.
-            var sink = new DiscordResponseSink(message.Channel, logger: _logger);
-            await handler(chatMessage!, sink, lifetimeToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
-        {
-            _logger.LogDebug(
-                "Discord message {MessageId} cancelled on shutdown.", message.Id);
+            return OnInboundAsync(inbound, botUserId, message.Channel);
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex, "DiscordChatAdapter failed while processing message {MessageId}", message.Id);
+            return Task.CompletedTask;
+        }
+    }
+
+    internal Task OnInboundAsync(InboundDiscordMessage inbound, ulong botUserId, IMessageChannel channel)
+    {
+        var handler = _handler;
+        if (handler is null || !_lifecycle.IsRunning)
+        {
+            return Task.CompletedTask;
+        }
+        var lifetimeToken = _lifecycle.LifetimeToken;
+
+        if (!_translator.TryTranslate(inbound, botUserId, out var chatMessage, out var reason))
+        {
+            _logger.LogInformation(
+                "Discord message {MessageId} ignored: {Reason} (in a server channel the bot only replies when @-mentioned; DMs always work).",
+                inbound.MessageId, reason);
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation(
+            "Discord message {MessageId} accepted from channel {ChannelId} (textLen={Length}); dispatching to conversation.",
+            inbound.MessageId, inbound.ChannelId, chatMessage!.Text.Length);
+
+        var sink = new DiscordResponseSink(channel, logger: _logger);
+        var id = Interlocked.Increment(ref _nextConversationId);
+        var conversation = Task.Run(
+            () => RunConversationAsync(handler, chatMessage, sink, inbound.MessageId, lifetimeToken),
+            CancellationToken.None);
+        _inFlight[id] = conversation;
+        _ = conversation.ContinueWith(
+            _ => _inFlight.TryRemove(id, out var _),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        return Task.CompletedTask;
+    }
+
+    private async Task RunConversationAsync(
+        Func<ChatMessage, IResponseSink, CancellationToken, Task> handler,
+        ChatMessage chatMessage,
+        DiscordResponseSink sink,
+        ulong messageId,
+        CancellationToken lifetimeToken)
+    {
+        try
+        {
+            await handler(chatMessage, sink, lifetimeToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
+            _logger.LogDebug(
+                "Discord message {MessageId} cancelled on shutdown.", messageId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex, "DiscordChatAdapter failed while processing message {MessageId}", messageId);
         }
     }
 
