@@ -1,7 +1,9 @@
 import type { IpcMain } from 'electron';
-import { CHANNEL, VAULT_KEYS, serializeError } from '@scout/shared';
+import { CHANNEL, PUBLIC_VAULT_KEYS, VAULT_KEYS, serializeError } from '@scout/shared';
 import type {
+  PublicVaultKey,
   VaultKey,
+  VaultGetPublicResponse,
   VaultHasResponse,
   VaultDeleteResponse,
   VaultIsAvailableResponse,
@@ -11,6 +13,10 @@ import type { Logger } from '../util/logger.js';
 
 function isKnownVaultKey(key: unknown): key is VaultKey {
   return typeof key === 'string' && (VAULT_KEYS as readonly string[]).includes(key);
+}
+
+function isPublicVaultKey(key: unknown): key is PublicVaultKey {
+  return typeof key === 'string' && (PUBLIC_VAULT_KEYS as readonly string[]).includes(key);
 }
 
 export function registerVaultHandlers(
@@ -79,12 +85,34 @@ export function registerVaultHandlers(
     },
   );
 
+  ipcMain.handle(
+    CHANNEL.vaultGetPublic,
+    async (_event, req: unknown): Promise<VaultGetPublicResponse> => {
+      const r = (req ?? {}) as Record<string, unknown>;
+      if (!isPublicVaultKey(r['key'])) {
+        throw Object.assign(
+          new Error(`vault/invalid-key: "${String(r['key'])}" cannot be read back`),
+          { code: 'vault/invalid-key' },
+        );
+      }
+      const key = r['key'];
+      logger.info('vault: public read request', { key });
+      try {
+        return { value: await vault.get(key) };
+      } catch (err: unknown) {
+        const serialized = serializeError(err);
+        throw Object.assign(new Error(serialized.message), { code: serialized.code });
+      }
+    },
+  );
+
   ipcMain.handle(CHANNEL.vaultIsAvailable, async (): Promise<VaultIsAvailableResponse> => {
     return vault.availability();
   });
 
   return () => {
     ipcMain.removeHandler(CHANNEL.vaultIsAvailable);
+    ipcMain.removeHandler(CHANNEL.vaultGetPublic);
     ipcMain.removeHandler(CHANNEL.vaultDelete);
     ipcMain.removeHandler(CHANNEL.vaultHas);
     ipcMain.removeHandler(CHANNEL.vaultStore);

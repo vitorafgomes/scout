@@ -24,6 +24,7 @@ describe('buildBridge', () => {
       'vaultStore',
       'vaultHas',
       'vaultDelete',
+      'vaultGetPublic',
       'vaultIsAvailable',
       'workerStart',
       'workerStop',
@@ -48,6 +49,7 @@ describe('buildBridge', () => {
       'providerStop',
       'providerRestart',
       'providerSetAutostart',
+      'validateProviderKey',
       'featuresList',
       'featureSetCredentials',
       'featureSetup',
@@ -182,6 +184,32 @@ describe('buildBridge', () => {
     const result = await bridge.vaultHas(req);
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.vaultHas, req);
+    expect(result).toBe(expected);
+  });
+
+  it('validateProviderKey sends the request on the validateKey channel and returns the verdict', async () => {
+    const ipc = makeFakeIpc();
+    const req = { provider: 'OpenAI' as const, apiKey: 'sk-test' };
+    const expected = { ok: false as const, reason: 'invalid-key' as const };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.validateProviderKey(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.providersValidateKey, req);
+    expect(result).toBe(expected);
+  });
+
+  it('vaultGetPublic sends the key on the getPublic channel and returns the value', async () => {
+    const ipc = makeFakeIpc();
+    const req = { key: 'llm.provider' as const };
+    const expected = { value: 'OpenAI' };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
+
+    const bridge = buildBridge(ipc);
+    const result = await bridge.vaultGetPublic(req);
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.vaultGetPublic, req);
     expect(result).toBe(expected);
   });
 

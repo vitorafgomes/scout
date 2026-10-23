@@ -7,14 +7,33 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import type { ProviderKeyValidateResponse } from '@scout/shared';
 
-import { type CloudLlmProvider, LlmConfigStore } from '../core/llm-config.store';
+import {
+  type CloudLlmProvider,
+  DEFAULT_CLOUD_MODELS,
+  LlmConfigStore,
+} from '../core/llm-config.store';
 import { LocalModelsStore } from '../core/local-models.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
 
 type FilterKind = 'all' | 'local' | 'cloud';
 type CardKind = 'local' | 'cloud';
 type ConnectionState = 'connected' | 'not-connected' | 'unknown';
+type CloudState = 'in-use' | 'connected' | 'not-connected';
+type CloudForm = 'key' | 'model';
+
+interface RestartMessages {
+  readonly restarting: string;
+  readonly idle: string;
+  readonly failed: string;
+}
+
+const GUARD_RESTART_MESSAGES: RestartMessages = {
+  restarting: 'Saved. Restarting Scout to use the read-only guard.',
+  idle: 'Saved. Scout will use the read-only guard the next time it starts.',
+  failed: 'Saved. Restart Scout from the status screen to use the read-only guard.',
+};
 
 interface CardModel {
   readonly id: string;
@@ -36,8 +55,8 @@ const DEFAULT_LM_STUDIO_ENDPOINT = 'http://localhost:1234';
 const CLOUD_PROVIDERS: Readonly<
   Record<string, { readonly provider: CloudLlmProvider; readonly defaultModel: string }>
 > = Object.freeze({
-  'openai-api': { provider: 'OpenAI', defaultModel: 'gpt-4o-mini' },
-  'google-gemini': { provider: 'Gemini', defaultModel: 'gemini-2.5-flash' },
+  'openai-api': { provider: 'OpenAI', defaultModel: DEFAULT_CLOUD_MODELS.OpenAI },
+  'google-gemini': { provider: 'Gemini', defaultModel: DEFAULT_CLOUD_MODELS.Gemini },
 });
 
 /** The OpenAI, Google Gemini, OpenRouter and Ollama marks are from Simple Icons (CC0-1.0); the others are generic. */
@@ -122,12 +141,18 @@ const ICONS = Object.freeze({
                   </div>
                   <span
                     class="badge"
-                    [class.badge--ok]="stateOf(card.id) === 'connected'"
-                    [class.badge--off]="stateOf(card.id) !== 'connected'"
+                    [class.badge--ok]="stateOf(card.id) === 'connected' || localInUse(card.id)"
+                    [class.badge--off]="stateOf(card.id) !== 'connected' && !localInUse(card.id)"
                     [attr.data-test]="'badge-' + card.id"
                   >
                     <span class="badge-dot" aria-hidden="true"></span>
-                    {{ stateOf(card.id) === 'connected' ? 'Connected' : 'Not Connected' }}
+                    {{
+                      localInUse(card.id)
+                        ? 'In use'
+                        : stateOf(card.id) === 'connected'
+                          ? 'Connected'
+                          : 'Not Connected'
+                    }}
                   </span>
                 </div>
                 <h3 class="card-title">{{ card.title }}</h3>
@@ -171,6 +196,30 @@ const ICONS = Object.freeze({
                       <span>{{ card.primaryAction }}</span>
                     </button>
                   }
+                  @if (
+                    card.id === 'ollama' &&
+                    stateOf('ollama') === 'connected' &&
+                    !localInUse('ollama')
+                  ) {
+                    <button
+                      type="button"
+                      class="action action--primary"
+                      data-test="use-ollama"
+                      aria-label="Use Ollama"
+                      [disabled]="saving()"
+                      (click)="useOllama()"
+                    >
+                      Use
+                    </button>
+                  }
+                  @if (card.id === 'ollama' && savedCard() === 'ollama') {
+                    <p class="saved" role="status" data-test="saved-ollama">
+                      {{ savedMessage() }}
+                    </p>
+                    @if (actionError(); as error) {
+                      <p class="form-error" role="alert">{{ error }}</p>
+                    }
+                  }
                   @if (card.secondaryLabel && card.secondaryUrl) {
                     <button
                       type="button"
@@ -207,165 +256,316 @@ const ICONS = Object.freeze({
                   </div>
                   <span
                     class="badge"
-                    [class.badge--ok]="cloudStateOf(card.id) === 'connected'"
-                    [class.badge--off]="cloudStateOf(card.id) !== 'connected'"
+                    [class.badge--ok]="cloudStateOf(card.id) !== 'not-connected'"
+                    [class.badge--off]="cloudStateOf(card.id) === 'not-connected'"
                     [attr.data-test]="'badge-' + card.id"
                   >
                     <span class="badge-dot" aria-hidden="true"></span>
-                    {{ cloudStateOf(card.id) === 'connected' ? 'Connected' : 'Not Connected' }}
+                    {{ cloudBadgeOf(card.id) }}
                   </span>
                 </div>
                 <h3 class="card-title">{{ card.title }}</h3>
                 <p class="card-desc">{{ card.description }}</p>
                 <div class="card-actions">
-                  <button
-                    type="button"
-                    class="action action--primary action--wide"
-                    [attr.data-test]="'action-' + card.id"
-                    [disabled]="card.disabled"
-                    [title]="card.disabled && card.id !== 'chatgpt-plus' ? 'Coming soon' : ''"
-                    [attr.aria-expanded]="card.disabled ? null : openForm() === card.id"
-                    (click)="toggleKeyForm(card.id)"
-                  >
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                      <path
-                        d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    <span>{{ card.primaryAction }}</span>
-                    <svg
-                      class="chevron"
-                      viewBox="0 0 24 24"
-                      width="14"
-                      height="14"
-                      aria-hidden="true"
-                    >
-                      <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
-                    </svg>
-                  </button>
-                  @if (
-                    card.id === guardCardId &&
-                    (cloudStateOf(card.id) === 'connected' || guardCheckFailed())
-                  ) {
+                  @if (isKeyed(card.id)) {
+                    @switch (cloudStateOf(card.id)) {
+                      @case ('in-use') {
+                        <p class="in-use-model" [attr.data-test]="'in-use-model-' + card.id">
+                          Model: {{ activeModel() }}
+                        </p>
+                        <div class="form-buttons">
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'change-model-' + card.id"
+                            [attr.aria-label]="'Change ' + card.title + ' model'"
+                            [attr.aria-expanded]="formOf(card.id) === 'model'"
+                            [disabled]="saving()"
+                            (click)="toggleForm(card.id, 'model')"
+                          >
+                            Change model
+                          </button>
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'disconnect-' + card.id"
+                            [attr.aria-label]="'Disconnect ' + card.title"
+                            [disabled]="saving()"
+                            (click)="disconnectProvider(card.id)"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      }
+                      @case ('connected') {
+                        <div class="form-buttons">
+                          <button
+                            type="button"
+                            class="action action--primary"
+                            [attr.data-test]="'use-' + card.id"
+                            [attr.aria-label]="'Use ' + card.title"
+                            [disabled]="saving()"
+                            (click)="useProvider(card.id)"
+                          >
+                            Use
+                          </button>
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'disconnect-' + card.id"
+                            [attr.aria-label]="'Disconnect ' + card.title"
+                            [disabled]="saving()"
+                            (click)="disconnectProvider(card.id)"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          class="secondary"
+                          [attr.data-test]="'change-key-' + card.id"
+                          [attr.aria-label]="'Change ' + card.title + ' key'"
+                          [attr.aria-expanded]="formOf(card.id) === 'key'"
+                          [disabled]="saving()"
+                          (click)="toggleForm(card.id, 'key')"
+                        >
+                          Change key
+                        </button>
+                      }
+                      @default {
+                        <button
+                          type="button"
+                          class="action action--primary action--wide"
+                          [attr.data-test]="'action-' + card.id"
+                          [attr.aria-label]="'Connect ' + card.title"
+                          [attr.aria-expanded]="formOf(card.id) === 'key'"
+                          (click)="toggleForm(card.id, 'key')"
+                        >
+                          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                            <path
+                              d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                          <span>{{ card.primaryAction }}</span>
+                          <svg
+                            class="chevron"
+                            viewBox="0 0 24 24"
+                            width="14"
+                            height="14"
+                            aria-hidden="true"
+                          >
+                            <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
+                          </svg>
+                        </button>
+                      }
+                    }
+                    @if (formOf(card.id) === 'key') {
+                      <form
+                        class="key-form"
+                        [attr.data-test]="'key-form-' + card.id"
+                        (submit)="saveKey($event, card.id, keyInput)"
+                      >
+                        <label class="field">
+                          <span class="field-label">API key</span>
+                          <input
+                            #keyInput
+                            type="password"
+                            autocomplete="off"
+                            class="text-input"
+                            [attr.data-test]="'api-key-' + card.id"
+                          />
+                        </label>
+                        @if (formError(); as error) {
+                          <p class="form-error" role="alert">{{ error }}</p>
+                        }
+                        <div class="form-buttons">
+                          <button
+                            type="submit"
+                            class="action action--primary"
+                            [disabled]="saving()"
+                            [attr.data-test]="'save-' + card.id"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'cancel-' + card.id"
+                            (click)="cancelForm()"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    }
+                    @if (formOf(card.id) === 'model') {
+                      <form
+                        class="key-form"
+                        [attr.data-test]="'model-form-' + card.id"
+                        (submit)="saveModel($event, card.id, modelInput)"
+                      >
+                        <label class="field">
+                          <span class="field-label">Model</span>
+                          <input
+                            #modelInput
+                            type="text"
+                            class="text-input"
+                            [value]="activeModel() ?? defaultModelOf(card.id)"
+                            [attr.data-test]="'model-' + card.id"
+                          />
+                        </label>
+                        @if (formError(); as error) {
+                          <p class="form-error" role="alert">{{ error }}</p>
+                        }
+                        <div class="form-buttons">
+                          <button
+                            type="submit"
+                            class="action action--primary"
+                            [disabled]="saving()"
+                            [attr.data-test]="'save-model-' + card.id"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'cancel-model-' + card.id"
+                            (click)="cancelForm()"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    }
+                    @if (savedCard() === card.id) {
+                      <p class="saved" role="status" [attr.data-test]="'saved-' + card.id">
+                        {{ savedMessage() }}
+                      </p>
+                      @if (actionError(); as error) {
+                        <p class="form-error" role="alert">{{ error }}</p>
+                      }
+                    }
+                  } @else if (card.id === guardCardId) {
                     <button
                       type="button"
-                      class="action"
-                      data-test="disconnect-typesafe-jev"
-                      aria-label="Disconnect TypeSafe (Jev)"
-                      [disabled]="saving()"
-                      (click)="disconnectGuard()"
+                      class="action action--primary action--wide"
+                      [attr.data-test]="'action-' + card.id"
+                      [attr.aria-expanded]="formOf(card.id) === 'key'"
+                      (click)="toggleForm(card.id, 'key')"
                     >
-                      Disconnect
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path
+                          d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                      <span>{{ card.primaryAction }}</span>
+                      <svg
+                        class="chevron"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        aria-hidden="true"
+                      >
+                        <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
+                      </svg>
                     </button>
-                  }
-                  @if (card.id === guardCardId) {
+                    @if (cloudStateOf(card.id) === 'connected' || guardCheckFailed()) {
+                      <button
+                        type="button"
+                        class="action"
+                        data-test="disconnect-typesafe-jev"
+                        aria-label="Disconnect TypeSafe (Jev)"
+                        [disabled]="saving()"
+                        (click)="disconnectGuard()"
+                      >
+                        Disconnect
+                      </button>
+                    }
                     @if (guardNotice(); as notice) {
                       <p class="saved" role="status" data-test="disconnected-typesafe-jev">
                         {{ notice }}
                       </p>
-                      @if (restartError(); as error) {
+                      @if (actionError(); as error) {
                         <p class="form-error" role="alert">{{ error }}</p>
                       }
                     }
                     @if (guardError(); as error) {
                       <p class="form-error" role="alert" data-test="guard-error">{{ error }}</p>
                     }
-                  }
-                  @if (openForm() === card.id && card.id === guardCardId) {
-                    <form
-                      class="key-form"
-                      [attr.data-test]="'key-form-' + card.id"
-                      (submit)="saveGuardKey($event, guardKeyInput)"
-                    >
-                      <label class="field">
-                        <span class="field-label">API key</span>
-                        <input
-                          #guardKeyInput
-                          type="password"
-                          autocomplete="off"
-                          class="text-input"
-                          [attr.data-test]="'api-key-' + card.id"
-                        />
-                      </label>
-                      @if (formError(); as error) {
-                        <p class="form-error" role="alert">{{ error }}</p>
-                      }
-                      <div class="form-buttons">
-                        <button
-                          type="submit"
-                          class="action action--primary"
-                          [disabled]="saving()"
-                          [attr.data-test]="'save-' + card.id"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          class="action"
-                          [attr.data-test]="'cancel-' + card.id"
-                          (click)="cancelKeyForm()"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  } @else if (openForm() === card.id) {
-                    <form
-                      class="key-form"
-                      [attr.data-test]="'key-form-' + card.id"
-                      (submit)="saveKey($event, card.id, keyInput, modelInput)"
-                    >
-                      <label class="field">
-                        <span class="field-label">API key</span>
-                        <input
-                          #keyInput
-                          type="password"
-                          autocomplete="off"
-                          class="text-input"
-                          [attr.data-test]="'api-key-' + card.id"
-                        />
-                      </label>
-                      <label class="field">
-                        <span class="field-label">Model</span>
-                        <input
-                          #modelInput
-                          type="text"
-                          class="text-input"
-                          [value]="defaultModelOf(card.id)"
-                          [attr.data-test]="'model-' + card.id"
-                        />
-                      </label>
-                      @if (formError(); as error) {
-                        <p class="form-error" role="alert">{{ error }}</p>
-                      }
-                      <div class="form-buttons">
-                        <button
-                          type="submit"
-                          class="action action--primary"
-                          [disabled]="saving()"
-                          [attr.data-test]="'save-' + card.id"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          class="action"
-                          [attr.data-test]="'cancel-' + card.id"
-                          (click)="cancelKeyForm()"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  }
-                  @if (savedCard() === card.id) {
-                    <p class="saved" role="status" [attr.data-test]="'saved-' + card.id">
-                      {{ savedMessage() }}
-                    </p>
-                    @if (restartError(); as error) {
-                      <p class="form-error" role="alert">{{ error }}</p>
+                    @if (formOf(card.id) === 'key') {
+                      <form
+                        class="key-form"
+                        [attr.data-test]="'key-form-' + card.id"
+                        (submit)="saveGuardKey($event, guardKeyInput)"
+                      >
+                        <label class="field">
+                          <span class="field-label">API key</span>
+                          <input
+                            #guardKeyInput
+                            type="password"
+                            autocomplete="off"
+                            class="text-input"
+                            [attr.data-test]="'api-key-' + card.id"
+                          />
+                        </label>
+                        @if (formError(); as error) {
+                          <p class="form-error" role="alert">{{ error }}</p>
+                        }
+                        <div class="form-buttons">
+                          <button
+                            type="submit"
+                            class="action action--primary"
+                            [disabled]="saving()"
+                            [attr.data-test]="'save-' + card.id"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            class="action"
+                            [attr.data-test]="'cancel-' + card.id"
+                            (click)="cancelForm()"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     }
+                    @if (savedCard() === card.id) {
+                      <p class="saved" role="status" [attr.data-test]="'saved-' + card.id">
+                        {{ savedMessage() }}
+                      </p>
+                      @if (actionError(); as error) {
+                        <p class="form-error" role="alert">{{ error }}</p>
+                      }
+                    }
+                  } @else {
+                    <button
+                      type="button"
+                      class="action action--primary action--wide"
+                      [attr.data-test]="'action-' + card.id"
+                      [disabled]="card.disabled"
+                      [title]="card.disabled && card.id !== 'chatgpt-plus' ? 'Coming soon' : ''"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                        <path
+                          d="M7 14a5 5 0 1 1 4.9-6h7.6l2 2-3 3-2-2-2 2-2-2-1.6 1.6A5 5 0 0 1 7 14Zm0-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                          fill="currentColor"
+                        />
+                      </svg>
+                      <span>{{ card.primaryAction }}</span>
+                      <svg
+                        class="chevron"
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        aria-hidden="true"
+                      >
+                        <path d="m9 6 6 6-6 6-1.4-1.4L12.2 12 7.6 7.4Z" fill="currentColor" />
+                      </svg>
+                    </button>
                   }
                 </div>
               </article>
@@ -628,6 +828,11 @@ const ICONS = Object.freeze({
         font-size: 12px;
         color: #f87171;
       }
+      .in-use-model {
+        margin: 0;
+        font-size: 12px;
+        color: #e4e8f0;
+      }
       .saved {
         margin: 0;
         font-size: 12px;
@@ -643,12 +848,13 @@ export class SourcesComponent implements OnInit {
   private readonly llmConfig = inject(LlmConfigStore);
 
   readonly filter = signal<FilterKind>('all');
-  readonly openForm = signal<string | null>(null);
+  readonly openForm = signal<{ readonly id: string; readonly kind: CloudForm } | null>(null);
   readonly formError = signal<string | null>(null);
   readonly saving = signal<boolean>(false);
   readonly savedCard = signal<string | null>(null);
   readonly savedMessage = signal<string>('');
-  readonly restartError = signal<string | null>(null);
+  readonly actionError = signal<string | null>(null);
+  readonly activeModel = this.llmConfig.model;
   readonly scanning = signal<string | null>(null);
   readonly guardCardId = GUARD_CARD_ID;
   private readonly guardConnected = signal<boolean>(false);
@@ -739,7 +945,7 @@ export class SourcesComponent implements OnInit {
       description:
         'Provide your developer API key to build with GPT-4o, GPT-4 Turbo, and DALL·E models directly.',
       iconPath: ICONS.openai,
-      primaryAction: 'Configure API Key',
+      primaryAction: 'Connect',
       secondaryLabel: null,
       secondaryUrl: null,
       primaryIsScan: false,
@@ -751,7 +957,7 @@ export class SourcesComponent implements OnInit {
       title: 'Google Gemini',
       description: 'Fast, multimodal AI models from Google including Gemini 2.5 Pro and Flash.',
       iconPath: ICONS.gemini,
-      primaryAction: 'Add API Key',
+      primaryAction: 'Connect',
       secondaryLabel: null,
       secondaryUrl: null,
       primaryIsScan: false,
@@ -816,66 +1022,171 @@ export class SourcesComponent implements OnInit {
     return this.states()[id] ?? 'unknown';
   }
 
-  cloudStateOf(id: string): ConnectionState {
+  isKeyed(id: string): boolean {
+    return CLOUD_PROVIDERS[id] !== undefined;
+  }
+
+  cloudStateOf(id: string): CloudState {
     if (id === GUARD_CARD_ID) {
       return this.guardConnected() ? 'connected' : 'not-connected';
     }
     const provider = CLOUD_PROVIDERS[id]?.provider;
-    return provider !== undefined && provider === this.llmConfig.activeCloudProvider()
-      ? 'connected'
-      : 'not-connected';
+    if (provider === undefined) return 'not-connected';
+    if (provider === this.llmConfig.activeCloudProvider()) return 'in-use';
+    return this.llmConfig.connectedProviders().has(provider) ? 'connected' : 'not-connected';
+  }
+
+  cloudBadgeOf(id: string): string {
+    switch (this.cloudStateOf(id)) {
+      case 'in-use':
+        return 'In use';
+      case 'connected':
+        return 'Connected';
+      default:
+        return 'Not Connected';
+    }
   }
 
   defaultModelOf(id: string): string {
     return CLOUD_PROVIDERS[id]?.defaultModel ?? '';
   }
 
-  toggleKeyForm(id: string): void {
+  formOf(id: string): CloudForm | null {
+    const open = this.openForm();
+    return open !== null && open.id === id ? open.kind : null;
+  }
+
+  toggleForm(id: string, kind: CloudForm): void {
     if (CLOUD_PROVIDERS[id] === undefined && id !== GUARD_CARD_ID) return;
     this.formError.set(null);
     this.savedCard.set(null);
-    this.restartError.set(null);
+    this.actionError.set(null);
     this.guardNotice.set(null);
     this.guardError.set(null);
-    this.openForm.update((open) => (open === id ? null : id));
+    this.openForm.update((open) => (open?.id === id && open.kind === kind ? null : { id, kind }));
   }
 
-  cancelKeyForm(): void {
+  cancelForm(): void {
     this.formError.set(null);
     this.openForm.set(null);
   }
 
-  async saveKey(
-    event: Event,
-    id: string,
-    keyInput: HTMLInputElement,
-    modelInput: HTMLInputElement,
-  ): Promise<void> {
+  async saveKey(event: Event, id: string, keyInput: HTMLInputElement): Promise<void> {
     event.preventDefault();
     const provider = CLOUD_PROVIDERS[id]?.provider;
     if (provider === undefined || this.saving()) return;
-    if (keyInput.value.trim().length === 0) {
+    const apiKey = keyInput.value;
+    keyInput.value = '';
+    if (apiKey.trim().length === 0) {
       this.formError.set('Enter an API key.');
-      return;
-    }
-    if (modelInput.value.trim().length === 0) {
-      this.formError.set('Enter a model.');
       return;
     }
     this.saving.set(true);
     this.formError.set(null);
+    const wasInUse = this.llmConfig.activeCloudProvider() === provider;
+    let result: ProviderKeyValidateResponse;
     try {
-      await this.llmConfig.setCloudProvider(provider, keyInput.value, modelInput.value);
+      result = await this.llmConfig.connect(provider, apiKey);
     } catch (err: unknown) {
       this.formError.set(err instanceof Error ? err.message : 'Could not save the API key.');
       return;
     } finally {
       this.saving.set(false);
     }
+    if (!result.ok) {
+      this.formError.set(rejectionMessage(provider, result));
+      return;
+    }
     this.openForm.set(null);
-    this.savedMessage.set('Saved.');
     this.savedCard.set(id);
-    await this.restartIfRunning(provider);
+    if (wasInUse || this.llmConfig.activeCloudProvider() !== provider) {
+      this.savedMessage.set(`Connected. Choose Use to switch Scout to ${provider}.`);
+      return;
+    }
+    this.savedMessage.set('');
+    await this.restartIfRunning({
+      restarting: `Connected. Restarting Scout to use ${provider}.`,
+      idle: `Connected. Scout will use ${provider} the next time it starts.`,
+      failed: `Connected. Restart Scout from the status screen to use ${provider}.`,
+    });
+  }
+
+  async useProvider(id: string): Promise<void> {
+    const entry = CLOUD_PROVIDERS[id];
+    if (entry === undefined) return;
+    await this.applyModel(id, entry.provider, entry.defaultModel);
+  }
+
+  async saveModel(event: Event, id: string, modelInput: HTMLInputElement): Promise<void> {
+    event.preventDefault();
+    const provider = CLOUD_PROVIDERS[id]?.provider;
+    if (provider === undefined) return;
+    if (modelInput.value.trim().length === 0) {
+      this.formError.set('Enter a model.');
+      return;
+    }
+    await this.applyModel(id, provider, modelInput.value);
+  }
+
+  async disconnectProvider(id: string): Promise<void> {
+    const provider = CLOUD_PROVIDERS[id]?.provider;
+    if (provider === undefined || this.saving()) return;
+    this.beginAction(id);
+    const wasActive = this.llmConfig.activeCloudProvider() === provider;
+    let keyError: string | null = null;
+    try {
+      await this.llmConfig.disconnect(provider);
+    } catch (err: unknown) {
+      keyError = err instanceof Error ? err.message : 'Could not remove the API key.';
+    } finally {
+      this.saving.set(false);
+    }
+    const movedOff = wasActive && this.llmConfig.activeCloudProvider() !== provider;
+    if (keyError !== null && !movedOff) {
+      this.actionError.set(keyError);
+      return;
+    }
+    if (keyError !== null) {
+      this.actionError.set(
+        `Disconnected from Scout, but the stored key could not be removed: ${keyError}`,
+      );
+    }
+    if (!movedOff) {
+      this.savedMessage.set('Disconnected.');
+      return;
+    }
+    const next = this.llmConfig.activeCloudProvider();
+    const settled =
+      next === null
+        ? 'Disconnected. No AI provider is connected; Scout will say so until you connect one.'
+        : `Disconnected. Scout now answers with ${next}.`;
+    await this.restartIfRunning({
+      restarting: settled,
+      idle: settled,
+      failed: `${settled} Restart Scout from the status screen to apply it.`,
+    });
+  }
+
+  localInUse(id: string): boolean {
+    return id === 'ollama' && this.llmConfig.provider() === 'Ollama';
+  }
+
+  async useOllama(): Promise<void> {
+    if (this.saving()) return;
+    this.beginAction('ollama');
+    try {
+      await this.llmConfig.useOllama();
+    } catch (err: unknown) {
+      this.actionError.set(err instanceof Error ? err.message : 'Could not switch to Ollama.');
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    await this.restartIfRunning({
+      restarting: 'Restarting Scout to use Ollama.',
+      idle: 'Scout will use Ollama the next time it starts.',
+      failed: 'Restart Scout from the status screen to use Ollama.',
+    });
   }
 
   async saveGuardKey(event: Event, keyInput: HTMLInputElement): Promise<void> {
@@ -901,14 +1212,14 @@ export class SourcesComponent implements OnInit {
     this.openForm.set(null);
     this.savedMessage.set('Saved.');
     this.savedCard.set(GUARD_CARD_ID);
-    await this.restartIfRunning('the read-only guard');
+    await this.restartIfRunning(GUARD_RESTART_MESSAGES);
   }
 
   async disconnectGuard(): Promise<void> {
     if (this.saving()) return;
     this.saving.set(true);
     this.savedCard.set(null);
-    this.restartError.set(null);
+    this.actionError.set(null);
     this.guardNotice.set(null);
     this.guardError.set(null);
     try {
@@ -922,7 +1233,7 @@ export class SourcesComponent implements OnInit {
     this.guardConnected.set(false);
     this.guardCheckFailed.set(false);
     this.guardNotice.set('Disconnected. The read-only guard is off.');
-    await this.restartIfRunning('the read-only guard');
+    await this.restartIfRunning(GUARD_RESTART_MESSAGES);
     this.savedMessage.set('');
   }
 
@@ -937,19 +1248,46 @@ export class SourcesComponent implements OnInit {
     }
   }
 
-  private async restartIfRunning(target: string): Promise<void> {
+  private async applyModel(id: string, provider: CloudLlmProvider, model: string): Promise<void> {
+    if (this.saving()) return;
+    this.beginAction(id);
+    try {
+      await this.llmConfig.use(provider, model);
+    } catch (err: unknown) {
+      this.actionError.set(err instanceof Error ? err.message : `Could not switch to ${provider}.`);
+      return;
+    } finally {
+      this.saving.set(false);
+    }
+    await this.restartIfRunning({
+      restarting: `Restarting Scout to use ${provider}.`,
+      idle: `Scout will use ${provider} the next time it starts.`,
+      failed: `Restart Scout from the status screen to use ${provider}.`,
+    });
+  }
+
+  private beginAction(id: string): void {
+    this.saving.set(true);
+    this.openForm.set(null);
+    this.formError.set(null);
+    this.actionError.set(null);
+    this.savedMessage.set('');
+    this.savedCard.set(id);
+  }
+
+  private async restartIfRunning(messages: RestartMessages): Promise<void> {
     try {
       const { state } = await this.bridge.workerStatus();
       if (state !== 'running' && state !== 'starting') {
-        this.savedMessage.set(`Saved. Scout will use ${target} the next time it starts.`);
+        this.savedMessage.set(messages.idle);
         return;
       }
-      this.savedMessage.set(`Saved. Restarting Scout to use ${target}.`);
+      this.savedMessage.set(messages.restarting);
       await this.bridge.workerStop();
       await this.bridge.workerStart();
     } catch (err: unknown) {
-      this.savedMessage.set(`Saved. Restart Scout from the status screen to use ${target}.`);
-      this.restartError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
+      this.savedMessage.set(messages.failed);
+      this.actionError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
     }
   }
 
@@ -999,5 +1337,21 @@ export class SourcesComponent implements OnInit {
 
   private patchState(id: string, state: ConnectionState): void {
     this.states.update((prev) => ({ ...prev, [id]: state }));
+  }
+}
+
+function rejectionMessage(
+  provider: CloudLlmProvider,
+  result: Extract<ProviderKeyValidateResponse, { ok: false }>,
+): string {
+  switch (result.reason) {
+    case 'invalid-key':
+      return `That key was rejected by ${provider}.`;
+    case 'unreachable':
+      return `${provider} could not be reached; check the connection and try again.`;
+    default:
+      return result.status === undefined
+        ? `${provider} gave an unexpected answer; the key was not saved.`
+        : `${provider} answered with HTTP ${result.status}; the key was not saved.`;
   }
 }

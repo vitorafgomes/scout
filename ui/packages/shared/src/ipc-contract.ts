@@ -1,4 +1,4 @@
-import type { DetectedClient, VaultKey } from './client-kinds.js';
+import type { CloudLlmProvider, DetectedClient, PublicVaultKey, VaultKey } from './client-kinds.js';
 
 export type { VaultKey };
 
@@ -10,6 +10,7 @@ export const CHANNEL = {
   vaultStore: 'scout:vault.store',
   vaultHas: 'scout:vault.has',
   vaultDelete: 'scout:vault.delete',
+  vaultGetPublic: 'scout:vault.getPublic',
   vaultIsAvailable: 'scout:vault.isAvailable',
   workerStart: 'scout:worker.start',
   workerStop: 'scout:worker.stop',
@@ -36,6 +37,7 @@ export const CHANNEL = {
   providerStop: 'scout:providers.stop',
   providerRestart: 'scout:providers.restart',
   providerSetAutostart: 'scout:providers.setAutostart',
+  providersValidateKey: 'scout:providers.validateKey',
   featuresList: 'scout:features.list',
   featureSetCredentials: 'scout:features.setCredentials',
   featureSetup: 'scout:features.setup',
@@ -92,6 +94,14 @@ export interface VaultDeleteRequest {
 
 export interface VaultDeleteResponse {
   readonly deleted: boolean;
+}
+
+export interface VaultGetPublicRequest {
+  readonly key: PublicVaultKey;
+}
+
+export interface VaultGetPublicResponse {
+  readonly value: string | null;
 }
 
 export interface VaultIsAvailableResponse {
@@ -281,6 +291,19 @@ export interface ProvidersListResponse {
   readonly providers: readonly ProviderStatusDto[];
 }
 
+export interface ProviderKeyValidateRequest {
+  readonly provider: CloudLlmProvider;
+  readonly apiKey: string;
+}
+
+export type ProviderKeyValidateResponse =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason: 'invalid-key' | 'unreachable' | 'unexpected';
+      readonly status?: number;
+    };
+
 export type FeatureId = 'github' | 'kubernetes';
 export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
 export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
@@ -354,6 +377,7 @@ export interface ScoutBridge {
   vaultStore(req: VaultStoreRequest): Promise<void>;
   vaultHas(req: VaultHasRequest): Promise<VaultHasResponse>;
   vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse>;
+  vaultGetPublic(req: VaultGetPublicRequest): Promise<VaultGetPublicResponse>;
   vaultIsAvailable(): Promise<VaultIsAvailableResponse>;
   workerStart(): Promise<WorkerStartResponse>;
   workerStop(): Promise<WorkerStopResponse>;
@@ -378,6 +402,7 @@ export interface ScoutBridge {
   providerStop(req: ProviderStopRequest): Promise<ProviderStatusDto>;
   providerRestart(req: ProviderRestartRequest): Promise<ProviderStatusDto>;
   providerSetAutostart(req: ProviderAutostartRequest): Promise<void>;
+  validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse>;
   featuresList(): Promise<FeaturesListResponse>;
   featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
   featureSetup(req: FeatureSetupRequest): Promise<FeatureDto>;

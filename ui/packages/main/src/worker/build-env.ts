@@ -1,4 +1,9 @@
-import { VaultUnavailableError, type VaultKey } from '@scout/shared';
+import {
+  CLOUD_API_KEY_VAULT_KEYS,
+  VaultUnavailableError,
+  type CloudLlmProvider,
+  type VaultKey,
+} from '@scout/shared';
 
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
@@ -39,6 +44,8 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
       if (llmEndpoint !== null) env['SCOUT__LLM__OLLAMA__ENDPOINT'] = llmEndpoint;
       return env;
     }
+    case 'None':
+      return env;
     case 'OpenAI':
       env['SCOUT__LLM__OPENAI__APIKEY'] = await requireApiKey(vaultGet, llmProvider);
       env['SCOUT__LLM__OPENAI__CHAT__MODEL'] = (await vaultGet('llm.cloud-model')) ?? 'gpt-4o-mini';
@@ -56,13 +63,31 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
 
 async function requireApiKey(
   vaultGet: BuildEnvDeps['vaultGet'],
-  provider: string,
+  provider: CloudLlmProvider,
 ): Promise<string> {
-  const apiKey = await vaultGet('llm.api-key');
+  const apiKey =
+    (await vaultGet(CLOUD_API_KEY_VAULT_KEYS[provider])) ?? (await vaultGet('llm.api-key'));
   if (apiKey === null) {
     throw new VaultUnavailableError(
       `No API key stored for ${provider}: add the key on the AI Sources screen first`,
     );
   }
   return apiKey;
+}
+
+export interface LegacyKeyVault {
+  get(key: VaultKey): Promise<string | null>;
+  store(key: VaultKey, value: string): Promise<void>;
+  delete(key: VaultKey): Promise<boolean>;
+}
+
+/** Moves the single shared `llm.api-key` of an earlier version into the active cloud provider's own slot, then deletes it; safe to run on every start. */
+export async function migrateLegacyApiKey(vault: LegacyKeyVault): Promise<void> {
+  const provider = await vault.get('llm.provider');
+  if (provider !== 'OpenAI' && provider !== 'Gemini') return;
+  const legacy = await vault.get('llm.api-key');
+  if (legacy === null) return;
+  const ownKey = CLOUD_API_KEY_VAULT_KEYS[provider];
+  if ((await vault.get(ownKey)) === null) await vault.store(ownKey, legacy);
+  await vault.delete('llm.api-key');
 }

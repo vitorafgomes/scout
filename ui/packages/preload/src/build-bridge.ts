@@ -42,6 +42,10 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.vaultDelete, req) as ReturnType<ScoutBridge['vaultDelete']>;
     },
 
+    vaultGetPublic(req) {
+      return ipc.invoke(CHANNEL.vaultGetPublic, req) as ReturnType<ScoutBridge['vaultGetPublic']>;
+    },
+
     vaultIsAvailable() {
       return ipc.invoke(CHANNEL.vaultIsAvailable) as ReturnType<ScoutBridge['vaultIsAvailable']>;
     },
@@ -167,6 +171,12 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     providerSetAutostart(req) {
       return ipc.invoke(CHANNEL.providerSetAutostart, req) as ReturnType<
         ScoutBridge['providerSetAutostart']
+      >;
+    },
+
+    validateProviderKey(req) {
+      return ipc.invoke(CHANNEL.providersValidateKey, req) as ReturnType<
+        ScoutBridge['validateProviderKey']
       >;
     },
 

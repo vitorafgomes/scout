@@ -9,6 +9,8 @@ export type VaultKey =
   | 'llm.model'
   | 'llm.endpoint'
   | 'llm.api-key'
+  | 'llm.openai.api-key'
+  | 'llm.gemini.api-key'
   | 'llm.cloud-model'
   | 'stt.provider'
   | 'stt.model'
@@ -23,11 +25,31 @@ export const VAULT_KEYS: readonly VaultKey[] = Object.freeze([
   'llm.model',
   'llm.endpoint',
   'llm.api-key',
+  'llm.openai.api-key',
+  'llm.gemini.api-key',
   'llm.cloud-model',
   'stt.provider',
   'stt.model',
   'guard.typesafe-api-key',
 ] as const);
+
+export type PublicVaultKey = 'llm.provider' | 'llm.cloud-model';
+
+/** The only vault keys the renderer may read back: non-secret settings, never a key or token. */
+export const PUBLIC_VAULT_KEYS: readonly PublicVaultKey[] = Object.freeze([
+  'llm.provider',
+  'llm.cloud-model',
+] as const);
+
+export type CloudLlmProvider = 'OpenAI' | 'Gemini';
+
+/** The vault key that holds each cloud provider's own API key. */
+export const CLOUD_API_KEY_VAULT_KEYS: Readonly<Record<CloudLlmProvider, VaultKey>> = Object.freeze(
+  {
+    OpenAI: 'llm.openai.api-key',
+    Gemini: 'llm.gemini.api-key',
+  },
+);
 
 export const CLIENT_KINDS: readonly ClientKind[] = Object.freeze([
   'discord',

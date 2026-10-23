@@ -1,6 +1,6 @@
 import { describe, it, expect, spyOn } from 'bun:test';
-import { buildEnv } from '../src/worker/build-env.js';
-import { VaultUnavailableError } from '@scout/shared';
+import { buildEnv, migrateLegacyApiKey } from '../src/worker/build-env.js';
+import { VaultUnavailableError, type VaultKey } from '@scout/shared';
 
 function makeVault(
   entries: Record<string, string | null>,
@@ -261,4 +261,190 @@ describe('buildEnv', () => {
     const serialised = JSON.stringify(Object.keys(env));
     expect(serialised).not.toContain(SECRET);
   });
+  it('one key per provider: OpenAI reads its own key, not the Gemini one', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-own');
+    expect(JSON.stringify(env)).not.toContain('gemini-own');
+  });
+
+  it('one key per provider: Gemini reads its own key, not the OpenAI one', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'Gemini',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env['SCOUT__LLM__GEMINI__APIKEY']).toBe('gemini-own');
+    expect(JSON.stringify(env)).not.toContain('sk-openai-own');
+  });
+
+  it('one key per provider: OpenAI active with only a Gemini key stored fails naming OpenAI', async () => {
+    let thrown: unknown = null;
+    try {
+      await buildEnv({
+        vaultGet: makeVault({
+          'discord.bot-token': 'tok',
+          'llm.provider': 'OpenAI',
+          'llm.gemini.api-key': 'gemini-own',
+        }),
+      });
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(VaultUnavailableError);
+    expect((thrown as Error).message).toContain('OpenAI');
+    expect((thrown as Error).message).not.toContain('gemini-own');
+  });
+
+  it('a provider own key wins over the legacy shared key', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'OpenAI',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.api-key': 'sk-legacy',
+      }),
+    });
+    expect(env['SCOUT__LLM__OPENAI__APIKEY']).toBe('sk-openai-own');
+  });
+
+  it('provider None: the worker gets SCOUT__LLM__PROVIDER=None and no provider variables, even with keys and models stored', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.provider': 'None',
+        'llm.model': 'llama3.1',
+        'llm.endpoint': 'http://localhost:11434',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.cloud-model': 'gpt-4o',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'None',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+
+  it('no provider and both provider keys stored still gives the plain Ollama env', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({
+        'discord.bot-token': 'tok',
+        'llm.openai.api-key': 'sk-openai-own',
+        'llm.gemini.api-key': 'gemini-own',
+      }),
+    });
+    expect(env).toEqual({
+      SCOUT__LLM__PROVIDER: 'Ollama',
+      DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
+    });
+  });
+});
+
+function makeVaultStore(initial: Partial<Record<VaultKey, string>>) {
+  const entries = new Map<VaultKey, string>(Object.entries(initial) as [VaultKey, string][]);
+  const writes: string[] = [];
+  return {
+    entries,
+    writes,
+    vault: {
+      get: async (key: VaultKey) => entries.get(key) ?? null,
+      store: async (key: VaultKey, value: string) => {
+        writes.push(`store ${key}`);
+        entries.set(key, value);
+      },
+      delete: async (key: VaultKey) => {
+        writes.push(`delete ${key}`);
+        return entries.delete(key);
+      },
+    },
+  };
+}
+
+describe('migrateLegacyApiKey', () => {
+  for (const [provider, ownKey] of [
+    ['OpenAI', 'llm.openai.api-key'],
+    ['Gemini', 'llm.gemini.api-key'],
+  ] as const) {
+    it(`existing users keep their key: the legacy key moves to the ${provider} slot and the legacy entry is deleted`, async () => {
+      const { entries, vault } = makeVaultStore({
+        'llm.provider': provider,
+        'llm.api-key': 'legacy-key',
+      });
+
+      await migrateLegacyApiKey(vault);
+
+      expect(entries.get(ownKey)).toBe('legacy-key');
+      expect(entries.has('llm.api-key')).toBe(false);
+    });
+  }
+
+  it('is idempotent: a second run writes nothing', async () => {
+    const { entries, writes, vault } = makeVaultStore({
+      'llm.provider': 'OpenAI',
+      'llm.api-key': 'legacy-key',
+    });
+    await migrateLegacyApiKey(vault);
+    writes.length = 0;
+
+    await migrateLegacyApiKey(vault);
+
+    expect(writes).toEqual([]);
+    expect(entries.get('llm.openai.api-key')).toBe('legacy-key');
+  });
+
+  it('a provider that already has its own key keeps it, and the stale legacy key is deleted', async () => {
+    const { entries, vault } = makeVaultStore({
+      'llm.provider': 'OpenAI',
+      'llm.openai.api-key': 'own-key',
+      'llm.api-key': 'legacy-key',
+    });
+
+    await migrateLegacyApiKey(vault);
+
+    expect(entries.get('llm.openai.api-key')).toBe('own-key');
+    expect(entries.has('llm.api-key')).toBe(false);
+  });
+
+  it('a failed copy rejects and never deletes the legacy key, so the only stored key survives', async () => {
+    const { entries, writes, vault } = makeVaultStore({
+      'llm.provider': 'Gemini',
+      'llm.api-key': 'legacy-key',
+    });
+    const failingVault = {
+      ...vault,
+      store: async () => {
+        throw new Error('keyring locked');
+      },
+    };
+
+    await expect(migrateLegacyApiKey(failingVault)).rejects.toThrow('keyring locked');
+
+    expect(writes).not.toContain('delete llm.api-key');
+    expect(entries.get('llm.api-key')).toBe('legacy-key');
+  });
+
+  for (const provider of ['Ollama', null]) {
+    it(`is a no-op when the provider is ${String(provider)}`, async () => {
+      const { entries, writes, vault } = makeVaultStore({
+        ...(provider === null ? {} : { 'llm.provider': provider }),
+        'llm.api-key': 'legacy-key',
+      });
+
+      await migrateLegacyApiKey(vault);
+
+      expect(writes).toEqual([]);
+      expect(entries.get('llm.api-key')).toBe('legacy-key');
+    });
+  }
 });

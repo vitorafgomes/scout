@@ -20,6 +20,7 @@ import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
+import { registerProviderKeyHandlers } from './ipc/provider-keys.js';
 import { WorkerHttpClient } from './worker/http-client.js';
 import { awaitCallback, findFreePort } from './oauth/loopback-server.js';
 import { createProductionDeps } from './detect/deps.js';
@@ -27,7 +28,7 @@ import { createVault } from './vault/safe-storage-vault.js';
 import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
 import { resolveWorkerBinary } from './worker/resolve-binary.js';
-import { buildEnv } from './worker/build-env.js';
+import { buildEnv, migrateLegacyApiKey } from './worker/build-env.js';
 import type { Supervisor } from './worker/supervisor.js';
 
 const logger = createLogger('main');
@@ -99,6 +100,7 @@ let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
+let unregisterProviderKeys: (() => void) | null = null;
 
 app
   .whenReady()
@@ -124,6 +126,11 @@ app
 
     const vault = createVault(createProductionVaultDeps(logger.child({ module: 'vault' })));
     unregisterVault = registerVaultHandlers(ipcMain, vault, logger.child({ module: 'vault' }));
+    await migrateLegacyApiKey(vault).catch((err: unknown) => {
+      logger.warn('vault: legacy API key not migrated', {
+        error: err instanceof Error ? err.name : typeof err,
+      });
+    });
 
     unregisterDetect = registerDetectHandler(
       ipcMain,
@@ -185,6 +192,11 @@ app
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
+    unregisterProviderKeys = registerProviderKeyHandlers(
+      ipcMain,
+      globalThis.fetch,
+      logger.child({ module: 'provider-keys' }),
+    );
     unregisterLmStudio = registerLmStudioHandlers(
       ipcMain,
       globalThis.fetch,
@@ -267,6 +279,7 @@ app.on('before-quit', (event) => {
     runningWorker.status.state === 'idle'
   ) {
     // No running worker — unregister synchronously and allow the quit.
+    unregisterProviderKeys?.();
     unregisterFeatures?.();
     unregisterProviders?.();
     unregisterWhisper?.();
@@ -289,6 +302,7 @@ app.on('before-quit', (event) => {
       logger.warn('before-quit: worker stop failed', { err: String(err) });
     })
     .finally(() => {
+      unregisterProviderKeys?.();
       unregisterFeatures?.();
       unregisterProviders?.();
       unregisterWhisper?.();

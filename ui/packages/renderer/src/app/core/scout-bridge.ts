@@ -27,6 +27,8 @@ import {
   type ScoutBridge,
   type VaultDeleteRequest,
   type VaultDeleteResponse,
+  type VaultGetPublicRequest,
+  type VaultGetPublicResponse,
   type VaultHasRequest,
   type VaultHasResponse,
   type VaultIsAvailableResponse,
@@ -42,6 +44,8 @@ import {
   type ProviderStopRequest,
   type ProviderRestartRequest,
   type ProviderAutostartRequest,
+  type ProviderKeyValidateRequest,
+  type ProviderKeyValidateResponse,
   type FeatureDto,
   type FeatureIdRequest,
   type FeatureSetCredentialsRequest,
@@ -81,6 +85,8 @@ function createFakeBridge(): ScoutBridge {
     vaultStore: (_req: VaultStoreRequest): Promise<void> => rejectNotAvailable(),
     vaultHas: (_req: VaultHasRequest): Promise<VaultHasResponse> => rejectNotAvailable(),
     vaultDelete: (_req: VaultDeleteRequest): Promise<VaultDeleteResponse> => rejectNotAvailable(),
+    vaultGetPublic: (_req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> =>
+      rejectNotAvailable(),
     vaultIsAvailable: (): Promise<VaultIsAvailableResponse> => rejectNotAvailable(),
     workerStart: (): Promise<WorkerStartResponse> => rejectNotAvailable(),
     workerStop: (): Promise<WorkerStopResponse> => rejectNotAvailable(),
@@ -132,6 +138,8 @@ function createFakeBridge(): ScoutBridge {
     providerRestart: (_req: ProviderRestartRequest): Promise<ProviderStatusDto> =>
       rejectNotAvailable(),
     providerSetAutostart: (_req: ProviderAutostartRequest): Promise<void> => rejectNotAvailable(),
+    validateProviderKey: (_req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> =>
+      rejectNotAvailable(),
     featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
     featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
       rejectNotAvailable(),
@@ -164,6 +172,10 @@ export class ScoutBridgeService {
 
   async vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse> {
     return this.bridge.vaultDelete(req);
+  }
+
+  async vaultGetPublic(req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> {
+    return this.bridge.vaultGetPublic(req);
   }
 
   async appOpenExternal(req: AppOpenExternalRequest): Promise<void> {
@@ -260,6 +272,10 @@ export class ScoutBridgeService {
 
   async providerSetAutostart(req: ProviderAutostartRequest): Promise<void> {
     return this.bridge.providerSetAutostart(req);
+  }
+
+  async validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> {
+    return this.bridge.validateProviderKey(req);
   }
 
   async featuresList(): Promise<FeaturesListResponse> {
