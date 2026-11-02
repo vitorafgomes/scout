@@ -2,10 +2,10 @@
 title: "Descriptive vs executive writes - refining the read-only invariant"
 version: "1.0"
 date: 2026-05-23
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-11-02
+changes: "Superseded by ADR 0032 on 2026-11-02: the classification stays, the absolute prohibition does not"
 page_type: adr
-status: accepted
+status: deprecated
 description: "Refines Scout's read-only invariant by distinguishing descriptive writes from executive writes."
 source:
   - "obsidian-vault/scout/06-decisions/2026-05-23-descriptive-vs-executive-writes.md"
@@ -13,6 +13,8 @@ reliability: medium
 ---
 
 # Descriptive vs executive writes - refining the read-only invariant
+
+> Superseded on 2026-11-02 by [[pages/decisions/0032-per-feature-write-permissions]]: the descriptive/executive classification below still names what a write is; the absolute prohibition of executive writes is replaced by per-feature grants and per-action approvals in the desktop.
 
 ## Context
 

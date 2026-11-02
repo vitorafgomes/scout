@@ -1,9 +1,9 @@
 ---
 title: "Scout performs descriptive writes only"
-version: "1.6"
+version: "1.7"
 date: 2026-10-21
 updated: 2026-11-02
-changes: "YouTube plugin read-only by construction; its OAuth POSTs classified as authentication (ADR 0030)"
+changes: "Scope note: ADR 0032 allows declared, granted and approved writes; this page still describes the read-only features"
 page_type: invariant
 status: active
 description: "Scout may write content that a human or another agent reads and decides on; it never mutates code, infrastructure, configuration or data on the host. The code upholds this by omission, plus an optional model-judged guard on requests."
@@ -37,6 +37,8 @@ reliability: high
 ---
 
 # Scout performs descriptive writes only
+
+> Scope change on 2026-11-02 ([[pages/decisions/0032-per-feature-write-permissions]]): this page describes the features that exist today, all read-only. From ADR 0032 on, a feature may declare writes in the catalog; such a feature is granted by the owner in the desktop, its irreversible actions are approved one by one there, and every write is logged. An undeclared write stays forbidden. The page is rewritten when the first write-capable feature ships.
 
 > Every write Scout makes is content a person or another agent reads and decides on (a chat reply, an issue body); no code path may mutate code, infrastructure, configuration or data on the host or in a connected system.
 

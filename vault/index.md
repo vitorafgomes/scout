@@ -116,6 +116,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0029-project-site-and-releases|ADR 0029 - Project site and releases]] - Site in docs/ on Pages; v* tags publish packages.
 - [[pages/decisions/0030-youtube-plugin-read-only-with-browser-sign-in|ADR 0030 YouTube plugin]] - Read-only YouTube plugin over the official APIs; browser sign-in from the desktop; key for public data.
 - [[pages/decisions/0031-desktop-self-update|ADR 0031 Desktop self-update]] - The desktop replaces its own executable only on the user's click, from a checksummed release; macOS and .deb keep Download.
+- [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 Per-feature write permissions]] - Features declare their writes; the owner grants each one and approves irreversible actions in the desktop.
 
 ## Domain
 
@@ -140,6 +141,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
 - [[pages/roadmap/youtube-creator-assistant|YouTube creator assistant]] - Initiative: claude-youtube surveyed; read-only YouTube plugin with browser sign-in, dated benchmarks.
 - [[pages/roadmap/desktop-auto-update|Desktop update notice and one-click update]] - Initiative: version check against GitHub Releases, what is new, user-approved update.
+- [[pages/roadmap/youtube-channel-operator|YouTube channel operator]] - Initiative: research, script, narration, visuals, video, review, approved publish, learn loop.
 
 ## History
 
