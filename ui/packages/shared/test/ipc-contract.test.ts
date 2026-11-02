@@ -19,6 +19,7 @@ describe('CHANNEL constant', () => {
       [
         'accessGet',
         'accessSet',
+        'accessStartPairing',
         'appGetVersion',
         'appOpenExternal',
         'appQuit',
@@ -27,11 +28,15 @@ describe('CHANNEL constant', () => {
         'chatgptSignIn',
         'chatgptSignOut',
         'chatgptStatus',
+        'desktopGetSettings',
+        'desktopSetKeepRunning',
+        'desktopSetStartAtLogin',
         'detectClients',
         'diagnosticsExport',
-        'discordBuildOAuthUrl',
-        'discordCancelOAuthInstall',
-        'discordStartOAuthInstall',
+        'discordCheckToken',
+        'discordEnableIntent',
+        'discordGuilds',
+        'discordInviteUrl',
         'featureDeleteCredentials',
         'featureDisable',
         'featureEnable',
@@ -47,6 +52,17 @@ describe('CHANNEL constant', () => {
         'kubernetesDisconnect',
         'kubernetesStatus',
         'kubernetesUse',
+        'localAsk',
+        'localCancel',
+        'localClearTurns',
+        'localGetBubble',
+        'localGetShortcut',
+        'localGetTurns',
+        'localHide',
+        'localOpen',
+        'localSetBubble',
+        'localSetShortcut',
+        'localTurns',
         'llmDeleteOllamaModel',
         'llmDetectEnvironment',
         'llmListLmStudioModels',
@@ -62,6 +78,10 @@ describe('CHANNEL constant', () => {
         'providersList',
         'providersValidateKey',
         'shellOpenExternal',
+        'slackDisconnect',
+        'slackManifestUrl',
+        'slackSave',
+        'slackStatus',
         'whisperDeleteModel',
         'whisperDownloadModel',
         'whisperDownloadProgress',
@@ -80,15 +100,25 @@ describe('CHANNEL constant', () => {
   });
 });
 
+describe('local conversation channels', () => {
+  test('one conversation for every window: get, clear and the pushed list, with no per-window event channel', () => {
+    expect(CHANNEL.localGetTurns).toBe('scout:local.getTurns');
+    expect(CHANNEL.localClearTurns).toBe('scout:local.clearTurns');
+    expect(CHANNEL.localTurns).toBe('scout:local.turns');
+    expect(Object.values(CHANNEL)).not.toContain('scout:local.event');
+  });
+});
+
 describe('ChannelName type', () => {
   test('accepts exact literal values only (compile-time check)', () => {
     // Compile-time: each literal is a valid ChannelName. If any CHANNEL value
     // drifts from this map, tsc fails.
     const valid: Record<ChannelName, true> = {
       'scout:detect.clients': true,
-      'scout:discord.buildOAuthUrl': true,
-      'scout:discord.startOAuthInstall': true,
-      'scout:discord.cancelOAuthInstall': true,
+      'scout:discord.checkToken': true,
+      'scout:discord.enableIntent': true,
+      'scout:discord.inviteUrl': true,
+      'scout:discord.guilds': true,
       'scout:chatgpt.signIn': true,
       'scout:chatgpt.cancelSignIn': true,
       'scout:chatgpt.listModels': true,
@@ -143,6 +173,25 @@ describe('ChannelName type', () => {
       'scout:kubernetes.disconnect': true,
       'scout:access.get': true,
       'scout:access.set': true,
+      'scout:access.startPairing': true,
+      'scout:slack.manifestUrl': true,
+      'scout:slack.save': true,
+      'scout:slack.status': true,
+      'scout:slack.disconnect': true,
+      'scout:desktop.getSettings': true,
+      'scout:desktop.setKeepRunning': true,
+      'scout:desktop.setStartAtLogin': true,
+      'scout:local.ask': true,
+      'scout:local.cancel': true,
+      'scout:local.getTurns': true,
+      'scout:local.clearTurns': true,
+      'scout:local.turns': true,
+      'scout:local.hide': true,
+      'scout:local.getShortcut': true,
+      'scout:local.setShortcut': true,
+      'scout:local.open': true,
+      'scout:local.getBubble': true,
+      'scout:local.setBubble': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });

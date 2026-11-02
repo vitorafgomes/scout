@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Tests.Fakes;
@@ -107,9 +108,34 @@ public sealed class ConversationServiceCollectionExtensionsTests
         options.MaxReplayedChars.ShouldBe(1234);
     }
 
+    [Fact]
+    public async Task Resolved_Conductor_Reads_The_Pairing_Code_And_Expiry_From_The_Scout_Access_Section()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Access:PairingCode"] = "482913",
+                ["Scout:Access:PairingExpiresAt"] = "2999-01-01T00:10:00.000Z",
+            })
+            .Build();
+        var signal = Substitute.For<IPairingSignal>();
+        var services = new ServiceCollection();
+        services.AddSingleton(Substitute.For<IChatGateway>());
+        services.AddSingleton(signal);
+        services.AddScoutConversation(config);
+        using var provider = services.BuildServiceProvider();
+        var sink = new RecordingResponseSink(new RenderCapabilities { FineGrainedEdit = true });
+
+        await provider.GetRequiredService<ConversationConductor>().HandleAsync(
+            new ChatMessage("111", "c1", "pair 482913", IsDirectMessage: true), sink, CancellationToken.None);
+
+        sink.FinalText.ShouldBe("Paired. Scout will answer you from now on.");
+    }
+
     [Theory]
     [InlineData("Scout:Access:RequireAllowList", "true",
-        "Scout has no allowed users yet. The owner can add them in the Scout desktop app under Settings.")]
+        "Scout is not set up for anyone yet. If you are the owner, open the Scout desktop app, go to Settings, "
+        + "choose Pair from chat and send the 6-digit code here in a direct message.")]
     [InlineData("Scout:Access:AllowedUserIds:0", "111", "Scout only answers its configured users.")]
     public async Task Resolved_Conductor_Applies_The_Scout_Access_Section(
         string key, string value, string expectedReply)

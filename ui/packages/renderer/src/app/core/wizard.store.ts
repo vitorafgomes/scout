@@ -14,6 +14,16 @@ export interface LoadFromVaultResult {
   readonly hasProvisioning: boolean;
 }
 
+const LOCAL_ONLY_KEY = 'scout:local-only';
+
+function readLocalOnly(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(LOCAL_ONLY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 const WIZARD_STEP_ORDER: readonly WizardStep[] = Object.freeze([
   'welcome',
   'provision',
@@ -31,15 +41,17 @@ export class WizardStore {
   private readonly _currentStep = signal<WizardStep>('welcome');
   private readonly _clientId = signal<string | null>(null);
   private readonly _guild = signal<WizardGuild | null>(null);
-  private readonly _intentsAcknowledged = signal<boolean>(false);
   // True once loadFromVault confirms the vault holds discord.bot-token.
   // Allows launch without clientId/guild (token-only provisioning).
   private readonly _hasToken = signal<boolean>(false);
+  private readonly _slackConnected = signal<boolean>(false);
+  private readonly _localOnly = signal<boolean>(readLocalOnly());
+  private landed = false;
 
   readonly currentStep = this._currentStep.asReadonly();
   readonly clientId = this._clientId.asReadonly();
   readonly guild = this._guild.asReadonly();
-  readonly intentsAcknowledged = this._intentsAcknowledged.asReadonly();
+  readonly slackConnected = this._slackConnected.asReadonly();
 
   readonly activeStepIndex = computed<number>(() => {
     const step = this._currentStep();
@@ -48,9 +60,46 @@ export class WizardStore {
   });
 
   // Token alone is sufficient to launch; clientId/guild are optional metadata.
-  readonly hasProvisioning = computed<boolean>(
+  readonly hasDiscord = computed<boolean>(
     () => this._hasToken() || (this._clientId() !== null && this._guild() !== null),
   );
+
+  /**
+   * True when Scout can run: a chat platform, Discord or Slack, is set up, or the owner chose
+   * to use Scout only from this computer through quick ask.
+   */
+  readonly hasProvisioning = computed<boolean>(
+    () => this.hasDiscord() || this._slackConnected() || this._localOnly(),
+  );
+
+  /** True when the owner skipped chat setup and has connected neither Discord nor Slack since. */
+  readonly usesOnlyThisComputer = computed<boolean>(
+    () => this._localOnly() && !this.hasDiscord() && !this._slackConnected(),
+  );
+
+  /**
+   * The screen the app opens on, answered once per launch and after `loadFromVault`: Chat when
+   * the owner uses Scout only from this computer, otherwise null to stay where the app is.
+   */
+  takeLandingUrl(): string | null {
+    if (this.landed) return null;
+    this.landed = true;
+    return this.usesOnlyThisComputer() ? '/chat' : null;
+  }
+
+  /** Remembers that the owner skipped chat setup and uses Scout only from this computer. */
+  useLocalOnly(): void {
+    this._localOnly.set(true);
+    try {
+      globalThis.localStorage?.setItem(LOCAL_ONLY_KEY, '1');
+    } catch {
+      // storage unavailable: the choice lasts for this session only
+    }
+  }
+
+  setSlackConnected(connected: boolean): void {
+    this._slackConnected.set(connected);
+  }
 
   goTo(step: WizardStep): void {
     this._currentStep.set(step);
@@ -64,10 +113,6 @@ export class WizardStore {
     this._guild.set(guild);
   }
 
-  markIntentsAcknowledged(): void {
-    this._intentsAcknowledged.set(true);
-  }
-
   // Pure renderer-side reset: clears in-memory signals only. Does NOT touch
   // the vault and does NOT stop the worker. Used when navigating away from
   // a wizard step without destroying provisioning state.
@@ -75,7 +120,6 @@ export class WizardStore {
     this._currentStep.set('welcome');
     this._clientId.set(null);
     this._guild.set(null);
-    this._intentsAcknowledged.set(false);
     this._hasToken.set(false);
   }
 
@@ -86,7 +130,6 @@ export class WizardStore {
     this._currentStep.set('welcome');
     this._clientId.set(null);
     this._guild.set(null);
-    this._intentsAcknowledged.set(false);
     this._hasToken.set(false);
 
     // Best-effort clear; swallow errors so reprovisioning never throws back
@@ -114,6 +157,7 @@ export class WizardStore {
   // are non-secrets mirrored in localStorage so the renderer can display
   // them and hint the worker without ever reading vault contents.
   async loadFromVault(): Promise<LoadFromVaultResult> {
+    const slack = this.readSlackConnected();
     let hasToken = false;
     try {
       const res = await this.bridge.vaultHas({ key: 'discord.bot-token' });
@@ -122,8 +166,11 @@ export class WizardStore {
       hasToken = false;
     }
 
+    const slackConnected = await slack;
+    this._slackConnected.set(slackConnected);
+
     if (!hasToken) {
-      return { hasProvisioning: false };
+      return { hasProvisioning: slackConnected || this._localOnly() };
     }
 
     this._hasToken.set(true);
@@ -136,6 +183,14 @@ export class WizardStore {
     }
 
     return { hasProvisioning: true };
+  }
+
+  private async readSlackConnected(): Promise<boolean> {
+    try {
+      return (await this.bridge.slackStatus()).connected === true;
+    } catch {
+      return false;
+    }
   }
 }
 

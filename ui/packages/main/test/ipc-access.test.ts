@@ -1,17 +1,22 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { CHANNEL, VaultUnavailableError, readIpcError, type WorkerStatus } from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { readAllowedUserIds, registerAccessHandlers } from '../src/ipc/access.js';
 import { restartWorkerIfRunning } from '../src/ipc/github.js';
 import { buildEnv } from '../src/worker/build-env.js';
+import { createSupervisor } from '../src/worker/supervisor.js';
 import { recordingLogger } from './kubernetes-fakes.js';
 
 type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
 const NULL_EVENT = null as unknown as IpcMainInvokeEvent;
 
-function setup(workerState: WorkerStatus['state'] = 'running') {
+const T0 = Date.parse('2026-10-28T12:00:00.000Z');
+
+function setup(workerState: WorkerStatus['state'] = 'running', code = 482913) {
   const handlers = new Map<string, IpcHandler>();
   const ipc: Pick<IpcMain, 'handle' | 'removeHandler'> = {
     handle(channel: string, handler: IpcHandler): void {
@@ -43,12 +48,15 @@ function setup(workerState: WorkerStatus['state'] = 'running') {
   };
   const { logger, lines } = recordingLogger();
   let restart: Promise<void> = Promise.resolve();
-  const dispose = registerAccessHandlers(ipc, {
+  let clock = T0;
+  const access = registerAccessHandlers(ipc, {
     vault,
     onAllowedUsersChanged: () => {
       restart = restartWorkerIfRunning(worker, logger);
     },
     logger,
+    randomInt: () => code,
+    now: () => clock,
   });
   const call = (channel: string, req?: unknown): Promise<unknown> => {
     const handler = handlers.get(channel);
@@ -56,7 +64,24 @@ function setup(workerState: WorkerStatus['state'] = 'running') {
     return Promise.resolve(handler(NULL_EVENT, req));
   };
   const set = (userIds: unknown) => call(CHANNEL.accessSet, { userIds });
-  return { handlers, entries, vault, calls, lines, call, set, dispose, restarted: () => restart };
+  const startPairing = () => call(CHANNEL.accessStartPairing);
+  const advance = (ms: number) => {
+    clock += ms;
+  };
+  return {
+    handlers,
+    entries,
+    vault,
+    calls,
+    lines,
+    call,
+    set,
+    access,
+    startPairing,
+    advance,
+    dispose: access.dispose,
+    restarted: () => restart,
+  };
 }
 
 async function rejection(promise: Promise<unknown>): Promise<{ code: string | null }> {
@@ -169,7 +194,7 @@ describe('Access IPC', () => {
     expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__1']).toBe('U02ABC');
   });
 
-  it('dispose removes both channels', () => {
+  it('dispose removes the three channels', () => {
     const s = setup();
 
     s.dispose();
@@ -192,5 +217,194 @@ describe('Access IPC', () => {
     expect(err.code).toBe('vault/unavailable');
     expect(await readAllowedUserIds(s.vault)).toEqual(['111']);
     expect(s.calls).toEqual([]);
+  });
+
+  describe('pairing from chat', () => {
+    const tokenOnly = async (key: string) => (key === 'discord.bot-token' ? 'tok' : null);
+
+    it('issues a 6-digit code valid for 10 minutes, restarts a running worker and passes the code to it', async () => {
+      const s = setup();
+
+      const pairing = await s.startPairing();
+      await s.restarted();
+      const env = await buildEnv({ vaultGet: tokenOnly, pairing: s.access.pendingPairing() });
+
+      expect(pairing).toEqual({ code: '482913', expiresAt: '2026-10-28T12:10:00.000Z' });
+      expect(s.calls).toEqual(['stop', 'start']);
+      expect(env['SCOUT__ACCESS__PAIRINGCODE']).toBe('482913');
+      expect(env['SCOUT__ACCESS__PAIRINGEXPIRESAT']).toBe('2026-10-28T12:10:00.000Z');
+    });
+
+    it('pads a small random number to six digits', async () => {
+      const s = setup('running', 7);
+
+      expect(await s.startPairing()).toMatchObject({ code: '000007' });
+    });
+
+    it('draws the code from crypto when no generator is injected', async () => {
+      const handlers = new Map<string, IpcHandler>();
+      const access = registerAccessHandlers(
+        { handle: (channel, handler) => void handlers.set(channel, handler), removeHandler() {} },
+        {
+          vault: { get: async () => null, store: async () => {}, delete: async () => true },
+          onAllowedUsersChanged() {},
+          logger: recordingLogger().logger,
+        },
+      );
+
+      await handlers.get(CHANNEL.accessStartPairing)?.(NULL_EVENT);
+
+      expect(access.pendingPairing()?.code).toMatch(/^[0-9]{6}$/);
+    });
+
+    it('stops passing the code to the worker once 10 minutes have passed', async () => {
+      const s = setup();
+      await s.startPairing();
+
+      s.advance(10 * 60_000);
+      const env = await buildEnv({ vaultGet: tokenOnly, pairing: s.access.pendingPairing() });
+
+      expect(s.access.pendingPairing()).toBeNull();
+      expect(env['SCOUT__ACCESS__PAIRINGCODE']).toBeUndefined();
+    });
+
+    it('a SCOUT_PAIRED line from the worker adds the id, clears the code and the restarted worker allows that user', async () => {
+      const s = setup();
+      await s.set(['999']);
+      await s.startPairing();
+      await s.restarted();
+      s.calls.length = 0;
+      const child = Object.assign(new EventEmitter(), {
+        pid: 7,
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        kill() {},
+      });
+      let reported: Promise<void> = Promise.resolve();
+      let lineSeen!: () => void;
+      const seen = new Promise<void>((resolve) => {
+        lineSeen = resolve;
+      });
+      const supervisor = createSupervisor({
+        spawn: mock(() => child as never),
+        logger: recordingLogger().logger,
+        resolveBinary: () => '/fake/worker',
+        checkBinaryExists: () => true,
+        buildEnv: async () => ({}),
+        onPaired: (userId) => {
+          reported = s.access.paired(userId);
+          lineSeen();
+        },
+      });
+      const started = supervisor.start();
+      child.stdout.write('SCOUT_READY\n');
+      await started;
+
+      child.stdout.write('SCOUT_PAIRED=111\n');
+      await Promise.race([seen, new Promise((resolve) => setTimeout(resolve, 1000))]);
+      await reported;
+      await s.restarted();
+      const env = await buildEnv({
+        vaultGet: tokenOnly,
+        allowedUserIds: await readAllowedUserIds(s.vault),
+        pairing: s.access.pendingPairing(),
+      });
+
+      expect(await readAllowedUserIds(s.vault)).toEqual(['999', '111']);
+      expect(s.access.pendingPairing()).toBeNull();
+      expect(s.calls).toEqual(['stop', 'start']);
+      expect(env['SCOUT__ACCESS__ALLOWEDUSERIDS__1']).toBe('111');
+      expect(env['SCOUT__ACCESS__PAIRINGCODE']).toBeUndefined();
+    });
+
+    it('ignores a pairing report when no pairing is pending', async () => {
+      const s = setup();
+
+      await s.access.paired('111');
+      await s.restarted();
+
+      expect(await readAllowedUserIds(s.vault)).toEqual([]);
+      expect(s.calls).toEqual([]);
+    });
+
+    it('ignores a pairing report after the code expired', async () => {
+      const s = setup();
+      await s.startPairing();
+      await s.restarted();
+      s.calls.length = 0;
+      s.advance(10 * 60_000);
+
+      await s.access.paired('111');
+
+      expect(await readAllowedUserIds(s.vault)).toEqual([]);
+      expect(s.calls).toEqual([]);
+    });
+
+    it('accepts only the first report for one code', async () => {
+      const s = setup();
+      await s.startPairing();
+
+      await s.access.paired('111');
+      await s.access.paired('333');
+
+      expect(await readAllowedUserIds(s.vault)).toEqual(['111']);
+    });
+
+    it('rejects an invalid id from the line and stores nothing', async () => {
+      const s = setup();
+      await s.startPairing();
+      await s.restarted();
+      s.calls.length = 0;
+
+      await s.access.paired('111 OR 1=1');
+      await s.restarted();
+
+      expect(s.entries.has('access.allowed-users')).toBe(false);
+      expect(await readAllowedUserIds(s.vault)).toEqual([]);
+      expect(s.calls).toEqual([]);
+    });
+
+    it('a vault that fails while adding the paired id leaves the list and the worker alone', async () => {
+      const s = setup();
+      await s.startPairing();
+      await s.restarted();
+      s.calls.length = 0;
+      s.vault.store = async () => {
+        throw new VaultUnavailableError();
+      };
+
+      await s.access.paired('111');
+      await s.restarted();
+
+      expect(await readAllowedUserIds(s.vault)).toEqual([]);
+      expect(s.calls).toEqual([]);
+      expect(s.lines.filter((line) => line.includes('vault/unavailable'))).toHaveLength(1);
+    });
+
+    it('a burned code from the worker stops reaching the worker and a later pairing report is ignored', async () => {
+      const s = setup();
+      await s.startPairing();
+      await s.restarted();
+      s.calls.length = 0;
+
+      s.access.pairingBurned();
+      await s.access.paired('111');
+      const env = await buildEnv({ vaultGet: tokenOnly, pairing: s.access.pendingPairing() });
+
+      expect(s.access.pendingPairing()).toBeNull();
+      expect(env['SCOUT__ACCESS__PAIRINGCODE']).toBeUndefined();
+      expect(await readAllowedUserIds(s.vault)).toEqual([]);
+      expect(s.calls).toEqual([]);
+    });
+
+    it('never logs the pairing code', async () => {
+      const s = setup();
+      await s.startPairing();
+      await s.access.paired('111');
+      await s.access.paired('333');
+
+      expect(s.lines.length).toBeGreaterThan(0);
+      expect(s.lines.filter((line) => line.includes('482913'))).toEqual([]);
+    });
   });
 });

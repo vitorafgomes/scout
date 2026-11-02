@@ -1,19 +1,11 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  OnInit,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { ScoutError } from '@scout/shared';
+import { readIpcError, type DiscordBotInfo } from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
 
-const TOKEN_PATTERN = /^[A-Za-z0-9_\-.]{50,}$/;
-const CLIENT_ID_MIN_LENGTH = 10;
+type IntentState = 'checking' | 'on' | 'needs-portal' | 'failed';
 
 @Component({
   selector: 'sc-token-paste',
@@ -21,8 +13,8 @@ const CLIENT_ID_MIN_LENGTH = 10;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="token-paste">
-      <h1>Provision Discord</h1>
-      <p class="subtitle">Step 2 of 3 - Bot token and intents</p>
+      <h1>Paste the bot token</h1>
+      <p class="subtitle">Step 2 of 3</p>
 
       @if (vaultBlocked()) {
         <div class="blocking-banner" role="alert">
@@ -43,7 +35,7 @@ const CLIENT_ID_MIN_LENGTH = 10;
                 data-test="token-input"
                 [value]="tokenValue()"
                 (input)="onTokenInput($event)"
-                (blur)="onTokenBlur()"
+                (paste)="onTokenPaste($event)"
                 aria-label="Discord bot token"
               />
               <button
@@ -54,80 +46,82 @@ const CLIENT_ID_MIN_LENGTH = 10;
               >
                 {{ reveal() ? 'Hide' : 'Show' }}
               </button>
+              <button
+                type="submit"
+                class="secondary"
+                data-test="submit"
+                [disabled]="tokenValue().trim().length === 0 || submitting()"
+              >
+                {{ submitting() ? 'Checking...' : 'Save' }}
+              </button>
             </div>
-            @if (tokenError(); as msg) {
-              <span class="error" role="alert">{{ msg }}</span>
-            }
           </label>
-
-          <label class="field">
-            <span class="label">Application (client) ID</span>
-            <input
-              type="text"
-              class="input"
-              autocomplete="off"
-              spellcheck="false"
-              data-test="client-id-input"
-              [value]="clientIdValue()"
-              (input)="onClientIdInput($event)"
-              (blur)="onClientIdBlur()"
-              aria-label="Discord application client id"
-            />
-            @if (clientIdError(); as msg) {
-              <span class="error" role="alert">{{ msg }}</span>
-            }
-          </label>
-
-          <fieldset class="intents">
-            <legend>Required intents (enable in Portal then acknowledge here)</legend>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                data-test="intent-message-content"
-                [checked]="intentMessageContent()"
-                (change)="setIntent('messageContent', $event)"
-              />
-              Message Content Intent
-            </label>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                data-test="intent-guild-members"
-                [checked]="intentGuildMembers()"
-                (change)="setIntent('guildMembers', $event)"
-              />
-              Server Members Intent
-            </label>
-            <label class="checkbox">
-              <input
-                type="checkbox"
-                data-test="intent-presence"
-                [checked]="intentPresence()"
-                (change)="setIntent('presence', $event)"
-              />
-              Presence Intent
-            </label>
-          </fieldset>
-
-          @if (submissionError(); as err) {
-            <p class="submission-error" role="alert">{{ err }}</p>
-          }
-
-          <div class="actions">
-            <button type="button" class="secondary" (click)="cancel()" [disabled]="submitting()">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="primary"
-              data-test="submit"
-              [disabled]="!canSubmit() || submitting()"
-            >
-              {{ submitting() ? 'Saving...' : 'Continue' }}
-            </button>
-          </div>
         </fieldset>
       </form>
+
+      @if (submissionError(); as err) {
+        <p class="submission-error" role="alert" data-test="token-error">{{ err }}</p>
+      }
+
+      @if (bot(); as found) {
+        <section class="found" aria-live="polite">
+          <p class="ok" data-test="bot-found">
+            &#10003; Found {{ found.applicationName }} (bot {{ found.botUsername }})
+          </p>
+          @switch (intent()) {
+            @case ('checking') {
+              <p data-test="intent-checking">Turning on Message Content Intent...</p>
+            }
+            @case ('on') {
+              <p class="ok" data-test="intent-on">&#10003; Message Content Intent is on</p>
+            }
+            @case ('needs-portal') {
+              <p class="fix" data-test="intent-fix">{{ intentFix()?.message }}</p>
+              <div class="fix-actions">
+                <button type="button" class="secondary" (click)="openPortal()">
+                  Open Developer Portal
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  data-test="check-again"
+                  (click)="enableIntent()"
+                >
+                  Check again
+                </button>
+              </div>
+            }
+            @case ('failed') {
+              <p class="submission-error" role="alert">{{ intentFix()?.message }}</p>
+              <div class="fix-actions">
+                <button
+                  type="button"
+                  class="primary"
+                  data-test="check-again"
+                  (click)="enableIntent()"
+                >
+                  Check again
+                </button>
+              </div>
+            }
+          }
+        </section>
+      }
+
+      <div class="actions">
+        <button type="button" class="secondary" (click)="cancel()" [disabled]="submitting()">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="primary"
+          data-test="continue"
+          [disabled]="intent() !== 'on'"
+          (click)="continueNext()"
+        >
+          Continue
+        </button>
+      </div>
     </main>
   `,
   styles: [
@@ -201,24 +195,6 @@ const CLIENT_ID_MIN_LENGTH = 10;
         cursor: pointer;
         font-size: 13px;
       }
-      .intents {
-        border: 1px solid #252b3b;
-        border-radius: 6px;
-        padding: 12px 16px;
-        margin: 16px 0;
-      }
-      .intents legend {
-        font-size: 13px;
-        color: #7b8299;
-        padding: 0 6px;
-      }
-      .checkbox {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        padding: 4px 0;
-      }
       .error {
         color: #d45a5a;
         font-size: 13px;
@@ -227,6 +203,28 @@ const CLIENT_ID_MIN_LENGTH = 10;
       .submission-error {
         color: #d45a5a;
         font-size: 13px;
+      }
+      .found {
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin: 16px 0;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .found p {
+        margin: 0 0 6px;
+      }
+      .ok {
+        color: #3aaf7b;
+      }
+      .fix {
+        color: #f0c060;
+      }
+      .fix-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
       }
       .actions {
         display: flex;
@@ -267,156 +265,99 @@ export class TokenPasteComponent implements OnInit {
   private readonly wizard = inject(WizardStore);
 
   readonly tokenValue = signal<string>('');
-  readonly clientIdValue = signal<string>('');
   readonly reveal = signal<boolean>(false);
-
-  readonly intentMessageContent = signal<boolean>(false);
-  readonly intentGuildMembers = signal<boolean>(false);
-  readonly intentPresence = signal<boolean>(false);
-
-  readonly tokenError = signal<string | null>(null);
-  readonly clientIdError = signal<string | null>(null);
-  readonly submissionError = signal<string | null>(null);
   readonly submitting = signal<boolean>(false);
+  readonly submissionError = signal<string | null>(null);
   readonly vaultBlocked = signal<boolean>(false);
-
-  readonly allIntentsChecked = computed<boolean>(
-    () => this.intentMessageContent() && this.intentGuildMembers() && this.intentPresence(),
-  );
-
-  readonly tokenLooksValid = computed<boolean>(() => TOKEN_PATTERN.test(this.tokenValue().trim()));
-
-  readonly clientIdLooksValid = computed<boolean>(
-    () => this.clientIdValue().trim().length >= CLIENT_ID_MIN_LENGTH,
-  );
-
-  readonly canSubmit = computed<boolean>(
-    () =>
-      !this.vaultBlocked() &&
-      this.tokenLooksValid() &&
-      this.clientIdLooksValid() &&
-      this.allIntentsChecked(),
-  );
-
-  // Probe used by tests to verify the local token buffer is cleared after
-  // successful submit. Intentionally private to discourage external reads.
-  private _lastSubmittedTokenLength: number | null = null;
+  readonly bot = signal<DiscordBotInfo | null>(null);
+  readonly intent = signal<IntentState | null>(null);
+  readonly intentFix = signal<{ message: string; portalUrl: string | null } | null>(null);
 
   ngOnInit(): void {
     this.wizard.goTo('token');
   }
 
   onTokenInput(ev: Event): void {
-    const value = (ev.target as HTMLInputElement).value;
-    this.tokenValue.set(value);
-    this.tokenError.set(null);
+    this.tokenValue.set((ev.target as HTMLInputElement).value);
+    this.submissionError.set(null);
   }
 
-  onTokenBlur(): void {
-    const value = this.tokenValue();
-    if (value.length === 0) {
-      this.tokenError.set('Token is required.');
-      return;
-    }
-    if (/\s/.test(value)) {
-      this.tokenError.set('Token contains whitespace. Re-paste without surrounding spaces.');
-      return;
-    }
-    if (!TOKEN_PATTERN.test(value)) {
-      this.tokenError.set('Token does not match the expected Discord format.');
-      return;
-    }
-    this.tokenError.set(null);
-  }
-
-  onClientIdInput(ev: Event): void {
-    const value = (ev.target as HTMLInputElement).value;
-    this.clientIdValue.set(value);
-    this.clientIdError.set(null);
-  }
-
-  onClientIdBlur(): void {
-    const value = this.clientIdValue().trim();
-    if (value.length < CLIENT_ID_MIN_LENGTH) {
-      this.clientIdError.set(`Client ID must be at least ${CLIENT_ID_MIN_LENGTH} characters.`);
-      return;
-    }
-    this.clientIdError.set(null);
+  onTokenPaste(ev: ClipboardEvent): void {
+    const pasted = ev.clipboardData?.getData('text') ?? '';
+    if (pasted.trim().length === 0) return;
+    ev.preventDefault();
+    this.tokenValue.set(pasted);
+    void this.submit();
   }
 
   toggleReveal(): void {
     this.reveal.update((v) => !v);
   }
 
-  setIntent(which: 'messageContent' | 'guildMembers' | 'presence', ev: Event): void {
-    const checked = (ev.target as HTMLInputElement).checked;
-    switch (which) {
-      case 'messageContent':
-        this.intentMessageContent.set(checked);
-        return;
-      case 'guildMembers':
-        this.intentGuildMembers.set(checked);
-        return;
-      case 'presence':
-        this.intentPresence.set(checked);
-        return;
-    }
-  }
-
-  async submit(ev: Event): Promise<void> {
-    ev.preventDefault();
-    if (!this.canSubmit() || this.submitting()) return;
+  async submit(ev?: Event): Promise<void> {
+    ev?.preventDefault();
+    const token = this.tokenValue().trim();
+    if (token.length === 0 || this.submitting()) return;
 
     this.submitting.set(true);
     this.submissionError.set(null);
-
-    // Hold the token in a local const only; clear the signal immediately
-    // after the vault store resolves. The token value must never linger.
-    const token = this.tokenValue().trim();
-    const clientId = this.clientIdValue().trim();
-
+    this.bot.set(null);
+    this.intent.set(null);
     try {
       const availability = await this.bridge.vaultIsAvailable();
       if (!availability.available) {
         this.vaultBlocked.set(true);
-        this.submitting.set(false);
         return;
       }
-
-      await this.bridge.vaultStore({ key: 'discord.bot-token', value: token });
-      await this.bridge.vaultStore({ key: 'discord.client-id', value: clientId });
-
-      this._lastSubmittedTokenLength = token.length;
+      const info = await this.bridge.discordCheckToken({ token });
       this.tokenValue.set('');
-
-      this.wizard.setClientId(clientId);
-      this.wizard.markIntentsAcknowledged();
-      this.wizard.goTo('oauth');
-      void this.router.navigateByUrl('/oauth');
+      this.bot.set(info);
+      this.wizard.setClientId(info.applicationId);
+      if (info.messageContent === 'on') {
+        this.intent.set('on');
+      } else {
+        await this.enableIntent();
+      }
     } catch (err: unknown) {
-      this.submissionError.set(this.describeError(err));
+      this.submissionError.set(readIpcError(err).message);
     } finally {
       this.submitting.set(false);
     }
   }
 
+  async enableIntent(): Promise<void> {
+    this.intent.set('checking');
+    this.intentFix.set(null);
+    try {
+      const result = await this.bridge.discordEnableIntent();
+      if (result.enabled) {
+        this.intent.set('on');
+        return;
+      }
+      this.intentFix.set({ message: result.message, portalUrl: result.portalUrl });
+      this.intent.set('needs-portal');
+    } catch (err: unknown) {
+      this.intentFix.set({ message: readIpcError(err).message, portalUrl: null });
+      this.intent.set('failed');
+    }
+  }
+
+  openPortal(): void {
+    const url = this.intentFix()?.portalUrl;
+    if (url == null) return;
+    void this.bridge.appOpenExternal({ url }).catch((err: unknown) => {
+      this.submissionError.set(readIpcError(err).message);
+    });
+  }
+
+  continueNext(): void {
+    if (this.intent() !== 'on') return;
+    this.wizard.goTo('oauth');
+    void this.router.navigateByUrl('/oauth');
+  }
+
   cancel(): void {
     void this.wizard.reset();
     void this.router.navigateByUrl('/');
-  }
-
-  // Test probe: exposes only the length that was submitted, never the token.
-  probeLastSubmittedTokenLength(): number | null {
-    return this._lastSubmittedTokenLength;
-  }
-
-  private describeError(err: unknown): string {
-    if (err instanceof ScoutError) {
-      return err.message;
-    }
-    if (err instanceof Error) {
-      return err.message;
-    }
-    return 'Unknown error while saving.';
   }
 }

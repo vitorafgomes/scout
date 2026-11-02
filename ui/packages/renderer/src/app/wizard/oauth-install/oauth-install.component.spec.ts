@@ -1,58 +1,35 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import {
-  DiscordTokenExchangeError,
-  OAuthLoopbackPortInUseError,
-  OAuthStateMismatchError,
-  OAuthUserCancelledError,
-} from '@scout/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ScoutError, encodeIpcErrorMessage, serializeError } from '@scout/shared';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PersistentStateService } from '../../core/persistent-state';
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
-import { OAUTH_INSTALL_PERMISSIONS, OAuthInstallComponent } from './oauth-install.component';
+import { OAuthInstallComponent } from './oauth-install.component';
 
-type ResolvablePromise<T> = {
-  readonly promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-};
+const INVITE =
+  'https://discord.com/oauth2/authorize?client_id=111222333&scope=bot&permissions=274877991936';
+const OLD = { id: '1', name: 'Old Server' };
+const NEW = { id: '2', name: 'Team' };
 
-function createResolvable<T>(): ResolvablePromise<T> {
-  let resolve: (value: T) => void = () => undefined;
-  let reject: (reason: unknown) => void = () => undefined;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
+function ipcError(code: string, message: string): Error {
+  return new Error(encodeIpcErrorMessage(serializeError(new ScoutError(code, message))));
 }
 
-function makeBridge(overrides: Partial<Record<string, unknown>> = {}) {
+function makeBridge(guilds: ReturnType<typeof vi.fn>) {
   return {
-    discordStartOAuthInstall: vi.fn(),
-    discordCancelOAuthInstall: vi.fn().mockResolvedValue(undefined),
-    vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
+    discordGuilds: guilds,
+    discordInviteUrl: vi.fn().mockResolvedValue({ url: INVITE }),
+    appOpenExternal: vi.fn().mockResolvedValue(undefined),
     vaultStore: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  } as unknown as ScoutBridgeService;
+    vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
+  } as unknown as ScoutBridgeService & Record<string, ReturnType<typeof vi.fn>>;
 }
 
-function makePersistentStub() {
-  return {
-    get: vi.fn().mockReturnValue(null),
-    set: vi.fn(),
-    clear: vi.fn(),
-  } as unknown as PersistentStateService;
-}
-
-async function setup(
-  bridge: ScoutBridgeService,
-  clientId: string | null,
-  persistent: PersistentStateService = makePersistentStub(),
-) {
+async function setup(bridge: ScoutBridgeService, clientId: string | null = '111222333') {
+  const persistent = { get: vi.fn().mockReturnValue(null), set: vi.fn(), clear: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
@@ -65,174 +42,164 @@ async function setup(
       { provide: PersistentStateService, useValue: persistent },
     ],
   });
-  const store = TestBed.inject(WizardStore);
-  if (clientId !== null) {
-    store.setClientId(clientId);
-  }
+  if (clientId !== null) TestBed.inject(WizardStore).setClientId(clientId);
+  const nav = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
   const fixture = TestBed.createComponent(OAuthInstallComponent);
   fixture.detectChanges();
-  await fixture.whenStable();
-  return fixture;
+  await vi.advanceTimersByTimeAsync(0);
+  fixture.detectChanges();
+  return { fixture, nav, persistent };
 }
 
 describe('OAuthInstallComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
+    vi.useFakeTimers();
   });
 
-  it('auto-starts the install with the computed permissions integer', async () => {
-    const gate = createResolvable<{ guildId: string; guildName: string }>();
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockReturnValue(gate.promise),
-    });
-    await setup(bridge, '1234567890');
-
-    expect(bridge.discordStartOAuthInstall).toHaveBeenCalledTimes(1);
-    expect(bridge.discordStartOAuthInstall).toHaveBeenCalledWith({
-      clientId: '1234567890',
-      permissions: OAUTH_INSTALL_PERMISSIONS,
-    });
-
-    // Flag-by-flag: VIEW_CHANNEL (bit 10), SEND_MESSAGES (bit 11),
-    // READ_MESSAGE_HISTORY (bit 16) and USE_APPLICATION_COMMANDS (bit 31)
-    // must all be set; no other bits leak in.
-    const permBits = BigInt(OAUTH_INSTALL_PERMISSIONS);
-    const expected = (1n << 10n) | (1n << 11n) | (1n << 16n) | (1n << 31n);
-    expect(permBits).toBe(expected);
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('navigates to /launch with guild in the store on success', async () => {
-    const gate = createResolvable<{ guildId: string; guildName: string }>();
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockReturnValue(gate.promise),
-    });
-    const fixture = await setup(bridge, '1234567890');
-    const router = TestBed.inject(Router);
-    const nav = vi.spyOn(router, 'navigateByUrl');
+  it('opens the invite and continues when the bot appears in a new server, storing it', async () => {
+    const guilds = vi
+      .fn()
+      .mockResolvedValueOnce({ guilds: [OLD] })
+      .mockResolvedValueOnce({ guilds: [OLD] })
+      .mockResolvedValueOnce({ guilds: [OLD, NEW] });
+    const bridge = makeBridge(guilds);
+    const { fixture, nav, persistent } = await setup(bridge);
 
-    gate.resolve({ guildId: 'g42', guildName: 'Scout Dev' });
-    // Drain microtasks: runInstall awaits two vaultStore resolutions before
-    // transitioning to 'success'.
-    for (let i = 0; i < 5; i++) await Promise.resolve();
-    await fixture.whenStable();
+    await fixture.componentInstance.openInvite();
+    expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: INVITE });
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(nav).not.toHaveBeenCalledWith('/launch');
+    await vi.advanceTimersByTimeAsync(3_000);
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.state()).toBe('success');
-    expect(TestBed.inject(WizardStore).guild()).toEqual({ id: 'g42', name: 'Scout Dev' });
-
-    const cont = fixture.nativeElement.querySelector('[data-test="continue"]') as HTMLButtonElement;
-    cont.click();
+    expect(bridge.vaultStore).toHaveBeenCalledWith({ key: 'discord.guild-id', value: '2' });
+    expect(bridge.vaultStore).toHaveBeenCalledWith({ key: 'discord.guild-name', value: 'Team' });
+    expect(persistent.set).toHaveBeenCalledWith({
+      clientId: '111222333',
+      guildId: '2',
+      guildName: 'Team',
+    });
+    expect(TestBed.inject(WizardStore).guild()).toEqual(NEW);
+    expect(fixture.nativeElement.querySelector('[data-test="joined"]').textContent).toContain(
+      'Scout joined Team',
+    );
     expect(nav).toHaveBeenCalledWith('/launch');
   });
 
-  it('persists guild-id, guild-name in the vault and mirrors state to PersistentStateService', async () => {
-    const gate = createResolvable<{ guildId: string; guildName: string }>();
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockReturnValue(gate.promise),
-    });
-    const persistent = makePersistentStub();
-    const fixture = await setup(bridge, '1234567890', persistent);
+  it('offers the servers the bot is already in and stores the one the owner picks', async () => {
+    const bridge = makeBridge(vi.fn().mockResolvedValue({ guilds: [OLD] }));
+    const { fixture, nav } = await setup(bridge);
 
-    gate.resolve({ guildId: 'g42', guildName: 'Scout Dev' });
-    for (let i = 0; i < 5; i++) await Promise.resolve();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(bridge.vaultStore).toHaveBeenCalledWith({ key: 'discord.guild-id', value: 'g42' });
-    expect(bridge.vaultStore).toHaveBeenCalledWith({
-      key: 'discord.guild-name',
-      value: 'Scout Dev',
-    });
-    expect(persistent.set).toHaveBeenCalledWith({
-      clientId: '1234567890',
-      guildId: 'g42',
-      guildName: 'Scout Dev',
-    });
-  });
-
-  it('redirects to / when no clientId is set in the store', async () => {
-    const bridge = makeBridge();
-    TestBed.configureTestingModule({
-      providers: [
-        provideZonelessChangeDetection(),
-        provideRouter([{ path: '', children: [] }]),
-        { provide: ScoutBridgeService, useValue: bridge },
-        { provide: PersistentStateService, useValue: makePersistentStub() },
-      ],
-    });
-    const router = TestBed.inject(Router);
-    const nav = vi.spyOn(router, 'navigateByUrl');
-    const fixture = TestBed.createComponent(OAuthInstallComponent);
-    fixture.detectChanges();
-
-    expect(bridge.discordStartOAuthInstall).not.toHaveBeenCalled();
-    expect(nav).toHaveBeenCalledWith('/');
-  });
-
-  it('maps state-mismatch error to the security copy', async () => {
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockRejectedValue(new OAuthStateMismatchError()),
-    });
-    const fixture = await setup(bridge, '1234567890');
-
-    expect(fixture.componentInstance.state()).toBe('error');
-    expect(fixture.componentInstance.errorMessage()).toBe(
-      'Authorization was rejected for security reasons. Try again.',
-    );
-  });
-
-  it('maps user-cancelled error to the cancelled copy', async () => {
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockRejectedValue(new OAuthUserCancelledError()),
-    });
-    const fixture = await setup(bridge, '1234567890');
-
-    expect(fixture.componentInstance.errorMessage()).toBe(
-      'Authorization cancelled. Try again or go back.',
-    );
-  });
-
-  it('maps loopback-port-in-use error to the port copy', async () => {
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockRejectedValue(new OAuthLoopbackPortInUseError()),
-    });
-    const fixture = await setup(bridge, '1234567890');
-
-    expect(fixture.componentInstance.errorMessage()).toBe(
-      'Cannot listen for the browser callback - close other Scout Desktop instances and retry.',
-    );
-  });
-
-  it('surfaces token-exchange reason on discord/token-exchange-failed', async () => {
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi
-        .fn()
-        .mockRejectedValue(new DiscordTokenExchangeError('invalid_grant')),
-    });
-    const fixture = await setup(bridge, '1234567890');
-
-    const msg = fixture.componentInstance.errorMessage();
-    expect(msg).toContain('Token exchange failed');
-    expect(msg).toContain('invalid_grant');
-  });
-
-  it('cancel during awaiting calls discordCancelOAuthInstall and routes to /token', async () => {
-    const gate = createResolvable<{ guildId: string; guildName: string }>();
-    const bridge = makeBridge({
-      discordStartOAuthInstall: vi.fn().mockReturnValue(gate.promise),
-    });
-    const fixture = await setup(bridge, '1234567890');
-    const router = TestBed.inject(Router);
-    const nav = vi.spyOn(router, 'navigateByUrl');
-
-    expect(fixture.componentInstance.state()).toBe('awaiting');
-    const cancelBtn = fixture.nativeElement.querySelector(
-      '[data-test="cancel"]',
+    const option = fixture.nativeElement.querySelector(
+      '[data-test="guild-option"]',
     ) as HTMLButtonElement;
-    cancelBtn.click();
-    await fixture.whenStable();
+    expect(option.textContent?.trim()).toBe('Old Server');
+    option.click();
+    await vi.advanceTimersByTimeAsync(0);
 
-    expect(bridge.discordCancelOAuthInstall).toHaveBeenCalledTimes(1);
-    expect(nav).toHaveBeenCalledWith('/token');
+    expect(bridge.vaultStore).toHaveBeenCalledWith({ key: 'discord.guild-id', value: '1' });
+    expect(nav).toHaveBeenCalledWith('/launch');
+  });
+
+  it('never picks a server the bot was already in when the first server list was slow', async () => {
+    let releaseFirst: (value: { guilds: (typeof OLD)[] }) => void = () => undefined;
+    const guilds = vi
+      .fn()
+      .mockReturnValueOnce(new Promise((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValue({ guilds: [OLD] });
+    const bridge = makeBridge(guilds);
+    const { fixture, nav } = await setup(bridge);
+
+    const invite = fixture.componentInstance.openInvite();
+    await vi.advanceTimersByTimeAsync(3_000 * 2);
+    releaseFirst({ guilds: [OLD] });
+    await invite;
+    await vi.advanceTimersByTimeAsync(3_000 * 3);
+
+    expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: INVITE });
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    expect(nav).not.toHaveBeenCalledWith('/launch');
+  });
+
+  it('does not open the invite while the current server list cannot be read', async () => {
+    const guilds = vi
+      .fn()
+      .mockRejectedValue(ipcError('discord/network-error', 'Could not reach Discord.'));
+    const bridge = makeBridge(guilds);
+    const { fixture, nav } = await setup(bridge);
+
+    await fixture.componentInstance.openInvite();
+    guilds.mockResolvedValue({ guilds: [OLD] });
+    await vi.advanceTimersByTimeAsync(3_000 * 3);
+    fixture.detectChanges();
+
+    expect(bridge.appOpenExternal).not.toHaveBeenCalled();
+    expect(bridge.vaultStore).not.toHaveBeenCalled();
+    expect(nav).not.toHaveBeenCalledWith('/launch');
+    expect(fixture.nativeElement.querySelector('[data-test="error-copy"]').textContent).toContain(
+      'Could not reach Discord.',
+    );
+  });
+
+  it('keeps polling through a network error and stops at the bound', async () => {
+    const guilds = vi
+      .fn()
+      .mockResolvedValueOnce({ guilds: [] })
+      .mockRejectedValue(ipcError('discord/network-error', 'Could not reach Discord.'));
+    const bridge = makeBridge(guilds);
+    const { fixture } = await setup(bridge);
+
+    await fixture.componentInstance.openInvite();
+    await vi.advanceTimersByTimeAsync(3_000 * 120);
+    fixture.detectChanges();
+
+    expect(guilds).toHaveBeenCalledTimes(1 + 100);
+    expect(fixture.componentInstance.waiting()).toBe(false);
+    expect(fixture.nativeElement.querySelector('[data-test="error-copy"]').textContent).toContain(
+      'Scout has not joined a server yet',
+    );
+  });
+
+  it('stops polling and says so when Discord rejects the bot token', async () => {
+    const guilds = vi
+      .fn()
+      .mockResolvedValueOnce({ guilds: [] })
+      .mockRejectedValue(ipcError('discord/token-rejected', 'Discord rejected this bot token.'));
+    const bridge = makeBridge(guilds);
+    const { fixture } = await setup(bridge);
+
+    await fixture.componentInstance.openInvite();
+    await vi.advanceTimersByTimeAsync(3_000 * 5);
+    fixture.detectChanges();
+
+    expect(guilds).toHaveBeenCalledTimes(2);
+    expect(fixture.nativeElement.querySelector('[data-test="error-copy"]').textContent).toContain(
+      'Discord rejected this bot token.',
+    );
+  });
+
+  it('stops polling when the step is left', async () => {
+    const guilds = vi.fn().mockResolvedValue({ guilds: [] });
+    const bridge = makeBridge(guilds);
+    const { fixture } = await setup(bridge);
+
+    await fixture.componentInstance.openInvite();
+    fixture.destroy();
+    await vi.advanceTimersByTimeAsync(3_000 * 10);
+
+    expect(guilds).toHaveBeenCalledTimes(1);
+  });
+
+  it('redirects to / when no application id is known', async () => {
+    const bridge = makeBridge(vi.fn().mockResolvedValue({ guilds: [] }));
+    const { nav } = await setup(bridge, null);
+
+    expect(nav).toHaveBeenCalledWith('/');
+    expect(bridge.discordGuilds).not.toHaveBeenCalled();
   });
 });

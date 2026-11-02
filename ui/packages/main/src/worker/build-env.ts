@@ -1,6 +1,7 @@
 import {
   CLOUD_API_KEY_VAULT_KEYS,
   VaultUnavailableError,
+  type AccessPairing,
   type CloudLlmProvider,
   type KubernetesLabelledContext,
   type VaultKey,
@@ -12,6 +13,15 @@ export interface BuildEnvDeps {
   gitHubEnv?: Readonly<Record<string, string>>;
   kubernetesSelection?: KubernetesSelection | null;
   allowedUserIds?: readonly string[];
+  pairing?: AccessPairing | null;
+  slackTokens?: SlackTokens | null;
+  whisperModelPath?: string | null;
+}
+
+/** The Slack bot token and app-level token the owner saved; the worker needs both. */
+export interface SlackTokens {
+  readonly botToken: string;
+  readonly appToken: string;
 }
 
 /** The kubeconfig path and the contexts the owner allowed Scout to read, with their labels. */
@@ -30,19 +40,19 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   const { vaultGet } = deps;
 
   const token = await vaultGet('discord.bot-token');
-  if (token === null) {
-    throw new VaultUnavailableError(
-      'discord.bot-token not found in vault — complete the Discord wizard first',
-    );
-  }
+  const slack = deps.slackTokens ?? null;
 
   const llmProvider = (await vaultGet('llm.provider')) ?? 'Ollama';
-
   const env: Record<string, string> = {
     SCOUT__LLM__PROVIDER: llmProvider,
+    SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
     DOTNET_ENVIRONMENT: 'Production',
-    SCOUT__ADAPTERS__DISCORD__BOTTOKEN: token,
   };
+  if (token !== null) env['SCOUT__ADAPTERS__DISCORD__BOTTOKEN'] = token;
+  if (slack !== null) {
+    env['SCOUT__ADAPTERS__SLACK__BOTTOKEN'] = slack.botToken;
+    env['SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN'] = slack.appToken;
+  }
   Object.assign(env, deps.gitHubEnv);
   if (deps.kubernetesSelection != null) {
     env['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH'] = deps.kubernetesSelection.path;
@@ -60,6 +70,12 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     deps.kubernetesSelection != null ||
     llmProvider === 'ChatGptPlan';
   if (ownerCredentialConnected) env['SCOUT__ACCESS__REQUIREALLOWLIST'] = 'true';
+  if (deps.pairing != null) {
+    env['SCOUT__ACCESS__PAIRINGCODE'] = deps.pairing.code;
+    env['SCOUT__ACCESS__PAIRINGEXPIRESAT'] = deps.pairing.expiresAt;
+  }
+
+  if (deps.whisperModelPath != null) env['SCOUT__TRANSCRIPTION__MODELPATH'] = deps.whisperModelPath;
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

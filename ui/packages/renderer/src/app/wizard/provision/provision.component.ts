@@ -13,12 +13,13 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="provision">
-      <h1>Provision Discord</h1>
-      <p class="subtitle">Step 1 of 3 — Create the Discord app</p>
-      <p class="copy">
-        Scout will open the Discord Developer Portal in your browser. Create an application, add a
-        bot user, and return here with the token.
-      </p>
+      <h1>Create your Discord bot</h1>
+      <p class="subtitle">Step 1 of 3</p>
+      <ol class="copy" data-test="portal-steps">
+        <li>Click <strong>New Application</strong> and name it Scout.</li>
+        <li>Open <strong>Bot</strong> and click <strong>Reset Token</strong>.</li>
+        <li>Click <strong>Copy</strong>, then come back here.</li>
+      </ol>
 
       @if (openError(); as err) {
         <div class="error-block" role="alert">
@@ -36,7 +37,7 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
       <div class="actions">
         <button type="button" class="secondary" (click)="back()">Back</button>
         <button type="button" class="primary" (click)="openPortal()" [disabled]="opening()">
-          {{ opening() ? 'Opening...' : 'Open Developer Portal' }}
+          {{ opening() ? 'Opening...' : 'Open Discord Developer Portal' }}
         </button>
         <button
           type="button"
@@ -45,7 +46,7 @@ const DEVELOPER_PORTAL_URL = 'https://discord.com/developers/applications';
           [disabled]="!portalOpened()"
           (click)="continueToToken()"
         >
-          I've created the app - Continue
+          I copied the token - Continue
         </button>
       </div>
     </main>

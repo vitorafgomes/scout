@@ -21,11 +21,9 @@ function makeBridgeStub(onWorkerEventImpl?: (listener: (e: WorkerEvent) => void)
     workerStop: vi.fn().mockResolvedValue({ exitCode: 0 }),
     workerStatus: vi.fn().mockResolvedValue({ state: 'idle', restarts: 0 }),
     vaultDelete: vi.fn().mockResolvedValue({ deleted: true }),
-    discordCancelOAuthInstall: vi.fn().mockResolvedValue(undefined),
     detectClients: vi.fn().mockResolvedValue({ clients: [] }),
     vaultIsAvailable: vi.fn().mockResolvedValue({ available: true }),
     vaultStore: vi.fn().mockResolvedValue(undefined),
-    discordStartOAuthInstall: vi.fn(),
     appOpenExternal: vi.fn(),
   } as unknown as ScoutBridgeService;
 

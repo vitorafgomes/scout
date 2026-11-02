@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Scout.Adapter.Local;
 
 namespace Scout.Host.Console;
 
@@ -15,7 +16,9 @@ internal static class ParentWatchdogRegistration
     /// <summary>
     /// Registers the watchdog and its default stdin probe only when
     /// <see cref="EnableEnvVar"/> equals "1". Standalone runs (manual dotnet run,
-    /// CLI) leave it unset so a terminal stdin EOF never kills the host.
+    /// CLI) leave it unset so a terminal stdin EOF never kills the host. When the
+    /// local adapter is already registered it is the only reader of stdin, so the
+    /// watchdog waits for that adapter's end of input instead of reading stdin itself.
     /// </summary>
     public static IServiceCollection AddParentWatchdog(
         this IServiceCollection services,
@@ -23,7 +26,15 @@ internal static class ParentWatchdogRegistration
     {
         if (enableFlag == "1")
         {
-            services.AddSingleton<IParentLivenessProbe, StdinEofParentLivenessProbe>();
+            if (services.Any(d => d.ServiceType == typeof(LocalChatAdapter)))
+            {
+                services.AddSingleton<IParentLivenessProbe>(
+                    sp => new InputClosedParentLivenessProbe(() => sp.GetRequiredService<LocalChatAdapter>().InputClosed));
+            }
+            else
+            {
+                services.AddSingleton<IParentLivenessProbe, StdinEofParentLivenessProbe>();
+            }
             services.AddHostedService<ParentWatchdogService>();
         }
 

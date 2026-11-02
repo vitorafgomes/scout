@@ -4,9 +4,10 @@ export type { VaultKey };
 
 export const CHANNEL = {
   detectClients: 'scout:detect.clients',
-  discordBuildOAuthUrl: 'scout:discord.buildOAuthUrl',
-  discordStartOAuthInstall: 'scout:discord.startOAuthInstall',
-  discordCancelOAuthInstall: 'scout:discord.cancelOAuthInstall',
+  discordCheckToken: 'scout:discord.checkToken',
+  discordEnableIntent: 'scout:discord.enableIntent',
+  discordInviteUrl: 'scout:discord.inviteUrl',
+  discordGuilds: 'scout:discord.guilds',
   chatgptSignIn: 'scout:chatgpt.signIn',
   chatgptListModels: 'scout:chatgpt.listModels',
   chatgptCancelSignIn: 'scout:chatgpt.cancelSignIn',
@@ -61,6 +62,25 @@ export const CHANNEL = {
   kubernetesDisconnect: 'scout:kubernetes.disconnect',
   accessGet: 'scout:access.get',
   accessSet: 'scout:access.set',
+  accessStartPairing: 'scout:access.startPairing',
+  slackManifestUrl: 'scout:slack.manifestUrl',
+  slackSave: 'scout:slack.save',
+  slackStatus: 'scout:slack.status',
+  slackDisconnect: 'scout:slack.disconnect',
+  desktopGetSettings: 'scout:desktop.getSettings',
+  desktopSetKeepRunning: 'scout:desktop.setKeepRunning',
+  desktopSetStartAtLogin: 'scout:desktop.setStartAtLogin',
+  localAsk: 'scout:local.ask',
+  localCancel: 'scout:local.cancel',
+  localGetTurns: 'scout:local.getTurns',
+  localClearTurns: 'scout:local.clearTurns',
+  localTurns: 'scout:local.turns',
+  localHide: 'scout:local.hide',
+  localGetShortcut: 'scout:local.getShortcut',
+  localSetShortcut: 'scout:local.setShortcut',
+  localOpen: 'scout:local.open',
+  localGetBubble: 'scout:local.getBubble',
+  localSetBubble: 'scout:local.setBubble',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -69,28 +89,38 @@ export interface DetectClientsResponse {
   readonly clients: readonly DetectedClient[];
 }
 
-export interface DiscordBuildOAuthUrlRequest {
-  readonly clientId: string;
-  readonly permissions: string;
-  readonly scopes: readonly ['bot', 'applications.commands'];
+/** A bot token the owner pastes; travels renderer to main once and is never sent back. */
+export interface DiscordCheckTokenRequest {
+  readonly token: string;
 }
 
-export interface DiscordBuildOAuthUrlResponse {
+/** Whether the bot may read message text: on, off, or only switchable in the portal (100+ servers). */
+export type DiscordMessageContent = 'on' | 'off' | 'privileged-100plus';
+
+/** What the bot token says about the Discord application behind it; never carries the token. */
+export interface DiscordBotInfo {
+  readonly applicationId: string;
+  readonly applicationName: string;
+  readonly botUsername: string;
+  readonly messageContent: DiscordMessageContent;
+}
+
+export type DiscordEnableIntentResult =
+  | { readonly enabled: true }
+  | { readonly enabled: false; readonly message: string; readonly portalUrl: string };
+
+export interface DiscordInviteUrlResponse {
   readonly url: string;
-  readonly state: string;
 }
 
-export interface DiscordStartOAuthInstallRequest {
-  readonly clientId: string;
-  readonly permissions: string;
+export interface DiscordGuild {
+  readonly id: string;
+  readonly name: string;
 }
 
-export interface DiscordOAuthResult {
-  readonly guildId: string;
-  readonly guildName: string;
+export interface DiscordGuildsResponse {
+  readonly guilds: readonly DiscordGuild[];
 }
-
-export type DiscordStartOAuthInstallResponse = DiscordOAuthResult;
 
 /** The only ChatGPT sign-in state the renderer ever sees; tokens stay in the main process. */
 export interface ChatGptStatus {
@@ -164,6 +194,8 @@ export interface WorkerStatus {
   readonly startedAt?: string;
   readonly restarts: number;
   readonly lastExitCode?: number;
+  /** Set on a crash after which the supervisor will not restart the worker by itself. */
+  readonly gaveUp?: true;
 }
 
 export type WorkerStatusResponse = WorkerStatus;
@@ -483,13 +515,106 @@ export interface AccessAllowedUsers {
   readonly userIds: readonly string[];
 }
 
+/** A one-time pairing code main issued; the owner sends `pair <code>` to Scout before `expiresAt`. */
+export interface AccessPairing {
+  readonly code: string;
+  readonly expiresAt: string;
+}
+
+/** The link that opens Slack's app creation flow prefilled with Scout's manifest. */
+export interface SlackManifestUrlResponse {
+  readonly url: string;
+}
+
+/** The two tokens the owner pastes; travel renderer to main once and are never sent back. */
+export interface SlackSaveRequest {
+  readonly botToken: string;
+  readonly appToken: string;
+}
+
+/** The workspace and bot user Slack reported when the tokens were saved; never a token. */
+export interface SlackStatus {
+  readonly connected: boolean;
+  readonly team: string | null;
+  readonly botUser: string | null;
+}
+
+/** How Scout stays on the desktop; keepRunning is always false while the system tray is unavailable. */
+export interface DesktopSettings {
+  readonly keepRunning: boolean;
+  readonly startAtLogin: boolean;
+  readonly trayAvailable: boolean;
+}
+
+export interface DesktopToggleRequest {
+  readonly enabled: boolean;
+}
+
+/** A recording made in the quick-ask window: 16 kHz mono 16-bit PCM WAV, base64-encoded. */
+export interface LocalAudio {
+  readonly contentType: 'audio/wav';
+  readonly base64: string;
+}
+
+/** One question from the quick-ask window; the renderer picks the id, main checks it. */
+export type LocalAskRequest =
+  | { readonly id: string; readonly text: string }
+  | { readonly id: string; readonly audio: LocalAudio };
+
+export interface LocalCancelRequest {
+  readonly id: string;
+}
+
+export interface LocalCitation {
+  readonly label: string;
+  readonly url?: string;
+}
+
+/** A step of the worker's reply to one quick-ask question; `text` is always the full reply so far. */
+export interface LocalEvent {
+  readonly id: string;
+  readonly event: 'begin' | 'update' | 'complete' | 'fail';
+  readonly text?: string;
+  readonly citations?: readonly LocalCitation[];
+}
+
+/**
+ * One question and its reply in the local conversation main keeps for every window: the question text,
+ * or "(voice message)" for a recording, and the reply so far.
+ */
+export interface LocalTurn {
+  readonly id: string;
+  readonly question: string;
+  readonly reply: string;
+  readonly citations: readonly LocalCitation[];
+  readonly state: 'running' | 'done' | 'failed';
+  /** True when the question failed because the worker is not running. */
+  readonly notRunning?: boolean;
+}
+
+/**
+ * The global shortcut that opens the quick-ask window, in Electron accelerator syntax; `registered` is whether
+ * the OS took it, and `hint` says what to do instead where the desktop refuses global shortcuts.
+ */
+export interface LocalShortcut {
+  readonly accelerator: string;
+  readonly registered: boolean;
+  readonly hint: string | null;
+}
+
+/** The floating Scout button: whether it shows, which corner it sits in, and on which display. */
+export interface LocalBubbleSettings {
+  readonly enabled: boolean;
+  readonly corner: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  readonly display: 'cursor' | 'primary';
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
-  discordBuildOAuthUrl(req: DiscordBuildOAuthUrlRequest): Promise<DiscordBuildOAuthUrlResponse>;
-  discordStartOAuthInstall(
-    req: DiscordStartOAuthInstallRequest,
-  ): Promise<DiscordStartOAuthInstallResponse>;
-  discordCancelOAuthInstall(): Promise<void>;
+  discordCheckToken(req: DiscordCheckTokenRequest): Promise<DiscordBotInfo>;
+  discordEnableIntent(): Promise<DiscordEnableIntentResult>;
+  discordInviteUrl(): Promise<DiscordInviteUrlResponse>;
+  discordGuilds(): Promise<DiscordGuildsResponse>;
   chatgptSignIn(): Promise<ChatGptStatus>;
   chatgptCancelSignIn(): Promise<void>;
   chatgptListModels(): Promise<ChatGptListModelsResponse>;
@@ -542,4 +667,23 @@ export interface ScoutBridge {
   kubernetesDisconnect(): Promise<KubernetesStatus>;
   accessGet(): Promise<AccessAllowedUsers>;
   accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers>;
+  accessStartPairing(): Promise<AccessPairing>;
+  slackManifestUrl(): Promise<SlackManifestUrlResponse>;
+  slackSave(req: SlackSaveRequest): Promise<SlackStatus>;
+  slackStatus(): Promise<SlackStatus>;
+  slackDisconnect(): Promise<SlackStatus>;
+  desktopGetSettings(): Promise<DesktopSettings>;
+  desktopSetKeepRunning(req: DesktopToggleRequest): Promise<DesktopSettings>;
+  desktopSetStartAtLogin(req: DesktopToggleRequest): Promise<DesktopSettings>;
+  localAsk(req: LocalAskRequest): Promise<void>;
+  localCancel(req: LocalCancelRequest): Promise<void>;
+  localGetTurns(): Promise<readonly LocalTurn[]>;
+  localClearTurns(): Promise<void>;
+  onLocalTurns(listener: (turns: readonly LocalTurn[]) => void): () => void;
+  localHide(): Promise<void>;
+  localGetShortcut(): Promise<LocalShortcut>;
+  localSetShortcut(req: Pick<LocalShortcut, 'accelerator'>): Promise<LocalShortcut>;
+  localOpen(): Promise<void>;
+  localGetBubble(): Promise<LocalBubbleSettings>;
+  localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleSettings>;
 }

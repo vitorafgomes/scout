@@ -16,4 +16,16 @@ public sealed record InboundDiscordMessage(
     string Content,
     bool MentionsSelf,
     DateTimeOffset Timestamp,
-    ulong? GuildId = null);
+    ulong? GuildId = null,
+    bool RepliesToSelf = false,
+    InboundVoiceMessage? Voice = null);
+
+/// <summary>
+/// The audio attachment of a Discord voice message (message flag
+/// <c>IS_VOICE_MESSAGE</c>), as plain values.
+/// </summary>
+public sealed record InboundVoiceMessage(
+    string Url,
+    string ContentType,
+    long SizeBytes,
+    TimeSpan? Duration);

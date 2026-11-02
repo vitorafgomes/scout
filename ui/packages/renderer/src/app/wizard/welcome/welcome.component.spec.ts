@@ -35,6 +35,7 @@ class FakeBridge {
   pending: ResolvablePromise<DetectClientsResponse> | null = null;
   calls = 0;
   vaultHasResult: { exists: boolean } = { exists: false };
+  slackConnected = false;
   workerStart = vi.fn().mockResolvedValue({ pid: 1 });
   appOpenExternal = vi.fn().mockResolvedValue(undefined);
 
@@ -51,6 +52,10 @@ class FakeBridge {
 
   vaultDelete(): Promise<{ deleted: boolean }> {
     return Promise.resolve({ deleted: true });
+  }
+
+  slackStatus(): Promise<{ connected: boolean; team: string | null; botUser: string | null }> {
+    return Promise.resolve({ connected: this.slackConnected, team: null, botUser: null });
   }
 }
 
@@ -96,6 +101,7 @@ interface SetupOpts {
     guildName: string;
   } | null;
   readonly workerStatus?: WorkerStatus;
+  readonly slackConnected?: boolean;
 }
 
 async function createComponent(
@@ -106,6 +112,7 @@ async function createComponent(
   logStore: ReturnType<typeof makeLogStore>;
 }> {
   bridge.vaultHasResult = { exists: opts.vaultHas ?? false };
+  bridge.slackConnected = opts.slackConnected ?? false;
   const logStore = makeLogStore(opts.workerStatus);
   TestBed.configureTestingModule({
     providers: [
@@ -113,6 +120,10 @@ async function createComponent(
       provideRouter([
         { path: 'provision', children: [] },
         { path: 'ready', children: [] },
+        { path: 'slack', children: [] },
+        { path: 'logs', children: [] },
+        { path: 'settings', children: [] },
+        { path: 'chat', children: [] },
       ]),
       { provide: ScoutBridgeService, useValue: bridge },
       { provide: LogStore, useValue: logStore },
@@ -127,9 +138,94 @@ async function createComponent(
   return { fixture, logStore };
 }
 
+async function flushBootstrap(fixture: ComponentFixture<WelcomeComponent>): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await fixture.whenStable();
+  fixture.detectChanges();
+}
+
 describe('WelcomeComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
+    localStorage.clear();
+  });
+
+  it('lets a new owner with no chat platform skip setup: the worker starts and the Chat screen opens', async () => {
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+    const skip = fixture.nativeElement.querySelector(
+      '[data-test="use-local"]',
+    ) as HTMLButtonElement;
+
+    expect(skip.textContent?.trim()).toBe('Skip for now — use Scout from this computer');
+    expect(fixture.nativeElement.querySelector('.local-only p')?.textContent?.trim()).toBe(
+      'No Discord or Slack needed: chat with Scout in this window.',
+    );
+    skip.click();
+    await flushBootstrap(fixture);
+
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(TestBed.inject(Router).url).toBe('/chat');
+    expect(TestBed.inject(WizardStore).hasProvisioning()).toBe(true);
+  });
+
+  it('after skipping once, the next launch starts the worker with no Discord or Slack', async () => {
+    localStorage.setItem('scout:local-only', '1');
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.querySelector('[data-test="use-local"]')).toBeNull();
+  });
+
+  it('with no external chat configured, the app opens on the Chat screen', async () => {
+    localStorage.setItem('scout:local-only', '1');
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+
+    expect(TestBed.inject(Router).url).toBe('/chat');
+  });
+
+  it('with Discord configured, the app keeps opening on the welcome screen', async () => {
+    localStorage.setItem('scout:local-only', '1');
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge, { vaultHas: true });
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+
+    expect(TestBed.inject(Router).url).toBe('/');
+  });
+
+  it('opens Chat only at launch: a later visit to the welcome screen does not jump to Chat again', async () => {
+    localStorage.setItem('scout:local-only', '1');
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+    await TestBed.inject(Router).navigateByUrl('/logs');
+    fixture.destroy();
+
+    const again = TestBed.createComponent(WelcomeComponent);
+    again.detectChanges();
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(again);
+
+    expect(TestBed.inject(Router).url).toBe('/logs');
+  });
+
+  it('does not offer the skip once a chat platform is connected', async () => {
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge, { slackConnected: true });
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+
+    expect(fixture.nativeElement.querySelector('[data-test="use-local"]')).toBeNull();
   });
 
   it('does not render a standalone "Provision Discord" primary button', async () => {
@@ -219,8 +315,7 @@ describe('WelcomeComponent', () => {
     bridge.pending?.resolve({
       clients: [{ kind: 'discord', installed: true, method: 'uri-scheme' }],
     });
-    await fixture.whenStable();
-    fixture.detectChanges();
+    await flushBootstrap(fixture);
 
     expect(bridge.workerStart).toHaveBeenCalledTimes(1);
   });
@@ -275,7 +370,7 @@ describe('WelcomeComponent', () => {
     expect(caption?.textContent?.trim()).toBe('My Guild');
   });
 
-  it('Connected card click navigates to /ready', async () => {
+  it('Connected card click opens Settings instead of the retired Status screen', async () => {
     const bridge = new FakeBridge();
     const { fixture } = await createComponent(bridge, {
       vaultHas: true,
@@ -291,7 +386,9 @@ describe('WelcomeComponent', () => {
     const router = TestBed.inject(Router);
     const nav = vi.spyOn(router, 'navigateByUrl');
     (fixture.nativeElement.querySelector('.card--discord') as HTMLElement).click();
-    expect(nav).toHaveBeenCalledWith('/ready');
+    expect(nav).toHaveBeenCalledWith('/settings');
+    expect(nav).not.toHaveBeenCalledWith('/status');
+    expect(nav).not.toHaveBeenCalledWith('/ready');
   });
 
   it('Disconnected card click triggers workerStart instead of navigating', async () => {
@@ -312,6 +409,51 @@ describe('WelcomeComponent', () => {
 
     (fixture.nativeElement.querySelector('.card--discord') as HTMLElement).click();
     expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('the Slack card opens the Slack setup', async () => {
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    bridge.pending?.resolve({ clients: [] });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
+    (fixture.nativeElement.querySelector('.card--slack') as HTMLElement).click();
+
+    expect(nav).toHaveBeenCalledWith('/slack');
+  });
+
+  it('Slack only: starts the worker, shows Slack connected and leaves the Discord card unprovisioned', async () => {
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge, {
+      vaultHas: false,
+      slackConnected: true,
+      workerStatus: { state: 'idle', restarts: 0 },
+    });
+    bridge.pending?.resolve({
+      clients: [{ kind: 'discord', installed: true, method: 'uri-scheme' }],
+    });
+    await flushBootstrap(fixture);
+
+    expect(bridge.workerStart).toHaveBeenCalledTimes(1);
+    const slackBadge = fixture.nativeElement.querySelector('[data-test="slack-badge"]');
+    expect(slackBadge?.textContent?.trim()).toBe('Connected');
+    const discordBadge = fixture.nativeElement.querySelector('[data-test="discord-badge"]');
+    expect(discordBadge?.textContent?.trim()).toBe('Installed');
+  });
+
+  it('offers no skip while clients are still being detected, so the worker cannot be started twice', async () => {
+    const bridge = new FakeBridge();
+    const { fixture } = await createComponent(bridge);
+    await flushBootstrap(fixture);
+
+    expect(fixture.nativeElement.querySelector('[data-test="use-local"]')).toBeNull();
+
+    bridge.pending?.resolve({ clients: [] });
+    await flushBootstrap(fixture);
+
+    expect(fixture.nativeElement.querySelector('[data-test="use-local"]')).not.toBeNull();
   });
 
   it('renders the loading state before detection settles', async () => {

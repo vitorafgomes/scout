@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Access;
@@ -12,7 +11,8 @@ public sealed class ConversationConductorAccessTests
 {
     private const string NotAllowedReply = "Scout only answers its configured users.";
     private const string NoAllowedUsersReply =
-        "Scout has no allowed users yet. The owner can add them in the Scout desktop app under Settings.";
+        "Scout is not set up for anyone yet. If you are the owner, open the Scout desktop app, go to Settings, "
+        + "choose Pair from chat and send the 6-digit code here in a direct message.";
 
     private static readonly RenderCapabilities FineGrained = new()
     {
@@ -45,7 +45,7 @@ public sealed class ConversationConductorAccessTests
         IConversationRouter router,
         AccessOptions access,
         ILogger<ConversationConductor>? logger = null)
-        => new(router, Pump(), logger, Options.Create(access));
+        => new(router, Pump(), logger, new AccessPolicy(access));
 
     [Fact]
     public async Task User_Not_In_The_Allowed_List_Gets_The_Refusal_And_The_Router_Is_Never_Called()

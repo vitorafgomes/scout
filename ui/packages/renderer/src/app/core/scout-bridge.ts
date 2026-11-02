@@ -8,10 +8,11 @@ import {
   type ChatGptStatus,
   type DetectClientsResponse,
   type DiagnosticsExportResponse,
-  type DiscordBuildOAuthUrlRequest,
-  type DiscordBuildOAuthUrlResponse,
-  type DiscordStartOAuthInstallRequest,
-  type DiscordStartOAuthInstallResponse,
+  type DiscordBotInfo,
+  type DiscordCheckTokenRequest,
+  type DiscordEnableIntentResult,
+  type DiscordGuildsResponse,
+  type DiscordInviteUrlResponse,
   type LlmListOllamaModelsRequest,
   type LlmListOllamaModelsResponse,
   type LlmPullOllamaModelRequest,
@@ -63,6 +64,17 @@ import {
   type KubernetesStatus,
   type KubernetesUseRequest,
   type AccessAllowedUsers,
+  type AccessPairing,
+  type SlackManifestUrlResponse,
+  type SlackSaveRequest,
+  type SlackStatus,
+  type DesktopSettings,
+  type DesktopToggleRequest,
+  type LocalAskRequest,
+  type LocalCancelRequest,
+  type LocalTurn,
+  type LocalShortcut,
+  type LocalBubbleSettings,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -87,13 +99,11 @@ function rejectNotAvailable<T>(): Promise<T> {
 function createFakeBridge(): ScoutBridge {
   return {
     detectClients: (): Promise<DetectClientsResponse> => rejectNotAvailable(),
-    discordBuildOAuthUrl: (
-      _req: DiscordBuildOAuthUrlRequest,
-    ): Promise<DiscordBuildOAuthUrlResponse> => rejectNotAvailable(),
-    discordStartOAuthInstall: (
-      _req: DiscordStartOAuthInstallRequest,
-    ): Promise<DiscordStartOAuthInstallResponse> => rejectNotAvailable(),
-    discordCancelOAuthInstall: (): Promise<void> => rejectNotAvailable(),
+    discordCheckToken: (_req: DiscordCheckTokenRequest): Promise<DiscordBotInfo> =>
+      rejectNotAvailable(),
+    discordEnableIntent: (): Promise<DiscordEnableIntentResult> => rejectNotAvailable(),
+    discordInviteUrl: (): Promise<DiscordInviteUrlResponse> => rejectNotAvailable(),
+    discordGuilds: (): Promise<DiscordGuildsResponse> => rejectNotAvailable(),
     chatgptSignIn: (): Promise<ChatGptStatus> => rejectNotAvailable(),
     chatgptCancelSignIn: (): Promise<void> => rejectNotAvailable(),
     chatgptListModels: (): Promise<ChatGptListModelsResponse> => rejectNotAvailable(),
@@ -177,6 +187,33 @@ function createFakeBridge(): ScoutBridge {
     kubernetesDisconnect: (): Promise<KubernetesStatus> => rejectNotAvailable(),
     accessGet: (): Promise<AccessAllowedUsers> => rejectNotAvailable(),
     accessSet: (_req: AccessAllowedUsers): Promise<AccessAllowedUsers> => rejectNotAvailable(),
+    accessStartPairing: (): Promise<AccessPairing> => rejectNotAvailable(),
+    slackManifestUrl: (): Promise<SlackManifestUrlResponse> => rejectNotAvailable(),
+    slackSave: (_req: SlackSaveRequest): Promise<SlackStatus> => rejectNotAvailable(),
+    slackStatus: (): Promise<SlackStatus> => rejectNotAvailable(),
+    slackDisconnect: (): Promise<SlackStatus> => rejectNotAvailable(),
+    desktopGetSettings: (): Promise<DesktopSettings> => rejectNotAvailable(),
+    desktopSetKeepRunning: (_req: DesktopToggleRequest): Promise<DesktopSettings> =>
+      rejectNotAvailable(),
+    desktopSetStartAtLogin: (_req: DesktopToggleRequest): Promise<DesktopSettings> =>
+      rejectNotAvailable(),
+    localAsk: (_req: LocalAskRequest): Promise<void> => rejectNotAvailable(),
+    localCancel: (_req: LocalCancelRequest): Promise<void> => rejectNotAvailable(),
+    localGetTurns: (): Promise<readonly LocalTurn[]> => rejectNotAvailable(),
+    localClearTurns: (): Promise<void> => rejectNotAvailable(),
+    onLocalTurns: (_listener: (turns: readonly LocalTurn[]) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    localHide: (): Promise<void> => rejectNotAvailable(),
+    localGetShortcut: (): Promise<LocalShortcut> => rejectNotAvailable(),
+    localSetShortcut: (_req: Pick<LocalShortcut, 'accelerator'>): Promise<LocalShortcut> =>
+      rejectNotAvailable(),
+    localOpen: (): Promise<void> => rejectNotAvailable(),
+    localGetBubble: (): Promise<LocalBubbleSettings> => rejectNotAvailable(),
+    localSetBubble: (_req: LocalBubbleSettings): Promise<LocalBubbleSettings> =>
+      rejectNotAvailable(),
   };
 }
 
@@ -212,14 +249,20 @@ export class ScoutBridgeService {
     return this.bridge.appOpenExternal(req);
   }
 
-  async discordStartOAuthInstall(
-    req: DiscordStartOAuthInstallRequest,
-  ): Promise<DiscordStartOAuthInstallResponse> {
-    return this.bridge.discordStartOAuthInstall(req);
+  async discordCheckToken(req: DiscordCheckTokenRequest): Promise<DiscordBotInfo> {
+    return this.bridge.discordCheckToken(req);
   }
 
-  async discordCancelOAuthInstall(): Promise<void> {
-    return this.bridge.discordCancelOAuthInstall();
+  async discordEnableIntent(): Promise<DiscordEnableIntentResult> {
+    return this.bridge.discordEnableIntent();
+  }
+
+  async discordInviteUrl(): Promise<DiscordInviteUrlResponse> {
+    return this.bridge.discordInviteUrl();
+  }
+
+  async discordGuilds(): Promise<DiscordGuildsResponse> {
+    return this.bridge.discordGuilds();
   }
 
   async chatgptSignIn(): Promise<ChatGptStatus> {
@@ -398,6 +441,82 @@ export class ScoutBridgeService {
 
   async accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers> {
     return this.bridge.accessSet(req);
+  }
+
+  async accessStartPairing(): Promise<AccessPairing> {
+    return this.bridge.accessStartPairing();
+  }
+
+  async slackManifestUrl(): Promise<SlackManifestUrlResponse> {
+    return this.bridge.slackManifestUrl();
+  }
+
+  async slackSave(req: SlackSaveRequest): Promise<SlackStatus> {
+    return this.bridge.slackSave(req);
+  }
+
+  async slackStatus(): Promise<SlackStatus> {
+    return this.bridge.slackStatus();
+  }
+
+  async slackDisconnect(): Promise<SlackStatus> {
+    return this.bridge.slackDisconnect();
+  }
+
+  async desktopGetSettings(): Promise<DesktopSettings> {
+    return this.bridge.desktopGetSettings();
+  }
+
+  async desktopSetKeepRunning(req: DesktopToggleRequest): Promise<DesktopSettings> {
+    return this.bridge.desktopSetKeepRunning(req);
+  }
+
+  async desktopSetStartAtLogin(req: DesktopToggleRequest): Promise<DesktopSettings> {
+    return this.bridge.desktopSetStartAtLogin(req);
+  }
+
+  async localAsk(req: LocalAskRequest): Promise<void> {
+    return this.bridge.localAsk(req);
+  }
+
+  async localCancel(req: LocalCancelRequest): Promise<void> {
+    return this.bridge.localCancel(req);
+  }
+
+  async localGetTurns(): Promise<readonly LocalTurn[]> {
+    return this.bridge.localGetTurns();
+  }
+
+  async localClearTurns(): Promise<void> {
+    return this.bridge.localClearTurns();
+  }
+
+  onLocalTurns(listener: (turns: readonly LocalTurn[]) => void): () => void {
+    return this.bridge.onLocalTurns(listener);
+  }
+
+  async localHide(): Promise<void> {
+    return this.bridge.localHide();
+  }
+
+  async localGetShortcut(): Promise<LocalShortcut> {
+    return this.bridge.localGetShortcut();
+  }
+
+  async localSetShortcut(req: Pick<LocalShortcut, 'accelerator'>): Promise<LocalShortcut> {
+    return this.bridge.localSetShortcut(req);
+  }
+
+  async localOpen(): Promise<void> {
+    return this.bridge.localOpen();
+  }
+
+  async localGetBubble(): Promise<LocalBubbleSettings> {
+    return this.bridge.localGetBubble();
+  }
+
+  async localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleSettings> {
+    return this.bridge.localSetBubble(req);
   }
 }
 

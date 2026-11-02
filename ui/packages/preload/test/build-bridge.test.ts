@@ -18,9 +18,10 @@ describe('buildBridge', () => {
 
     const expectedKeys: (keyof ScoutBridge)[] = [
       'detectClients',
-      'discordBuildOAuthUrl',
-      'discordStartOAuthInstall',
-      'discordCancelOAuthInstall',
+      'discordCheckToken',
+      'discordEnableIntent',
+      'discordInviteUrl',
+      'discordGuilds',
       'chatgptSignIn',
       'chatgptCancelSignIn',
       'chatgptListModels',
@@ -73,6 +74,25 @@ describe('buildBridge', () => {
       'kubernetesDisconnect',
       'accessGet',
       'accessSet',
+      'accessStartPairing',
+      'slackManifestUrl',
+      'slackSave',
+      'slackStatus',
+      'slackDisconnect',
+      'desktopGetSettings',
+      'desktopSetKeepRunning',
+      'desktopSetStartAtLogin',
+      'localAsk',
+      'localCancel',
+      'localGetTurns',
+      'localClearTurns',
+      'onLocalTurns',
+      'localHide',
+      'localGetShortcut',
+      'localSetShortcut',
+      'localOpen',
+      'localGetBubble',
+      'localSetBubble',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -116,22 +136,36 @@ describe('buildBridge', () => {
     ]);
   });
 
-  it('discordBuildOAuthUrl passes the request payload through without mutation', async () => {
+  it('discordCheckToken passes the pasted token to main once and returns the bot info', async () => {
     const ipc = makeFakeIpc();
-    const req = {
-      clientId: 'abc123',
-      permissions: '8',
-      scopes: ['bot', 'applications.commands'] as const,
+    const req = { token: 'pasted-token' };
+    const expected = {
+      applicationId: '1',
+      applicationName: 'Scout',
+      botUsername: 'scout',
+      messageContent: 'on' as const,
     };
-    const expected = { url: 'https://discord.com/oauth2/authorize?...', state: 'xyz' };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
 
-    const bridge = buildBridge(ipc);
-    const result = await bridge.discordBuildOAuthUrl(req);
+    const result = await buildBridge(ipc).discordCheckToken(req);
 
-    expect(ipc.invoke).toHaveBeenCalledTimes(1);
-    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.discordBuildOAuthUrl, req);
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.discordCheckToken, req);
     expect(result).toBe(expected);
+  });
+
+  it('discordEnableIntent and discordGuilds send no token from the renderer', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.discordEnableIntent();
+    await bridge.discordGuilds();
+    await bridge.discordInviteUrl();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.discordEnableIntent],
+      [CHANNEL.discordGuilds],
+      [CHANNEL.discordInviteUrl],
+    ]);
   });
 
   it('onWorkerEvent registers a handler via ipc.on and forwards events stripping the ipc event arg', () => {
@@ -443,5 +477,104 @@ describe('buildBridge', () => {
     await buildBridge(ipc).accessGet();
 
     expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessGet);
+  });
+
+  it('accessStartPairing invokes the access.startPairing channel and returns the code', async () => {
+    const ipc = makeFakeIpc();
+    const pairing = { code: '482913', expiresAt: '2026-10-28T12:10:00.000Z' };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(pairing));
+
+    const result = await buildBridge(ipc).accessStartPairing();
+
+    expect(ipc.invoke).toHaveBeenCalledWith(CHANNEL.accessStartPairing);
+    expect(result).toBe(pairing);
+  });
+
+  it('the Slack methods reach main only through their own channels, and only save carries the tokens', async () => {
+    const ipc = makeFakeIpc();
+    const status = { connected: true, team: 'Acme', botUser: 'scout' };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
+    const bridge = buildBridge(ipc);
+
+    await bridge.slackManifestUrl();
+    await bridge.slackSave({ botToken: 'xoxb-1', appToken: 'xapp-1' });
+    await bridge.slackStatus();
+    await bridge.slackDisconnect();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.slackManifestUrl],
+      [CHANNEL.slackSave, { botToken: 'xoxb-1', appToken: 'xapp-1' }],
+      [CHANNEL.slackStatus],
+      [CHANNEL.slackDisconnect],
+    ]);
+  });
+
+  it('the Desktop settings methods reach main only through their own channels', async () => {
+    const ipc = makeFakeIpc();
+    const settings = { keepRunning: true, startAtLogin: false, trayAvailable: true };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(settings));
+    const bridge = buildBridge(ipc);
+
+    await bridge.desktopGetSettings();
+    await bridge.desktopSetKeepRunning({ enabled: false });
+    await bridge.desktopSetStartAtLogin({ enabled: true });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.desktopGetSettings],
+      [CHANNEL.desktopSetKeepRunning, { enabled: false }],
+      [CHANNEL.desktopSetStartAtLogin, { enabled: true }],
+    ]);
+  });
+
+  it('the quick-ask methods reach main only through their own channels with their payloads', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.localAsk({ id: 'q-1', text: 'is prod green?' });
+    await bridge.localCancel({ id: 'q-1' });
+    await bridge.localGetTurns();
+    await bridge.localClearTurns();
+    await bridge.localHide();
+    await bridge.localGetShortcut();
+    await bridge.localSetShortcut({ accelerator: 'Alt+Shift+S' });
+    await bridge.localOpen();
+    await bridge.localGetBubble();
+    await bridge.localSetBubble({ enabled: true, corner: 'top-left', display: 'primary' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.localAsk, { id: 'q-1', text: 'is prod green?' }],
+      [CHANNEL.localCancel, { id: 'q-1' }],
+      [CHANNEL.localGetTurns],
+      [CHANNEL.localClearTurns],
+      [CHANNEL.localHide],
+      [CHANNEL.localGetShortcut],
+      [CHANNEL.localSetShortcut, { accelerator: 'Alt+Shift+S' }],
+      [CHANNEL.localOpen],
+      [CHANNEL.localGetBubble],
+      [CHANNEL.localSetBubble, { enabled: true, corner: 'top-left', display: 'primary' }],
+    ]);
+  });
+
+  it('onLocalTurns forwards the conversation main pushes and unsubscribes the same handler', () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const received: unknown[] = [];
+    const turns = [
+      { id: 'q-1', question: 'is prod green?', reply: 'Green', citations: [], state: 'running' },
+    ];
+
+    const unsubscribe = bridge.onLocalTurns((t) => received.push(t));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, turns);
+    unsubscribe();
+
+    expect(channel).toBe(CHANNEL.localTurns);
+    expect(received).toEqual([turns]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.localTurns, handler);
   });
 });

@@ -1,4 +1,17 @@
-import { app, BrowserWindow, ipcMain, powerMonitor, shell, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Notification,
+  powerMonitor,
+  screen,
+  shell,
+  session,
+  Tray,
+} from 'electron';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -23,7 +36,7 @@ import { registerWorkerHandlers, attachBrowserWindow } from './ipc/worker.js';
 import { registerLlmHandlers } from './ipc/llm.js';
 import { registerLlmPullHandlers } from './ipc/llm-pull.js';
 import { registerLmStudioHandlers } from './ipc/lm-studio.js';
-import { registerWhisperHandlers } from './ipc/whisper.js';
+import { registerWhisperHandlers, whisperRootDir } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
 import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
@@ -32,6 +45,13 @@ import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
 import { readKubernetesSelection, registerKubernetesHandlers } from './ipc/kubernetes.js';
 import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
+import { readSlackTokens, registerSlackHandlers } from './ipc/slack.js';
+import { registerDesktopHandlers, type DesktopHandle } from './ipc/desktop.js';
+import { installAppLifecycle, launchWindow } from './shell/app-lifecycle.js';
+import { createLoginItem } from './shell/login-item.js';
+import { restartThroughX11, x11RelaunchArgs } from './shell/x11-relaunch.js';
+import { createPresenceNotifier, reportPairing } from './shell/notifications.js';
+import { createTrayController, type TrayController } from './tray/tray.js';
 import { detectKubeconfig } from './kubernetes/kubeconfig.js';
 import {
   GITHUB_APP_CLIENT_ID,
@@ -48,13 +68,33 @@ import { createSupervisor } from './worker/supervisor.js';
 import {
   resolveControlPlaneBinary,
   resolveProtoDir,
+  resolveTrayIcon,
   resolveWorkerBinary,
 } from './worker/resolve-binary.js';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import { buildEnv, migrateLegacyApiKey } from './worker/build-env.js';
+import { findBestWhisperModel } from './worker/whisper-model.js';
 import type { Supervisor } from './worker/supervisor.js';
+import {
+  allowMicrophoneOnlyForApp,
+  openQuickAsk,
+  registerQuickAsk,
+  type QuickAsk,
+} from './quick-ask/quick-ask.js';
 
 const logger = createLogger('main');
+
+const relaunch = x11RelaunchArgs(
+  process.platform,
+  process.env,
+  process.argv.slice(1),
+  process.execPath,
+  app.isPackaged,
+);
+const relaunching =
+  relaunch === null
+    ? Promise.resolve(false)
+    : restartThroughX11(relaunch, { spawn, exit: (code) => app.exit(code), logger });
 
 function createProdSingletonLockDeps(log: typeof logger): SingletonLockDeps {
   return {
@@ -130,11 +170,59 @@ let chatGptAuth: ChatGptAuth | null = null;
 let unregisterGitHub: (() => void) | null = null;
 let unregisterKubernetes: (() => void) | null = null;
 let unregisterAccess: (() => void) | null = null;
+let unregisterSlack: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
+let quickAsk: QuickAsk | null = null;
+let trayController: TrayController | null = null;
+let desktop: DesktopHandle | null = null;
+let openMainWindow: ((show: boolean) => BrowserWindow) | null = null;
+
+function disposeAll(): void {
+  quickAsk?.dispose();
+  trayController?.destroy();
+  desktop?.dispose();
+  unregisterProviderKeys?.();
+  chatGptAuth?.stop();
+  unregisterChatGpt?.();
+  controlPlane?.dispose();
+  gitHubAuth?.stop();
+  unregisterGitHub?.();
+  unregisterKubernetes?.();
+  unregisterAccess?.();
+  unregisterSlack?.();
+  unregisterFeatures?.();
+  unregisterProviders?.();
+  unregisterWhisper?.();
+  unregisterLlmPull?.();
+  unregisterLmStudio?.();
+  unregisterLlm?.();
+  unregisterWorker?.();
+  unregisterDiscord?.();
+  unregisterApp?.();
+  unregisterDetect?.();
+  unregisterVault?.();
+}
+
+const notifierLogger = logger.child({ module: 'notifications' });
+let notifier: ReturnType<typeof createPresenceNotifier> | null = null;
+
+const lifecycle = installAppLifecycle({
+  app,
+  platform: process.platform,
+  supervisor: () => supervisor,
+  keepRunning: () => desktop?.keepRunning() ?? false,
+  window: () => mainWindow,
+  createWindow: () => openMainWindow?.(true),
+  onHiddenToTray: () => void notifier?.hiddenToTray(),
+  onAsk: openQuickAsk,
+  dispose: disposeAll,
+  logger,
+});
 
 app
   .whenReady()
   .then(async () => {
+    if (await relaunching) return;
     const gotLock = app.requestSingleInstanceLock();
     if (!gotLock) {
       let result;
@@ -156,6 +244,15 @@ app
 
     const vault = createVault(createProductionVaultDeps(logger.child({ module: 'vault' })));
     unregisterVault = registerVaultHandlers(ipcMain, vault, logger.child({ module: 'vault' }));
+    notifier = createPresenceNotifier({
+      platform: process.platform,
+      isSupported: () => Notification.isSupported(),
+      show: (title, body) => new Notification({ title, body }).show(),
+      vault,
+      logger: notifierLogger,
+    });
+    const presence = notifier;
+
     await migrateLegacyApiKey(vault).catch((err: unknown) => {
       logger.warn('vault: legacy API key not migrated', {
         error: err instanceof Error ? err.name : typeof err,
@@ -170,17 +267,15 @@ app
 
     unregisterApp = registerAppHandlers(ipcMain, shell, app, logger.child({ module: 'app' }));
 
-    unregisterDiscord = registerDiscordHandlers(
-      ipcMain,
-      {
-        awaitCallback,
-        fetch: globalThis.fetch,
-        shell,
-        logger: logger.child({ module: 'discord' }),
-        findFreePort,
+    const discordLogger = logger.child({ module: 'discord' });
+    unregisterDiscord = registerDiscordHandlers(ipcMain, {
+      fetch: globalThis.fetch,
+      vault,
+      onTokenChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, discordLogger);
       },
-      logger.child({ module: 'discord' }),
-    );
+      logger: discordLogger,
+    });
 
     const chatGptTokenFile = path.join(app.getPath('userData'), 'chatgpt-token.json');
     chatGptAuth = new ChatGptAuth({
@@ -241,12 +336,23 @@ app
     });
 
     const accessLogger = logger.child({ module: 'access' });
-    unregisterAccess = registerAccessHandlers(ipcMain, {
+    const access = registerAccessHandlers(ipcMain, {
       vault,
       onAllowedUsersChanged: () => {
         if (supervisor !== null) void restartWorkerIfRunning(supervisor, accessLogger);
       },
       logger: accessLogger,
+    });
+    unregisterAccess = access.dispose;
+
+    const slackLogger = logger.child({ module: 'slack' });
+    unregisterSlack = registerSlackHandlers(ipcMain, {
+      vault,
+      fetch: globalThis.fetch,
+      onConnectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, slackLogger);
+      },
+      logger: slackLogger,
     });
 
     supervisor = createSupervisor({
@@ -268,7 +374,51 @@ app
           gitHubEnv: await auth.workerEnv(),
           kubernetesSelection: await readKubernetesSelection(vault),
           allowedUserIds: await readAllowedUserIds(vault),
+          pairing: access.pendingPairing(),
+          slackTokens: await readSlackTokens(vault),
+          whisperModelPath: await findBestWhisperModel(whisperRootDir()),
         }),
+      onPaired: (userId) =>
+        void reportPairing(userId, access, () => readAllowedUserIds(vault), presence),
+      onPairingBurned: () => access.pairingBurned(),
+      onLocalEvent: (json) => quickAsk?.handleWorkerLine(json),
+    });
+
+    const workerSupervisor = supervisor;
+    trayController = createTrayController({
+      createTray: (iconPath) => {
+        if (!existsSync(iconPath)) throw new Error('tray icon missing');
+        const icon = nativeImage.createFromPath(iconPath);
+        return new Tray(
+          process.platform === 'darwin' ? icon.resize({ width: 16, height: 16 }) : icon,
+        );
+      },
+      buildContextMenu: (template) => Menu.buildFromTemplate(template),
+      iconPath: resolveTrayIcon({ app, resourcesPath: process.resourcesPath, cwd: __dirname }),
+      onOpen: () => lifecycle.showWindow(),
+      onAskScout: openQuickAsk,
+      onStart: () => workerSupervisor.start(),
+      onStop: () => workerSupervisor.stop(),
+      onQuit: () => app.quit(),
+      logger: logger.child({ module: 'tray' }),
+      initialStatus: workerSupervisor.status,
+    });
+    workerSupervisor.onEvent((event) => {
+      if (event.kind !== 'state') return;
+      trayController?.setStatus(event.status);
+      presence.workerStatus(event.status);
+    });
+
+    desktop = await registerDesktopHandlers(ipcMain, {
+      vault,
+      loginItem: createLoginItem({
+        platform: process.platform,
+        home: os.homedir(),
+        executable: process.env['APPIMAGE'] || process.execPath,
+        app,
+      }),
+      trayAvailable: trayController !== null,
+      logger: logger.child({ module: 'desktop' }),
     });
 
     unregisterWorker = registerWorkerHandlers(
@@ -374,97 +524,56 @@ app
       preloadPath = undefined;
     }
 
-    mainWindow = createMainWindow({
-      createWindow: (opts) => new BrowserWindow(opts),
-      logger,
-      preloadPath,
+    allowMicrophoneOnlyForApp(session.defaultSession, {
       indexHtmlPath,
       ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
     });
-
-    mainWindow.on('closed', () => {
-      mainWindow = null;
+    quickAsk = await registerQuickAsk({
+      ipcMain,
+      supervisor: workerSupervisor,
+      createWindow: (opts) => new BrowserWindow(opts),
+      preloadPath,
+      indexHtmlPath,
+      ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
+      globalShortcut,
+      vault,
+      logger: logger.child({ module: 'quick-ask' }),
+      screen,
+      platform: process.platform,
+      env: process.env,
+      execPath: process.execPath,
+      windows: () => BrowserWindow.getAllWindows(),
     });
 
-    attachBrowserWindow(mainWindow, supervisor);
-
-    logger.info('main window created', { dev: DEV });
+    openMainWindow = (show) => {
+      const window = createMainWindow({
+        createWindow: (opts) => new BrowserWindow(opts),
+        logger,
+        preloadPath,
+        indexHtmlPath,
+        showOnReady: show,
+        ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
+      });
+      window.on('close', (event) => lifecycle.onWindowClose(event));
+      window.on('closed', () => {
+        if (mainWindow === window) mainWindow = null;
+      });
+      mainWindow = window;
+      attachBrowserWindow(window, workerSupervisor);
+      logger.info('main window created', { dev: DEV, hidden: !show });
+      return window;
+    };
+    const openWindow = openMainWindow;
+    launchWindow({
+      argv: process.argv,
+      platform: process.platform,
+      trayAvailable: trayController !== null,
+      notifier: presence,
+      openWindow,
+      onAsk: openQuickAsk,
+    });
   })
   .catch((err: unknown) => {
     logger.error('app.whenReady failed', err);
     app.quit();
   });
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('before-quit', (event) => {
-  logger.info('before-quit');
-
-  const runningWorker = supervisor;
-  if (
-    runningWorker === null ||
-    runningWorker.status.state === 'stopped' ||
-    runningWorker.status.state === 'idle'
-  ) {
-    // No running worker — unregister synchronously and allow the quit.
-    unregisterProviderKeys?.();
-    chatGptAuth?.stop();
-    unregisterChatGpt?.();
-    controlPlane?.dispose();
-    gitHubAuth?.stop();
-    unregisterGitHub?.();
-    unregisterKubernetes?.();
-    unregisterAccess?.();
-    unregisterFeatures?.();
-    unregisterProviders?.();
-    unregisterWhisper?.();
-    unregisterLlmPull?.();
-    unregisterLmStudio?.();
-    unregisterLlm?.();
-    unregisterWorker?.();
-    unregisterDiscord?.();
-    unregisterApp?.();
-    unregisterDetect?.();
-    unregisterVault?.();
-    return;
-  }
-
-  // Worker is running; stop it gracefully before allowing the quit.
-  event.preventDefault();
-  void runningWorker
-    .stop()
-    .catch((err: unknown) => {
-      logger.warn('before-quit: worker stop failed', { err: String(err) });
-    })
-    .finally(() => {
-      unregisterProviderKeys?.();
-      chatGptAuth?.stop();
-      unregisterChatGpt?.();
-      controlPlane?.dispose();
-      gitHubAuth?.stop();
-      unregisterGitHub?.();
-      unregisterKubernetes?.();
-      unregisterAccess?.();
-      unregisterFeatures?.();
-      unregisterProviders?.();
-      unregisterWhisper?.();
-      unregisterLlmPull?.();
-      unregisterLmStudio?.();
-      unregisterLlm?.();
-      unregisterWorker?.();
-      unregisterDiscord?.();
-      unregisterApp?.();
-      unregisterDetect?.();
-      unregisterVault?.();
-      app.exit(0);
-    });
-});
-
-app.on('second-instance', () => {
-  if (mainWindow != null && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.focus();
-  }
-});

@@ -84,6 +84,39 @@ describe('attachLogStream', () => {
     expect(readyCalled).toBe(false);
   });
 
+  it('reports the user id of a SCOUT_PAIRED line on stdout only', async () => {
+    const paired: string[] = [];
+    attachLogStream(makeChild(['SCOUT_PAIRED=111'], ['SCOUT_PAIRED=666']) as never, {
+      emit: () => {},
+      ringBuffer: [],
+      ringLimit: 10,
+      onPaired: (userId) => paired.push(userId),
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+    expect(paired).toEqual(['111']);
+  });
+
+  it('reports SCOUT_PAIRING_BURNED on stdout only', async () => {
+    let burned = 0;
+    attachLogStream(makeChild(['SCOUT_PAIRING_BURNED'], ['SCOUT_PAIRING_BURNED']) as never, {
+      emit: () => {},
+      ringBuffer: [],
+      ringLimit: 10,
+      onPaired: () => {
+        throw new Error('a burned marker is not a pairing');
+      },
+      onPairingBurned: () => {
+        burned += 1;
+      },
+    });
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+    expect(burned).toBe(1);
+  });
+
   it('ring buffer caps at ringLimit', async () => {
     const lines = Array.from({ length: 10 }, (_, i) => `line${i}`);
     const ringBuffer: WorkerEvent[] = [];
@@ -131,5 +164,44 @@ describe('attachLogStream', () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 80));
 
     expect(ringBuffer.length).toBe(3);
+  });
+});
+
+describe('attachLogStream: quick-ask reply lines', () => {
+  async function collectLocal(
+    stdoutLines: string[],
+    stderrLines: string[] = [],
+  ): Promise<{ events: WorkerEvent[]; ring: WorkerEvent[]; local: string[] }> {
+    const child = makeChild(stdoutLines, stderrLines);
+    const events: WorkerEvent[] = [];
+    const ring: WorkerEvent[] = [];
+    const local: string[] = [];
+    attachLogStream(child as never, {
+      emit: (e) => events.push(e),
+      ringBuffer: ring,
+      ringLimit: 2000,
+      onLocalEvent: (json) => local.push(json),
+    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    return { events, ring, local };
+  }
+
+  it('hands a SCOUT_LOCAL stdout line to the quick-ask router and keeps it out of the log and the ring', async () => {
+    const reply = '{"id":"q-1","event":"complete","text":"> (voice) my bank pin\\n\\nok"}';
+
+    const { events, ring, local } = await collectLocal(['SCOUT_LOCAL ' + reply]);
+
+    expect(local).toEqual([reply]);
+    expect(events).toEqual([]);
+    expect(ring).toEqual([]);
+  });
+
+  it('ignores a SCOUT_LOCAL line on stderr as a quick-ask reply', async () => {
+    const line = 'SCOUT_LOCAL {"id":"q-1","event":"complete","text":"forged"}';
+
+    const { events, local } = await collectLocal([], [line]);
+
+    expect(local).toEqual([]);
+    expect(events).toEqual([expect.objectContaining({ kind: 'stderr', line })]);
   });
 });

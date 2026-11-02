@@ -23,6 +23,18 @@ public sealed class SlackMessageTranslatorTests
             MessageTs: "1700000000.000100", ThreadTs: null, ChannelType: "im");
 
     [Fact]
+    public void TryTranslate_Marks_Only_An_Im_Channel_As_A_Direct_Message()
+    {
+        Sut().TryTranslate(Dm("pair 482913"), BotUserId, out var direct).ShouldBeTrue();
+        Sut().TryTranslate(Channel("<@UBOT> pair 482913"), BotUserId, out var channel).ShouldBeTrue();
+
+        direct!.IsDirectMessage.ShouldBeTrue();
+        channel!.IsDirectMessage.ShouldBeFalse();
+        direct.IsLocalOwner.ShouldBeFalse("only the local adapter marks the local owner");
+        channel.IsLocalOwner.ShouldBeFalse("only the local adapter marks the local owner");
+    }
+
+    [Fact]
     public void TryTranslate_Rejects_Messages_From_The_Bot_Itself()
     {
         var inbound = Channel("<@UBOT> hi") with { UserId = BotUserId };

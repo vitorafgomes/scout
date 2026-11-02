@@ -123,19 +123,31 @@ describe('DiscordPlatformCardComponent', () => {
     expect(card.getAttribute('tabindex')).toBe('0');
   });
 
-  it('Slack card renders as coming-soon and is non-clickable', () => {
+  it('Slack card is clickable and offers set up while Slack is not connected', () => {
     const fixture = create('slack');
     const activate = vi.fn();
     fixture.componentInstance.activate.subscribe(activate);
 
-    const card = fixture.nativeElement.querySelector('.card--coming-soon') as HTMLElement;
-    expect(card).not.toBeNull();
-    expect(card.getAttribute('aria-disabled')).toBe('true');
-    expect(card.getAttribute('data-kind')).toBe('slack');
+    const card = fixture.nativeElement.querySelector('.card--slack') as HTMLElement;
+    expect(card.getAttribute('role')).toBe('button');
+    expect(
+      fixture.nativeElement.querySelector('[data-test="slack-badge"]').textContent.trim(),
+    ).toBe('Set up');
     card.click();
-    expect(activate).not.toHaveBeenCalled();
-    const discordOnly = fixture.nativeElement.querySelector('.card--discord');
-    expect(discordOnly).toBeNull();
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(activate).toHaveBeenCalledTimes(2);
+  });
+
+  it('Slack card says Connected once Slack is connected', () => {
+    TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
+    const fixture = TestBed.createComponent(DiscordPlatformCardComponent);
+    fixture.componentInstance.kind = 'slack';
+    fixture.componentInstance.slackConnected = true;
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-test="slack-badge"]').textContent.trim(),
+    ).toBe('Connected');
   });
 
   it('Teams card renders as coming-soon and is non-clickable regardless of state', () => {

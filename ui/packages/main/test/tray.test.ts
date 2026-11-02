@@ -1,335 +1,232 @@
 import { describe, it, expect } from 'bun:test';
+import { EventEmitter } from 'node:events';
+import type { BrowserWindow, Display, Menu, Tray } from 'electron';
+import type { WorkerStatus } from '@scout/shared';
 import { createTrayController } from '../src/tray/tray.js';
 import type { TrayDeps } from '../src/tray/tray.js';
-import type { WorkerStatus } from '@scout/shared';
-import type { Logger } from '../src/util/logger.js';
+import { openQuickAsk, registerQuickAsk } from '../src/quick-ask/quick-ask.js';
+import { recordingLogger } from './kubernetes-fakes.js';
+import { FakeTray } from './shell-fakes.js';
 
-// ---------------------------------------------------------------------------
-// Fake helpers
-// ---------------------------------------------------------------------------
-
-interface FakeMenuItemConstructorOptions {
-  label?: string;
-  type?: string;
-  id?: string;
-  enabled?: boolean;
-  click?: () => void;
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve: () => void = () => undefined;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
 }
 
-class FakeMenu {
-  readonly template: FakeMenuItemConstructorOptions[];
-
-  constructor(template: FakeMenuItemConstructorOptions[]) {
-    this.template = template;
-  }
-
-  itemById(id: string): FakeMenuItemConstructorOptions | undefined {
-    return this.template.find((item) => item.id === id);
-  }
-
-  hasItemById(id: string): boolean {
-    return this.template.some((item) => item.id === id);
-  }
-
-  labels(): string[] {
-    return this.template.map((item) => item.label).filter((l): l is string => l !== undefined);
-  }
-}
-
-class FakeTray {
-  private contextMenu: FakeMenu | null = null;
-  private tooltip = '';
-  private destroyed = false;
-  private readonly listeners: Map<string, Array<() => void>> = new Map();
-  readonly destroyCalls: number[] = [];
-
-  on(event: string, cb: () => void): this {
-    const existing = this.listeners.get(event) ?? [];
-    existing.push(cb);
-    this.listeners.set(event, existing);
-    return this;
-  }
-
-  emit(event: string): void {
-    const cbs = this.listeners.get(event) ?? [];
-    for (const cb of cbs) cb();
-  }
-
-  setContextMenu(menu: FakeMenu): void {
-    this.contextMenu = menu;
-  }
-
-  setToolTip(tip: string): void {
-    this.tooltip = tip;
-  }
-
-  popUpContextMenu(): void {}
-
-  isDestroyed(): boolean {
-    return this.destroyed;
-  }
-
-  destroy(): void {
-    this.destroyed = true;
-    this.destroyCalls.push(Date.now());
-  }
-
-  getContextMenu(): FakeMenu | null {
-    return this.contextMenu;
-  }
-
-  getToolTip(): string {
-    return this.tooltip;
-  }
-}
-
-function makeNullLogger(): Logger {
-  return {
-    debug() {},
-    info() {},
-    warn() {},
-    error() {},
-    child() {
-      return makeNullLogger();
-    },
-  };
-}
-
-function makeDeps(overrides?: Partial<TrayDeps>): {
-  deps: TrayDeps;
-  fakeTray: FakeTray;
-  menus: FakeMenu[];
-  calls: { showWindow: number; quit: number; stopWorker: number };
-} {
+function setup(overrides: Partial<TrayDeps> = {}) {
   const fakeTray = new FakeTray();
-  const menus: FakeMenu[] = [];
-  const calls = { showWindow: 0, quit: 0, stopWorker: 0 };
-
-  const deps: TrayDeps = {
-    createTray: (_iconPath: string) => fakeTray as unknown as Electron.Tray,
-    buildContextMenu: (template) => {
-      const menu = new FakeMenu(
-        template as FakeMenuItemConstructorOptions[],
-      ) as unknown as Electron.Menu;
-      menus.push(menu as unknown as FakeMenu);
-      return menu;
-    },
+  const opened: string[] = [];
+  const { logger, lines } = recordingLogger();
+  const controller = createTrayController({
+    createTray: () => fakeTray as unknown as Tray,
+    buildContextMenu: (template) => template as unknown as Menu,
     iconPath: '/fake/icon.png',
-    onShowWindow: () => {
-      calls.showWindow += 1;
-    },
-    onStopWorker: async () => {
-      calls.stopWorker += 1;
-    },
-    onQuit: () => {
-      calls.quit += 1;
-    },
-    logger: makeNullLogger(),
+    onOpen: () => opened.push('window'),
+    onAskScout: openQuickAsk,
+    onStart: async () => undefined,
+    onStop: async () => undefined,
+    onQuit: () => undefined,
+    logger,
     ...overrides,
-  };
-
-  return { deps, fakeTray, menus, calls };
+  });
+  return { fakeTray, opened, lines, controller: controller! };
 }
 
-function statusRunning(): WorkerStatus {
-  return { state: 'running', restarts: 0 };
-}
+const status = (state: WorkerStatus['state']): WorkerStatus => ({ state, restarts: 0 });
 
-function statusIdle(): WorkerStatus {
-  return { state: 'idle', restarts: 0 };
-}
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+describe('the tray menu', () => {
+  it('offers Open Scout, Ask Scout..., the worker toggle and Quit Scout, in that order', () => {
+    const { fakeTray } = setup({ initialStatus: status('running') });
 
-describe('createTrayController', () => {
-  it('calls createTray with the provided iconPath and assigns a context menu', () => {
-    const { deps, fakeTray, menus } = makeDeps();
-
-    createTrayController(deps);
-
-    expect(fakeTray.isDestroyed()).toBe(false);
-    expect(menus.length).toBeGreaterThanOrEqual(1);
+    expect(fakeTray.layout()).toEqual([
+      'Open Scout',
+      'Ask Scout...',
+      '---',
+      'Stop Scout',
+      '---',
+      'Quit Scout',
+    ]);
   });
 
-  it('calls onShowWindow when the Show Scout Desktop menu item is clicked', () => {
-    const { deps, menus, calls } = makeDeps({ initialStatus: statusIdle() });
+  it.each([
+    ['idle', 'Start Scout', true],
+    ['stopped', 'Start Scout', true],
+    ['crashed', 'Start Scout', true],
+    ['starting', 'Start Scout', false],
+    ['running', 'Stop Scout', true],
+  ] as const)('worker %s: shows %s, enabled %p', (state, label, enabled) => {
+    const { fakeTray, controller } = setup();
 
-    createTrayController(deps);
+    controller.setStatus(status(state));
 
-    const lastMenu = menus.at(-1)!;
-    const showItem = lastMenu.itemById('show-window');
-    expect(showItem).toBeDefined();
-    showItem!.click!();
-
-    expect(calls.showWindow).toBe(1);
+    expect(fakeTray.item('worker').label).toBe(label);
+    expect(fakeTray.item('worker').enabled).toBe(enabled);
   });
 
-  it('calls onQuit when the Quit Scout Desktop menu item is clicked', () => {
-    const { deps, menus, calls } = makeDeps({ initialStatus: statusIdle() });
+  it.each([
+    ['idle', 'Scout - Idle'],
+    ['starting', 'Scout - Starting'],
+    ['running', 'Scout - Running'],
+    ['stopped', 'Scout - Stopped'],
+    ['crashed', 'Scout - Crashed'],
+  ] as const)('worker %s: the tooltip reads "%s"', (state, tooltip) => {
+    const { fakeTray, controller } = setup();
 
-    createTrayController(deps);
+    controller.setStatus(status(state));
 
-    const lastMenu = menus.at(-1)!;
-    const quitItem = lastMenu.itemById('quit');
-    expect(quitItem).toBeDefined();
-    quitItem!.click!();
-
-    expect(calls.quit).toBe(1);
+    expect(fakeTray.tooltip).toBe(tooltip);
   });
 
-  it('calls onStopWorker when Stop worker is clicked', async () => {
-    const { deps, menus, calls } = makeDeps({ initialStatus: statusRunning() });
+  it('Stop Scout stays disabled while the worker is stopping, then offers Start Scout', async () => {
+    const stopping = deferred();
+    const { fakeTray, controller } = setup({
+      initialStatus: status('running'),
+      onStop: () => stopping.promise,
+    });
 
-    createTrayController(deps);
+    fakeTray.click('worker');
+    controller.setStatus(status('stopped'));
 
-    const lastMenu = menus.at(-1)!;
-    const stopItem = lastMenu.itemById('stop-worker');
-    expect(stopItem).toBeDefined();
-    stopItem!.click!();
+    expect(fakeTray.item('worker')).toMatchObject({ label: 'Stop Scout', enabled: false });
 
-    // Give the async click handler a tick to resolve.
-    await new Promise((r) => setTimeout(r, 0));
+    stopping.resolve();
+    await tick();
 
-    expect(calls.stopWorker).toBe(1);
+    expect(fakeTray.item('worker')).toMatchObject({ label: 'Start Scout', enabled: true });
   });
 
-  it('logs an error and does NOT throw when onStopWorker rejects', async () => {
-    const errors: unknown[] = [];
-    const logger: Logger = {
-      ...makeNullLogger(),
-      error(_msg: string, err?: unknown) {
-        errors.push(err);
+  it('Start Scout stays disabled until the start settles, even before the worker reports starting', async () => {
+    const starting = deferred();
+    const { fakeTray, controller } = setup({
+      initialStatus: status('stopped'),
+      onStart: () => starting.promise,
+    });
+
+    fakeTray.click('worker');
+
+    expect(fakeTray.item('worker')).toMatchObject({ label: 'Start Scout', enabled: false });
+
+    controller.setStatus(status('running'));
+    starting.resolve();
+    await tick();
+
+    expect(fakeTray.item('worker')).toMatchObject({ label: 'Stop Scout', enabled: true });
+  });
+
+  it('a failed start is logged and the item is offered again', async () => {
+    const { fakeTray, lines } = setup({
+      initialStatus: status('stopped'),
+      onStart: () => Promise.reject(new Error('binary missing')),
+    });
+
+    fakeTray.click('worker');
+    await tick();
+
+    expect(fakeTray.item('worker')).toMatchObject({ label: 'Start Scout', enabled: true });
+    expect(lines.some((line) => line.includes('tray: start failed'))).toBe(true);
+  });
+
+  it('Open Scout and a click on the icon both open the window', () => {
+    const { fakeTray, opened } = setup();
+
+    fakeTray.click('open');
+    fakeTray.emit('click');
+
+    expect(opened).toEqual(['window', 'window']);
+  });
+
+  it('Ask Scout... creates and shows the real quick-ask window on the quick-ask route', async () => {
+    class QuickAskWindow extends EventEmitter {
+      readonly webContents = Object.assign(new EventEmitter(), {
+        setWindowOpenHandler() {},
+        focus() {},
+      });
+      readonly calls: string[] = [];
+      route: unknown = null;
+      isDestroyed = () => false;
+      setPosition = () => this.calls.push('setPosition');
+      show = () => this.calls.push('show');
+      showInactive = () => this.calls.push('showInactive');
+      focus = () => this.calls.push('focus');
+      hide = () => this.calls.push('hide');
+      destroy = () => undefined;
+      loadFile = (_path: string, options: unknown) => {
+        this.route = options;
+        return Promise.resolve();
+      };
+      loadURL = () => Promise.resolve();
+    }
+    const windows: QuickAskWindow[] = [];
+    const display = { workArea: { x: 0, y: 0, width: 1280, height: 800 } } as Display;
+    const quickAsk = await registerQuickAsk({
+      ipcMain: { handle: () => undefined, removeHandler: () => undefined },
+      supervisor: { writeStdin: () => true, onEvent: () => () => undefined },
+      createWindow: () => {
+        const window = new QuickAskWindow();
+        windows.push(window);
+        return window as unknown as BrowserWindow;
       },
-    };
-
-    const { deps, menus } = makeDeps({
-      initialStatus: statusRunning(),
-      onStopWorker: async () => {
-        throw new Error('stop failed');
+      preloadPath: undefined,
+      indexHtmlPath: '/app/renderer/index.html',
+      globalShortcut: { register: () => true, unregister: () => undefined },
+      vault: { get: async () => null, store: async () => undefined },
+      logger: recordingLogger().logger,
+      screen: {
+        getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+        getDisplayNearestPoint: () => display,
+        getPrimaryDisplay: () => display,
+        getAllDisplays: () => [display],
       },
+      platform: 'linux',
+      env: {},
+      execPath: '/opt/Scout/scout-desktop',
+      windows: () => [],
+    });
+    const { fakeTray } = setup();
+
+    fakeTray.click('ask');
+    quickAsk.dispose();
+
+    const quickAskWindows = windows.filter(
+      (w) => (w.route as { hash: string } | null)?.hash === '/quick-ask',
+    );
+    expect(quickAskWindows).toHaveLength(1);
+    expect(quickAskWindows[0]!.calls).toEqual(['setPosition', 'show', 'focus']);
+  });
+
+  it('returns null and logs when the desktop cannot create a tray', () => {
+    const { logger, lines } = recordingLogger();
+
+    const controller = createTrayController({
+      createTray: () => {
+        throw new Error('no status notifier host');
+      },
+      buildContextMenu: (template) => template as unknown as Menu,
+      iconPath: '/fake/icon.png',
+      onOpen: () => undefined,
+      onAskScout: () => undefined,
+      onStart: async () => undefined,
+      onStop: async () => undefined,
+      onQuit: () => undefined,
       logger,
     });
 
-    createTrayController(deps);
-
-    const stopItem = menus.at(-1)!.itemById('stop-worker');
-    expect(stopItem).toBeDefined();
-
-    let threw = false;
-    try {
-      stopItem!.click!();
-      await new Promise((r) => setTimeout(r, 10));
-    } catch {
-      threw = true;
-    }
-
-    expect(threw).toBe(false);
-    expect(errors.length).toBe(1);
+    expect(controller).toBeNull();
+    expect(lines.some((line) => line.includes('tray: not available on this desktop'))).toBe(true);
   });
 
-  it('setStatus rebuilds the menu with the new status label', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
+  it('destroy removes the icon and later status changes do not touch it', () => {
+    const { fakeTray, controller } = setup();
 
-    const controller = createTrayController(deps);
-    const menusBefore = menus.length;
-
-    controller.setStatus(statusRunning());
-
-    expect(menus.length).toBe(menusBefore + 1);
-    const newMenu = menus.at(-1)!;
-    const statusItem = newMenu.itemById('status-label');
-    expect(statusItem?.label).toBe('Status: Running');
-  });
-
-  it('hides Stop worker when status is idle', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusRunning() });
-
-    const controller = createTrayController(deps);
-
-    controller.setStatus(statusIdle());
-
-    const lastMenu = menus.at(-1)!;
-    expect(lastMenu.hasItemById('stop-worker')).toBe(false);
-  });
-
-  it('shows Stop worker when status is running', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
-
-    const controller = createTrayController(deps);
-
-    controller.setStatus(statusRunning());
-
-    const lastMenu = menus.at(-1)!;
-    expect(lastMenu.hasItemById('stop-worker')).toBe(true);
-  });
-
-  it('shows Stop worker when status is starting', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
-
-    const controller = createTrayController(deps);
-
-    controller.setStatus({ state: 'starting', restarts: 0 });
-
-    const lastMenu = menus.at(-1)!;
-    expect(lastMenu.hasItemById('stop-worker')).toBe(true);
-  });
-
-  it('calls tray.destroy() when destroy() is invoked', () => {
-    const { deps, fakeTray } = makeDeps();
-
-    const controller = createTrayController(deps);
     controller.destroy();
+    controller.setStatus(status('running'));
 
-    expect(fakeTray.isDestroyed()).toBe(true);
-    expect(fakeTray.destroyCalls.length).toBe(1);
-  });
-
-  it('menu order is stable across setStatus calls', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
-
-    const controller = createTrayController(deps);
-    controller.setStatus(statusRunning());
-    controller.setStatus(statusIdle());
-    controller.setStatus(statusRunning());
-
-    for (const menu of menus) {
-      const ids = menu.template.filter((i) => i.id !== undefined).map((i) => i.id);
-
-      expect(ids[0]).toBe('show-window');
-      expect(ids[1]).toBe('status-label');
-
-      const lastId = ids.at(-1);
-      expect(lastId).toBe('quit');
-    }
-  });
-
-  it('status label reads "Status: Idle" for idle state', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
-
-    createTrayController(deps);
-
-    const statusItem = menus.at(-1)!.itemById('status-label');
-    expect(statusItem?.label).toBe('Status: Idle');
-  });
-
-  it('status label reads "Status: Crashed" for crashed state', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusIdle() });
-
-    const controller = createTrayController(deps);
-    controller.setStatus({ state: 'crashed', restarts: 2 });
-
-    const statusItem = menus.at(-1)!.itemById('status-label');
-    expect(statusItem?.label).toBe('Status: Crashed');
-  });
-
-  it('status item is disabled (non-interactive label)', () => {
-    const { deps, menus } = makeDeps({ initialStatus: statusRunning() });
-
-    createTrayController(deps);
-
-    const statusItem = menus.at(-1)!.itemById('status-label');
-    expect(statusItem?.enabled).toBe(false);
+    expect(fakeTray.destroyed).toBe(true);
+    expect(fakeTray.tooltip).toBe('Scout - Idle');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { createSupervisor } from '../src/worker/supervisor.js';
 import type { SupervisorDeps } from '../src/worker/supervisor.js';
 import type { WorkerEvent } from '@scout/shared';
@@ -428,5 +428,77 @@ describe('createSupervisor', () => {
       expect(thrown).not.toBeNull();
       expect(supervisor.status.state).toBe('crashed');
     });
+  });
+});
+
+describe('createSupervisor: quick-ask stdin', () => {
+  async function running(stdin: Writable, overrides: Partial<SupervisorDeps> = {}) {
+    const { child, ...deps } = makeDeps(overrides);
+    (child as unknown as { stdin: Writable }).stdin = stdin;
+    const supervisor = createSupervisor(deps);
+    const started = supervisor.start();
+    await Promise.resolve();
+    await Promise.resolve();
+    emitReady(child);
+    await started;
+    return { supervisor, child };
+  }
+
+  it('writes one line to the running worker stdin', async () => {
+    const written: string[] = [];
+    const stdin = new Writable({
+      write(chunk: Buffer, _enc, cb) {
+        written.push(chunk.toString());
+        cb();
+      },
+    });
+    const { supervisor } = await running(stdin);
+
+    const accepted = supervisor.writeStdin('{"type":"ask","id":"q-1","text":"hi"}', () => {});
+
+    expect(accepted).toBe(true);
+    expect(written).toEqual(['{"type":"ask","id":"q-1","text":"hi"}\n']);
+  });
+
+  it('refuses a write when no worker is running', () => {
+    const { child, ...deps } = makeDeps();
+    void child;
+    const supervisor = createSupervisor(deps);
+
+    expect(supervisor.writeStdin('{"type":"ask"}', () => {})).toBe(false);
+  });
+
+  it('reports a stdin write that fails with EPIPE to the caller and logs it instead of crashing', async () => {
+    const warnings: string[] = [];
+    const logger = { ...makeNullLogger(), warn: (msg: string) => warnings.push(msg) };
+    const stdin = new Writable({
+      write(_chunk, _enc, cb) {
+        cb(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }));
+      },
+    });
+    const { supervisor } = await running(stdin, { logger });
+    const failures: string[] = [];
+
+    supervisor.writeStdin('{"type":"ask","id":"q-1","text":"hi"}', (err) =>
+      failures.push(err.message),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+    expect(failures).toEqual(['write EPIPE']);
+    expect(warnings).toContain('supervisor: worker stdin closed');
+  });
+
+  it('hands SCOUT_LOCAL lines to onLocalEvent and keeps them out of the snapshot', async () => {
+    const local: string[] = [];
+    const stdin = new Writable({ write: (_c, _e, cb) => cb() });
+    const { supervisor, child } = await running(stdin, {
+      onLocalEvent: (json) => local.push(json),
+    });
+
+    emitLine(child, 'stdout', 'SCOUT_LOCAL {"id":"q-1","event":"begin"}');
+    await new Promise<void>((resolve) => setTimeout(resolve, 80));
+
+    expect(local).toEqual(['{"id":"q-1","event":"begin"}']);
+    expect(supervisor.getSnapshot().some((e) => 'line' in e && e.line.includes('q-1'))).toBe(false);
   });
 });

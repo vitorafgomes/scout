@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerAppHandlers } from '../src/ipc/app.js';
+import { manifestUrl } from '../src/slack/slack-setup.js';
 import { createLogger } from '../src/util/logger.js';
 
 const logger = createLogger('test', { sink: () => {} });
@@ -68,6 +69,14 @@ describe('registerAppHandlers — appOpenExternal', () => {
       url: 'https://discord.com/oauth2/authorize?client_id=1',
     });
     expect(shell.calls).toContain('https://discord.com/oauth2/authorize?client_id=1');
+  });
+
+  it('opens the Slack app creation link with the manifest it was given', async () => {
+    const url = manifestUrl();
+
+    await invoke(ipc, 'scout:app.openExternal', { url });
+
+    expect(shell.calls).toEqual([url]);
   });
 
   it('allows https://discordapp.com', async () => {

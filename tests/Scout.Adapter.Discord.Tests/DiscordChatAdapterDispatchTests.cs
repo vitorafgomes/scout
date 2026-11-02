@@ -3,6 +3,7 @@ using Discord;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 
 namespace Scout.Adapter.Discord.Tests;
 
@@ -110,11 +111,38 @@ public sealed class DiscordChatAdapterDispatchTests
         }
     }
 
+    [Fact]
+    public async Task A_Reply_Cancelled_At_Stop_Stops_The_Typing_Indicator()
+    {
+        var typing = Substitute.For<IDisposable>();
+        var channel = Substitute.For<IDMChannel>();
+        channel.EnterTypingState(Arg.Any<RequestOptions>()).Returns(typing);
+        var begun = NewSignal();
+        await using var adapter = NewAdapter(new RecordingLogger());
+        adapter.Arm(
+            async (_, sink, ct) =>
+            {
+                await sink.BeginAsync(ct);
+                begun.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+            },
+            CancellationToken.None);
+
+        await adapter.OnInboundAsync(DirectMessage(), BotUserId, channel);
+        await begun.Task.WaitAsync(Generous);
+        typing.DidNotReceive().Dispose();
+
+        await adapter.StopAsync(CancellationToken.None);
+
+        typing.Received(1).Dispose();
+    }
+
     private static DiscordChatAdapter NewAdapter(ILogger<DiscordChatAdapter> logger)
         => new(
             Options.Create(new DiscordOptions { BotToken = "not-a-real-token" }),
             new DiscordMessageTranslator(),
-            logger);
+            logger,
+            new AccessPolicy(new AccessOptions()));
 
     private static InboundDiscordMessage DirectMessage()
         => new(

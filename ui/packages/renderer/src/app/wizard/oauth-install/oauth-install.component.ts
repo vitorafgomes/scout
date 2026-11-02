@@ -1,40 +1,20 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
-import { ScoutError, type DiscordOAuthResult } from '@scout/shared';
+import { readIpcError, type DiscordGuild } from '@scout/shared';
 
 import { PersistentStateService } from '../../core/persistent-state';
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { WizardStore } from '../../core/wizard.store';
 
-type InstallState = 'idle' | 'awaiting' | 'exchanging' | 'success' | 'error';
-
-// Discord permissions Scout requires at install time. Keep the bit positions
-// explicit so reviewers can map each flag to a docs entry. SEND_MESSAGES is
-// the single write flag the bot needs so it can reply in the channel where
-// it was mentioned; the read-only invariant still holds because plugins
-// never post unprompted.
-const PERM_VIEW_CHANNEL = 1n << 10n;
-const PERM_SEND_MESSAGES = 1n << 11n;
-const PERM_READ_MESSAGE_HISTORY = 1n << 16n;
-const PERM_USE_APPLICATION_COMMANDS = 1n << 31n;
-
-function computePermissions(): string {
-  return (
-    PERM_VIEW_CHANNEL |
-    PERM_SEND_MESSAGES |
-    PERM_READ_MESSAGE_HISTORY |
-    PERM_USE_APPLICATION_COMMANDS
-  ).toString();
-}
-
-const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
-  'oauth/state-mismatch': 'Authorization was rejected for security reasons. Try again.',
-  'oauth/user-cancelled': 'Authorization cancelled. Try again or go back.',
-  'oauth/loopback-port-in-use':
-    'Cannot listen for the browser callback - close other Scout Desktop instances and retry.',
-  'app/external-host-not-allowed':
-    'An internal host allow-list check failed. This is a bug - please report it.',
-});
+const POLL_INTERVAL_MS = 3_000;
+const MAX_POLLS = 100;
 
 @Component({
   selector: 'sc-oauth-install',
@@ -42,58 +22,50 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="oauth-install">
-      <h1>Provision Discord</h1>
-      <p class="subtitle">Step 3 of 3 - Install to your server</p>
+      <h1>Add Scout to your server</h1>
+      <p class="subtitle">Step 3 of 3</p>
 
-      @switch (state()) {
-        @case ('awaiting') {
-          <section class="panel">
-            <div class="spinner" aria-hidden="true"></div>
-            <p>Waiting for authorization in your browser...</p>
-            <p class="hint">Listening on 127.0.0.1:53682</p>
-            <button type="button" class="ghost" data-test="cancel" (click)="cancel()">
-              Cancel
-            </button>
-          </section>
+      <section class="panel">
+        @if (joined(); as name) {
+          <p class="ok" data-test="joined">Scout joined {{ name }}</p>
+        } @else if (waiting()) {
+          <div class="spinner" aria-hidden="true"></div>
+          <p data-test="waiting">
+            Pick your server in the browser and click Authorize. Scout continues on its own.
+          </p>
+        } @else {
+          <p>Discord opens in your browser so you can pick the server.</p>
+          <button type="button" class="primary" data-test="invite" (click)="openInvite()">
+            Add Scout to a server
+          </button>
         }
-        @case ('exchanging') {
-          <section class="panel">
-            <div class="spinner" aria-hidden="true"></div>
-            <p>Completing authorization...</p>
-          </section>
+
+        @if (error(); as message) {
+          <p class="error" role="alert" data-test="error-copy">{{ message }}</p>
         }
-        @case ('success') {
-          <section class="panel success">
-            <p data-test="success-line">
-              Scout was added to <strong>{{ guild()?.guildName }}</strong
-              >.
-            </p>
-            <div class="actions">
-              <button type="button" class="primary" data-test="continue" (click)="continueNext()">
-                Continue
-              </button>
-            </div>
-          </section>
+
+        @if (guilds().length > 0 && joined() === null) {
+          <p class="hint">Scout is already in these servers. Pick one to use:</p>
+          <ul class="guilds">
+            @for (guild of guilds(); track guild.id) {
+              <li>
+                <button
+                  type="button"
+                  class="secondary"
+                  data-test="guild-option"
+                  (click)="choose(guild)"
+                >
+                  {{ guild.name }}
+                </button>
+              </li>
+            }
+          </ul>
         }
-        @case ('error') {
-          <section class="panel error-panel" role="alert">
-            <p class="error" data-test="error-copy">{{ errorMessage() }}</p>
-            <div class="actions">
-              <button type="button" class="secondary" data-test="back" (click)="back()">
-                Back
-              </button>
-              <button type="button" class="primary" data-test="retry" (click)="retry()">
-                Retry
-              </button>
-            </div>
-          </section>
-        }
-        @default {
-          <section class="panel">
-            <p>Preparing authorization...</p>
-          </section>
-        }
-      }
+
+        <div class="actions">
+          <button type="button" class="ghost" data-test="back" (click)="back()">Back</button>
+        </div>
+      </section>
     </main>
   `,
   styles: [
@@ -141,10 +113,20 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
       .error {
         color: #d45a5a;
       }
+      .ok {
+        color: #3aaf7b;
+      }
       .hint {
         color: #7b8299;
         font-size: 13px;
-        font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+      }
+      .guilds {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
       .spinner {
         width: 28px;
@@ -200,108 +182,129 @@ const ERROR_COPY: Readonly<Record<string, string>> = Object.freeze({
     `,
   ],
 })
-export class OAuthInstallComponent implements OnInit {
+export class OAuthInstallComponent implements OnInit, OnDestroy {
   private readonly bridge = inject(ScoutBridgeService);
   private readonly router = inject(Router);
   private readonly wizard = inject(WizardStore);
   private readonly persistent = inject(PersistentStateService);
 
-  readonly state = signal<InstallState>('idle');
-  readonly errorMessage = signal<string | null>(null);
-  readonly guild = signal<DiscordOAuthResult | null>(null);
+  readonly guilds = signal<readonly DiscordGuild[]>([]);
+  readonly waiting = signal<boolean>(false);
+  readonly joined = signal<string | null>(null);
+  readonly error = signal<string | null>(null);
+
+  private known = new Set<string>();
+  private baseline: Promise<boolean> = Promise.resolve(false);
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private polls = 0;
+  private destroyed = false;
 
   ngOnInit(): void {
     this.wizard.goTo('oauth');
-    const id = this.wizard.clientId();
-    if (id === null) {
+    if (this.wizard.clientId() === null) {
       void this.router.navigateByUrl('/');
       return;
     }
-    void this.runInstall(id);
+    this.baseline = this.loadGuilds();
   }
 
-  retry(): void {
-    const id = this.wizard.clientId();
-    if (id === null) {
-      void this.router.navigateByUrl('/');
-      return;
+  ngOnDestroy(): void {
+    this.destroyed = true;
+    this.stopPolling();
+  }
+
+  async openInvite(): Promise<void> {
+    this.error.set(null);
+    if (!(await this.baseline)) {
+      this.baseline = this.loadGuilds();
+      if (!(await this.baseline)) return;
     }
-    void this.runInstall(id);
-  }
-
-  async cancel(): Promise<void> {
     try {
-      await this.bridge.discordCancelOAuthInstall();
-    } catch {
-      // Even if the cancel IPC fails, still return the UI to a usable state.
+      const { url } = await this.bridge.discordInviteUrl();
+      await this.bridge.appOpenExternal({ url });
+    } catch (err: unknown) {
+      this.error.set(readIpcError(err).message);
+      return;
     }
-    this.state.set('idle');
-    void this.router.navigateByUrl('/token');
+    this.polls = 0;
+    this.waiting.set(true);
+    this.schedulePoll();
   }
 
-  continueNext(): void {
+  async choose(guild: DiscordGuild): Promise<void> {
+    this.stopPolling();
+    const clientId = this.wizard.clientId();
+    if (clientId === null) return;
+    try {
+      await this.bridge.vaultStore({ key: 'discord.guild-id', value: guild.id });
+      await this.bridge.vaultStore({ key: 'discord.guild-name', value: guild.name });
+    } catch (err: unknown) {
+      this.error.set(readIpcError(err).message);
+      return;
+    }
+    this.wizard.setGuild(guild);
+    this.persistent.set({ clientId, guildId: guild.id, guildName: guild.name });
+    this.joined.set(guild.name);
     this.wizard.goTo('launch');
     void this.router.navigateByUrl('/launch');
   }
 
   back(): void {
+    this.stopPolling();
     void this.router.navigateByUrl('/token');
   }
 
-  private async runInstall(clientId: string): Promise<void> {
-    this.state.set('awaiting');
-    this.errorMessage.set(null);
-    this.guild.set(null);
-
+  private async loadGuilds(): Promise<boolean> {
     try {
-      const permissions = computePermissions();
-      const result = await this.bridge.discordStartOAuthInstall({ clientId, permissions });
-      // The main process handled state verification + token exchange;
-      // reaching here means the flow succeeded.
-      this.state.set('exchanging');
-      this.guild.set(result);
-      this.wizard.setGuild({ id: result.guildId, name: result.guildName });
-      await this.persistProvisioning(clientId, result.guildId, result.guildName);
-      this.state.set('success');
+      const { guilds } = await this.bridge.discordGuilds();
+      this.known = new Set(guilds.map((g) => g.id));
+      this.guilds.set(guilds);
+      return true;
     } catch (err: unknown) {
-      this.errorMessage.set(this.describeError(err));
-      this.state.set('error');
+      this.error.set(readIpcError(err).message);
+      return false;
     }
   }
 
-  private async persistProvisioning(
-    clientId: string,
-    guildId: string,
-    guildName: string,
-  ): Promise<void> {
-    try {
-      await this.bridge.vaultStore({ key: 'discord.guild-id', value: guildId });
-    } catch {
-      // best-effort
-    }
-    try {
-      await this.bridge.vaultStore({ key: 'discord.guild-name', value: guildName });
-    } catch {
-      // best-effort
-    }
-    this.persistent.set({ clientId, guildId, guildName });
+  private schedulePoll(): void {
+    if (this.destroyed) return;
+    this.timer = setTimeout(() => void this.poll(), POLL_INTERVAL_MS);
   }
 
-  private describeError(err: unknown): string {
-    if (err instanceof ScoutError) {
-      const mapped = ERROR_COPY[err.code];
-      if (mapped !== undefined) return mapped;
-      if (err.code === 'discord/token-exchange-failed') {
-        return `Token exchange failed: ${err.message}`;
+  private stopPolling(): void {
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    this.waiting.set(false);
+  }
+
+  private async poll(): Promise<void> {
+    this.timer = null;
+    if (this.destroyed) return;
+    this.polls += 1;
+    try {
+      const { guilds } = await this.bridge.discordGuilds();
+      if (this.destroyed || !this.waiting()) return;
+      const added = guilds.find((g) => !this.known.has(g.id));
+      if (added !== undefined) {
+        await this.choose(added);
+        return;
       }
-      return `Something went wrong (${err.code}). Check the logs.`;
+    } catch (err: unknown) {
+      const { code, message } = readIpcError(err);
+      if (code === 'discord/token-rejected') {
+        this.stopPolling();
+        this.error.set(message);
+        return;
+      }
     }
-    if (err instanceof Error) {
-      return `Something went wrong: ${err.message}. Check the logs.`;
+    if (this.destroyed || !this.waiting()) return;
+    if (this.polls >= MAX_POLLS) {
+      this.stopPolling();
+      this.error.set(
+        'Scout has not joined a server yet. Click Add Scout to a server to try again.',
+      );
+      return;
     }
-    return 'Something went wrong. Check the logs.';
+    this.schedulePoll();
   }
 }
-
-export const OAUTH_INSTALL_ERROR_COPY = ERROR_COPY;
-export const OAUTH_INSTALL_PERMISSIONS = computePermissions();

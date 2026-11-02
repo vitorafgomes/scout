@@ -13,13 +13,11 @@ import {
   type WhisperVariant,
 } from '@scout/shared';
 import type { Logger } from '../util/logger.js';
+import { WHISPER_MODEL_FILES } from '../worker/whisper-model.js';
 
 const HF_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main';
 
-const VARIANT_TO_FILE: Readonly<Record<WhisperVariant, string>> = Object.freeze({
-  'large-v3': 'ggml-large-v3.bin',
-  'large-v3-turbo': 'ggml-large-v3-turbo.bin',
-});
+const VARIANT_TO_FILE = WHISPER_MODEL_FILES;
 
 const VALID_VARIANTS: ReadonlySet<string> = new Set(Object.keys(VARIANT_TO_FILE));
 
@@ -27,7 +25,7 @@ function isVariant(value: unknown): value is WhisperVariant {
   return typeof value === 'string' && VALID_VARIANTS.has(value);
 }
 
-function whisperRootDir(): string {
+export function whisperRootDir(): string {
   return path.join(app.getPath('userData'), 'whisper-models');
 }
 

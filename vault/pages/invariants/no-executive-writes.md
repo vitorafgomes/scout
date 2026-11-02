@@ -1,9 +1,9 @@
 ---
 title: "Scout performs descriptive writes only"
-version: "1.2"
+version: "1.4"
 date: 2026-10-21
-updated: 2026-10-23
-changes: "Optional run-time guard (ADR 0016); Kubernetes plugin: GET-only test against the real client, exact function set; allowed-users refusal classified"
+updated: 2026-10-30
+changes: "Own startup entry (login item, Linux autostart file) listed as a classified exception (ADR 0027); quick-ask replies to the local window classified as descriptive writes to the originating channel (ADR 0028); Own Discord application flag PATCH listed as a classified exception (ADR 0022); owner pairing reply classified (ADR 0021)"
 page_type: invariant
 status: active
 description: "Scout may write content that a human or another agent reads and decides on; it never mutates code, infrastructure, configuration or data on the host. The code upholds this by omission, plus an optional model-judged guard on requests."
@@ -51,7 +51,7 @@ Scout answers questions in shared chat channels. A model that can call a mutatin
 ## Scope
 
 - **Applies to:** every `KernelPlugin` the host registers, the GitHub client, the Kubernetes clients, the chat adapters, and the control plane.
-- **Does not cover:** Scout's own state (below), and replies posted to the chat platform, which are descriptive writes by definition. That includes the allowed-users refusal ("Scout only answers its configured users." or the setup text), which goes through the same sink to the originating channel only and is the one thing a refused message causes ([[pages/decisions/0021-allowed-users]], `src/Scout.Conversation/ConversationConductor.cs:60`). The allow-list decides who gets replies; it never authorizes a write.
+- **Does not cover:** Scout's own state (below), and replies posted to the chat platform, which are descriptive writes by definition. That includes the allowed-users refusal ("Scout only answers its configured users." or the setup text), which goes through the same sink to the originating channel only and is the one thing a refused message causes ([[pages/decisions/0021-allowed-users]], `src/Scout.Conversation/ConversationConductor.cs:131`). The allow-list decides who gets replies; it never authorizes a write. The pairing reply ("Paired. Scout will answer you from now on." or "That pairing code is not valid. Check the code in Scout's Settings and send it again.") is the same kind of reply, in the direct message it answers. The `SCOUT_PAIRED=<userId>` line it causes goes to the desktop's own supervisor on stdout, and the id lands in Scout's own vault, which is Scout's own state (`src/Scout.Conversation/ConversationConductor.cs:198`).
 
 ## Where it is held
 
@@ -79,12 +79,15 @@ Scout answers questions in shared chat channels. A model that can call a mutatin
 
 - **Token scope (reopened 2026-10-23 for pasted tokens).** The catalog asked for a `repo`-scope token and listed "Create issues"; it now lists only the GitHub App's read permissions (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:42`, `tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:27`). A host configured with `Scout:Plugins:GitHub:Token` still gets whatever scopes that token carries. An earlier plugin had `create_issue` under `src/old/`, which is outside `Scout.slnx` and not built. The desktop "Use a token" method accepts any token the owner pastes, including a classic token with `repo` scope, and hands it to the worker as `SCOUT__PLUGINS__GITHUB__TOKEN`; the card warns when the scope header lists a write scope, and read-only for that method rests on the GET-only client ([[pages/decisions/0019-github-app-device-flow]], `ui/packages/main/test/oauth-github-token.test.ts:133`).
 - **Host mutation by the control plane.** `Scout.Host.ControlPlane` can pull and delete Ollama models (`src/Scout.Host.ControlPlane/Services/ModelsGrpcService.cs:22,59`; `src/Scout.ControlPlane/Providers/OllamaApiClient.cs:168`) and start and kill the Ollama process (`src/Scout.ControlPlane/Providers/OllamaProviderService.cs:193`, `src/Scout.ControlPlane/Providers/SystemProcessLauncher.cs:173`). These are driven by the desktop UI over an authenticated local socket (`src/Scout.Host.ControlPlane/ControlPlaneServiceRegistration.cs:30`), never by the model. They mutate the host, so ADR 0009 must rule on whether they fall outside this invariant.
+- **Quick ask (local adapter).** The local adapter writes `SCOUT_LOCAL` reply lines to the worker's stdout, and the desktop shows them only in the owner's own quick-ask window and Chat screen, which share one conversation held in main (`src/Scout.Adapter.Local/LocalEventWriter.cs:25`, `ui/packages/main/src/quick-ask/quick-ask.ts:520`). Those windows are the originating channel, so the reply is a descriptive write like any chat reply. Reading the owner's microphone while Space or the button is held, and the line main writes to the worker's stdin, are reads the owner starts on their own machine; the quick-ask shortcut is Scout's own configuration. The adapter adds no LLM-invocable function, plugin operation or control-plane command ([[pages/decisions/0028-local-quick-ask-assistant]]).
+- **Own Discord application flag.** The desktop wizard sends one PATCH to Scout's own Discord application to turn on the limited Message Content intent, keeping every other flag (`ui/packages/main/src/discord/discord-setup.ts:94`). The owner starts it from the wizard; no LLM-invocable function or worker path reaches it. [[pages/decisions/0022-discord-setup-from-the-bot-token]] classifies it as Scout's own configuration, not an executive write.
+- **Own startup entry.** The desktop registers Scout as a login item on macOS and Windows and writes `~/.config/autostart/scout.desktop` on Linux (`ui/packages/main/src/shell/login-item.ts:53`, `:76`), only when the owner turns on "Start Scout when I log in" in Settings, and deletes that one file when it is turned off (`:87`). No worker path, LLM-invocable function or chat message reaches it. [[pages/decisions/0027-desktop-presence]] classifies it as Scout's own configuration, not an executive write.
 - **Own state.** Scout writes `features.json` and `local-runtimes.json` (`src/Scout.ControlPlane/Features/JsonFileFeatureStateStore.cs:167`, `src/Scout.ControlPlane/Providers/JsonFileLocalRuntimeConfigStore.cs:129`) and the vector database (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:107`) under the user's local application data directory. This is Scout's own config and index.
 
 ## Related
 
-- Services: [[pages/services/plugin-github]], [[pages/services/plugin-kubernetes]], [[pages/services/llm]], [[pages/services/skills]], [[pages/services/knowledge]], [[pages/services/control-plane]], [[pages/services/host-control-plane]]
-- ADR: [[pages/decisions/0009-descriptive-vs-executive-writes]], [[pages/decisions/0020-kubernetes-from-local-kubeconfig]]
+- Services: [[pages/services/adapter-local]], [[pages/services/plugin-github]], [[pages/services/plugin-kubernetes]], [[pages/services/llm]], [[pages/services/skills]], [[pages/services/knowledge]], [[pages/services/control-plane]], [[pages/services/host-control-plane]]
+- ADR: [[pages/decisions/0009-descriptive-vs-executive-writes]], [[pages/decisions/0020-kubernetes-from-local-kubeconfig]], [[pages/decisions/0028-local-quick-ask-assistant]]
 - Similar: [[pages/invariants/pluggable-boundaries]]
 
 ## Change protocol

@@ -32,4 +32,15 @@ public sealed class ChatMessageTests
 
         message.Timestamp.ShouldBe(ts);
     }
+
+    [Fact]
+    public void A_Voice_Message_May_Have_Empty_Text()
+    {
+        var audio = new AudioAttachment("audio/ogg", 10, TimeSpan.FromSeconds(1), _ => Task.FromResult<Stream>(Stream.Null));
+
+        var message = new ChatMessage("u", "c", string.Empty, null, audio);
+
+        message.Text.ShouldBe(string.Empty);
+        message.Audio.ShouldBeSameAs(audio);
+    }
 }

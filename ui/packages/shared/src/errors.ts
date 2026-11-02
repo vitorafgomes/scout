@@ -79,6 +79,15 @@ export class ExternalHostNotAllowedError extends ScoutError {
   }
 }
 
+export class DesktopAutostartError extends ScoutError {
+  constructor(
+    message = 'Could not change whether Scout starts when you log in.',
+    options?: ErrorOptions,
+  ) {
+    super('desktop/autostart-failed', message, options);
+  }
+}
+
 export class OllamaUnreachableError extends ScoutError {
   readonly endpoint: string;
 

@@ -1,14 +1,17 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Scout.Adapter.Discord;
+using Scout.Adapter.Local;
 using Scout.Adapter.Slack;
 using Scout.Adapter.Teams;
 using Scout.Conversation;
+using Scout.Conversation.Access;
 using Scout.Knowledge;
 using Scout.Llm;
 using Scout.Plugin.GitHub;
 using Scout.Plugin.Kubernetes;
 using Scout.Skills;
+using Scout.Transcription.Whisper;
 
 namespace Scout.Host.Console;
 
@@ -20,9 +23,9 @@ namespace Scout.Host.Console;
 internal static class HostComposition
 {
     /// <summary>
-    /// Register every service the host needs: readiness signal, LLM, conversation,
-    /// project knowledge, the self-gating chat adapters, the GitHub and Kubernetes plugins,
-    /// the conversation worker, and the parent watchdog.
+    /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project
+    /// knowledge, local voice transcription, the self-gating chat adapters (the local one first, so stdin is
+    /// read before any network adapter starts), the GitHub and Kubernetes plugins, the worker and the watchdog.
     /// </summary>
     public static IServiceCollection AddScoutHost(
         this IServiceCollection services,
@@ -32,6 +35,7 @@ internal static class HostComposition
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddSingleton<IReadinessSignal, StdoutReadinessSignal>();
+        services.AddSingleton<IPairingSignal, StdoutPairingSignal>();
 
         services.AddScoutLlm(configuration);
 
@@ -41,8 +45,12 @@ internal static class HostComposition
         services.AddScoutConversation(configuration);
         services.AddProjectKnowledge(configuration);
 
+        // Local voice transcription, only when the configured Whisper model file exists.
+        services.AddWhisperTranscription(configuration);
+
         // Each adapter self-gates on its configured credentials, so the host runs
         // whatever combination is configured and starts none when nothing is set.
+        services.AddLocalAdapter(configuration);
         services.AddDiscordAdapter(configuration);
         services.AddSlackAdapter(configuration);
         services.AddTeamsAdapter(configuration);

@@ -34,6 +34,72 @@ function makePersistentStub(initial: PersistentState | null = null) {
 describe('WizardStore', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
+    localStorage.clear();
+  });
+
+  it('using Scout only from this computer counts as provisioned and survives a reload', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: ScoutBridgeService,
+          useValue: makeBridgeStub({
+            slackStatus: vi.fn().mockResolvedValue({ connected: false }),
+          }),
+        },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
+      ],
+    });
+    TestBed.inject(WizardStore).useLocalOnly();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: ScoutBridgeService,
+          useValue: makeBridgeStub({
+            slackStatus: vi.fn().mockResolvedValue({ connected: false }),
+          }),
+        },
+        { provide: PersistentStateService, useValue: makePersistentStub() },
+      ],
+    });
+    const reloaded = TestBed.inject(WizardStore);
+
+    expect(await reloaded.loadFromVault()).toEqual({ hasProvisioning: true });
+    expect(reloaded.hasProvisioning()).toBe(true);
+    expect(reloaded.hasDiscord()).toBe(false);
+  });
+
+  it('a local-only owner lands on /chat once per launch; with Slack connected the landing is kept', async () => {
+    localStorage.setItem('scout:local-only', '1');
+    const configure = (connected: boolean) => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideZonelessChangeDetection(),
+          {
+            provide: ScoutBridgeService,
+            useValue: makeBridgeStub({
+              slackStatus: vi.fn().mockResolvedValue({ connected }),
+            }),
+          },
+          { provide: PersistentStateService, useValue: makePersistentStub() },
+        ],
+      });
+      return TestBed.inject(WizardStore);
+    };
+
+    const localOnly = configure(false);
+    await localOnly.loadFromVault();
+    const first = localOnly.takeLandingUrl();
+    const second = localOnly.takeLandingUrl();
+    const withSlack = configure(true);
+    await withSlack.loadFromVault();
+
+    expect(first).toBe('/chat');
+    expect(second).toBeNull();
+    expect(withSlack.takeLandingUrl()).toBeNull();
   });
 
   it('defaults to the welcome step with empty state', () => {
@@ -49,7 +115,6 @@ describe('WizardStore', () => {
     expect(store.currentStep()).toBe('welcome');
     expect(store.clientId()).toBeNull();
     expect(store.guild()).toBeNull();
-    expect(store.intentsAcknowledged()).toBe(false);
     expect(store.activeStepIndex()).toBe(0);
     expect(store.hasProvisioning()).toBe(false);
   });
@@ -73,7 +138,7 @@ describe('WizardStore', () => {
     expect(store.activeStepIndex()).toBe(3);
   });
 
-  it('records clientId, guild, and intents acknowledgement', () => {
+  it('records clientId and guild', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
@@ -85,11 +150,9 @@ describe('WizardStore', () => {
 
     store.setClientId('1234567890');
     store.setGuild({ id: 'g1', name: 'My Guild' });
-    store.markIntentsAcknowledged();
 
     expect(store.clientId()).toBe('1234567890');
     expect(store.guild()).toEqual({ id: 'g1', name: 'My Guild' });
-    expect(store.intentsAcknowledged()).toBe(true);
     expect(store.hasProvisioning()).toBe(true);
   });
 
@@ -108,14 +171,12 @@ describe('WizardStore', () => {
     store.goTo('oauth');
     store.setClientId('abc');
     store.setGuild({ id: 'g', name: 'n' });
-    store.markIntentsAcknowledged();
 
     await store.reset();
 
     expect(store.currentStep()).toBe('welcome');
     expect(store.clientId()).toBeNull();
     expect(store.guild()).toBeNull();
-    expect(store.intentsAcknowledged()).toBe(false);
     expect(bridge.vaultDelete).not.toHaveBeenCalled();
     expect(persistent.clear).not.toHaveBeenCalled();
   });
@@ -141,7 +202,6 @@ describe('WizardStore', () => {
     expect(store.currentStep()).toBe('welcome');
     expect(store.clientId()).toBeNull();
     expect(store.guild()).toBeNull();
-    expect(store.intentsAcknowledged()).toBe(false);
     expect(bridge.vaultDelete).toHaveBeenCalledTimes(4);
     expect(bridge.vaultDelete).toHaveBeenCalledWith({ key: 'discord.bot-token' });
     expect(bridge.vaultDelete).toHaveBeenCalledWith({ key: 'discord.client-id' });
@@ -280,5 +340,63 @@ describe('WizardStore', () => {
     expect(store.clientId()).toBeNull();
     expect(store.guild()).toBeNull();
     expect(store.hasProvisioning()).toBe(true);
+  });
+  it('Slack only: loadFromVault counts Slack as provisioning but not as Discord', async () => {
+    const bridge = makeBridgeStub({
+      vaultHas: vi.fn().mockResolvedValue({ exists: false }),
+      slackStatus: vi.fn().mockResolvedValue({ connected: true, team: 'Acme', botUser: 'scout' }),
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge },
+        { provide: PersistentStateService, useValue: makePersistentStub(null) },
+      ],
+    });
+    const store = TestBed.inject(WizardStore);
+
+    const result = await store.loadFromVault();
+
+    expect(result).toEqual({ hasProvisioning: true });
+    expect(store.hasProvisioning()).toBe(true);
+    expect(store.slackConnected()).toBe(true);
+    expect(store.hasDiscord()).toBe(false);
+  });
+
+  it('a failing Slack status reads as not connected and keeps Discord provisioning', async () => {
+    const bridge = makeBridgeStub({
+      vaultHas: vi.fn().mockResolvedValue({ exists: true }),
+      slackStatus: vi.fn().mockRejectedValue(new Error('unavailable')),
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge },
+        { provide: PersistentStateService, useValue: makePersistentStub(null) },
+      ],
+    });
+    const store = TestBed.inject(WizardStore);
+
+    const result = await store.loadFromVault();
+
+    expect(result).toEqual({ hasProvisioning: true });
+    expect(store.slackConnected()).toBe(false);
+  });
+
+  it('reprovisioning Discord keeps a Slack connection provisioned', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: makeBridgeStub() },
+        { provide: PersistentStateService, useValue: makePersistentStub(null) },
+      ],
+    });
+    const store = TestBed.inject(WizardStore);
+    store.setSlackConnected(true);
+
+    await store.reprovision();
+
+    expect(store.hasProvisioning()).toBe(true);
+    expect(store.hasDiscord()).toBe(false);
   });
 });

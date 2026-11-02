@@ -29,8 +29,8 @@ public sealed class DiscordSinkBoundaryTests
         var attempts = 0;
 
         var sink = new DiscordResponseSink(
-            postInitial: (_, _) => Task.CompletedTask,
-            edit: (body, _) =>
+            post: (_, _, _) => Task.CompletedTask,
+            edit: (_, body, _) =>
             {
                 attempts++;
                 if (attempts == 1)
@@ -66,8 +66,8 @@ public sealed class DiscordSinkBoundaryTests
         var attempts = 0;
 
         var sink = new DiscordResponseSink(
-            postInitial: (_, _) => Task.CompletedTask,
-            edit: (body, _) =>
+            post: (_, _, _) => Task.CompletedTask,
+            edit: (_, body, _) =>
             {
                 attempts++;
                 if (attempts == 1)
@@ -101,8 +101,8 @@ public sealed class DiscordSinkBoundaryTests
         var edits = new List<string>();
 
         var sink = new DiscordResponseSink(
-            postInitial: (_, _) => Task.CompletedTask,
-            edit: (body, _) =>
+            post: (_, _, _) => Task.CompletedTask,
+            edit: (_, body, _) =>
             {
                 if (body.Contains("drop", StringComparison.Ordinal))
                 {

@@ -1,4 +1,4 @@
-import { CHANNEL, type ScoutBridge, type WorkerEvent } from '@scout/shared';
+import { CHANNEL, type LocalTurn, type ScoutBridge, type WorkerEvent } from '@scout/shared';
 
 export interface IpcSubset {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
@@ -12,22 +12,24 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.detectClients) as ReturnType<ScoutBridge['detectClients']>;
     },
 
-    discordBuildOAuthUrl(req) {
-      return ipc.invoke(CHANNEL.discordBuildOAuthUrl, req) as ReturnType<
-        ScoutBridge['discordBuildOAuthUrl']
+    discordCheckToken(req) {
+      return ipc.invoke(CHANNEL.discordCheckToken, req) as ReturnType<
+        ScoutBridge['discordCheckToken']
       >;
     },
 
-    discordStartOAuthInstall(req) {
-      return ipc.invoke(CHANNEL.discordStartOAuthInstall, req) as ReturnType<
-        ScoutBridge['discordStartOAuthInstall']
+    discordEnableIntent() {
+      return ipc.invoke(CHANNEL.discordEnableIntent) as ReturnType<
+        ScoutBridge['discordEnableIntent']
       >;
     },
 
-    discordCancelOAuthInstall() {
-      return ipc.invoke(CHANNEL.discordCancelOAuthInstall) as ReturnType<
-        ScoutBridge['discordCancelOAuthInstall']
-      >;
+    discordInviteUrl() {
+      return ipc.invoke(CHANNEL.discordInviteUrl) as ReturnType<ScoutBridge['discordInviteUrl']>;
+    },
+
+    discordGuilds() {
+      return ipc.invoke(CHANNEL.discordGuilds) as ReturnType<ScoutBridge['discordGuilds']>;
     },
 
     chatgptSignIn() {
@@ -278,6 +280,97 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     accessSet(req) {
       return ipc.invoke(CHANNEL.accessSet, req) as ReturnType<ScoutBridge['accessSet']>;
+    },
+
+    accessStartPairing() {
+      return ipc.invoke(CHANNEL.accessStartPairing) as ReturnType<
+        ScoutBridge['accessStartPairing']
+      >;
+    },
+
+    slackManifestUrl() {
+      return ipc.invoke(CHANNEL.slackManifestUrl) as ReturnType<ScoutBridge['slackManifestUrl']>;
+    },
+
+    slackSave(req) {
+      return ipc.invoke(CHANNEL.slackSave, req) as ReturnType<ScoutBridge['slackSave']>;
+    },
+
+    slackStatus() {
+      return ipc.invoke(CHANNEL.slackStatus) as ReturnType<ScoutBridge['slackStatus']>;
+    },
+
+    slackDisconnect() {
+      return ipc.invoke(CHANNEL.slackDisconnect) as ReturnType<ScoutBridge['slackDisconnect']>;
+    },
+
+    desktopGetSettings() {
+      return ipc.invoke(CHANNEL.desktopGetSettings) as ReturnType<
+        ScoutBridge['desktopGetSettings']
+      >;
+    },
+
+    desktopSetKeepRunning(req) {
+      return ipc.invoke(CHANNEL.desktopSetKeepRunning, req) as ReturnType<
+        ScoutBridge['desktopSetKeepRunning']
+      >;
+    },
+
+    desktopSetStartAtLogin(req) {
+      return ipc.invoke(CHANNEL.desktopSetStartAtLogin, req) as ReturnType<
+        ScoutBridge['desktopSetStartAtLogin']
+      >;
+    },
+
+    localAsk(req) {
+      return ipc.invoke(CHANNEL.localAsk, req) as ReturnType<ScoutBridge['localAsk']>;
+    },
+
+    localCancel(req) {
+      return ipc.invoke(CHANNEL.localCancel, req) as ReturnType<ScoutBridge['localCancel']>;
+    },
+
+    localGetTurns() {
+      return ipc.invoke(CHANNEL.localGetTurns) as ReturnType<ScoutBridge['localGetTurns']>;
+    },
+
+    localClearTurns() {
+      return ipc.invoke(CHANNEL.localClearTurns) as ReturnType<ScoutBridge['localClearTurns']>;
+    },
+
+    onLocalTurns(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as readonly LocalTurn[]);
+      ipc.on(CHANNEL.localTurns, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localTurns, handler);
+      };
+    },
+
+    localHide() {
+      return ipc.invoke(CHANNEL.localHide) as ReturnType<ScoutBridge['localHide']>;
+    },
+
+    localGetShortcut() {
+      return ipc.invoke(CHANNEL.localGetShortcut) as ReturnType<ScoutBridge['localGetShortcut']>;
+    },
+
+    localSetShortcut(req) {
+      return ipc.invoke(CHANNEL.localSetShortcut, req) as ReturnType<
+        ScoutBridge['localSetShortcut']
+      >;
+    },
+
+    localOpen() {
+      return ipc.invoke(CHANNEL.localOpen) as ReturnType<ScoutBridge['localOpen']>;
+    },
+
+    localGetBubble() {
+      return ipc.invoke(CHANNEL.localGetBubble) as ReturnType<ScoutBridge['localGetBubble']>;
+    },
+
+    localSetBubble(req) {
+      return ipc.invoke(CHANNEL.localSetBubble, req) as ReturnType<ScoutBridge['localSetBubble']>;
     },
   };
 }

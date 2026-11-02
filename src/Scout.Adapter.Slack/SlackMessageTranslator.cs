@@ -81,7 +81,8 @@ public sealed partial class SlackMessageTranslator
             UserId: inbound.UserId,
             ChannelId: inbound.ChannelId,
             Text: stripped,
-            Timestamp: inbound.Timestamp);
+            Timestamp: inbound.Timestamp,
+            IsDirectMessage: isDm);
         return true;
     }
 

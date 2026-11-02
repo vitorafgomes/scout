@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Slack"
-version: "1.1"
+version: "1.2"
 date: 2026-10-21
-changes: "SlackNet 0.19.0: stop awaits the Socket Mode disconnect under the shutdown token; dispose always releases the socket client"
+updated: 2026-10-28
+changes: "Translator sets ChatMessage.IsDirectMessage for owner pairing; desktop setup from a manifest and two tokens"
 page_type: service
 status: active
 description: "Slack chat adapter over Socket Mode: filters bot traffic, streams the reply by posting then updating one message."
@@ -50,7 +51,11 @@ sequenceDiagram
     K->>S: PostMessage, then Update
 ```
 
-The translator drops anything from a bot, from this app, or with a `bot_message` subtype, so the sink's own `chat.update` edits cannot retrigger the adapter (`src/Scout.Adapter.Slack/SlackMessageTranslator.cs:39`). Messages with other subtypes are also dropped (`:55`).
+The translator drops anything from a bot, from this app, or with a `bot_message` subtype, so the sink's own `chat.update` edits cannot retrigger the adapter (`src/Scout.Adapter.Slack/SlackMessageTranslator.cs:39`). Messages with other subtypes are also dropped (`:55`). A message in an `im` channel gets `ChatMessage.IsDirectMessage = true` (`:85`), which owner pairing requires ([[pages/decisions/0021-allowed-users]]).
+
+## Desktop setup
+
+The desktop app creates the Slack app from a manifest and passes the two tokens as `SCOUT__ADAPTERS__SLACK__BOTTOKEN` and `SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN` ([[pages/decisions/0023-slack-setup-from-a-manifest]], [[pages/services/desktop-ui]]). The manifest (`ui/packages/main/src/slack/slack-setup.ts:19`) turns Socket Mode on and asks for the events this adapter reads, `message.channels`, `message.groups` and `message.im`, with `channels:history`, `groups:history`, `im:history` and `chat:write`. A change here that reads another event or calls another Web API method changes that manifest too; otherwise an app created from it never receives the event or lacks the scope.
 
 ## Invariants
 
@@ -65,7 +70,7 @@ The translator drops anything from a bot, from this app, or with a `bot_message`
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Slack.Tests` (58 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle (stop awaits the Socket Mode disconnect, returns on cancellation if it never completes, and surfaces its fault; dispose still disposes the socket client when stop faults), DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
+`tests/Scout.Adapter.Slack.Tests` (59 test attributes, 7 files): translator rules, inbound projection, adapter and lifecycle (stop awaits the Socket Mode disconnect, returns on cancellation if it never completes, and surfaces its fault; dispose still disposes the socket client when stop faults), DI gating including a missing app-level token, sink behaviour and a sink boundary test. No live Slack connection.
 
 ## Related
 

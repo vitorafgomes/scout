@@ -8,16 +8,16 @@ public sealed class DiscordResponseSinkTests
     private const string Cursor = "▌";
 
     private static (DiscordResponseSink Sink, List<string> Posts, List<string> Edits) Create(
-        Func<string, CancellationToken, Task>? editOverride = null)
+        Func<int, string, CancellationToken, Task>? editOverride = null)
     {
         var posts = new List<string>();
         var edits = new List<string>();
-        Func<string, CancellationToken, Task> post = (body, _) =>
+        Func<int, string, CancellationToken, Task> post = (_, body, _) =>
         {
             posts.Add(body);
             return Task.CompletedTask;
         };
-        Func<string, CancellationToken, Task> edit = editOverride ?? ((body, _) =>
+        Func<int, string, CancellationToken, Task> edit = editOverride ?? ((_, body, _) =>
         {
             edits.Add(body);
             return Task.CompletedTask;
@@ -26,11 +26,11 @@ public sealed class DiscordResponseSinkTests
     }
 
     [Fact]
-    public void Capabilities_Are_FineGrained_4096()
+    public void Capabilities_Are_FineGrained_And_Leave_Long_Replies_To_The_Sink()
     {
         var (sink, _, _) = Create();
         sink.Capabilities.FineGrainedEdit.ShouldBeTrue();
-        sink.Capabilities.MaxBodyLength.ShouldBe(4096);
+        sink.Capabilities.MaxBodyLength.ShouldBe(int.MaxValue);
         sink.Capabilities.SupportsInterimCitations.ShouldBeFalse();
     }
 
@@ -102,26 +102,14 @@ public sealed class DiscordResponseSinkTests
     }
 
     [Fact]
-    public async Task Complete_OverLimit_Body_Preserves_Head_Not_Just_Footer()
+    public async Task Update_Shows_One_Cursor_When_The_Pump_Already_Appended_One()
     {
-        const int max = 4096;
         var (sink, _, edits) = Create();
         await sink.BeginAsync(CancellationToken.None);
 
-        // An answer that already fills the budget, plus citations that would
-        // push it over. The head of the answer must survive; the user must not
-        // be left with only the Sources footer.
-        var answer = "HEAD-OF-ANSWER " + new string('a', max);
-        await sink.CompleteAsync(
-            answer,
-            new[] { new Citation("src/A.cs:1") },
-            CancellationToken.None);
+        await sink.UpdateAsync("hello" + Cursor, CancellationToken.None);
 
-        var body = edits[^1];
-        body.Length.ShouldBeLessThanOrEqualTo(max);
-        body.ShouldStartWith("HEAD-OF-ANSWER ");
-        body.ShouldEndWith("... (truncated)\n\n");
-        body.ShouldNotContain("Sources:");
+        edits.ShouldBe(["hello" + Cursor]);
     }
 
     [Fact]

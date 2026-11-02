@@ -2,8 +2,8 @@
 title: "Desktop models system (AI Sources → Models)"
 version: "1.0"
 date: 2026-05-16
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-10-30
+changes: "Side-nav block brought to the current order: Chat first, Features, no Status, Logs optional"
 page_type: longform
 status: active
 description: "How the Scout Desktop pieces fit together to discover an inference backend (AI Sources), download a model into it, and select which model to use."
@@ -28,12 +28,13 @@ and [[pages/decisions/0008-local-models-real-downloads]].
 The post-connect side-nav is ordered top to bottom:
 
 ```
+Chat             /chat
 AI Sources       /sources
   └── Manage…    /sources/local-models  (drill-in from a card)
 Models           /llm                  (route name kept for compat)
-Status           /status
-Logs             /logs
-Settings         /settings
+Features         /features
+Logs             /logs                 (hidden when Settings turns it off)
+Settings         /settings             (worker status and controls live here)
 ```
 
 - **AI Sources** is the lower layer — *where do models come from*.

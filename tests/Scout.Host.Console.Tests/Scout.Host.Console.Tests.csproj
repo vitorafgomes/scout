@@ -25,5 +25,6 @@
     <ProjectReference Include="..\..\src\Scout.Llm\Scout.Llm.csproj" />
     <ProjectReference Include="..\..\src\Scout.Knowledge\Scout.Knowledge.csproj" />
     <ProjectReference Include="..\..\src\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
+    <ProjectReference Include="..\..\src\Scout.Adapter.Local\Scout.Adapter.Local.csproj" />
   </ItemGroup>
 </Project>

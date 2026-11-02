@@ -16,8 +16,10 @@
     <ProjectReference Include="..\Scout.Adapter.Discord\Scout.Adapter.Discord.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Slack\Scout.Adapter.Slack.csproj" />
     <ProjectReference Include="..\Scout.Adapter.Teams\Scout.Adapter.Teams.csproj" />
+    <ProjectReference Include="..\Scout.Adapter.Local\Scout.Adapter.Local.csproj" />
     <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
     <ProjectReference Include="..\Scout.Plugin.Kubernetes\Scout.Plugin.Kubernetes.csproj" />
+    <ProjectReference Include="..\Scout.Transcription.Whisper\Scout.Transcription.Whisper.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
@@ -29,4 +31,17 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+  <!-- Whisper.net loads its native libraries from runtimes/<rid>/ beside the
+       binary, which a single-file publish would hide inside the bundle; keep
+       the target platform's Whisper natives as loose files and drop the rest. -->
+  <Target Name="ShipWhisperNativesBesideTheWorker" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <WhisperNativeDir>runtimes/$(RuntimeIdentifier.Replace('osx-', 'macos-'))/</WhisperNativeDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WhisperNative Include="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\', '/').StartsWith('runtimes/')) And $([System.String]::Copy('%(ResolvedFileToPublish.Filename)').Contains('whisper'))" />
+      <ResolvedFileToPublish Remove="@(_WhisperNative)" />
+      <ResolvedFileToPublish Include="@(_WhisperNative)" Condition="$([System.String]::Copy('%(_WhisperNative.RelativePath)').Replace('\', '/').StartsWith('$(WhisperNativeDir)'))" ExcludeFromSingleFile="true" />
+    </ItemGroup>
+  </Target>
 </Project>

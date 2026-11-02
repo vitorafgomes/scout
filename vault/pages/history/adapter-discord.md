@@ -17,6 +17,12 @@ reliability: high
 
 > Dated changes to [[pages/services/adapter-discord]]; the service page states how it works now.
 
+## 2026-10-28 - Threads, long replies, typing, reply reference, voice messages
+
+- **Asked for:** "improvements in the Discord chat" and "use audio to communicate - me recording".
+- **What changed:** a mention in a server text channel opens a public thread on the user's message and the reply streams there (`ReplyInThreads`, default true; falls back to the channel when Discord refuses); a reply that stays in the channel is a Discord reply to the user's message; the typing indicator shows from Begin to the first streamed content; a reply longer than one embed continues in up to five messages, split at paragraphs, lines or spaces and never inside a code fence that fits a part, where before it was cut at 4,096 characters; voice messages reach the core as audio with a download delegate ([[pages/decisions/0024-voice-messages-transcribed-locally]]). The sink stopped appending its own cursor after the pump's, which showed two cursors while streaming.
+- **Tests:** `DiscordReplySplitterTests`, `DiscordResponseSinkPartsTests`, `DiscordChatAdapterThreadTests`, `DiscordVoiceMessageTests`, and a typing-at-stop test in `DiscordChatAdapterDispatchTests`. `Capabilities_Are_FineGrained_4096` and `Complete_OverLimit_Body_Preserves_Head_Not_Just_Footer` were replaced, because the sink no longer caps a reply at one embed.
+
 ## 2026-10-22 - The gateway handler stops awaiting the conversation
 
 - **Symptom:** while a reply streamed, the owner's log showed `[Discord] Gateway: A MessageReceived handler is blocking the gateway task.` Discord.Net 3.20.2 raises that warning in `DiscordSocketClient.TimeoutWrap` when an event handler outlives the configured handler timeout, and then keeps awaiting the handler to completion inside the gateway event dispatch.

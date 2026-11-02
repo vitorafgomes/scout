@@ -3,7 +3,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { load } from 'js-yaml';
-import { resolveControlPlaneBinary, resolveProtoDir } from '../src/worker/resolve-binary.js';
+import {
+  resolveControlPlaneBinary,
+  resolveProtoDir,
+  resolveTrayIcon,
+} from '../src/worker/resolve-binary.js';
 
 const UI_ROOT = join(import.meta.dirname, '../../..');
 const CONFIG_PATH = join(UI_ROOT, 'build/electron-builder.yml');
@@ -46,6 +50,7 @@ interface BuilderConfig {
   };
   mac: {
     identity: null | string;
+    extendInfo?: Record<string, string>;
     target: MacTarget[];
   };
   win: {
@@ -115,6 +120,14 @@ describe('electron-builder.yml', () => {
     expect(config.mac.identity).toBeNull();
   });
 
+  it('mac asks for the microphone with a usage description and the audio-input entitlement', () => {
+    expect(config.mac.extendInfo?.['NSMicrophoneUsageDescription']).toContain('quick-ask');
+    const entitlements = readFileSync(join(UI_ROOT, 'build/entitlements.mac.plist'), 'utf8');
+    expect(entitlements).toMatch(
+      /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/,
+    );
+  });
+
   it('win targets include nsis', () => {
     const nsis = config.win.target.find((t) => t.target === 'nsis');
     expect(nsis).toBeDefined();
@@ -143,6 +156,21 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     expect(existsSync(join(source, 'features.proto'))).toBe(true);
     expect(existsSync(join(source, 'providers.proto'))).toBe(true);
     expect(resolveProtoDir(packaged)).toBe(join(RESOURCES, protos!.to));
+  });
+
+  it('ships the tray icon where resolveTrayIcon looks for it', () => {
+    const icons = config.extraResources.find((r) => r.to === 'icons');
+
+    expect(icons).toBeDefined();
+    expect(icons!.filter).toEqual(['icon.png']);
+    expect(existsSync(join(UI_ROOT, icons!.from, 'icon.png'))).toBe(true);
+    expect(resolveTrayIcon(packaged)).toBe(join(RESOURCES, icons!.to, 'icon.png'));
+  });
+
+  it('resolves the tray icon from ui/build/icons when not packaged', () => {
+    expect(resolveTrayIcon({ cwd: join(UI_ROOT, 'packages/main/src') })).toBe(
+      join(UI_ROOT, 'build/icons/icon.png'),
+    );
   });
 
   it('resolves the packaged control-plane host inside the worker resources folder', () => {

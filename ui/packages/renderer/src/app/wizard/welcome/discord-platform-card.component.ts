@@ -60,6 +60,28 @@ const DISCORD_BADGES: Readonly<Record<DiscordCardState, BadgeSpec>> = Object.fre
           </button>
         }
       </article>
+    } @else if (kind === 'slack') {
+      <article
+        class="card card--slack"
+        [attr.data-kind]="'slack'"
+        [attr.data-state]="slackConnected ? 'connected' : 'not-connected'"
+        role="button"
+        tabindex="0"
+        [attr.aria-label]="slackConnected ? 'Slack platform, Connected' : 'Slack platform, Set up'"
+        (click)="onActivate()"
+        (keydown)="onKeydown($event)"
+      >
+        <header class="card-head">
+          <h2>Slack</h2>
+          <span
+            class="badge"
+            [attr.data-tone]="slackConnected ? 'success' : 'neutral'"
+            data-test="slack-badge"
+          >
+            <span>{{ slackConnected ? 'Connected' : 'Set up' }}</span>
+          </span>
+        </header>
+      </article>
     } @else {
       <article
         class="card card--coming-soon"
@@ -189,6 +211,7 @@ export class DiscordPlatformCardComponent {
   @Input({ required: true }) kind!: PlatformKind;
   @Input() state: DiscordCardState = 'idle';
   @Input() guildName: string | null = null;
+  @Input() slackConnected = false;
 
   @Output() readonly activate = new EventEmitter<void>();
   @Output() readonly download = new EventEmitter<void>();
@@ -212,12 +235,12 @@ export class DiscordPlatformCardComponent {
   }
 
   onActivate(): void {
-    if (this.kind !== 'discord') return;
+    if (this.kind === 'teams') return;
     this.activate.emit();
   }
 
   onKeydown(event: KeyboardEvent): void {
-    if (this.kind !== 'discord') return;
+    if (this.kind === 'teams') return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       this.activate.emit();

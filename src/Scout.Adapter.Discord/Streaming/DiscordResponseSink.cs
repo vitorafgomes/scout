@@ -8,46 +8,58 @@ using Scout.Conversation.Abstractions;
 namespace Scout.Adapter.Discord.Streaming;
 
 /// <summary>
-/// <see cref="IResponseSink"/> backed by a single Discord embed in the
-/// originating channel. Begin posts an embed seeded with the cursor; Update
-/// replaces the embed description with the cumulative text plus cursor;
-/// Complete replaces it without the cursor and appends a citation footer; Fail
-/// appends an error footer to the partial text. The transport edit is behind a
-/// delegate seam so the sink is unit-testable without Discord.Net network.
+/// <see cref="IResponseSink"/> backed by Discord embeds in the channel the reply
+/// belongs to. Begin posts an embed seeded with the cursor, as a reply to the
+/// user's message when a reference is given, and shows the typing indicator
+/// until the first streamed content. Every render splits the text into parts of
+/// at most one embed (<see cref="DiscordReplySplitter"/>), edits the parts that
+/// changed and posts new parts as follow-up messages in order, up to
+/// <see cref="MaxParts"/>. Complete renders without the cursor and with a
+/// citation footer; Fail appends an error footer to the partial text. The
+/// transport is behind delegate seams so the sink is unit-testable without
+/// Discord.Net network.
 ///
 /// This sink owns its transport resilience: writes are wrapped in a Discord.Net
 /// <see cref="RateLimitedException"/> backoff-and-retry, so the platform-agnostic
 /// pump never has to know about Discord's rate limits.
 ///
 /// Lifecycle is single-threaded by contract: exactly one Begin, then zero or
-/// more Update, then one terminal Complete/Fail, all from the same caller. The
-/// production <c>posted</c> message handle is therefore written once in Begin
-/// and read by later calls without synchronization.
+/// more Update, then one terminal Complete/Fail, all from the same caller.
+/// Dispose stops the typing indicator if the reply never reached a terminal call.
 /// </summary>
-public sealed class DiscordResponseSink : IResponseSink
+public sealed class DiscordResponseSink : IResponseSink, IDisposable
 {
     internal const int MaxEmbedDescriptionLength = 4096;
+    internal const int MaxParts = 5;
     internal const string CursorGlyph = "▌";
     internal const string ErrorFooter = "\n\n(the AI provider returned an error; see Scout logs)";
-    internal const string TruncationMarker = "... (truncated)\n\n";
+    internal const string IncompleteFooter = "\n\n(the rest of this reply could not be posted; see Scout logs)";
 
-    // Used when a rate-limit response carries no usable retry hint.
+    // Room left in every part for the cursor, a closing fence, the truncation
+    // marker and the incomplete footer.
+    internal const int PartLength = MaxEmbedDescriptionLength - 128;
+
     private static readonly TimeSpan DefaultRateLimitBackoff = TimeSpan.FromSeconds(1);
 
-    private readonly Func<string, CancellationToken, Task> _postInitial;
-    private readonly Func<string, CancellationToken, Task> _edit;
+    private readonly Func<int, string, CancellationToken, Task> _post;
+    private readonly Func<int, string, CancellationToken, Task> _edit;
+    private readonly Func<IDisposable> _enterTyping;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
+    private readonly List<string> _rendered = [];
 
+    private IDisposable? _typing;
     private bool _begun;
     private bool _terminal;
 
     /// <summary>
-    /// Production constructor. Posts and edits a Discord embed in
-    /// <paramref name="channel"/>.
+    /// Production constructor. Posts and edits Discord embeds in
+    /// <paramref name="channel"/>; the first post replies to
+    /// <paramref name="replyTo"/> when it is set.
     /// </summary>
     public DiscordResponseSink(
         IMessageChannel channel,
+        MessageReference? replyTo = null,
         TimeProvider? timeProvider = null,
         ILogger? logger = null)
     {
@@ -55,51 +67,53 @@ public sealed class DiscordResponseSink : IResponseSink
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger.Instance;
 
-        // Single-threaded by the sink lifecycle (Begin -> Update* -> terminal,
-        // one caller): written once in the Begin closure, read by later edits.
-        // No synchronization needed.
-        IUserMessage? posted = null;
+        var posted = new List<IUserMessage>();
 
-        _postInitial = async (body, ct) =>
+        _post = async (index, body, ct) =>
         {
-            var embed = new EmbedBuilder().WithDescription(body).Build();
-            posted = await channel.SendMessageAsync(embed: embed, options: Request(ct))
+            var message = await channel.SendMessageAsync(
+                    embed: Embed(body),
+                    options: Request(ct),
+                    messageReference: index == 0 ? replyTo : null)
                 .ConfigureAwait(false);
+            posted.Add(message);
         };
 
-        _edit = async (body, ct) =>
-        {
-            if (posted is null)
-            {
-                return;
-            }
-            await posted.ModifyAsync(
-                props => props.Embed = new EmbedBuilder().WithDescription(body).Build(),
-                Request(ct)).ConfigureAwait(false);
-        };
+        _edit = (index, body, ct) =>
+            posted[index].ModifyAsync(props => props.Embed = Embed(body), Request(ct));
+
+        _enterTyping = () => channel.EnterTypingState();
     }
 
     /// <summary>
-    /// Test seam. <paramref name="postInitial"/> simulates the initial post and
-    /// <paramref name="edit"/> simulates each subsequent embed edit; both may
-    /// throw <see cref="RateLimitedException"/> to exercise the backoff path.
+    /// Test seam. <paramref name="post"/> simulates posting part <c>index</c> as a
+    /// new message and <paramref name="edit"/> simulates editing the message of
+    /// part <c>index</c>; both may throw <see cref="RateLimitedException"/> to
+    /// exercise the backoff path. <paramref name="enterTyping"/> starts the typing
+    /// indicator and returns the handle that stops it.
     /// </summary>
     internal DiscordResponseSink(
-        Func<string, CancellationToken, Task> postInitial,
-        Func<string, CancellationToken, Task> edit,
+        Func<int, string, CancellationToken, Task> post,
+        Func<int, string, CancellationToken, Task> edit,
+        Func<IDisposable>? enterTyping = null,
         TimeProvider? timeProvider = null,
         ILogger? logger = null)
     {
-        _postInitial = postInitial ?? throw new ArgumentNullException(nameof(postInitial));
+        _post = post ?? throw new ArgumentNullException(nameof(post));
         _edit = edit ?? throw new ArgumentNullException(nameof(edit));
+        _enterTyping = enterTyping ?? (() => NoTyping.Instance);
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger.Instance;
     }
 
+    /// <summary>
+    /// No body limit for the pump: the sink splits a long reply across messages
+    /// itself and caps it at <see cref="MaxParts"/> embeds.
+    /// </summary>
     public RenderCapabilities Capabilities { get; } = new()
     {
         FineGrainedEdit = true,
-        MaxBodyLength = MaxEmbedDescriptionLength,
+        MaxBodyLength = int.MaxValue,
         SupportsInterimCitations = false,
     };
 
@@ -113,8 +127,15 @@ public sealed class DiscordResponseSink : IResponseSink
 
         // Discord rejects empty embed descriptions; seed with the cursor. Begin
         // failures escape so the pump can report them.
-        await WriteWithRateLimitRetryAsync(_postInitial, CursorGlyph, cancellationToken)
-            .ConfigureAwait(false);
+        await RenderAsync([CursorGlyph], cancellationToken).ConfigureAwait(false);
+        try
+        {
+            _typing = _enterTyping();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Discord typing indicator could not start; replying without it.");
+        }
     }
 
     public async Task UpdateAsync(string cumulativeText, CancellationToken cancellationToken)
@@ -122,14 +143,26 @@ public sealed class DiscordResponseSink : IResponseSink
         ArgumentNullException.ThrowIfNull(cumulativeText);
         EnsureActive();
 
-        var body = WithCursor(cumulativeText);
+        var text = cumulativeText.EndsWith(CursorGlyph, StringComparison.Ordinal)
+            ? cumulativeText[..^CursorGlyph.Length]
+            : cumulativeText;
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            StopTyping();
+        }
+
+        var parts = DiscordReplySplitter.Split(text, PartLength, MaxParts).ToList();
+        if (parts.Count == 0)
+        {
+            parts.Add(string.Empty);
+        }
+        parts[^1] += CursorGlyph;
+
         // Interim edits are best-effort. After exhausting the rate-limit retry,
-        // a still-failing interim edit is dropped (the pump retains the buffer
-        // and the terminal call will re-render the full body).
+        // a still-failing interim write is dropped; the next render retries it.
         try
         {
-            await WriteWithRateLimitRetryAsync(_edit, body, cancellationToken)
-                .ConfigureAwait(false);
+            await RenderAsync(parts, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -150,8 +183,20 @@ public sealed class DiscordResponseSink : IResponseSink
         ArgumentNullException.ThrowIfNull(citations);
         EnterTerminal();
 
-        var body = ComposeTerminalBody(finalText, citations);
-        await WriteWithRateLimitRetryAsync(_edit, body, cancellationToken).ConfigureAwait(false);
+        var body = citations.Count == 0 ? finalText : finalText + BuildCitationFooter(citations);
+        var parts = DiscordReplySplitter.Split(body, PartLength, MaxParts);
+        try
+        {
+            await RenderAsync(parts, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && FirstUnwrittenPart(parts) > 0)
+        {
+            var last = FirstUnwrittenPart(parts) - 1;
+            _logger.LogWarning(
+                ex, "Discord could not write part {Part} of a reply; marking the reply incomplete.", last + 2);
+            await WriteWithRateLimitRetryAsync(_edit, last, parts[last] + IncompleteFooter, cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     public async Task FailAsync(
@@ -166,10 +211,54 @@ public sealed class DiscordResponseSink : IResponseSink
 
         var body = finalTextSoFar.Length == 0
             ? ErrorFooter.TrimStart()
-            : TruncateHead(finalTextSoFar, MaxEmbedDescriptionLength - ErrorFooter.Length)
-                + ErrorFooter;
+            : finalTextSoFar + ErrorFooter;
 
-        await WriteWithRateLimitRetryAsync(_edit, body, cancellationToken).ConfigureAwait(false);
+        await RenderAsync(DiscordReplySplitter.Split(body, PartLength, MaxParts), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Stops the typing indicator.</summary>
+    public void Dispose() => StopTyping();
+
+    private int FirstUnwrittenPart(IReadOnlyList<string> parts)
+    {
+        for (var i = 0; i < parts.Count; i++)
+        {
+            if (i >= _rendered.Count || _rendered[i] != parts[i])
+            {
+                return i;
+            }
+        }
+        return parts.Count;
+    }
+
+    // Writes the parts that differ from what is on screen, in order, and stops
+    // at the first failure so parts never arrive out of order.
+    private async Task RenderAsync(IReadOnlyList<string> parts, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < parts.Count; i++)
+        {
+            if (i < _rendered.Count)
+            {
+                if (_rendered[i] == parts[i])
+                {
+                    continue;
+                }
+                await WriteWithRateLimitRetryAsync(_edit, i, parts[i], cancellationToken).ConfigureAwait(false);
+                _rendered[i] = parts[i];
+            }
+            else
+            {
+                await WriteWithRateLimitRetryAsync(_post, i, parts[i], cancellationToken).ConfigureAwait(false);
+                _rendered.Add(parts[i]);
+            }
+        }
+    }
+
+    private void StopTyping()
+    {
+        _typing?.Dispose();
+        _typing = null;
     }
 
     private void EnsureActive()
@@ -191,7 +280,10 @@ public sealed class DiscordResponseSink : IResponseSink
             throw new InvalidOperationException("Second terminal call.");
         }
         _terminal = true;
+        StopTyping();
     }
+
+    private static Embed Embed(string body) => new EmbedBuilder().WithDescription(body).Build();
 
     private static RequestOptions Request(CancellationToken cancellationToken)
         => new() { CancelToken = cancellationToken };
@@ -199,13 +291,14 @@ public sealed class DiscordResponseSink : IResponseSink
     // Discord 429: back off once and retry. Non-rate-limit exceptions propagate
     // to the caller, which decides whether to drop (interim) or surface (Begin).
     private async Task WriteWithRateLimitRetryAsync(
-        Func<string, CancellationToken, Task> write,
+        Func<int, string, CancellationToken, Task> write,
+        int index,
         string body,
         CancellationToken cancellationToken)
     {
         try
         {
-            await write(body, cancellationToken).ConfigureAwait(false);
+            await write(index, body, cancellationToken).ConfigureAwait(false);
         }
         catch (RateLimitedException ex)
         {
@@ -216,52 +309,8 @@ public sealed class DiscordResponseSink : IResponseSink
 
             await Task.Delay(DefaultRateLimitBackoff, _timeProvider, cancellationToken)
                 .ConfigureAwait(false);
-            await write(body, cancellationToken).ConfigureAwait(false);
+            await write(index, body, cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    private static string WithCursor(string body)
-    {
-        var budget = MaxEmbedDescriptionLength - CursorGlyph.Length;
-        return TruncateHead(body, budget) + CursorGlyph;
-    }
-
-    // Build the terminal body keeping the answer head visible: if body+footer
-    // overflows, trim the footer first; if the answer alone still overflows,
-    // preserve the HEAD with a visible marker (so the user sees the start of the
-    // answer, not just the Sources footer).
-    private static string ComposeTerminalBody(string finalText, IReadOnlyList<Citation> citations)
-    {
-        if (citations.Count == 0)
-        {
-            return TruncateHead(finalText, MaxEmbedDescriptionLength);
-        }
-
-        var footer = BuildCitationFooter(citations);
-        if (finalText.Length + footer.Length <= MaxEmbedDescriptionLength)
-        {
-            return finalText + footer;
-        }
-
-        // Footer would push us over: drop the footer and keep the answer head.
-        return TruncateHead(finalText, MaxEmbedDescriptionLength);
-    }
-
-    // Head-preserving truncation: keep the START of the text and mark the cut,
-    // so the beginning of the answer is never lost.
-    private static string TruncateHead(string body, int budget)
-    {
-        if (body.Length <= budget)
-        {
-            return body;
-        }
-        if (budget <= TruncationMarker.Length)
-        {
-            return body[..budget];
-        }
-
-        var keep = budget - TruncationMarker.Length;
-        return body[..keep] + TruncationMarker;
     }
 
     internal static string BuildCitationFooter(IReadOnlyList<Citation> citations)
@@ -276,5 +325,14 @@ public sealed class DiscordResponseSink : IResponseSink
             sb.Append("- ").Append(citation.ToString()).Append(nl);
         }
         return sb.ToString().TrimEnd();
+    }
+
+    private sealed class NoTyping : IDisposable
+    {
+        public static readonly NoTyping Instance = new();
+
+        public void Dispose()
+        {
+        }
     }
 }

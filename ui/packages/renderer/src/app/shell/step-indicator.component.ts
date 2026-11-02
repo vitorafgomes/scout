@@ -12,9 +12,9 @@ interface StepView {
 
 const STEP_LABELS: Readonly<Record<WizardStep, string>> = Object.freeze({
   welcome: 'Welcome',
-  provision: 'Provision',
-  token: 'Token',
-  oauth: 'Authorize',
+  provision: 'Create bot',
+  token: 'Bot token',
+  oauth: 'Add to server',
   launch: 'Launch',
   ready: 'Ready',
 });
