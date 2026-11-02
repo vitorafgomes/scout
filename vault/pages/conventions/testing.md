@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.5"
+version: "1.6"
 date: 2026-10-21
-updated: 2026-10-30
-changes: "Adapter.Local tests drive stdin through an anonymous pipe; counts refreshed"
+updated: 2026-11-02
+changes: "Test titles never carry large fixtures; ui job timeout"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -94,6 +94,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
 - 81 spec or test files: 43 in `ui/packages/main/test`, 4 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 33 in `ui/packages/renderer/src/app` (counted 2026-10-30).
+- On GitHub Actions Bun prints every test title. A title that interpolates its data (`%p`, `%o`, `%j`) with a large fixture makes a log line the runner's problem matchers cannot regex-match, and the job hangs until `timeout-minutes` (20, `.github/workflows/ui-ci.yml:32`) ends it. An `it.each` with a large fixture carries a short label as its first column and puts only that label in the title (`ui/packages/main/test/quick-ask.test.ts:338`). Measured 2026-11-02: one 14,000,004-character title stalled all three runners for an hour.
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
 - The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:18` to `:21`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow.
 - The `Build control-plane host` step (`.github/workflows/ui-ci.yml:100`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.

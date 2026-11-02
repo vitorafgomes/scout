@@ -37,14 +37,12 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             dist_script: dist:linux
-          # Diagnostic: macOS and Windows removed while the Test (UI) hang is
-          # traced on Linux; restore both before merging.
-          # - os: macos-latest
-          #   rid: osx-arm64
-          #   dist_script: dist:mac
-          # - os: windows-latest
-          #   rid: win-x64
-          #   dist_script: dist:win
+          - os: macos-latest
+            rid: osx-arm64
+            dist_script: dist:mac
+          - os: windows-latest
+            rid: win-x64
+            dist_script: dist:win
 
     runs-on: ${{ matrix.os }}
 

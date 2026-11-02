@@ -333,15 +333,23 @@ describe('quick ask: questions to the worker', () => {
     t.quickAsk.dispose();
   });
 
+  // The case label, not the request, goes into the test title: the oversized
+  // cases would otherwise print megabytes into the test log.
   it.each([
-    [{ id: 'bad id!', text: 'hi' }],
-    [{ id: 'q-1', text: '   ' }],
-    [{ id: 'q-1', text: 'x'.repeat(4001) }],
-    [{ id: 'q-1', audio: { contentType: 'audio/mpeg', base64: 'AAAA' } }],
-    [{ id: 'q-1', audio: { contentType: 'audio/wav', base64: 'not base64!' } }],
-    [{ id: 'q-1', audio: { contentType: 'audio/wav', base64: 'A'.repeat(14_000_004) } }],
-    [undefined],
-  ])('rejects a malformed question %p before it reaches the worker', async (req) => {
+    ['an id with spaces and punctuation', { id: 'bad id!', text: 'hi' }],
+    ['blank text', { id: 'q-1', text: '   ' }],
+    ['text over 4000 characters', { id: 'q-1', text: 'x'.repeat(4001) }],
+    ['audio that is not wav', { id: 'q-1', audio: { contentType: 'audio/mpeg', base64: 'AAAA' } }],
+    [
+      'audio that is not base64',
+      { id: 'q-1', audio: { contentType: 'audio/wav', base64: 'not base64!' } },
+    ],
+    [
+      'audio over the base64 limit',
+      { id: 'q-1', audio: { contentType: 'audio/wav', base64: 'A'.repeat(14_000_004) } },
+    ],
+    ['no request at all', undefined],
+  ])('rejects a malformed question (%s) before it reaches the worker', async (_label, req) => {
     const t = await setup();
 
     await t.rejection(t.invoke(CHANNEL.localAsk, sender(), req));
