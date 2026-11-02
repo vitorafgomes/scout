@@ -22,6 +22,11 @@ reliability: medium
 
 ## Entries
 
+### `ProjectWatchServiceTests.RapidEdits_AreDebouncedToSingleReindex` is timing-sensitive (2026-11-02)
+
+- **Blocker:** none; it is flaky, not wrong. The test drives a real file watcher with a 50 ms debounce (`tests/Scout.Knowledge.Tests/ProjectWatchServiceTests.cs:11`) and expects one `ReplaceFileAsync` for a burst of edits; on a shared GitHub runner it counted two (run 41435925678, 2026-11-02) and passed on rerun.
+- **Fix:** drive the debounce from an injected clock or a `TimeProvider` so the burst and the quiet period are deterministic, or widen the debounce under test well past the watcher's own coalescing window.
+
 ### X11 always-on-top unverified on COSMIC (2026-10-31)
 
 - **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:87`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
