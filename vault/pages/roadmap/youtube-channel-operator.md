@@ -97,7 +97,8 @@ The owner's rule (2026-11-02): "a maior parte tem que ser em C#". Every stage of
 
 - [[pages/decisions/0032-per-feature-write-permissions]] accepted; ADR 0030 is amended when the first write row is implemented (phase 5).
 - **Owner, decided 2026-11-02:** narration and images come only from the AI Sources already connected in Scout; no separate account, key or card for media ("o objetivo e' sempre usar apenas os AI Sources que estao autenticados ja no Scout e nao ter uma conta a parte"). Phase 3 therefore carries a capability matrix per connected provider (which of them offers speech and image generation through the same credential, which do not) and a local fallback for the rest: text-card slideshow with owner-supplied images, and a local speech engine when one is installed on the machine.
-- **Owner:** whether `ffmpeg` bundled with the desktop is acceptable as the one external tool; the first channel mandate.
+- **Owner, decided 2026-11-02:** `ffmpeg` is bundled with the desktop as the one external tool ("pode usar o ffmpeg empacotado"); our C# code drives it.
+- **Owner:** the first channel mandate.
 
 ## Services affected
 
