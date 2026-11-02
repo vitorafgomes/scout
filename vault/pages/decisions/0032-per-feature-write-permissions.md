@@ -1,8 +1,9 @@
 ---
 title: "ADR 0032 - Features declare what they write, and the owner grants each one"
-version: "1.0"
+version: "1.1"
 date: 2026-11-02
-changes: "Initial ADR"
+updated: 2026-11-02
+changes: "Amended: youtube is the operator's one feature, Executive with every row declared"
 page_type: adr
 status: accepted
 description: "Scout is no longer read-only by definition. Each feature declares the reads and writes it performs; the owner grants a feature's write permission in the desktop, irreversible actions ask for a per-action approval there, every write is logged, and a chat message or the model can never grant a permission or skip an approval. Supersedes the absolute prohibition of ADR 0009; keeps its classification."
@@ -49,7 +50,7 @@ The control plane already carries the seed of the answer: every feature in the c
 
 - **Better:** Scout can be the channel operator the owner wants, and later other write-capable features, without a new founding debate each time: the catalog entry says what a feature does, the owner decides per feature, and the review gate has a precise thing to check. The audit trail is part of the product.
 - **Worse:** the project's one-line promise changes from "it never writes" to "every write is declared, granted and logged"; the README, the project site and the pipeline's `read-only` lens all need the new wording, and every existing page that cites the absolute rule needs a date and a pointer here. A granted feature with a bug can write where it should not; the per-action approval limits that to reversible writes, and the logs make it visible.
-- **Neutral but noteworthy:** the three existing plugins keep `WriteClass.None` and change nothing. The desktop's self-update ([[pages/decisions/0031-desktop-self-update]]) and the own-configuration writes are unchanged and remain outside the feature grants.
+- **Neutral but noteworthy:** GitHub and Kubernetes keep `WriteClass.None` and change nothing. Amended 2026-11-02 on the owner's decision ("tem que ficar tudo dentro da mesma feature"): `youtube` is the one feature of the channel operator and declares its read, write and irreversible rows under `WriteClass.Executive` ([[pages/roadmap/youtube-channel-operator]]); the plugin itself stays GET-only until the write rows are implemented. The desktop's self-update ([[pages/decisions/0031-desktop-self-update]]) and the own-configuration writes are unchanged and remain outside the feature grants.
 
 ## Alternatives considered
 
