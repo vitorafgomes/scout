@@ -2,7 +2,7 @@
 title: "YouTube channel operator"
 version: "1.1"
 date: 2026-11-02
-changes: "One feature, and the pipeline in C#: the scheduler and every stage move to the worker; the desktop only shows and approves"
+changes: "Parity table: every module of the reference mapped to a phase"
 page_type: roadmap
 status: active
 description: "Initiative: Scout runs a YouTube channel end to end, from topic research and scripts through narration, visuals and an assembled video, to a review step, upload and scheduling the owner approves, and a learning loop over the channel's analytics; own C# code, official APIs, per-feature permissions (ADR 0032)."
@@ -67,6 +67,32 @@ The owner's rule (2026-11-02): "tem que ficar tudo dentro da mesma feature". The
 ### Where it runs
 
 The owner's rule (2026-11-02): "a maior parte tem que ser em C#". Every stage of the pipeline is C# in the .NET worker and control plane: research, script, narration and image calls through the connected AI Source, the scene list, the `ffmpeg` driver, the checks, the scheduler (a hosted service in the worker), the approval queue, the write log and every YouTube call. The desktop (TypeScript) only shows and asks: the Production and Review screens render what the control plane returns and send the owner's grant, edits and approvals back over the authenticated socket; it holds no pipeline logic. Chat is the remote control: ask for a video, follow progress, get the report.
+
+### Parity with the reference
+
+The owner's rule: "essa feature tem que seguir 100% o que e' esse projeto". Every module the reference README names (read 2026-11-02), and where it lands here; the only deliberate difference is media through the AI Sources already connected in Scout, never a separate account.
+
+| Reference module | Here | Phase |
+|---|---|---|
+| Autonomous channel operator (objective, audience, pillars, cadence, limits) | the mandate on the Production screen | 2 |
+| Outcome and ROI studio (target metric against a budget; missing data shown as unavailable, never zero) | an outcome panel per mandate; unavailable is a state, not a zero | 2, 5 |
+| Research, Script | research functions and the script generator | 2 |
+| Evidence desk (each factual claim tied to a verified source before approval) | a claims list on the review; an unverified claim blocks approval | 2, 4 |
+| Production readiness (providers, channel access, MP4 assembly; uploads nothing) | a readiness check on the Production screen | 3, 4 |
+| Resumable generation (progress saved per stage) | each stage writes its result under Scout's folder before the next starts | 3 |
+| AI video generation (local slideshow by default, video clips with a paid-seconds cap) | slideshow by default; video through the connected AI Source when it offers it, with a cap | 3 |
+| Scene repair studio (edit, reorder, lock, regenerate one scene, rebuild) | the scene list | 3, 4 |
+| Shorts repurposing (three vertical drafts from an approved video, reusing media) | Shorts cuts from the approved package | 4 |
+| Content review (checks, metadata, approval, scheduling) | the review and the approval queue | 4, 5 |
+| Required approvals (fact review, media-rights confirmation, owner approval; simulated media never approvable) | three approvals on the package; placeholder media cannot be approved | 4 |
+| Discoverability preflight (search and AI-answer checks) | our own checks on title, description and tags against the channel's search data; no third-party audit tool | 4 |
+| Publish (upload, metadata, thumbnail, schedule) | approved actions on the Review screen | 5 |
+| Learning loop (24-hour and 7-day results against history, proposals to approve) | the reports and proposals | 5 |
+| Controlled growth experiments (title and thumbnail variants, 95% evidence threshold) | experiments with the same threshold and a stored rollback | 5 |
+| Scene-aware retention (which scene lost viewers) | the retention curve mapped onto the scene list | 5 |
+| Audience engagement studio (comment sync, spam quarantine, approved replies, ideas from requests) | comment sync, quarantine, approved replies, requests feeding research | 6 |
+| Scheduler (generation daily, publishing queue every 15 minutes, analytics daily, optimization nightly, comments and experiments every 4 hours, weekly strategy review) | a hosted service in the worker with the same jobs; times in the owner's local zone | 2 to 6 |
+| Dashboard on a local port | the desktop app; no local web server | n/a |
 
 ## Phases
 
