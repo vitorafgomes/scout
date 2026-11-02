@@ -56,6 +56,12 @@ export const CHANNEL = {
   githubCancel: 'scout:github.cancel',
   githubSignOut: 'scout:github.signOut',
   githubSaveToken: 'scout:github.saveToken',
+  youtubeSignIn: 'scout:youtube.signIn',
+  youtubeStatus: 'scout:youtube.status',
+  youtubeCancelSignIn: 'scout:youtube.cancelSignIn',
+  youtubeSignOut: 'scout:youtube.signOut',
+  youtubeSaveApiKey: 'scout:youtube.saveApiKey',
+  youtubeClearApiKey: 'scout:youtube.clearApiKey',
   kubernetesDetect: 'scout:kubernetes.detect',
   kubernetesUse: 'scout:kubernetes.use',
   kubernetesStatus: 'scout:kubernetes.status',
@@ -395,8 +401,12 @@ export interface LlmListModelsResponse {
   readonly models: readonly LlmModel[];
 }
 
-export type FeatureId = 'github' | 'kubernetes';
-export const FEATURE_IDS: readonly FeatureId[] = Object.freeze(['github', 'kubernetes'] as const);
+export type FeatureId = 'github' | 'kubernetes' | 'youtube';
+export const FEATURE_IDS: readonly FeatureId[] = Object.freeze([
+  'github',
+  'kubernetes',
+  'youtube',
+] as const);
 export type FeatureStatus = 'enabled' | 'needs-credentials' | 'disabled' | 'error';
 
 export interface FeatureCredentialFieldDto {
@@ -479,6 +489,24 @@ export interface GitHubStatus {
 /** A token the owner pastes; travels renderer to main once and is never sent back. */
 export interface GitHubSaveTokenRequest {
   readonly token: string;
+}
+
+/** The YouTube connection as the renderer sees it; never carries a token, the key or the OAuth client. */
+export interface YouTubeStatus {
+  readonly configured: boolean;
+  readonly connected: boolean;
+  readonly method: 'oauth' | 'apiKey' | null;
+  readonly channelId: string | null;
+  readonly channelTitle: string | null;
+  readonly pending: boolean;
+  readonly error: string | null;
+  readonly clientConfigPath: string;
+  readonly source: 'env' | 'file' | 'bundled' | 'embedded' | null;
+}
+
+/** A YouTube Data API key the owner pastes; travels renderer to main once and is never sent back. */
+export interface YouTubeSaveApiKeyRequest {
+  readonly apiKey: string;
 }
 
 export type KubernetesAuthKind =
@@ -703,6 +731,12 @@ export interface ScoutBridge {
   githubCancel(): Promise<void>;
   githubSignOut(): Promise<GitHubStatus>;
   githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus>;
+  youtubeSignIn(): Promise<YouTubeStatus>;
+  youtubeStatus(): Promise<YouTubeStatus>;
+  youtubeCancelSignIn(): Promise<void>;
+  youtubeSignOut(): Promise<YouTubeStatus>;
+  youtubeSaveApiKey(req: YouTubeSaveApiKeyRequest): Promise<YouTubeStatus>;
+  youtubeClearApiKey(): Promise<YouTubeStatus>;
   kubernetesDetect(): Promise<KubernetesDetection>;
   kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus>;
   kubernetesStatus(): Promise<KubernetesStatus>;

@@ -9,6 +9,7 @@ import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
 import { GitHubConnectComponent } from './github-connect.component';
 import { KubernetesConnectComponent } from './kubernetes-connect.component';
+import { YouTubeConnectComponent } from './youtube-connect.component';
 
 type Connection = 'connected' | 'not-connected' | 'unknown';
 
@@ -24,6 +25,7 @@ export const NO_ALLOWED_USERS_WARNING =
     CredentialDialogComponent,
     GitHubConnectComponent,
     KubernetesConnectComponent,
+    YouTubeConnectComponent,
   ],
   template: `
     <main class="page">
@@ -58,6 +60,11 @@ export const NO_ALLOWED_USERS_WARNING =
                   "
                 />
               }
+              @if (f.id === 'youtube') {
+                <sc-youtube-connect
+                  (connectedChange)="youtubeConnection.set($event ? 'connected' : 'not-connected')"
+                />
+              }
               @if (connectionOf(f.id) === 'connected' && noAllowedUsers()) {
                 <p class="access-warning" [attr.data-test]="'access-warning-' + f.id">
                   {{ noAllowedUsersWarning }}
@@ -67,7 +74,7 @@ export const NO_ALLOWED_USERS_WARNING =
           }
         </div>
         <div class="notes" data-test="features-notes">
-          <p>GitHub and Kubernetes are used by the chat bot once connected.</p>
+          <p>GitHub, Kubernetes and YouTube are used by the chat bot once connected.</p>
         </div>
       }
 
@@ -146,6 +153,7 @@ export class FeaturesComponent implements OnInit {
   readonly activeDialog = signal<FeatureViewModel | null>(null);
   readonly githubConnection = signal<Connection>('unknown');
   readonly kubernetesConnection = signal<Connection>('unknown');
+  readonly youtubeConnection = signal<Connection>('unknown');
 
   connectionOf(id: FeatureId): Connection | null {
     switch (id) {
@@ -153,6 +161,8 @@ export class FeaturesComponent implements OnInit {
         return this.githubConnection();
       case 'kubernetes':
         return this.kubernetesConnection();
+      case 'youtube':
+        return this.youtubeConnection();
       default:
         return null;
     }

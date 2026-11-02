@@ -2,7 +2,7 @@
 title: "Release - cut a Scout Desktop release"
 version: "1.1"
 date: 2026-11-02
-changes: "The release carries the updater metadata (latest*.yml, the Windows blockmap) that Update and restart reads"
+changes: "The Package step bundles the Google OAuth client from the SCOUT_GOOGLE_CLIENT_SECRET repository secret; local builds take it from the environment"
 page_type: runbook
 status: active
 description: "Tag main with the new version, let the Release workflow publish the desktop packages, and check them on the release page and the project site."
@@ -10,6 +10,7 @@ source:
   - chat
   - .github/workflows/release.yml
   - ui/build/electron-builder.yml
+  - ui/build/scripts/write-google-client.mjs
   - docs/site.js
 reliability: high
 ---
@@ -32,6 +33,16 @@ reliability: high
 
 - Push access to `vitorafgomes/scout` (to push a tag).
 - The workflow publishes with its own `GITHUB_TOKEN`; no personal token is involved.
+- The repository secret `SCOUT_GOOGLE_CLIENT_SECRET`, created once by the owner in GitHub (Settings, Secrets and variables, Actions, New repository secret) with the secret of Scout's Google OAuth Desktop client. Only the `Package` step of `.github/workflows/release.yml` receives it; `ui-ci.yml` never does, so pull request builds, forks included, never see it. Without it the release still builds: the `Package` log says `google client: not bundled` and Sign in with Google needs the user's own client file ([[pages/services/desktop-ui]], YouTube connection).
+
+## Google client in a local build
+
+`bun run package:all` (and every `dist` script) starts with `node build/scripts/write-google-client.mjs`. With `SCOUT_GOOGLE_CLIENT_SECRET` in the environment it writes `ui/packages/main/resources/google-client.json` (`client_id` from `SCOUT_GOOGLE_CLIENT_ID`, else `DEFAULT_GOOGLE_CLIENT_ID` in `ui/packages/main/src/oauth/google-auth.ts`, and the secret) and prints `google client: bundled`; without it, it deletes a stale copy and prints `google client: not bundled`. The file is gitignored (`ui/.gitignore`). For a local dist with the bundled client, export the secret from the owner's own client file for that one command, never into a file in the repository:
+
+```bash
+SCOUT_GOOGLE_CLIENT_SECRET="$(jq -r '.installed.client_secret // .client_secret' ~/.config/@scout/desktop/google-oauth-client.json)" \
+  bun run dist:linux
+```
 
 ## Steps
 

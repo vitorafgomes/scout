@@ -10,6 +10,7 @@ using Scout.Knowledge;
 using Scout.Llm;
 using Scout.Plugin.GitHub;
 using Scout.Plugin.Kubernetes;
+using Scout.Plugin.YouTube;
 using Scout.Skills;
 using Scout.Transcription.Whisper;
 
@@ -23,9 +24,8 @@ namespace Scout.Host.Console;
 internal static class HostComposition
 {
     /// <summary>
-    /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project
-    /// knowledge, local voice transcription, the self-gating chat adapters (the local one first, so stdin is
-    /// read before any network adapter starts), the GitHub and Kubernetes plugins, the worker and the watchdog.
+    /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project knowledge, voice transcription,
+    /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the worker, the watchdog.
     /// </summary>
     public static IServiceCollection AddScoutHost(
         this IServiceCollection services,
@@ -58,6 +58,7 @@ internal static class HostComposition
         // Semantic Kernel function-calling plugins. Each self-gates on its own configuration.
         services.AddGitHubPlugin(configuration);
         services.AddKubernetesPlugin(configuration);
+        services.AddYouTubePlugin(configuration);
 
         services.AddHostedService<ConversationWorker>();
 

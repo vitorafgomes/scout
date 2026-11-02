@@ -9,6 +9,9 @@ public sealed class FeatureCatalog : IFeatureCatalog
     /// <summary>Canonical id for the Kubernetes feature.</summary>
     public const string KubernetesId = "kubernetes";
 
+    /// <summary>Canonical id for the YouTube feature.</summary>
+    public const string YouTubeId = "youtube";
+
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
@@ -77,7 +80,43 @@ public sealed class FeatureCatalog : IFeatureCatalog
             "Your credentials may allow changes, so a read-only user bound to the 'view' cluster role is safer.",
         });
 
-    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes };
+    private static readonly FeatureMetadata YouTube = new(
+        Id: YouTubeId,
+        DisplayName: "YouTube",
+        Description: "Reads a channel's overview, latest uploads and video statistics; your own channel after you sign in from the desktop; never posts or uploads.",
+        RequiresCredentials: true,
+        CredentialFields: new[]
+        {
+            new FeatureCredentialField(
+                Key: "api_key",
+                Kind: "password",
+                Label: "YouTube Data API key",
+                HelperText: "Create it in the Google Cloud Console (APIs & Services, Credentials) for a project with the YouTube Data API v3 enabled. It reads public data only.",
+                CreateLinkUrl: null,
+                CreateLinkLabel: null),
+        },
+        SettingsFields: Array.Empty<FeatureSettingField>(),
+        WriteClass: WriteClass.None,
+        ScopeMatrix: new[]
+        {
+            new FeatureScopeRow(
+                Scope: "channels.list: read",
+                Actions: new[] { "Read a channel's title, handle, subscribers, total views and video count" }),
+            new FeatureScopeRow(
+                Scope: "playlistItems.list: read",
+                Actions: new[] { "List the latest uploads of a channel" }),
+            new FeatureScopeRow(
+                Scope: "videos.list: read",
+                Actions: new[] { "Read a video's title, duration, views, likes and comment count" }),
+        },
+        SetupSteps: new[]
+        {
+            "Create a project in the Google Cloud Console.",
+            "Enable the YouTube Data API v3 for that project.",
+            "Create an API key for public channels, or sign in with Google from the Scout app to read your own channel.",
+        });
+
+    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes, YouTube };
 
     private readonly Dictionary<string, FeatureMetadata> _byId = AllFeatures.ToDictionary(
         f => f.Id,

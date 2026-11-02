@@ -11,6 +11,7 @@ import {
   type FeatureId,
   type GitHubStatus,
   type KubernetesStatus,
+  type YouTubeStatus,
 } from '@scout/shared';
 
 import { FeaturesStore } from '../core/features.store';
@@ -147,9 +148,61 @@ describe('FeaturesComponent', () => {
     expect(grid.textContent).toContain('GitHub');
     expect(grid.textContent).toContain('Kubernetes');
     expect(notes.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      'GitHub and Kubernetes are used by the chat bot once connected.',
+      'GitHub, Kubernetes and YouTube are used by the chat bot once connected.',
     );
     expect(lede.textContent).not.toContain('keyring');
+  });
+
+  it('the YouTube card shows the connection instead of the control-plane toggle', async () => {
+    const youtube: FeatureDto = {
+      ...kubernetes,
+      id: 'youtube',
+      displayName: 'YouTube',
+      description: 'YouTube integration',
+    };
+    const youtubeStatus: YouTubeStatus = {
+      configured: true,
+      connected: true,
+      method: 'oauth',
+      channelId: 'UCscoutTestChannel',
+      channelTitle: 'Scout Test Channel',
+      pending: false,
+      error: null,
+      clientConfigPath: '/user-data/google-oauth-client.json',
+      source: 'file',
+    };
+    const bridge = {
+      featuresList: vi.fn(async () => ({ features: [youtube] })),
+      featureEnable: vi.fn(),
+      featureDisable: vi.fn(),
+      featureSetCredentials: vi.fn(),
+      featureSetup: vi.fn(),
+      featureDeleteCredentials: vi.fn(),
+      youtubeStatus: vi.fn(async () => youtubeStatus),
+      accessGet: vi.fn(async () => ({ userIds: ['111'] })),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+        FeaturesStore,
+      ],
+    });
+    const fixture = TestBed.createComponent(FeaturesComponent);
+    for (let i = 0; i < 3; i++) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+    fixture.detectChanges();
+    const card = fixture.nativeElement.querySelector('[data-test="card-youtube"]') as HTMLElement;
+
+    expect(card.querySelector('[data-test="youtube-connect-section"]')).not.toBeNull();
+    expect(card.querySelector('[data-test="badge-youtube"]')?.textContent?.trim()).toBe(
+      'Connected',
+    );
+    expect(card.querySelector('[data-test="toggle-youtube"]')).toBeNull();
+    expect(card.querySelector('[data-test="cta-youtube"]')).toBeNull();
+    expect(card.textContent).not.toContain('Needs credentials');
   });
 
   it('a card says turning the feature on is not available yet when the control plane does not implement it', async () => {

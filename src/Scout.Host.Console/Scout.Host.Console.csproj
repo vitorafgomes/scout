@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Scout.Adapter.Local\Scout.Adapter.Local.csproj" />
     <ProjectReference Include="..\Scout.Plugin.GitHub\Scout.Plugin.GitHub.csproj" />
     <ProjectReference Include="..\Scout.Plugin.Kubernetes\Scout.Plugin.Kubernetes.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.YouTube\Scout.Plugin.YouTube.csproj" />
     <ProjectReference Include="..\Scout.Transcription.Whisper\Scout.Transcription.Whisper.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -9,6 +9,9 @@ const ALLOWED_HOSTS = new Set([
   'support-dev.discord.com',
   'github.com',
   'api.slack.com',
+  'console.cloud.google.com',
+  'studio.youtube.com',
+  'www.youtube.com',
 ]);
 
 function isAllowedUrl(raw: string): { ok: true; url: URL } | { ok: false; reason: string } {

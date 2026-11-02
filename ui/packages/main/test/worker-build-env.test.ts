@@ -1,6 +1,7 @@
 import { describe, it, expect, spyOn } from 'bun:test';
 import { buildEnv, migrateLegacyApiKey } from '../src/worker/build-env.js';
 import { VaultUnavailableError, type VaultKey } from '@scout/shared';
+import { API_KEY, TOKEN_FILE, connect, makeGoogleFake } from './google-fakes.js';
 
 function makeVault(
   entries: Record<string, string | null>,
@@ -569,6 +570,46 @@ function makeVaultStore(initial: Partial<Record<VaultKey, string>>) {
     },
   };
 }
+
+describe('buildEnv YouTube', () => {
+  it('a YouTube session hands the worker the token file path and turns on the allow-list gate', async () => {
+    const google = makeGoogleFake();
+    await connect(google);
+
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      youTubeEnv: await google.auth.workerEnv(),
+    });
+
+    expect(env['SCOUT__PLUGINS__YOUTUBE__TOKENFILE']).toBe(TOKEN_FILE);
+    expect('SCOUT__PLUGINS__YOUTUBE__APIKEY' in env).toBe(false);
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('a pasted YouTube key reaches the worker as SCOUT__PLUGINS__YOUTUBE__APIKEY', async () => {
+    const google = makeGoogleFake();
+    await google.auth.saveApiKey(API_KEY);
+
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      youTubeEnv: await google.auth.workerEnv(),
+    });
+
+    expect(env['SCOUT__PLUGINS__YOUTUBE__APIKEY']).toBe(API_KEY);
+    expect('SCOUT__PLUGINS__YOUTUBE__TOKENFILE' in env).toBe(false);
+    expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
+  });
+
+  it('without a YouTube connection the worker gets no YouTube variable and no allow-list gate from it', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      youTubeEnv: await makeGoogleFake().auth.workerEnv(),
+    });
+
+    expect(Object.keys(env).filter((key) => key.includes('YOUTUBE'))).toEqual([]);
+    expect('SCOUT__ACCESS__REQUIREALLOWLIST' in env).toBe(false);
+  });
+});
 
 describe('buildEnv voice transcription', () => {
   it('gives the worker the installed Whisper model path', async () => {

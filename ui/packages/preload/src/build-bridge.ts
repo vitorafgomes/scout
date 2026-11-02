@@ -263,6 +263,36 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
     },
 
+    youtubeSignIn() {
+      return ipc.invoke(CHANNEL.youtubeSignIn) as ReturnType<ScoutBridge['youtubeSignIn']>;
+    },
+
+    youtubeStatus() {
+      return ipc.invoke(CHANNEL.youtubeStatus) as ReturnType<ScoutBridge['youtubeStatus']>;
+    },
+
+    youtubeCancelSignIn() {
+      return ipc.invoke(CHANNEL.youtubeCancelSignIn) as ReturnType<
+        ScoutBridge['youtubeCancelSignIn']
+      >;
+    },
+
+    youtubeSignOut() {
+      return ipc.invoke(CHANNEL.youtubeSignOut) as ReturnType<ScoutBridge['youtubeSignOut']>;
+    },
+
+    youtubeSaveApiKey(req) {
+      return ipc.invoke(CHANNEL.youtubeSaveApiKey, req) as ReturnType<
+        ScoutBridge['youtubeSaveApiKey']
+      >;
+    },
+
+    youtubeClearApiKey() {
+      return ipc.invoke(CHANNEL.youtubeClearApiKey) as ReturnType<
+        ScoutBridge['youtubeClearApiKey']
+      >;
+    },
+
     kubernetesDetect() {
       return ipc.invoke(CHANNEL.kubernetesDetect) as ReturnType<ScoutBridge['kubernetesDetect']>;
     },

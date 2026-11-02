@@ -16,6 +16,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import {
+  readFile as fsReadFile,
   readlink as fsReadlink,
   unlink as fsUnlink,
   writeFile as fsWriteFile,
@@ -44,6 +45,12 @@ import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ip
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
+import { registerYouTubeHandlers } from './ipc/youtube.js';
+import {
+  DEFAULT_GOOGLE_CLIENT_ID,
+  DEFAULT_GOOGLE_CLIENT_SECRET,
+  GoogleAuth,
+} from './oauth/google-auth.js';
 import { readKubernetesSelection, registerKubernetesHandlers } from './ipc/kubernetes.js';
 import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
 import { readSlackTokens, registerSlackHandlers } from './ipc/slack.js';
@@ -179,6 +186,8 @@ let unregisterKubernetes: (() => void) | null = null;
 let unregisterAccess: (() => void) | null = null;
 let unregisterSlack: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
+let unregisterYouTube: (() => void) | null = null;
+let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
 let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
@@ -196,6 +205,8 @@ function disposeAll(): void {
   controlPlane?.dispose();
   gitHubAuth?.stop();
   unregisterGitHub?.();
+  googleAuth?.stop();
+  unregisterYouTube?.();
   unregisterKubernetes?.();
   unregisterAccess?.();
   unregisterSlack?.();
@@ -333,6 +344,49 @@ app
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
 
+    const youTubeLogger = logger.child({ module: 'youtube' });
+    const google = new GoogleAuth({
+      fetch: globalThis.fetch,
+      awaitCallback,
+      findFreePort,
+      openExternal: (url) => shell.openExternal(url),
+      vault,
+      tokenFilePath: path.join(app.getPath('userData'), 'youtube-token.json'),
+      clientConfigPath: path.join(app.getPath('userData'), 'google-oauth-client.json'),
+      env: process.env,
+      bundledClientPath: path.join(
+        app.getAppPath(),
+        'packages',
+        'main',
+        'resources',
+        'google-client.json',
+      ),
+      defaultClient: {
+        clientId: DEFAULT_GOOGLE_CLIENT_ID,
+        clientSecret: DEFAULT_GOOGLE_CLIENT_SECRET,
+      },
+      fs: {
+        readFile: (p) => fsReadFile(p, 'utf8'),
+        writeFile: fsWriteFile,
+        rename: fsRename,
+        rm: fsRm,
+      },
+      now: () => Date.now(),
+      onConnectionChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, youTubeLogger);
+      },
+      onResume: (listener) => {
+        powerMonitor.on('resume', listener);
+        return () => powerMonitor.removeListener('resume', listener);
+      },
+      logger: youTubeLogger,
+    });
+    googleAuth = google;
+    unregisterYouTube = registerYouTubeHandlers(ipcMain, google, youTubeLogger);
+    google.start().catch((err: unknown) => {
+      youTubeLogger.warn('youtube: start failed', { err: String(err) });
+    });
+
     const kubernetesLogger = logger.child({ module: 'kubernetes' });
     unregisterKubernetes = registerKubernetesHandlers(ipcMain, {
       vault,
@@ -381,6 +435,7 @@ app
           vaultGet: (key) => vault.get(key),
           chatGptTokenFile,
           gitHubEnv: await auth.workerEnv(),
+          youTubeEnv: await google.workerEnv(),
           kubernetesSelection: await readKubernetesSelection(vault),
           allowedUserIds: await readAllowedUserIds(vault),
           pairing: access.pendingPairing(),

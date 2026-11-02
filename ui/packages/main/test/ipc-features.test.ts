@@ -177,6 +177,18 @@ describe('registerFeaturesHandlers', () => {
     expect(client.enableFeature).not.toHaveBeenCalled();
   });
 
+  it('the youtube feature id is accepted and reaches the control plane', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger);
+
+    const thrown = await rejection(
+      ipcMain.handlers.get(CHANNEL.featureDisable)!(NULL_EVENT, { id: 'youtube' }),
+    );
+
+    expect(thrown).toBeNull();
+    expect(client.disableFeature).toHaveBeenCalledWith('youtube');
+  });
+
   it('a control plane that is not running reaches the renderer as control-plane/unavailable', async () => {
     registerFeaturesHandlers(
       ipcMain,

@@ -74,6 +74,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/llm|Llm]] - Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout.
 - [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; authenticates from a token or the desktop's token file, self-gates off when neither is set.
 - [[pages/services/plugin-kubernetes|Plugin.Kubernetes]] - Read-only Kubernetes plugin: six GET-only Semantic Kernel functions over the owner's kubeconfig, only for the contexts the owner allowed; self-gates off without a path and a context.
+- [[pages/services/plugin-youtube|Plugin.YouTube]] - YouTube Data API read functions (channel overview, recent videos, video stats); token file or API key.
 - [[pages/services/transcription-whisper|Transcription.Whisper]] - Transcribes Discord voice messages and quick-ask WAV recordings on this machine with a local Whisper model; registered only when the model file exists.
 - [[pages/services/skills|Skills]] - Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools.
 
@@ -113,6 +114,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0027-desktop-presence|ADR 0027 - Scout stays resident on the desktop: tray, keep running, start at login, notifications]] - Closing the window hides Scout to the tray and the worker keeps running; start at login with --hidden; three native notifications; no tray means the old quit-on-close.
 - [[pages/decisions/0028-local-quick-ask-assistant|ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio]] - A global shortcut opens a small window to type or hold Space to talk; main writes JSON lines to the worker's stdin and reads SCOUT_LOCAL lines from stdout, and the local owner skips the allow-list.
 - [[pages/decisions/0029-project-site-and-releases|ADR 0029 - Project site and releases]] - Site in docs/ on Pages; v* tags publish packages.
+- [[pages/decisions/0030-youtube-plugin-read-only-with-browser-sign-in|ADR 0030 YouTube plugin]] - Read-only YouTube plugin over the official APIs; browser sign-in from the desktop; key for public data.
 - [[pages/decisions/0031-desktop-self-update|ADR 0031 Desktop self-update]] - The desktop replaces its own executable only on the user's click, from a checksummed release; macOS and .deb keep Download.
 
 ## Domain

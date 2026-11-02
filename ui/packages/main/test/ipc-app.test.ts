@@ -94,6 +94,27 @@ describe('registerAppHandlers — appOpenExternal', () => {
     expect(shell.calls.length).toBe(1);
   });
 
+  it('opens the Google Cloud Console page that creates a YouTube API key', async () => {
+    await invoke(ipc, 'scout:app.openExternal', {
+      url: 'https://console.cloud.google.com/apis/credentials',
+    });
+    expect(shell.calls).toEqual(['https://console.cloud.google.com/apis/credentials']);
+  });
+
+  it('opens YouTube Studio for the connected channel', async () => {
+    await invoke(ipc, 'scout:app.openExternal', {
+      url: 'https://studio.youtube.com/channel/UCscoutTestChannel',
+    });
+    expect(shell.calls).toEqual(['https://studio.youtube.com/channel/UCscoutTestChannel']);
+  });
+
+  it('opens the connected channel on YouTube', async () => {
+    await invoke(ipc, 'scout:app.openExternal', {
+      url: 'https://www.youtube.com/channel/UCscoutTestChannel',
+    });
+    expect(shell.calls).toEqual(['https://www.youtube.com/channel/UCscoutTestChannel']);
+  });
+
   it('rejects https://evil.example and does NOT call shell.openExternal', async () => {
     let caught: unknown;
     try {

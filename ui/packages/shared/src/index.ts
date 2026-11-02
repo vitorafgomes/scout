@@ -125,6 +125,8 @@ export {
   type GitHubPendingSignIn,
   type GitHubSaveTokenRequest,
   type GitHubStatus,
+  type YouTubeSaveApiKeyRequest,
+  type YouTubeStatus,
   type KubernetesAuthKind,
   type KubernetesContextInfo,
   type KubernetesDetection,

@@ -77,4 +77,34 @@ public sealed class FeatureCatalogTests
         Kubernetes.CredentialFields.ShouldBeEmpty();
         Kubernetes.RequiresCredentials.ShouldBeFalse();
     }
+
+    [Fact]
+    public void YouTube_Is_Read_Only_And_Lists_Only_The_Three_List_Calls()
+    {
+        var youTube = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull();
+
+        youTube.DisplayName.ShouldBe("YouTube");
+        youTube.WriteClass.ShouldBe(WriteClass.None);
+        youTube.ScopeMatrix.ShouldNotBeNull().Select(r => r.Scope)
+            .ShouldBe(["channels.list: read", "playlistItems.list: read", "videos.list: read"]);
+        youTube.Description.ShouldBe(
+            "Reads a channel's overview, latest uploads and video statistics; your own channel after you sign in from the desktop; never posts or uploads.");
+    }
+
+    [Fact]
+    public void YouTube_Asks_Only_For_An_Api_Key_And_Explains_Where_To_Create_It()
+    {
+        var youTube = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull();
+
+        youTube.RequiresCredentials.ShouldBeTrue();
+        var field = youTube.CredentialFields.ShouldHaveSingleItem();
+        field.Key.ShouldBe("api_key");
+        field.Kind.ShouldBe("password");
+        field.Label.ShouldBe("YouTube Data API key");
+        field.HelperText.ShouldNotBeNull().ShouldContain("Google Cloud Console");
+        youTube.SettingsFields.ShouldBeEmpty();
+        youTube.SetupSteps.ShouldNotBeNull().Count.ShouldBe(3);
+        youTube.SetupSteps!.ShouldContain(step => step.Contains("YouTube Data API v3"));
+        youTube.SetupSteps!.ShouldContain(step => step.Contains("sign in") && step.Contains("Scout app"));
+    }
 }

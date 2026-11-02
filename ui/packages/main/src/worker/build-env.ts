@@ -11,6 +11,7 @@ export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
   chatGptTokenFile?: string;
   gitHubEnv?: Readonly<Record<string, string>>;
+  youTubeEnv?: Readonly<Record<string, string>>;
   kubernetesSelection?: KubernetesSelection | null;
   allowedUserIds?: readonly string[];
   pairing?: AccessPairing | null;
@@ -53,7 +54,7 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     env['SCOUT__ADAPTERS__SLACK__BOTTOKEN'] = slack.botToken;
     env['SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN'] = slack.appToken;
   }
-  Object.assign(env, deps.gitHubEnv);
+  Object.assign(env, deps.gitHubEnv, deps.youTubeEnv);
   if (deps.kubernetesSelection != null) {
     env['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH'] = deps.kubernetesSelection.path;
     deps.kubernetesSelection.contexts.forEach((context, i) => {
@@ -67,6 +68,7 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   });
   const ownerCredentialConnected =
     Object.keys(deps.gitHubEnv ?? {}).length > 0 ||
+    Object.keys(deps.youTubeEnv ?? {}).length > 0 ||
     deps.kubernetesSelection != null ||
     llmProvider === 'ChatGptPlan';
   if (ownerCredentialConnected) env['SCOUT__ACCESS__REQUIREALLOWLIST'] = 'true';
