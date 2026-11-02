@@ -31,6 +31,9 @@ const feature = (id: 'github' | 'kubernetes'): FeatureDto => ({
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
 });
 
 const github: GitHubStatus = {
@@ -70,6 +73,7 @@ function makeBridge(
   let current = first;
   return {
     accessGet: vi.fn(async () => ({ userIds: allowedUserIds })),
+    onFeaturesChanged: vi.fn(() => () => undefined),
     featuresList: vi.fn(async () => ({ features: [feature('github'), feature('kubernetes')] })),
     githubStatus: vi.fn(async () => github),
     kubernetesStatus: vi.fn(async () => current),

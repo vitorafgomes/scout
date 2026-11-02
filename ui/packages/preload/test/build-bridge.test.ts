@@ -69,6 +69,13 @@ describe('buildBridge', () => {
       'featureDeleteCredentials',
       'featureEnable',
       'featureDisable',
+      'featureWriteGrant',
+      'onFeaturesChanged',
+      'actionsList',
+      'actionsApprove',
+      'actionsReject',
+      'onActionsChanged',
+      'writesList',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -384,6 +391,9 @@ describe('buildBridge', () => {
       settings: {},
       scopeMatrix: null,
       setupSteps: null,
+      writeClass: 'none',
+      granted: false,
+      grantedAt: null,
     };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
 
@@ -415,6 +425,9 @@ describe('buildBridge', () => {
       settings: {},
       scopeMatrix: null,
       setupSteps: null,
+      writeClass: 'none',
+      granted: false,
+      grantedAt: null,
     };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(expected));
 
@@ -425,9 +438,65 @@ describe('buildBridge', () => {
     expect(result).toBe(expected);
   });
 
+  it('featureWriteGrant, actionsList, actionsApprove, actionsReject and writesList invoke their channels with the request', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const grant = { id: 'youtube' as const, granted: true, confirmWrites: true };
+
+    await bridge.featureWriteGrant(grant);
+    await bridge.actionsList();
+    await bridge.actionsApprove({ id: 'act-1' });
+    await bridge.actionsReject({ id: 'act-1', reason: 'Wrong thumbnail' });
+    await bridge.writesList({ limit: 50 });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.featureWriteGrant, grant],
+      [CHANNEL.actionsList],
+      [CHANNEL.actionsApprove, { id: 'act-1' }],
+      [CHANNEL.actionsReject, { id: 'act-1', reason: 'Wrong thumbnail' }],
+      [CHANNEL.writesList, { limit: 50 }],
+    ]);
+  });
+
+  it('onActionsChanged calls the listener each time main announces a change and unsubscribes the same handler', () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    let changes = 0;
+
+    const unsubscribe = bridge.onActionsChanged(() => (changes += 1));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [string, (event: unknown) => void][]
+    )[0]!;
+    handler({});
+    handler({});
+    unsubscribe();
+
+    expect(channel).toBe(CHANNEL.actionsChanged);
+    expect(changes).toBe(2);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.actionsChanged, handler);
+  });
+
+  it('onFeaturesChanged calls the listener each time main announces the features changed and unsubscribes the same handler', () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    let changes = 0;
+
+    const unsubscribe = bridge.onFeaturesChanged(() => (changes += 1));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [string, (event: unknown) => void][]
+    )[0]!;
+    handler({});
+    handler({});
+    unsubscribe();
+
+    expect(channel).toBe(CHANNEL.featuresChanged);
+    expect(changes).toBe(2);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.featuresChanged, handler);
+  });
+
   it('featureEnable invokes the correct channel with the id request', async () => {
     const ipc = makeFakeIpc();
-    const req = { id: 'kubernetes' as const };
+    const req = { id: 'kubernetes' as const, confirmWrites: false };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve({}));
 
     const bridge = buildBridge(ipc);

@@ -1,22 +1,23 @@
 namespace Scout.ControlPlane.Features;
 
 /// <summary>
-/// Per-feature write classification under the descriptive/executive split.
+/// Per-feature write classification. A feature with any write row needs the
+/// owner's grant before it is enabled.
 /// </summary>
 public enum WriteClass
 {
-    /// <summary>Read-only — no external mutations of any kind.</summary>
+    /// <summary>Read-only: no external mutations of any kind.</summary>
     None,
 
     /// <summary>
-    /// Mutations that produce content for a human/agent to read and act
-    /// on (e.g. opening a GitHub issue). Permitted.
+    /// Produces content a human or agent reads and acts on, such as drafts
+    /// under Scout's own data folder; runs only under the owner's grant.
     /// </summary>
     Descriptive,
 
     /// <summary>
-    /// Mutations that directly change infra/code/data without a human
-    /// gate. Forbidden by the Scout security invariant.
+    /// Mutates external state; runs only under the owner's grant and, for
+    /// irreversible rows, a per-action approval.
     /// </summary>
     Executive,
 }
@@ -35,4 +36,8 @@ public sealed record FeatureMetadata(
     IReadOnlyList<FeatureSettingField> SettingsFields,
     WriteClass WriteClass,
     IReadOnlyList<FeatureScopeRow>? ScopeMatrix = null,
-    IReadOnlyList<string>? SetupSteps = null);
+    IReadOnlyList<string>? SetupSteps = null)
+{
+    /// <summary>True when any scope row writes, reversibly or not.</summary>
+    public bool HasWriteRows => ScopeMatrix?.Any(row => row.Access != ScopeAccess.Read) ?? false;
+}

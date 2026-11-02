@@ -20,6 +20,10 @@ describe('CHANNEL constant', () => {
         'accessGet',
         'accessSet',
         'accessStartPairing',
+        'actionsApprove',
+        'actionsChanged',
+        'actionsList',
+        'actionsReject',
         'appGetVersion',
         'appOpenExternal',
         'appQuit',
@@ -42,6 +46,8 @@ describe('CHANNEL constant', () => {
         'featureEnable',
         'featureSetCredentials',
         'featureSetup',
+        'featureWriteGrant',
+        'featuresChanged',
         'featuresList',
         'githubCancel',
         'githubSaveToken',
@@ -103,6 +109,7 @@ describe('CHANNEL constant', () => {
         'workerStart',
         'workerStatus',
         'workerStop',
+        'writesList',
         'youtubeCancelSignIn',
         'youtubeClearApiKey',
         'youtubeSaveApiKey',
@@ -120,6 +127,32 @@ describe('local conversation channels', () => {
     expect(CHANNEL.localClearTurns).toBe('scout:local.clearTurns');
     expect(CHANNEL.localTurns).toBe('scout:local.turns');
     expect(Object.values(CHANNEL)).not.toContain('scout:local.event');
+  });
+});
+
+describe('review channels', () => {
+  test('a feature write grant is its own channel, separate from enable', () => {
+    expect(CHANNEL.featureWriteGrant).toBe('scout:features.writeGrant');
+  });
+
+  test('main tells the renderer the features changed on their own channel, so a revoked grant reaches the Features screen', () => {
+    expect(CHANNEL.featuresChanged).toBe('scout:features.changed');
+  });
+
+  test('the Review screen lists, approves and rejects queued actions, reads the write log and hears of changes', () => {
+    expect([
+      CHANNEL.actionsList,
+      CHANNEL.actionsApprove,
+      CHANNEL.actionsReject,
+      CHANNEL.actionsChanged,
+      CHANNEL.writesList,
+    ]).toEqual([
+      'scout:actions.list',
+      'scout:actions.approve',
+      'scout:actions.reject',
+      'scout:actions.changed',
+      'scout:writes.list',
+    ]);
   });
 });
 
@@ -176,6 +209,13 @@ describe('ChannelName type', () => {
       'scout:features.deleteCredentials': true,
       'scout:features.enable': true,
       'scout:features.disable': true,
+      'scout:features.writeGrant': true,
+      'scout:actions.list': true,
+      'scout:actions.approve': true,
+      'scout:actions.reject': true,
+      'scout:actions.changed': true,
+      'scout:features.changed': true,
+      'scout:writes.list': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,
@@ -264,6 +304,8 @@ describe('no-external-write sanity scan', () => {
     //                                       installation is written. progress only reports that install.
     'scout:update.install',
     'scout:update.progress',
+    'scout:writes.list',
+    'scout:features.writeGrant',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new

@@ -12,6 +12,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     /// <summary>Canonical id for the YouTube feature.</summary>
     public const string YouTubeId = "youtube";
 
+
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
@@ -42,17 +43,21 @@ public sealed class FeatureCatalog : IFeatureCatalog
         ScopeMatrix: new[]
         {
             new FeatureScopeRow(
-                Scope: "Metadata: read",
-                Actions: new[] { "List the repositories the Scout GitHub App is installed on" }),
+                Scope: "Metadata",
+                Actions: new[] { "List the repositories the Scout GitHub App is installed on" },
+                Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "Contents: read",
-                Actions: new[] { "Read the README, languages and top-level files of a repository" }),
+                Scope: "Contents",
+                Actions: new[] { "Read the README, languages and top-level files of a repository" },
+                Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "Pull requests: read",
-                Actions: new[] { "List open pull requests" }),
+                Scope: "Pull requests",
+                Actions: new[] { "List open pull requests" },
+                Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "Issues: read",
-                Actions: new[] { "List open issues" }),
+                Scope: "Issues",
+                Actions: new[] { "List open issues" },
+                Access: ScopeAccess.Read),
         },
         SetupSteps: new[]
         {
@@ -83,7 +88,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata YouTube = new(
         Id: YouTubeId,
         DisplayName: "YouTube",
-        Description: "Reads a channel's overview, latest uploads and video statistics; your own channel after you sign in from the desktop; never posts or uploads.",
+        Description: "Reads a channel's overview, uploads, statistics, search results and comments; your own channel after you sign in from the desktop. With your write permission it will also produce videos under Scout's folder and, one action at a time with your approval, upload, schedule, reply and change titles or thumbnails. Nothing of the write side is implemented yet.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -96,18 +101,61 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 CreateLinkLabel: null),
         },
         SettingsFields: Array.Empty<FeatureSettingField>(),
-        WriteClass: WriteClass.None,
+        WriteClass: WriteClass.Executive,
         ScopeMatrix: new[]
         {
             new FeatureScopeRow(
-                Scope: "channels.list: read",
-                Actions: new[] { "Read a channel's title, handle, subscribers, total views and video count" }),
+                Scope: "channels.list",
+                Actions: new[] { "Read a channel's title, handle, subscribers, total views and video count" },
+                Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "playlistItems.list: read",
-                Actions: new[] { "List the latest uploads of a channel" }),
+                Scope: "playlistItems.list",
+                Actions: new[] { "List the latest uploads of a channel" },
+                Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "videos.list: read",
-                Actions: new[] { "Read a video's title, duration, views, likes and comment count" }),
+                Scope: "videos.list",
+                Actions: new[] { "Read a video's title, duration, views, likes and comment count" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "search.list",
+                Actions: new[] { "Search YouTube for videos on a topic" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "commentThreads.list",
+                Actions: new[] { "Read the comments on your videos" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "analytics (yt-analytics v2)",
+                Actions: new[] { "Read a video's views, watch time and click-through rate" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "Scout's data folder",
+                Actions: new[] { "Save scripts, narration, images, the scene list, the video and thumbnails" },
+                Access: ScopeAccess.Write),
+            new FeatureScopeRow(
+                Scope: "videos.insert",
+                Actions: new[] { "Upload a video as private or unlisted" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "videos.update",
+                Actions: new[] { "Set a video's title, description, tags, publish time and visibility" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "thumbnails.set",
+                Actions: new[] { "Set a video's thumbnail" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "playlistItems.insert",
+                Actions: new[] { "Add a video to a playlist" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "comments.insert",
+                Actions: new[] { "Publish a reply to a comment" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "comments.setModerationStatus",
+                Actions: new[] { "Hold, publish or reject a comment" },
+                Access: ScopeAccess.IrreversibleWrite),
         },
         SetupSteps: new[]
         {
@@ -121,6 +169,28 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private readonly Dictionary<string, FeatureMetadata> _byId = AllFeatures.ToDictionary(
         f => f.Id,
         StringComparer.Ordinal);
+
+    /// <summary>Build the catalog; throws when an entry breaks <see cref="Validate"/>.</summary>
+    public FeatureCatalog() => Validate(AllFeatures);
+
+    /// <summary>
+    /// Fails when a feature declares a write row under <see cref="WriteClass.None"/>,
+    /// because the class is what the owner grants.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Names every inconsistent feature.</exception>
+    public static void Validate(IEnumerable<FeatureMetadata> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+        var inconsistent = features
+            .Where(f => f.WriteClass == WriteClass.None && f.HasWriteRows)
+            .Select(f => f.Id)
+            .ToList();
+        if (inconsistent.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Features with a write row must declare a write class other than None: {string.Join(", ", inconsistent)}.");
+        }
+    }
 
     /// <inheritdoc/>
     public IReadOnlyList<FeatureMetadata> All => AllFeatures;

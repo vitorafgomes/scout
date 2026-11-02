@@ -1,8 +1,8 @@
 ---
 title: "YouTube channel operator"
-version: "1.0"
+version: "1.1"
 date: 2026-11-02
-changes: "Initial initiative page: research to publish to learn, in Scout, with the owner's approvals"
+changes: "Parity table: every module of the reference mapped to a phase"
 page_type: roadmap
 status: active
 description: "Initiative: Scout runs a YouTube channel end to end, from topic research and scripts through narration, visuals and an assembled video, to a review step, upload and scheduling the owner approves, and a learning loop over the channel's analytics; own C# code, official APIs, per-feature permissions (ADR 0032)."
@@ -23,7 +23,7 @@ The owner tested the read-only YouTube plugin ([[pages/roadmap/youtube-creator-a
 
 ## Scope
 
-- **In scope:** the stages below, as Scout features in the control-plane catalog with their own write rows and grants; the desktop as the only approval surface; official APIs only (YouTube Data API v3 with the upload and comment scopes, YouTube Analytics API v2, the connected LLM provider, a TTS and an image or video provider the owner connects); local rendering of the final video; Discord, Slack and the quick-ask window as the places to ask for a video and follow progress.
+- **In scope:** the stages below, inside the one `youtube` feature of the control-plane catalog with its declared rows and the owner's grant; the desktop as the only approval surface; official APIs only (YouTube Data API v3 with the upload and comment scopes, YouTube Analytics API v2, the connected LLM provider, a TTS and an image or video provider the owner connects); local rendering of the final video; Discord, Slack and the quick-ask window as the places to ask for a video and follow progress.
 - **Out of scope:** scraping of any site; buying ads; anything the owner has not granted; writes outside Scout's own data folder; uploading without the per-video approval; third-party captions.
 - **Anti-goals:** a video uploaded that nobody approved; a comment reply published that nobody read; a credential with write scopes held by a feature that does not need it; placeholder media reaching the review as if it were final.
 
@@ -34,21 +34,24 @@ By the end of phase 5, the owner says "make a video about X" in Discord, reviews
 ## Status
 
 - **As of 2026-11-02:** planned; nothing built. ADR 0032 accepted. Phase 1 of the read-only plan is in review and gives this initiative the sign-in, the token file and the catalog entry.
+- **2026-11-02, phase 1 worker side built:** the `youtube` catalog entry declares the operator's read, write and irreversible-write rows under `WriteClass.Executive` (`tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:87`); the control plane grants writes only with the owner's confirmation, through `Enable` or `SetWriteGrant` (`tests/Scout.ControlPlane.Tests/Features/FeaturesServiceTests.cs:211`, `:288`); the approval queue and the write log exist with their gRPC calls (`tests/Scout.ControlPlane.Tests/Integration/FeatureWritesGrpcTests.cs:94`); the guard refuses writes only while nothing is granted (`tests/Scout.Llm.Tests/Guard/ReadOnlyGuardChatCompletionServiceTests.cs:277`). Nothing of the write side is implemented; the desktop side of phase 1 is in progress.
+- **2026-11-02, phase 1 desktop side built:** the YouTube card lists its read, write and irreversible rows with the grant line, and "Allow writes" grants only after the confirmation dialog (`ui/packages/renderer/src/app/features/features.component.spec.ts:522`, `ui/packages/renderer/src/app/features/feature-card.component.spec.ts:172`); the Review screen lists pending actions with Approve and Reject and the recent writes newest first (`ui/packages/renderer/src/app/review/review.component.spec.ts:103`); the granted features reach the worker as `SCOUT__FEATURES__GRANTEDWRITES` and a grant change restarts it (`ui/packages/main/test/worker-build-env.test.ts:796`). [[pages/services/desktop-ui]].
 - **Next milestone:** ADR 0032's wording landed on the README, the site and the pipeline; then phase 1 below.
-- **Blocker:** none for phases 1 and 2. Phase 3 needs a TTS and an image source the owner picks (see Decisions pending). Phase 5 needs the `youtube.upload` and `youtube.force-ssl` scopes on the sign-in, granted only when the Publish feature is enabled.
+- **Blocker:** none for phases 1 and 2. Phase 3 needs a TTS and an image source the owner picks (see Decisions pending). Phase 5 needs the `youtube.upload` and `youtube.force-ssl` scopes on the sign-in, requested only once the write grant is given.
 
 ## Design
 
-### Features and their permissions
+### One feature, every permission declared
 
-| Feature (catalog id) | Reads | Writes | Grant |
-|---|---|---|---|
-| `youtube` (exists) | channel, uploads, video stats; analytics in phase 2 of the read-only plan | none | credential only |
-| `youtube-research` | search, trending and competitor data through the Data API; the channel's own history | none | credential only |
-| `youtube-production` | the mandate, research, analytics | files under Scout's data folder: scripts, narration, images, scene list, the assembled video, thumbnails | `WriteClass.Descriptive`, enabled once |
-| `youtube-publish` | the review queue | `videos.insert` (upload), `videos.update` (metadata, publish time, visibility), `thumbnails.set`, `playlistItems.insert` | `WriteClass.Executive`; every upload and schedule is an approved action |
-| `youtube-engage` | `commentThreads.list` | `comments.insert` (reply), `comments.setModerationStatus` | `WriteClass.Executive`; every reply is an approved action |
-| `youtube-experiments` | analytics | `videos.update` of a live title, `thumbnails.set` of a live thumbnail | `WriteClass.Executive`; every change is an approved action, with the rollback stored |
+The owner's rule (2026-11-02): "tem que ficar tudo dentro da mesma feature". The operator is the existing `youtube` catalog entry, not a set of features. Its contract lists every call with its access; the owner grants the write permission once on the YouTube card of the Features screen (the grant is a control-plane call, confirmed in a dialog that lists the write rows); every irreversible row still runs one action at a time after the owner approves it on the Review screen.
+
+| Access | Rows of the `youtube` feature |
+|---|---|
+| read | `channels.list`, `search.list`, `videos.list`, `playlistItems.list`, `commentThreads.list`, analytics (YouTube Analytics API v2) |
+| write | scripts, narration, images, scene list, the assembled video and thumbnails under Scout's data folder |
+| write (irreversible), approved per action | `videos.insert` (upload), `videos.update` (metadata, visibility, publish time, a live title), `thumbnails.set`, `playlistItems.insert`, `comments.insert` (reply), `comments.setModerationStatus` |
+
+`WriteClass.Executive`. Without the grant the feature is what phase 1 of the read-only plan shipped: reads only. The Google sign-in asks for the upload and comment scopes only when the grant is given (phase 5).
 
 ### The pipeline
 
@@ -65,16 +68,42 @@ By the end of phase 5, the owner says "make a video about X" in Discord, reviews
 
 ### Where it runs
 
-The desktop is the operator: the scheduler (daily research, publishing queue, analytics at fixed hours) runs in the desktop main process while Scout runs; the worker keeps the model functions and the API calls; the control plane carries the feature grants and the approval queue. Chat is the remote control: ask for a video, follow progress, get the report.
+The owner's rule (2026-11-02): "a maior parte tem que ser em C#". Every stage of the pipeline is C# in the .NET worker and control plane: research, script, narration and image calls through the connected AI Source, the scene list, the `ffmpeg` driver, the checks, the scheduler (a hosted service in the worker), the approval queue, the write log and every YouTube call. The desktop (TypeScript) only shows and asks: the Production and Review screens render what the control plane returns and send the owner's grant, edits and approvals back over the authenticated socket; it holds no pipeline logic. Chat is the remote control: ask for a video, follow progress, get the report.
+
+### Parity with the reference
+
+The owner's rule: "essa feature tem que seguir 100% o que e' esse projeto". Every module the reference README names (read 2026-11-02), and where it lands here; the only deliberate difference is media through the AI Sources already connected in Scout, never a separate account.
+
+| Reference module | Here | Phase |
+|---|---|---|
+| Autonomous channel operator (objective, audience, pillars, cadence, limits) | the mandate on the Production screen | 2 |
+| Outcome and ROI studio (target metric against a budget; missing data shown as unavailable, never zero) | an outcome panel per mandate; unavailable is a state, not a zero | 2, 5 |
+| Research, Script | research functions and the script generator | 2 |
+| Evidence desk (each factual claim tied to a verified source before approval) | a claims list on the review; an unverified claim blocks approval | 2, 4 |
+| Production readiness (providers, channel access, MP4 assembly; uploads nothing) | a readiness check on the Production screen | 3, 4 |
+| Resumable generation (progress saved per stage) | each stage writes its result under Scout's folder before the next starts | 3 |
+| AI video generation (local slideshow by default, video clips with a paid-seconds cap) | slideshow by default; video through the connected AI Source when it offers it, with a cap | 3 |
+| Scene repair studio (edit, reorder, lock, regenerate one scene, rebuild) | the scene list | 3, 4 |
+| Shorts repurposing (three vertical drafts from an approved video, reusing media) | Shorts cuts from the approved package | 4 |
+| Content review (checks, metadata, approval, scheduling) | the review and the approval queue | 4, 5 |
+| Required approvals (fact review, media-rights confirmation, owner approval; simulated media never approvable) | three approvals on the package; placeholder media cannot be approved | 4 |
+| Discoverability preflight (search and AI-answer checks) | our own checks on title, description and tags against the channel's search data; no third-party audit tool | 4 |
+| Publish (upload, metadata, thumbnail, schedule) | approved actions on the Review screen | 5 |
+| Learning loop (24-hour and 7-day results against history, proposals to approve) | the reports and proposals | 5 |
+| Controlled growth experiments (title and thumbnail variants, 95% evidence threshold) | experiments with the same threshold and a stored rollback | 5 |
+| Scene-aware retention (which scene lost viewers) | the retention curve mapped onto the scene list | 5 |
+| Audience engagement studio (comment sync, spam quarantine, approved replies, ideas from requests) | comment sync, quarantine, approved replies, requests feeding research | 6 |
+| Scheduler (generation daily, publishing queue every 15 minutes, analytics daily, optimization nightly, comments and experiments every 4 hours, weekly strategy review) | a hosted service in the worker with the same jobs; times in the owner's local zone | 2 to 6 |
+| Dashboard on a local port | the desktop app; no local web server | n/a |
 
 ## Phases
 
 ### Phase 1: the contract in the product
-- **Scope:** ADR 0032 wording on README, the site and CLAUDE.md; the Features screen shows write rows and asks for confirmation before enabling a write-capable feature; the catalog gains the five features above with their rows (all disabled); the approval queue and the write log in the control plane and the desktop (empty for now); the LLM guard refuses writes only when no granted feature exists.
-- **Success criteria:** enabling `youtube-publish` shows its four write rows and needs the confirmation; a test proves an undeclared write fails the catalog test; a test proves a chat message cannot approve a queued action.
+- **Scope:** ADR 0032 wording on README, the site and CLAUDE.md; the `youtube` catalog entry declares the rows above; the YouTube card shows them with the grant line and an Allow writes button behind a confirmation dialog; the approval queue and the write log in the control plane and the desktop Review screen (empty for now); the LLM guard refuses writes only when no granted feature exists. Nothing on the write side executes yet.
+- **Success criteria:** granting writes on the YouTube card shows every write row and needs the confirmation; a test proves a write row under `WriteClass.None` fails the catalog test; approvals exist only as control-plane calls the desktop makes.
 
 ### Phase 2: mandate, research and script (no write)
-- **Scope:** Production screen with the mandate; `youtube-research` and the script generator; drafts in Scout's folder; the chat flow "make a video about X" up to the script.
+- **Scope:** Production screen with the mandate; research functions and the script generator; drafts in Scout's folder; the chat flow "make a video about X" up to the script.
 - **Success criteria:** the target outcome's first half: a script the owner can read on the desktop within minutes of asking in Discord, grounded in the channel's data and the benchmarks page.
 
 ### Phase 3: narration and visuals
@@ -86,22 +115,23 @@ The desktop is the operator: the scheduler (daily research, publishing queue, an
 - **Success criteria:** a real MP4 the owner would upload by hand, with the checks green; placeholder media cannot be approved.
 
 ### Phase 5: publish and learn
-- **Scope:** `youtube-publish` with the upload scopes, the approval queue in use, scheduling, the 24-hour and 7-day reports, experiments.
+- **Scope:** the upload scopes on the sign-in, the approval queue in use, scheduling, the 24-hour and 7-day reports, experiments.
 - **Success criteria:** the target outcome.
 
 ### Phase 6: engage
-- **Scope:** `youtube-engage`: comment sync, themes, spam quarantine, reply drafts and approved replies.
+- **Scope:** comment sync, themes, spam quarantine, reply drafts and approved replies.
 
 ## Decisions pending
 
-- [[pages/decisions/0032-per-feature-write-permissions]] accepted; the per-feature ADRs for `youtube-publish` and `youtube-engage` are drafted at their phases.
+- [[pages/decisions/0032-per-feature-write-permissions]] accepted; ADR 0030 is amended when the first write row is implemented (phase 5).
 - **Owner, decided 2026-11-02:** narration and images come only from the AI Sources already connected in Scout; no separate account, key or card for media ("o objetivo e' sempre usar apenas os AI Sources que estao autenticados ja no Scout e nao ter uma conta a parte"). Phase 3 therefore carries a capability matrix per connected provider (which of them offers speech and image generation through the same credential, which do not) and a local fallback for the rest: text-card slideshow with owner-supplied images, and a local speech engine when one is installed on the machine.
-- **Owner:** whether `ffmpeg` bundled with the desktop is acceptable as the one external tool; the first channel mandate.
+- **Owner, decided 2026-11-02:** `ffmpeg` is bundled with the desktop as the one external tool ("pode usar o ffmpeg empacotado"); our C# code drives it.
+- **Owner:** the first channel mandate.
 
 ## Services affected
 
 - [[pages/services/control-plane]] and [[pages/services/host-control-plane]]: feature rows, grants, the approval queue, the write log.
-- [[pages/services/desktop-ui]]: Features confirmation, the Production and Review screens, the scheduler, the approval surface.
+- [[pages/services/desktop-ui]]: the YouTube card's grant, the Production and Review screens, the approval surface; no pipeline logic.
 - [[pages/services/plugin-youtube]]: new scopes and functions per feature.
 - [[pages/services/llm]]: the guard and the provider cards for TTS and images.
 - [[pages/services/conversation]]: the chat flow and progress messages.
@@ -111,4 +141,4 @@ The desktop is the operator: the scheduler (daily research, publishing queue, an
 - Google verification: the `youtube.upload` scope is restricted and the app must pass Google's review before more than the test users can grant it; while unverified the owner still can.
 - Paid providers: a runaway loop can spend money; every paid call checks the cap first and the cap is per day.
 - Content rights: music and images the owner supplies are the owner's responsibility; generated media is marked as generated in the metadata.
-- The desktop must be running for the scheduler; a missed slot is reported, never silently skipped.
+- The worker must be running for the scheduler; a missed slot is reported, never silently skipped.

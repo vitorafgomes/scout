@@ -10,6 +10,156 @@ import {
 
 import type { FeatureDto, FeatureSettingFieldDto } from '@scout/shared';
 
+/** The dialog look shared by the credential dialog and the write confirmation dialog. */
+export const DIALOG_STYLES = `
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+      .dialog {
+        background: #171b26;
+        border: 1px solid #252b3b;
+        border-radius: 8px;
+        padding: 20px;
+        width: min(600px, 92vw);
+        max-height: 90vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        color: #e4e8f0;
+      }
+      h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #7b8299;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .label {
+        font-size: 13px;
+        color: #7b8299;
+      }
+      .helper {
+        margin: 0;
+        font-size: 12px;
+        color: #7b8299;
+      }
+      input[type='text'],
+      input[type='password'],
+      textarea {
+        background: #0f1117;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        padding: 8px;
+        color: #e4e8f0;
+        font-family: inherit;
+        font-size: 13px;
+      }
+      textarea {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 12px;
+        resize: vertical;
+      }
+      .link-btn {
+        align-self: flex-start;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 4px;
+        border: 1px solid #252b3b;
+        color: #93c5fd;
+        text-decoration: none;
+        background: transparent;
+      }
+      .link-btn:hover {
+        background: #1e2333;
+      }
+      .scope-matrix {
+        border-top: 1px solid #252b3b;
+        padding-top: 12px;
+      }
+      .scope-matrix table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .scope-matrix th,
+      .scope-matrix td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid #1e2333;
+        vertical-align: top;
+      }
+      .scope-matrix th {
+        color: #7b8299;
+        font-weight: 500;
+      }
+      .scope-matrix code {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        color: #fbbf24;
+        font-size: 11px;
+      }
+      .scope-matrix ul {
+        margin: 0;
+        padding-left: 16px;
+      }
+      .setup-steps {
+        border-top: 1px solid #252b3b;
+        padding-top: 12px;
+      }
+      .setup-steps ol {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 12px;
+        color: #e4e8f0;
+      }
+      .setup-steps li {
+        line-height: 1.45;
+      }
+      footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .btn {
+        font-size: 13px;
+        padding: 6px 14px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn--primary {
+        background: #2563eb;
+        color: white;
+      }
+      .btn--secondary {
+        background: transparent;
+        color: #e4e8f0;
+        border-color: #252b3b;
+      }
+    `;
+
 export interface CredentialDialogSubmit {
   readonly credentials: Record<string, string>;
   readonly settings: Record<string, string>;
@@ -222,156 +372,7 @@ export interface CredentialDialogSubmit {
       </div>
     </div>
   `,
-  styles: [
-    `
-      .backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.6);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 100;
-      }
-      .dialog {
-        background: #171b26;
-        border: 1px solid #252b3b;
-        border-radius: 8px;
-        padding: 20px;
-        width: min(600px, 92vw);
-        max-height: 90vh;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        color: #e4e8f0;
-      }
-      h2 {
-        margin: 0;
-        font-size: 18px;
-      }
-      h3 {
-        margin: 0 0 8px;
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #7b8299;
-      }
-      .field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .label {
-        font-size: 13px;
-        color: #7b8299;
-      }
-      .helper {
-        margin: 0;
-        font-size: 12px;
-        color: #7b8299;
-      }
-      input[type='text'],
-      input[type='password'],
-      textarea {
-        background: #0f1117;
-        border: 1px solid #252b3b;
-        border-radius: 6px;
-        padding: 8px;
-        color: #e4e8f0;
-        font-family: inherit;
-        font-size: 13px;
-      }
-      textarea {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 12px;
-        resize: vertical;
-      }
-      .link-btn {
-        align-self: flex-start;
-        font-size: 12px;
-        padding: 4px 10px;
-        border-radius: 4px;
-        border: 1px solid #252b3b;
-        color: #93c5fd;
-        text-decoration: none;
-        background: transparent;
-      }
-      .link-btn:hover {
-        background: #1e2333;
-      }
-      .scope-matrix {
-        border-top: 1px solid #252b3b;
-        padding-top: 12px;
-      }
-      .scope-matrix table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-      }
-      .scope-matrix th,
-      .scope-matrix td {
-        text-align: left;
-        padding: 6px 8px;
-        border-bottom: 1px solid #1e2333;
-        vertical-align: top;
-      }
-      .scope-matrix th {
-        color: #7b8299;
-        font-weight: 500;
-      }
-      .scope-matrix code {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        color: #fbbf24;
-        font-size: 11px;
-      }
-      .scope-matrix ul {
-        margin: 0;
-        padding-left: 16px;
-      }
-      .setup-steps {
-        border-top: 1px solid #252b3b;
-        padding-top: 12px;
-      }
-      .setup-steps ol {
-        margin: 0;
-        padding-left: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        font-size: 12px;
-        color: #e4e8f0;
-      }
-      .setup-steps li {
-        line-height: 1.45;
-      }
-      footer {
-        display: flex;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-      .btn {
-        font-size: 13px;
-        padding: 6px 14px;
-        border-radius: 6px;
-        border: 1px solid transparent;
-        cursor: pointer;
-      }
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      .btn--primary {
-        background: #2563eb;
-        color: white;
-      }
-      .btn--secondary {
-        background: transparent;
-        color: #e4e8f0;
-        border-color: #252b3b;
-      }
-    `,
-  ],
+  styles: [DIALOG_STYLES],
 })
 export class CredentialDialogComponent {
   @Input({ required: true }) feature!: FeatureDto;

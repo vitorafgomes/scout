@@ -13,6 +13,7 @@ export interface ControlPlaneLauncherDeps {
   logger: Logger;
   platform: NodeJS.Platform;
   mintToken?: () => string;
+  mintWorkerToken?: () => string;
   socketDir?: string;
   extraEnv?: Record<string, string>;
   getUid?: () => number | undefined;
@@ -22,8 +23,16 @@ export interface LaunchedControlPlane {
   readonly kind: 'launched';
   readonly socketPath: string;
   readonly token: string;
+  /** The worker's own token for the WorkerGate service; never the desktop token, never logged. */
+  readonly workerToken: string;
   readonly child: ChildProcess;
   dispose(): void;
+}
+
+/** Where and with which token the worker reaches the control plane's write gate. */
+export interface WorkerGateAccess {
+  readonly socketPath: string;
+  readonly token: string;
 }
 
 export interface UnsupportedControlPlane {
@@ -35,6 +44,7 @@ const MAX_SOCKET_PATH_LENGTH = 100;
 
 const RESERVED_KEYS = new Set([
   'scout_controlplane_token',
+  'scout_controlplane_worker_token',
   'scout__controlplane__socketpath',
   'urls',
   'http_ports',
@@ -90,12 +100,20 @@ function defaultSocketDir(): string {
 
 /**
  * Spawns Scout.Host.ControlPlane bound to a per-session Unix socket and hands it a fresh
- * session token through its environment. The token never reaches the logger.
+ * session token and a separate worker token through its environment. Neither token
+ * reaches the logger.
  */
 export function launchControlPlane(
   deps: ControlPlaneLauncherDeps,
 ): LaunchedControlPlane | UnsupportedControlPlane {
-  const { spawn, resolveBinary, logger, platform, mintToken = mintSessionToken } = deps;
+  const {
+    spawn,
+    resolveBinary,
+    logger,
+    platform,
+    mintToken = mintSessionToken,
+    mintWorkerToken = mintSessionToken,
+  } = deps;
 
   if (platform === 'win32') {
     return {
@@ -116,6 +134,7 @@ export function launchControlPlane(
 
   const binaryPath = resolveBinary();
   const token = mintToken();
+  const workerToken = mintWorkerToken();
 
   // ponytail: no restart policy and no parent-death watchdog; reuse the worker supervisor's policy in phase 3.
   const child = spawn(binaryPath, [], {
@@ -124,6 +143,7 @@ export function launchControlPlane(
       ...deps.extraEnv,
       Scout__ControlPlane__SocketPath: socketPath,
       SCOUT_CONTROLPLANE_TOKEN: token,
+      SCOUT_CONTROLPLANE_WORKER_TOKEN: workerToken,
     },
     cwd: path.dirname(binaryPath),
     stdio: ['ignore', 'ignore', 'inherit'],
@@ -146,6 +166,7 @@ export function launchControlPlane(
     kind: 'launched',
     socketPath,
     token,
+    workerToken,
     child,
     dispose() {
       child.kill('SIGTERM');
@@ -161,6 +182,8 @@ export interface ConnectControlPlaneDeps extends ControlPlaneLauncherDeps {
 export interface ControlPlaneConnection {
   /** Resolves once the host's socket exists; rejects with ControlPlaneUnavailableError otherwise. */
   readonly client: Promise<ControlPlaneClient>;
+  /** The worker's way to the write gate while the launched host lives; null when it never launched or is gone. */
+  workerGate(): WorkerGateAccess | null;
   dispose(): void;
 }
 
@@ -208,11 +231,14 @@ function waitForSocket(launched: LaunchedControlPlane, timeoutMs: number): Promi
 export function connectControlPlane(deps: ConnectControlPlaneDeps): ControlPlaneConnection {
   let launched: LaunchedControlPlane | null = null;
   let client: ControlPlaneClient | null = null;
+  let gate: WorkerGateAccess | null = null;
 
   const connecting = (async (): Promise<ControlPlaneClient> => {
     const result = launchControlPlane(deps);
     if (result.kind === 'unsupported') throw new ControlPlaneUnavailableError(result.reason);
     launched = result;
+    gate = { socketPath: result.socketPath, token: result.workerToken };
+    result.child.once('exit', () => (gate = null));
     await waitForSocket(result, deps.socketWaitMs ?? 10_000);
     client = createControlPlaneClient({
       socketPath: result.socketPath,
@@ -223,6 +249,7 @@ export function connectControlPlane(deps: ConnectControlPlaneDeps): ControlPlane
     result.child.once('exit', () => client?.close());
     return client;
   })().catch((err: unknown) => {
+    gate = null;
     launched?.dispose();
     const unavailable =
       err instanceof ControlPlaneUnavailableError
@@ -238,6 +265,7 @@ export function connectControlPlane(deps: ConnectControlPlaneDeps): ControlPlane
 
   return {
     client: connecting,
+    workerGate: () => gate,
     dispose(): void {
       client?.close();
       launched?.dispose();

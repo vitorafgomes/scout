@@ -19,8 +19,13 @@ public sealed class FeatureCatalogTests
     [Fact]
     public void GitHub_Lists_Only_The_Read_Only_App_Permissions()
     {
-        GitHub.ScopeMatrix!.Select(r => r.Scope)
-            .ShouldBe(["Metadata: read", "Contents: read", "Pull requests: read", "Issues: read"]);
+        GitHub.ScopeMatrix!.Select(r => (r.Scope, r.Access))
+            .ShouldBe([
+                ("Metadata", ScopeAccess.Read),
+                ("Contents", ScopeAccess.Read),
+                ("Pull requests", ScopeAccess.Read),
+                ("Issues", ScopeAccess.Read),
+            ]);
         GitHub.WriteClass.ShouldBe(WriteClass.None);
     }
 
@@ -79,16 +84,36 @@ public sealed class FeatureCatalogTests
     }
 
     [Fact]
-    public void YouTube_Is_Read_Only_And_Lists_Only_The_Three_List_Calls()
+    public void The_YouTube_Feature_Declares_Its_Read_Write_And_Irreversible_Rows()
     {
         var youTube = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull();
 
         youTube.DisplayName.ShouldBe("YouTube");
-        youTube.WriteClass.ShouldBe(WriteClass.None);
-        youTube.ScopeMatrix.ShouldNotBeNull().Select(r => r.Scope)
-            .ShouldBe(["channels.list: read", "playlistItems.list: read", "videos.list: read"]);
+        youTube.WriteClass.ShouldBe(WriteClass.Executive);
+        youTube.HasWriteRows.ShouldBeTrue();
+        youTube.ScopeMatrix.ShouldNotBeNull().Select(r => (r.Scope, r.Access))
+            .ShouldBe([
+                ("channels.list", ScopeAccess.Read),
+                ("playlistItems.list", ScopeAccess.Read),
+                ("videos.list", ScopeAccess.Read),
+                ("search.list", ScopeAccess.Read),
+                ("commentThreads.list", ScopeAccess.Read),
+                ("analytics (yt-analytics v2)", ScopeAccess.Read),
+                ("Scout's data folder", ScopeAccess.Write),
+                ("videos.insert", ScopeAccess.IrreversibleWrite),
+                ("videos.update", ScopeAccess.IrreversibleWrite),
+                ("thumbnails.set", ScopeAccess.IrreversibleWrite),
+                ("playlistItems.insert", ScopeAccess.IrreversibleWrite),
+                ("comments.insert", ScopeAccess.IrreversibleWrite),
+                ("comments.setModerationStatus", ScopeAccess.IrreversibleWrite),
+            ]);
+        youTube.ScopeMatrix!.Single(r => r.Access == ScopeAccess.Write).Actions
+            .ShouldBe(["Save scripts, narration, images, the scene list, the video and thumbnails"]);
         youTube.Description.ShouldBe(
-            "Reads a channel's overview, latest uploads and video statistics; your own channel after you sign in from the desktop; never posts or uploads.");
+            "Reads a channel's overview, uploads, statistics, search results and comments; your own channel after " +
+            "you sign in from the desktop. With your write permission it will also produce videos under Scout's " +
+            "folder and, one action at a time with your approval, upload, schedule, reply and change titles or " +
+            "thumbnails. Nothing of the write side is implemented yet.");
     }
 
     [Fact]
@@ -106,5 +131,30 @@ public sealed class FeatureCatalogTests
         youTube.SetupSteps.ShouldNotBeNull().Count.ShouldBe(3);
         youTube.SetupSteps!.ShouldContain(step => step.Contains("YouTube Data API v3"));
         youTube.SetupSteps!.ShouldContain(step => step.Contains("sign in") && step.Contains("Scout app"));
+    }
+
+    [Fact]
+    public void A_Write_Row_Under_WriteClass_None_Fails_The_Catalog_Check()
+    {
+        var undeclared = new FeatureMetadata(
+            Id: "sneaky",
+            DisplayName: "Sneaky",
+            Description: "Claims to read.",
+            RequiresCredentials: false,
+            CredentialFields: [],
+            SettingsFields: [],
+            WriteClass: WriteClass.None,
+            ScopeMatrix: [new FeatureScopeRow("videos.insert", ["Upload a video"], ScopeAccess.IrreversibleWrite)]);
+        var reversible = undeclared with
+        {
+            Id = "drafty",
+            ScopeMatrix = [new FeatureScopeRow("Scripts", ["Save a script"], ScopeAccess.Write)],
+        };
+
+        var ex = Should.Throw<InvalidOperationException>(() =>
+            FeatureCatalog.Validate(new FeatureCatalog().All.Append(undeclared).Append(reversible)));
+
+        ex.Message.ShouldBe("Features with a write row must declare a write class other than None: sneaky, drafty.");
+        Should.NotThrow(() => FeatureCatalog.Validate(new FeatureCatalog().All));
     }
 }

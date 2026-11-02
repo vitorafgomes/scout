@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Scout.ControlPlane;
 using Scout.Host.ControlPlane.Security;
 using Scout.Host.ControlPlane.Services;
@@ -10,19 +11,26 @@ namespace Scout.Host.ControlPlane;
 public static class ControlPlaneServiceRegistration
 {
     /// <summary>
-    /// Register gRPC, the token interceptor, the session token and the domain
-    /// services. The caller supplies the <see cref="SessionToken"/> so tests
-    /// can pin a known value; pass null to mint/read from the environment.
+    /// Register gRPC, the role-based token interceptor, the caller tokens and the
+    /// domain services. Tests pin the desktop <paramref name="token"/> and the
+    /// <paramref name="workerToken"/>; with a null <paramref name="token"/> the
+    /// desktop token is read from the environment or minted and the worker token
+    /// is read from <c>SCOUT_CONTROLPLANE_WORKER_TOKEN</c>.
     /// </summary>
     public static IServiceCollection AddControlPlaneHost(
         this IServiceCollection services,
         IConfiguration config,
-        SessionToken? token = null)
+        SessionToken? token = null,
+        string? workerToken = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(config);
 
-        services.AddSingleton(token ?? SessionToken.FromEnvironmentOrMint());
+        var desktop = token ?? SessionToken.FromEnvironmentOrMint();
+        var worker = token is null
+            ? Environment.GetEnvironmentVariable(CallerTokens.WorkerEnvVarName)
+            : workerToken;
+        services.AddSingleton(sp => CallerTokens.Create(desktop, worker, sp.GetRequiredService<ILogger<CallerTokens>>()));
         services.AddSingleton<TokenAuthInterceptor>();
 
         services.AddGrpc(options =>
@@ -34,7 +42,7 @@ public static class ControlPlaneServiceRegistration
         return services;
     }
 
-    /// <summary>Map the three gRPC services on the endpoint route builder.</summary>
+    /// <summary>Map the four gRPC services on the endpoint route builder.</summary>
     public static void MapControlPlaneServices(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -44,5 +52,7 @@ public static class ControlPlaneServiceRegistration
             .MapGrpcService<ModelsGrpcService>(endpoints);
         Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
             .MapGrpcService<FeaturesGrpcService>(endpoints);
+        Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
+            .MapGrpcService<WorkerGateGrpcService>(endpoints);
     }
 }

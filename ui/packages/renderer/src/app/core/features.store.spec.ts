@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ControlPlaneNotImplementedError,
   ControlPlaneUnavailableError,
+  ControlPlaneWriteConfirmationError,
   encodeIpcErrorMessage,
   serializeError,
   type FeatureDto,
@@ -20,6 +21,8 @@ interface BridgeStub {
   featureSetCredentials: ReturnType<typeof vi.fn>;
   featureSetup: ReturnType<typeof vi.fn>;
   featureDeleteCredentials: ReturnType<typeof vi.fn>;
+  featureWriteGrant: ReturnType<typeof vi.fn>;
+  onFeaturesChanged: ReturnType<typeof vi.fn>;
 }
 
 function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
@@ -30,6 +33,8 @@ function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
     featureSetCredentials: vi.fn(),
     featureSetup: vi.fn(),
     featureDeleteCredentials: vi.fn(),
+    featureWriteGrant: vi.fn(),
+    onFeaturesChanged: vi.fn(() => () => undefined),
     ...overrides,
   };
 }
@@ -58,6 +63,9 @@ const githubDisabled: FeatureDto = {
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
 };
 
 const githubEnabled: FeatureDto = {
@@ -92,6 +100,33 @@ describe('FeaturesStore', () => {
     expect(store.features()[0]!.busy).toBe(false);
   });
 
+  it('reloads the features when main announces they changed, so a grant revoked elsewhere shows as revoked', async () => {
+    const granted = {
+      ...githubEnabled,
+      id: 'youtube' as const,
+      writeClass: 'executive' as const,
+      granted: true,
+    };
+    const listeners: (() => void)[] = [];
+    const bridge = makeBridge({
+      featuresList: vi
+        .fn()
+        .mockResolvedValueOnce({ features: [granted] })
+        .mockResolvedValueOnce({ features: [{ ...granted, granted: false }] }),
+      onFeaturesChanged: vi.fn((listener: () => void) => {
+        listeners.push(listener);
+        return () => undefined;
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    listeners.forEach((listener) => listener());
+    await vi.waitFor(() => expect(bridge.featuresList).toHaveBeenCalledTimes(2));
+
+    await vi.waitFor(() => expect(store.features()[0]!.granted).toBe(false));
+  });
+
   it('toggle flips enabled optimistically and confirms with bridge response', async () => {
     const bridge = makeBridge({
       featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
@@ -102,7 +137,7 @@ describe('FeaturesStore', () => {
 
     await store.toggle('github');
 
-    expect(bridge.featureEnable).toHaveBeenCalledWith({ id: 'github' });
+    expect(bridge.featureEnable).toHaveBeenCalledWith({ id: 'github', confirmWrites: false });
     const view = store.features()[0]!;
     expect(view.enabled).toBe(true);
     expect(view.status).toBe('enabled');
@@ -282,5 +317,56 @@ describe('FeaturesStore', () => {
     expect(view.enabled).toBe(false);
     expect(view.lastError).toBe('Turning this feature on is not available yet.');
     expect(store.lastError()).toBe('Turning this feature on is not available yet.');
+  });
+
+  it("the control plane's confirmation message is shown when enable was called without confirming", async () => {
+    const youtube: FeatureDto = {
+      ...githubDisabled,
+      id: 'youtube',
+      hasCredentials: true,
+      status: 'disabled',
+      writeClass: 'executive',
+    };
+    const message =
+      'Confirm the writes of youtube before enabling it: youtube.upload (irreversible write).';
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [youtube] })),
+      featureEnable: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.enable',
+          new ControlPlaneWriteConfirmationError(message),
+        );
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.toggle('youtube');
+
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(false);
+    expect(view.lastError).toBe(message);
+  });
+
+  it("a refused write grant shows the control plane's message on the feature and leaves the grant off", async () => {
+    const youtube: FeatureDto = { ...githubDisabled, id: 'youtube', writeClass: 'executive' };
+    const message =
+      'Confirm the writes of youtube before granting them: youtube.upload (irreversible write).';
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [youtube] })),
+      featureWriteGrant: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.writeGrant',
+          new ControlPlaneWriteConfirmationError(message),
+        );
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.setWriteGrant('youtube', true, false);
+
+    const view = store.features()[0]!;
+    expect([view.granted, view.lastError, view.busy]).toEqual([false, message, false]);
   });
 });

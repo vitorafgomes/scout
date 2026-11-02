@@ -45,7 +45,7 @@ import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ip
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
-import { registerYouTubeHandlers } from './ipc/youtube.js';
+import { registerYouTubeHandlers, revokeYouTubeWriteGrant } from './ipc/youtube.js';
 import {
   DEFAULT_GOOGLE_CLIENT_ID,
   DEFAULT_GOOGLE_CLIENT_SECRET,
@@ -85,8 +85,10 @@ import {
   resolveTrayIcon,
   resolveWorkerBinary,
 } from './worker/resolve-binary.js';
+import { CHANNEL, ControlPlaneUnavailableError } from '@scout/shared';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
-import { buildEnv, migrateLegacyApiKey } from './worker/build-env.js';
+import type { ControlPlaneClient } from './control-plane/client.js';
+import { buildEnv, migrateLegacyApiKey, readGrantedWriteFeatures } from './worker/build-env.js';
 import { findBestWhisperModel } from './worker/whisper-model.js';
 import type { Supervisor } from './worker/supervisor.js';
 import {
@@ -193,6 +195,16 @@ let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
 let updateNotice: UpdateNoticeHandle | null = null;
 let openMainWindow: ((show: boolean) => BrowserWindow) | null = null;
+
+function sendToAllWindows(channel: string, log: typeof logger): void {
+  for (const target of BrowserWindow.getAllWindows()) {
+    try {
+      if (!target.isDestroyed()) target.webContents.send(channel);
+    } catch {
+      log.debug(`${channel}: a window closed before the change reached it`);
+    }
+  }
+}
 
 function disposeAll(): void {
   quickAsk?.dispose();
@@ -345,6 +357,11 @@ app
     });
 
     const youTubeLogger = logger.child({ module: 'youtube' });
+    const featuresChanged = (): void => sendToAllWindows(CHANNEL.featuresChanged, youTubeLogger);
+    const youTubeControlPlane = (): Promise<ControlPlaneClient> =>
+      controlPlane === null
+        ? Promise.reject(new ControlPlaneUnavailableError())
+        : controlPlane.client;
     const google = new GoogleAuth({
       fetch: globalThis.fetch,
       awaitCallback,
@@ -375,6 +392,8 @@ app
       onConnectionChanged: () => {
         if (supervisor !== null) void restartWorkerIfRunning(supervisor, youTubeLogger);
       },
+      revokeWriteGrant: () =>
+        revokeYouTubeWriteGrant(youTubeControlPlane, youTubeLogger, featuresChanged),
       onResume: (listener) => {
         powerMonitor.on('resume', listener);
         return () => powerMonitor.removeListener('resume', listener);
@@ -382,7 +401,13 @@ app
       logger: youTubeLogger,
     });
     googleAuth = google;
-    unregisterYouTube = registerYouTubeHandlers(ipcMain, google, youTubeLogger);
+    unregisterYouTube = registerYouTubeHandlers(
+      ipcMain,
+      google,
+      youTubeLogger,
+      youTubeControlPlane,
+      featuresChanged,
+    );
     google.start().catch((err: unknown) => {
       youTubeLogger.warn('youtube: start failed', { err: String(err) });
     });
@@ -441,6 +466,11 @@ app
           pairing: access.pendingPairing(),
           slackTokens: await readSlackTokens(vault),
           whisperModelPath: await findBestWhisperModel(whisperRootDir()),
+          grantedWriteFeatures: await readGrantedWriteFeatures(
+            controlPlane?.client ?? null,
+            logger.child({ module: 'supervisor' }),
+          ),
+          workerGate: controlPlane?.workerGate() ?? null,
         }),
       onPaired: (userId) =>
         void reportPairing(userId, access, () => readAllowedUserIds(vault), presence),
@@ -548,10 +578,17 @@ app
     });
     controlPlane = connection;
 
+    const featuresLogger = logger.child({ module: 'features' });
     unregisterFeatures = registerFeaturesHandlers(
       ipcMain,
       () => connection.client,
-      logger.child({ module: 'features' }),
+      featuresLogger,
+      {
+        onWriteGrantChanged: () => {
+          if (supervisor !== null) void restartWorkerIfRunning(supervisor, featuresLogger);
+        },
+        onActionsChanged: () => sendToAllWindows(CHANNEL.actionsChanged, featuresLogger),
+      },
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));

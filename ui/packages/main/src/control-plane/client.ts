@@ -5,11 +5,16 @@ import {
   ControlPlaneNotImplementedError,
   ControlPlaneUnauthenticatedError,
   ControlPlaneUnavailableError,
+  ControlPlaneWriteConfirmationError,
   type FeatureCredentialFieldDto,
   type FeatureDto,
   type FeatureId,
+  type FeatureScopeAccess,
   type FeatureSettingFieldDto,
   type FeatureStatus,
+  type FeatureWriteClass,
+  type PendingActionDto,
+  type WriteLogEntryDto,
 } from '@scout/shared';
 
 export interface ControlPlaneClientOptions {
@@ -43,8 +48,13 @@ export interface ControlPlaneClient {
     settings: Readonly<Record<string, string | null>>,
   ): Promise<FeatureDto>;
   deleteFeatureCredentials(id: FeatureId): Promise<FeatureDto>;
-  enableFeature(id: FeatureId): Promise<FeatureDto>;
+  enableFeature(id: FeatureId, confirmWrites: boolean): Promise<FeatureDto>;
   disableFeature(id: FeatureId): Promise<FeatureDto>;
+  setWriteGrant(id: FeatureId, granted: boolean, confirmWrites: boolean): Promise<FeatureDto>;
+  listPendingActions(): Promise<PendingActionDto[]>;
+  approveAction(id: string, reason?: string): Promise<PendingActionDto>;
+  rejectAction(id: string, reason?: string): Promise<PendingActionDto>;
+  listWrites(limit: number): Promise<WriteLogEntryDto[]>;
   close(): void;
 }
 
@@ -70,10 +80,34 @@ interface FeatureMessage {
   credentialFields: FieldMessage[];
   settingsFields: FieldMessage[];
   settings: Record<string, string>;
-  scopeMatrix: { scope: string; actions: string[] }[];
+  scopeMatrix: { scope: string; actions: string[]; access: number }[];
   hasScopeMatrix: boolean;
   setupSteps: string[];
   hasSetupSteps: boolean;
+  writeClass: number;
+  granted: boolean;
+  grantedAt?: string;
+}
+
+interface PendingActionMessage {
+  id: string;
+  featureId: string;
+  action: string;
+  target: string;
+  summary: string;
+  requestedAt: string;
+  status: string;
+  decidedAt?: string;
+}
+
+interface WriteLogEntryMessage {
+  at: string;
+  featureId: string;
+  action: string;
+  target: string;
+  outcome: string;
+  approvedBy?: string;
+  actionId?: string;
 }
 
 type UnaryMethod = (
@@ -84,6 +118,7 @@ type UnaryMethod = (
 ) => grpc.ClientUnaryCall;
 
 const TOKEN_HEADER = 'x-scout-token';
+const WRITE_CONFIRMATION = 'Confirm the writes of ';
 
 const STATUS: Readonly<Record<string, FeatureStatus>> = {
   ENABLED: 'enabled',
@@ -91,6 +126,9 @@ const STATUS: Readonly<Record<string, FeatureStatus>> = {
   DISABLED: 'disabled',
   ERROR: 'error',
 };
+
+const ACCESS: readonly FeatureScopeAccess[] = ['read', 'write', 'irreversible'];
+const WRITE_CLASS: readonly FeatureWriteClass[] = ['none', 'descriptive', 'executive'];
 
 function mapCallError(err: grpc.ServiceError): Error {
   switch (err.code) {
@@ -136,8 +174,42 @@ function toFeatureDto(message: FeatureMessage): FeatureDto {
     credentialFields: message.credentialFields.map(toCredentialField),
     settingsFields: message.settingsFields.map(toSettingField),
     settings: message.settings,
-    scopeMatrix: message.hasScopeMatrix ? message.scopeMatrix : null,
+    scopeMatrix: message.hasScopeMatrix
+      ? message.scopeMatrix.map((row) => ({
+          scope: row.scope,
+          actions: row.actions,
+          access: ACCESS[row.access] ?? 'irreversible',
+        }))
+      : null,
     setupSteps: message.hasSetupSteps ? message.setupSteps : null,
+    writeClass: WRITE_CLASS[message.writeClass] ?? 'executive',
+    granted: message.granted,
+    grantedAt: message.grantedAt ?? null,
+  };
+}
+
+function toPendingAction(message: PendingActionMessage): PendingActionDto {
+  return {
+    id: message.id,
+    featureId: message.featureId,
+    action: message.action,
+    target: message.target,
+    summary: message.summary,
+    requestedAt: message.requestedAt,
+    status: message.status,
+    decidedAt: message.decidedAt ?? null,
+  };
+}
+
+function toWriteLogEntry(message: WriteLogEntryMessage): WriteLogEntryDto {
+  return {
+    at: message.at,
+    featureId: message.featureId,
+    action: message.action,
+    target: message.target,
+    outcome: message.outcome,
+    approvedBy: message.approvedBy ?? null,
+    actionId: message.actionId ?? null,
   };
 }
 
@@ -210,6 +282,19 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
 
   const feature = async (method: string, request: object): Promise<FeatureDto> =>
     toFeatureDto(await call<FeatureMessage>(features, method, request));
+  async function confirmable(method: string, request: object): Promise<FeatureDto> {
+    try {
+      return await feature(method, request);
+    } catch (err: unknown) {
+      const { code, details } = err as Partial<grpc.ServiceError>;
+      if (code !== grpc.status.FAILED_PRECONDITION || !details?.startsWith(WRITE_CONFIRMATION)) {
+        throw err;
+      }
+      throw new ControlPlaneWriteConfirmationError(details, { cause: err });
+    }
+  }
+  const decide = async (method: string, id: string, reason?: string): Promise<PendingActionDto> =>
+    toPendingAction(await call<PendingActionMessage>(features, method, { id, reason }));
 
   return {
     listProviders: () => call<ListProvidersResponse>(providers, 'ListProviders', {}),
@@ -228,8 +313,26 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       return feature('Setup', { id, credentials, settings: upserts, clearedSettings });
     },
     deleteFeatureCredentials: (id) => feature('DeleteCredentials', { id }),
-    enableFeature: (id) => feature('Enable', { id }),
+    enableFeature: (id, confirmWrites) => confirmable('Enable', { id, confirmWrites }),
     disableFeature: (id) => feature('Disable', { id }),
+    setWriteGrant: (id, granted, confirmWrites) =>
+      confirmable('SetWriteGrant', { id, granted, confirmWrites }),
+    async listPendingActions(): Promise<PendingActionDto[]> {
+      const response = await call<{ actions: PendingActionMessage[] }>(
+        features,
+        'ListPendingActions',
+        {},
+      );
+      return response.actions.map(toPendingAction);
+    },
+    approveAction: (id, reason) => decide('ApproveAction', id, reason),
+    rejectAction: (id, reason) => decide('RejectAction', id, reason),
+    async listWrites(limit): Promise<WriteLogEntryDto[]> {
+      const response = await call<{ entries: WriteLogEntryMessage[] }>(features, 'ListWrites', {
+        limit,
+      });
+      return response.entries.map(toWriteLogEntry);
+    },
     close(): void {
       closed = true;
       providers.close();

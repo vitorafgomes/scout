@@ -51,6 +51,13 @@ export const CHANNEL = {
   featureDeleteCredentials: 'scout:features.deleteCredentials',
   featureEnable: 'scout:features.enable',
   featureDisable: 'scout:features.disable',
+  featureWriteGrant: 'scout:features.writeGrant',
+  featuresChanged: 'scout:features.changed',
+  actionsList: 'scout:actions.list',
+  actionsApprove: 'scout:actions.approve',
+  actionsReject: 'scout:actions.reject',
+  actionsChanged: 'scout:actions.changed',
+  writesList: 'scout:writes.list',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -428,10 +435,17 @@ export interface FeatureSettingFieldDto {
   readonly required: boolean;
 }
 
+/** What a scope row lets Scout do: read, write, or a write that cannot be undone and waits for an approval per action. */
+export type FeatureScopeAccess = 'read' | 'write' | 'irreversible';
+
 export interface FeatureScopeRowDto {
   readonly scope: string;
   readonly actions: readonly string[];
+  readonly access: FeatureScopeAccess;
 }
+
+/** Whether a feature writes nothing, writes content a person reads, or changes something outside Scout. */
+export type FeatureWriteClass = 'none' | 'descriptive' | 'executive';
 
 export interface FeatureDto {
   readonly id: FeatureId;
@@ -447,6 +461,10 @@ export interface FeatureDto {
   readonly settings: Readonly<Record<string, string | null>>;
   readonly scopeMatrix: readonly FeatureScopeRowDto[] | null;
   readonly setupSteps: readonly string[] | null;
+  readonly writeClass: FeatureWriteClass;
+  /** True once the owner allowed this feature's writes on the Features screen. */
+  readonly granted: boolean;
+  readonly grantedAt: string | null;
 }
 
 export interface FeaturesListResponse {
@@ -455,6 +473,61 @@ export interface FeaturesListResponse {
 
 export interface FeatureIdRequest {
   readonly id: FeatureId;
+}
+
+/** Turns a feature on; `confirmWrites` is true only after the owner allowed the feature's write rows. */
+export interface FeatureEnableRequest {
+  readonly id: FeatureId;
+  readonly confirmWrites: boolean;
+}
+
+/** Grants or revokes a feature's writes; granting needs `confirmWrites` true, after the owner allowed the write rows. */
+export interface FeatureWriteGrantRequest {
+  readonly id: FeatureId;
+  readonly granted: boolean;
+  readonly confirmWrites: boolean;
+}
+
+/** An action a granted feature asked to perform that cannot be undone; it runs only after the owner approves it. */
+export interface PendingActionDto {
+  readonly id: string;
+  readonly featureId: string;
+  readonly action: string;
+  readonly target: string;
+  readonly summary: string;
+  readonly requestedAt: string;
+  /** `pending`, `approved`, `rejected`, or `executed` once the worker recorded the approved write. */
+  readonly status: string;
+  readonly decidedAt: string | null;
+}
+
+export interface PendingActionsResponse {
+  readonly actions: readonly PendingActionDto[];
+}
+
+/** The owner's decision on one pending action; `reason` is optional and kept with the decision. */
+export interface ActionDecisionRequest {
+  readonly id: string;
+  readonly reason?: string;
+}
+
+/** One write Scout performed: when, for which feature, what, on what, how it ended and who approved it. */
+export interface WriteLogEntryDto {
+  readonly at: string;
+  readonly featureId: string;
+  readonly action: string;
+  readonly target: string;
+  readonly outcome: string;
+  readonly approvedBy: string | null;
+  readonly actionId: string | null;
+}
+
+export interface WritesListRequest {
+  readonly limit: number;
+}
+
+export interface WritesListResponse {
+  readonly entries: readonly WriteLogEntryDto[];
 }
 
 export interface FeatureSetCredentialsRequest {
@@ -724,8 +797,16 @@ export interface ScoutBridge {
   featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto>;
   featureSetup(req: FeatureSetupRequest): Promise<FeatureDto>;
   featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto>;
-  featureEnable(req: FeatureIdRequest): Promise<FeatureDto>;
+  featureEnable(req: FeatureEnableRequest): Promise<FeatureDto>;
   featureDisable(req: FeatureIdRequest): Promise<FeatureDto>;
+  featureWriteGrant(req: FeatureWriteGrantRequest): Promise<FeatureDto>;
+  /** Calls `listener` each time main announces that a feature's state changed outside the Features screen. */
+  onFeaturesChanged(listener: () => void): () => void;
+  actionsList(): Promise<PendingActionsResponse>;
+  actionsApprove(req: ActionDecisionRequest): Promise<PendingActionDto>;
+  actionsReject(req: ActionDecisionRequest): Promise<PendingActionDto>;
+  onActionsChanged(listener: () => void): () => void;
+  writesList(req: WritesListRequest): Promise<WritesListResponse>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

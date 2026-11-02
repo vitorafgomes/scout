@@ -9,9 +9,15 @@ import { CredentialDialogComponent } from './credential-dialog.component';
 import { FeatureCardComponent } from './feature-card.component';
 import { GitHubConnectComponent } from './github-connect.component';
 import { KubernetesConnectComponent } from './kubernetes-connect.component';
+import { WriteConfirmationDialogComponent } from './write-confirmation-dialog.component';
 import { YouTubeConnectComponent } from './youtube-connect.component';
 
 type Connection = 'connected' | 'not-connected' | 'unknown';
+
+interface WriteConfirmation {
+  readonly feature: FeatureViewModel;
+  readonly purpose: 'enable' | 'grant';
+}
 
 export const NO_ALLOWED_USERS_WARNING =
   'Nobody can use this connection from chat until you add allowed users in Settings.';
@@ -26,6 +32,7 @@ export const NO_ALLOWED_USERS_WARNING =
     GitHubConnectComponent,
     KubernetesConnectComponent,
     YouTubeConnectComponent,
+    WriteConfirmationDialogComponent,
   ],
   template: `
     <main class="page">
@@ -44,7 +51,9 @@ export const NO_ALLOWED_USERS_WARNING =
             <sc-feature-card
               [feature]="f"
               [connection]="connectionOf(f.id)"
-              (toggle)="store.toggle(f.id)"
+              (toggle)="onToggle(f)"
+              (allowWrites)="confirming.set({ feature: f, purpose: 'grant' })"
+              (revokeWrites)="store.setWriteGrant(f.id, false, false)"
               (openCredentialDialog)="openDialog(f)"
               (clearCredentials)="store.clearCredentials(f.id)"
             >
@@ -75,6 +84,10 @@ export const NO_ALLOWED_USERS_WARNING =
         </div>
         <div class="notes" data-test="features-notes">
           <p>GitHub, Kubernetes and YouTube are used by the chat bot once connected.</p>
+          <p>
+            A feature that writes lists its write permissions on its card and writes only after you
+            allow them; actions that cannot be undone wait for you on the Review screen.
+          </p>
         </div>
       }
 
@@ -83,6 +96,14 @@ export const NO_ALLOWED_USERS_WARNING =
           [feature]="dlg"
           (submit)="onDialogSubmit(dlg.id, $event)"
           (cancel)="closeDialog()"
+        />
+      }
+
+      @if (confirming(); as c) {
+        <sc-write-confirmation-dialog
+          [feature]="c.feature"
+          (allow)="onAllowWrites(c)"
+          (cancel)="confirming.set(null)"
         />
       }
     </main>
@@ -151,6 +172,7 @@ export class FeaturesComponent implements OnInit {
   readonly noAllowedUsers = signal(false);
   readonly noAllowedUsersWarning = NO_ALLOWED_USERS_WARNING;
   readonly activeDialog = signal<FeatureViewModel | null>(null);
+  readonly confirming = signal<WriteConfirmation | null>(null);
   readonly githubConnection = signal<Connection>('unknown');
   readonly kubernetesConnection = signal<Connection>('unknown');
   readonly youtubeConnection = signal<Connection>('unknown');
@@ -174,6 +196,21 @@ export class FeaturesComponent implements OnInit {
       () => this.noAllowedUsers.set(false),
     );
     await this.store.load();
+  }
+
+  onToggle(feature: FeatureViewModel): void {
+    if (!feature.enabled && feature.writeClass !== 'none') {
+      this.confirming.set({ feature, purpose: 'enable' });
+      return;
+    }
+    void this.store.toggle(feature.id);
+  }
+
+  async onAllowWrites(confirmation: WriteConfirmation): Promise<void> {
+    this.confirming.set(null);
+    const { id } = confirmation.feature;
+    if (confirmation.purpose === 'enable') await this.store.toggle(id, true);
+    else await this.store.setWriteGrant(id, true, true);
   }
 
   openDialog(feature: FeatureViewModel): void {

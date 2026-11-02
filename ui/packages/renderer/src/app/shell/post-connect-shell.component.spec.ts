@@ -101,18 +101,26 @@ describe('PostConnectShellComponent', () => {
     const labels = Array.from(fixture.nativeElement.querySelectorAll('.nav-label')).map((el) =>
       ((el as HTMLElement).textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['Chat', 'AI Sources', 'Models', 'Features', 'Settings']);
+    expect(labels).toEqual(['Chat', 'AI Sources', 'Models', 'Features', 'Review', 'Settings']);
   });
 
-  it('renders Chat first, then AI Sources, Models, Features, Logs, Settings, with no Status entry', async () => {
+  it('renders Chat first, then AI Sources, Models, Features, Review, Logs, Settings, with no Status entry', async () => {
     const { fixture } = await setup();
 
     const links = fixture.nativeElement.querySelectorAll('.nav-link');
-    expect(links.length).toBe(6);
+    expect(links.length).toBe(7);
     const labels = Array.from(links).map((el) =>
       ((el as HTMLElement).querySelector('.nav-label')?.textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['Chat', 'AI Sources', 'Models', 'Features', 'Logs', 'Settings']);
+    expect(labels).toEqual([
+      'Chat',
+      'AI Sources',
+      'Models',
+      'Features',
+      'Review',
+      'Logs',
+      'Settings',
+    ]);
   });
 
   it('exposes data-test attributes for every nav item', async () => {
@@ -122,6 +130,9 @@ describe('PostConnectShellComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="nav-sources"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-models"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-features"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="nav-review"]')?.getAttribute('href'),
+    ).toBe('/review');
     expect(fixture.nativeElement.querySelector('[data-test="nav-status"]')).toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-logs"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-settings"]')).not.toBeNull();

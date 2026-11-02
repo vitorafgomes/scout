@@ -38,9 +38,14 @@ class FakeWindow extends EventEmitter {
   position: { x: number; y: number } | null = null;
   bounds = { x: 0, y: 0, width: 0, height: 0 };
   alwaysOnTopLevel: string | null = null;
+  topMoves = 0;
   allWorkspaces: { visible: boolean; options: unknown } | null = null;
-  constructor(readonly options: Record<string, unknown>) {
+  constructor(
+    readonly options: Record<string, unknown>,
+    private readonly platform: NodeJS.Platform = 'linux',
+  ) {
     super();
+    this.alwaysOnTopLevel = options['alwaysOnTop'] === true ? 'floating' : null;
     this.bounds = {
       x: 0,
       y: 0,
@@ -80,6 +85,10 @@ class FakeWindow extends EventEmitter {
   }
   hide(): void {
     this.calls.push('hide');
+    if (this.platform === 'linux') this.alwaysOnTopLevel = null;
+  }
+  moveTop(): void {
+    this.topMoves += 1;
   }
   destroy(): void {
     this.destroyed = true;
@@ -196,7 +205,7 @@ async function setup(
     ipcMain,
     supervisor,
     createWindow: (opts) => {
-      const window = new FakeWindow(opts as Record<string, unknown>);
+      const window = new FakeWindow(opts as Record<string, unknown>, options.platform);
       windows.push(window);
       return window as unknown as BrowserWindow;
     },
@@ -566,6 +575,20 @@ describe('quick ask: window and shortcut', () => {
     t.quickAsk.dispose();
   });
 
+  it('reopening the quick-ask window after Close puts it back on top of other windows', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localOpen, sender());
+    const window = t.quickAskWindow();
+
+    await t.invoke(CHANNEL.localHide, sender());
+    await t.invoke(CHANNEL.localOpen, sender());
+
+    expect(window.calls.slice(-2)).toEqual(['show', 'focus']);
+    expect(window.alwaysOnTopLevel).toBe('floating');
+    expect(window.topMoves).toBe(2);
+    t.quickAsk.dispose();
+  });
+
   it.each(['linux', 'darwin', 'win32'] as const)(
     'on %s the quick-ask window keeps the default focusable window, so the window manager gives it the keyboard and the blur that hides it',
     async (platform) => {
@@ -846,6 +869,25 @@ describe('quick ask: floating button', () => {
     },
   );
 
+  it('the floating button is back on top each time it reappears', async () => {
+    const t = await setup();
+    const bubble = t.bubble();
+    const atStartup = bubble.alwaysOnTopLevel;
+
+    await t.invoke(CHANNEL.localOpen, sender());
+    await t.invoke(CHANNEL.localHide, sender());
+
+    expect(bubble.calls).toEqual([
+      'setPosition',
+      'showInactive',
+      'hide',
+      'setPosition',
+      'showInactive',
+    ]);
+    expect([atStartup, bubble.alwaysOnTopLevel]).toEqual(['screen-saver', 'screen-saver']);
+    t.quickAsk.dispose();
+  });
+
   it('closing the quick-ask window from its frame shows the bubble again', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localOpen, sender());
@@ -1026,12 +1068,12 @@ describe('quick ask: floating button', () => {
     t.quickAsk.dispose();
   });
 
-  it('leaves the window level and workspaces alone outside macOS', async () => {
+  it('leaves the workspaces alone outside macOS', async () => {
     const t = await setup({ platform: 'win32' });
 
     await t.invoke(CHANNEL.localOpen, sender());
 
-    expect(t.bubble().alwaysOnTopLevel).toBeNull();
+    expect(t.bubble().allWorkspaces).toBeNull();
     expect(t.quickAskWindow().allWorkspaces).toBeNull();
     t.quickAsk.dispose();
   });

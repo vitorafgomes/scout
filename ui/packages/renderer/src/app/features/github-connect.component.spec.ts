@@ -23,6 +23,9 @@ const feature = (id: 'github' | 'kubernetes'): FeatureDto => ({
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
 });
 
 const INSTALL_URL = 'https://github.com/apps/scout-chatops/installations/new';
@@ -59,6 +62,7 @@ function makeBridge(first: GitHubStatus, allowedUserIds: readonly string[] = [])
     setStatus(next: GitHubStatus): void {
       current = next;
     },
+    onFeaturesChanged: vi.fn(() => () => undefined),
     featuresList: vi.fn(async () => ({ features: [feature('github'), feature('kubernetes')] })),
     githubStatus: vi.fn(async () => current),
     githubSignIn: vi.fn(async () => {

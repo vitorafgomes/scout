@@ -42,6 +42,10 @@ export class FeaturesStore {
     return this._features().map((f) => ({ ...f, busy: busy.has(f.id) }));
   });
 
+  constructor() {
+    this._bridge.onFeaturesChanged(() => void this.load());
+  }
+
   async load(): Promise<void> {
     try {
       const res = await this._bridge.featuresList();
@@ -59,7 +63,8 @@ export class FeaturesStore {
     }
   }
 
-  async toggle(id: FeatureId): Promise<void> {
+  /** Flips a feature on or off; `confirmWrites` is true only after the owner allowed the feature's writes. */
+  async toggle(id: FeatureId, confirmWrites = false): Promise<void> {
     const current = this._features().find((f) => f.id === id);
     if (current === undefined) return;
     const nextEnabled = !current.enabled;
@@ -68,7 +73,7 @@ export class FeaturesStore {
     this.markBusy(id, true);
     try {
       const updated = nextEnabled
-        ? await this._bridge.featureEnable({ id })
+        ? await this._bridge.featureEnable({ id, confirmWrites })
         : await this._bridge.featureDisable({ id });
       this.replaceOne(updated);
     } catch (err: unknown) {
@@ -78,6 +83,20 @@ export class FeaturesStore {
         status: 'error',
         lastError: errorText(err),
       });
+      this._lastError.set(errorText(err));
+    } finally {
+      this.markBusy(id, false);
+    }
+  }
+
+  /** Grants or revokes a feature's writes; a refusal from the control plane is shown on the feature. */
+  async setWriteGrant(id: FeatureId, granted: boolean, confirmWrites: boolean): Promise<void> {
+    this.markBusy(id, true);
+    try {
+      this.replaceOne(await this._bridge.featureWriteGrant({ id, granted, confirmWrites }));
+      this._lastError.set(null);
+    } catch (err: unknown) {
+      this.patchOne(id, { lastError: errorText(err) });
       this._lastError.set(errorText(err));
     } finally {
       this.markBusy(id, false);

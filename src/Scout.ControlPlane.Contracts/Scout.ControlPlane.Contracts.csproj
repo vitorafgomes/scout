@@ -21,5 +21,6 @@
     <Protobuf Include="protos/providers.proto" GrpcServices="Both" />
     <Protobuf Include="protos/models.proto" GrpcServices="Both" />
     <Protobuf Include="protos/features.proto" GrpcServices="Both" />
+    <Protobuf Include="protos/worker.proto" GrpcServices="Both" />
   </ItemGroup>
 </Project>

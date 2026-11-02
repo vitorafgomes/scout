@@ -307,6 +307,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     }
     place(bubbleWindow, BUBBLE_SIZE);
     bubbleWindow.showInactive();
+    bubbleWindow.setAlwaysOnTop(true, 'screen-saver');
   }
 
   function destroyBubble(): void {
@@ -365,6 +366,8 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     }
     if (bubbleWindow !== null && !bubbleWindow.isDestroyed()) bubbleWindow.hide();
     window.show();
+    window.setAlwaysOnTop(true, 'floating');
+    window.moveTop();
     window.focus();
     window.webContents.focus();
   }

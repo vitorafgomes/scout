@@ -15,4 +15,14 @@ public sealed class FeatureStateStoreOptions
     /// <c>%LocalAppData%/Scout/features.json</c>.
     /// </summary>
     public string? FilePath { get; set; }
+
+    /// <summary>
+    /// <see cref="FilePath"/> or the default under local application data; the
+    /// action queue and the write log live in the same folder.
+    /// </summary>
+    public string ResolveFilePath() =>
+        FilePath ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Scout",
+            "features.json");
 }

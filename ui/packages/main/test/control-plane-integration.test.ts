@@ -4,7 +4,11 @@ import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { ControlPlaneNotImplementedError, ControlPlaneUnauthenticatedError } from '@scout/shared';
+import {
+  ControlPlaneNotImplementedError,
+  ControlPlaneUnauthenticatedError,
+  ControlPlaneWriteConfirmationError,
+} from '@scout/shared';
 import { createControlPlaneClient } from '../src/control-plane/client.js';
 import type { ControlPlaneClient } from '../src/control-plane/client.js';
 import { launchControlPlane } from '../src/control-plane/launcher.js';
@@ -153,6 +157,35 @@ describe('control plane over UDS', () => {
   );
 
   it(
+    'the worker token the launcher hands the real host may not list or grant features',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const worker = connect((result as LaunchedControlPlane).workerToken);
+
+      const listed = await worker.listFeatures().then(
+        () => null,
+        (err: unknown) => err,
+      );
+      const granted = await worker.setWriteGrant('youtube', true, true).then(
+        () => null,
+        (err: unknown) => err,
+      );
+      const youtube = (await connect((result as LaunchedControlPlane).token).listFeatures()).find(
+        (feature) => feature.id === 'youtube',
+      );
+
+      expect([listed, granted].map((err) => (err as { code?: unknown } | null)?.code)).toEqual([
+        7, 7,
+      ]);
+      expect(youtube?.granted).toBe(false);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
     'ListFeatures returns github, kubernetes and youtube from the real Scout.Host.ControlPlane binary',
     async () => {
       if (process.platform === 'win32') {
@@ -183,7 +216,7 @@ describe('control plane over UDS', () => {
       const before = (await client.listFeatures()).find((f) => f.id === 'github');
 
       const saved = await client.setFeatureCredentials('github', { pat: 'ghp_integration' });
-      const enableError = await client.enableFeature('github').then(
+      const enableError = await client.enableFeature('github', false).then(
         () => null,
         (err: unknown) => err,
       );
@@ -191,6 +224,83 @@ describe('control plane over UDS', () => {
       expect([before?.hasCredentials, before?.status]).toEqual([false, 'needs-credentials']);
       expect([saved.hasCredentials, saved.status]).toEqual([true, 'disabled']);
       expect(enableError).toBeInstanceOf(ControlPlaneNotImplementedError);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'youtube declares executive writes with read, write and irreversible rows and starts without a grant',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+
+      const youtube = (await connect((result as LaunchedControlPlane).token).listFeatures()).find(
+        (f) => f.id === 'youtube',
+      );
+      const accesses = new Set(youtube?.scopeMatrix?.map((row) => row.access));
+
+      expect([youtube?.writeClass, youtube?.granted, youtube?.grantedAt]).toEqual([
+        'executive',
+        false,
+        null,
+      ]);
+      expect([...accesses].sort()).toEqual(['irreversible', 'read', 'write']);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'Enable of youtube without confirming its writes is refused with the confirmation message, and with confirming says it is not available yet',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setFeatureCredentials('youtube', { api_key: 'integration-key' });
+
+      const unconfirmed = await client.enableFeature('youtube', false).then(
+        () => null,
+        (err: unknown) => err,
+      );
+      const confirmed = await client.enableFeature('youtube', true).then(
+        () => null,
+        (err: unknown) => err,
+      );
+
+      expect(unconfirmed).toBeInstanceOf(ControlPlaneWriteConfirmationError);
+      expect((unconfirmed as Error).message).toStartWith(
+        'Confirm the writes of youtube before enabling it',
+      );
+      expect(confirmed).toBeInstanceOf(ControlPlaneNotImplementedError);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'SetWriteGrant records the owner grant of youtube only with confirmWrites, and a revoke clears it',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+
+      const unconfirmed = await client.setWriteGrant('youtube', true, false).then(
+        () => null,
+        (err: unknown) => err,
+      );
+      const granted = await client.setWriteGrant('youtube', true, true);
+      const revoked = await client.setWriteGrant('youtube', false, false);
+
+      expect(unconfirmed).toBeInstanceOf(ControlPlaneWriteConfirmationError);
+      expect((unconfirmed as Error).message).toStartWith(
+        'Confirm the writes of youtube before granting them',
+      );
+      expect([granted.granted, granted.grantedAt === null]).toEqual([true, false]);
+      expect([revoked.granted, revoked.grantedAt]).toEqual([false, null]);
     },
     TEST_TIMEOUT_MS,
   );

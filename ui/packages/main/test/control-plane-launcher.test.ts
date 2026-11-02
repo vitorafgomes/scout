@@ -72,6 +72,7 @@ afterEach(() => {
 
 const BINARY = '/fake/bin/Scout.Host.ControlPlane';
 const TOKEN = 'ab'.repeat(32);
+const WORKER_TOKEN = 'cd'.repeat(32);
 
 function makeDeps(overrides: Partial<ControlPlaneLauncherDeps> = {}) {
   const child = makeChild();
@@ -101,6 +102,14 @@ describe('launchControlPlane', () => {
     expect(calls[0]?.command).toBe(BINARY);
     expect(launched.token).toMatch(/^[0-9a-f]{64}$/);
     expect(calls[0]?.env['SCOUT_CONTROLPLANE_TOKEN']).toBe(launched.token);
+    expect(launched.workerToken).toMatch(/^[0-9a-f]{64}$/);
+    expect(launched.workerToken).not.toBe(launched.token);
+    expect(calls[0]?.env['SCOUT_CONTROLPLANE_WORKER_TOKEN']).toBe(launched.workerToken);
+    expect(
+      ['SCOUT_CONTROLPLANE_TOKEN', 'SCOUT_CONTROLPLANE_WORKER_TOKEN'].filter(
+        (key) => key in process.env,
+      ),
+    ).toEqual([]);
     expect(launched.socketPath.startsWith(socketDir + path.sep)).toBe(true);
     expect(launched.socketPath.length).toBeLessThan(100);
     expect(calls[0]?.env['Scout__ControlPlane__SocketPath']).toBe(launched.socketPath);
@@ -109,13 +118,17 @@ describe('launchControlPlane', () => {
     const second = launchControlPlane(makeDeps().deps);
     if (second.kind !== 'launched') throw new Error(`expected a launch, got ${second.kind}`);
     expect(second.token).not.toBe(launched.token);
+    expect(second.workerToken).not.toBe(launched.workerToken);
 
     launched.dispose();
     expect(child.killed).toBe(true);
   });
 
-  it('never logs the session token', () => {
-    const { deps, child, lines } = makeDeps({ mintToken: () => TOKEN });
+  it('never logs the session token or the worker token', () => {
+    const { deps, child, lines } = makeDeps({
+      mintToken: () => TOKEN,
+      mintWorkerToken: () => WORKER_TOKEN,
+    });
 
     const launched = launchControlPlane(deps);
     child.emit('error', new Error('spawn failed'));
@@ -124,7 +137,7 @@ describe('launchControlPlane', () => {
 
     expect(launched.kind).toBe('launched');
     expect(lines.length).toBeGreaterThanOrEqual(3);
-    expect(lines.filter((line) => line.includes(TOKEN))).toEqual([]);
+    expect(lines.filter((line) => line.includes(TOKEN) || line.includes(WORKER_TOKEN))).toEqual([]);
   });
 
   it('refuses a socket path of 100 characters or more', () => {
@@ -197,8 +210,10 @@ describe('launchControlPlane', () => {
   it('passes extraEnv to the host and keeps its own socket and token variables', () => {
     const { deps, calls } = makeDeps({
       mintToken: () => TOKEN,
+      mintWorkerToken: () => WORKER_TOKEN,
       extraEnv: {
         SCOUT_CONTROLPLANE_TOKEN: 'x',
+        SCOUT_CONTROLPLANE_WORKER_TOKEN: 'y',
         Scout__ControlPlane__SocketPath: '/elsewhere.sock',
         Scout__Providers__Ollama__PingTimeout: '00:00:00.100',
       },
@@ -208,6 +223,7 @@ describe('launchControlPlane', () => {
 
     if (launched.kind !== 'launched') throw new Error(`expected a launch, got ${launched.kind}`);
     expect(calls[0]?.env['SCOUT_CONTROLPLANE_TOKEN']).toBe(TOKEN);
+    expect(calls[0]?.env['SCOUT_CONTROLPLANE_WORKER_TOKEN']).toBe(WORKER_TOKEN);
     expect(calls[0]?.env['Scout__ControlPlane__SocketPath']).toBe(launched.socketPath);
     expect(calls[0]?.env['Scout__Providers__Ollama__PingTimeout']).toBe('00:00:00.100');
   });
@@ -217,6 +233,8 @@ describe('launchControlPlane', () => {
       scout__controlplane__socketpath: '/evil',
       'Scout:ControlPlane:SocketPath': '/evil2',
       scout_controlplane_token: 'f'.repeat(64),
+      scout_controlplane_worker_token: 'e'.repeat(64),
+      DOTNET_Scout_ControlPlane_Worker_Token: 'e'.repeat(64),
       DOTNET_Scout__ControlPlane__SocketPath: '/evil3',
       Kestrel__Endpoints__Http__Url: 'http://0.0.0.0:5000',
       'kestrel:Endpoints:Https:Url': 'https://0.0.0.0:5001',
@@ -231,12 +249,16 @@ describe('launchControlPlane', () => {
     const saved = { ...process.env };
     Object.assign(process.env, hostile, kept);
     try {
-      const { deps, calls } = makeDeps({ mintToken: () => TOKEN });
+      const { deps, calls } = makeDeps({
+        mintToken: () => TOKEN,
+        mintWorkerToken: () => WORKER_TOKEN,
+      });
 
       const launched = launchControlPlane(deps);
 
       if (launched.kind !== 'launched') throw new Error(`expected a launch, got ${launched.kind}`);
       const env = calls[0]!.env;
+      expect(env['SCOUT_CONTROLPLANE_WORKER_TOKEN']).toBe(WORKER_TOKEN);
       expect(Object.keys(hostile).filter((key) => key in env)).toEqual([]);
       expect(env['Scout__ControlPlane__SocketPath']).toBe(launched.socketPath);
       expect(env['SCOUT_CONTROLPLANE_TOKEN']).toBe(TOKEN);
@@ -406,6 +428,40 @@ describe('connectControlPlane', () => {
     expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
     expect((error as Error).message).toContain('100 characters');
     expect(calls).toHaveLength(0);
+  });
+
+  it('hands the worker the socket path and the worker token from the launch, never the desktop token, and nothing once the host is gone', async () => {
+    const { deps, child } = makeDeps({
+      mintToken: () => TOKEN,
+      mintWorkerToken: () => WORKER_TOKEN,
+    });
+
+    const connection = connectControlPlane({ ...deps, protoDir: PROTO_DIR, socketWaitMs: 5_000 });
+    const whileLaunched = connection.workerGate();
+    child.emit('exit', 1, null);
+    await rejectionOf(connection.client);
+
+    expect(whileLaunched).toEqual({
+      socketPath: path.join(deps.socketDir!, `controlplane-${process.pid}.sock`),
+      token: WORKER_TOKEN,
+    });
+    expect(connection.workerGate()).toBeNull();
+  });
+
+  it('a control plane that never launched gives the worker no gate', async () => {
+    const unsupported = connectControlPlane({
+      ...makeDeps({ platform: 'win32' }).deps,
+      protoDir: PROTO_DIR,
+    });
+    const timedOut = connectControlPlane({
+      ...makeDeps().deps,
+      protoDir: PROTO_DIR,
+      socketWaitMs: 50,
+    });
+    await rejectionOf(unsupported.client);
+    await rejectionOf(timedOut.client);
+
+    expect([unsupported.workerGate(), timedOut.workerGate()]).toEqual([null, null]);
   });
 
   it('win32 is unavailable and names named pipes', async () => {

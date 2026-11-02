@@ -1,6 +1,30 @@
 import { describe, it, expect, spyOn } from 'bun:test';
-import { buildEnv, migrateLegacyApiKey } from '../src/worker/build-env.js';
-import { VaultUnavailableError, type VaultKey } from '@scout/shared';
+import type { IpcMainInvokeEvent } from 'electron';
+import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  buildEnv,
+  migrateLegacyApiKey,
+  readGrantedWriteFeatures,
+} from '../src/worker/build-env.js';
+import {
+  connectControlPlane,
+  type ControlPlaneLauncherDeps,
+} from '../src/control-plane/launcher.js';
+import { registerFeaturesHandlers, type FeaturesClient } from '../src/ipc/features.js';
+import { restartWorkerIfRunning } from '../src/ipc/github.js';
+import type { Logger } from '../src/util/logger.js';
+import {
+  CHANNEL,
+  ControlPlaneUnavailableError,
+  VaultUnavailableError,
+  type FeatureDto,
+  type FeatureId,
+  type VaultKey,
+  type WorkerStatus,
+} from '@scout/shared';
 import { API_KEY, TOKEN_FILE, connect, makeGoogleFake } from './google-fakes.js';
 
 function makeVault(
@@ -88,6 +112,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'OpenAI',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -120,6 +147,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'Gemini',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -200,6 +230,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -221,6 +254,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -239,6 +275,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -300,6 +339,9 @@ describe('buildEnv', () => {
       chatGptTokenFile: '/home/owner/.config/Scout/chatgpt-token.json',
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'ChatGptPlan',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -330,6 +372,9 @@ describe('buildEnv', () => {
       chatGptTokenFile: '/tmp/chatgpt-token.json',
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -462,6 +507,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -478,6 +526,9 @@ describe('buildEnv', () => {
       }),
     });
     expect(env).toEqual({
+      SCOUT__FEATURES__GRANTEDWRITES: '',
+      SCOUT__WORKERGATE__SOCKETPATH: '',
+      SCOUT__WORKERGATE__TOKEN: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -717,4 +768,251 @@ describe('migrateLegacyApiKey', () => {
       expect(entries.get('llm.api-key')).toBe('legacy-key');
     });
   }
+});
+
+describe('buildEnv write grants', () => {
+  const silent: Logger = {
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+    child() {
+      return silent;
+    },
+  };
+
+  function feature(id: FeatureDto['id'], granted: boolean): FeatureDto {
+    return {
+      id,
+      displayName: id,
+      description: '',
+      requiresCredentials: false,
+      hasCredentials: false,
+      enabled: granted,
+      status: granted ? 'enabled' : 'disabled',
+      lastError: null,
+      credentialFields: [],
+      settingsFields: [],
+      settings: {},
+      scopeMatrix: null,
+      setupSteps: null,
+      writeClass: id === 'youtube' ? 'executive' : 'none',
+      granted,
+      grantedAt: granted ? '2026-11-02T10:00:00Z' : null,
+    };
+  }
+
+  it('granted write features reach the worker as SCOUT__FEATURES__GRANTEDWRITES and a grant change restarts the worker', async () => {
+    let granted: FeatureId[] = [];
+    const ids: FeatureId[] = ['github', 'kubernetes', 'youtube'];
+    const client = {
+      listFeatures: async () => ids.map((id) => feature(id, granted.includes(id))),
+      setWriteGrant: async (id: FeatureId, grant: boolean) => {
+        granted = grant ? [...granted, id] : granted.filter((g) => g !== id);
+        return feature(id, grant);
+      },
+      enableFeature: async (id: FeatureId) => {
+        granted = [...granted, id];
+        return feature(id, true);
+      },
+      disableFeature: async (id: FeatureId) => {
+        granted = granted.filter((g) => g !== id);
+        return feature(id, false);
+      },
+    };
+    const envs: Record<string, string>[] = [];
+    let state: WorkerStatus['state'] = 'stopped';
+    const worker = {
+      get status(): WorkerStatus {
+        return { state } as WorkerStatus;
+      },
+      async start() {
+        envs.push(
+          await buildEnv({
+            vaultGet: async () => null,
+            grantedWriteFeatures: await readGrantedWriteFeatures(client, silent),
+          }),
+        );
+        state = 'running';
+        return { pid: 1 };
+      },
+      async stop() {
+        state = 'stopped';
+        return { exitCode: 0 };
+      },
+    };
+    const handlers = new Map<
+      string,
+      (event: IpcMainInvokeEvent, req: unknown) => Promise<unknown>
+    >();
+    let restart: Promise<void> = Promise.resolve();
+    registerFeaturesHandlers(
+      { handle: (channel, fn) => void handlers.set(channel, fn), removeHandler: () => {} },
+      async () => client as unknown as FeaturesClient,
+      silent,
+      { onWriteGrantChanged: () => (restart = restartWorkerIfRunning(worker, silent)) },
+    );
+
+    const send = async (channel: string, req: object): Promise<void> => {
+      await handlers.get(channel)!(null as unknown as IpcMainInvokeEvent, req);
+      await restart;
+    };
+
+    await worker.start();
+    await send(CHANNEL.featureWriteGrant, { id: 'youtube', granted: true, confirmWrites: true });
+    await send(CHANNEL.featureWriteGrant, { id: 'youtube', granted: false, confirmWrites: false });
+    await send(CHANNEL.featureEnable, { id: 'youtube', confirmWrites: true });
+    await send(CHANNEL.featureDisable, { id: 'youtube' });
+
+    expect(envs.map((env) => env['SCOUT__FEATURES__GRANTEDWRITES'] || 'no grants')).toEqual([
+      'no grants',
+      'youtube',
+      'no grants',
+      'youtube',
+      'no grants',
+    ]);
+  });
+
+  it('no feature granted sets SCOUT__FEATURES__GRANTEDWRITES empty so a value inherited from the desktop cannot grant writes', async () => {
+    const granted = await buildEnv({ vaultGet: async () => null, grantedWriteFeatures: [] });
+    const unknown = await buildEnv({ vaultGet: async () => null });
+
+    expect(granted['SCOUT__FEATURES__GRANTEDWRITES']).toBe('');
+    expect(unknown['SCOUT__FEATURES__GRANTEDWRITES']).toBe('');
+  });
+
+  it('a worker started while the control plane is still connecting gets the grants once it connects', async () => {
+    const warnings: string[] = [];
+    const logger: Logger = { ...silent, warn: (msg: string) => void warnings.push(msg) };
+    let connect: (client: { listFeatures(): Promise<FeatureDto[]> }) => void = () => {};
+    const connecting = new Promise<{ listFeatures(): Promise<FeatureDto[]> }>((resolve) => {
+      connect = resolve;
+    });
+
+    const reading = readGrantedWriteFeatures(connecting, logger, 5_000);
+    setTimeout(
+      () =>
+        connect({
+          listFeatures: async () => [
+            { id: 'youtube', granted: true } as FeatureDto,
+            { id: 'github', granted: false } as FeatureDto,
+          ],
+        }),
+      20,
+    );
+
+    expect(await reading).toEqual(['youtube']);
+    expect(warnings).toEqual([]);
+  });
+
+  it('a control plane that does not connect within the wait starts the worker with no grants and a warning', async () => {
+    const warnings: string[] = [];
+    const logger: Logger = { ...silent, warn: (msg: string) => void warnings.push(msg) };
+    const never = new Promise<{ listFeatures(): Promise<FeatureDto[]> }>(() => {});
+
+    const granted = await readGrantedWriteFeatures(never, logger, 20);
+
+    expect(granted).toEqual([]);
+    expect(warnings).toEqual([
+      'worker starts with no write grants: the control plane is not connected yet',
+    ]);
+  });
+
+  it('a control plane that is not connected yet or does not answer gives the worker no grants and is logged', async () => {
+    const warnings: string[] = [];
+    const logger: Logger = { ...silent, warn: (msg: string) => void warnings.push(msg) };
+    const failing = {
+      listFeatures: async (): Promise<FeatureDto[]> => {
+        throw new ControlPlaneUnavailableError('socket reset');
+      },
+    };
+
+    const notConnected = await readGrantedWriteFeatures(null, logger);
+    const unanswered = await readGrantedWriteFeatures(failing, logger);
+
+    expect([notConnected, unanswered]).toEqual([[], []]);
+    expect(warnings).toHaveLength(2);
+  });
+});
+
+describe('buildEnv worker gate', () => {
+  const silent: Logger = {
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+    child() {
+      return silent;
+    },
+  };
+
+  it('always sets the worker gate socket and token, empty while the control plane is not launched, so inherited values cannot override them', async () => {
+    const absent = await buildEnv({ vaultGet: async () => null });
+    const notLaunched = await buildEnv({ vaultGet: async () => null, workerGate: null });
+    const launched = await buildEnv({
+      vaultGet: async () => null,
+      workerGate: { socketPath: '/run/user/1000/scout/controlplane-7.sock', token: 'w'.repeat(64) },
+    });
+
+    for (const env of [absent, notLaunched]) {
+      expect([env['SCOUT__WORKERGATE__SOCKETPATH'], env['SCOUT__WORKERGATE__TOKEN']]).toEqual([
+        '',
+        '',
+      ]);
+    }
+    expect([
+      launched['SCOUT__WORKERGATE__SOCKETPATH'],
+      launched['SCOUT__WORKERGATE__TOKEN'],
+    ]).toEqual(['/run/user/1000/scout/controlplane-7.sock', 'w'.repeat(64)]);
+  });
+
+  it('a worker env built while the control plane holds the desktop token carries only the worker token, under SCOUT__WORKERGATE__TOKEN', async () => {
+    const desktopToken = 'd'.repeat(64);
+    const workerToken = 'e'.repeat(64);
+    const socketDir = mkdtempSync(path.join(os.tmpdir(), 'scout-wg-'));
+    const child = Object.assign(new EventEmitter(), { pid: 7, kill: () => true });
+    const hostEnvs: Record<string, string | undefined>[] = [];
+    const spawn = ((_cmd: string, _args: string[], options: { env: Record<string, string> }) => {
+      hostEnvs.push(options.env);
+      return child;
+    }) as unknown as ControlPlaneLauncherDeps['spawn'];
+    try {
+      const connection = connectControlPlane({
+        spawn,
+        resolveBinary: () => '/fake/Scout.Host.ControlPlane',
+        logger: silent,
+        platform: 'linux',
+        socketDir,
+        mintToken: () => desktopToken,
+        mintWorkerToken: () => workerToken,
+        protoDir: '/unused',
+        socketWaitMs: 50,
+      });
+      connection.client.catch(() => undefined);
+
+      const env = await buildEnv({
+        vaultGet: async () => null,
+        workerGate: connection.workerGate(),
+      });
+      const workerEnv = { ...process.env, ...env };
+
+      expect(hostEnvs[0]?.['SCOUT_CONTROLPLANE_TOKEN']).toBe(desktopToken);
+      expect(hostEnvs[0]?.['SCOUT_CONTROLPLANE_WORKER_TOKEN']).toBe(workerToken);
+      expect(
+        ['SCOUT_CONTROLPLANE_TOKEN', 'SCOUT_CONTROLPLANE_WORKER_TOKEN'].filter(
+          (k) => k in workerEnv,
+        ),
+      ).toEqual([]);
+      expect(Object.values(workerEnv).filter((value) => value?.includes(desktopToken))).toEqual([]);
+      expect(Object.entries(env).filter(([, value]) => value === workerToken)).toEqual([
+        ['SCOUT__WORKERGATE__TOKEN', workerToken],
+      ]);
+      expect(env['SCOUT__WORKERGATE__SOCKETPATH']).toBe(
+        path.join(socketDir, `controlplane-${process.pid}.sock`),
+      );
+      connection.dispose();
+    } finally {
+      rmSync(socketDir, { recursive: true, force: true });
+    }
+  });
 });

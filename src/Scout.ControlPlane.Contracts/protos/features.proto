@@ -12,6 +12,11 @@ service Features {
   rpc DeleteCredentials(DeleteCredentialsRequest) returns (Feature);
   rpc Enable(EnableRequest) returns (Feature);
   rpc Disable(DisableRequest) returns (Feature);
+  rpc SetWriteGrant(SetWriteGrantRequest) returns (Feature);
+  rpc ListPendingActions(ListPendingActionsRequest) returns (ListPendingActionsResponse);
+  rpc ApproveAction(ActionDecisionRequest) returns (PendingAction);
+  rpc RejectAction(ActionDecisionRequest) returns (PendingAction);
+  rpc ListWrites(ListWritesRequest) returns (ListWritesResponse);
 }
 
 enum FeatureStatus {
@@ -47,6 +52,7 @@ message FeatureSettingField {
 message FeatureScopeRow {
   string scope = 1;
   repeated string actions = 2;
+  int32 access = 3;
 }
 
 // Merged catalog + persisted state + credential-presence snapshot.
@@ -66,6 +72,9 @@ message Feature {
   bool has_scope_matrix = 13;
   repeated string setup_steps = 14;
   bool has_setup_steps = 15;
+  int32 write_class = 16;
+  bool granted = 17;
+  optional string granted_at = 18;
 }
 
 message ListFeaturesRequest {}
@@ -94,8 +103,56 @@ message DeleteCredentialsRequest {
 
 message EnableRequest {
   string id = 1;
+  bool confirm_writes = 2;
 }
 
 message DisableRequest {
   string id = 1;
+}
+
+message SetWriteGrantRequest {
+  string id = 1;
+  bool granted = 2;
+  bool confirm_writes = 3;
+}
+
+message PendingAction {
+  string id = 1;
+  string feature_id = 2;
+  string action = 3;
+  string target = 4;
+  string summary = 5;
+  string requested_at = 6;
+  string status = 7;
+  optional string decided_at = 8;
+  optional string reason = 9;
+}
+
+message ListPendingActionsRequest {}
+
+message ListPendingActionsResponse {
+  repeated PendingAction actions = 1;
+}
+
+message ActionDecisionRequest {
+  string id = 1;
+  optional string reason = 2;
+}
+
+message WriteLogEntry {
+  string at = 1;
+  string feature_id = 2;
+  string action = 3;
+  string target = 4;
+  string outcome = 5;
+  optional string approved_by = 6;
+  optional string action_id = 7;
+}
+
+message ListWritesRequest {
+  int32 limit = 1;
+}
+
+message ListWritesResponse {
+  repeated WriteLogEntry entries = 1;
 }

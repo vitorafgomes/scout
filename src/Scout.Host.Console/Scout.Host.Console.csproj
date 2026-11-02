@@ -45,4 +45,8 @@
       <ResolvedFileToPublish Include="@(_WhisperNative)" Condition="$([System.String]::Copy('%(_WhisperNative.RelativePath)').Replace('\', '/').StartsWith('$(WhisperNativeDir)'))" ExcludeFromSingleFile="true" />
     </ItemGroup>
   </Target>
+  <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" />
+    <ProjectReference Include="..\Scout.ControlPlane.Contracts\Scout.ControlPlane.Contracts.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,22 +1,31 @@
 using Grpc.Core;
+using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Contracts;
 using Scout.ControlPlane.Features;
 using GrpcFeatures = Scout.ControlPlane.Contracts.Features;
+using WirePendingAction = Scout.ControlPlane.Contracts.PendingAction;
 
 namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
-/// Thin gRPC adapter over <see cref="FeaturesService"/>. Maps domain
+/// Thin gRPC adapter over <see cref="FeaturesService"/>, the action queue and
+/// the write log. Maps domain
 /// exceptions to gRPC status codes; validation failures carry the dotted-path
 /// error map in the status detail.
 /// </summary>
 public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
 {
-    private readonly FeaturesService _features;
+    private const int DefaultWritesLimit = 50;
 
-    public FeaturesGrpcService(FeaturesService features)
+    private readonly FeaturesService _features;
+    private readonly IActionQueue _actions;
+    private readonly IWriteLog _writes;
+
+    public FeaturesGrpcService(FeaturesService features, IActionQueue actions, IWriteLog writes)
     {
         _features = features ?? throw new ArgumentNullException(nameof(features));
+        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+        _writes = writes ?? throw new ArgumentNullException(nameof(writes));
     }
 
     public override async Task<ListFeaturesResponse> ListFeatures(
@@ -73,11 +82,63 @@ public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
 
     public override Task<Feature> Enable(EnableRequest request, ServerCallContext context) =>
         Guard(async () => FeatureMapping.ToWire(
-            await _features.EnableAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+            await _features.EnableAsync(request.Id, request.ConfirmWrites, context.CancellationToken)
+                .ConfigureAwait(false)));
 
     public override Task<Feature> Disable(DisableRequest request, ServerCallContext context) =>
         Guard(async () => FeatureMapping.ToWire(
             await _features.DisableAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Feature> SetWriteGrant(SetWriteGrantRequest request, ServerCallContext context) =>
+        Guard(async () => FeatureMapping.ToWire(
+            await _features.SetWriteGrantAsync(
+                request.Id,
+                request.Granted,
+                request.ConfirmWrites,
+                context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<ListPendingActionsResponse> ListPendingActions(
+        ListPendingActionsRequest request,
+        ServerCallContext context) =>
+        Guard(async () =>
+        {
+            var response = new ListPendingActionsResponse();
+            foreach (var action in await _actions.ListPendingAsync(context.CancellationToken).ConfigureAwait(false))
+            {
+                response.Actions.Add(FeatureMapping.ToWire(action));
+            }
+            return response;
+        });
+
+    public override Task<WirePendingAction> ApproveAction(
+        ActionDecisionRequest request,
+        ServerCallContext context) =>
+        Guard(async () => FeatureMapping.ToWire(
+            await _actions.ApproveAsync(
+                request.Id,
+                request.HasReason ? request.Reason : null,
+                context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<WirePendingAction> RejectAction(
+        ActionDecisionRequest request,
+        ServerCallContext context) =>
+        Guard(async () => FeatureMapping.ToWire(
+            await _actions.RejectAsync(
+                request.Id,
+                request.HasReason ? request.Reason : null,
+                context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<ListWritesResponse> ListWrites(ListWritesRequest request, ServerCallContext context) =>
+        Guard(async () =>
+        {
+            var limit = request.Limit > 0 ? request.Limit : DefaultWritesLimit;
+            var response = new ListWritesResponse();
+            foreach (var entry in await _writes.ListAsync(limit, context.CancellationToken).ConfigureAwait(false))
+            {
+                response.Entries.Add(FeatureMapping.ToWire(entry));
+            }
+            return response;
+        });
 
     private static async Task<T> Guard<T>(Func<Task<T>> action)
     {
@@ -95,6 +156,18 @@ public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
             throw new RpcException(new Status(StatusCode.InvalidArgument, detail));
         }
         catch (FeatureCredentialsMissingException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (WriteConfirmationRequiredException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (PendingActionNotFoundException ex)
+        {
+            throw new RpcException(new Status(StatusCode.NotFound, ex.Message));
+        }
+        catch (PendingActionAlreadyDecidedException ex)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }

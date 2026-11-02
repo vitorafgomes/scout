@@ -25,7 +25,7 @@ internal static class HostComposition
 {
     /// <summary>
     /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project knowledge, voice transcription,
-    /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the worker, the watchdog.
+    /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the write gate, the worker, the watchdog.
     /// </summary>
     public static IServiceCollection AddScoutHost(
         this IServiceCollection services,
@@ -59,6 +59,7 @@ internal static class HostComposition
         services.AddGitHubPlugin(configuration);
         services.AddKubernetesPlugin(configuration);
         services.AddYouTubePlugin(configuration);
+        AddWriteGate(services, configuration);
 
         services.AddHostedService<ConversationWorker>();
 
@@ -68,6 +69,51 @@ internal static class HostComposition
             Environment.GetEnvironmentVariable(ParentWatchdogRegistration.EnableEnvVar));
 
         return services;
+    }
+
+    /// <summary>
+    /// The control plane's write gate over the socket and token Scout Desktop passes as
+    /// <c>SCOUT__WORKERGATE__SOCKETPATH</c> and <c>SCOUT__WORKERGATE__TOKEN</c>; without
+    /// both, a gate that refuses every write. Once read, the token leaves the process environment.
+    /// </summary>
+    private static void AddWriteGate(IServiceCollection services, IConfiguration configuration)
+    {
+        var socketPath = configuration["Scout:WorkerGate:SocketPath"];
+        var token = configuration["Scout:WorkerGate:Token"];
+        RemoveWorkerGateTokenFromEnvironment();
+        if (string.IsNullOrWhiteSpace(socketPath) || string.IsNullOrWhiteSpace(token))
+        {
+            services.AddSingleton<Scout.Llm.Abstractions.IWriteGate, ClosedWriteGate>();
+            return;
+        }
+
+        services.AddSingleton<Scout.Llm.Abstractions.IWriteGate>(_ => new GrpcWriteGate(socketPath, token));
+    }
+
+    /// <summary>
+    /// Removes every environment variable that configuration reads as the worker gate token, in any
+    /// casing or ':' spelling and with or without the <c>DOTNET_</c> or <c>ASPNETCORE_</c> prefix, so no
+    /// process the worker starts inherits it.
+    /// </summary>
+    private static void RemoveWorkerGateTokenFromEnvironment()
+    {
+        foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>())
+        {
+            var normalized = key.ToUpperInvariant().Replace(":", "__", StringComparison.Ordinal);
+            if (normalized.StartsWith("DOTNET_", StringComparison.Ordinal))
+            {
+                normalized = normalized["DOTNET_".Length..];
+            }
+            else if (normalized.StartsWith("ASPNETCORE_", StringComparison.Ordinal))
+            {
+                normalized = normalized["ASPNETCORE_".Length..];
+            }
+
+            if (normalized == "SCOUT__WORKERGATE__TOKEN")
+            {
+                Environment.SetEnvironmentVariable(key, null);
+            }
+        }
     }
 
     /// <summary>

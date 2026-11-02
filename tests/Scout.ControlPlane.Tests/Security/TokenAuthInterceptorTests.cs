@@ -1,4 +1,5 @@
 using Grpc.Core;
+using Microsoft.Extensions.Logging.Abstractions;
 using Scout.Host.ControlPlane.Security;
 using Shouldly;
 using Xunit;
@@ -8,11 +9,76 @@ namespace Scout.ControlPlane.Tests.Security;
 public sealed class TokenAuthInterceptorTests
 {
     private const string Token = "test-token-value";
+    private const string WorkerToken = "test-worker-token-value";
+    private const string ListFeatures = "/scout.controlplane.v1.Features/ListFeatures";
+    private const string ApproveAction = "/scout.controlplane.v1.Features/ApproveAction";
+    private const string StartProvider = "/scout.controlplane.v1.Providers/StartProvider";
+    private const string PullModel = "/scout.controlplane.v1.Models/PullModel";
+    private const string RequestWrite = "/scout.controlplane.v1.WorkerGate/RequestWrite";
+    private const string RecordWrite = "/scout.controlplane.v1.WorkerGate/RecordWrite";
 
-    private static ServerCallContext Context(Metadata headers) => new FakeServerCallContext(headers);
+    private static ServerCallContext Context(Metadata headers, string method = ListFeatures) =>
+        new FakeServerCallContext(headers, method);
 
-    private static TokenAuthInterceptor Interceptor() =>
-        new(SessionToken.FromValue(Token));
+    private static TokenAuthInterceptor Interceptor(string? workerToken = WorkerToken) =>
+        new(CallerTokens.Create(SessionToken.FromValue(Token), workerToken, NullLogger<CallerTokens>.Instance));
+
+    private static Task<string> Call(string token, string method, string? workerToken = WorkerToken) =>
+        Interceptor(workerToken).UnaryServerHandler<string, string>(
+            "req",
+            Context(new Metadata { { "x-scout-token", token } }, method),
+            (_, _) => Task.FromResult("ok"));
+
+    [Theory]
+    [InlineData(ListFeatures)]
+    [InlineData(ApproveAction)]
+    [InlineData(StartProvider)]
+    [InlineData(PullModel)]
+    public async Task The_Desktop_Token_Reaches_Features_Providers_And_Models(string method)
+    {
+        (await Call(Token, method)).ShouldBe("ok");
+    }
+
+    [Theory]
+    [InlineData(RequestWrite)]
+    [InlineData(RecordWrite)]
+    public async Task The_Worker_Token_Reaches_The_Worker_Gate(string method)
+    {
+        (await Call(WorkerToken, method)).ShouldBe("ok");
+    }
+
+    [Theory]
+    [InlineData(WorkerToken, ListFeatures)]
+    [InlineData(WorkerToken, ApproveAction)]
+    [InlineData(WorkerToken, StartProvider)]
+    [InlineData(WorkerToken, PullModel)]
+    [InlineData(Token, RequestWrite)]
+    [InlineData(Token, RecordWrite)]
+    [InlineData(Token, "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo")]
+    [InlineData(Token, "/scout.controlplane.v1.FeaturesX/ListFeatures")]
+    [InlineData(WorkerToken, "/scout.controlplane.v1.WorkerGateX/RequestWrite")]
+    public async Task A_Caller_Outside_Its_Role_Is_Denied_Naming_The_Method(string token, string method)
+    {
+        var ex = await Should.ThrowAsync<RpcException>(() => Call(token, method));
+
+        ex.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        ex.Status.Detail.ShouldBe($"This caller may not call {method}.");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task Without_A_Worker_Token_The_Worker_Gate_Is_Unreachable_For_Everyone(string? workerToken)
+    {
+        var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, RequestWrite, workerToken));
+        var empty = await Should.ThrowAsync<RpcException>(() => Call(string.Empty, RequestWrite, workerToken));
+        var desktop = await Should.ThrowAsync<RpcException>(() => Call(Token, RequestWrite, workerToken));
+
+        worker.StatusCode.ShouldBe(StatusCode.Unauthenticated);
+        empty.StatusCode.ShouldBe(StatusCode.Unauthenticated);
+        desktop.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        (await Call(Token, ListFeatures, workerToken)).ShouldBe("ok");
+    }
 
     [Fact]
     public async Task ValidTokenInAuthorizationHeader_PassesThrough()
@@ -81,6 +147,21 @@ public sealed class TokenAuthInterceptorTests
         ex.StatusCode.ShouldBe(StatusCode.Unauthenticated);
     }
 
+    [Fact]
+    public async Task The_Worker_Token_On_A_Server_Stream_Is_Denied()
+    {
+        var headers = new Metadata { { "x-scout-token", WorkerToken } };
+
+        var ex = await Should.ThrowAsync<RpcException>(() =>
+            Interceptor().ServerStreamingServerHandler<string, string>(
+                "req",
+                new NoopStreamWriter<string>(),
+                Context(headers, PullModel),
+                (_, _, _) => Task.CompletedTask));
+
+        ex.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+    }
+
     private sealed class NoopStreamWriter<T> : IServerStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }
@@ -88,17 +169,18 @@ public sealed class TokenAuthInterceptorTests
         public Task WriteAsync(T message) => Task.CompletedTask;
     }
 
-    // Minimal ServerCallContext: the interceptor only reads RequestHeaders.
     private sealed class FakeServerCallContext : ServerCallContext
     {
         private readonly Metadata _headers;
+        private readonly string _method;
 
-        public FakeServerCallContext(Metadata headers)
+        public FakeServerCallContext(Metadata headers, string method)
         {
             _headers = headers;
+            _method = method;
         }
 
-        protected override string MethodCore => "/test/Method";
+        protected override string MethodCore => _method;
         protected override string HostCore => string.Empty;
         protected override string PeerCore => "uds:test";
         protected override DateTime DeadlineCore => DateTime.UtcNow.AddMinutes(1);

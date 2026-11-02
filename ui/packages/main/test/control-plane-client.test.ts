@@ -7,7 +7,10 @@ import path from 'node:path';
 import {
   ControlPlaneNotImplementedError,
   ControlPlaneUnavailableError,
+  ControlPlaneWriteConfirmationError,
   type FeatureDto,
+  type PendingActionDto,
+  type WriteLogEntryDto,
 } from '@scout/shared';
 import { createControlPlaneClient } from '../src/control-plane/client.js';
 import type { ControlPlaneClient } from '../src/control-plane/client.js';
@@ -191,10 +194,12 @@ const githubWire = {
     { key: 'default_repo_url', kind: 'text', label: 'Default repository URL', required: true },
   ],
   settings: { default_repo_url: 'https://github.com/acme/repo' },
-  scopeMatrix: [{ scope: 'repo', actions: ['Read pull requests'] }],
+  scopeMatrix: [{ scope: 'repo', actions: ['Read pull requests'], access: 0 }],
   hasScopeMatrix: true,
   setupSteps: ['Create a token.'],
   hasSetupSteps: true,
+  writeClass: 0,
+  granted: false,
 };
 
 const kubernetesWire = {
@@ -213,7 +218,36 @@ const kubernetesWire = {
   hasScopeMatrix: false,
   setupSteps: [],
   hasSetupSteps: false,
+  writeClass: 0,
+  granted: false,
 };
+
+const youtubeWire = {
+  id: 'youtube',
+  displayName: 'YouTube',
+  description: 'Run the channel.',
+  requiresCredentials: true,
+  hasCredentials: true,
+  enabled: true,
+  status: 'ENABLED',
+  credentialFields: [],
+  settingsFields: [],
+  settings: {},
+  scopeMatrix: [
+    { scope: 'youtube.readonly', actions: ['Read the review queue'], access: 0 },
+    { scope: 'drafts', actions: ['Save a draft'], access: 1 },
+    { scope: 'youtube.upload', actions: ['Upload a video'], access: 2 },
+  ],
+  hasScopeMatrix: true,
+  setupSteps: [],
+  hasSetupSteps: false,
+  writeClass: 2,
+  granted: true,
+  grantedAt: '2026-11-02T10:00:00.0000000Z',
+};
+
+const descriptiveWire = { ...youtubeWire, id: 'descriptive', writeClass: 1, granted: false };
+delete (descriptiveWire as Partial<typeof youtubeWire>).grantedAt;
 
 const githubDto: FeatureDto = {
   id: 'github',
@@ -246,8 +280,11 @@ const githubDto: FeatureDto = {
     },
   ],
   settings: { default_repo_url: 'https://github.com/acme/repo' },
-  scopeMatrix: [{ scope: 'repo', actions: ['Read pull requests'] }],
+  scopeMatrix: [{ scope: 'repo', actions: ['Read pull requests'], access: 'read' }],
   setupSteps: ['Create a token.'],
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
 };
 
 const kubernetesDto: FeatureDto = {
@@ -273,12 +310,47 @@ const kubernetesDto: FeatureDto = {
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
+};
+
+const pendingWire = {
+  id: 'act-1',
+  featureId: 'youtube',
+  action: 'Upload video',
+  target: 'channel UC1',
+  summary: 'Upload "Intro" as private',
+  requestedAt: '2026-11-02T10:00:00Z',
+  status: 'pending',
+};
+
+const pendingDto: PendingActionDto = { ...pendingWire, decidedAt: null };
+
+const writeWire = {
+  at: '2026-11-02T11:00:00Z',
+  featureId: 'youtube',
+  action: 'Upload video',
+  target: 'channel UC1',
+  outcome: 'succeeded',
+  approvedBy: 'owner',
+  actionId: 'act-1',
+};
+
+const unapprovedWriteWire = {
+  at: '2026-11-02T09:00:00Z',
+  featureId: 'youtube',
+  action: 'Save script',
+  target: 'drafts/intro.md',
+  outcome: 'succeeded',
 };
 
 async function startFeaturesServer(
   socketPath: string,
   calls: FeaturesCall[],
   enableStatus?: grpc.status,
+  enableDetails = 'not wired',
+  grantStatus?: grpc.status,
 ): Promise<grpc.Server> {
   const definition = protoLoader.loadSync(path.join(PROTO_DIR, 'features.proto'), {
     enums: String,
@@ -292,16 +364,27 @@ async function startFeaturesServer(
     (call: grpc.ServerUnaryCall<unknown, unknown>, callback: grpc.sendUnaryData<unknown>) => {
       calls.push({ method, request: call.request, token: call.metadata.get('x-scout-token') });
       if (failWith === undefined) callback(null, response());
-      else callback({ code: failWith, details: 'not wired' }, null);
+      else callback({ code: failWith, details: enableDetails }, null);
     };
   const server = new grpc.Server();
   server.addService(loaded.scout.controlplane.v1.Features.service, {
-    ListFeatures: handler('ListFeatures', () => ({ features: [githubWire, kubernetesWire] })),
+    ListFeatures: handler('ListFeatures', () => ({
+      features: [githubWire, kubernetesWire, youtubeWire, descriptiveWire],
+    })),
     SetCredentials: handler('SetCredentials', () => githubWire),
     Setup: handler('Setup', () => githubWire),
     DeleteCredentials: handler('DeleteCredentials', () => githubWire),
     Enable: handler('Enable', () => githubWire, enableStatus),
     Disable: handler('Disable', () => githubWire),
+    SetWriteGrant: handler('SetWriteGrant', () => youtubeWire, grantStatus),
+    ListPendingActions: handler('ListPendingActions', () => ({ actions: [pendingWire] })),
+    ApproveAction: handler('ApproveAction', () => ({
+      ...pendingWire,
+      status: 'approved',
+      decidedAt: '2026-11-02T10:05:00Z',
+    })),
+    RejectAction: handler('RejectAction', () => ({ ...pendingWire, status: 'rejected' })),
+    ListWrites: handler('ListWrites', () => ({ entries: [writeWire, unapprovedWriteWire] })),
   });
   await new Promise<void>((resolve, reject) => {
     server.bindAsync(`unix:${socketPath}`, grpc.ServerCredentials.createInsecure(), (err) =>
@@ -325,7 +408,7 @@ describe('createControlPlaneClient features', () => {
 
     const features = await client.listFeatures();
 
-    expect(features).toEqual([githubDto, kubernetesDto]);
+    expect(features.slice(0, 2)).toEqual([githubDto, kubernetesDto]);
     expect(calls.map((c) => c.token)).toEqual([[TOKEN]]);
   });
 
@@ -340,7 +423,7 @@ describe('createControlPlaneClient features', () => {
     server = await startFeaturesServer(socketPath, calls);
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const enabled = await client.enableFeature('github');
+    const enabled = await client.enableFeature('github', false);
     await client.disableFeature('kubernetes');
     await client.setFeatureCredentials('github', { pat: 'ghp_abc' });
     await client.setupFeature(
@@ -352,7 +435,7 @@ describe('createControlPlaneClient features', () => {
 
     expect(enabled).toEqual(githubDto);
     expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
-      { method: 'Enable', request: { id: 'github' } },
+      { method: 'Enable', request: { id: 'github', confirmWrites: false } },
       { method: 'Disable', request: { id: 'kubernetes' } },
       { method: 'SetCredentials', request: { id: 'github', credentials: { pat: 'ghp_abc' } } },
       {
@@ -379,13 +462,192 @@ describe('createControlPlaneClient features', () => {
     server = await startFeaturesServer(socketPath, [], grpc.status.UNIMPLEMENTED);
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const error = await client.enableFeature('github').then(
+    const error = await client.enableFeature('github', false).then(
       () => null,
       (err: unknown) => err,
     );
 
     expect(error).toBeInstanceOf(ControlPlaneNotImplementedError);
     expect((error as Error).message).toBe('Turning this feature on is not available yet.');
+  });
+
+  it('listFeatures maps each scope row access, the write class and the grant of a write-capable feature', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startFeaturesServer(socketPath, []);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const [, , youtube, descriptive] = await client.listFeatures();
+
+    expect(youtube?.scopeMatrix).toEqual([
+      { scope: 'youtube.readonly', actions: ['Read the review queue'], access: 'read' },
+      { scope: 'drafts', actions: ['Save a draft'], access: 'write' },
+      { scope: 'youtube.upload', actions: ['Upload a video'], access: 'irreversible' },
+    ]);
+    expect([youtube?.writeClass, youtube?.granted, youtube?.grantedAt]).toEqual([
+      'executive',
+      true,
+      '2026-11-02T10:00:00.0000000Z',
+    ]);
+    expect([descriptive?.writeClass, descriptive?.granted, descriptive?.grantedAt]).toEqual([
+      'descriptive',
+      false,
+      null,
+    ]);
+  });
+
+  it('enableFeature and setWriteGrant send confirmWrites true when the owner confirmed the writes', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: FeaturesCall[] = [];
+    server = await startFeaturesServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    await client.enableFeature('youtube', true);
+    const granted = await client.setWriteGrant('youtube', true, true);
+    await client.setWriteGrant('youtube', false, false);
+
+    expect(granted.granted).toBe(true);
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'Enable', request: { id: 'youtube', confirmWrites: true } },
+      { method: 'SetWriteGrant', request: { id: 'youtube', granted: true, confirmWrites: true } },
+      { method: 'SetWriteGrant', request: { id: 'youtube', granted: false, confirmWrites: false } },
+    ]);
+  });
+
+  it('a FAILED_PRECONDITION Enable rejects with ControlPlaneWriteConfirmationError carrying the control plane message', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startFeaturesServer(
+      socketPath,
+      [],
+      grpc.status.FAILED_PRECONDITION,
+      'Confirm the writes of youtube before enabling it',
+    );
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.enableFeature('youtube', false).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneWriteConfirmationError);
+    expect((error as Error).message).toBe('Confirm the writes of youtube before enabling it');
+  });
+
+  it('a FAILED_PRECONDITION Enable for missing credentials is not taken for a write confirmation', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startFeaturesServer(
+      socketPath,
+      [],
+      grpc.status.FAILED_PRECONDITION,
+      'Feature github is missing required credentials',
+    );
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.enableFeature('github', false).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).not.toBeInstanceOf(ControlPlaneWriteConfirmationError);
+    expect((error as grpc.ServiceError).code).toBe(grpc.status.FAILED_PRECONDITION);
+  });
+
+  it('a FAILED_PRECONDITION SetWriteGrant rejects with ControlPlaneWriteConfirmationError carrying the control plane message', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startFeaturesServer(
+      socketPath,
+      [],
+      undefined,
+      'Confirm the writes of youtube before granting them',
+      grpc.status.FAILED_PRECONDITION,
+    );
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.setWriteGrant('youtube', true, false).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneWriteConfirmationError);
+    expect((error as Error).message).toBe('Confirm the writes of youtube before granting them');
+  });
+
+  it('lists pending actions, approves and rejects one with the reason, and lists the writes with the limit', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: FeaturesCall[] = [];
+    server = await startFeaturesServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const pending = await client.listPendingActions();
+    const approved = await client.approveAction('act-1');
+    const rejected = await client.rejectAction('act-1', 'Wrong thumbnail');
+    const writes = await client.listWrites(50);
+
+    expect(pending).toEqual([pendingDto]);
+    expect([approved.status, approved.decidedAt]).toEqual(['approved', '2026-11-02T10:05:00Z']);
+    expect([rejected.status, rejected.decidedAt]).toEqual(['rejected', null]);
+    expect(writes).toEqual<WriteLogEntryDto[]>([
+      writeWire,
+      { ...unapprovedWriteWire, approvedBy: null, actionId: null },
+    ]);
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'ListPendingActions', request: {} },
+      { method: 'ApproveAction', request: { id: 'act-1' } },
+      { method: 'RejectAction', request: { id: 'act-1', reason: 'Wrong thumbnail' } },
+      { method: 'ListWrites', request: { limit: 50 } },
+    ]);
+  });
+
+  it('listPendingActions rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    client = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const startedAt = Date.now();
+    const error = await client.listPendingActions().then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
   });
 
   it('listFeatures rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {

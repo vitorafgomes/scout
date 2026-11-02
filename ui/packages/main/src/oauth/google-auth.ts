@@ -86,6 +86,8 @@ export interface GoogleAuthDeps {
   fs: GoogleAuthFs;
   now(): number;
   onConnectionChanged(): void;
+  /** Revokes the YouTube write grant when the credential changes or is lost; awaited before the connection change, never throws. */
+  revokeWriteGrant?(): Promise<void>;
   /** Subscribes to the system waking from sleep; returns the unsubscribe function. */
   onResume(listener: () => void): () => void;
   logger: Logger;
@@ -212,6 +214,7 @@ export class GoogleAuth {
       await this.deps.vault.store(API_KEY_KEY, apiKey);
       this.lastError = null;
       this.deps.logger.info('youtube: connected with an API key');
+      await this.deps.revokeWriteGrant?.();
       this.deps.onConnectionChanged();
       return this.toStatus(null, apiKey);
     });
@@ -313,6 +316,7 @@ export class GoogleAuth {
         });
       });
       deps.logger.info('youtube: signed in', { hasChannel: identity.channelId !== null });
+      await deps.revokeWriteGrant?.();
       deps.onConnectionChanged();
     } catch (err: unknown) {
       if (signal.aborted) return;
@@ -479,6 +483,7 @@ export class GoogleAuth {
           'Google no longer accepts the saved sign-in. Sign in with Google again.',
         );
         deps.logger.warn('youtube: refresh rejected; the owner must sign in again', { code });
+        await deps.revokeWriteGrant?.();
         deps.onConnectionChanged();
         return;
       }

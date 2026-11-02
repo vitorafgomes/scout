@@ -24,6 +24,9 @@ function baseFeature(overrides: Partial<FeatureDto> = {}): FeatureDto {
     settings: {},
     scopeMatrix: null,
     setupSteps: null,
+    writeClass: 'none',
+    granted: false,
+    grantedAt: null,
     ...overrides,
   };
 }
@@ -167,8 +170,8 @@ describe('CredentialDialogComponent', () => {
           },
         ],
         scopeMatrix: [
-          { scope: 'repo', actions: ['Read repository metadata', 'Read issues'] },
-          { scope: 'read:org', actions: ['List teams'] },
+          { scope: 'repo', actions: ['Read repository metadata', 'Read issues'], access: 'read' },
+          { scope: 'read:org', actions: ['List teams'], access: 'read' },
         ],
       }),
     );
