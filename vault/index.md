@@ -135,6 +135,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
 - [[pages/roadmap/chatgpt-plan-provider|ChatGPT plan provider]] - Initiative: answer through the owner's ChatGPT plan via the official browser sign-in.
 - [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
+- [[pages/roadmap/youtube-creator-assistant|YouTube creator assistant]] - Initiative: claude-youtube surveyed; read-only YouTube plugin with browser sign-in, dated benchmarks.
+- [[pages/roadmap/desktop-auto-update|Desktop update notice and one-click update]] - Initiative: version check against GitHub Releases, what is new, user-approved update.
 
 ## History
 
