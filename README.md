@@ -3,10 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
 
-Open-source, read-only chatops assistant for Discord, Slack, and Teams.
+Open-source chatops assistant for Discord, Slack, and Teams.
 
 Scout answers operational and business questions in chat by reading from cloud
-providers, source control, and code repositories. It never writes.
+providers, source control, and code repositories. Every write a feature
+performs is declared, granted by the owner in the desktop and, when it
+cannot be undone, approved one action at a time; the first features are
+read-only.
 
 ## Download
 

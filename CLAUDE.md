@@ -11,7 +11,7 @@ Loaded into every session in this repo, for me, for every subagent I spawn, and 
 
 ## Project snapshot
 
-- **What:** open-source (MIT), read-only chatops assistant for Discord, Slack and Teams. It answers operational and business questions by reading from source control, code repositories and cloud providers. It never writes.
+- **What:** open-source (MIT) chatops assistant for Discord, Slack and Teams. It answers operational and business questions by reading from source control, code repositories and cloud providers, and from ADR 0032 (2026-11-02) it may also act through features that declare their writes, which the owner grants one by one in the desktop and approves per irreversible action.
 - **Stack:** .NET 10 (`global.json` pins the SDK), Microsoft Semantic Kernel as the one LLM path (ADR 0012), `Discord.Net`, `SlackNet`, Bot Framework for Teams, OpenTelemetry. Solution file `Scout.slnx`.
 - **Projects:** `src/Scout.Adapter.{Discord,Slack,Teams}`, `Scout.Conversation`, `Scout.Skills`, `Scout.Llm`, `Scout.Knowledge`, `Scout.Plugin.GitHub`, `Scout.ControlPlane` + `.Contracts`, hosts `Scout.Host.Console` and `Scout.Host.ControlPlane`; one test project per project under `tests/`. `src/old` and `tests/old` are the retired first cut; nothing new goes there. `vault/pages/architecture/project-map.md`.
 - **Desktop UI:** `ui/` (Bun, Electron 45, Angular 22) provisions chat clients and spawns and supervises the `Scout.Host.Console` worker directly; the gRPC/UDS control plane (ADR 0004, ADR 0011) exists on the .NET side only, the Electron client is the open initiative in `vault/pages/roadmap/control-plane-client.md`. Same repo, same vault. `vault/pages/services/desktop-ui.md`.
@@ -22,13 +22,13 @@ Loaded into every session in this repo, for me, for every subagent I spawn, and 
 
 ## The standard
 
-Correct, tested, clean, and **read-only by contract**. The one thing that is never "harden later" is the descriptive/executive write split (ADR 0009): Scout may produce content a human or another agent reads and decides on, and may never mutate code, infrastructure, configuration, data or the host filesystem outside its own config. A boundary case defaults to forbidden. Because the model decides when to call a function, a new LLM-invocable function is judged by what it can reach, never by what its description promises.
+Correct, tested, clean, and **every write declared, granted and approved**. The one thing that is never "harden later" is the write contract (ADR 0032, which keeps ADR 0009's classification): a feature declares every call that leaves the process and whether it writes; a write-capable feature runs only after the owner grants it in the desktop; an irreversible action runs only after the owner approves that action there; every write is logged; the model and the chat can only ask. An undeclared write, or a write outside Scout's own folders, is forbidden. Because the model decides when to call a function, a new LLM-invocable function is judged by what it can reach, never by what its description promises.
 
 ## Team rules
 
 The letters are stable; hooks, skills and the vault reference them by letter. A to E carry the same meaning as in the owner's other repos; F to J are this repo's.
 
-- **A - Read-only.** Every call that leaves the process is at most a descriptive write, posted in the originating channel; never an executive write. `vault/pages/invariants/no-executive-writes.md`, ADR 0009.
+- **A - Declared writes.** Every call that leaves the process is declared by its feature (read, write, or irreversible write); a write runs only under the owner's grant and, when irreversible, the owner's per-action approval in the desktop; never from a chat message or a function result. `vault/pages/decisions/0032-per-feature-write-permissions.md`, `vault/pages/invariants/no-executive-writes.md`, ADR 0009 for the classification.
 - **B - Edit, test, validate, per edit.** Every edit ships with a test that fails without it and asserts the requirement in the words the request used; a refactor names behaviour-lock tests green before and after. Then structure, then `dotnet build Scout.slnx` at 0 warnings, `dotnet format Scout.slnx --verify-no-changes` clean **and** `scripts/check-diagnostics.sh <touched.csproj>` clean. `vault/pages/conventions/testing.md`.
 - **C - No premature abstraction.** One concrete user means no generic, base class or helper; three similar lines beat a speculative abstraction. A documented abstraction (adapter, provider, plugin) is not premature.
 - **D - Verify before citing.** Read the file, class or convention before recommending it; nothing here is stable enough to quote from memory.
