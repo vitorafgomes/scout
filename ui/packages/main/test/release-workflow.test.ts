@@ -11,6 +11,7 @@ const REPO_ROOT = join(import.meta.dirname, '../../../..');
 interface Step {
   name?: string;
   run?: string;
+  env?: Record<string, string>;
 }
 
 interface Workflow {
@@ -105,6 +106,18 @@ describe('the release workflow', () => {
       );
     },
   );
+
+  it('only the release Package step sees the Google client secret, and no UI CI step does', () => {
+    const withSecret = (name: string) =>
+      steps(name)
+        .filter((step) => JSON.stringify(step).includes('SCOUT_GOOGLE_CLIENT_SECRET'))
+        .map((step) => [step.name, step.env?.['SCOUT_GOOGLE_CLIENT_SECRET']]);
+
+    expect(withSecret('release.yml')).toEqual([
+      ['Package', '${{ secrets.SCOUT_GOOGLE_CLIENT_SECRET }}'],
+    ]);
+    expect(withSecret('ui-ci.yml')).toEqual([]);
+  });
 
   it.each(['release.yml', 'ui-ci.yml'])(
     'every packaging step in %s runs electron-builder with --publish never',

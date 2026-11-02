@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.8"
+version: "1.9"
 date: 2026-10-21
 updated: 2026-11-02
-changes: "The ui workflow packages with --publish never now that electron-builder.yml declares a publish provider"
+changes: "Plugin.YouTube.Tests in the count table; counts recounted"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -39,21 +39,22 @@ Versions come from `Directory.Packages.props` (central package management).
 
 ## Layout and counts
 
-One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 882 in the thirteen projects of `Scout.slnx` (recounted 2026-10-28).
+One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 936 in the fourteen projects of `Scout.slnx` (recounted 2026-11-02).
 
 | Test project | Attributes | Covers |
 |---|---|---|
 | `Scout.Llm.Tests` | 217 | [[pages/services/llm]] |
-| `Scout.Conversation.Tests` | 118 | [[pages/services/conversation]] |
+| `Scout.Conversation.Tests` | 124 | [[pages/services/conversation]] |
 | `Scout.Knowledge.Tests` | 107 | [[pages/services/knowledge]] |
 | `Scout.Adapter.Discord.Tests` | 70 | [[pages/services/adapter-discord]] |
-| `Scout.ControlPlane.Tests` | 66 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
+| `Scout.ControlPlane.Tests` | 68 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
 | `Scout.Adapter.Slack.Tests` | 59 | [[pages/services/adapter-slack]] |
 | `Scout.Plugin.GitHub.Tests` | 55 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Teams.Tests` | 50 | [[pages/services/adapter-teams]] |
+| `Scout.Plugin.YouTube.Tests` | 45 | [[pages/services/plugin-youtube]] |
 | `Scout.Plugin.Kubernetes.Tests` | 39 | [[pages/services/plugin-kubernetes]] |
 | `Scout.Skills.Tests` | 36 | [[pages/services/skills]] |
-| `Scout.Host.Console.Tests` | 34 | [[pages/services/host-console]] |
+| `Scout.Host.Console.Tests` | 35 | [[pages/services/host-console]] |
 | `Scout.Adapter.Local.Tests` | 16 | [[pages/services/adapter-local]] |
 | `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
 

@@ -103,6 +103,7 @@ jobs:
         run: bun run ${{ matrix.dist_script }} -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          SCOUT_GOOGLE_CLIENT_SECRET: ${{ secrets.SCOUT_GOOGLE_CLIENT_SECRET }}
 
       - name: Keep the packages and the updater metadata, and write checksums
         working-directory: ui/build/dist

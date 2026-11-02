@@ -1,6 +1,12 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { buildBridge, type IpcSubset } from '../src/build-bridge.js';
-import { CHANNEL, type FeatureDto, type ScoutBridge, type WorkerEvent } from '@scout/shared';
+import {
+  CHANNEL,
+  type FeatureDto,
+  type ScoutBridge,
+  type WorkerEvent,
+  type YouTubeStatus,
+} from '@scout/shared';
 
 function makeFakeIpc(): IpcSubset {
   return {
@@ -68,6 +74,12 @@ describe('buildBridge', () => {
       'githubCancel',
       'githubSignOut',
       'githubSaveToken',
+      'youtubeSignIn',
+      'youtubeStatus',
+      'youtubeCancelSignIn',
+      'youtubeSignOut',
+      'youtubeSaveApiKey',
+      'youtubeClearApiKey',
       'kubernetesDetect',
       'kubernetesUse',
       'kubernetesStatus',
@@ -515,6 +527,40 @@ describe('buildBridge', () => {
       [CHANNEL.slackStatus],
       [CHANNEL.slackDisconnect],
     ]);
+  });
+
+  it('the YouTube methods reach main only through their own channels, and only saveApiKey carries the key', async () => {
+    const ipc = makeFakeIpc();
+    const status: YouTubeStatus = {
+      configured: false,
+      connected: true,
+      method: 'apiKey',
+      channelId: null,
+      channelTitle: null,
+      pending: false,
+      error: null,
+      clientConfigPath: '/user-data/google-oauth-client.json',
+      source: 'file',
+    };
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
+    const bridge = buildBridge(ipc);
+
+    await bridge.youtubeSignIn();
+    await bridge.youtubeStatus();
+    await bridge.youtubeCancelSignIn();
+    await bridge.youtubeSaveApiKey({ apiKey: 'AIzaSyPreloadKey' });
+    await bridge.youtubeClearApiKey();
+    const signedOut = await bridge.youtubeSignOut();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.youtubeSignIn],
+      [CHANNEL.youtubeStatus],
+      [CHANNEL.youtubeCancelSignIn],
+      [CHANNEL.youtubeSaveApiKey, { apiKey: 'AIzaSyPreloadKey' }],
+      [CHANNEL.youtubeClearApiKey],
+      [CHANNEL.youtubeSignOut],
+    ]);
+    expect(signedOut).toEqual(status);
   });
 
   it('the Desktop settings methods reach main only through their own channels', async () => {

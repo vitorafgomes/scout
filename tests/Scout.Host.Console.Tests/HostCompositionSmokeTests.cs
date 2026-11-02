@@ -53,8 +53,8 @@ public sealed class HostCompositionSmokeTests
         ["Scout:Conversation:SystemPrompt"] = "You are Scout.",
     };
 
-    // Full host config: an adapter, the GitHub and Kubernetes plugins, and a project so
-    // the Discord adapter, both plugins, and the Project Expert agent path all
+    // Full host config: an adapter, the GitHub, Kubernetes and YouTube plugins, and a project so
+    // the Discord adapter, the three plugins, and the Project Expert agent path all
     // participate. Dummy credentials only; the wiring is what is under test.
     private static IConfiguration FullConfig() =>
         new ConfigurationBuilder()
@@ -64,13 +64,13 @@ public sealed class HostCompositionSmokeTests
                 ["Scout:Plugins:GitHub:Token"] = "github-dummy-not-real",
                 ["Scout:Plugins:Kubernetes:KubeconfigPath"] = "/nonexistent/scout-test/kubeconfig",
                 ["Scout:Plugins:Kubernetes:Contexts:0:Name"] = "dev",
+                ["Scout:Plugins:YouTube:ApiKey"] = "youtube-dummy-not-real",
                 ["Scout:Projects:Items:0:Name"] = "scout",
                 ["Scout:Projects:Items:0:RepoPath"] = "/repos/scout",
             })
             .Build();
 
-    // Minimal host config: no adapters, no plugin token, no projects. The host
-    // must still compose and resolve without throwing.
+    // Minimal host config: no adapters, no plugin credential, no projects; the host must still compose and resolve.
     private static IConfiguration EmptyConfig() =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>(CoreConfig))
@@ -196,11 +196,22 @@ public sealed class HostCompositionSmokeTests
         var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
         kernel.Plugins.ShouldNotContain(p => p.Name == "ProjectKnowledge");
         kernel.Plugins.ShouldNotContain(p => p.Name == "Kubernetes");
+        kernel.Plugins.ShouldNotContain(p => p.Name == "YouTube");
 
         // The host still builds and the worker still resolves.
         var hostedServices = ResolveWithin(
             () => provider.GetServices<IHostedService>().ToList());
         hostedServices.ShouldContain(s => s is ConversationWorker);
+    }
+
+    [Fact]
+    public void FullConfig_Puts_The_YouTube_Plugin_On_The_Kernel_Without_Calling_YouTube()
+    {
+        using var host = BuildHost(FullConfig());
+
+        var kernel = ResolveWithin(() => host.Services.GetRequiredService<Kernel>());
+
+        kernel.Plugins.ShouldContain(p => p.Name == "YouTube");
     }
 
     // Run the resolution on a worker thread and join under a budget. A construction

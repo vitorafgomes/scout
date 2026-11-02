@@ -60,6 +60,8 @@ import {
   type GitHubPendingSignIn,
   type GitHubSaveTokenRequest,
   type GitHubStatus,
+  type YouTubeSaveApiKeyRequest,
+  type YouTubeStatus,
   type KubernetesDetection,
   type KubernetesStatus,
   type KubernetesUseRequest,
@@ -185,6 +187,13 @@ function createFakeBridge(): ScoutBridge {
     githubCancel: (): Promise<void> => rejectNotAvailable(),
     githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
+    youtubeSignIn: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeStatus: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeCancelSignIn: (): Promise<void> => rejectNotAvailable(),
+    youtubeSignOut: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeSaveApiKey: (_req: YouTubeSaveApiKeyRequest): Promise<YouTubeStatus> =>
+      rejectNotAvailable(),
+    youtubeClearApiKey: (): Promise<YouTubeStatus> => rejectNotAvailable(),
     kubernetesDetect: (): Promise<KubernetesDetection> => rejectNotAvailable(),
     kubernetesUse: (_req: KubernetesUseRequest): Promise<KubernetesStatus> => rejectNotAvailable(),
     kubernetesStatus: (): Promise<KubernetesStatus> => rejectNotAvailable(),
@@ -439,6 +448,30 @@ export class ScoutBridgeService {
 
   async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
     return this.bridge.githubSaveToken(req);
+  }
+
+  async youtubeSignIn(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSignIn();
+  }
+
+  async youtubeStatus(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeStatus();
+  }
+
+  async youtubeCancelSignIn(): Promise<void> {
+    return this.bridge.youtubeCancelSignIn();
+  }
+
+  async youtubeSignOut(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSignOut();
+  }
+
+  async youtubeSaveApiKey(req: YouTubeSaveApiKeyRequest): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSaveApiKey(req);
+  }
+
+  async youtubeClearApiKey(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeClearApiKey();
   }
 
   async kubernetesDetect(): Promise<KubernetesDetection> {

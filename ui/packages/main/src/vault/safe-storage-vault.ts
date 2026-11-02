@@ -9,6 +9,8 @@ export type MainOnlyVaultKey =
   | 'chatgpt.host-id'
   | 'github.session'
   | 'github.token'
+  | 'youtube.session'
+  | 'youtube.api-key'
   | 'kubernetes.selection'
   | 'access.allowed-users'
   | 'slack.connection'
