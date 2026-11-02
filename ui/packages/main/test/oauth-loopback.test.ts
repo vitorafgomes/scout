@@ -86,10 +86,12 @@ describe('awaitCallback', () => {
       logger,
     });
 
+    const settled = callbackPromise.catch((err: unknown) => err);
+
     await new Promise<void>((r) => setTimeout(r, 30));
     await fetch(`http://127.0.0.1:${port}/callback?code=c&state=wrong`);
 
-    await expect(callbackPromise).rejects.toBeInstanceOf(OAuthStateMismatchError);
+    expect(await settled).toBeInstanceOf(OAuthStateMismatchError);
   });
 
   it('rejects with OAuthUserCancelledError on access_denied', async () => {
@@ -101,12 +103,14 @@ describe('awaitCallback', () => {
       logger,
     });
 
+    const settled = callbackPromise.catch((err: unknown) => err);
+
     await new Promise<void>((r) => setTimeout(r, 30));
     await fetch(
       `http://127.0.0.1:${port}/callback?error=access_denied&error_description=User+denied`,
     );
 
-    await expect(callbackPromise).rejects.toBeInstanceOf(OAuthUserCancelledError);
+    expect(await settled).toBeInstanceOf(OAuthUserCancelledError);
   });
 
   it('non-access_denied error rejects with DiscordTokenExchangeError', async () => {
@@ -118,12 +122,14 @@ describe('awaitCallback', () => {
       logger,
     });
 
+    const settled = callbackPromise.catch((err: unknown) => err);
+
     await new Promise<void>((r) => setTimeout(r, 30));
     await fetch(
       `http://127.0.0.1:${port}/callback?error=server_error&error_description=Something+broke`,
     );
 
-    await expect(callbackPromise).rejects.toBeInstanceOf(DiscordTokenExchangeError);
+    expect(await settled).toBeInstanceOf(DiscordTokenExchangeError);
   });
 
   it('returns 404 for unknown paths and keeps listening for /callback', async () => {

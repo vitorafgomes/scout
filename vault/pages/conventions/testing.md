@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.9"
+version: "1.10"
 date: 2026-10-21
 updated: 2026-11-02
-changes: "Plugin.YouTube.Tests in the count table; counts recounted"
+changes: "UI tests: catch a rejection before triggering it"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -100,6 +100,8 @@ The format-check step is commented out because `dotnet format --verify-no-change
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
 - The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:19` to `:22`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow; `docs/**` (`:14`, `:25`) triggers it for the project site.
 - The `Build control-plane host` step (`.github/workflows/ui-ci.yml:107`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.
+
+- **Catch a rejection before triggering it.** In `bun:test`, a promise that rejects while the test awaits something else is reported as an unhandled rejection and fails the test, even when `expect(...).rejects` is awaited right after; the OAuth loopback tests awaited a `fetch` first and failed on macOS only, where the server rejects before `fetch` resolves. An unawaited `expect(...).rejects` does not help: Bun evaluates it at once and blocks the test until the promise settles. Attach `const settled = promise.catch((err: unknown) => err)` before the call that triggers the rejection, then assert `expect(await settled).toBeInstanceOf(...)` (`ui/packages/main/test/oauth-loopback.test.ts:106`).
 
 ## Related
 
