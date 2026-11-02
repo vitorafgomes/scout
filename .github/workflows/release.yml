@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: The ref is a version tag
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::A release runs from a version tag, not from the $GITHUB_REF_TYPE $GITHUB_REF_NAME. Push a tag such as v1.2.3, or choose the tag under Use workflow from."
+            exit 1
+          fi
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME is not a version. Use v<major>.<minor>.<patch>, for example v1.2.3 or v1.2.3-beta.1."
+            exit 1
+          fi
+          echo "Releasing ${GITHUB_REF_NAME#v}"
+
+  build:
+    needs: check
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            dist_script: dist:linux
+            platform: linux
+          - os: macos-latest
+            rid: osx-arm64
+            dist_script: dist:mac
+            platform: mac
+          - os: windows-latest
+            rid: win-x64
+            dist_script: dist:win
+            platform: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Install UI dependencies
+        working-directory: ui
+        run: bun install --frozen-lockfile
+
+      - name: Set the app version from the tag
+        working-directory: ui
+        shell: bash
+        run: npm pkg set version="${GITHUB_REF_NAME#v}"
+
+      - name: Publish worker binary
+        working-directory: ui
+        shell: bash
+        run: bun run worker:publish -- ${{ matrix.rid }}
+
+      - name: Package
+        working-directory: ui
+        shell: bash
+        run: bun run ${{ matrix.dist_script }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Keep the packages and write checksums
+        working-directory: ui/build/dist
+        shell: bash
+        run: |
+          rm -f -- *.blockmap *.yml *.yaml Scout-Desktop-*-mac-x64.dmg
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          "${hash[@]}" Scout-Desktop-* > "SHA256SUMS-${{ matrix.platform }}.txt"
+          cat "SHA256SUMS-${{ matrix.platform }}.txt"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            ui/build/dist/Scout-Desktop-*
+            ui/build/dist/SHA256SUMS-*.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+
+      - name: Publish the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -l release
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "Scout Desktop $GITHUB_REF_NAME" --generate-notes release/*
+          fi

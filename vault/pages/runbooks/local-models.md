@@ -1,9 +1,9 @@
 ---
 title: "Local Models - operations runbook"
-version: "1.0"
+version: "1.1"
 date: 2026-05-16
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-11-02
+changes: "Artifact name Scout-Desktop-<version>-<os>-<arch>"
 page_type: runbook
 status: active
 description: "Quick reference for working with the AI Sources / Models surface in the Scout Desktop app."
@@ -30,7 +30,7 @@ the Scout Desktop app. Decisions are recorded under
 | Whisper GGML store (macOS)      | `~/Library/Application Support/Scout Desktop/whisper-models/` |
 | Whisper GGML store (Windows)    | `%APPDATA%\Scout Desktop\whisper-models\` |
 | Renderer state mirror           | `localStorage['scout:local-models']` (DevTools → Application → Local Storage) |
-| Latest AppImage build           | `~/WorkSpace/scout/ui/build/dist/Scout Desktop-<version>-linux-x86_64.AppImage` |
+| Latest AppImage build           | `~/WorkSpace/scout/ui/build/dist/Scout-Desktop-<version>-linux-x86_64.AppImage` |
 
 ## How a Connected badge is computed
 
@@ -155,11 +155,11 @@ bun run dist:linux
 ```
 
 Artifact lands at
-`build/dist/Scout Desktop-<version>-linux-x86_64.AppImage`. Mark
+`build/dist/Scout-Desktop-<version>-linux-x86_64.AppImage`. Mark
 executable on first run:
 
 ```bash
-chmod +x "build/dist/Scout Desktop-0.0.1-linux-x86_64.AppImage"
+chmod +x build/dist/Scout-Desktop-0.0.1-linux-x86_64.AppImage
 ```
 
 ## What this runbook does not cover

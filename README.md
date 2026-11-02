@@ -8,6 +8,21 @@ Open-source, read-only chatops assistant for Discord, Slack, and Teams.
 Scout answers operational and business questions in chat by reading from cloud
 providers, source control, and code repositories. It never writes.
 
+## Download
+
+Project site: https://vitorafgomes.github.io/scout/
+
+Every release, with its checksums: https://github.com/vitorafgomes/scout/releases
+
+- Linux x86_64: `Scout-Desktop-<version>-linux-x86_64.AppImage`, or
+  `Scout-Desktop-<version>-linux-amd64.deb` for Debian and Ubuntu
+- macOS on Apple silicon, 12 or later: `Scout-Desktop-<version>-mac-arm64.dmg`
+- Windows 10 or later, 64-bit: `Scout-Desktop-<version>-win-x64.exe`
+
+Builds are not code-signed yet. macOS asks you to open the app from System
+Settings the first time; Windows shows a SmartScreen prompt. Verify the
+download against the `SHA256SUMS-<os>.txt` files in the release.
+
 ## Status
 
 Pre-alpha. Design in progress.

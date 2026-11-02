@@ -22,6 +22,21 @@ reliability: medium
 
 ## Entries
 
+### Desktop builds are unsigned (2026-11-02)
+
+- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:53`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
+- **Unblocks with:** an Apple Developer ID certificate plus notarization (an App Store Connect API key, `hardenedRuntime: true`), and a Windows code-signing certificate (an OV or EV certificate, or Azure Trusted Signing), each stored as a GitHub Actions secret and read by electron-builder in the `build` job of `.github/workflows/release.yml:32`.
+
+### Intel Mac package is built but not released (2026-11-02)
+
+- **Blocker:** the mac leg of the release workflow publishes only the `osx-arm64` worker, while the desktop looks for an `osx-x64` worker on an Intel Mac (`ui/packages/main/src/worker/resolve-binary.ts:17`), so the x64 `.dmg` electron-builder produces could not start Scout. The release workflow deletes it before publishing and the site offers the Apple silicon image only.
+- **Unblocks with:** a second `bun run worker:publish -- osx-x64` on the mac leg and both workers carried in each dmg, or a separate x64 leg; then stop pruning `*-mac-x64.dmg` and show the Intel row the page already knows how to label.
+
+### Project site has no screenshots yet (2026-11-02)
+
+- **Blocker:** none; nobody has captured them. The hero of `docs/index.html` shows an example Discord conversation built in HTML instead of a screenshot of the desktop app or a real chat.
+- **Unblocks with:** screenshots of the desktop app and of a Discord or Slack answer, with no real names, hosts or ids, saved under `docs/` and placed next to the example conversation or in the "How it works" section.
+
 ### `ProjectWatchServiceTests.RapidEdits_AreDebouncedToSingleReindex` is timing-sensitive (2026-11-02)
 
 - **Blocker:** none; it is flaky, not wrong. The test drives a real file watcher with a 50 ms debounce (`tests/Scout.Knowledge.Tests/ProjectWatchServiceTests.cs:11`) and expects one `ReplaceFileAsync` for a burst of edits; on a shared GitHub runner it counted two (run 41435925678, 2026-11-02) and passed on rerun.

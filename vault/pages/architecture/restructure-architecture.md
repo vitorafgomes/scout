@@ -2,7 +2,7 @@
 title: "Scout Restructure - Architecture, Status and Backlog"
 version: "1.1"
 date: 2026-05-29
-updated: 2026-10-22
+updated: 2026-11-02
 changes: "Backlog re-verified against main on 2026-10-22"
 page_type: longform
 status: active
@@ -122,5 +122,5 @@ Open as of 2026-10-22. Small deferrals with a known unblock live in [[pages/road
   `SCOUT__LLM__OLLAMA__CHAT__MODEL`, ...). Default chat model `llama3.1` via
   Ollama at `http://localhost:11434`.
 - Discord: replies only when @-mentioned in a guild channel; DMs always work.
-- AppImage: `ui/build/dist/Scout Desktop-0.0.1-linux-x86_64.AppImage`. Closing
+- AppImage: `ui/build/dist/Scout-Desktop-0.0.1-linux-x86_64.AppImage`. Closing
   the app now reliably stops the bot host (parent-death watchdog).

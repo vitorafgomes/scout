@@ -112,6 +112,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0024-voice-messages-transcribed-locally|ADR 0024 - Voice messages are transcribed locally, after the allow-list]] - A Discord voice message is downloaded and transcribed by a local Whisper model only for an allowed sender, within 25 MB and 5 minutes, and answered with a quote of what was heard.
 - [[pages/decisions/0027-desktop-presence|ADR 0027 - Scout stays resident on the desktop: tray, keep running, start at login, notifications]] - Closing the window hides Scout to the tray and the worker keeps running; start at login with --hidden; three native notifications; no tray means the old quit-on-close.
 - [[pages/decisions/0028-local-quick-ask-assistant|ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio]] - A global shortcut opens a small window to type or hold Space to talk; main writes JSON lines to the worker's stdin and reads SCOUT_LOCAL lines from stdout, and the local owner skips the allow-list.
+- [[pages/decisions/0029-project-site-and-releases|ADR 0029 - Project site and releases]] - Site in docs/ on Pages; v* tags publish packages.
 
 ## Domain
 
@@ -127,6 +128,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Runbooks
 
 - [[pages/runbooks/local-models|Local Models - operations runbook]] - Quick reference for working with the AI Sources / Models surface in the Scout Desktop app.
+- [[pages/runbooks/release|Release]] - Bump ui/package.json, tag main with v<version>, check the Release workflow, the release page and the site.
 
 ## Roadmap
 
