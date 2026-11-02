@@ -2,7 +2,7 @@
 title: "YouTube channel operator"
 version: "1.1"
 date: 2026-11-02
-changes: "One feature: the operator lives inside the existing youtube entry; the five-feature table replaced by one access table"
+changes: "One feature, and the pipeline in C#: the scheduler and every stage move to the worker; the desktop only shows and approves"
 page_type: roadmap
 status: active
 description: "Initiative: Scout runs a YouTube channel end to end, from topic research and scripts through narration, visuals and an assembled video, to a review step, upload and scheduling the owner approves, and a learning loop over the channel's analytics; own C# code, official APIs, per-feature permissions (ADR 0032)."
@@ -66,7 +66,7 @@ The owner's rule (2026-11-02): "tem que ficar tudo dentro da mesma feature". The
 
 ### Where it runs
 
-The desktop is the operator: the scheduler (daily research, publishing queue, analytics at fixed hours) runs in the desktop main process while Scout runs; the worker keeps the model functions and the API calls; the control plane carries the feature grants and the approval queue. Chat is the remote control: ask for a video, follow progress, get the report.
+The owner's rule (2026-11-02): "a maior parte tem que ser em C#". Every stage of the pipeline is C# in the .NET worker and control plane: research, script, narration and image calls through the connected AI Source, the scene list, the `ffmpeg` driver, the checks, the scheduler (a hosted service in the worker), the approval queue, the write log and every YouTube call. The desktop (TypeScript) only shows and asks: the Production and Review screens render what the control plane returns and send the owner's grant, edits and approvals back over the authenticated socket; it holds no pipeline logic. Chat is the remote control: ask for a video, follow progress, get the report.
 
 ## Phases
 
@@ -102,7 +102,7 @@ The desktop is the operator: the scheduler (daily research, publishing queue, an
 ## Services affected
 
 - [[pages/services/control-plane]] and [[pages/services/host-control-plane]]: feature rows, grants, the approval queue, the write log.
-- [[pages/services/desktop-ui]]: Features confirmation, the Production and Review screens, the scheduler, the approval surface.
+- [[pages/services/desktop-ui]]: the YouTube card's grant, the Production and Review screens, the approval surface; no pipeline logic.
 - [[pages/services/plugin-youtube]]: new scopes and functions per feature.
 - [[pages/services/llm]]: the guard and the provider cards for TTS and images.
 - [[pages/services/conversation]]: the chat flow and progress messages.
@@ -112,4 +112,4 @@ The desktop is the operator: the scheduler (daily research, publishing queue, an
 - Google verification: the `youtube.upload` scope is restricted and the app must pass Google's review before more than the test users can grant it; while unverified the owner still can.
 - Paid providers: a runaway loop can spend money; every paid call checks the cap first and the cap is per day.
 - Content rights: music and images the owner supplies are the owner's responsibility; generated media is marked as generated in the metadata.
-- The desktop must be running for the scheduler; a missed slot is reported, never silently skipped.
+- The worker must be running for the scheduler; a missed slot is reported, never silently skipped.
