@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.4"
+version: "1.5"
 date: 2026-10-21
-updated: 2026-10-22
-changes: "Rule I failing-call tests raise the real client exception through a fake HttpMessageHandler"
+updated: 2026-10-30
+changes: "Adapter.Local tests drive stdin through an anonymous pipe; counts refreshed"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -39,30 +39,33 @@ Versions come from `Directory.Packages.props` (central package management).
 
 ## Layout and counts
 
-One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 758 in the eleven projects of `Scout.slnx`.
+One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 882 in the thirteen projects of `Scout.slnx` (recounted 2026-10-28).
 
 | Test project | Attributes | Covers |
 |---|---|---|
 | `Scout.Llm.Tests` | 217 | [[pages/services/llm]] |
+| `Scout.Conversation.Tests` | 118 | [[pages/services/conversation]] |
 | `Scout.Knowledge.Tests` | 107 | [[pages/services/knowledge]] |
-| `Scout.Conversation.Tests` | 76 | [[pages/services/conversation]] |
+| `Scout.Adapter.Discord.Tests` | 70 | [[pages/services/adapter-discord]] |
 | `Scout.ControlPlane.Tests` | 66 | [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/host-control-plane]] |
-| `Scout.Adapter.Slack.Tests` | 58 | [[pages/services/adapter-slack]] |
+| `Scout.Adapter.Slack.Tests` | 59 | [[pages/services/adapter-slack]] |
 | `Scout.Plugin.GitHub.Tests` | 55 | [[pages/services/plugin-github]] |
 | `Scout.Adapter.Teams.Tests` | 50 | [[pages/services/adapter-teams]] |
-| `Scout.Adapter.Discord.Tests` | 37 | [[pages/services/adapter-discord]] |
+| `Scout.Plugin.Kubernetes.Tests` | 39 | [[pages/services/plugin-kubernetes]] |
 | `Scout.Skills.Tests` | 36 | [[pages/services/skills]] |
-| `Scout.Plugin.Kubernetes.Tests` | 35 | [[pages/services/plugin-kubernetes]] |
-| `Scout.Host.Console.Tests` | 21 | [[pages/services/host-console]] |
+| `Scout.Host.Console.Tests` | 34 | [[pages/services/host-console]] |
+| `Scout.Adapter.Local.Tests` | 16 | [[pages/services/adapter-local]] |
+| `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
 
 `tests/old` holds 653 further attributes for the retired code under `src/old`. It is not in `Scout.slnx`, so CI does not build or run it. Exclude it from any count.
 
 ## Patterns in use
 
-- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:117` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
+- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:118` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
 - **Self-gating tests.** Each optional module has a test for "not configured means not registered" (for example `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24`).
 - **Boundary fakes.** SDK edges are faked: a fake HTTP handler for GitHub (`tests/Scout.Plugin.GitHub.Tests/Fakes/`), a recording sender for Teams (`tests/Scout.Adapter.Teams.Tests/Streaming/RecordingSender.cs`), a recording sink for the conversation core (`tests/Scout.Conversation.Tests/Fakes/RecordingResponseSink.cs`), a fake embedder for skills (`tests/Scout.Skills.Tests/FakeEmbeddingGenerator.cs`).
 - **One failing-call test per external boundary (Rule I).** A failing-call test makes the real client library raise its real exception, by placing a fake `HttpMessageHandler` under the real connector, instead of constructing the exception by hand: `tests/Scout.Llm.Tests/ChatGatewayRateLimitTests.cs:151` drives the real OpenAI connector into a 429, which a hand-made `HttpOperationException` had hidden ([[pages/history/llm]]).
+- **Stdio boundaries.** The local adapter is tested over a real `AnonymousPipeServerStream` for stdin and a capturing `TextWriter` for stdout (`tests/Scout.Adapter.Local.Tests/LineCapture.cs`), so the line splitting, the 20 MB cap and end of file run through the same stream code as production; its wait helper fails with a Shouldly message that names the missing event and prints the captured stdout, never a bare timeout. On the desktop side the supervisor's stdin is a Node `Writable` whose callback fails with EPIPE (`ui/packages/main/test/worker-supervisor.test.ts`).
 - **Regression tests named for the bug.** `tests/Scout.Llm.Tests/CompositionCycleRegressionTests.cs` pins the kernel and embedder construction cycle.
 - **Real integration.** `tests/Scout.ControlPlane.Tests/Integration/ControlPlaneUdsIntegrationTests.cs` starts the control-plane host on a real Unix socket; the `uds` collection (`tests/Scout.ControlPlane.Tests/Integration/UdsCollection.cs:10`) serialises those tests. SQLite tests use a real file (`tests/Scout.Knowledge.Tests/SqliteProjectKnowledgeStoreTests.cs`).
 - **No live services.** No test calls Discord, Slack, Teams, GitHub, Azure or an LLM.
@@ -90,7 +93,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 `.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, build the control-plane host, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:80` to `:119`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
-- 63 spec or test files: 32 in `ui/packages/main/test`, 3 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 27 in `ui/packages/renderer/src/app`.
+- 81 spec or test files: 43 in `ui/packages/main/test`, 4 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 33 in `ui/packages/renderer/src/app` (counted 2026-10-30).
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
 - The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:18` to `:21`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow.
 - The `Build control-plane host` step (`.github/workflows/ui-ci.yml:100`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.

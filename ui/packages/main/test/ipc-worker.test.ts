@@ -61,6 +61,7 @@ function makeSupervisor(overrides: Partial<Supervisor> = {}): Supervisor {
       return () => _listeners.delete(listener);
     },
     getSnapshot: mock(() => []),
+    writeStdin: () => false,
     ...overrides,
   };
 }

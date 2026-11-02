@@ -15,7 +15,8 @@ namespace Scout.Conversation.Memory;
 /// entries. Each entry carries its own lock object, so concurrent
 /// <see cref="Load"/>/<see cref="Append"/> for the same key serialize while
 /// different keys never contend. TTL eviction is lazy: a stale entry is dropped
-/// on the next access rather than on a timer.
+/// on the next access to it, and every <see cref="Append"/> sweeps the other
+/// expired entries, so one-shot keys (a thread per question) do not pile up.
 /// </remarks>
 public sealed class InMemoryConversationMemoryStore : IConversationMemoryStore
 {
@@ -67,7 +68,8 @@ public sealed class InMemoryConversationMemoryStore : IConversationMemoryStore
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(assistant);
 
-        var entry = _entries.GetOrAdd(key, static _ => new ConversationEntry());
+        var now = _timeProvider.GetUtcNow();
+        var entry = _entries.GetOrAdd(key, static (_, touched) => new ConversationEntry { LastTouchUtc = touched }, now);
 
         lock (entry.Gate)
         {
@@ -87,6 +89,24 @@ public sealed class InMemoryConversationMemoryStore : IConversationMemoryStore
             }
 
             entry.LastTouchUtc = _timeProvider.GetUtcNow();
+        }
+
+        SweepExpired();
+    }
+
+    internal int Count => _entries.Count;
+
+    private void SweepExpired()
+    {
+        foreach (var pair in _entries)
+        {
+            lock (pair.Value.Gate)
+            {
+                if (IsExpired(pair.Value))
+                {
+                    _entries.TryRemove(pair);
+                }
+            }
         }
     }
 

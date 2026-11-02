@@ -1,67 +1,110 @@
 import type { IpcMain } from 'electron';
-import { CHANNEL, serializeError } from '@scout/shared';
-import type {
-  DiscordBuildOAuthUrlRequest,
-  DiscordBuildOAuthUrlResponse,
-  DiscordStartOAuthInstallRequest,
-  DiscordStartOAuthInstallResponse,
+import {
+  CHANNEL,
+  ScoutError,
+  encodeIpcErrorMessage,
+  serializeError,
+  type DiscordBotInfo,
+  type DiscordCheckTokenRequest,
+  type DiscordEnableIntentResult,
+  type DiscordGuildsResponse,
+  type DiscordInviteUrlResponse,
 } from '@scout/shared';
-import { FlowController } from '../oauth/discord-flow.js';
-import { buildAuthorizeUrl } from '../oauth/url-builder.js';
-import { generateState } from '../oauth/state.js';
-import { awaitCallback, findFreePort } from '../oauth/loopback-server.js';
-import type { DiscordFlowDeps } from '../oauth/discord-flow.js';
+import {
+  checkBotToken,
+  enableMessageContent,
+  inviteUrl,
+  listGuilds,
+} from '../discord/discord-setup.js';
+import type { Vault } from '../vault/safe-storage-vault.js';
 import type { Logger } from '../util/logger.js';
 
-export function registerDiscordHandlers(
-  ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
-  deps: DiscordFlowDeps,
-  logger: Logger,
-): () => void {
-  const controller = new FlowController();
-
-  // buildOAuthUrl is a convenience channel for dev-tools and tests.
-  // The real wizard flow drives through startOAuthInstall, which
-  // generates state and PKCE internally inside the FlowController.
-  ipcMain.handle(
-    CHANNEL.discordBuildOAuthUrl,
-    async (_event, req: unknown): Promise<DiscordBuildOAuthUrlResponse> => {
-      const r = req as DiscordBuildOAuthUrlRequest;
-      const state = generateState();
-      const url = buildAuthorizeUrl({
-        clientId: r.clientId,
-        permissions: r.permissions,
-        redirectUri: `http://127.0.0.1:53682/callback`,
-        state,
-        codeChallenge: 'dev-placeholder',
-      });
-      return { url, state };
-    },
-  );
-
-  ipcMain.handle(
-    CHANNEL.discordStartOAuthInstall,
-    async (_event, req: unknown): Promise<DiscordStartOAuthInstallResponse> => {
-      const r = req as DiscordStartOAuthInstallRequest;
-      logger.info('discord: start OAuth install', { clientId: r.clientId });
-      try {
-        return await controller.start({ clientId: r.clientId, permissions: r.permissions }, deps);
-      } catch (err: unknown) {
-        const serialized = serializeError(err);
-        throw Object.assign(new Error(serialized.message), { code: serialized.code });
-      }
-    },
-  );
-
-  ipcMain.handle(CHANNEL.discordCancelOAuthInstall, async (): Promise<void> => {
-    controller.cancel();
-  });
-
-  return () => {
-    ipcMain.removeHandler(CHANNEL.discordCancelOAuthInstall);
-    ipcMain.removeHandler(CHANNEL.discordStartOAuthInstall);
-    ipcMain.removeHandler(CHANNEL.discordBuildOAuthUrl);
-  };
+export interface DiscordHandlerDeps {
+  fetch: typeof globalThis.fetch;
+  vault: Pick<Vault, 'get' | 'store' | 'delete'>;
+  /** Called after a different bot token replaced the stored one. */
+  onTokenChanged(): void;
+  logger: Logger;
 }
 
-export { awaitCallback, findFreePort };
+/**
+ * Sets up the Discord bot from its token alone. The token arrives once through checkToken, is
+ * stored in the vault, and from then on is read only here and by the worker environment.
+ */
+export function registerDiscordHandlers(
+  ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
+  deps: DiscordHandlerDeps,
+): () => void {
+  const { fetch, vault, logger, onTokenChanged } = deps;
+
+  async function relay<T>(name: string, call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (err: unknown) {
+      const serialized = serializeError(err);
+      logger.warn(`discord: ${name} failed`, { code: serialized.code });
+      throw Object.assign(new Error(encodeIpcErrorMessage(serialized)), {
+        code: serialized.code,
+      });
+    }
+  }
+
+  async function stored(key: 'discord.bot-token' | 'discord.client-id'): Promise<string> {
+    const value = await vault.get(key);
+    if (value === null) {
+      throw new ScoutError('discord/not-connected', 'Paste the Discord bot token first.');
+    }
+    return value;
+  }
+
+  ipcMain.handle(
+    CHANNEL.discordCheckToken,
+    (_event, req: DiscordCheckTokenRequest): Promise<DiscordBotInfo> =>
+      relay('check token', async () => {
+        const token = typeof req?.token === 'string' ? req.token.trim() : '';
+        if (token.length === 0) {
+          throw new ScoutError('discord/token-empty', 'Paste the Discord bot token.');
+        }
+        const info = await checkBotToken(fetch, token);
+        const previousToken = await vault.get('discord.bot-token');
+        const previousApplication = await vault.get('discord.client-id');
+        if (previousApplication !== null && previousApplication !== info.applicationId) {
+          await vault.delete('discord.guild-id');
+          await vault.delete('discord.guild-name');
+        }
+        await vault.store('discord.bot-token', token);
+        await vault.store('discord.client-id', info.applicationId);
+        logger.info('discord: bot token saved', {
+          applicationId: info.applicationId,
+          messageContent: info.messageContent,
+        });
+        if (previousToken !== null && previousToken !== token) onTokenChanged();
+        return info;
+      }),
+  );
+
+  ipcMain.handle(CHANNEL.discordEnableIntent, (): Promise<DiscordEnableIntentResult> =>
+    relay('enable intent', async () => {
+      const result = await enableMessageContent(fetch, await stored('discord.bot-token'));
+      logger.info('discord: message content intent', { enabled: result.enabled });
+      return result;
+    }),
+  );
+
+  ipcMain.handle(CHANNEL.discordInviteUrl, (): Promise<DiscordInviteUrlResponse> =>
+    relay('invite url', async () => ({ url: inviteUrl(await stored('discord.client-id')) })),
+  );
+
+  ipcMain.handle(CHANNEL.discordGuilds, (): Promise<DiscordGuildsResponse> =>
+    relay('guilds', async () => ({
+      guilds: await listGuilds(fetch, await stored('discord.bot-token')),
+    })),
+  );
+
+  return () => {
+    ipcMain.removeHandler(CHANNEL.discordGuilds);
+    ipcMain.removeHandler(CHANNEL.discordInviteUrl);
+    ipcMain.removeHandler(CHANNEL.discordEnableIntent);
+    ipcMain.removeHandler(CHANNEL.discordCheckToken);
+  };
+}

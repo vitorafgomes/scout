@@ -162,6 +162,16 @@ describe('createMainWindow', () => {
     expect(ref.fake.shownCount).toBe(1);
   });
 
+  it('a --hidden launch loads the renderer, so its worker auto-start runs, but never shows the window', () => {
+    const { deps, ref } = setup({ showOnReady: false });
+    createMainWindow(deps);
+
+    ref.fake.triggerReadyToShow();
+
+    expect(ref.fake.loadedFile).toBe('/fake/index.html');
+    expect(ref.fake.shownCount).toBe(0);
+  });
+
   it('setWindowOpenHandler returns { action: deny } for any URL', () => {
     const { deps, ref } = setup();
     createMainWindow(deps);

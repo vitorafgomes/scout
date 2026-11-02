@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.Adapter.Discord.Streaming;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 
 namespace Scout.Adapter.Discord;
 
@@ -15,13 +16,21 @@ namespace Scout.Adapter.Discord;
 /// a <see cref="DiscordResponseSink"/> bound to the originating channel (the
 /// descriptive-write boundary — replies write only where the message came
 /// from), and invokes the handler with both. The conductor drives the sink.
+/// With <see cref="DiscordOptions.ReplyInThreads"/>, a mention in a server text
+/// channel first opens a public thread on the user's message and the reply goes
+/// there; when the thread cannot be created the reply stays in the channel.
 /// </summary>
 public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 {
     // ponytail: fixed 10 s ceiling on waiting for in-flight replies at stop; make it configurable if a host needs a longer drain.
     private static readonly TimeSpan InFlightDrainTimeout = TimeSpan.FromSeconds(10);
 
+    private const int ThreadNameLength = 60;
+    private const string VoiceThreadName = "Voice message";
+
     private readonly string _botToken;
+    private readonly bool _replyInThreads;
+    private readonly AccessPolicy _access;
     private readonly DiscordMessageTranslator _translator;
     private readonly ILogger<DiscordChatAdapter> _logger;
     private readonly DiscordSocketClient _client;
@@ -34,7 +43,8 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     public DiscordChatAdapter(
         IOptions<DiscordOptions> options,
         DiscordMessageTranslator translator,
-        ILogger<DiscordChatAdapter> logger)
+        ILogger<DiscordChatAdapter> logger,
+        AccessPolicy access)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(options.Value);
@@ -51,6 +61,8 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         }
 
         _botToken = options.Value.BotToken;
+        _replyInThreads = options.Value.ReplyInThreads;
+        _access = access ?? throw new ArgumentNullException(nameof(access));
 
         _client = new DiscordSocketClient(new DiscordSocketConfig
         {
@@ -142,6 +154,7 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
 
             var guildId = (message.Channel as SocketGuildChannel)?.Guild.Id;
             var mentionsSelf = message.MentionedUsers.Any(u => u.Id == botUserId);
+            var repliesToSelf = (message as IUserMessage)?.ReferencedMessage?.Author?.Id == botUserId;
             var inbound = ProjectInbound(
                 messageId: message.Id,
                 authorId: message.Author.Id,
@@ -149,9 +162,11 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
                 content: message.Content,
                 mentionsSelf: mentionsSelf,
                 timestamp: message.Timestamp,
-                guildId: guildId);
+                guildId: guildId,
+                repliesToSelf: repliesToSelf,
+                voice: VoiceOf(message));
 
-            return OnInboundAsync(inbound, botUserId, message.Channel);
+            return OnInboundAsync(inbound, botUserId, message.Channel, message);
         }
         catch (Exception ex)
         {
@@ -161,7 +176,11 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         }
     }
 
-    internal Task OnInboundAsync(InboundDiscordMessage inbound, ulong botUserId, IMessageChannel channel)
+    internal Task OnInboundAsync(
+        InboundDiscordMessage inbound,
+        ulong botUserId,
+        IMessageChannel channel,
+        IMessage? source = null)
     {
         var handler = _handler;
         if (handler is null || !_lifecycle.IsRunning)
@@ -179,13 +198,12 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         }
 
         _logger.LogInformation(
-            "Discord message {MessageId} accepted from channel {ChannelId} (textLen={Length}); dispatching to conversation.",
-            inbound.MessageId, inbound.ChannelId, chatMessage!.Text.Length);
+            "Discord message {MessageId} accepted from channel {ChannelId} (textLen={Length}, voice={Voice}); dispatching to conversation.",
+            inbound.MessageId, inbound.ChannelId, chatMessage!.Text.Length, chatMessage.Audio is not null);
 
-        var sink = new DiscordResponseSink(channel, logger: _logger);
         var id = Interlocked.Increment(ref _nextConversationId);
         var conversation = Task.Run(
-            () => RunConversationAsync(handler, chatMessage, sink, inbound.MessageId, lifetimeToken),
+            () => RunConversationAsync(handler, chatMessage, inbound, channel, source, lifetimeToken),
             CancellationToken.None);
         _inFlight[id] = conversation;
         _ = conversation.ContinueWith(
@@ -199,13 +217,26 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
     private async Task RunConversationAsync(
         Func<ChatMessage, IResponseSink, CancellationToken, Task> handler,
         ChatMessage chatMessage,
-        DiscordResponseSink sink,
-        ulong messageId,
+        InboundDiscordMessage inbound,
+        IMessageChannel channel,
+        IMessage? source,
         CancellationToken lifetimeToken)
     {
+        var messageId = inbound.MessageId;
         try
         {
-            await handler(chatMessage, sink, lifetimeToken).ConfigureAwait(false);
+            var thread = await TryOpenThreadAsync(chatMessage, channel, source, lifetimeToken).ConfigureAwait(false);
+            var replyChannel = thread ?? channel;
+            var message = thread is null
+                ? chatMessage
+                : new ChatMessage(
+                    chatMessage.UserId, thread.Id.ToString(), chatMessage.Text, chatMessage.Timestamp, chatMessage.Audio);
+            var replyTo = thread is null
+                ? new MessageReference(messageId, inbound.ChannelId, inbound.GuildId, failIfNotExists: false)
+                : null;
+
+            using var sink = new DiscordResponseSink(replyChannel, replyTo, logger: _logger);
+            await handler(message, sink, lifetimeToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
@@ -219,6 +250,76 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         }
     }
 
+    // A public thread on the user's message, for a mention in a server text
+    // channel from a user the access policy admits; null for a refused user, a
+    // DM, a thread, a voice channel's chat, or when Discord refuses (missing
+    // permission), in which case the reply stays in the channel.
+    private async Task<IThreadChannel?> TryOpenThreadAsync(
+        ChatMessage chatMessage,
+        IMessageChannel channel,
+        IMessage? source,
+        CancellationToken cancellationToken)
+    {
+        if (!_replyInThreads || source is null || !_access.IsAllowed(chatMessage.UserId)
+            || channel is not ITextChannel text || channel is IThreadChannel || channel is IVoiceChannel)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await text.CreateThreadAsync(
+                    ThreadName(chatMessage.Text),
+                    ThreadType.PublicThread,
+                    ThreadArchiveDuration.OneDay,
+                    source,
+                    options: new RequestOptions { CancelToken = cancellationToken })
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not open a thread for Discord message {MessageId}; replying in the channel instead.",
+                source.Id);
+            return null;
+        }
+    }
+
+    internal static string ThreadName(string question)
+    {
+        var name = question.ReplaceLineEndings(" ").Trim();
+        if (name.Length == 0)
+        {
+            return VoiceThreadName;
+        }
+        if (name.Length <= ThreadNameLength)
+        {
+            return name;
+        }
+
+        var space = name.LastIndexOf(' ', ThreadNameLength);
+        return (space > ThreadNameLength / 2 ? name[..space] : name[..ThreadNameLength]).TrimEnd() + "...";
+    }
+
+    private static InboundVoiceMessage? VoiceOf(SocketMessage message)
+    {
+        if (message.Flags is not { } flags || !flags.HasFlag(MessageFlags.VoiceMessage))
+        {
+            return null;
+        }
+
+        var audio = message.Attachments.FirstOrDefault(
+            a => a.ContentType?.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) == true);
+        return audio is null
+            ? null
+            : new InboundVoiceMessage(
+                audio.Url,
+                audio.ContentType!,
+                audio.Size,
+                audio.Duration is { } seconds ? TimeSpan.FromSeconds(seconds) : null);
+    }
+
     // Pure projection of the Discord message fields into the translator DTO.
     // Extracted so the inbound glue is unit-testable without Discord.Net's
     // sealed SocketMessage.
@@ -229,7 +330,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         string? content,
         bool mentionsSelf,
         DateTimeOffset timestamp,
-        ulong? guildId)
+        ulong? guildId,
+        bool repliesToSelf = false,
+        InboundVoiceMessage? voice = null)
         => new(
             MessageId: messageId,
             AuthorId: authorId,
@@ -237,7 +340,9 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
             Content: content ?? string.Empty,
             MentionsSelf: mentionsSelf,
             Timestamp: timestamp,
-            GuildId: guildId);
+            GuildId: guildId,
+            RepliesToSelf: repliesToSelf,
+            Voice: voice);
 
     private Task OnReadyAsync()
     {

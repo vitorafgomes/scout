@@ -9,15 +9,42 @@ function makeVault(
 }
 
 describe('buildEnv', () => {
-  it('throws VaultUnavailableError when discord.bot-token is absent', async () => {
-    let thrown: unknown = null;
-    try {
-      await buildEnv({ vaultGet: makeVault({}) });
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(VaultUnavailableError);
-    expect((thrown as VaultUnavailableError).code).toBe('vault/unavailable');
+  it('with neither Discord nor Slack connected, starts the worker with only the local adapter', async () => {
+    const env = await buildEnv({ vaultGet: makeVault({}), slackTokens: null });
+
+    expect(env['SCOUT__ADAPTERS__LOCAL__ENABLED']).toBe('true');
+    expect(Object.keys(env).filter((key) => /DISCORD|SLACK/.test(key))).toEqual([]);
+  });
+
+  it('Slack only: the worker gets both Slack tokens under the keys SlackOptions binds, and no Discord token', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({}),
+      slackTokens: { botToken: 'xoxb-b', appToken: 'xapp-a' },
+    });
+
+    expect(env['SCOUT__ADAPTERS__SLACK__BOTTOKEN']).toBe('xoxb-b');
+    expect(env['SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN']).toBe('xapp-a');
+    expect('SCOUT__ADAPTERS__DISCORD__BOTTOKEN' in env).toBe(false);
+  });
+
+  it('Discord and Slack: the worker gets both adapters', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      slackTokens: { botToken: 'xoxb-b', appToken: 'xapp-a' },
+    });
+
+    expect(env['SCOUT__ADAPTERS__DISCORD__BOTTOKEN']).toBe('tok');
+    expect(env['SCOUT__ADAPTERS__SLACK__BOTTOKEN']).toBe('xoxb-b');
+    expect(env['SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN']).toBe('xapp-a');
+  });
+
+  it('leaves the Slack variables out when Slack is not connected', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      slackTokens: null,
+    });
+
+    expect(Object.keys(env).filter((k) => k.startsWith('SCOUT__ADAPTERS__SLACK__'))).toEqual([]);
   });
 
   it('emits SCOUT__ADAPTERS__DISCORD__BOTTOKEN from vault discord.bot-token', async () => {
@@ -62,6 +89,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'OpenAI',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__OPENAI__APIKEY: 'sk-openai-key',
       SCOUT__LLM__OPENAI__CHAT__MODEL: 'gpt-4o',
@@ -93,6 +121,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'Gemini',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__GEMINI__APIKEY: 'gemini-key',
       SCOUT__LLM__GEMINI__CHAT__MODEL: 'gemini-2.5-pro',
@@ -172,6 +201,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__OLLAMA__CHAT__MODEL: 'llama3.1',
       SCOUT__LLM__OLLAMA__ENDPOINT: 'http://localhost:11434',
@@ -192,6 +222,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__OLLAMA__CHAT__MODEL: 'qwen2.5',
       SCOUT__LLM__OLLAMA__ENDPOINT: 'http://10.0.0.5:11434',
@@ -209,6 +240,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__GUARD__TYPESAFE__APIKEY: 'ts-key',
       SCOUT__LLM__OLLAMA__CHAT__MODEL: 'llama3.1',
@@ -269,6 +301,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'ChatGptPlan',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
       SCOUT__LLM__CHATGPTPLAN__TOKENFILE: '/home/owner/.config/Scout/chatgpt-token.json',
       SCOUT__LLM__CHATGPTPLAN__CHAT__MODEL: 'gpt-6.1-sol',
@@ -298,6 +331,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
     });
   });
@@ -429,6 +463,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
     });
   });
@@ -444,6 +479,7 @@ describe('buildEnv', () => {
     expect(env).toEqual({
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
+      SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
       SCOUT__ADAPTERS__DISCORD__BOTTOKEN: 'tok',
     });
   });
@@ -493,6 +529,15 @@ describe('buildEnv allowed users', () => {
     expect(env['SCOUT__ACCESS__REQUIREALLOWLIST']).toBe('true');
   });
 
+  it('Slack is a chat platform, not an owner credential: connecting it does not require an allow list', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'llm.provider': 'Ollama' }),
+      slackTokens: { botToken: 'xoxb-b', appToken: 'xapp-a' },
+    });
+
+    expect('SCOUT__ACCESS__REQUIREALLOWLIST' in env).toBe(false);
+  });
+
   it('local first: with no owner credential and no allowed users the worker gets no access variable', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({ 'discord.bot-token': 'tok', 'llm.provider': 'Ollama' }),
@@ -524,6 +569,36 @@ function makeVaultStore(initial: Partial<Record<VaultKey, string>>) {
     },
   };
 }
+
+describe('buildEnv voice transcription', () => {
+  it('gives the worker the installed Whisper model path', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      whisperModelPath: '/user-data/whisper-models/ggml-large-v3-turbo.bin',
+    });
+
+    expect(env['SCOUT__TRANSCRIPTION__MODELPATH']).toBe(
+      '/user-data/whisper-models/ggml-large-v3-turbo.bin',
+    );
+  });
+
+  it('sets no transcription variable when no Whisper model is installed', async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      whisperModelPath: null,
+    });
+
+    expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__TRANSCRIPTION__'))).toEqual([]);
+  });
+});
+
+describe('buildEnv quick ask', () => {
+  it('turns on the local adapter so the quick-ask window can reach the worker', async () => {
+    const env = await buildEnv({ vaultGet: makeVault({ 'discord.bot-token': 'tok' }) });
+
+    expect(env['SCOUT__ADAPTERS__LOCAL__ENABLED']).toBe('true');
+  });
+});
 
 describe('migrateLegacyApiKey', () => {
   for (const [provider, ownKey] of [

@@ -46,6 +46,21 @@ public sealed class DiscordMessageTranslatorTests
         chatMessage!.Text.ShouldBe("hi scout");
     }
 
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(9999UL, false)]
+    public void TryTranslate_Marks_A_Message_Without_A_Guild_As_A_Direct_Message(ulong? guildId, bool expected)
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 1, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111> pair 482913", MentionsSelf: true,
+            Timestamp: FixedTime, GuildId: guildId);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.IsDirectMessage.ShouldBe(expected);
+        chatMessage.IsLocalOwner.ShouldBeFalse("only the local adapter marks the local owner");
+    }
+
     [Fact]
     public void TryTranslate_Rejects_Messages_That_Are_Only_A_Mention()
     {

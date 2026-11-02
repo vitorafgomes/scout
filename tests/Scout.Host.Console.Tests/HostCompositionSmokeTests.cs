@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Scout.Conversation;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 using Scout.Llm;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
@@ -124,6 +125,7 @@ public sealed class HostCompositionSmokeTests
         ResolveWithin(() => provider.GetRequiredService<Kernel>()).ShouldNotBeNull();
         ResolveWithin(() => provider.GetRequiredService<IChatGateway>()).ShouldNotBeNull();
         ResolveWithin(() => provider.GetRequiredService<ConversationConductor>()).ShouldNotBeNull();
+        ResolveWithin(() => provider.GetRequiredService<IPairingSignal>()).ShouldBeOfType<StdoutPairingSignal>();
 
         // Every hosted service, including ConversationWorker, must construct. The
         // worker pulls the adapters, conductor, lifetime and readiness signal, so

@@ -17,4 +17,13 @@ public sealed class AccessOptions
     /// letting everyone in. The desktop app sets it once an owner credential is connected.
     /// </summary>
     public bool RequireAllowList { get; set; }
+
+    /// <summary>
+    /// A one-time code the desktop app issued; a sender who sends <c>pair &lt;code&gt;</c>
+    /// in a direct message before <see cref="PairingExpiresAt"/> is reported to the desktop app.
+    /// </summary>
+    public string? PairingCode { get; set; }
+
+    /// <summary>When <see cref="PairingCode"/> stops being accepted.</summary>
+    public DateTimeOffset? PairingExpiresAt { get; set; }
 }

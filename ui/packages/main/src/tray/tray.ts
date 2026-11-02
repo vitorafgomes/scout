@@ -1,13 +1,16 @@
-import type { Tray, MenuItemConstructorOptions } from 'electron';
+import type { Menu, MenuItemConstructorOptions, Tray } from 'electron';
 import type { WorkerStatus } from '@scout/shared';
 import type { Logger } from '../util/logger.js';
 
 export interface TrayDeps {
   createTray: (iconPath: string) => Tray;
-  buildContextMenu: (template: MenuItemConstructorOptions[]) => Electron.Menu;
+  buildContextMenu: (template: MenuItemConstructorOptions[]) => Menu;
   iconPath: string;
-  onShowWindow: () => void;
-  onStopWorker: () => Promise<void>;
+  onOpen: () => void;
+  onAskScout: () => void;
+  onStart: () => Promise<unknown>;
+  onStop: () => Promise<unknown>;
+  /** Must go through app.quit() so the normal before-quit path stops the worker. */
   onQuit: () => void;
   logger: Logger;
   initialStatus?: WorkerStatus;
@@ -18,102 +21,81 @@ export interface TrayController {
   destroy(): void;
 }
 
-function prettyState(state: WorkerStatus['state']): string {
-  switch (state) {
-    case 'idle':
-      return 'Idle';
-    case 'starting':
-      return 'Starting';
-    case 'running':
-      return 'Running';
-    case 'stopped':
-      return 'Stopped';
-    case 'crashed':
-      return 'Crashed';
+const STATE_LABEL: Record<WorkerStatus['state'], string> = {
+  idle: 'Idle',
+  starting: 'Starting',
+  running: 'Running',
+  stopped: 'Stopped',
+  crashed: 'Crashed',
+};
+
+/** The tray icon and its menu, or null when this desktop could not create a tray. */
+export function createTrayController(deps: TrayDeps): TrayController | null {
+  const { logger } = deps;
+
+  let tray: Tray;
+  try {
+    tray = deps.createTray(deps.iconPath);
+  } catch (err: unknown) {
+    logger.warn('tray: not available on this desktop', {
+      error: err instanceof Error ? err.name : typeof err,
+    });
+    return null;
   }
-}
 
-function isWorkerActive(state: WorkerStatus['state']): boolean {
-  return state === 'running' || state === 'starting';
-}
+  let status: WorkerStatus = deps.initialStatus ?? { state: 'idle', restarts: 0 };
+  let pending: 'start' | 'stop' | null = null;
 
-export function createTrayController(deps: TrayDeps): TrayController {
-  const { createTray, buildContextMenu, iconPath, onShowWindow, onStopWorker, onQuit, logger } =
-    deps;
-
-  let currentStatus: WorkerStatus = deps.initialStatus ?? { state: 'idle', restarts: 0 };
-  let tray: Tray | null = createTray(iconPath);
-
-  function buildMenu(status: WorkerStatus): Electron.Menu {
-    const template: MenuItemConstructorOptions[] = [
-      {
-        label: 'Show Scout Desktop',
-        type: 'normal',
-        id: 'show-window',
-        click: onShowWindow,
-      },
-      { type: 'separator' },
-      {
-        label: `Status: ${prettyState(status.state)}`,
-        type: 'normal',
-        id: 'status-label',
-        enabled: false,
-      },
-      { type: 'separator' },
-    ];
-
-    if (isWorkerActive(status.state)) {
-      template.push({
-        label: 'Stop worker',
-        type: 'normal',
-        id: 'stop-worker',
-        click: () => {
-          onStopWorker().catch((err: unknown) => {
-            logger.error('tray: stop worker failed', err);
-          });
-        },
+  function run(action: 'start' | 'stop'): void {
+    pending = action;
+    refresh();
+    (action === 'start' ? deps.onStart() : deps.onStop())
+      .catch((err: unknown) => {
+        logger.error(`tray: ${action} failed`, err);
+      })
+      .finally(() => {
+        pending = null;
+        refresh();
       });
+  }
+
+  function workerItem(): MenuItemConstructorOptions {
+    if (pending === 'stop') return { id: 'worker', label: 'Stop Scout', enabled: false };
+    if (pending === 'start' || status.state === 'starting') {
+      return { id: 'worker', label: 'Start Scout', enabled: false };
     }
-
-    template.push({
-      label: 'Quit Scout Desktop',
-      type: 'normal',
-      id: 'quit',
-      click: onQuit,
-    });
-
-    return buildContextMenu(template);
+    if (status.state === 'running') {
+      return { id: 'worker', label: 'Stop Scout', enabled: true, click: () => run('stop') };
+    }
+    return { id: 'worker', label: 'Start Scout', enabled: true, click: () => run('start') };
   }
 
-  function attachTrayListeners(t: Tray): void {
-    // Left-click on Windows/Linux shows window; macOS only emits 'click'.
-    t.on('click', onShowWindow);
-
-    // Windows/Linux emit distinct right-click for context menu popup.
-    t.on('right-click', () => {
-      t.popUpContextMenu();
-    });
+  function refresh(): void {
+    if (tray.isDestroyed()) return;
+    tray.setToolTip(`Scout - ${STATE_LABEL[status.state]}`);
+    tray.setContextMenu(
+      deps.buildContextMenu([
+        { id: 'open', label: 'Open Scout', click: deps.onOpen },
+        { id: 'ask', label: 'Ask Scout...', click: deps.onAskScout },
+        { type: 'separator' },
+        workerItem(),
+        { type: 'separator' },
+        { id: 'quit', label: 'Quit Scout', click: deps.onQuit },
+      ]),
+    );
   }
 
-  tray.setContextMenu(buildMenu(currentStatus));
-  tray.setToolTip('Scout Desktop');
-  attachTrayListeners(tray);
+  tray.on('click', deps.onOpen);
+  refresh();
 
   return {
-    setStatus(status: WorkerStatus): void {
-      currentStatus = status;
-
-      if (tray == null || tray.isDestroyed()) return;
-
-      tray.setContextMenu(buildMenu(status));
-      tray.setToolTip(`Scout Desktop — ${prettyState(status.state)}`);
+    setStatus(next: WorkerStatus): void {
+      status = next;
+      refresh();
     },
 
     destroy(): void {
-      if (tray != null && !tray.isDestroyed()) {
-        tray.destroy();
-      }
-      tray = null;
+      if (!tray.isDestroyed()) tray.destroy();
     },
   };
 }

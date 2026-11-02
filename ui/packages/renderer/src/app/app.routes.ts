@@ -1,4 +1,7 @@
-import type { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, type Routes } from '@angular/router';
+
+import { MenuPreferences } from './core/menu-preferences';
 
 import { requireClientIdGuard, requireBotTokenGuard } from './core/wizard.guards';
 
@@ -34,10 +37,7 @@ export const appRoutes: Routes = [
     path: 'ready',
     loadComponent: () => import('./wizard/ready/ready.component').then((m) => m.ReadyComponent),
   },
-  {
-    path: 'status',
-    loadComponent: () => import('./wizard/ready/ready.component').then((m) => m.ReadyComponent),
-  },
+  { path: 'status', redirectTo: 'logs' },
   {
     path: 'sources',
     loadComponent: () => import('./sources/sources.component').then((m) => m.SourcesComponent),
@@ -57,12 +57,31 @@ export const appRoutes: Routes = [
   },
   {
     path: 'logs',
+    canActivate: [() => inject(MenuPreferences).showLogs() || inject(Router).parseUrl('/settings')],
     loadComponent: () => import('./wizard/log-viewer/logs.component').then((m) => m.LogsComponent),
+  },
+  {
+    path: 'slack',
+    loadComponent: () =>
+      import('./wizard/slack/slack-setup.component').then((m) => m.SlackSetupComponent),
   },
   {
     path: 'settings',
     loadComponent: () =>
       import('./wizard/settings/settings.component').then((m) => m.SettingsComponent),
+  },
+  {
+    path: 'chat',
+    loadComponent: () => import('./chat/chat.component').then((m) => m.ChatComponent),
+  },
+  {
+    path: 'quick-ask',
+    loadComponent: () => import('./quick-ask/quick-ask.component').then((m) => m.QuickAskComponent),
+  },
+  {
+    path: 'floating-button',
+    loadComponent: () =>
+      import('./floating-button/floating-button.component').then((m) => m.FloatingButtonComponent),
   },
   { path: '**', redirectTo: '' },
 ];

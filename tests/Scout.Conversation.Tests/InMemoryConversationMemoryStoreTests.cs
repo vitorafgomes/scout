@@ -24,6 +24,23 @@ public sealed class InMemoryConversationMemoryStoreTests
     private static ConversationTurn Assistant(string text) => new(ConversationRole.Assistant, text);
 
     [Fact]
+    public void An_Append_Sweeps_Conversations_Idle_Past_The_Ttl_So_One_Shot_Threads_Do_Not_Pile_Up()
+    {
+        var store = Store(new ConversationMemoryOptions { IdleTtl = TimeSpan.FromMinutes(30) }, out var clock);
+        for (var i = 0; i < 50; i++)
+        {
+            store.Append($"thread-{i}", User("q"), Assistant("a"));
+        }
+        store.Count.ShouldBe(50);
+
+        clock.Advance(TimeSpan.FromMinutes(31));
+        store.Append("thread-new", User("q"), Assistant("a"));
+
+        store.Count.ShouldBe(1);
+        store.Load("thread-new").Count.ShouldBe(2);
+    }
+
+    [Fact]
     public void Load_Returns_Empty_When_Nothing_Stored()
     {
         var store = Store(null, out _);

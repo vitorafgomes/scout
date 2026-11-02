@@ -1,3 +1,4 @@
+import { randomInt as cryptoRandomInt } from 'node:crypto';
 import type { IpcMain } from 'electron';
 import {
   CHANNEL,
@@ -5,6 +6,7 @@ import {
   encodeIpcErrorMessage,
   serializeError,
   type AccessAllowedUsers,
+  type AccessPairing,
 } from '@scout/shared';
 import type { Vault } from '../vault/safe-storage-vault.js';
 import type { Logger } from '../util/logger.js';
@@ -12,11 +14,24 @@ import type { Logger } from '../util/logger.js';
 const ALLOWED_USERS_KEY = 'access.allowed-users';
 const MAX_IDS = 50;
 const ID_PATTERN = /^[A-Za-z0-9._:@-]{1,64}$/;
+const PAIRING_TTL_MS = 10 * 60_000;
 
 export interface AccessHandlerDeps {
   vault: Pick<Vault, 'get' | 'store' | 'delete'>;
   onAllowedUsersChanged(): void;
   logger: Logger;
+  randomInt?: (max: number) => number;
+  now?: () => number;
+}
+
+export interface AccessHandlers {
+  dispose(): void;
+  /** The unexpired pairing code the worker should accept, or null. */
+  pendingPairing(): AccessPairing | null;
+  /** Adds the user id the worker reported on a `SCOUT_PAIRED=` line; ignored when no code is pending. */
+  paired(userId: string): Promise<void>;
+  /** Drops the pending code after the worker reported it burned. */
+  pairingBurned(): void;
 }
 
 /** The platform user ids the owner allowed, in the order they were added; empty when none. */
@@ -58,8 +73,9 @@ export function validateAllowedUserIds(input: unknown): string[] {
 export function registerAccessHandlers(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
   deps: AccessHandlerDeps,
-): () => void {
-  const { vault, logger } = deps;
+): AccessHandlers {
+  const { vault, logger, randomInt = cryptoRandomInt, now = Date.now } = deps;
+  let pairing: AccessPairing | null = null;
 
   async function relay<T>(name: string, call: () => Promise<T>): Promise<T> {
     try {
@@ -90,15 +106,58 @@ export function registerAccessHandlers(
     return { userIds: next };
   }
 
+  function pendingPairing(): AccessPairing | null {
+    if (pairing !== null && Date.parse(pairing.expiresAt) <= now()) pairing = null;
+    return pairing;
+  }
+
+  function startPairing(): AccessPairing {
+    pairing = {
+      code: String(randomInt(1_000_000)).padStart(6, '0'),
+      expiresAt: new Date(now() + PAIRING_TTL_MS).toISOString(),
+    };
+    logger.info('access: pairing code issued');
+    deps.onAllowedUsersChanged();
+    return pairing;
+  }
+
+  async function paired(userId: string): Promise<void> {
+    if (pendingPairing() === null) {
+      logger.warn('access: ignored a pairing report with no pairing pending');
+      return;
+    }
+    pairing = null;
+    try {
+      const current = await readAllowedUserIds(vault);
+      await set({ userIds: [...current, userId] });
+      logger.info('access: paired a user from chat');
+    } catch (err: unknown) {
+      logger.warn('access: pairing report rejected', { code: serializeError(err).code });
+    }
+  }
+
   ipcMain.handle(CHANNEL.accessGet, (): Promise<AccessAllowedUsers> => relay('get', get));
   ipcMain.handle(
     CHANNEL.accessSet,
     (_event, req: AccessAllowedUsers | undefined): Promise<AccessAllowedUsers> =>
       relay('set', () => set(req)),
   );
+  ipcMain.handle(CHANNEL.accessStartPairing, (): Promise<AccessPairing> =>
+    relay('startPairing', async () => startPairing()),
+  );
 
-  return () => {
-    ipcMain.removeHandler(CHANNEL.accessSet);
-    ipcMain.removeHandler(CHANNEL.accessGet);
+  return {
+    dispose() {
+      ipcMain.removeHandler(CHANNEL.accessStartPairing);
+      ipcMain.removeHandler(CHANNEL.accessSet);
+      ipcMain.removeHandler(CHANNEL.accessGet);
+    },
+    pendingPairing,
+    paired,
+    pairingBurned() {
+      if (pairing === null) return;
+      pairing = null;
+      logger.info('access: pairing code burned by the worker');
+    },
   };
 }

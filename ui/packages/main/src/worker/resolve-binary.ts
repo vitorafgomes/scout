@@ -76,3 +76,14 @@ export function resolveProtoDir(
   }
   return path.join(findRepoRoot(cwd), 'src', 'Scout.ControlPlane.Contracts', 'protos');
 }
+
+/** The tray icon: shipped under `resources/icons` when packaged, read from `ui/build/icons` otherwise. */
+export function resolveTrayIcon(
+  deps: Pick<ResolveBinaryDeps, 'app' | 'resourcesPath' | 'cwd'>,
+): string {
+  const { app, resourcesPath, cwd } = deps;
+  if (app?.isPackaged === true && resourcesPath != null) {
+    return path.join(resourcesPath, 'icons', 'icon.png');
+  }
+  return path.join(findRepoRoot(cwd), 'ui', 'build', 'icons', 'icon.png');
+}

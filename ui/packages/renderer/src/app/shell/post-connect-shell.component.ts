@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+
+import { MenuPreferences } from '../core/menu-preferences';
 
 interface NavItem {
   readonly path: string;
@@ -9,6 +11,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: readonly NavItem[] = Object.freeze([
+  {
+    path: '/chat',
+    label: 'Chat',
+    testId: 'nav-chat',
+    iconPath:
+      'M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2Zm2 4v2h12V8Zm0 4v2h8v-2Z',
+  },
   {
     path: '/sources',
     label: 'AI Sources',
@@ -28,13 +37,6 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
     label: 'Features',
     testId: 'nav-features',
     iconPath: 'M4 4h6v6H4Zm10 0h6v6h-6Zm-10 10h6v6H4Zm10 0h6v6h-6Z',
-  },
-  {
-    path: '/status',
-    label: 'Status',
-    testId: 'nav-status',
-    iconPath:
-      'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8Zm-1-13h2v6h-2Zm0 8h2v2h-2Z',
   },
   {
     path: '/logs',
@@ -61,7 +63,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       <nav class="rail" aria-label="Primary">
         <div class="brand" aria-hidden="true">Scout</div>
         <ul class="nav-list" role="list">
-          @for (item of navItems; track item.path) {
+          @for (item of navItems(); track item.path) {
             <li class="nav-item" role="listitem">
               <a
                 class="nav-link"
@@ -163,5 +165,9 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
   ],
 })
 export class PostConnectShellComponent {
-  readonly navItems: readonly NavItem[] = NAV_ITEMS;
+  private readonly menu = inject(MenuPreferences);
+
+  readonly navItems = computed<readonly NavItem[]>(() =>
+    this.menu.showLogs() ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.path !== '/logs'),
+  );
 }

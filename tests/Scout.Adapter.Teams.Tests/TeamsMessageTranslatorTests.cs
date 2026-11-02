@@ -57,6 +57,7 @@ public sealed class TeamsMessageTranslatorTests
         msg.UserId.ShouldBe(HumanId);
         msg.ChannelId.ShouldBe(ConversationId);
         msg.Timestamp.ShouldBe(FixedTime);
+        msg.IsLocalOwner.ShouldBeFalse("only the local adapter marks the local owner");
     }
 
     [Fact]

@@ -50,10 +50,22 @@ const MID_WIZARD_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
             (activate)="onDiscordCardActivate()"
             (download)="onDiscordDownload()"
           />
-          <sc-discord-platform-card kind="slack" />
+          <sc-discord-platform-card
+            kind="slack"
+            [slackConnected]="slackConnected()"
+            (activate)="onSlackCardActivate()"
+          />
           <sc-discord-platform-card kind="teams" />
         }
       </section>
+      @if (!loading() && !hasProvisioning()) {
+        <section class="local-only">
+          <button type="button" data-test="use-local" (click)="useLocalOnly()">
+            Skip for now — use Scout from this computer
+          </button>
+          <p>No Discord or Slack needed: chat with Scout in this window.</p>
+        </section>
+      }
     </main>
   `,
   styles: [
@@ -89,6 +101,20 @@ const MID_WIZARD_STEPS: ReadonlySet<WizardStep> = new Set<WizardStep>([
       .error {
         color: #d45a5a;
       }
+      .local-only {
+        margin-top: 24px;
+        color: #7b8299;
+        font-size: 13px;
+      }
+      .local-only button {
+        background: #171b26;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        color: #e4e8f0;
+        padding: 8px 14px;
+        font-size: 14px;
+        cursor: pointer;
+      }
       .loading {
         color: #7b8299;
       }
@@ -111,9 +137,11 @@ export class WelcomeComponent implements OnInit {
   });
 
   readonly guildName = computed<string | null>(() => this.wizard.guild()?.name ?? null);
+  readonly slackConnected = computed<boolean>(() => this.wizard.slackConnected());
+  readonly hasProvisioning = computed<boolean>(() => this.wizard.hasProvisioning());
 
   readonly discordCardState = computed<DiscordCardState>(() => {
-    const provisioned = this.wizard.hasProvisioning();
+    const provisioned = this.wizard.hasDiscord();
     const step = this.wizard.currentStep();
     const worker = this.logStore.status();
     const discord = this.discordClient();
@@ -147,7 +175,7 @@ export class WelcomeComponent implements OnInit {
   onDiscordCardActivate(): void {
     const state = this.discordCardState();
     if (state === 'connected' || state === 'error') {
-      void this.router.navigateByUrl('/ready');
+      void this.router.navigateByUrl('/settings');
       return;
     }
     if (state === 'disconnected') {
@@ -162,6 +190,16 @@ export class WelcomeComponent implements OnInit {
     }
     this.wizard.goTo('provision');
     void this.router.navigateByUrl('/provision');
+  }
+
+  useLocalOnly(): void {
+    this.wizard.useLocalOnly();
+    void this.bridge.workerStart().catch(() => undefined);
+    void this.router.navigateByUrl('/chat');
+  }
+
+  onSlackCardActivate(): void {
+    void this.router.navigateByUrl('/slack');
   }
 
   onDiscordDownload(): void {
@@ -180,6 +218,8 @@ export class WelcomeComponent implements OnInit {
           // Worker status events will drive the card; nothing more to do.
         });
       }
+      const landing = this.wizard.takeLandingUrl();
+      if (landing !== null) void this.router.navigateByUrl(landing);
     } catch {
       // loadFromVault already swallows internal errors; this is a belt-and-braces.
     }

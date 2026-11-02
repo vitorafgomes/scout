@@ -7,6 +7,8 @@ export interface CreateMainWindowDeps {
   preloadPath: string | undefined;
   indexHtmlPath: string;
   devServerUrl?: string;
+  /** False for a `--hidden` launch: the renderer loads and runs, but the window stays hidden until the tray or a second launch shows it. */
+  showOnReady?: boolean;
 }
 
 export function createMainWindow(deps: CreateMainWindowDeps): BrowserWindow {
@@ -31,7 +33,7 @@ export function createMainWindow(deps: CreateMainWindowDeps): BrowserWindow {
   });
 
   window.once('ready-to-show', () => {
-    if (!window.isDestroyed()) window.show();
+    if (deps.showOnReady !== false && !window.isDestroyed()) window.show();
   });
 
   window.webContents.setWindowOpenHandler((_details) => ({ action: 'deny' }));

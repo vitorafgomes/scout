@@ -1,0 +1,161 @@
+---
+title: "ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio"
+version: "1.5"
+date: 2026-10-31
+updated: 2026-11-02
+changes: "Quick-ask window resizable, movable by a grip, last place remembered"
+page_type: adr
+status: accepted
+description: "A global shortcut opens a small desktop window where the owner types or holds Space to talk; main writes one JSON request per line to the worker's stdin and reads the reply as SCOUT_LOCAL lines on stdout, and the conversation core trusts that message as the local owner."
+supersedes: ""
+superseded_by: ""
+source:
+  - chat
+  - src/Scout.Adapter.Local/
+  - src/Scout.Conversation/Abstractions/ChatMessage.cs
+  - src/Scout.Conversation/ConversationConductor.cs
+  - src/Scout.Transcription.Whisper/WavDecoder.cs
+  - src/Scout.Host.Console/HostComposition.cs
+  - ui/packages/main/src/main.ts
+  - ui/packages/main/src/shell/x11-relaunch.ts
+  - ui/packages/main/src/quick-ask/quick-ask.ts
+  - ui/packages/main/src/quick-ask/placement.ts
+  - ui/packages/main/src/shell/app-lifecycle.ts
+  - ui/packages/renderer/src/app/quick-ask/
+  - ui/packages/renderer/src/app/floating-button/
+  - ui/packages/renderer/src/app/chat/
+  - ui/packages/renderer/src/app/core/local-conversation.ts
+reliability: high
+---
+
+# ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio
+
+> CommandOrControl+Alt+Space opens a small always-on-top Scout window anywhere on the desktop; the owner types a question or holds Space to talk, the recording is transcribed by the local Whisper model, and the answer streams into the window. No chat platform, socket or port is involved.
+
+## Status
+
+- [ ] Proposed
+- [x] Accepted
+- [ ] Deprecated / superseded
+
+Updated: 2026-10-31.
+
+## Context
+
+The owner asked for "something that stays directly in the operating system" and chose the third of three levels: talk to Scout from the desktop without Discord or Slack, with a global shortcut that opens a quick-ask box and hold-to-talk through the microphone, transcribed by the local Whisper model ([[pages/decisions/0024-voice-messages-transcribed-locally]]). The desktop app already spawns the worker with stdin, stdout and stderr as pipes. stdout carries only marker lines (`SCOUT_READY`, `SCOUT_PAIRED=`, `SCOUT_PAIRING_BURNED`), and stdin exists so the parent-death watchdog sees end of file ([[pages/services/host-console]]). The renderer reaches main only through the preload bridge ([[pages/decisions/0011-backend-frontend-grpc-uds]]). Any message reaching the conductor must pass the allow-list ([[pages/decisions/0021-allowed-users]]), which knows chat platform user ids only. Another piece of work, in a separate worktree, builds the tray, keep-running, autostart and notifications. Its tray menu calls `openQuickAsk()`.
+
+## Decision
+
+- **Transport is the worker's stdio.** No new socket or port. Main writes one JSON line per request to the worker's stdin:
+  - `{"type":"ask","id":"<uuid>","text":"..."}`
+  - `{"type":"ask","id":"...","audio":{"contentType":"audio/wav","base64":"..."}}`
+  - `{"type":"cancel","id":"..."}`
+
+  The worker answers with stdout lines `SCOUT_LOCAL <json>`, where the JSON is `{"id","event":"begin"|"update"|"complete"|"fail","text"?,"citations"?}` and `text` is always the full reply so far ([[pages/decisions/0013-conversation-core-streaming-sink]]). The supervisor's stdio was already `['pipe','pipe','pipe']`. The only change is that main now writes to stdin, through `Supervisor.writeStdin` (`ui/packages/main/src/worker/supervisor.ts:366`), which refuses when no worker is running. A stdin `error` listener (`:225`) keeps an EPIPE from a worker exiting mid-write from crashing main.
+- **Events are JSON-escaped and line-atomic.** `LocalEventWriter` serializes every event with `System.Text.Json`, which escapes every line break, so reply text can never begin a line of its own: a reply containing `\nSCOUT_PAIRED=999` stays inside one escaped line. Each event is one `WriteLine` on a synchronized writer (`src/Scout.Adapter.Local/LocalEventWriter.cs:23`). `Console.Out` is already a synchronized writer, and `TextWriter.Synchronized` returns it unchanged, so the local events, the readiness marker and the pairing markers share one lock.
+  - Main hands `SCOUT_LOCAL ` lines on stdout to the quick-ask router and keeps them out of the log ring, the log viewer and the diagnostics export (`ui/packages/main/src/worker/log-stream.ts:34`).
+  - A `SCOUT_LOCAL` line on stderr is an ordinary log line.
+  - The router applies each event, by id, to that question's turn in the conversation main holds (see Shared conversation) and drops unknown ids, events for finished questions and anything that is not one of the four events (`ui/packages/main/src/quick-ask/quick-ask.ts:520`).
+- **One reader of stdin.** With the local adapter enabled, the adapter is the only reader of stdin. The parent watchdog then waits on the adapter's `InputClosed` (end of file or a read failure) instead of reading stdin itself (`src/Scout.Host.Console/ParentWatchdogRegistration.cs:29`, `src/Scout.Host.Console/IParentLivenessProbe.cs:65`), because two readers would split the bytes of a request.
+- **Bounded input.** The worker reads stdin in chunks.
+  - A line over 20 MB is discarded up to its newline and answered with a `fail` event that carries the id found in the line's first 256 characters.
+  - Malformed JSON, a missing or invalid id, an unknown `type`, an empty question, a recording that is not `audio/wav` or is not valid base64, and a duplicate running id each get a `fail` event.
+  - The reader then continues with the next line, including when writing that `fail` to stdout itself fails. No single request can end the reader: each line is dispatched inside a guard that logs the exception, without the request text, and moves on, so a cancel that meets a disposed token source or a throwing callback cannot complete `InputClosed` and let the watchdog stop the whole worker, Discord and Slack included.
+  - A handler that throws unexpectedly still ends its reply with `fail` "Scout could not answer that; see Scout logs.", so the window never waits forever.
+  - The recording's base64 is decoded by `System.Text.Json` straight into bytes; an invalid one makes the line malformed. After a line longer than 64K characters the reader drops its buffer instead of keeping it.
+  - Main validates each request before it is written: an id of 1 to 64 letters, digits and hyphens, text of 1 to 4,000 characters, `audio/wav` base64 of at most 14,000,000 characters (`ui/packages/main/src/quick-ask/quick-ask.ts:134`).
+  - `cancel` cancels the running request. The turn ends with the `fail` "Cancelled." and no `complete`. The quick-ask window sends it for a question still being answered when the owner asks the next one.
+- **Local-owner trust.** `ChatMessage.IsLocalOwner` defaults to false and only `LocalChatAdapter` sets it (`src/Scout.Conversation/Abstractions/ChatMessage.cs:54`, `src/Scout.Adapter.Local/LocalChatAdapter.cs:258`). The conductor never treats a local-owner message as a pairing attempt and lets it skip the allow-list (`src/Scout.Conversation/ConversationConductor.cs:116`, `:131`). The flag survives the voice rewrite (`:153`).
+  - Trust comes from the transport, not from an id: only a process that holds the write end of the worker's stdin, which is the desktop app that spawned it, can send a local message.
+  - A Discord, Slack or Teams message with the user id `local-owner` is still refused, and the translators never set the flag.
+  - Every local request is user `local-owner` in the stable channel `local`, so short-term memory carries over from one quick ask to the next.
+- **Microphone handling.** The renderer captures with `getUserMedia` and an `AudioContext` at 16 kHz mono, and records only while Space is held with the question box empty or while the microphone button is pressed (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:245`).
+  - Stopping is always complete: a stop that arrives while the microphone is still opening waits for it and then stops the stream and closes the `AudioContext`, and every new start first releases any microphone still open, so a quick press leaves no live microphone and no old processor writes into the next recording.
+  - Escape, or the window losing focus while Space is held, discards the recording: the microphone stops and nothing is sent.
+  - The `ScriptProcessorNode` reaches the audio output only through a gain node set to 0 (`ui/packages/renderer/src/app/quick-ask/wav-recorder.ts:105`). Chromium fires `onaudioprocess` only for a processor connected towards the destination; connecting it straight there played the microphone back through the speakers, and with echo cancellation on the owner's own voice could be taken for echo and removed from the recording.
+  - Samples are kept in memory, capped at 5 minutes (`ui/packages/renderer/src/app/quick-ask/wav-recorder.ts:4`), and encoded as 16-bit PCM WAV in the renderer. The stream stops when recording ends.
+  - The recording is sent once to main and then to the worker's stdin. It is never written to disk and never leaves the machine. Whisper transcribes it locally ([[pages/services/transcription-whisper]]).
+  - The reply opens with the `> (voice) ` quote, exactly as for a Discord voice message. Without a Whisper model the existing help text comes back.
+  - Main grants the `media` permission only to the app's own page (the `file:` URL of `index.html`, or the dev server origin in development) and only for audio (`ui/packages/main/src/quick-ask/quick-ask.ts:102`). Every other permission keeps Electron's default, so clipboard writes in other screens are unchanged.
+  - macOS gets `NSMicrophoneUsageDescription` through `extendInfo` (`ui/build/electron-builder.yml:64`) and the `com.apple.security.device.audio-input` entitlement (`ui/build/entitlements.mac.plist:11`).
+- **Shortcut and window.**
+  - `registerQuickAsk` registers `CommandOrControl+Alt+Space`, or the stored shortcut, when the app is ready, and unregisters it on quit (`ui/packages/main/src/quick-ask/quick-ask.ts:220`).
+  - `openQuickAsk()` (`:97`) shows a frameless, always-on-top, sandboxed window with context isolation and the existing preload. It loads the renderer at `#/quick-ask` without the wizard shell and hides it on blur or Escape.
+  - **Resizable and movable (amended 2026-11-02).** The owner could neither move the window nor resize it ("eu nao consigo mover o chat que clicamos no botao e nem consigo aumentar e diminuir a caixa"): it was created not resizable and, being frameless, had nothing to grab. It is now resizable down to 360 by 240 (`ui/packages/main/src/quick-ask/quick-ask.ts:343`), and the page has a 14 px strip labelled "Scout" across its top that drags the window, while its input and buttons stay clickable (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:36`). Main remembers the window's last bounds whenever it hides or closes, under the main-only vault key `quick-ask.window` (`ui/packages/main/src/quick-ask/quick-ask.ts:317`); a failed save is logged as a warning and the place then lasts until Scout quits. A newly created window goes back to those bounds when their top-left point lies in the work area of a current display, and otherwise to the floating button's corner (see Floating button); a window that was only hidden shows again where it was.
+  - Settings, "Floating button and quick ask", changes the shortcut. Main registers the new one before it releases the old one: a `false` from `globalShortcut.register` keeps the old shortcut and returns "That shortcut is taken", and a malformed accelerator also keeps the old one (`:438`).
+  - The shortcut is stored under the main-only vault key `quick-ask.shortcut`. It is not a secret.
+  - If the worker is not running, the turn's reply is "Scout is not running. Start it from the tray or the app.". A failed stdin write, or a worker exit mid-answer, ends every running turn with "Scout stopped before it finished answering." (`:503`).
+- **Floating button (amended 2026-10-31).** The owner asked for a small Scout button that stays above all open windows, never gets in the way of a click and opens the chat when clicked, placed where they choose in Settings, on Windows, macOS and Linux, with a choice of which display it sits on.
+  - **Bubble window.** The button is its own 64 by 64 window (`ui/packages/main/src/quick-ask/quick-ask.ts:289`): transparent, frameless, always on top, out of the taskbar, not resizable, not focusable, no shadow, `acceptFirstMouse` so a click on the inactive window reaches the page on macOS, and the same sandboxed web preferences as the quick-ask window. It loads the renderer at `#/floating-button` (`ui/packages/renderer/src/app/floating-button/floating-button.component.ts:56`), a 56 px blue circle with a chat icon and the label "Ask Scout", rendered without the wizard shell (`ui/packages/renderer/src/app/app.component.ts:21`) on a transparent page. The window is a 64 px square around the 56 px circle, so it takes clicks only in that square, the circle and a 4 px transparent margin; no click-through logic is needed. It is shown with `showInactive`, so it never takes focus from the app the owner is in.
+  - **Click.** A click calls `scout:local.open`, which runs the same `open()` as the shortcut and the tray (`ui/packages/main/src/quick-ask/quick-ask.ts:514`). The bubble hides while the quick-ask window is shown and comes back when that window hides on blur, Escape or `scout:local.hide` (`:335`). The quick-ask page also has a Close button next to the microphone button that calls `scout:local.hide`, the same as Escape, so the window can always be closed with the mouse (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:269`).
+  - **Placement.** `placeInCorner` (`ui/packages/main/src/quick-ask/placement.ts:11`) puts a window in a corner of a display's work area, 16 px from both edges. The bubble goes to the chosen corner, and so does the quick-ask window when it has no remembered place on a current display (`ui/packages/main/src/quick-ask/quick-ask.ts:279`), which replaces centring. The display is the one nearest the mouse cursor (the default) or the primary display; with the cursor choice the bubble follows the cursor's display each time it is shown again.
+  - **Wayland (amended 2026-10-31).** The owner found on Pop!_OS COSMIC that the windows ignored the chosen corner ("Nao esta mudando as posicoes"). Electron 45 runs there as a native Wayland client, where the compositor ignores `setPosition` and always-on-top; started with `--ozone-platform=x11` it runs through XWayland, where both hold on COSMIC. So on Linux, in a Wayland session (`XDG_SESSION_TYPE=wayland` or `WAYLAND_DISPLAY` set) that also has XWayland (`DISPLAY` set), Scout starts itself once more with `--ozone-platform=x11` added to its arguments, before anything else starts (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:87`): it spawns the target detached with its stdio ignored and, once the child has started, logs that it does and exits (`ui/packages/main/src/shell/x11-relaunch.ts:41`). A spawn that fails, such as a stale `APPIMAGE` path or a permission error, is logged as a warning and Scout carries on as a native Wayland client. A packaged app starts the AppImage from `APPIMAGE` when set, otherwise the running executable, because the AppImage's mount disappears when the first process exits; outside a packaged app an inherited `APPIMAGE` belongs to another program and is ignored. It never restarts when an ozone platform is already on the command line, so it cannot loop. Electron's `app.relaunch` was measured not to come back when its target is the AppImage (the first process exited and no second one appeared), so Scout spawns the new process itself, as electron-updater does for AppImages. `place` positions both windows on Wayland too (`ui/packages/main/src/quick-ask/quick-ask.ts:279`), so corner placement and always-on-top go through XWayland. Measured on COSMIC under X11, its window manager ("Smithay X WM") places every window it manages at its own spot, ignores `setPosition`, `setBounds` and always-on-top, and draws a frame even with `frame: false`, whatever the window type; it does not manage a window created with `focusable: false`, which keeps its position and stays above managed windows, as the bubble does. Measured on the owner's COSMIC session, a window that is unmanaged keeps the corner but never receives keyboard focus: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager for it, which ignores a window it does not manage. Such a window cannot be typed into, never blurs and so never hides, and with the bubble hidden nothing closed it ("nao estou conseguindo escrever no chat do botao que criamos, e tambem nao consigo fechalo"). So the quick-ask window is created focusable on every platform (`ui/packages/main/src/quick-ask/quick-ask.ts:343`): on COSMIC the window manager places and frames it, so the chosen corner holds only for the bubble there, while typing, Escape, the blur that hides it and the frame's close button work. Closing it that way destroys the window, so a `closed` handler shows the bubble again (`ui/packages/main/src/quick-ask/quick-ask.ts:360`). A session without XWayland (no `DISPLAY`) stays native Wayland, because forcing X11 there stops Electron with "Missing X server or $DISPLAY", and the compositor places the windows. Appending the switch from main at runtime instead was measured not to change the browser process's platform and made the GPU process crash, hence the restart. `globalShortcut` does not work under XWayland either, so on Linux with `XDG_SESSION_TYPE=wayland` or `WAYLAND_DISPLAY` set (`ui/packages/main/src/quick-ask/quick-ask.ts:227`) the shortcut status carries the hint "Your desktop (Wayland) does not let apps register global shortcuts. Add a custom shortcut in your system settings that runs: <command>" (`:33`, `:411`), where the command is the AppImage path from `APPIMAGE`, or the running executable, followed by `--ask`, in double quotes when the path holds a space (`:408`), with `registered` set to what `globalShortcut.register` returned.
+  - **macOS.** Both windows join every Space and stay above full-screen apps: `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`, with the `screen-saver` level for the bubble and `floating` for the quick-ask window (`:268`).
+  - **`--ask`.** `ASK_ARG` (`ui/packages/main/src/shell/login-item.ts:96`) opens quick ask: a second launch with it calls `onAsk` instead of showing the main window (`ui/packages/main/src/shell/app-lifecycle.ts:110`), and a first launch with it opens quick ask from `launchWindow`: at once for a hidden launch, otherwise when the main window emits `show` (`:65`, `:66`), so showing the main window does not take the focus from quick ask and hide it. That is the command a Wayland owner binds to a system shortcut.
+  - **Settings key.** The choice is stored as JSON `{ enabled, corner, display }` under the main-only vault key `quick-ask.bubble` (`ui/packages/main/src/vault/safe-storage-vault.ts:18`), default `{ enabled: true, corner: "bottom-right", display: "cursor" }` (`ui/packages/main/src/quick-ask/quick-ask.ts:35`). An unreadable or malformed stored value falls back to the default with a warning (`:372`). `scout:local.getBubble` returns it and `scout:local.setBubble` validates the three fields (anything else fails with `quick-ask/invalid-bubble`), stores it, and applies it: off destroys the bubble, on creates it if missing, and a new corner or display moves it (`:419`). Settings, "Floating button and quick ask", has the "Show the floating button" switch, four corner buttons and the "Display with the mouse cursor" or "Primary display" choice (`ui/packages/renderer/src/app/wizard/settings/settings.component.ts:107`, `:422`), and shows the Wayland hint under the shortcut (`:177`). It is not a secret.
+- **No chat platform needed.** With neither Discord nor Slack connected, `buildEnv` no longer refuses: the worker starts with only the local adapter. A new owner can pick "Skip for now — use Scout from this computer" on the welcome screen (`ui/packages/renderer/src/app/wizard/welcome/welcome.component.ts:195`). That choice is kept as `scout:local-only` in `localStorage`, counts as provisioned in `WizardStore` (`ui/packages/renderer/src/app/core/wizard.store.ts:71`), starts the worker and opens the Chat screen. `Scout.Host.Console` builds and runs with Local as its only adapter.
+- **Enabled by the desktop.** `buildEnv` sets `SCOUT__ADAPTERS__LOCAL__ENABLED=true` (`ui/packages/main/src/worker/build-env.ts:48`), and the host registers the adapter only when `Scout:Adapters:Local:Enabled` is true (`src/Scout.Adapter.Local/LocalServiceCollectionExtensions.cs:23`).
+- **Chat screen in the main window (amended 2026-10-30).** On Pop!_OS with COSMIC on Wayland the global shortcut does not fire and the tray may not show, so the owner had no way to reach Scout from the machine. The owner asked: "if I set up none of the three, shouldn't it show a chat so I can talk to Scout directly on the machine?".
+  - The main window has a Chat screen, route `chat`, first in the sidebar (`ui/packages/renderer/src/app/shell/post-connect-shell.component.ts:15`). It uses the same `scout:local.*` channels as the quick-ask window and shows the same conversation (see Shared conversation); the worker is unchanged.
+  - Enter sends, Shift+Enter adds a line, and holding the microphone button sends the same WAV voice request as quick ask. The reply streams in as plain text and opens with the `> (voice) ` quote for a voice question.
+  - One question runs at a time. Stop sends `cancel` for it, and the turn ends with the worker's "Cancelled." `fail`.
+  - With no running worker, the turn shows "Scout is not running. Start it from the tray or the app." as its reply, and, for that `local/not-running` refusal only, a Start Scout button that calls `scout:worker.start` once (`ui/packages/renderer/src/app/chat/chat.component.ts:249`); Send works again as soon as the worker runs. A refusal that never became a turn, such as a question over 4,000 characters, shows on the error line instead.
+  - The conversation is the one main holds (see Shared conversation). It survives moving to another screen and back, and Clear empties it for both windows. Clear empties only that history: the worker's memory for the `local` channel keeps the earlier turns until it expires or the worker restarts, so the next question can still draw on them; resetting it on Clear is a followup in [[pages/roadmap/followups]]. It is never written to disk and is gone when the app quits. The worker's short-term memory for the `local` channel is shared with quick ask, as before.
+  - Landing: when the owner chose "use Scout from this computer" and has connected neither Discord nor Slack, the app opens on Chat once per launch, after the welcome screen has started the worker (`ui/packages/renderer/src/app/core/wizard.store.ts:84`, `ui/packages/renderer/src/app/wizard/welcome/welcome.component.ts:221`). A later visit to the welcome screen stays there, so Discord or Slack can still be set up. With Discord or Slack connected, the landing is unchanged.
+- **Shared conversation (amended 2026-10-31).** After testing the AppImage the owner asked that the two windows show one conversation: "o que esta num chat tem que mostrar no outro ... caso va no outro tem que ver tudo que esta escrito", and that the quick-ask window keep earlier questions on screen ("se eu escrevo um teste nao esta mostrando o que escrevi anteriormente").
+  - Main holds the conversation as a list of `LocalTurn` (`ui/packages/shared/src/ipc-contract.ts:585`): id, question, reply so far, citations, `running`, `done` or `failed`, and `notRunning` for a `local/not-running` refusal. Each accepted `scout:local.ask` appends a turn with the question text, or "(voice message)" for a recording, before the stdin line is written (`ui/packages/main/src/quick-ask/quick-ask.ts:467`); worker events reshape the running turn: `update` sets the reply, `complete` sets reply, citations and `done`, `fail` sets the reply and `failed`. A refused write marks the turn failed with `notRunning` and the refusal is still returned. An id already in the list is refused.
+  - Every change sends the whole list on `scout:local.turns` to every open window (`:240`); `scout:local.getTurns` returns it, and `scout:local.clearTurns` empties it unless a turn is running (`:497`). The list keeps the last 200 turns in memory, never on disk.
+  - Both windows read it through one root `LocalConversation` store (`ui/packages/renderer/src/app/core/local-conversation.ts:13`) that loads the list on start, then follows the pushes. The quick-ask window shows every turn, the question then the reply, with the newest scrolled into view; asking while a turn runs still cancels it first (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:286`). Because the conversation is shared, that cancels a question running from the Chat screen too: one question at a time, whichever window asked it.
+  - The owner's request to see what Scout heard as the voice turn's question ("deveria mostrar o que falei") is deferred: it needs a `heard` event from the worker, a followup in [[pages/roadmap/followups]]. Until then the question stays "(voice message)", and the transcript shows only as the reply's opening `> (voice) ` quote, which the worker already wrote and the windows already displayed before this amendment.
+  - The renderer still talks to main only over IPC; the conversation lives in main and no renderer reads another's state.
+- **Classification.** The reply is a descriptive write to the originating channel, the quick-ask window and the Chat screen of the owner who asked ([[pages/decisions/0009-descriptive-vs-executive-writes]]). The microphone capture and the stdin line are reads the owner starts on their own machine. The shortcut and the floating button settings are Scout's own configuration, and placing the two windows moves only Scout's own windows; no new call leaves the process. The adapter adds no LLM-invocable function, no plugin operation and no control-plane command.
+
+## Consequences
+
+- **Better:**
+  - The owner asks Scout from anywhere on the desktop, by typing or talking, without a chat platform or a bot.
+  - Recordings stay in memory and on the machine.
+  - No port is opened, so nothing else on the machine can reach the assistant.
+  - Quick-ask replies never land in the logs or the diagnostics bundle.
+- **Worse:**
+  - The quick-ask path trusts whoever holds the worker's stdin. That is the desktop app today, and anyone who runs the worker binary by hand in a terminal with `Scout:Adapters:Local:Enabled=true`, who is already on the machine as the owner.
+  - A hidden quick-ask window and the floating button window are open windows, so closing the main window never fires `window-all-closed` while either exists. Neither keeps Scout alive: with keep running off, `onWindowClose` quits explicitly on Linux and Windows (`ui/packages/main/src/shell/app-lifecycle.ts:121`), and with keep running on the main window only hides, as before ([[pages/decisions/0027-desktop-presence]]).
+  - On Wayland with XWayland, Scout starts twice: the first process only relaunches itself with `--ozone-platform=x11`. The global shortcut still needs the system binding. On COSMIC the quick-ask window is managed by the window manager, so it opens where COSMIC places it, with a frame, not in the chosen corner; only the bubble keeps the corner there. Without XWayland the compositor still decides where the floating button and the quick-ask window appear and whether always-on-top holds; the corner and display choice have no effect there.
+  - The floating button cannot be dragged and does not follow a display being added or removed; both are followups in [[pages/roadmap/followups]].
+  - Cumulative `update` events resend the whole reply each time, which is quadratic in the reply length (capped at 32,000 characters by the sink).
+- **Neutral but noteworthy:**
+  - Space records only while the question box is empty, so typing a space in a question still works.
+  - The renderer uses a `ScriptProcessorNode`, because the CSP `script-src 'self'` blocks the blob-URL module an `AudioWorklet` would need; its output is muted, never played.
+
+## Alternatives considered
+
+- **A local HTTP or WebSocket port on the worker.** Opens a port that any process on the machine can reach, and needs an authentication token. stdio is private to the parent.
+- **The gRPC control plane over the Unix socket ([[pages/decisions/0011-backend-frontend-grpc-uds]]).** It is served by `Scout.Host.ControlPlane`, not by the chat worker that holds the conductor. Routing chat through it would join the two hosts.
+- **A platform user id for the owner on the allow-list.** It would reuse the list but make trust depend on a string any chat platform could send; the flag can only come from the stdin transport.
+- **Recording in main, or an `AudioWorklet` in the renderer.** Main has no media capture API, and the CSP blocks a worklet module from a blob URL.
+- **Status quo.** The owner keeps opening Discord or Slack to ask Scout.
+
+## Enforcement
+
+- `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs`:
+  - Event order, the escaped `\nSCOUT_PAIRED=999` reply, malformed, oversized and refused lines, cancel and duplicate ids.
+  - The audio request, end of file and a stdin read failure.
+  - stdout write failures, both on a refusal and during a reply.
+  - Registration gated on `Enabled`.
+- `tests/Scout.Conversation.Tests/ConversationConductorLocalOwnerTests.cs`, and the `IsLocalOwner` assertions in the Discord, Slack and Teams translator tests.
+- `tests/Scout.Transcription.Whisper.Tests/WhisperWavTranscriptionTests.cs`.
+- `tests/Scout.Host.Console.Tests/HostLocalCompositionTests.cs`.
+- `ui/packages/main/test/x11-relaunch.test.ts` (when Scout relaunches through XWayland, and never twice).
+- `ui/packages/main/test/quick-ask.test.ts` (the shared conversation block covers the turns, the broadcast to every window, get, clear and the 200-turn cap; the floating button block covers the bubble window, the corner and display placement, Wayland, macOS, the stored and invalid settings), `ui/packages/main/test/placement.test.ts`, the `--ask` tests in `ui/packages/main/test/shell-app-lifecycle.test.ts`, the quick-ask blocks in `worker-supervisor.test.ts` and `worker-log-stream.test.ts`, the quick-ask block in `worker-build-env.test.ts`, the macOS microphone test in `packaging-config.test.ts`, and `ui/packages/preload/test/build-bridge.test.ts`.
+- `ui/packages/renderer/src/app/quick-ask/quick-ask.component.spec.ts`, `wav-recorder.spec.ts`, `ui/packages/renderer/src/app/floating-button/floating-button.component.spec.ts`, the floating button route and shell tests in `app.routes.spec.ts`, and the shortcut and floating button blocks in `settings.component.spec.ts`.
+- `ui/packages/renderer/src/app/chat/chat.component.spec.ts`, the landing tests in `wizard.store.spec.ts` and `welcome.component.spec.ts`, and the nav order in `post-connect-shell.component.spec.ts`.
+- Invariants: [[pages/invariants/no-executive-writes]], [[pages/invariants/pluggable-boundaries]], [[pages/invariants/secrets-never-in-source]].
+
+## Related
+
+- Services affected: [[pages/services/adapter-local]], [[pages/services/conversation]], [[pages/services/transcription-whisper]], [[pages/services/host-console]], [[pages/services/desktop-ui]]
+- Related decisions: [[pages/decisions/0021-allowed-users]], [[pages/decisions/0024-voice-messages-transcribed-locally]], [[pages/decisions/0013-conversation-core-streaming-sink]], [[pages/decisions/0011-backend-frontend-grpc-uds]], [[pages/decisions/0009-descriptive-vs-executive-writes]]
+
+## Notes
+
+Out of scope: the tray, keep-running and autostart, which belong to the parallel work, whose tray menu calls `openQuickAsk()`. Also out of scope: spoken replies.

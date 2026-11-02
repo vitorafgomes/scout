@@ -33,8 +33,8 @@ var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 });
 
 // Keep stdout clean: replace the default console logger with one that writes
-// everything to stderr, so the SCOUT_READY marker is the only thing the
-// supervisor ever parses on stdout.
+// everything to stderr, so the SCOUT_READY, SCOUT_PAIRED= and SCOUT_LOCAL markers
+// are the only lines the supervisor ever parses on stdout.
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
@@ -55,6 +55,10 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["Scout:Adapters:Slack:BotTo
 if (!string.IsNullOrWhiteSpace(builder.Configuration["Scout:Adapters:Teams:AppId"]))
 {
     configuredAdapters.Add("Teams");
+}
+if (string.Equals(builder.Configuration["Scout:Adapters:Local:Enabled"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    configuredAdapters.Add("Local");
 }
 
 WriteMarker($"env={builder.Environment.EnvironmentName} adapters configured: " +

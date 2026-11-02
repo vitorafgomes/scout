@@ -14,19 +14,7 @@ import { ScoutBridgeService } from '../../core/scout-bridge';
 import { LlmConfigStore } from '../../core/llm-config.store';
 import { LogStore } from '../../core/log.store';
 import { WizardStore } from '../../core/wizard.store';
-
-function formatUptime(startedAt: string | undefined): string {
-  if (startedAt === undefined) return '—';
-  const ms = Date.now() - new Date(startedAt).getTime();
-  if (ms < 0) return '0s';
-  const totalSeconds = Math.floor(ms / 1000);
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
+import { formatUptime } from '../../core/uptime';
 
 @Component({
   selector: 'sc-ready',

@@ -8,6 +8,7 @@ const ALLOWED_HOSTS = new Set([
   'discordapp.com',
   'support-dev.discord.com',
   'github.com',
+  'api.slack.com',
 ]);
 
 function isAllowedUrl(raw: string): { ok: true; url: URL } | { ok: false; reason: string } {

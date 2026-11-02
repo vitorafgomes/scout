@@ -55,3 +55,15 @@ internal sealed class StdinEofParentLivenessProbe : IParentLivenessProbe
         cancellationToken.ThrowIfCancellationRequested();
     }
 }
+
+/// <summary>
+/// Detects parent death through another reader of the stdin pipe: completes when
+/// the task <paramref name="inputClosed"/> returns completes, which the local
+/// adapter does on end of file or a read failure. Used when that adapter owns stdin,
+/// because two readers would split its bytes.
+/// </summary>
+internal sealed class InputClosedParentLivenessProbe(Func<Task> inputClosed) : IParentLivenessProbe
+{
+    public Task WaitForParentExitAsync(CancellationToken cancellationToken)
+        => inputClosed().WaitAsync(cancellationToken);
+}

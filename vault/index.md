@@ -6,7 +6,7 @@ changes: "Added the Desktop UI service page and the control-plane client initiat
 page_type: index
 status: active
 description: "Content catalogue for the Scout LLM wiki."
-updated: 2026-10-23
+updated: 2026-10-30
 source:
   - chat
   - obsidian-vault/scout (technical notes migrated 2026-10-21)
@@ -60,12 +60,13 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Services (one per src project)
 
-- [[pages/services/adapter-discord|Adapter.Discord]] - Discord chat adapter: receives mentions and direct messages over the gateway, and streams the reply by posting then editing one embed.
+- [[pages/services/adapter-discord|Adapter.Discord]] - Discord chat adapter: receives mentions, direct messages and voice messages, opens a thread per conversation in server channels, and streams the reply into embeds that continue across messages.
 - [[pages/services/adapter-slack|Adapter.Slack]] - Slack chat adapter over Socket Mode: filters bot traffic, streams the reply by posting then updating one message.
+- [[pages/services/adapter-local|Adapter.Local]] - Local adapter for the desktop's quick-ask window: reads JSON requests from the worker's stdin and streams the reply as SCOUT_LOCAL lines on stdout, as the trusted local owner.
 - [[pages/services/adapter-teams|Adapter.Teams]] - Microsoft Teams adapter: the Bot Framework turn handler, translator and streaming sink; the inbound webhook is deliberately not wired in this repository.
 - [[pages/services/control-plane-contracts|ControlPlane.Contracts]] - The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs.
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
-- [[pages/services/desktop-ui|Desktop UI]] - Electron app: onboards a Discord bot, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, manages local models from Node.
+- [[pages/services/desktop-ui|Desktop UI]] - Electron app: sets up a Discord bot from its token or a Slack app from a manifest, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, stays in the tray and can start at login, manages local models from Node.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
 - [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub and Kubernetes plugins, runs the adapters, or runs a one-shot project index.
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.
@@ -73,6 +74,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/llm|Llm]] - Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout.
 - [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; authenticates from a token or the desktop's token file, self-gates off when neither is set.
 - [[pages/services/plugin-kubernetes|Plugin.Kubernetes]] - Read-only Kubernetes plugin: six GET-only Semantic Kernel functions over the owner's kubeconfig, only for the contexts the owner allowed; self-gates off without a path and a context.
+- [[pages/services/transcription-whisper|Transcription.Whisper]] - Transcribes Discord voice messages and quick-ask WAV recordings on this machine with a local Whisper model; registered only when the model file exists.
 - [[pages/services/skills|Skills]] - Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools.
 
 ## Invariants
@@ -104,7 +106,12 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0018-chatgpt-plan-sign-in|ADR 0018 - ChatGPT plan through Sign in with ChatGPT]] - The ChatGPT Plus card signs in through the browser; the worker answers through the Responses API inside Semantic Kernel.
 - [[pages/decisions/0019-github-app-device-flow|ADR 0019 - GitHub through a read-only GitHub App and the device flow]] - Connect with GitHub through a read-only App and the device flow, or paste a token (warned when it can write); one credential at a time, held by main.
 - [[pages/decisions/0020-kubernetes-from-local-kubeconfig|ADR 0020 - Kubernetes from the kubeconfig on this computer, with consent per context]] - Scout reads the owner's kubeconfig in place for the contexts the owner ticks, GET only, with no logs, secrets, exec or watch.
-- [[pages/decisions/0021-allowed-users|ADR 0021 - Only allowed users can use Scout once an owner credential is connected]] - The conductor answers only the user ids listed in Settings; an empty list refuses everyone while GitHub, Kubernetes or the ChatGPT plan is connected and answers everyone otherwise.
+- [[pages/decisions/0021-allowed-users|ADR 0021 - Only allowed users can use Scout once an owner credential is connected]] - The conductor answers only the user ids listed in Settings; an empty list refuses everyone while GitHub, Kubernetes or the ChatGPT plan is connected and answers everyone otherwise; the owner can pair from chat with a one-time code in a direct message.
+- [[pages/decisions/0022-discord-setup-from-the-bot-token|ADR 0022 - Discord setup from the bot token]] - The wizard sets up the Discord bot from the pasted token: reads the app, turns on Message Content, invites without OAuth.
+- [[pages/decisions/0023-slack-setup-from-a-manifest|ADR 0023 - Slack is set up from a prefilled app manifest and two pasted tokens]] - The desktop opens Slack's app creation flow with Scout's Socket Mode manifest; main checks the pasted bot and app-level tokens with Slack, keeps them in main-only keys and passes them to the worker.
+- [[pages/decisions/0024-voice-messages-transcribed-locally|ADR 0024 - Voice messages are transcribed locally, after the allow-list]] - A Discord voice message is downloaded and transcribed by a local Whisper model only for an allowed sender, within 25 MB and 5 minutes, and answered with a quote of what was heard.
+- [[pages/decisions/0027-desktop-presence|ADR 0027 - Scout stays resident on the desktop: tray, keep running, start at login, notifications]] - Closing the window hides Scout to the tray and the worker keeps running; start at login with --hidden; three native notifications; no tray means the old quit-on-close.
+- [[pages/decisions/0028-local-quick-ask-assistant|ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio]] - A global shortcut opens a small window to type or hold Space to talk; main writes JSON lines to the worker's stdin and reads SCOUT_LOCAL lines from stdout, and the local owner skips the allow-list.
 
 ## Domain
 

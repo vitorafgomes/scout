@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Access;
 using Scout.Conversation.Memory;
@@ -33,6 +34,7 @@ public static class ConversationServiceCollectionExtensions
         services.Configure<AccessOptions>(configuration.GetSection(AccessOptions.ConfigSection));
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(sp => new AccessPolicy(sp.GetRequiredService<IOptions<AccessOptions>>().Value));
         services.TryAddSingleton<IConversationKeyProvider, ConversationKeyProvider>();
         services.TryAddSingleton<IConversationMemoryStore, InMemoryConversationMemoryStore>();
         services.TryAddSingleton(sp => new StreamPumpOptions
@@ -47,7 +49,14 @@ public static class ConversationServiceCollectionExtensions
         services.TryAddSingleton<ISkillSelector, NoOpSkillSelector>();
 
         services.TryAddSingleton<IConversationRouter, LlmStreamingRouter>();
-        services.TryAddSingleton<ConversationConductor>();
+        services.TryAddSingleton(sp => new ConversationConductor(
+            sp.GetRequiredService<IConversationRouter>(),
+            sp.GetRequiredService<StreamPump>(),
+            sp.GetService<ILogger<ConversationConductor>>(),
+            sp.GetRequiredService<AccessPolicy>(),
+            sp.GetService<IAudioTranscriber>(),
+            sp.GetService<IPairingSignal>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         return services;
     }

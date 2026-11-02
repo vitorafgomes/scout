@@ -10,7 +10,13 @@ export type MainOnlyVaultKey =
   | 'github.session'
   | 'github.token'
   | 'kubernetes.selection'
-  | 'access.allowed-users';
+  | 'access.allowed-users'
+  | 'slack.connection'
+  | 'app.keep-running'
+  | 'app.tray-notice-shown'
+  | 'quick-ask.shortcut'
+  | 'quick-ask.bubble'
+  | 'quick-ask.window';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 

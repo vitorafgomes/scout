@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Access;
 
 namespace Scout.Adapter.Discord;
 
@@ -33,6 +35,7 @@ public static class DiscordServiceCollectionExtensions
         }
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(sp => new AccessPolicy(sp.GetRequiredService<IOptions<AccessOptions>>().Value));
         services.AddSingleton<DiscordMessageTranslator>();
         services.AddSingleton<DiscordChatAdapter>();
         services.AddSingleton<IChatAdapter>(sp => sp.GetRequiredService<DiscordChatAdapter>());

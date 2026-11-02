@@ -24,6 +24,12 @@ export interface SupervisorDeps {
   readinessTimeoutMs?: number;
   stopTimeoutMs?: number;
   restartPolicy?: RestartPolicy;
+  /** Called with the user id of each `SCOUT_PAIRED=` line the worker prints on stdout. */
+  onPaired?: (userId: string) => void;
+  /** Called when the worker prints `SCOUT_PAIRING_BURNED`: its pairing code is no longer accepted. */
+  onPairingBurned?: () => void;
+  /** Called with the JSON of each `SCOUT_LOCAL ` line the worker prints on stdout. */
+  onLocalEvent?: (json: string) => void;
 }
 
 export interface Supervisor {
@@ -33,6 +39,11 @@ export interface Supervisor {
   stop(): Promise<{ exitCode: number | null }>;
   onEvent(listener: (e: WorkerEvent) => void): () => void;
   getSnapshot(): readonly WorkerEvent[];
+  /**
+   * Writes one line to the running worker's stdin. Returns false when no worker is
+   * running; `onError` gets a write that fails after it was queued (a closed pipe).
+   */
+  writeStdin(line: string, onError: (err: Error) => void): boolean;
 }
 
 const DEFAULT_POLICY: RestartPolicy = {
@@ -58,6 +69,7 @@ function makeStatus(
   pid?: number,
   startedAt?: string,
   lastExitCode?: number,
+  gaveUp?: true,
 ): WorkerStatus {
   // Collect only the defined optional fields in a plain object, then cast
   // once to WorkerStatus. The cast is safe because every required field
@@ -67,6 +79,7 @@ function makeStatus(
   if (pid !== undefined) optional['pid'] = pid;
   if (startedAt !== undefined) optional['startedAt'] = startedAt;
   if (lastExitCode !== undefined) optional['lastExitCode'] = lastExitCode;
+  if (gaveUp !== undefined) optional['gaveUp'] = gaveUp;
   return { state, restarts, ...optional } as unknown as WorkerStatus;
 }
 
@@ -93,6 +106,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
   let failureTimes: number[] = [];
   let restartCount = 0;
+  let restartTimer: ReturnType<typeof setTimeout> | null = null;
 
   function emit(event: WorkerEvent): void {
     if (event.kind !== 'state') {
@@ -113,6 +127,21 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
   function transition(next: WorkerStatus): void {
     _status = next;
     emit({ kind: 'state', status: next });
+  }
+
+  /** Crashed; final when no child is left to exit and no restart is scheduled. */
+  function crashed(): void {
+    const final = _child === null && restartTimer === null;
+    transition(
+      makeStatus(
+        'crashed',
+        restartCount,
+        undefined,
+        _startedAt,
+        undefined,
+        final ? true : undefined,
+      ),
+    );
   }
 
   function kill(child: ChildProcess, signal: NodeJS.Signals | 'SIGKILL'): void {
@@ -137,7 +166,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         failures: failureTimes.length,
         window: restartPolicy.windowMs,
       });
-      transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+      crashed();
       return;
     }
 
@@ -153,10 +182,12 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
     transition(makeStatus('starting', restartCount, undefined, _startedAt));
 
-    setTimeout(() => {
+    restartTimer = setTimeout(() => {
+      restartTimer = null;
       void doStart().catch((err: unknown) => {
+        if (_status.state === 'stopped') return;
         logger.error('supervisor: restart attempt failed', err);
-        transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+        crashed();
       });
     }, delay);
   }
@@ -171,13 +202,17 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     }
 
     const extraEnv = await buildEnv();
+    if (_status.state === 'stopped') {
+      throw new Error('worker/stopped: stop requested before the worker was spawned');
+    }
     // env is intentionally not logged — it contains secrets.
     // SCOUT__PARENT_WATCHDOG=1 makes the host self-terminate on stdin EOF, so it
     // cannot orphan if this supervisor dies ungracefully (crash / SIGKILL).
     const childEnv = { ...process.env, ...extraEnv, SCOUT__PARENT_WATCHDOG: '1' };
 
     // stdin is a pipe (not 'ignore') so the host's parent-death watchdog gets
-    // EOF when we die. We keep the write end open and never write to it.
+    // EOF when we die. We keep the write end open; quick-ask requests are the
+    // only lines written to it (writeStdin).
     const child = spawn(binaryPath, [], {
       env: childEnv,
       cwd: path.dirname(binaryPath),
@@ -187,9 +222,13 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     });
 
     _child = child;
+    child.stdin?.on('error', (err: Error) => {
+      logger.warn('supervisor: worker stdin closed', { error: err.message });
+    });
 
     if (child.pid == null) {
-      transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+      _child = null;
+      crashed();
       throw new Error('worker/spawn-failed: child process has no PID after spawn');
     }
 
@@ -204,7 +243,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         settled = true;
         logger.error('supervisor: readiness timeout', undefined, { readinessTimeoutMs });
         kill(child, 'SIGKILL');
-        transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+        crashed();
         reject(new Error('worker/readiness-timeout: SCOUT_READY not received within timeout'));
       }, readinessTimeoutMs);
 
@@ -212,6 +251,9 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         emit,
         ringBuffer,
         ringLimit,
+        onPaired: (userId) => deps.onPaired?.(userId),
+        onPairingBurned: () => deps.onPairingBurned?.(),
+        onLocalEvent: (json) => deps.onLocalEvent?.(json),
         onHttpEndpoint(endpoint) {
           _httpEndpoint = endpoint;
           logger.info('supervisor: worker http endpoint registered', { endpoint });
@@ -231,11 +273,12 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         settled = true;
         clearTimeout(readinessTimer);
         logger.error('supervisor: child process error', err);
-        transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+        crashed();
         reject(err);
       });
 
       child.once('exit', (code, signal) => {
+        if (_child === child) _child = null;
         _httpEndpoint = null;
         emit({ kind: 'exit', code, signal });
         logger.info('supervisor: worker exited', {
@@ -246,7 +289,7 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
         if (!settled) {
           settled = true;
           clearTimeout(readinessTimer);
-          transition(makeStatus('crashed', restartCount, undefined, _startedAt));
+          if (_status.state !== 'stopped') crashed();
           reject(new Error(`worker exited before SCOUT_READY (code=${String(code)})`));
           return;
         }
@@ -282,6 +325,10 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     },
 
     async stop(): Promise<{ exitCode: number | null }> {
+      if (restartTimer !== null) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
       const child = _child;
       if (child == null || _status.state === 'stopped' || _status.state === 'idle') {
         transition(makeStatus('stopped', restartCount, undefined, _startedAt));
@@ -314,6 +361,19 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
 
     getSnapshot(): readonly WorkerEvent[] {
       return [...ringBuffer];
+    },
+
+    writeStdin(line: string, onError: (err: Error) => void): boolean {
+      const stdin = _child?.stdin;
+      if (_status.state !== 'running' || stdin == null || !stdin.writable) return false;
+      try {
+        stdin.write(line + '\n', (err) => {
+          if (err != null) onError(err);
+        });
+        return true;
+      } catch {
+        return false;
+      }
     },
   };
 }
