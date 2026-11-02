@@ -85,9 +85,9 @@ bun run dist:win      # NSIS installer, x64
 ```
 
 AppImage is always produced on Linux builds — this is a release
-invariant. All artifacts are **UNSIGNED** in this repo; do not
-distribute them as official releases until signing and notarisation
-are set up.
+invariant. All artifacts are **UNSIGNED**: the release workflow
+(`.github/workflows/release.yml`) publishes them on a `v*` tag and the
+project site says so until signing and notarisation are set up.
 
 ## CI
 

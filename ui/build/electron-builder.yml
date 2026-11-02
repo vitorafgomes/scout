@@ -1,10 +1,10 @@
 # Icons under build/icons/ are placeholders; replace with final Scout logo before 1.0.
-# Builds are UNSIGNED — do not distribute as official releases without code signing.
+# Builds are UNSIGNED; the release workflow publishes them and the project site says so.
 
 appId: com.scout.desktop
 productName: Scout Desktop
 copyright: Scout OSS contributors
-artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+artifactName: Scout-Desktop-${version}-${os}-${arch}.${ext}
 electronVersion: "45.0.0"
 
 extraMetadata:

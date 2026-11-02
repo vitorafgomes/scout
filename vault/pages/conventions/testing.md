@@ -1,13 +1,13 @@
 ---
 title: "Testing"
-version: "1.6"
+version: "1.7"
 date: 2026-10-21
 updated: 2026-11-02
-changes: "Test titles never carry large fixtures; ui job timeout"
+changes: "The project site's tests run in the ui workflow (bun test ./docs)"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
-source: ["Directory.Build.props", "Directory.Packages.props", ".github/workflows/ci.yml", ".github/workflows/ui-ci.yml", "tests/", "ui/package.json", "scripts/check-diagnostics.sh"]
+source: ["Directory.Build.props", "Directory.Packages.props", ".github/workflows/ci.yml", ".github/workflows/ui-ci.yml", "tests/", "ui/package.json", "scripts/check-diagnostics.sh", "docs/site.test.js"]
 reliability: high
 ---
 
@@ -90,14 +90,15 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 ## UI tests
 
-`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, build the control-plane host, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:80` to `:119`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
+`.github/workflows/ui-ci.yml` runs on three operating systems: `bun install --frozen-lockfile`, lint, typecheck, build the control-plane host, `bun run test`, publish the worker binary, package the app (`.github/workflows/ui-ci.yml:87` to `:126`). The prettier check (`bun run format`) runs on the Linux leg only, because Windows checkouts convert to CRLF and `ui/.prettierrc.json` requires LF.
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
 - 81 spec or test files: 43 in `ui/packages/main/test`, 4 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 33 in `ui/packages/renderer/src/app` (counted 2026-10-30).
-- On GitHub Actions Bun prints every test title. A title that interpolates its data (`%p`, `%o`, `%j`) with a large fixture makes a log line the runner's problem matchers cannot regex-match, and the job hangs until `timeout-minutes` (20, `.github/workflows/ui-ci.yml:32`) ends it. An `it.each` with a large fixture carries a short label as its first column and puts only that label in the title (`ui/packages/main/test/quick-ask.test.ts:338`). Measured 2026-11-02: one 14,000,004-character title stalled all three runners for an hour.
+- On GitHub Actions Bun prints every test title. A title that interpolates its data (`%p`, `%o`, `%j`) with a large fixture makes a log line the runner's problem matchers cannot regex-match, and the job hangs until `timeout-minutes` (20, `.github/workflows/ui-ci.yml:34`) ends it. An `it.each` with a large fixture carries a short label as its first column and puts only that label in the title (`ui/packages/main/test/quick-ask.test.ts:338`). Measured 2026-11-02: one 14,000,004-character title stalled all three runners for an hour.
+- The project site under `docs/` has one test file, `docs/site.test.js`, run with `bun test ./docs` from the repository root. It covers the one HTTP call (`fetchLatestRelease`, with an injected `fetch`: 403, 404 and a network failure yield `null`) and the pure functions in `docs/site.js`: detecting the visitor's platform, sorting a release's assets per platform and ignoring blockmaps, `latest*.yml` and checksums, the size label, and the model with and without a release. The `Test (site)` step runs it right after `Setup Node` on all three legs, before `bun install` (`.github/workflows/ui-ci.yml:64`); it needs no install, because the module imports nothing. The DOM part of `docs/site.js` has no test. [[pages/decisions/0029-project-site-and-releases]]
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
-- The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:18` to `:21`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow.
-- The `Build control-plane host` step (`.github/workflows/ui-ci.yml:100`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.
+- The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:19` to `:22`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow; `docs/**` (`:14`, `:25`) triggers it for the project site.
+- The `Build control-plane host` step (`.github/workflows/ui-ci.yml:107`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.
 
 ## Related
 
