@@ -1,11 +1,15 @@
 import {
   CLOUD_API_KEY_VAULT_KEYS,
   VaultUnavailableError,
+  serializeError,
   type AccessPairing,
   type CloudLlmProvider,
   type KubernetesLabelledContext,
   type VaultKey,
 } from '@scout/shared';
+import type { ControlPlaneClient } from '../control-plane/client.js';
+import type { WorkerGateAccess } from '../control-plane/launcher.js';
+import type { Logger } from '../util/logger.js';
 
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
@@ -17,6 +21,10 @@ export interface BuildEnvDeps {
   pairing?: AccessPairing | null;
   slackTokens?: SlackTokens | null;
   whisperModelPath?: string | null;
+  /** Ids of the features whose writes the owner granted; the worker's guard allows writes only for these. */
+  grantedWriteFeatures?: readonly string[];
+  /** The control plane's write gate for the worker; null while the control plane is not launched. */
+  workerGate?: WorkerGateAccess | null;
 }
 
 /** The Slack bot token and app-level token the owner saved; the worker needs both. */
@@ -78,6 +86,9 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   }
 
   if (deps.whisperModelPath != null) env['SCOUT__TRANSCRIPTION__MODELPATH'] = deps.whisperModelPath;
+  env['SCOUT__FEATURES__GRANTEDWRITES'] = (deps.grantedWriteFeatures ?? []).join(',');
+  env['SCOUT__WORKERGATE__SOCKETPATH'] = deps.workerGate?.socketPath ?? '';
+  env['SCOUT__WORKERGATE__TOKEN'] = deps.workerGate?.token ?? '';
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;
@@ -112,6 +123,44 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
       return env;
     default:
       throw new Error(`llm.provider "${llmProvider}" is not supported by the desktop app`);
+  }
+}
+
+type GrantsClient = Pick<ControlPlaneClient, 'listFeatures'>;
+
+/**
+ * The ids of the features whose writes the owner granted, as the control plane reports them at worker start.
+ * A control plane still connecting is awaited for up to `waitMs`; none when it is not there, does not connect in
+ * time or does not answer, so the worker starts without writes instead of failing.
+ */
+export async function readGrantedWriteFeatures(
+  client: GrantsClient | Promise<GrantsClient> | null,
+  logger: Logger,
+  waitMs = 10_000,
+): Promise<string[]> {
+  const notConnected = 'worker starts with no write grants: the control plane is not connected yet';
+  if (client === null) {
+    logger.warn(notConnected);
+    return [];
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), waitMs);
+  });
+  try {
+    const connected = await Promise.race([Promise.resolve(client), timedOut]);
+    if (connected === null) {
+      logger.warn(notConnected);
+      return [];
+    }
+    return (await connected.listFeatures()).filter((f) => f.granted).map((f) => f.id);
+  } catch (err: unknown) {
+    logger.warn('worker starts with no write grants: the control plane did not answer', {
+      code: serializeError(err).code,
+    });
+    return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -25,7 +25,7 @@ reliability: high
 
 ## Responsibility
 
-Owns reading requests from stdin, turning each into a local-owner `ChatMessage`, cancelling a request, and writing reply events to stdout. Does not own routing, memory, transcription or the access rules ([[pages/services/conversation]]), nor the quick-ask window, the shortcut or the microphone ([[pages/services/desktop-ui]]).
+Owns reading requests from stdin, turning each into a local-owner `ChatMessage`, cancelling a request, and writing reply events to stdout. Does not own routing, memory, transcription or the access rules ([[pages/services/conversation]]), nor the quick-ask window, the shortcut or the microphone ([[pages/services/desktop-quick-ask]]).
 
 ## Public contract
 

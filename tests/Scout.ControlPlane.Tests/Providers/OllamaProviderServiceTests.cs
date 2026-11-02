@@ -245,6 +245,8 @@ public sealed class OllamaProviderServiceTests
         captured!.EnvironmentOverrides.ShouldNotBeNull();
         captured.EnvironmentOverrides!.ContainsKey(OllamaProviderService.SessionTokenEnvVarName).ShouldBeTrue();
         captured.EnvironmentOverrides[OllamaProviderService.SessionTokenEnvVarName].ShouldBeNull();
+        captured.EnvironmentOverrides.ContainsKey(OllamaProviderService.WorkerTokenEnvVarName).ShouldBeTrue();
+        captured.EnvironmentOverrides[OllamaProviderService.WorkerTokenEnvVarName].ShouldBeNull();
     }
 
     private static async IAsyncEnumerable<PullProgress> Frames(

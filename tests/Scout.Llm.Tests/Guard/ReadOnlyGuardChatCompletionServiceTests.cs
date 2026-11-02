@@ -13,9 +13,8 @@ namespace Scout.Llm.Tests.Guard;
 public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
 {
     private const string RefusalText =
-        "Scout is read-only: it can explain, summarise and draft, but it will not change code, " +
-        "infrastructure, configuration, data or accounts. If you want a change, Scout can describe " +
-        "the steps for you to apply.";
+        "Scout can act only through features the owner turned on. No feature with write permission is on; " +
+        "the owner enables one on the Features screen of the Scout app.";
 
     private readonly IChatCompletionService _inner = Substitute.For<IChatCompletionService>();
     private readonly RecordingLogger _logger = new();
@@ -23,7 +22,7 @@ public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
 
     public void Dispose() => _clients.ForEach(client => client.Dispose());
 
-    private ReadOnlyGuardChatCompletionService Guard(HttpMessageHandler handler)
+    private ReadOnlyGuardChatCompletionService Guard(HttpMessageHandler handler, params string[] grantedWrites)
     {
         var http = new HttpClient(handler, disposeHandler: false);
         _clients.Add(http);
@@ -31,6 +30,7 @@ public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
             _inner,
             new TypeSafeClient(http, Options.Create(new TypeSafeGuardOptions { ApiKey = "ts-key" })),
             threshold: 0.5,
+            grantedWrites,
             _logger);
     }
 
@@ -271,6 +271,39 @@ public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
 
         messages.ShouldHaveSingleItem().Content.ShouldBe(RefusalText);
         _inner.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Without_A_Granted_Write_Feature_A_Write_Intent_Is_Refused_Naming_The_Features_Screen()
+    {
+        using var handler = StubTypeSafeHandler.Answering(0.9);
+        InnerStreams("Uploaded.");
+
+        var chunks = await Collect(Guard(handler).GetStreamingChatMessageContentsAsync(
+            History("upload the video to my channel"), kernel: null));
+
+        chunks.ShouldHaveSingleItem().Content.ShouldBe(
+            "Scout can act only through features the owner turned on. No feature with write permission is on; " +
+            "the owner enables one on the Features screen of the Scout app.");
+        _inner.ReceivedCalls().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task With_A_Granted_Write_Feature_The_Request_Passes_Through()
+    {
+        using var handler = StubTypeSafeHandler.Answering(0.9);
+        var expected = InnerStreams("The upload ", "is queued for your approval.");
+        _inner.GetChatMessageContentsAsync(
+                Arg.Any<ChatHistory>(), Arg.Any<PromptExecutionSettings?>(), Arg.Any<Kernel?>(), Arg.Any<CancellationToken>())
+            .Returns([new ChatMessageContent(AuthorRole.Assistant, "Queued for your approval.")]);
+
+        var chunks = await Collect(Guard(handler, "youtube").GetStreamingChatMessageContentsAsync(
+            History("upload the video to my channel"), kernel: null));
+        var messages = await Guard(handler, "youtube").GetChatMessageContentsAsync(History("upload the video"));
+
+        chunks.ShouldBe(expected);
+        messages.ShouldHaveSingleItem().Content.ShouldBe("Queued for your approval.");
+        handler.Calls.ShouldBe(0);
     }
 
     private sealed class RecordingLogger : ILogger<ReadOnlyGuardChatCompletionService>

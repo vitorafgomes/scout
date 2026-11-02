@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+service WorkerGate {
+  rpc RequestWrite(RequestWriteRequest) returns (RequestWriteResponse);
+  rpc RecordWrite(RecordWriteRequest) returns (RecordWriteResponse);
+}
+
+message RequestWriteRequest {
+  string feature_id = 1;
+  string scope = 2;
+  string target = 3;
+  string summary = 4;
+}
+
+message RequestWriteResponse {
+  string decision = 1;
+  string reason = 2;
+  optional string action_id = 3;
+}
+
+message RecordWriteRequest {
+  string feature_id = 1;
+  string scope = 2;
+  string target = 3;
+  string outcome = 4;
+  optional string action_id = 5;
+}
+
+message RecordWriteResponse {}

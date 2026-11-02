@@ -208,7 +208,11 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
     // env is intentionally not logged — it contains secrets.
     // SCOUT__PARENT_WATCHDOG=1 makes the host self-terminate on stdin EOF, so it
     // cannot orphan if this supervisor dies ungracefully (crash / SIGKILL).
-    const childEnv = { ...process.env, ...extraEnv, SCOUT__PARENT_WATCHDOG: '1' };
+    const childEnv = {
+      ...workerInheritableEnv(process.env),
+      ...extraEnv,
+      SCOUT__PARENT_WATCHDOG: '1',
+    };
 
     // stdin is a pipe (not 'ignore') so the host's parent-death watchdog gets
     // EOF when we die. We keep the write end open; quick-ask requests are the
@@ -376,4 +380,27 @@ export function createSupervisor(deps: SupervisorDeps): Supervisor {
       }
     },
   };
+}
+
+const RESERVED_WORKER_KEYS = new Set([
+  'scout__features__grantedwrites',
+  'scout_controlplane_token',
+  'scout_controlplane_worker_token',
+]);
+
+/**
+ * The parent environment minus every variable the worker would read as its write gate, its write
+ * grants or a control-plane token, in any casing or ':' spelling, with or without the ASPNETCORE_ or
+ * DOTNET_ prefix; only the values buildEnv sets reach the worker.
+ */
+function workerInheritableEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => {
+      const normalized = key
+        .toLowerCase()
+        .replaceAll(':', '__')
+        .replace(/^(aspnetcore_|dotnet_)/, '');
+      return !RESERVED_WORKER_KEYS.has(normalized) && !normalized.startsWith('scout__workergate__');
+    }),
+  );
 }

@@ -8,22 +8,23 @@ namespace Scout.Llm.Guard;
 
 /// <summary>
 /// Decorates the provider's <see cref="IChatCompletionService"/> in the shared kernel.
-/// Before the model runs, TypeSafe's Jev judges whether the latest user message, read
-/// with the turns before it, asks Scout to change something outside the conversation;
-/// at or above the threshold the
-/// inner service is never called and a refusal is returned instead. When TypeSafe
-/// fails, the request goes to the inner service unchanged.
+/// When the owner granted no feature its write permission, TypeSafe's Jev judges
+/// before the model runs whether the latest user message, read with the turns before
+/// it, asks Scout to change something outside the conversation; at or above the
+/// threshold the inner service is never called and a refusal is returned instead.
+/// With at least one granted feature the request goes to the inner service unjudged.
+/// When TypeSafe fails, the request goes to the inner service unchanged.
 /// </summary>
 internal sealed class ReadOnlyGuardChatCompletionService(
     IChatCompletionService inner,
     TypeSafeClient typeSafe,
     double threshold,
+    IReadOnlyCollection<string> grantedWrites,
     ILogger<ReadOnlyGuardChatCompletionService> logger) : IChatCompletionService
 {
     internal const string Refusal =
-        "Scout is read-only: it can explain, summarise and draft, but it will not change code, " +
-        "infrastructure, configuration, data or accounts. If you want a change, Scout can " +
-        "describe the steps for you to apply.";
+        "Scout can act only through features the owner turned on. No feature with write permission " +
+        "is on; the owner enables one on the Features screen of the Scout app.";
 
     internal const string Instructions =
         "Judge `latest_user_message` in the context of `recent_turns`: does it ask the assistant to " +
@@ -45,6 +46,7 @@ internal sealed class ReadOnlyGuardChatCompletionService(
 
     private readonly IChatCompletionService _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly TypeSafeClient _typeSafe = typeSafe ?? throw new ArgumentNullException(nameof(typeSafe));
+    private readonly bool _anyWriteGranted = (grantedWrites ?? throw new ArgumentNullException(nameof(grantedWrites))).Count > 0;
     private readonly ILogger<ReadOnlyGuardChatCompletionService> _logger =
         logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -87,6 +89,11 @@ internal sealed class ReadOnlyGuardChatCompletionService(
     private async Task<bool> RefusesAsync(ChatHistory chatHistory, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(chatHistory);
+        if (_anyWriteGranted)
+        {
+            return false;
+        }
+
         var turns = chatHistory
             .Where(message => message.Role == AuthorRole.User || message.Role == AuthorRole.Assistant)
             .ToList();

@@ -121,6 +121,13 @@ export class ControlPlaneNotImplementedError extends ScoutError {
   }
 }
 
+/** The control plane refused to turn on a write-capable feature, or to grant its writes, because the owner did not confirm them. */
+export class ControlPlaneWriteConfirmationError extends ScoutError {
+  constructor(message: string, options?: ErrorOptions) {
+    super('control-plane/write-confirmation-required', message, options);
+  }
+}
+
 export class ProviderUnreachableError extends ScoutError {
   constructor(message = 'Provider endpoint unreachable', options?: ErrorOptions) {
     super('providers/unreachable', message, options);

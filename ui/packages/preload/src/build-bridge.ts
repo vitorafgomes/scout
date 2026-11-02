@@ -243,6 +243,44 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.featureDisable, req) as ReturnType<ScoutBridge['featureDisable']>;
     },
 
+    featureWriteGrant(req) {
+      return ipc.invoke(CHANNEL.featureWriteGrant, req) as ReturnType<
+        ScoutBridge['featureWriteGrant']
+      >;
+    },
+
+    onFeaturesChanged(listener) {
+      const handler = (): void => listener();
+      ipc.on(CHANNEL.featuresChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.featuresChanged, handler);
+      };
+    },
+
+    actionsList() {
+      return ipc.invoke(CHANNEL.actionsList) as ReturnType<ScoutBridge['actionsList']>;
+    },
+
+    actionsApprove(req) {
+      return ipc.invoke(CHANNEL.actionsApprove, req) as ReturnType<ScoutBridge['actionsApprove']>;
+    },
+
+    actionsReject(req) {
+      return ipc.invoke(CHANNEL.actionsReject, req) as ReturnType<ScoutBridge['actionsReject']>;
+    },
+
+    onActionsChanged(listener) {
+      const handler = (): void => listener();
+      ipc.on(CHANNEL.actionsChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.actionsChanged, handler);
+      };
+    },
+
+    writesList(req) {
+      return ipc.invoke(CHANNEL.writesList, req) as ReturnType<ScoutBridge['writesList']>;
+    },
+
     githubSignIn() {
       return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
     },

@@ -52,8 +52,15 @@ import {
   type ProviderKeyValidateResponse,
   type LlmListModelsRequest,
   type LlmListModelsResponse,
+  type ActionDecisionRequest,
   type FeatureDto,
+  type FeatureEnableRequest,
   type FeatureIdRequest,
+  type FeatureWriteGrantRequest,
+  type PendingActionDto,
+  type PendingActionsResponse,
+  type WritesListRequest,
+  type WritesListResponse,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -180,8 +187,21 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     featureSetup: (_req: FeatureSetupRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
-    featureEnable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureEnable: (_req: FeatureEnableRequest): Promise<FeatureDto> => rejectNotAvailable(),
     featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureWriteGrant: (_req: FeatureWriteGrantRequest): Promise<FeatureDto> =>
+      rejectNotAvailable(),
+    onFeaturesChanged: (_listener: () => void): (() => void) => {
+      return (): void => undefined;
+    },
+    actionsList: (): Promise<PendingActionsResponse> => rejectNotAvailable(),
+    actionsApprove: (_req: ActionDecisionRequest): Promise<PendingActionDto> =>
+      rejectNotAvailable(),
+    actionsReject: (_req: ActionDecisionRequest): Promise<PendingActionDto> => rejectNotAvailable(),
+    onActionsChanged: (_listener: () => void): (() => void) => {
+      return (): void => undefined;
+    },
+    writesList: (_req: WritesListRequest): Promise<WritesListResponse> => rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubCancel: (): Promise<void> => rejectNotAvailable(),
@@ -422,12 +442,40 @@ export class ScoutBridgeService {
     return this.bridge.featureDeleteCredentials(req);
   }
 
-  async featureEnable(req: FeatureIdRequest): Promise<FeatureDto> {
+  async featureEnable(req: FeatureEnableRequest): Promise<FeatureDto> {
     return this.bridge.featureEnable(req);
   }
 
   async featureDisable(req: FeatureIdRequest): Promise<FeatureDto> {
     return this.bridge.featureDisable(req);
+  }
+
+  async featureWriteGrant(req: FeatureWriteGrantRequest): Promise<FeatureDto> {
+    return this.bridge.featureWriteGrant(req);
+  }
+
+  async actionsList(): Promise<PendingActionsResponse> {
+    return this.bridge.actionsList();
+  }
+
+  async actionsApprove(req: ActionDecisionRequest): Promise<PendingActionDto> {
+    return this.bridge.actionsApprove(req);
+  }
+
+  async actionsReject(req: ActionDecisionRequest): Promise<PendingActionDto> {
+    return this.bridge.actionsReject(req);
+  }
+
+  onActionsChanged(listener: () => void): () => void {
+    return this.bridge.onActionsChanged(listener);
+  }
+
+  onFeaturesChanged(listener: () => void): () => void {
+    return this.bridge.onFeaturesChanged(listener);
+  }
+
+  async writesList(req: WritesListRequest): Promise<WritesListResponse> {
+    return this.bridge.writesList(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

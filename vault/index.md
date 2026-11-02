@@ -67,6 +67,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/control-plane-contracts|ControlPlane.Contracts]] - The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs.
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
 - [[pages/services/desktop-ui|Desktop UI]] - Electron app: sets up a Discord bot from its token or a Slack app from a manifest, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, stays in the tray and can start at login, manages local models from Node.
+- [[pages/services/desktop-quick-ask|Desktop quick ask]] - The floating button, the quick-ask window, the shortcut, voice turns and the shared local conversation.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
 - [[pages/services/host-console|Host.Console]] - The chat host executable: composes LLM, skills, conversation, knowledge, adapters and the GitHub and Kubernetes plugins, runs the adapters, or runs a one-shot project index.
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.

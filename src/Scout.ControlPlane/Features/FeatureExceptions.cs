@@ -49,6 +49,32 @@ public sealed class FeatureCredentialsMissingException : Exception
     }
 }
 
+/// <summary>
+/// Thrown when enabling or granting a feature with write rows comes without the
+/// owner's confirmation of those writes.
+/// </summary>
+public sealed class WriteConfirmationRequiredException : Exception
+{
+    public string FeatureId { get; }
+
+    public IReadOnlyList<FeatureScopeRow> WriteRows { get; }
+
+    /// <param name="id">The feature id.</param>
+    /// <param name="writeRows">The rows the owner must confirm.</param>
+    /// <param name="before">What the confirmation precedes, such as "enabling it" or "granting them".</param>
+    public WriteConfirmationRequiredException(string id, IReadOnlyList<FeatureScopeRow> writeRows, string before)
+        : base($"Confirm the writes of {id} before {before}: {string.Join(", ", writeRows.Select(Describe))}.")
+    {
+        FeatureId = id;
+        WriteRows = writeRows;
+    }
+
+    private static string Describe(FeatureScopeRow row) =>
+        row.Access == ScopeAccess.IrreversibleWrite
+            ? $"{row.Scope} (irreversible write)"
+            : $"{row.Scope} (write)";
+}
+
 /// <summary>Thrown when enable targets a feature whose plugin is not wired yet.</summary>
 public sealed class FeatureNotImplementedException : Exception
 {

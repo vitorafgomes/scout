@@ -222,7 +222,7 @@ public sealed class FeaturesService
         return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Remove credentials for a feature and disable it.</summary>
+    /// <summary>Remove credentials for a feature, disable it and revoke its write grant.</summary>
     public async Task<FeatureSnapshot> DeleteCredentialsAsync(string id, CancellationToken ct)
     {
         var metadata = Require(id);
@@ -241,8 +241,11 @@ public sealed class FeaturesService
         return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Enable a feature.</summary>
-    public async Task<FeatureSnapshot> EnableAsync(string id, CancellationToken ct)
+    /// <summary>
+    /// Enable a feature. A feature with write rows is the owner's grant and needs
+    /// <paramref name="confirmWrites"/>; enabling it records the grant.
+    /// </summary>
+    public async Task<FeatureSnapshot> EnableAsync(string id, bool confirmWrites, CancellationToken ct)
     {
         var metadata = Require(id);
 
@@ -257,6 +260,11 @@ public sealed class FeaturesService
             }
         }
 
+        if (metadata.HasWriteRows && !confirmWrites)
+        {
+            throw new WriteConfirmationRequiredException(id, WriteRows(metadata), "enabling it");
+        }
+
         if (!_activator.CanActivate(id))
         {
             throw new FeatureNotImplementedException(id);
@@ -268,7 +276,13 @@ public sealed class FeaturesService
             var existing = await _stateStore.GetAsync(id, ct).ConfigureAwait(false);
             await _stateStore.SetAsync(
                     id,
-                    existing with { Enabled = true, LastError = null },
+                    existing with
+                    {
+                        Enabled = true,
+                        LastError = null,
+                        Granted = metadata.HasWriteRows,
+                        GrantedAt = metadata.HasWriteRows ? DateTimeOffset.UtcNow : null,
+                    },
                     ct)
                 .ConfigureAwait(false);
         }
@@ -277,7 +291,7 @@ public sealed class FeaturesService
             var existing = await _stateStore.GetAsync(id, ct).ConfigureAwait(false);
             await _stateStore.SetAsync(
                     id,
-                    existing with { Enabled = false, LastError = ex.Message },
+                    existing with { Enabled = false, LastError = ex.Message, Granted = false, GrantedAt = null },
                     ct)
                 .ConfigureAwait(false);
             throw;
@@ -286,7 +300,39 @@ public sealed class FeaturesService
         return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Disable a feature.</summary>
+    /// <summary>
+    /// Grant or revoke the owner's write permission for a feature that declares
+    /// write rows. Granting needs <paramref name="confirmWrites"/>; revoking does not.
+    /// </summary>
+    public async Task<FeatureSnapshot> SetWriteGrantAsync(
+        string id,
+        bool granted,
+        bool confirmWrites,
+        CancellationToken ct)
+    {
+        var metadata = Require(id);
+
+        if (!metadata.HasWriteRows)
+        {
+            throw new FeatureValidationFailedException(
+                SingleError("granted", $"{id} declares no writes to grant."));
+        }
+
+        if (granted && !confirmWrites)
+        {
+            throw new WriteConfirmationRequiredException(id, WriteRows(metadata), "granting them");
+        }
+
+        var existing = await _stateStore.GetAsync(id, ct).ConfigureAwait(false);
+        await _stateStore.SetAsync(
+                id,
+                existing with { Granted = granted, GrantedAt = granted ? DateTimeOffset.UtcNow : null },
+                ct)
+            .ConfigureAwait(false);
+        return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Disable a feature and revoke its write grant.</summary>
     public async Task<FeatureSnapshot> DisableAsync(string id, CancellationToken ct)
     {
         var metadata = Require(id);
@@ -305,6 +351,9 @@ public sealed class FeaturesService
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         return _catalog.Find(id) ?? throw new FeatureUnknownException(id);
     }
+
+    private static List<FeatureScopeRow> WriteRows(FeatureMetadata metadata) =>
+        (metadata.ScopeMatrix ?? []).Where(row => row.Access != ScopeAccess.Read).ToList();
 
     private IFeatureCredentialValidator? FindValidator(string id) =>
         _validators.FirstOrDefault(v => string.Equals(v.FeatureId, id, StringComparison.Ordinal));
@@ -352,7 +401,10 @@ public sealed class FeaturesService
             SettingsFields: metadata.SettingsFields,
             Settings: state.Settings,
             ScopeMatrix: metadata.ScopeMatrix,
-            SetupSteps: metadata.SetupSteps);
+            SetupSteps: metadata.SetupSteps,
+            WriteClass: metadata.WriteClass,
+            Granted: state.Granted,
+            GrantedAt: state.GrantedAt);
     }
 
     // Plain "text" inputs are optional metadata; any other kind ("password",

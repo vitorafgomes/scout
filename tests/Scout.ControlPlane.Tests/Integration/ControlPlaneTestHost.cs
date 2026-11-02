@@ -16,13 +16,15 @@ namespace Scout.ControlPlane.Tests.Integration;
 
 /// <summary>
 /// Boots the gRPC control-plane host on a temp Unix domain socket with a pinned
-/// session token and fully stubbed Ollama backend (no network, no daemon). The
-/// host binds only the UDS - never a TCP port. Disposing tears the host down and
-/// removes the temp directory.
+/// desktop token, a pinned worker token unless told otherwise, and a fully stubbed
+/// Ollama backend (no network, no daemon). The host binds only the UDS - never a
+/// TCP port. Disposing tears the host down and removes the temp directory.
 /// </summary>
 internal sealed class ControlPlaneTestHost : IAsyncDisposable
 {
     public const string Token = "integration-session-token";
+
+    public const string WorkerToken = "integration-worker-token";
 
     private readonly WebApplication _app;
     private readonly string _tempDir;
@@ -30,6 +32,9 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
     public string SocketPath { get; }
 
     public StubOllamaApiClient Ollama { get; }
+
+    /// <summary>The host's services, for seeding domain state a test reads back over gRPC.</summary>
+    public IServiceProvider Services => _app.Services;
 
     /// <summary>Addresses Kestrel reports as bound. For a UDS-only host this is empty (no TCP).</summary>
     public IReadOnlyCollection<string> BoundAddresses
@@ -57,7 +62,8 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
     }
 
     public static async Task<ControlPlaneTestHost> StartAsync(
-        Action<StubOllamaApiClient>? configureOllama = null)
+        Action<StubOllamaApiClient>? configureOllama = null,
+        bool withWorkerToken = true)
     {
         var tempDir = Directory.CreateTempSubdirectory("scout-cp-it-").FullName;
         var socketPath = Path.Combine(tempDir, "controlplane.sock");
@@ -81,7 +87,10 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
                 ["Scout:LocalRuntime:Config:FilePath"] = Path.Combine(tempDir, "local-runtimes.json"),
             })
             .Build();
-        builder.Services.AddControlPlaneHost(config, SessionToken.FromValue(Token));
+        builder.Services.AddControlPlaneHost(
+            config,
+            SessionToken.FromValue(Token),
+            withWorkerToken ? WorkerToken : null);
 
         // Permissive activator so enable/disable round-trips actually toggle state.
         builder.Services.RemoveAll<IFeatureActivator>();
@@ -110,6 +119,9 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
     /// <summary>Open a gRPC channel over the host's UDS with the session token attached.</summary>
     public GrpcChannel CreateChannel(bool withToken = true) =>
         CreateChannelFor(SocketPath, withToken ? Token : null);
+
+    /// <summary>Open a gRPC channel over the host's UDS with the worker token attached.</summary>
+    public GrpcChannel CreateWorkerChannel() => CreateChannelFor(SocketPath, WorkerToken);
 
     /// <summary>Open a gRPC channel over an arbitrary UDS path (used for failure injection).</summary>
     public static GrpcChannel CreateChannelFor(string socketPath, string? token)

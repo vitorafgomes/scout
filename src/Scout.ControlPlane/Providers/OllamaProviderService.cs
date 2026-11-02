@@ -19,6 +19,7 @@ public sealed class OllamaProviderService
     // a host-side test asserts the two stay in sync. Scrubbed from every child
     // launch so the session token is not inherited by spawned daemons.
     internal const string SessionTokenEnvVarName = "SCOUT_CONTROLPLANE_TOKEN";
+    internal const string WorkerTokenEnvVarName = "SCOUT_CONTROLPLANE_WORKER_TOKEN";
 
     private static readonly TimeSpan ReadinessPollInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(2);
@@ -197,6 +198,7 @@ public sealed class OllamaProviderService
                 EnvironmentOverrides: new Dictionary<string, string?>
                 {
                     [SessionTokenEnvVarName] = null,
+                    [WorkerTokenEnvVarName] = null,
                 });
 
             _logger.LogInformation("Spawning ollama daemon: {Path} serve", binaryPath);

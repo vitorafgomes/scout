@@ -4,12 +4,16 @@ namespace Scout.ControlPlane.Features;
 /// Persistent state for a single feature. <c>LastError</c> is null when the
 /// feature is healthy. <c>Settings</c> carries the non-secret configuration
 /// values the user typed into the setup dialog; empty when the feature has no
-/// settings or has never been configured.
+/// settings or has never been configured. <c>Granted</c> is true while the
+/// owner's write grant for the feature holds; <c>GrantedAt</c> records when
+/// the owner gave it.
 /// </summary>
 public sealed record FeatureState(
     bool Enabled,
     string? LastError,
-    IReadOnlyDictionary<string, string?> Settings);
+    IReadOnlyDictionary<string, string?> Settings,
+    bool Granted = false,
+    DateTimeOffset? GrantedAt = null);
 
 /// <summary>
 /// Persists per-feature toggle and last-error state across restarts.

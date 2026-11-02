@@ -25,7 +25,21 @@ public sealed record FeatureSettingField(
     string? CreateLinkLabel,
     bool Required);
 
+/// <summary>What a feature does with one scope: read it, write it, or write it irreversibly.</summary>
+public enum ScopeAccess
+{
+    /// <summary>Reads only.</summary>
+    Read,
+
+    /// <summary>A write that can be undone and runs under the feature's grant.</summary>
+    Write,
+
+    /// <summary>A write that cannot be undone; each action waits for the owner's approval.</summary>
+    IrreversibleWrite,
+}
+
 /// <summary>One row of a scope-to-actions matrix rendered as a table.</summary>
 public sealed record FeatureScopeRow(
     string Scope,
-    IReadOnlyList<string> Actions);
+    IReadOnlyList<string> Actions,
+    ScopeAccess Access = ScopeAccess.Read);

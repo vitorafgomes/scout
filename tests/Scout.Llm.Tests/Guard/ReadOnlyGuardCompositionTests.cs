@@ -19,9 +19,8 @@ namespace Scout.Llm.Tests.Guard;
 public sealed class ReadOnlyGuardCompositionTests
 {
     private const string RefusalText =
-        "Scout is read-only: it can explain, summarise and draft, but it will not change code, " +
-        "infrastructure, configuration, data or accounts. If you want a change, Scout can describe " +
-        "the steps for you to apply.";
+        "Scout can act only through features the owner turned on. No feature with write permission is on; " +
+        "the owner enables one on the Features screen of the Scout app.";
 
     private static IConfiguration GuardedOllama() =>
         new ConfigurationBuilder()
@@ -143,6 +142,42 @@ public sealed class ReadOnlyGuardCompositionTests
         probeRuns.ShouldBe(1);
         modelTurns.ShouldBe(2);
         typeSafe.Calls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_Grant_Bound_From_Scout_Features_GrantedWrites_Lets_A_Change_Request_Reach_The_Model()
+    {
+        using var typeSafe = StubTypeSafeHandler.Answering(0.9);
+        using var model = new ScriptedModel(() => Sse(AnswerChunks));
+        using var modelHttp = new HttpClient(model) { BaseAddress = new Uri("http://localhost:11434/v1/") };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "Ollama",
+                ["Scout:Guard:TypeSafe:ApiKey"] = "ts-key",
+                ["Scout:Features:GrantedWrites"] = "youtube",
+            })
+            .Build();
+        var services = new ServiceCollection().AddScoutLlm(configuration);
+        services.AddHttpClient<TypeSafeClient>().ConfigurePrimaryHttpMessageHandler(() => typeSafe);
+        services.AddSingleton<Scout.Llm.Abstractions.ILlmProviderFactory>(sp =>
+            new OllamaLlmProviderFactory(sp.GetRequiredService<IOptions<LlmOptions>>(), modelHttp));
+        using var provider = services.BuildServiceProvider();
+
+        var reply = await provider.GetRequiredService<IChatGateway>()
+            .CompleteAsync(new ChatRequest { UserMessage = "upload the video to my channel" }, CancellationToken.None);
+
+        reply.ShouldBe("ping says pong");
+    }
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData(" , ", "")]
+    [InlineData("youtube", "youtube")]
+    [InlineData(" youtube , github ,", "youtube|github")]
+    public void GrantedWrites_Is_A_Comma_Separated_List_Of_Feature_Ids(string value, string expected)
+    {
+        string.Join('|', new FeatureGrantsOptions { GrantedWrites = value }.GrantedWriteIds()).ShouldBe(expected);
     }
 
     private static readonly string[] ToolCallChunks =

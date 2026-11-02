@@ -353,6 +353,49 @@ describe('createSupervisor', () => {
       const snapshot = JSON.stringify(supervisor.getSnapshot());
       expect(snapshot).not.toContain(SECRET);
     });
+
+    it('never passes an inherited worker gate, write grant or control-plane token variable to the worker, in any spelling, and passes the values buildEnv sets', async () => {
+      const inherited: Record<string, string> = {
+        scout__workergate__token: 'inherited-token',
+        'Scout:WorkerGate:Token': 'inherited-token',
+        DOTNET_Scout__WorkerGate__Token: 'inherited-token',
+        aspnetcore_scout__workergate__socketpath: '/tmp/other.sock',
+        'Scout:WorkerGate:SocketPath': '/tmp/other.sock',
+        scout__features__grantedwrites: 'youtube',
+        'DOTNET_Scout:Features:GrantedWrites': 'youtube',
+        scout_controlplane_token: 'desktop-token',
+        Scout_ControlPlane_Worker_Token: 'worker-token',
+        DOTNET_SCOUT_CONTROLPLANE_TOKEN: 'desktop-token',
+      };
+      const unrelatedKey = 'SCOUT__TEST__SUPERVISOR_INHERITED';
+      const keys = [...Object.keys(inherited), unrelatedKey];
+      const saved = new Map(keys.map((key) => [key, process.env[key]]));
+      Object.assign(process.env, inherited, { [unrelatedKey]: 'kept' });
+      try {
+        const fromBuildEnv = {
+          SCOUT__WORKERGATE__SOCKETPATH: '/run/scout/cp.sock',
+          SCOUT__WORKERGATE__TOKEN: 'gate-token',
+          SCOUT__FEATURES__GRANTEDWRITES: '',
+        };
+        const { child, ...deps } = makeDeps({ buildEnv: async () => ({ ...fromBuildEnv }) });
+        const supervisor = createSupervisor(deps);
+        const startPromise = supervisor.start();
+        await Promise.resolve();
+        await Promise.resolve();
+        emitReady(child);
+        await startPromise;
+
+        const spawnCalls = (deps.spawn as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+        const { env } = spawnCalls[0]?.[2] as { env: Record<string, string | undefined> };
+        expect(Object.keys(env).filter((key) => key in inherited)).toEqual([]);
+        expect(env).toMatchObject({ ...fromBuildEnv, [unrelatedKey]: 'kept' });
+      } finally {
+        for (const [key, value] of saved) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    });
   });
 
   describe('state transition order', () => {

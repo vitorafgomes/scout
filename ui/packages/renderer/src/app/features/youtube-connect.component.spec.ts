@@ -25,6 +25,9 @@ const youtube: FeatureDto = {
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
 };
 
 const notConnected: YouTubeStatus = {
@@ -58,6 +61,7 @@ function makeBridge(first: YouTubeStatus) {
     setStatus(next: YouTubeStatus): void {
       current = next;
     },
+    onFeaturesChanged: vi.fn(() => () => undefined),
     featuresList: vi.fn(async () => ({ features: [youtube] })),
     youtubeStatus: vi.fn(async () => current),
     youtubeSignIn: vi.fn(async () => {

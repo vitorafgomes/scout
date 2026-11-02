@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 
 import type { FeatureViewModel } from '../core/features.store';
@@ -6,6 +7,7 @@ import type { FeatureViewModel } from '../core/features.store';
   selector: 'sc-feature-card',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [DatePipe],
   template: `
     <article class="card" [attr.data-test]="'card-' + feature.id">
       <header class="card-head">
@@ -44,6 +46,64 @@ import type { FeatureViewModel } from '../core/features.store';
 
       <ng-content />
 
+      @if (feature.writeClass !== 'none') {
+        <section class="permissions" [attr.data-test]="'permissions-' + feature.id">
+          <h4>Permissions</h4>
+          <ul class="scope-rows">
+            @for (row of feature.scopeMatrix ?? []; track row.scope) {
+              <li [attr.data-test]="'scope-row-' + row.scope">
+                <code>{{ row.scope }}</code>
+                <span
+                  class="access"
+                  [class.access--write]="row.access === 'write'"
+                  [class.access--irreversible]="row.access === 'irreversible'"
+                  [attr.data-test]="'access-' + row.scope"
+                  >{{ row.access }}</span
+                >
+                <span class="row-actions">{{ row.actions.join(', ') }}</span>
+              </li>
+            }
+          </ul>
+          <p class="grant" [attr.data-test]="'grant-' + feature.id">
+            @if (feature.granted && feature.grantedAt !== null) {
+              Write permission: granted on {{ feature.grantedAt | date: 'yyyy-MM-dd' }}
+            } @else if (feature.granted) {
+              Write permission: granted
+            } @else {
+              Write permission: not granted
+            }
+          </p>
+          @if (connection !== null) {
+            @if (feature.granted) {
+              <button
+                type="button"
+                class="btn btn--secondary"
+                [attr.data-test]="'revoke-writes-' + feature.id"
+                [disabled]="feature.busy"
+                (click)="revokeWrites.emit()"
+              >
+                Revoke writes
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn btn--primary"
+                [attr.data-test]="'allow-writes-' + feature.id"
+                [disabled]="feature.busy || connection !== 'connected'"
+                (click)="allowWrites.emit()"
+              >
+                Allow writes
+              </button>
+            }
+            @if (feature.lastError !== null) {
+              <p class="err" [attr.data-test]="'grant-err-' + feature.id">
+                {{ feature.lastError }}
+              </p>
+            }
+          }
+        </section>
+      }
+
       @if (connection === null) {
         <footer class="actions">
           <label class="toggle">
@@ -52,7 +112,7 @@ import type { FeatureViewModel } from '../core/features.store';
               [checked]="feature.enabled"
               [disabled]="toggleDisabled()"
               [attr.data-test]="'toggle-' + feature.id"
-              (change)="toggle.emit()"
+              (change)="$any($event.target).checked = feature.enabled; toggle.emit()"
             />
             <span>{{ feature.enabled ? 'Enabled' : 'Disabled' }}</span>
           </label>
@@ -143,6 +203,58 @@ import type { FeatureViewModel } from '../core/features.store';
         font-size: 12px;
         color: #f87171;
       }
+      .permissions {
+        border-top: 1px solid #252b3b;
+        padding-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .permissions h4 {
+        margin: 0;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #7b8299;
+      }
+      .scope-rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: #e4e8f0;
+      }
+      .scope-rows code {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-size: 11px;
+        margin-right: 6px;
+      }
+      .access {
+        font-size: 10px;
+        text-transform: uppercase;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #1e2333;
+        color: #7b8299;
+        margin-right: 6px;
+      }
+      .access--write {
+        background: #3a2a10;
+        color: #fbbf24;
+      }
+      .access--irreversible {
+        background: #3a1414;
+        color: #f87171;
+      }
+      .grant {
+        margin: 0;
+        font-size: 13px;
+        color: #e4e8f0;
+      }
       .actions {
         display: flex;
         gap: 8px;
@@ -188,6 +300,8 @@ export class FeatureCardComponent {
   @Output() readonly toggle = new EventEmitter<void>();
   @Output() readonly openCredentialDialog = new EventEmitter<void>();
   @Output() readonly clearCredentials = new EventEmitter<void>();
+  @Output() readonly allowWrites = new EventEmitter<void>();
+  @Output() readonly revokeWrites = new EventEmitter<void>();
 
   badgeLabel(): string {
     switch (this.feature.status) {

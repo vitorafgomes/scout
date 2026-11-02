@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Features;
 using Scout.ControlPlane.Providers;
 
@@ -68,6 +69,10 @@ public static class ControlPlaneServiceCollectionExtensions
         services.TryAddSingleton<ICredentialStore>(_ => new InMemoryCredentialStore());
         services.TryAddSingleton<IFeatureActivator, NullFeatureActivator>();
 
+        services.TryAddSingleton<IActionQueue, JsonFileActionQueue>();
+        services.TryAddSingleton<IWriteLog, JsonLinesWriteLog>();
+
         services.AddSingleton<FeaturesService>();
+        services.AddSingleton<WriteGate.WriteGateService>();
     }
 }

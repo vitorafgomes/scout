@@ -1,9 +1,9 @@
 ---
 title: "Backend-frontend transport - gRPC over Unix domain socket / named pipe"
-version: "1.0"
+version: "1.1"
 date: 2026-05-28
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-11-02
+changes: "Amended 2026-11-02: a second caller, the worker, with its own role-scoped token, WorkerGate only"
 page_type: adr
 status: accepted
 description: "Scout's desktop app is Electron (Node main process + Angular renderer). The .NET backend runs as a supervised child process (sidecar)."
@@ -72,6 +72,17 @@ Angular renderer ──contextBridge IPC──▶ Electron main ──gRPC over 
   `nodeIntegration`. High-volume streams reach the renderer over a
   `MessagePort` (`MessageChannelMain`) rather than `ipcRenderer` event spam, for
   backpressure and throughput.
+
+## Amendment 2026-11-02 - a second caller, the worker
+
+On the owner's decision to move the enforcement of writes from the LLM guard to the function call and to make the approval queue control-plane-only ([[pages/decisions/0032-per-feature-write-permissions]]), the control plane gains a second caller: the console worker, `Scout.Host.Console`, which must be able to request a write but never approve, grant or enable one.
+
+- **Two tokens, two roles.** The desktop mints a second token, of the same strength, and hands it to the host as `SCOUT_CONTROLPLANE_WORKER_TOKEN` beside the session token. The token interceptor becomes role-based with default deny: the desktop token reaches the `Features`, `Providers` and `Models` services, the worker token reaches the new `WorkerGate` service (`RequestWrite`, `RecordWrite`) only, and any other method answers `PERMISSION_DENIED`. No or a wrong token stays `UNAUTHENTICATED`.
+- **Startup.** A worker token equal to the desktop token refuses to start; a missing worker token closes `WorkerGate` to every caller and is logged once.
+- **The worker's handshake.** The desktop passes the worker the socket path and the worker token as `SCOUT__WORKERGATE__SOCKETPATH` and `SCOUT__WORKERGATE__TOKEN`; the worker never receives the desktop token. The renderer still never touches the socket.
+- **Contract.** `worker.proto` joins the `.proto` files of `Scout.ControlPlane.Contracts`; the worker uses its generated client, so `Scout.Host.Console` now references the contracts project ([[pages/architecture/project-map]]).
+
+Where it lives: [[pages/services/host-control-plane]], [[pages/services/control-plane]], [[pages/services/control-plane-contracts]], [[pages/services/desktop-ui]].
 
 ## Alternatives considered
 

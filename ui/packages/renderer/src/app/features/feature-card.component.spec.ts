@@ -28,8 +28,40 @@ const base: FeatureViewModel = {
   settings: {},
   scopeMatrix: null,
   setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
   busy: false,
 };
+
+const youtube: FeatureViewModel = {
+  ...base,
+  id: 'youtube',
+  displayName: 'YouTube',
+  hasCredentials: true,
+  status: 'disabled',
+  scopeMatrix: [
+    { scope: 'youtube.readonly', actions: ['Read the channel'], access: 'read' },
+    { scope: 'drafts', actions: ['Save scripts and renders'], access: 'write' },
+    { scope: 'youtube.upload', actions: ['Upload a video'], access: 'irreversible' },
+  ],
+  writeClass: 'executive',
+};
+
+function connectionCard(
+  feature: FeatureViewModel,
+  connection: 'connected' | 'not-connected',
+): ComponentFixture<FeatureCardComponent> {
+  const fixture = create();
+  fixture.componentInstance.connection = connection;
+  setFeature(fixture, feature);
+  return fixture;
+}
+
+function text(fixture: ComponentFixture<FeatureCardComponent>, testId: string): string {
+  const el = fixture.nativeElement.querySelector(`[data-test="${testId}"]`) as HTMLElement | null;
+  return (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
 
 function create(): ComponentFixture<FeatureCardComponent> {
   TestBed.configureTestingModule({
@@ -135,5 +167,50 @@ describe('FeatureCardComponent', () => {
       '[data-test="clear-github"]',
     ) as HTMLButtonElement;
     expect(clear.disabled).toBe(true);
+  });
+
+  it('the YouTube card shows its read, write and irreversible rows and the grant line', () => {
+    const notGranted = connectionCard(youtube, 'connected');
+    const rows = ['youtube.readonly', 'drafts', 'youtube.upload'].map((scope) => [
+      scope,
+      text(notGranted, 'access-' + scope),
+    ]);
+    const before = text(notGranted, 'grant-youtube');
+    TestBed.resetTestingModule();
+    const granted = connectionCard(
+      { ...youtube, granted: true, grantedAt: '2026-11-02T10:00:00Z' },
+      'connected',
+    );
+
+    expect(rows).toEqual([
+      ['youtube.readonly', 'read'],
+      ['drafts', 'write'],
+      ['youtube.upload', 'irreversible'],
+    ]);
+    expect(before).toBe('Write permission: not granted');
+    expect(text(granted, 'grant-youtube')).toBe('Write permission: granted on 2026-11-02');
+  });
+
+  it('Allow writes is disabled while YouTube is not connected', () => {
+    const disconnected = connectionCard(youtube, 'not-connected');
+    const allowWhileDisconnected = disconnected.nativeElement.querySelector(
+      '[data-test="allow-writes-youtube"]',
+    ) as HTMLButtonElement;
+    const disabledWhileDisconnected = allowWhileDisconnected.disabled;
+    TestBed.resetTestingModule();
+    const connected = connectionCard(youtube, 'connected');
+    const allowWhileConnected = connected.nativeElement.querySelector(
+      '[data-test="allow-writes-youtube"]',
+    ) as HTMLButtonElement;
+
+    expect(disabledWhileDisconnected).toBe(true);
+    expect(allowWhileConnected.disabled).toBe(false);
+  });
+
+  it('a read-only feature shows no permissions block', () => {
+    const fixture = create();
+    setFeature(fixture, { ...base, hasCredentials: true, status: 'disabled' });
+
+    expect(fixture.nativeElement.querySelector('[data-test="permissions-github"]')).toBeNull();
   });
 });

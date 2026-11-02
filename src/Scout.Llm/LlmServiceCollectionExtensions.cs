@@ -65,6 +65,7 @@ public static class LlmServiceCollectionExtensions
         if (guarded)
         {
             services.Configure<TypeSafeGuardOptions>(configuration.GetSection(TypeSafeGuardOptions.Section));
+            services.Configure<FeatureGrantsOptions>(configuration.GetSection(FeatureGrantsOptions.Section));
             services.AddHttpClient<TypeSafeClient>(client => client.Timeout = TimeSpan.FromSeconds(5));
         }
 
@@ -125,6 +126,15 @@ public static class LlmServiceCollectionExtensions
                 builder.Plugins.Add(plugin);
             }
 
+            var writeFunctions = sp.GetServices<WriteFunctionDeclaration>().ToList();
+            if (writeFunctions.Count > 0)
+            {
+                builder.Services.AddSingleton<IFunctionInvocationFilter>(new WriteGateFilter(
+                    writeFunctions,
+                    sp.GetRequiredService<IWriteGate>(),
+                    sp.GetService<ILogger<WriteGateFilter>>() ?? NullLogger<WriteGateFilter>.Instance));
+            }
+
             return builder.Build();
         });
 
@@ -175,7 +185,35 @@ public static class LlmServiceCollectionExtensions
                 (IChatCompletionService)innerFactory(kernelProvider),
                 services.GetRequiredService<TypeSafeClient>(),
                 services.GetRequiredService<IOptions<TypeSafeGuardOptions>>().Value.Threshold,
+                services.GetRequiredService<IOptions<FeatureGrantsOptions>>().Value.GrantedWriteIds(),
                 services.GetService<ILogger<ReadOnlyGuardChatCompletionService>>()
                     ?? NullLogger<ReadOnlyGuardChatCompletionService>.Instance));
+    }
+
+    /// <summary>
+    /// Declare that a kernel function performs a write for a feature. Every call to it
+    /// then asks the registered <see cref="IWriteGate"/> first; the kernel fails to build
+    /// when a write function is declared and no gate is registered.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="pluginName">The kernel plugin's name.</param>
+    /// <param name="functionName">The kernel function's name.</param>
+    /// <param name="featureId">The catalog id of the feature the write belongs to.</param>
+    /// <param name="scope">The catalog scope row the write performs.</param>
+    /// <param name="summaryArguments">The arguments whose values the request summary shows; none by default.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddWriteFunction(
+        this IServiceCollection services,
+        string pluginName,
+        string functionName,
+        string featureId,
+        string scope,
+        IReadOnlyList<string>? summaryArguments = null)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.AddSingleton(new WriteFunctionDeclaration(pluginName, functionName, featureId, scope)
+        {
+            SummaryArguments = summaryArguments ?? [],
+        });
     }
 }

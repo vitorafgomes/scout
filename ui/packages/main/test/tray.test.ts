@@ -154,6 +154,8 @@ describe('the tray menu', () => {
       showInactive = () => this.calls.push('showInactive');
       focus = () => this.calls.push('focus');
       hide = () => this.calls.push('hide');
+      setAlwaysOnTop = () => undefined;
+      moveTop = () => undefined;
       destroy = () => undefined;
       loadFile = (_path: string, options: unknown) => {
         this.route = options;

@@ -26,7 +26,10 @@ public sealed record FeatureSnapshot(
     IReadOnlyList<FeatureSettingField> SettingsFields,
     IReadOnlyDictionary<string, string?> Settings,
     IReadOnlyList<FeatureScopeRow>? ScopeMatrix,
-    IReadOnlyList<string>? SetupSteps);
+    IReadOnlyList<string>? SetupSteps,
+    WriteClass WriteClass,
+    bool Granted,
+    DateTimeOffset? GrantedAt);
 
 /// <summary>Body of a setup request: credential upserts plus setting upserts/clears.</summary>
 public sealed record FeatureSetupInput(

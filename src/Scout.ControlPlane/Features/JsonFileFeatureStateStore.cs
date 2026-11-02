@@ -29,7 +29,7 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
     {
         ArgumentNullException.ThrowIfNull(options);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _filePath = options.Value.FilePath ?? GetDefaultFilePath();
+        _filePath = options.Value.ResolveFilePath();
     }
 
     /// <summary>Absolute path of the underlying JSON file.</summary>
@@ -59,7 +59,9 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
             current[featureId] = new FeatureEntry(
                 state.Enabled,
                 state.LastError,
-                SerialiseSettings(state.Settings));
+                SerialiseSettings(state.Settings),
+                state.Granted ? true : null,
+                state.Granted ? state.GrantedAt : null);
             await WriteAsync(current, ct).ConfigureAwait(false);
         }
         finally
@@ -87,7 +89,9 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
             entry.LastError,
             entry.Settings is null
                 ? EmptySettings()
-                : new Dictionary<string, string?>(entry.Settings, StringComparer.Ordinal));
+                : new Dictionary<string, string?>(entry.Settings, StringComparer.Ordinal),
+            entry.Granted ?? false,
+            entry.Granted == true ? entry.GrantedAt : null);
 
     private static FeatureState EmptyState() =>
         new(false, null, EmptySettings());
@@ -161,14 +165,10 @@ public sealed class JsonFileFeatureStateStore : IFeatureStateStore, IDisposable
         File.Move(tempPath, _filePath, overwrite: true);
     }
 
-    private static string GetDefaultFilePath()
-    {
-        var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return Path.Combine(root, "Scout", "features.json");
-    }
-
     private sealed record FeatureEntry(
         [property: JsonPropertyName("enabled")] bool? Enabled,
         [property: JsonPropertyName("lastError")] string? LastError,
-        [property: JsonPropertyName("settings")] Dictionary<string, string?>? Settings);
+        [property: JsonPropertyName("settings")] Dictionary<string, string?>? Settings,
+        [property: JsonPropertyName("granted")] bool? Granted = null,
+        [property: JsonPropertyName("grantedAt")] DateTimeOffset? GrantedAt = null);
 }

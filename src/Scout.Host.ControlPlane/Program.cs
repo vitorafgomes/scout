@@ -3,12 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scout.Host.ControlPlane;
+using Scout.Host.ControlPlane.Security;
 using Scout.Host.ControlPlane.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// gRPC + token interceptor + domain services. Token is read from
-// SCOUT_CONTROLPLANE_TOKEN or minted at startup.
 builder.Services.AddControlPlaneHost(builder.Configuration);
 
 // Windows named-pipe ACL: restrict to the current user.
@@ -28,6 +27,8 @@ builder.WebHost.ConfigureKestrel(kestrel =>
 
 var app = builder.Build();
 app.MapControlPlaneServices();
+
+app.Services.GetRequiredService<CallerTokens>();
 
 // Fail loud if the native stat the UDS anti-hijack pre-flight depends on
 // cannot be trusted on this platform (unresolved symbol, unsupported arch,
