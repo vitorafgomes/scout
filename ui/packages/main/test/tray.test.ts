@@ -199,6 +199,34 @@ describe('the tray menu', () => {
     expect(quickAskWindows[0]!.calls).toEqual(['setPosition', 'show', 'focus']);
   });
 
+  it('the tray offers Update available while a newer version is known', () => {
+    const { fakeTray, controller, opened } = setup({ initialStatus: status('running') });
+
+    controller.setUpdateAvailable('0.2.0');
+
+    expect(fakeTray.layout()).toEqual([
+      'Open Scout',
+      'Update available: 0.2.0',
+      'Ask Scout...',
+      '---',
+      'Stop Scout',
+      '---',
+      'Quit Scout',
+    ]);
+    expect(fakeTray.tooltip).toBe('Scout - Running - update available');
+    fakeTray.click('update');
+    expect(opened).toEqual(['window']);
+
+    controller.setStatus(status('stopped'));
+    expect(fakeTray.item('update').label).toBe('Update available: 0.2.0');
+    expect(fakeTray.tooltip).toBe('Scout - Stopped - update available');
+
+    controller.setUpdateAvailable(null);
+
+    expect(fakeTray.layout()).not.toContain('Update available: 0.2.0');
+    expect(fakeTray.tooltip).toBe('Scout - Stopped');
+  });
+
   it('returns null and logs when the desktop cannot create a tray', () => {
     const { logger, lines } = recordingLogger();
 

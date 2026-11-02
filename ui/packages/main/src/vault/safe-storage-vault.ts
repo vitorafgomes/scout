@@ -16,7 +16,10 @@ export type MainOnlyVaultKey =
   | 'app.tray-notice-shown'
   | 'quick-ask.shortcut'
   | 'quick-ask.bubble'
-  | 'quick-ask.window';
+  | 'quick-ask.window'
+  | 'update.check-enabled'
+  | 'update.skipped-version'
+  | 'update.last-check';
 
 export type StoredVaultKey = VaultKey | MainOnlyVaultKey;
 

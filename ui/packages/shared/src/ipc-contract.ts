@@ -81,6 +81,14 @@ export const CHANNEL = {
   localOpen: 'scout:local.open',
   localGetBubble: 'scout:local.getBubble',
   localSetBubble: 'scout:local.setBubble',
+  updateGetState: 'scout:update.getState',
+  updateSetCheckEnabled: 'scout:update.setCheckEnabled',
+  updateCheckNow: 'scout:update.checkNow',
+  updateSkipVersion: 'scout:update.skipVersion',
+  updateRemindLater: 'scout:update.remindLater',
+  updateNotice: 'scout:update.notice',
+  updateInstall: 'scout:update.install',
+  updateProgress: 'scout:update.progress',
 } as const satisfies Readonly<Record<string, string>>;
 
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -609,6 +617,40 @@ export interface LocalBubbleSettings {
   readonly display: 'cursor' | 'primary';
 }
 
+/** A newer Scout Desktop on GitHub Releases: its version, its notes as plain text, and the links the owner may open. */
+export interface UpdateNotice {
+  readonly currentVersion: string;
+  readonly latestVersion: string;
+  readonly notes: string;
+  readonly releaseUrl: string;
+  readonly downloadUrl: string;
+  readonly publishedAt: string;
+  /** True when this package can replace itself: a packaged AppImage or the Windows installer. */
+  readonly canInstall: boolean;
+}
+
+/** Where an install the user started stands; `percent` and the byte counts are set only while downloading. */
+export interface UpdateProgress {
+  readonly phase: 'checking' | 'downloading' | 'ready' | 'installing' | 'failed';
+  readonly percent: number | null;
+  readonly transferred: number | null;
+  readonly total: number | null;
+  readonly message: string | null;
+}
+
+/** The update check as Settings shows it; `packaged` is false in a development build, which never checks. */
+export interface UpdateState {
+  readonly checkEnabled: boolean;
+  readonly lastCheckAt: string | null;
+  readonly lastResult: string | null;
+  readonly notice: UpdateNotice | null;
+  readonly packaged: boolean;
+}
+
+export interface UpdateSkipVersionRequest {
+  readonly version: string;
+}
+
 export interface ScoutBridge {
   detectClients(): Promise<DetectClientsResponse>;
   discordCheckToken(req: DiscordCheckTokenRequest): Promise<DiscordBotInfo>;
@@ -686,4 +728,12 @@ export interface ScoutBridge {
   localOpen(): Promise<void>;
   localGetBubble(): Promise<LocalBubbleSettings>;
   localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleSettings>;
+  updateGetState(): Promise<UpdateState>;
+  updateSetCheckEnabled(req: DesktopToggleRequest): Promise<UpdateState>;
+  updateCheckNow(): Promise<UpdateState>;
+  updateSkipVersion(req: UpdateSkipVersionRequest): Promise<UpdateState>;
+  updateRemindLater(): Promise<UpdateState>;
+  onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void;
+  updateInstall(): Promise<UpdateState>;
+  onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;
 }

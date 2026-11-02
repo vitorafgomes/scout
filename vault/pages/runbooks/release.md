@@ -1,14 +1,15 @@
 ---
 title: "Release - cut a Scout Desktop release"
-version: "1.0"
+version: "1.1"
 date: 2026-11-02
-changes: "Initial runbook"
+changes: "The release carries the updater metadata (latest*.yml, the Windows blockmap) that Update and restart reads"
 page_type: runbook
 status: active
 description: "Tag main with the new version, let the Release workflow publish the desktop packages, and check them on the release page and the project site."
 source:
   - chat
   - .github/workflows/release.yml
+  - ui/build/electron-builder.yml
   - docs/site.js
 reliability: high
 ---
@@ -52,8 +53,9 @@ reliability: high
    ```bash
    gh release view v0.0.2
    ```
-   Expected: not a draft, not a prerelease, marked Latest, with four packages and three checksum files:
-   `Scout-Desktop-0.0.2-linux-x86_64.AppImage`, `Scout-Desktop-0.0.2-linux-amd64.deb`, `Scout-Desktop-0.0.2-mac-arm64.dmg`, `Scout-Desktop-0.0.2-win-x64.exe`, `SHA256SUMS-linux.txt`, `SHA256SUMS-mac.txt`, `SHA256SUMS-windows.txt`. No `.blockmap` or `.yml` file.
+   Expected: not a draft, not a prerelease, marked Latest, with four packages, three checksum files and the updater metadata:
+   `Scout-Desktop-0.0.2-linux-x86_64.AppImage`, `Scout-Desktop-0.0.2-linux-amd64.deb`, `Scout-Desktop-0.0.2-mac-arm64.dmg`, `Scout-Desktop-0.0.2-win-x64.exe`, `SHA256SUMS-linux.txt`, `SHA256SUMS-mac.txt`, `SHA256SUMS-windows.txt`, `latest-linux.yml`, `latest.yml` and `Scout-Desktop-0.0.2-win-x64.exe.blockmap`. No `latest-mac.yml`, no mac blockmap, no Intel dmg.
+   The two `latest*.yml` files and the blockmap are what Update and restart reads ([[pages/decisions/0031-desktop-self-update]]); never delete them from a release. A release without them leaves AppImage and Windows users with a failed install ("This release has no update for this package") until they use the Release notes link. The checksum files cover the packages only, not the metadata.
 
 4. **Check the site.** Open https://vitorafgomes.github.io/scout/.
    Expected: the big button reads "Download for <your system>" and downloads your package; the line under it shows `Version 0.0.2`, the file name and its size; each platform card lists its packages with sizes.
@@ -62,6 +64,7 @@ reliability: high
 
 - `sha256sum -c SHA256SUMS-linux.txt` next to a downloaded Linux package prints `OK`.
 - The site's version line matches the tag.
+- An installed older AppImage or Windows build shows "Scout 0.0.2 is available" within a day (or at once with Settings, Check now) and offers Update and restart, which downloads, restarts and reports the new version. A macOS or `.deb` install offers Download instead. A build released before Update and restart existed (0.0.1, for example) never offers it, so its users download the new version once by hand; from then on they get Update and restart.
 
 ## When something fails
 

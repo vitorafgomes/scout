@@ -146,6 +146,12 @@ export {
   type LocalTurn,
   type LocalShortcut,
   type LocalBubbleSettings,
+  type UpdateNotice,
+  type UpdateProgress,
+  type UpdateState,
+  type UpdateSkipVersionRequest,
 } from './ipc-contract.js';
+
+export { compareVersions, pickDownload, type ReleaseAsset } from './version.js';
 
 export { kubernetesLabelError } from './kubernetes-labels.js';

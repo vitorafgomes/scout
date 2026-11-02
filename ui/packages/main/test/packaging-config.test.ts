@@ -57,6 +57,7 @@ interface BuilderConfig {
     certificateFile?: string;
     target: WinTarget[];
   };
+  publish?: Record<string, unknown>;
 }
 
 const raw = readFileSync(CONFIG_PATH, 'utf8');
@@ -135,6 +136,15 @@ describe('electron-builder.yml', () => {
 
   it('win config has no certificateFile (unsigned)', () => {
     expect(config.win.certificateFile).toBeUndefined();
+  });
+
+  it('publishes the updater metadata for the public GitHub releases of vitorafgomes/scout, without a token', () => {
+    expect(config.publish).toEqual({
+      provider: 'github',
+      owner: 'vitorafgomes',
+      repo: 'scout',
+      releaseType: 'release',
+    });
   });
 });
 

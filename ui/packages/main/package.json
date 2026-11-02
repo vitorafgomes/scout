@@ -14,7 +14,8 @@
   "dependencies": {
     "@grpc/grpc-js": "1.14.6",
     "@grpc/proto-loader": "0.8.1",
-    "@scout/shared": "workspace:*"
+    "@scout/shared": "workspace:*",
+    "electron-updater": "^6.8.12"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.1",

@@ -16,6 +16,16 @@ import { FakeTray } from './shell-fakes.js';
 class FakeApp extends EventEmitter {
   quitRequests = 0;
   exitCode: number | null = null;
+  lock: string[] = [];
+
+  releaseSingleInstanceLock(): void {
+    this.lock.push('released');
+  }
+
+  requestSingleInstanceLock(): boolean {
+    this.lock.push('requested');
+    return true;
+  }
 
   quit(): void {
     this.quitRequests += 1;
@@ -53,9 +63,17 @@ class FakeWindow implements LifecycleWindow {
 function fakeWorker(state: WorkerStatus['state'] = 'running') {
   const worker = {
     status: { state, restarts: 0 } as WorkerStatus,
+    stops: 0,
+    starts: 0,
     async stop() {
+      worker.stops += 1;
       worker.status = { state: 'stopped', restarts: 0 };
       return { exitCode: 0 };
+    },
+    async start() {
+      worker.starts += 1;
+      worker.status = { state: 'running', restarts: 0 };
+      return { pid: 4242 };
     },
   };
   return worker;
@@ -241,6 +259,93 @@ describe('the quick-ask window never keeps Scout alive', () => {
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ visible: true, focused: true });
     expect(quickAskWindow).toMatchObject({ visible: false, focused: false });
+  });
+});
+
+describe('stopping the worker for an update restart', () => {
+  it('a worker stopped for the restart is not stopped again by before-quit', async () => {
+    const app = new FakeApp();
+    let stops = 0;
+    const finishers: (() => void)[] = [];
+    const worker = {
+      status: { state: 'running', restarts: 0 } as WorkerStatus,
+      start: async () => ({ pid: 4242 }),
+      stop: () => {
+        stops += 1;
+        return new Promise<{ exitCode: number }>((resolve) => {
+          finishers.push(() => {
+            worker.status = { state: 'stopped', restarts: 0 };
+            resolve({ exitCode: 0 });
+          });
+        });
+      },
+    };
+    let disposed = 0;
+    const lifecycle = installAppLifecycle({
+      app: app as unknown as AppLifecycleDeps['app'],
+      platform: 'linux',
+      supervisor: () => worker,
+      keepRunning: () => false,
+      window: () => null,
+      createWindow: () => undefined,
+      onHiddenToTray: () => undefined,
+      onAsk: () => undefined,
+      dispose: () => {
+        disposed += 1;
+      },
+      logger: recordingLogger().logger,
+    });
+
+    const prepared = lifecycle.stopWorker();
+    app.quit();
+    const exitBeforeStopped = app.exitCode;
+    finishers.forEach((finish) => finish());
+    await prepared;
+    await settle();
+
+    expect(stops).toBe(1);
+    expect(exitBeforeStopped).toBeNull();
+    expect(disposed).toBe(1);
+    expect(app.exitCode).toBe(0);
+  });
+});
+
+describe('a restart for an update', () => {
+  it('a worker restarted after stopWorker is stopped again by before-quit', async () => {
+    const { app, worker, lifecycle } = setup({ keepRunning: false });
+
+    await lifecycle.stopWorker();
+    await worker.start();
+    app.quit();
+    await settle();
+
+    expect(worker.stops).toBe(2);
+    expect(worker.status.state).toBe('stopped');
+    expect(app.exitCode).toBe(0);
+  });
+
+  it('the lock is taken again and the worker restarted when the new version could not be applied', async () => {
+    const { app, worker, lifecycle } = setup({ keepRunning: true });
+
+    await lifecycle.prepareForRestart();
+    const whilePrepared = { lock: [...app.lock], state: worker.status.state };
+    await lifecycle.recoverFromFailedRestart();
+
+    expect(whilePrepared).toEqual({ lock: ['released'], state: 'stopped' });
+    expect(app.lock).toEqual(['released', 'requested']);
+    expect(worker.starts).toBe(1);
+    expect(worker.status.state).toBe('running');
+  });
+
+  it('a worker that was not running before the restart stays stopped after the recovery', async () => {
+    const { app, worker, lifecycle } = setup({ keepRunning: true });
+    await worker.stop();
+
+    await lifecycle.prepareForRestart();
+    await lifecycle.recoverFromFailedRestart();
+
+    expect(app.lock).toEqual(['released', 'requested']);
+    expect(worker.starts).toBe(0);
   });
 });
 

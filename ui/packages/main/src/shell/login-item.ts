@@ -1,4 +1,4 @@
-import { chmod, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { DesktopAutostartError } from '@scout/shared';
 
@@ -20,7 +20,10 @@ export interface LoginItemDeps {
   };
 }
 
-/** Scout's own start-at-login entry, changed only on the owner's toggle in Settings. */
+/**
+ * Scout's own start-at-login entry: turned on and off only by the owner's toggle in Settings; on Linux an entry that
+ * exists is also rewritten at start to name Scout's own current executable (see refreshLoginEntry).
+ */
 export interface LoginItem {
   isEnabled(): Promise<boolean>;
   setEnabled(enabled: boolean): Promise<void>;
@@ -90,6 +93,19 @@ export function createLoginItem(deps: LoginItemDeps): LoginItem {
       }
     },
   };
+}
+
+/**
+ * Rewrites the Linux start-at-login entry when it names another executable, such as an AppImage an update saved
+ * under the new release's name; resolves true when it rewrote the entry. Start at login that is off stays off.
+ */
+export async function refreshLoginEntry(deps: LoginItemDeps): Promise<boolean> {
+  if (deps.platform !== 'linux') return false;
+  const file = path.join(deps.home, '.config', 'autostart', 'scout.desktop');
+  const current = await readFile(file, 'utf8').catch(() => null);
+  if (current === null || current === autostartEntry(deps.executable)) return false;
+  await createLoginItem(deps).setEnabled(true);
+  return true;
 }
 
 /** The argument that opens the quick-ask window, for a desktop shortcut where global shortcuts are refused. */

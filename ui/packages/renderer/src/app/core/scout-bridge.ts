@@ -75,6 +75,10 @@ import {
   type LocalTurn,
   type LocalShortcut,
   type LocalBubbleSettings,
+  type UpdateNotice,
+  type UpdateProgress,
+  type UpdateSkipVersionRequest,
+  type UpdateState,
 } from '@scout/shared';
 
 const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
@@ -214,6 +218,24 @@ function createFakeBridge(): ScoutBridge {
     localGetBubble: (): Promise<LocalBubbleSettings> => rejectNotAvailable(),
     localSetBubble: (_req: LocalBubbleSettings): Promise<LocalBubbleSettings> =>
       rejectNotAvailable(),
+    updateGetState: (): Promise<UpdateState> => rejectNotAvailable(),
+    updateSetCheckEnabled: (_req: DesktopToggleRequest): Promise<UpdateState> =>
+      rejectNotAvailable(),
+    updateCheckNow: (): Promise<UpdateState> => rejectNotAvailable(),
+    updateSkipVersion: (_req: UpdateSkipVersionRequest): Promise<UpdateState> =>
+      rejectNotAvailable(),
+    updateRemindLater: (): Promise<UpdateState> => rejectNotAvailable(),
+    onUpdateNotice: (_listener: (notice: UpdateNotice | null) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    updateInstall: (): Promise<UpdateState> => rejectNotAvailable(),
+    onUpdateProgress: (_listener: (progress: UpdateProgress) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
   };
 }
 
@@ -517,6 +539,38 @@ export class ScoutBridgeService {
 
   async localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleSettings> {
     return this.bridge.localSetBubble(req);
+  }
+
+  async updateGetState(): Promise<UpdateState> {
+    return this.bridge.updateGetState();
+  }
+
+  async updateSetCheckEnabled(req: DesktopToggleRequest): Promise<UpdateState> {
+    return this.bridge.updateSetCheckEnabled(req);
+  }
+
+  async updateCheckNow(): Promise<UpdateState> {
+    return this.bridge.updateCheckNow();
+  }
+
+  async updateSkipVersion(req: UpdateSkipVersionRequest): Promise<UpdateState> {
+    return this.bridge.updateSkipVersion(req);
+  }
+
+  async updateRemindLater(): Promise<UpdateState> {
+    return this.bridge.updateRemindLater();
+  }
+
+  onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void {
+    return this.bridge.onUpdateNotice(listener);
+  }
+
+  async updateInstall(): Promise<UpdateState> {
+    return this.bridge.updateInstall();
+  }
+
+  onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void {
+    return this.bridge.onUpdateProgress(listener);
   }
 }
 

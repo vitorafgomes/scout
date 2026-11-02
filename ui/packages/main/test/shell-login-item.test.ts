@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { readIpcError } from '@scout/shared';
-import { createLoginItem, type LoginItemDeps } from '../src/shell/login-item.js';
+import { createLoginItem, refreshLoginEntry, type LoginItemDeps } from '../src/shell/login-item.js';
+import { ownExecutable } from '../src/shell/own-executable.js';
 
 function fakeApp() {
   const calls: { openAtLogin: boolean; args?: string[] }[] = [];
@@ -81,6 +82,51 @@ describe('start at login on Linux', () => {
   }
 
   const entryPath = () => path.join(home, '.config', 'autostart', 'scout.desktop');
+
+  it('a renamed AppImage refreshes the start-at-login entry on the next start', async () => {
+    const renamed = '/home/owner/Applications/Scout-Desktop-0.2.0-linux-x86_64.AppImage';
+    const deps = { platform: 'linux' as const, home, executable: renamed, app: fakeApp().app };
+
+    const whileOff = await refreshLoginEntry(deps);
+    const createdWhileOff = await linuxItem().isEnabled();
+    await linuxItem().setEnabled(true);
+    const afterRename = await refreshLoginEntry(deps);
+    const again = await refreshLoginEntry(deps);
+
+    expect(whileOff).toBe(false);
+    expect(createdWhileOff).toBe(false);
+    expect(afterRename).toBe(true);
+    expect(again).toBe(false);
+    expect(await readFile(entryPath(), 'utf8')).toContain(`Exec="${renamed}" --hidden`);
+    expect(await readFile(entryPath(), 'utf8')).not.toContain(executable);
+  });
+
+  it.each([
+    [
+      "a .deb started with another program's APPIMAGE",
+      { APPIMAGE: '/opt/Other.AppImage', APPDIR: '/tmp/.mount_OtherXy34' },
+      '/usr/lib/scout-desktop/scout-desktop',
+      '/usr/lib/scout-desktop/scout-desktop',
+    ],
+    [
+      'Scout run from its own AppImage',
+      { APPIMAGE: '/home/owner/Applications/Scout.AppImage', APPDIR: '/tmp/.mount_ScoutAb12' },
+      '/tmp/.mount_ScoutAb12/scout-desktop',
+      '/home/owner/Applications/Scout.AppImage',
+    ],
+  ])(
+    "a .deb started with another program's APPIMAGE keeps its own path in the login entry (%s)",
+    async (_label, env, execPath, expected) => {
+      await createLoginItem({
+        platform: 'linux',
+        home,
+        executable: ownExecutable(env, execPath),
+        app: fakeApp().app,
+      }).setEnabled(true);
+
+      expect(await readFile(entryPath(), 'utf8')).toContain(`Exec="${expected}" --hidden`);
+    },
+  );
 
   it('writes exactly the expected entry to <home>/.config/autostart/scout.desktop', async () => {
     await linuxItem().setEnabled(true);
