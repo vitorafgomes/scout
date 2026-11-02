@@ -1,4 +1,11 @@
-import { CHANNEL, type LocalTurn, type ScoutBridge, type WorkerEvent } from '@scout/shared';
+import {
+  CHANNEL,
+  type LocalTurn,
+  type ScoutBridge,
+  type UpdateNotice,
+  type UpdateProgress,
+  type WorkerEvent,
+} from '@scout/shared';
 
 export interface IpcSubset {
   invoke(channel: string, ...args: unknown[]): Promise<unknown>;
@@ -371,6 +378,51 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     localSetBubble(req) {
       return ipc.invoke(CHANNEL.localSetBubble, req) as ReturnType<ScoutBridge['localSetBubble']>;
+    },
+
+    updateGetState() {
+      return ipc.invoke(CHANNEL.updateGetState) as ReturnType<ScoutBridge['updateGetState']>;
+    },
+
+    updateSetCheckEnabled(req) {
+      return ipc.invoke(CHANNEL.updateSetCheckEnabled, req) as ReturnType<
+        ScoutBridge['updateSetCheckEnabled']
+      >;
+    },
+
+    updateCheckNow() {
+      return ipc.invoke(CHANNEL.updateCheckNow) as ReturnType<ScoutBridge['updateCheckNow']>;
+    },
+
+    updateSkipVersion(req) {
+      return ipc.invoke(CHANNEL.updateSkipVersion, req) as ReturnType<
+        ScoutBridge['updateSkipVersion']
+      >;
+    },
+
+    updateRemindLater() {
+      return ipc.invoke(CHANNEL.updateRemindLater) as ReturnType<ScoutBridge['updateRemindLater']>;
+    },
+
+    onUpdateNotice(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as UpdateNotice | null);
+      ipc.on(CHANNEL.updateNotice, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.updateNotice, handler);
+      };
+    },
+
+    updateInstall() {
+      return ipc.invoke(CHANNEL.updateInstall) as ReturnType<ScoutBridge['updateInstall']>;
+    },
+
+    onUpdateProgress(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as UpdateProgress);
+      ipc.on(CHANNEL.updateProgress, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.updateProgress, handler);
+      };
     },
   };
 }

@@ -10,6 +10,7 @@ import type {
   DesktopToggleRequest,
   LocalBubbleSettings,
   LocalShortcut,
+  UpdateState,
   WorkerEvent,
   WorkerStatus,
 } from '@scout/shared';
@@ -25,9 +26,17 @@ import { SettingsComponent } from './settings.component';
 function makeBridge(
   initial: readonly string[] = [],
   desktop: DesktopSettings = { keepRunning: true, startAtLogin: false, trayAvailable: true },
+  update: UpdateState = {
+    checkEnabled: true,
+    lastCheckAt: '2026-11-02T09:30:00.000Z',
+    lastResult: 'up-to-date',
+    notice: null,
+    packaged: true,
+  },
 ) {
   let stored: readonly string[] = initial;
   let desktopSettings = desktop;
+  let updateState = update;
   const workerListeners: ((event: WorkerEvent) => void)[] = [];
   const workerCalls: string[] = [];
   return {
@@ -81,6 +90,19 @@ function makeBridge(
       display: 'cursor',
     })),
     localSetBubble: vi.fn(async (req: LocalBubbleSettings): Promise<LocalBubbleSettings> => req),
+    updateGetState: vi.fn(async (): Promise<UpdateState> => updateState),
+    updateSetCheckEnabled: vi.fn(async (req: DesktopToggleRequest): Promise<UpdateState> => {
+      updateState = { ...updateState, checkEnabled: req.enabled };
+      return updateState;
+    }),
+    updateCheckNow: vi.fn(async (): Promise<UpdateState> => {
+      updateState = {
+        ...updateState,
+        lastCheckAt: '2026-11-02T10:45:00.000Z',
+        lastResult: 'available 0.2.0',
+      };
+      return updateState;
+    }),
   };
 }
 
@@ -505,6 +527,53 @@ describe('Settings: Desktop', () => {
     );
     expect(checkbox(fixture, 'desktop-start-at-login').checked).toBe(false);
     expect(checkbox(fixture, 'desktop-start-at-login').disabled).toBe(false);
+  });
+});
+
+describe('Settings: Desktop, new versions', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  const lastCheck = (at: string, result: string) =>
+    `Last check: ${new Date(at).toLocaleString()} · ${result}`;
+
+  it('the Check for new versions toggle and Check now reach main', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const toggle = el(fixture, 'update-check-enabled') as HTMLInputElement;
+
+    expect(toggle.parentElement?.textContent?.trim()).toBe('Check for new versions');
+    expect(toggle.checked).toBe(true);
+    expect(text(fixture, 'update-last-check')).toBe(
+      lastCheck('2026-11-02T09:30:00.000Z', 'up-to-date'),
+    );
+
+    toggle.click();
+    await settle(fixture);
+    expect(bridge.updateSetCheckEnabled).toHaveBeenCalledWith({ enabled: false });
+    expect((el(fixture, 'update-check-enabled') as HTMLInputElement).checked).toBe(false);
+
+    el(fixture, 'update-check-now')!.click();
+    await settle(fixture);
+    expect(bridge.updateCheckNow).toHaveBeenCalledTimes(1);
+    expect(text(fixture, 'update-last-check')).toBe(
+      lastCheck('2026-11-02T10:45:00.000Z', 'available 0.2.0'),
+    );
+  });
+
+  it('development build shows the explanatory line and no toggle', async () => {
+    const fixture = await render(
+      makeBridge(
+        [],
+        { keepRunning: true, startAtLogin: false, trayAvailable: true },
+        { checkEnabled: true, lastCheckAt: null, lastResult: null, notice: null, packaged: false },
+      ),
+    );
+
+    expect(text(fixture, 'update-dev-build')).toBe('Update checks run only in the installed app.');
+    expect(el(fixture, 'update-check-enabled')).toBeNull();
+    expect(el(fixture, 'update-check-now')).toBeNull();
   });
 });
 

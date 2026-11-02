@@ -18,6 +18,8 @@ export interface TrayDeps {
 
 export interface TrayController {
   setStatus(status: WorkerStatus): void;
+  /** Shows "Update available: <version>" in the menu and the tooltip, or removes it with null. */
+  setUpdateAvailable(version: string | null): void;
   destroy(): void;
 }
 
@@ -45,6 +47,7 @@ export function createTrayController(deps: TrayDeps): TrayController | null {
 
   let status: WorkerStatus = deps.initialStatus ?? { state: 'idle', restarts: 0 };
   let pending: 'start' | 'stop' | null = null;
+  let updateVersion: string | null = null;
 
   function run(action: 'start' | 'stop'): void {
     pending = action;
@@ -72,10 +75,14 @@ export function createTrayController(deps: TrayDeps): TrayController | null {
 
   function refresh(): void {
     if (tray.isDestroyed()) return;
-    tray.setToolTip(`Scout - ${STATE_LABEL[status.state]}`);
+    const updateSuffix = updateVersion === null ? '' : ' - update available';
+    tray.setToolTip(`Scout - ${STATE_LABEL[status.state]}${updateSuffix}`);
     tray.setContextMenu(
       deps.buildContextMenu([
         { id: 'open', label: 'Open Scout', click: deps.onOpen },
+        ...(updateVersion === null
+          ? []
+          : [{ id: 'update', label: `Update available: ${updateVersion}`, click: deps.onOpen }]),
         { id: 'ask', label: 'Ask Scout...', click: deps.onAskScout },
         { type: 'separator' },
         workerItem(),
@@ -91,6 +98,11 @@ export function createTrayController(deps: TrayDeps): TrayController | null {
   return {
     setStatus(next: WorkerStatus): void {
       status = next;
+      refresh();
+    },
+
+    setUpdateAvailable(version: string | null): void {
+      updateVersion = version;
       refresh();
     },
 

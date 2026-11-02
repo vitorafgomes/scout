@@ -104,13 +104,15 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Keep the packages and write checksums
+      - name: Keep the packages and the updater metadata, and write checksums
         working-directory: ui/build/dist
         shell: bash
         run: |
-          rm -f -- *.blockmap *.yml *.yaml Scout-Desktop-*-mac-x64.dmg
+          shopt -s extglob
+          rm -f -- !(latest*).yml *.yaml Scout-Desktop-*-mac-x64.dmg*
+          if [ "${{ matrix.platform }}" = mac ]; then rm -f -- *.blockmap *.yml; fi
           if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
-          "${hash[@]}" Scout-Desktop-* > "SHA256SUMS-${{ matrix.platform }}.txt"
+          "${hash[@]}" Scout-Desktop-!(*.blockmap) > "SHA256SUMS-${{ matrix.platform }}.txt"
           cat "SHA256SUMS-${{ matrix.platform }}.txt"
 
       - name: Upload packages
@@ -120,6 +122,7 @@ jobs:
           path: |
             ui/build/dist/Scout-Desktop-*
             ui/build/dist/SHA256SUMS-*.txt
+            ui/build/dist/latest*.yml
           retention-days: 7
           if-no-files-found: error
 

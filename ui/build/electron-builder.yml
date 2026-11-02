@@ -48,6 +48,14 @@ extraResources:
 electronLanguages:
   - en-US
 
+# Generates app-update.yml in resources and latest*.yml next to the packages for electron-updater;
+# the release workflow still publishes with gh and passes --publish never.
+publish:
+  provider: github
+  owner: vitorafgomes
+  repo: scout
+  releaseType: release
+
 mac:
   category: public.app-category.developer-tools
   identity: null

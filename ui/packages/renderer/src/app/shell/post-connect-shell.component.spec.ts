@@ -4,7 +4,10 @@ import { Router, provideRouter } from '@angular/router';
 import { Component } from '@angular/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { UpdateNotice } from '@scout/shared';
+
 import { MenuPreferences } from '../core/menu-preferences';
+import { ScoutBridgeService } from '../core/scout-bridge';
 import { PostConnectShellComponent } from './post-connect-shell.component';
 
 @Component({ selector: 'sc-stub-llm', standalone: true, template: 'llm-page' })
@@ -14,13 +17,28 @@ class StubLogs {}
 @Component({ selector: 'sc-stub-settings', standalone: true, template: 'settings-page' })
 class StubSettings {}
 
-async function setup(): Promise<{
+function updateBridge(notice: UpdateNotice | null) {
+  return {
+    updateGetState: async () => ({
+      checkEnabled: true,
+      lastCheckAt: null,
+      lastResult: null,
+      notice,
+      packaged: true,
+    }),
+    onUpdateNotice: () => () => undefined,
+    onUpdateProgress: () => () => undefined,
+  } as unknown as ScoutBridgeService;
+}
+
+async function setup(bridge?: ScoutBridgeService): Promise<{
   fixture: ComponentFixture<PostConnectShellComponent>;
   router: Router;
 }> {
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
+      ...(bridge === undefined ? [] : [{ provide: ScoutBridgeService, useValue: bridge }]),
       provideRouter([
         { path: 'chat', component: StubLlm },
         { path: 'llm', component: StubLlm },
@@ -40,6 +58,33 @@ describe('PostConnectShellComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     localStorage.clear();
+  });
+
+  it('shows no update bar while main knows no newer version', async () => {
+    const { fixture } = await setup(updateBridge(null));
+
+    expect(fixture.nativeElement.querySelector('[data-test="update-notice"]')).toBeNull();
+  });
+
+  it('shows the update bar above the page while a newer version is known', async () => {
+    const { fixture } = await setup(
+      updateBridge({
+        currentVersion: '0.1.0',
+        latestVersion: '0.2.0',
+        notes: '',
+        releaseUrl: 'https://github.com/vitorafgomes/scout/releases/tag/v0.2.0',
+        downloadUrl: 'https://github.com/vitorafgomes/scout/releases/tag/v0.2.0',
+        publishedAt: '2026-11-01T18:00:00Z',
+        canInstall: false,
+      }),
+    );
+
+    const bar = fixture.nativeElement.querySelector('[data-test="update-notice"]') as HTMLElement;
+    expect(bar).not.toBeNull();
+    expect(bar.textContent).toContain('Scout 0.2.0 is available. You have 0.1.0.');
+    const main = fixture.nativeElement.querySelector('main.main') as HTMLElement;
+    expect(bar.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(main.contains(bar)).toBe(false);
   });
 
   it('shows Logs in the menu while "Show Logs in the menu" is on', async () => {

@@ -23,6 +23,7 @@ import {
   rm as fsRm,
 } from 'node:fs/promises';
 import os from 'node:os';
+import { autoUpdater } from 'electron-updater';
 import { createLogger } from './util/logger.js';
 import { tryRecoverStaleLock } from './util/singleton-lock.js';
 import type { SingletonLockDeps } from './util/singleton-lock.js';
@@ -48,10 +49,16 @@ import { readAllowedUserIds, registerAccessHandlers } from './ipc/access.js';
 import { readSlackTokens, registerSlackHandlers } from './ipc/slack.js';
 import { registerDesktopHandlers, type DesktopHandle } from './ipc/desktop.js';
 import { installAppLifecycle, launchWindow } from './shell/app-lifecycle.js';
-import { createLoginItem } from './shell/login-item.js';
+import { createLoginItem, refreshLoginEntry } from './shell/login-item.js';
+import { ownExecutable } from './shell/own-executable.js';
 import { restartThroughX11, x11RelaunchArgs } from './shell/x11-relaunch.js';
 import { createPresenceNotifier, reportPairing } from './shell/notifications.js';
 import { createTrayController, type TrayController } from './tray/tray.js';
+import {
+  canSelfUpdate,
+  registerUpdateNotice,
+  type UpdateNoticeHandle,
+} from './update/update-notice.js';
 import { detectKubeconfig } from './kubernetes/kubeconfig.js';
 import {
   GITHUB_APP_CLIENT_ID,
@@ -175,11 +182,13 @@ let gitHubAuth: GitHubAuth | null = null;
 let quickAsk: QuickAsk | null = null;
 let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
+let updateNotice: UpdateNoticeHandle | null = null;
 let openMainWindow: ((show: boolean) => BrowserWindow) | null = null;
 
 function disposeAll(): void {
   quickAsk?.dispose();
   trayController?.destroy();
+  updateNotice?.dispose();
   desktop?.dispose();
   unregisterProviderKeys?.();
   chatGptAuth?.stop();
@@ -409,16 +418,45 @@ app
       presence.workerStatus(event.status);
     });
 
+    const loginItemDeps = {
+      platform: process.platform,
+      home: os.homedir(),
+      executable: ownExecutable(process.env, process.execPath),
+      app,
+    };
+    void refreshLoginEntry(loginItemDeps).catch((err: unknown) => {
+      logger.warn('start-at-login entry not refreshed', { err: String(err) });
+    });
     desktop = await registerDesktopHandlers(ipcMain, {
       vault,
-      loginItem: createLoginItem({
-        platform: process.platform,
-        home: os.homedir(),
-        executable: process.env['APPIMAGE'] || process.execPath,
-        app,
-      }),
+      loginItem: createLoginItem(loginItemDeps),
       trayAvailable: trayController !== null,
       logger: logger.child({ module: 'desktop' }),
+    });
+
+    updateNotice = await registerUpdateNotice({
+      ipcMain,
+      vault,
+      fetch: globalThis.fetch,
+      logger: logger.child({ module: 'update' }),
+      currentVersion: app.getVersion(),
+      packaged: app.isPackaged,
+      platform: process.platform,
+      arch: process.arch,
+      env: process.env,
+      execPath: process.execPath,
+      windows: () => BrowserWindow.getAllWindows(),
+      now: () => new Date(),
+      setTimer: (ms, fn) => {
+        const timer = setTimeout(fn, ms);
+        return () => clearTimeout(timer);
+      },
+      onNoticeChanged: (version) => trayController?.setUpdateAvailable(version),
+      updater: canSelfUpdate(app.isPackaged, process.platform, process.env, process.execPath)
+        ? autoUpdater
+        : null,
+      prepareForRestart: () => lifecycle.prepareForRestart(),
+      recoverFromFailedRestart: () => lifecycle.recoverFromFailedRestart(),
     });
 
     unregisterWorker = registerWorkerHandlers(

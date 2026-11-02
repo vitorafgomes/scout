@@ -82,6 +82,14 @@ describe('CHANNEL constant', () => {
         'slackManifestUrl',
         'slackSave',
         'slackStatus',
+        'updateCheckNow',
+        'updateGetState',
+        'updateInstall',
+        'updateNotice',
+        'updateProgress',
+        'updateRemindLater',
+        'updateSetCheckEnabled',
+        'updateSkipVersion',
         'whisperDeleteModel',
         'whisperDownloadModel',
         'whisperDownloadProgress',
@@ -192,6 +200,14 @@ describe('ChannelName type', () => {
       'scout:local.open': true,
       'scout:local.getBubble': true,
       'scout:local.setBubble': true,
+      'scout:update.getState': true,
+      'scout:update.setCheckEnabled': true,
+      'scout:update.checkNow': true,
+      'scout:update.skipVersion': true,
+      'scout:update.remindLater': true,
+      'scout:update.notice': true,
+      'scout:update.install': true,
+      'scout:update.progress': true,
     };
     expect(Object.values(valid).every((v) => v === true)).toBe(true);
   });
@@ -222,6 +238,20 @@ describe('no-external-write sanity scan', () => {
     // - scout:features.deleteCredentials -> deletes that same local keyring entry; no external mutation.
     'scout:features.setCredentials',
     'scout:features.deleteCredentials',
+    // - scout:update.getState .. notice  -> "update" names Scout's own version check: one unauthenticated GET of
+    //                                       public release metadata and Scout's own vault keys; nothing is
+    //                                       written outside Scout's config.
+    'scout:update.getState',
+    'scout:update.setCheckEnabled',
+    'scout:update.checkNow',
+    'scout:update.skipVersion',
+    'scout:update.remindLater',
+    'scout:update.notice',
+    // - scout:update.install, progress  -> install replaces Scout's own executable with a release the user chose
+    //                                       by clicking Update and restart; nothing outside Scout's own
+    //                                       installation is written. progress only reports that install.
+    'scout:update.install',
+    'scout:update.progress',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new
@@ -246,5 +276,29 @@ describe('no-external-write sanity scan', () => {
     for (const allowed of LOCAL_WRITE_ALLOWLIST) {
       expect(channelValues.has(allowed)).toBe(true);
     }
+  });
+});
+
+describe('update channels', () => {
+  test('the update check and install have their own scout:update channels, with the notice and the progress pushed', () => {
+    expect([
+      CHANNEL.updateGetState,
+      CHANNEL.updateSetCheckEnabled,
+      CHANNEL.updateCheckNow,
+      CHANNEL.updateSkipVersion,
+      CHANNEL.updateRemindLater,
+      CHANNEL.updateNotice,
+      CHANNEL.updateInstall,
+      CHANNEL.updateProgress,
+    ]).toEqual([
+      'scout:update.getState',
+      'scout:update.setCheckEnabled',
+      'scout:update.checkNow',
+      'scout:update.skipVersion',
+      'scout:update.remindLater',
+      'scout:update.notice',
+      'scout:update.install',
+      'scout:update.progress',
+    ]);
   });
 });

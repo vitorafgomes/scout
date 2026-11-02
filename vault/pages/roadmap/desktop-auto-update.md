@@ -59,7 +59,9 @@ By the end of phase 2, the owner installs 0.1.0 from the site, a 0.2.0 tag is pu
 
 ## Status
 
-- **As of 2026-11-02:** plan written, nothing built. Phase 1 can start without any decision from the owner; phase 2 needs the ADR and the workflow change.
+- **As of 2026-11-02:** phases 1 and 2 built together on `feat/update-notice` (PR #75), governed by [[pages/decisions/0031-desktop-self-update]]. The check, the bar, the tray item and the Settings rows: `ui/packages/main/src/update/update-notice.ts`, `ui/packages/shared/src/version.ts`, `ui/packages/renderer/src/app/shell/update-notice.component.ts`, `ui/packages/main/src/tray/tray.ts`, `ui/packages/renderer/src/app/wizard/settings/settings.component.ts`. Update and restart through `electron-updater` for the AppImage actually running and for Windows; the worker is stopped and the single-instance lock released before the restart, and taken back when the new version cannot be applied (`ui/packages/main/src/shell/app-lifecycle.ts`); a renamed AppImage refreshes the start-at-login entry (`ui/packages/main/src/shell/login-item.ts`). The release workflow keeps `latest*.yml` and the blockmaps for Linux and Windows and a test runs its prune step. Details and file:line on [[pages/services/desktop-ui]], "Update notice".
+- **Next milestone:** the first release carrying the updater metadata (`v0.2.0`), then the owner's end-to-end test from a 0.1.0 or local 0.0.1 build.
+- **Open:** macOS one-click update after signing; `.deb` keeps Download ([[pages/roadmap/followups]]).
 
 ## Phases
 
@@ -78,8 +80,8 @@ By the end of phase 2, the owner installs 0.1.0 from the site, a 0.2.0 tag is pu
 
 ## Decisions pending
 
-- `pages/decisions/0031-desktop-self-update` (to be drafted at phase 2): the Rule A classification above, the updater, which packages, what the user must click, what is stored.
-- **Owner:** confirm that phase 1 ships before phase 2; whether to keep the metadata files in the release from the next tag on (they are harmless to the site).
+- [[pages/decisions/0031-desktop-self-update]] (accepted 2026-11-02): the Rule A classification above, the updater, which packages, what the user must click, what is stored.
+- **Owner:** decided 2026-11-02 after testing phase 1 ("eu nao deveria ter a questao do download mas sim update"): both phases ship together; the metadata files stay in every release from `v0.2.0` on.
 
 ## Services affected
 

@@ -13,9 +13,12 @@ export interface LifecycleWindow {
 }
 
 export interface AppLifecycleDeps {
-  app: Pick<App, 'on' | 'quit' | 'exit'>;
+  app: Pick<
+    App,
+    'on' | 'quit' | 'exit' | 'releaseSingleInstanceLock' | 'requestSingleInstanceLock'
+  >;
   platform: NodeJS.Platform;
-  supervisor(): Pick<Supervisor, 'status' | 'stop'> | null;
+  supervisor(): Pick<Supervisor, 'status' | 'stop' | 'start'> | null;
   keepRunning(): boolean;
   window(): LifecycleWindow | null;
   createWindow(): void;
@@ -36,6 +39,12 @@ export interface AppLifecycle {
    * stop window-all-closed from firing and keep Scout alive.
    */
   onWindowClose(event: { preventDefault(): void }): void;
+  /** Stops a running worker once; before-quit and an update restart share the same stop. */
+  stopWorker(): Promise<void>;
+  /** Stops the worker and frees the single-instance lock, so the updated Scout can start while this one exits. */
+  prepareForRestart(): Promise<void>;
+  /** Takes the lock again and restarts the worker if it ran before, when the update could not be applied. */
+  recoverFromFailedRestart(): Promise<void>;
 }
 
 export interface LaunchDeps {
@@ -69,6 +78,49 @@ export function launchWindow(deps: LaunchDeps): void {
 export function installAppLifecycle(deps: AppLifecycleDeps): AppLifecycle {
   const { app, logger } = deps;
   let quitting = false;
+  let stopping: Promise<void> | null = null;
+  let workerRanBeforeRestart = false;
+
+  const isRunning = (worker: ReturnType<AppLifecycleDeps['supervisor']>): boolean =>
+    worker !== null && worker.status.state !== 'stopped' && worker.status.state !== 'idle';
+
+  function stopWorker(): Promise<void> {
+    if (stopping !== null) return stopping;
+    const worker = deps.supervisor();
+    if (worker === null || !isRunning(worker)) return Promise.resolve();
+    stopping = worker
+      .stop()
+      .then(
+        () => undefined,
+        (err: unknown) => {
+          logger.warn('before-quit: worker stop failed', { err: String(err) });
+        },
+      )
+      .finally(() => {
+        stopping = null;
+      });
+    return stopping;
+  }
+
+  async function prepareForRestart(): Promise<void> {
+    workerRanBeforeRestart = isRunning(deps.supervisor());
+    await stopWorker();
+    app.releaseSingleInstanceLock();
+  }
+
+  async function recoverFromFailedRestart(): Promise<void> {
+    if (!app.requestSingleInstanceLock()) {
+      logger.warn('update: the single-instance lock is held by another Scout');
+    }
+    if (!workerRanBeforeRestart) return;
+    workerRanBeforeRestart = false;
+    await deps
+      .supervisor()
+      ?.start()
+      .catch((err: unknown) => {
+        logger.warn('update: worker restart failed', { err: String(err) });
+      });
+  }
 
   function showWindow(): void {
     const window = deps.window();
@@ -89,22 +141,16 @@ export function installAppLifecycle(deps: AppLifecycleDeps): AppLifecycle {
     quitting = true;
     logger.info('before-quit');
 
-    const worker = deps.supervisor();
-    if (worker === null || worker.status.state === 'stopped' || worker.status.state === 'idle') {
+    if (stopping === null && !isRunning(deps.supervisor())) {
       deps.dispose();
       return;
     }
 
     event.preventDefault();
-    void worker
-      .stop()
-      .catch((err: unknown) => {
-        logger.warn('before-quit: worker stop failed', { err: String(err) });
-      })
-      .finally(() => {
-        deps.dispose();
-        app.exit(0);
-      });
+    void stopWorker().finally(() => {
+      deps.dispose();
+      app.exit(0);
+    });
   });
 
   app.on('second-instance', (_event, argv: readonly string[] = []) => {
@@ -115,6 +161,9 @@ export function installAppLifecycle(deps: AppLifecycleDeps): AppLifecycle {
 
   return {
     showWindow,
+    stopWorker,
+    prepareForRestart,
+    recoverFromFailedRestart,
     onWindowClose(event): void {
       if (quitting) return;
       if (!deps.keepRunning()) {

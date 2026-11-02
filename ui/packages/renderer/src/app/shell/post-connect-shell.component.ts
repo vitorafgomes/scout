@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { MenuPreferences } from '../core/menu-preferences';
+import { UpdateNoticeComponent } from './update-notice.component';
 
 interface NavItem {
   readonly path: string;
@@ -56,7 +57,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
 @Component({
   selector: 'sc-post-connect-shell',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, UpdateNoticeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="shell">
@@ -87,9 +88,12 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
           }
         </ul>
       </nav>
-      <main class="main" role="main">
-        <router-outlet />
-      </main>
+      <div class="content">
+        <sc-update-notice />
+        <main class="main" role="main">
+          <router-outlet />
+        </main>
+      </div>
     </div>
   `,
   styles: [
@@ -158,7 +162,14 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       .nav-icon {
         flex-shrink: 0;
       }
+      .content {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
       .main {
+        flex: 1;
+        min-height: 0;
         overflow-y: auto;
       }
     `,

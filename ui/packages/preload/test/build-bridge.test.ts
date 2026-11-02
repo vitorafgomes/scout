@@ -93,6 +93,14 @@ describe('buildBridge', () => {
       'localOpen',
       'localGetBubble',
       'localSetBubble',
+      'updateGetState',
+      'updateSetCheckEnabled',
+      'updateCheckNow',
+      'updateSkipVersion',
+      'updateRemindLater',
+      'onUpdateNotice',
+      'updateInstall',
+      'onUpdateProgress',
     ];
 
     const actualKeys = Object.keys(bridge).sort();
@@ -576,5 +584,82 @@ describe('buildBridge', () => {
     expect(channel).toBe(CHANNEL.localTurns);
     expect(received).toEqual([turns]);
     expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.localTurns, handler);
+  });
+
+  it('the update methods reach main only through their own channels with their payloads', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.updateGetState();
+    await bridge.updateSetCheckEnabled({ enabled: false });
+    await bridge.updateCheckNow();
+    await bridge.updateSkipVersion({ version: '0.2.0' });
+    await bridge.updateRemindLater();
+    await bridge.updateInstall();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.updateGetState],
+      [CHANNEL.updateSetCheckEnabled, { enabled: false }],
+      [CHANNEL.updateCheckNow],
+      [CHANNEL.updateSkipVersion, { version: '0.2.0' }],
+      [CHANNEL.updateRemindLater],
+      [CHANNEL.updateInstall],
+    ]);
+  });
+
+  it('onUpdateNotice forwards the notice main pushes and unsubscribes the same handler', () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const received: unknown[] = [];
+    const notice = {
+      currentVersion: '0.1.0',
+      latestVersion: '0.2.0',
+      notes: '* item',
+      releaseUrl: 'https://github.com/vitorafgomes/scout/releases/tag/v0.2.0',
+      downloadUrl: 'https://github.com/vitorafgomes/scout/releases/tag/v0.2.0',
+      publishedAt: '2026-11-01T18:00:00Z',
+    };
+
+    const unsubscribe = bridge.onUpdateNotice((n) => received.push(n));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, notice);
+    handler({}, null);
+    unsubscribe();
+
+    expect(channel).toBe(CHANNEL.updateNotice);
+    expect(received).toEqual([notice, null]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.updateNotice, handler);
+  });
+
+  it('onUpdateProgress forwards the progress main pushes and unsubscribes the same handler', () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const received: unknown[] = [];
+    const progress = {
+      phase: 'downloading',
+      percent: 42,
+      transferred: 42,
+      total: 100,
+      message: null,
+    };
+
+    const unsubscribe = bridge.onUpdateProgress((p) => received.push(p));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, progress);
+    unsubscribe();
+
+    expect(channel).toBe(CHANNEL.updateProgress);
+    expect(received).toEqual([progress]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.updateProgress, handler);
   });
 });

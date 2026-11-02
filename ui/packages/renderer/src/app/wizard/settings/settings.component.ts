@@ -6,7 +6,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { readIpcError, type DesktopSettings, type LocalBubbleSettings } from '@scout/shared';
+import {
+  readIpcError,
+  type DesktopSettings,
+  type LocalBubbleSettings,
+  type UpdateState,
+} from '@scout/shared';
 
 import { ScoutBridgeService } from '../../core/scout-bridge';
 import { ChatClientsComponent } from './chat-clients.component';
@@ -210,6 +215,41 @@ const DISPLAYS: readonly { value: LocalBubbleSettings['display']; label: string 
             Start Scout when I log in
           </label>
         }
+        @if (update(); as state) {
+          @if (state.packaged) {
+            <label class="toggle">
+              <input
+                type="checkbox"
+                data-test="update-check-enabled"
+                [checked]="state.checkEnabled"
+                [disabled]="updateBusy()"
+                (change)="setCheckEnabled($any($event.target))"
+              />
+              Check for new versions
+            </label>
+            <div class="update-row">
+              <p class="muted" data-test="update-last-check">
+                Last check:
+                {{ state.lastCheckAt === null ? 'never' : formatDate(state.lastCheckAt) }}
+                @if (state.lastResult !== null) {
+                  · {{ state.lastResult }}
+                }
+              </p>
+              <button
+                type="button"
+                data-test="update-check-now"
+                [disabled]="updateBusy()"
+                (click)="checkNow()"
+              >
+                Check now
+              </button>
+            </div>
+          } @else {
+            <p class="description" data-test="update-dev-build">
+              Update checks run only in the installed app.
+            </p>
+          }
+        }
         @if (desktopError(); as error) {
           <p class="error" role="alert" data-test="desktop-error">{{ error }}</p>
         }
@@ -286,6 +326,12 @@ const DISPLAYS: readonly { value: LocalBubbleSettings['display']; label: string 
       }
       .access-add {
         display: flex;
+        gap: 8px;
+      }
+      .update-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         gap: 8px;
       }
       .access-add input {
@@ -373,6 +419,8 @@ export class SettingsComponent implements OnInit {
   readonly desktop = signal<DesktopSettings | null>(null);
   readonly desktopBusy = signal(false);
   readonly desktopError = signal<string | null>(null);
+  readonly update = signal<UpdateState | null>(null);
+  readonly updateBusy = signal(false);
   readonly shortcut = signal('');
   readonly shortcutBusy = signal(false);
   readonly shortcutError = signal<string | null>(null);
@@ -405,6 +453,10 @@ export class SettingsComponent implements OnInit {
     void this.bridge
       .desktopGetSettings()
       .then((settings) => this.desktop.set(settings))
+      .catch((err: unknown) => this.desktopError.set(readIpcError(err).message));
+    void this.bridge
+      .updateGetState()
+      .then((state) => this.update.set(state))
       .catch((err: unknown) => this.desktopError.set(readIpcError(err).message));
     void this.bridge
       .localGetShortcut()
@@ -453,6 +505,34 @@ export class SettingsComponent implements OnInit {
 
   async setStartAtLogin(input: HTMLInputElement): Promise<void> {
     await this.saveDesktop(input, (enabled) => this.bridge.desktopSetStartAtLogin({ enabled }));
+  }
+
+  formatDate(iso: string): string {
+    return new Date(iso).toLocaleString();
+  }
+
+  async setCheckEnabled(input: HTMLInputElement): Promise<void> {
+    const enabled = input.checked;
+    const saved = await this.saveUpdate(() => this.bridge.updateSetCheckEnabled({ enabled }));
+    if (!saved) input.checked = !enabled;
+  }
+
+  async checkNow(): Promise<void> {
+    await this.saveUpdate(() => this.bridge.updateCheckNow());
+  }
+
+  private async saveUpdate(call: () => Promise<UpdateState>): Promise<boolean> {
+    this.updateBusy.set(true);
+    this.desktopError.set(null);
+    try {
+      this.update.set(await call());
+      return true;
+    } catch (err: unknown) {
+      this.desktopError.set(readIpcError(err).message);
+      return false;
+    } finally {
+      this.updateBusy.set(false);
+    }
   }
 
   private async saveDesktop(
