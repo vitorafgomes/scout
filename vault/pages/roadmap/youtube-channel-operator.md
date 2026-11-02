@@ -55,8 +55,8 @@ By the end of phase 5, the owner says "make a video about X" in Discord, reviews
 1. **Mandate.** A Production screen in the desktop holds the channel mandate: objective, audience, content pillars, cadence, language, voice and style, blocked topics, budget caps for paid providers. Stored under Scout's own vault and data folder; editable only there.
 2. **Research.** Topic candidates from the channel's history, the Data API's search and the connected model, each with an estimated fit to the mandate and the reasons; the owner picks or asks for more. No external write.
 3. **Script.** Hook, narrative, pattern interrupts, call to action, chapters, title variants, description, tags; every factual claim marked with its source or "unverified". Saved as a draft in Scout's folder, shown in the desktop and summarised in chat.
-4. **Narration.** Text to speech through a provider the owner connects (a local engine the owner already runs, or a paid provider card like the LLM cards); per-scene audio files; the owner can replace a sentence and regenerate one scene.
-5. **Visuals.** Default: a slideshow built from generated or owner-supplied images with captions, free; optional: a video-generation provider with a cap on paid seconds and a fallback to the slideshow. Scene list with lock, reorder, replace and regenerate.
+4. **Narration.** Text to speech through the AI Source already connected in Scout when it offers speech (the same credential, no second account); otherwise a local engine on the machine; per-scene audio files; the owner can replace a sentence and regenerate one scene.
+5. **Visuals.** Default: a slideshow built from images the connected AI Source generates (when it offers images) or the owner supplies, with captions; optional: video generation through that same source when it offers it, with a cap on paid seconds and a fallback to the slideshow. Scene list with lock, reorder, replace and regenerate.
 6. **Assembly.** `ffmpeg` renders the MP4 (narration, visuals, captions, music the owner supplies) and a 9:16 Shorts cut per scene group; the renderer is our own C# driver of the `ffmpeg` binary bundled with the desktop (one external tool, not a library, chosen because no own renderer is realistic; the owner's rule on third-party code is met by owning every line that drives it).
 7. **Review.** The Production screen shows the script, the narration, each scene and the final video; checks run (duration, loudness, caption coverage, no placeholder media); the owner edits, regenerates or approves. Nothing leaves the machine before this.
 8. **Publish.** The approved package goes to the approval queue: upload as private or unlisted, set metadata and thumbnail, schedule the publish time; each is an approved action; the result and the video id are logged and shown.
@@ -95,7 +95,8 @@ The desktop is the operator: the scheduler (daily research, publishing queue, an
 ## Decisions pending
 
 - [[pages/decisions/0032-per-feature-write-permissions]] accepted; the per-feature ADRs for `youtube-publish` and `youtube-engage` are drafted at their phases.
-- **Owner:** which TTS (the local engine already on the owner's machine, or a paid provider); which image source (a paid provider, or only owner-supplied images at first); whether `ffmpeg` bundled with the desktop is acceptable as the one external tool; the first channel mandate.
+- **Owner, decided 2026-11-02:** narration and images come only from the AI Sources already connected in Scout; no separate account, key or card for media ("o objetivo e' sempre usar apenas os AI Sources que estao autenticados ja no Scout e nao ter uma conta a parte"). Phase 3 therefore carries a capability matrix per connected provider (which of them offers speech and image generation through the same credential, which do not) and a local fallback for the rest: text-card slideshow with owner-supplied images, and a local speech engine when one is installed on the machine.
+- **Owner:** whether `ffmpeg` bundled with the desktop is acceptable as the one external tool; the first channel mandate.
 
 ## Services affected
 
