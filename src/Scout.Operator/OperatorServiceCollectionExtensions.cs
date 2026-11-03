@@ -1,0 +1,45 @@
+using System.Threading.Channels;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.SemanticKernel;
+using Scout.Llm;
+
+namespace Scout.Operator;
+
+/// <summary>DI composition for the YouTube channel operator.</summary>
+public static class OperatorServiceCollectionExtensions
+{
+    /// <summary>The catalog scope row of the operator's writes into Scout's data folder.</summary>
+    public const string DataFolderScope = "Scout's data folder";
+
+    /// <summary>
+    /// Register the operator: the research, script and pipeline stages, the background worker, and the
+    /// <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
+    /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
+    /// client and an origin notifier registered by the caller.
+    /// </summary>
+    public static IServiceCollection AddYouTubeOperator(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<SearchBudget>();
+        services.AddSingleton<TopicResearcher>();
+        services.AddSingleton<ScriptWriter>();
+        services.AddSingleton<OperatorPipeline>();
+        services.AddSingleton(Channel.CreateUnbounded<QueuedProject>());
+        services.AddHostedService<OperatorWorker>();
+        services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
+            new YouTubeOperatorPlugin(
+                sp.GetRequiredService<IOperatorControlPlane>(),
+                sp.GetRequiredService<Channel<QueuedProject>>()),
+            YouTubeOperatorPlugin.PluginName));
+        services.AddWriteFunction(
+            YouTubeOperatorPlugin.PluginName,
+            YouTubeOperatorPlugin.MakeVideo,
+            "youtube",
+            DataFolderScope,
+            summaryArguments: ["topic"]);
+        return services;
+    }
+}

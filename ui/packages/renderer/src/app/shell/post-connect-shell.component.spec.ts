@@ -101,14 +101,22 @@ describe('PostConnectShellComponent', () => {
     const labels = Array.from(fixture.nativeElement.querySelectorAll('.nav-label')).map((el) =>
       ((el as HTMLElement).textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['Chat', 'AI Sources', 'Models', 'Features', 'Review', 'Settings']);
+    expect(labels).toEqual([
+      'Chat',
+      'AI Sources',
+      'Models',
+      'Features',
+      'Production',
+      'Review',
+      'Settings',
+    ]);
   });
 
-  it('renders Chat first, then AI Sources, Models, Features, Review, Logs, Settings, with no Status entry', async () => {
+  it('renders Chat first, then AI Sources, Models, Features, Production, Review, Logs, Settings, with no Status entry', async () => {
     const { fixture } = await setup();
 
     const links = fixture.nativeElement.querySelectorAll('.nav-link');
-    expect(links.length).toBe(7);
+    expect(links.length).toBe(8);
     const labels = Array.from(links).map((el) =>
       ((el as HTMLElement).querySelector('.nav-label')?.textContent ?? '').trim(),
     );
@@ -117,6 +125,7 @@ describe('PostConnectShellComponent', () => {
       'AI Sources',
       'Models',
       'Features',
+      'Production',
       'Review',
       'Logs',
       'Settings',
@@ -130,6 +139,9 @@ describe('PostConnectShellComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-test="nav-sources"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-models"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="nav-features"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-test="nav-production"]')?.getAttribute('href'),
+    ).toBe('/production');
     expect(
       fixture.nativeElement.querySelector('[data-test="nav-review"]')?.getAttribute('href'),
     ).toBe('/review');

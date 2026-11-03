@@ -74,5 +74,7 @@ public static class ControlPlaneServiceCollectionExtensions
 
         services.AddSingleton<FeaturesService>();
         services.AddSingleton<WriteGate.WriteGateService>();
+        services.AddSingleton<Operator.JsonFileOperatorStore>();
+        services.AddSingleton<Operator.OperatorService>();
     }
 }

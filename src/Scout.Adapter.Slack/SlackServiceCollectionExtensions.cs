@@ -38,6 +38,7 @@ public static class SlackServiceCollectionExtensions
         services.AddSingleton<SlackMessageTranslator>();
         services.AddSingleton<SlackChatAdapter>();
         services.AddSingleton<IChatAdapter>(sp => sp.GetRequiredService<SlackChatAdapter>());
+        services.AddSingleton<IOriginPoster, SlackOriginPoster>();
 
         return services;
     }

@@ -62,6 +62,29 @@ public sealed class DiscordMessageTranslatorTests
     }
 
     [Fact]
+    public void TryTranslate_Names_The_Channel_And_The_Question_As_The_Origin()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 42, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: "<@1111> start the weekly video", MentionsSelf: true, Timestamp: FixedTime, GuildId: 9999);
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.OriginReference.ShouldBe("discord:3333:42");
+    }
+
+    [Fact]
+    public void TryTranslate_Names_The_Channel_And_The_Voice_Message_As_The_Origin()
+    {
+        var inbound = new InboundDiscordMessage(
+            MessageId: 43, AuthorId: HumanUserId, ChannelId: ChannelId,
+            Content: string.Empty, MentionsSelf: false, Timestamp: FixedTime,
+            Voice: new InboundVoiceMessage("https://cdn.example/voice.ogg", "audio/ogg", 1024, TimeSpan.FromSeconds(3)));
+
+        Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
+        chatMessage!.OriginReference.ShouldBe("discord:3333:43");
+    }
+
+    [Fact]
     public void TryTranslate_Rejects_Messages_That_Are_Only_A_Mention()
     {
         var inbound = new InboundDiscordMessage(

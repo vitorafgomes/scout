@@ -19,6 +19,14 @@ reliability: high
 
 > Dated changes to [[pages/services/llm]]; the service page states how it works now.
 
+## 2026-11-03 - The ChatGPT plan path ran declared writes without the write gate
+
+- **Symptom:** none in production yet (no write function was declared before the operator's phase 2); found while proving the write gate on every provider path for the first declared write, `youtube_make_video`.
+- **Root cause:** the `ChatGptPlan` factory built its `IChatClient` with Microsoft.Extensions.AI's `UseFunctionInvocation()`, which invokes kernel functions as plain `AIFunction`s outside the kernel's filters, so `WriteGateFilter` never saw the call.
+- **What changed:** the builder uses Semantic Kernel's `UseKernelFunctionInvocation()` (`src/Scout.Llm/Providers/ChatGptPlan/ChatGptPlanLlmProviderFactory.cs:103`), which routes every call through the kernel and its filters; the existing ChatGPT plan tests stay green across the change.
+- **Tests:** `tests/Scout.Llm.Tests/Guard/WriteGateProviderPathTests.cs` proves the gate on the Gemini and ChatGPT plan paths; reverting the builder line makes the ChatGPT plan case run the write body.
+- **Invariants:** [[pages/invariants/no-executive-writes]], [[pages/decisions/0032-per-feature-write-permissions]]: the function gate is the enforcement point, so every provider path must go through the kernel's filters.
+
 ## 2026-10-22 - A provider without credit was reported as a connection error
 
 - **Symptom:** with an OpenAI key whose account had no credit, a Discord user got an empty or partial reply ending in "(connection error)". The log showed `System.ClientModel.ClientResultException: HTTP 429 (insufficient_quota: credit_balance_exhausted)` raised from the OpenAI SDK, through Semantic Kernel's streaming chat call, into `ChatGateway.StreamChatAsync`, then `StreamPump stream failed mid-flight` and `Discord response failed`.

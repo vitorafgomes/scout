@@ -48,6 +48,7 @@ public static class ConversationServiceCollectionExtensions
         // beforehand; this TryAdd then no-ops and the real one wins.
         services.TryAddSingleton<ISkillSelector, NoOpSkillSelector>();
 
+        services.TryAddSingleton<IOriginNotifier, OriginNotifier>();
         services.TryAddSingleton<IConversationRouter, LlmStreamingRouter>();
         services.TryAddSingleton(sp => new ConversationConductor(
             sp.GetRequiredService<IConversationRouter>(),

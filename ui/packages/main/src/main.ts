@@ -41,6 +41,7 @@ import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers, whisperRootDir } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
+import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
@@ -180,6 +181,7 @@ let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
+let unregisterOperator: (() => void) | null = null;
 let unregisterProviderKeys: (() => void) | null = null;
 let unregisterChatGpt: (() => void) | null = null;
 let chatGptAuth: ChatGptAuth | null = null;
@@ -223,6 +225,7 @@ function disposeAll(): void {
   unregisterAccess?.();
   unregisterSlack?.();
   unregisterFeatures?.();
+  unregisterOperator?.();
   unregisterProviders?.();
   unregisterWhisper?.();
   unregisterLlmPull?.();
@@ -589,6 +592,11 @@ app
         },
         onActionsChanged: () => sendToAllWindows(CHANNEL.actionsChanged, featuresLogger),
       },
+    );
+    unregisterOperator = registerOperatorHandlers(
+      ipcMain,
+      () => connection.client,
+      logger.child({ module: 'operator' }),
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));

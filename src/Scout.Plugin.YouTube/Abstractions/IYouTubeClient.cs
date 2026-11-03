@@ -20,4 +20,10 @@ public interface IYouTubeClient
 
     /// <summary>The videos with the given ids (at most 50), in the order asked; unknown ids are absent.</summary>
     Task<IReadOnlyList<YouTubeVideo>> GetVideosAsync(IReadOnlyList<string> ids, CancellationToken ct);
+
+    /// <summary>
+    /// One <c>search.list</c> call for videos matching <paramref name="query"/>, most relevant first, at most
+    /// 25 (<paramref name="max"/> is clamped to 1..25). Each call spends one of the 100 searches YouTube allows a day.
+    /// </summary>
+    Task<IReadOnlyList<YouTubeSearchResult>> SearchVideosAsync(string query, int max, CancellationToken ct);
 }

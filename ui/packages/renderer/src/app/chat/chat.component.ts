@@ -38,7 +38,9 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
       <ol class="turns" data-test="turns" aria-live="polite">
         @for (turn of turns(); track turn.id) {
           <li class="turn">
-            <p class="question" data-test="question" [textContent]="turn.question"></p>
+            @if (!turn.notice) {
+              <p class="question" data-test="question" [textContent]="turn.question"></p>
+            }
             <p
               class="reply"
               data-test="reply"

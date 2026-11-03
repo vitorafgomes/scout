@@ -73,6 +73,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/host-control-plane|Host.ControlPlane]] - ASP.NET gRPC host that serves the control-plane domain to the desktop UI over a Unix socket or named pipe, guarded by a per-session token.
 - [[pages/services/knowledge|Knowledge]] - Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent.
 - [[pages/services/llm|Llm]] - Selects one LLM provider by configuration, builds the shared Semantic Kernel, and exposes a streaming chat gateway and an embedding generator to the rest of Scout.
+- [[pages/services/operator|Operator]] - The YouTube channel operator's pipeline in the worker: researches a topic, writes the script with its claims, saves each stage through the control plane and posts progress to the chat that asked.
 - [[pages/services/plugin-github|Plugin.GitHub]] - Read-only GitHub plugin: four Semantic Kernel functions over a typed REST client; authenticates from a token or the desktop's token file, self-gates off when neither is set.
 - [[pages/services/plugin-kubernetes|Plugin.Kubernetes]] - Read-only Kubernetes plugin: six GET-only Semantic Kernel functions over the owner's kubeconfig, only for the contexts the owner allowed; self-gates off without a path and a context.
 - [[pages/services/plugin-youtube|Plugin.YouTube]] - YouTube Data API read functions (channel overview, recent videos, video stats); token file or API key.
@@ -118,6 +119,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0030-youtube-plugin-read-only-with-browser-sign-in|ADR 0030 YouTube plugin]] - Read-only YouTube plugin over the official APIs; browser sign-in from the desktop; key for public data.
 - [[pages/decisions/0031-desktop-self-update|ADR 0031 Desktop self-update]] - The desktop replaces its own executable only on the user's click, from a checksummed release; macOS and .deb keep Download.
 - [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 Per-feature write permissions]] - Features declare their writes; the owner grants each one and approves irreversible actions in the desktop.
+- [[pages/decisions/0033-channel-operator-architecture|ADR 0033 Channel operator architecture]] - Operator state in the control plane, the pipeline in Scout.Operator, media through the connected AI Source, progress back to the originating chat.
 
 ## Domain
 

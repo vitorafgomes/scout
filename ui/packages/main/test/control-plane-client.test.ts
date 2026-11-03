@@ -5,10 +5,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  ControlPlaneInvalidArgumentError,
+  ControlPlaneNotFoundError,
+  ControlPlanePermissionDeniedError,
   ControlPlaneNotImplementedError,
   ControlPlaneUnavailableError,
   ControlPlaneWriteConfirmationError,
   type FeatureDto,
+  type OperatorProjectDto,
   type PendingActionDto,
   type WriteLogEntryDto,
 } from '@scout/shared';
@@ -665,6 +669,277 @@ describe('createControlPlaneClient features', () => {
 
     const startedAt = Date.now();
     const error = await client.listFeatures().then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  });
+});
+
+interface OperatorCall {
+  method: string;
+  request: unknown;
+  token: grpc.MetadataValue[];
+}
+
+const mandateWire = {
+  objective: 'Grow a .NET channel',
+  audience: 'Backend developers',
+  pillars: ['Performance', 'Testing'],
+  cadence: 'weekly',
+  language: 'en',
+  voiceAndStyle: 'calm, precise',
+  blockedTopics: ['politics'],
+  targetMetric: 'views',
+  targetValue: '10000',
+  updatedAt: '2026-11-03T09:00:00Z',
+};
+
+const projectWire = {
+  id: 'p1',
+  topic: 'Span<T> in C#',
+  status: 'script_ready',
+  origin: 'desktop',
+  createdAt: '2026-11-03T09:00:00Z',
+  updatedAt: '2026-11-03T09:05:00Z',
+  candidates: [{ title: 'Span<T> without fear', reason: 'Fits Performance', fit: 0.82 }],
+  script: {
+    hook: 'Your allocations are lying to you.',
+    sections: [{ heading: 'Why Span', narration: 'Span is a view over memory.' }],
+    callToAction: 'Subscribe for more.',
+    titleVariants: ['Span<T> explained'],
+    description: 'A tour of Span<T>.',
+    tags: ['dotnet', 'span'],
+    chapters: [{ at: '00:00', title: 'Intro' }],
+  },
+  claims: [
+    {
+      id: 'c1',
+      text: 'Span<T> is a ref struct.',
+      risk: 'low',
+      sourceUrls: ['https://learn.microsoft.com/dotnet/api/system.span-1'],
+      status: 'pending',
+    },
+  ],
+};
+
+const queuedWire = {
+  id: 'p2',
+  topic: 'Records in C#',
+  status: 'queued',
+  origin: 'desktop',
+  createdAt: '2026-11-03T10:00:00Z',
+  updatedAt: '2026-11-03T10:00:00Z',
+  candidates: [],
+  claims: [],
+  error: 'model unavailable',
+};
+
+const projectDto: OperatorProjectDto = {
+  ...projectWire,
+  claims: [{ ...projectWire.claims[0]!, note: null }],
+  error: null,
+};
+
+async function startOperatorServer(
+  socketPath: string,
+  calls: OperatorCall[],
+  options: {
+    mandate?: object;
+    failWith?: { code: grpc.status; details: string };
+  } = {},
+): Promise<grpc.Server> {
+  const definition = protoLoader.loadSync(path.join(PROTO_DIR, 'operator.proto'), {
+    enums: String,
+    defaults: true,
+  });
+  const loaded = grpc.loadPackageDefinition(definition) as unknown as {
+    scout: { controlplane: { v1: { Operator: grpc.ServiceClientConstructor } } };
+  };
+  const handler =
+    (method: string, response: () => unknown) =>
+    (call: grpc.ServerUnaryCall<unknown, unknown>, callback: grpc.sendUnaryData<unknown>) => {
+      calls.push({ method, request: call.request, token: call.metadata.get('x-scout-token') });
+      if (options.failWith === undefined) callback(null, response());
+      else callback(options.failWith, null);
+    };
+  const server = new grpc.Server();
+  server.addService(loaded.scout.controlplane.v1.Operator.service, {
+    GetMandate: handler('GetMandate', () => options.mandate ?? mandateWire),
+    SaveMandate: handler('SaveMandate', () => mandateWire),
+    ListProjects: handler('ListProjects', () => ({ projects: [projectWire, queuedWire] })),
+    GetProject: handler('GetProject', () => projectWire),
+    StartProject: handler('StartProject', () => queuedWire),
+    DecideClaim: handler('DecideClaim', () => ({
+      ...projectWire,
+      claims: [{ ...projectWire.claims[0], status: 'waived', note: 'Common knowledge' }],
+    })),
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.bindAsync(`unix:${socketPath}`, grpc.ServerCredentials.createInsecure(), (err) =>
+      err ? reject(err) : resolve(),
+    );
+  });
+  return server;
+}
+
+describe('createControlPlaneClient operator', () => {
+  it('maps the mandate, the projects with candidates, script and claims, and sends each request with the token', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+    const { updatedAt: _stamp, ...fields } = mandateWire;
+
+    const mandate = await client.getMandate();
+    const saved = await client.saveMandate(fields);
+    const projects = await client.listProjects(50);
+    const one = await client.getProject('p1');
+    const started = await client.startProject('Records in C#');
+    const decided = await client.decideClaim('p1', 'c1', 'waived', 'Common knowledge');
+    await client.decideClaim('p1', 'c1', 'supported');
+
+    expect(mandate).toEqual(mandateWire);
+    expect(saved).toEqual(mandateWire);
+    expect(projects).toEqual([
+      projectDto,
+      { ...queuedWire, script: null, error: 'model unavailable' },
+    ]);
+    expect(one).toEqual(projectDto);
+    expect([started.id, started.status, started.script]).toEqual(['p2', 'queued', null]);
+    expect([decided.claims[0]?.status, decided.claims[0]?.note]).toEqual([
+      'waived',
+      'Common knowledge',
+    ]);
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'GetMandate', request: {} },
+      { method: 'SaveMandate', request: fields },
+      { method: 'ListProjects', request: { limit: 50 } },
+      { method: 'GetProject', request: { id: 'p1' } },
+      { method: 'StartProject', request: { topic: 'Records in C#' } },
+      {
+        method: 'DecideClaim',
+        request: { projectId: 'p1', claimId: 'c1', status: 'waived', note: 'Common knowledge' },
+      },
+      { method: 'DecideClaim', request: { projectId: 'p1', claimId: 'c1', status: 'supported' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('getMandate answers null while no mandate was saved, whether the host answers an empty mandate or NOT_FOUND', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const emptySocket = tempSocketPath();
+    const empty = await startOperatorServer(emptySocket, [], { mandate: {} });
+    const emptyClient = createControlPlaneClient({
+      socketPath: emptySocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.NOT_FOUND, details: 'No mandate saved' },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const fromEmpty = await emptyClient.getMandate();
+    const fromNotFound = await client.getMandate();
+    emptyClient.close();
+    empty.forceShutdown();
+
+    expect([fromEmpty, fromNotFound]).toEqual([null, null]);
+  });
+
+  it('an INVALID_ARGUMENT from the operator rejects with ControlPlaneInvalidArgumentError carrying the control plane message', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: 'objective is required' },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.saveMandate({ ...mandateWire, objective: '' }).then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((error as Error).message).toBe('objective is required');
+  });
+
+  it('a PERMISSION_DENIED start rejects with ControlPlanePermissionDeniedError carrying the write gate reason', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const reason =
+      'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.';
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.PERMISSION_DENIED, details: reason },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.startProject('Records in C#').then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlanePermissionDeniedError);
+    expect((error as Error).message).toBe(reason);
+  });
+
+  it('a NOT_FOUND project rejects with ControlPlaneNotFoundError carrying the control plane message', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.NOT_FOUND, details: 'Project p9 not found' },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.getProject('p9').then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneNotFoundError);
+    expect((error as Error).message).toBe('Project p9 not found');
+  });
+
+  it('listProjects rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    client = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const startedAt = Date.now();
+    const error = await client.listProjects(50).then(
       () => null,
       (err: unknown) => err,
     );

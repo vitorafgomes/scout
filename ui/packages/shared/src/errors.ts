@@ -128,6 +128,27 @@ export class ControlPlaneWriteConfirmationError extends ScoutError {
   }
 }
 
+/** The control plane refused a request as invalid; the message is the control plane's own reason. */
+export class ControlPlaneInvalidArgumentError extends ScoutError {
+  constructor(message: string, options?: ErrorOptions) {
+    super('control-plane/invalid-argument', message, options);
+  }
+}
+
+/** The control plane refused the request because the owner has not granted it; the message is the write gate's reason. */
+export class ControlPlanePermissionDeniedError extends ScoutError {
+  constructor(message: string, options?: ErrorOptions) {
+    super('control-plane/permission-denied', message, options);
+  }
+}
+
+/** The control plane has no record with the id the request named. */
+export class ControlPlaneNotFoundError extends ScoutError {
+  constructor(message: string, options?: ErrorOptions) {
+    super('control-plane/not-found', message, options);
+  }
+}
+
 export class ProviderUnreachableError extends ScoutError {
   constructor(message = 'Provider endpoint unreachable', options?: ErrorOptions) {
     super('providers/unreachable', message, options);

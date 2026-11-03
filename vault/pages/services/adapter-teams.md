@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Teams"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Founded from the code on 2026-10-21"
+updated: 2026-11-03
+changes: "No origin reference and no origin poster, so no later posts (ADR 0033)"
 page_type: service
 status: active
 description: "Microsoft Teams adapter: the Bot Framework turn handler, translator and streaming sink; the inbound webhook is deliberately not wired in this repository."
@@ -50,7 +51,7 @@ flowchart LR
 
 - [[pages/invariants/pluggable-boundaries]]: registers as `IChatAdapter` only when configured.
 - [[pages/invariants/secrets-never-in-source]]: the constructor rejects an empty app id (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:58`).
-- [[pages/invariants/no-executive-writes]]: the only platform writes are the reply activities.
+- [[pages/invariants/no-executive-writes]]: the only platform writes are the reply activities. Teams fills no `ChatMessage.OriginReference` and registers no `IOriginPoster`, so a later progress post to a Teams conversation returns false ([[pages/decisions/0033-channel-operator-architecture]], [[pages/services/conversation]]).
 
 ## Hot spots
 
@@ -59,7 +60,7 @@ flowchart LR
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Teams.Tests` (50 test attributes, 7 files): translator, adapter and lifecycle, DI gating, sink behaviour, a sink boundary test and a sink-with-pump test using `Streaming/RecordingSender.cs`. No Azure calls.
+`tests/Scout.Adapter.Teams.Tests` (51 test attributes, 7 files): a `teams:` reference returns false from the composed notifier (`TeamsServiceCollectionExtensionsTests.cs`); translator, adapter and lifecycle, DI gating, sink behaviour, a sink boundary test and a sink-with-pump test using `Streaming/RecordingSender.cs`. No Azure calls.
 
 ## Related
 

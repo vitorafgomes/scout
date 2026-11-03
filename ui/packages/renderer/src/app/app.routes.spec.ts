@@ -8,6 +8,7 @@ import { appRoutes } from './app.routes';
 import { MenuPreferences } from './core/menu-preferences';
 import { ScoutBridgeService } from './core/scout-bridge';
 import { FloatingButtonComponent } from './floating-button/floating-button.component';
+import { ProductionComponent } from './production/production.component';
 import { ReviewComponent } from './review/review.component';
 
 describe('app routes', () => {
@@ -53,6 +54,17 @@ describe('app routes', () => {
     while (route.firstChild !== null) route = route.firstChild;
     expect(router.url).toBe('/review');
     expect(route.component).toBe(ReviewComponent);
+  });
+
+  it('production resolves to the Production screen', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/production');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/production');
+    expect(route.component).toBe(ProductionComponent);
   });
 
   it('floating-button resolves to the floating button component', async () => {

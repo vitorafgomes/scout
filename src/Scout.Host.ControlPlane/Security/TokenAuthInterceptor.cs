@@ -7,8 +7,8 @@ namespace Scout.Host.ControlPlane.Security;
 
 /// <summary>
 /// Validates the caller's token on every unary and streaming call and allows
-/// only the services of its role: the desktop token reaches Features, Providers
-/// and Models, the worker token reaches WorkerGate, and everything else fails
+/// only the services of its role: the desktop token reaches Features, Providers,
+/// Models and Operator, the worker token reaches WorkerGate, and everything else fails
 /// with <see cref="StatusCode.PermissionDenied"/>. The token is read from the
 /// <c>authorization</c> metadata header (with an optional <c>Bearer </c> prefix)
 /// or the <c>x-scout-token</c> header. Absent or mismatched tokens fail with
@@ -25,6 +25,7 @@ public sealed class TokenAuthInterceptor : Interceptor
         Prefix(Features.Descriptor),
         Prefix(Providers.Descriptor),
         Prefix(Models.Descriptor),
+        Prefix(Scout.ControlPlane.Contracts.Operator.Descriptor),
     ];
 
     private static readonly string[] WorkerServices = [Prefix(WorkerGate.Descriptor)];

@@ -58,6 +58,12 @@ export const CHANNEL = {
   actionsReject: 'scout:actions.reject',
   actionsChanged: 'scout:actions.changed',
   writesList: 'scout:writes.list',
+  operatorMandate: 'scout:operator.mandate',
+  operatorSaveMandate: 'scout:operator.saveMandate',
+  operatorProjects: 'scout:operator.projects',
+  operatorProject: 'scout:operator.project',
+  operatorStartProject: 'scout:operator.startProject',
+  operatorDecideClaim: 'scout:operator.decideClaim',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -530,6 +536,107 @@ export interface WritesListResponse {
   readonly entries: readonly WriteLogEntryDto[];
 }
 
+/** The channel mandate the operator works to; `updatedAt` is set once the owner saved it. */
+export interface MandateDto {
+  readonly objective: string;
+  readonly audience: string;
+  readonly pillars: readonly string[];
+  readonly cadence: string;
+  readonly language: string;
+  readonly voiceAndStyle: string;
+  readonly blockedTopics: readonly string[];
+  readonly targetMetric: string;
+  readonly targetValue: string;
+  readonly updatedAt: string | null;
+}
+
+/** The mandate fields the owner saves; the control plane stamps the time. */
+export type MandateSaveRequest = Omit<MandateDto, 'updatedAt'>;
+
+/** The saved mandate, or null while the owner has not saved one. */
+export interface MandateResponse {
+  readonly mandate: MandateDto | null;
+}
+
+/** A topic the operator proposed, why, and how well it fits the mandate (0 to 1). */
+export interface TopicCandidateDto {
+  readonly title: string;
+  readonly reason: string;
+  readonly fit: number;
+}
+
+export interface ScriptSectionDto {
+  readonly heading: string;
+  readonly narration: string;
+}
+
+export interface ChapterDto {
+  readonly at: string;
+  readonly title: string;
+}
+
+/** The script draft of a video project, with the metadata the upload would carry. */
+export interface ScriptDto {
+  readonly hook: string;
+  readonly sections: readonly ScriptSectionDto[];
+  readonly callToAction: string;
+  readonly titleVariants: readonly string[];
+  readonly description: string;
+  readonly tags: readonly string[];
+  readonly chapters: readonly ChapterDto[];
+}
+
+/** A factual claim in the script, the sources the operator found for it, and the owner's verdict. */
+export interface ClaimDto {
+  readonly id: string;
+  readonly text: string;
+  readonly risk: string;
+  readonly sourceUrls: readonly string[];
+  readonly status: string;
+  readonly note: string | null;
+}
+
+/** One video the operator works on, from the topic to the script and its claims. */
+export interface OperatorProjectDto {
+  readonly id: string;
+  readonly topic: string;
+  readonly status: string;
+  readonly origin: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly candidates: readonly TopicCandidateDto[];
+  readonly script: ScriptDto | null;
+  readonly claims: readonly ClaimDto[];
+  readonly error: string | null;
+}
+
+export interface OperatorProjectsRequest {
+  readonly limit: number;
+}
+
+export interface OperatorProjectsResponse {
+  readonly projects: readonly OperatorProjectDto[];
+}
+
+export interface OperatorProjectRequest {
+  readonly id: string;
+}
+
+/** The topic of a video the owner asks the operator to make; 3 to 200 characters. */
+export interface StartProjectRequest {
+  readonly topic: string;
+}
+
+export type ClaimStatus = 'supported' | 'unsupported' | 'waived';
+
+/** The owner's verdict on one claim; a waived claim needs the note saying why. */
+export interface ClaimDecisionRequest {
+  readonly projectId: string;
+  readonly claimId: string;
+  readonly status: ClaimStatus;
+  readonly note?: string;
+}
+
 export interface FeatureSetCredentialsRequest {
   readonly id: FeatureId;
   readonly body: Readonly<Record<string, string>>;
@@ -699,6 +806,8 @@ export interface LocalTurn {
   readonly state: 'running' | 'done' | 'failed';
   /** True when the question failed because the worker is not running. */
   readonly notRunning?: boolean;
+  /** True for a message Scout posted on its own, such as operator progress; it has no question. */
+  readonly notice?: true;
 }
 
 /**
@@ -807,6 +916,12 @@ export interface ScoutBridge {
   actionsReject(req: ActionDecisionRequest): Promise<PendingActionDto>;
   onActionsChanged(listener: () => void): () => void;
   writesList(req: WritesListRequest): Promise<WritesListResponse>;
+  operatorMandate(): Promise<MandateResponse>;
+  operatorSaveMandate(req: MandateSaveRequest): Promise<MandateDto>;
+  operatorProjects(req: OperatorProjectsRequest): Promise<OperatorProjectsResponse>;
+  operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto>;
+  operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

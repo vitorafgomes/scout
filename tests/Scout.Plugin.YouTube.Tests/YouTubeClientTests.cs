@@ -110,6 +110,59 @@ public sealed class YouTubeClientTests
     }
 
     [Fact]
+    public async Task Search_Asks_Search_List_Once_For_Videos_By_Relevance_And_Keeps_Only_Video_Results()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, GoogleJson.Search);
+
+        var results = await client.SearchVideosAsync("sourdough & starter", 10, CancellationToken.None);
+
+        handler.Requests.ShouldHaveSingleItem().Uri.PathAndQuery
+            .ShouldBe("/youtube/v3/search?part=snippet&type=video&order=relevance&maxResults=10&q=sourdough%20%26%20starter");
+        results.ShouldBe([
+            new YouTubeSearchResult("srch0000001", "Sourdough in 10 minutes", "Bread Lab",
+                new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero), "A fast starter."),
+            new YouTubeSearchResult("srch0000002", "Why bread rises", "Kitchen Science",
+                new DateTimeOffset(2026, 8, 15, 8, 30, 0, TimeSpan.Zero), string.Empty),
+        ]);
+    }
+
+    [Theory]
+    [InlineData(500, 25)]
+    [InlineData(0, 1)]
+    public async Task Search_Asks_For_Between_1_And_25_Results(int asked, int sent)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, GoogleJson.NoItems);
+
+        await client.SearchVideosAsync("bread", asked, CancellationToken.None);
+
+        handler.Requests.ShouldHaveSingleItem().Uri.Query.ShouldContain($"&maxResults={sent}&");
+    }
+
+    [Fact]
+    public async Task Search_With_The_Daily_Quota_Spent_Throws_The_Quota_Message()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.Forbidden, GoogleJson.Error(403, "quotaExceeded"));
+
+        var ex = await Should.ThrowAsync<YouTubeApiException>(
+            () => client.SearchVideosAsync("bread", 10, CancellationToken.None));
+
+        ex.Message.ShouldBe("YouTube's daily quota for this key is spent; it resets at midnight Pacific time.");
+    }
+
+    [Fact]
+    public async Task Search_Transport_Failure_Propagates_As_HttpRequestException()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueThrow(new HttpRequestException("connection reset"));
+
+        await Should.ThrowAsync<HttpRequestException>(
+            () => client.SearchVideosAsync("bread", 10, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Unauthorized_Throws_Sign_In_Again_Message()
     {
         var (client, handler) = Build();

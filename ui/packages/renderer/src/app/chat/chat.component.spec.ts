@@ -31,6 +31,7 @@ function makeBridge() {
     ]);
   const localAsk = vi.fn(async (req: LocalAskRequest): Promise<void> => append(req));
   return {
+    push,
     emit: (event: LocalEvent) =>
       push(
         turns.map((turn) =>
@@ -248,6 +249,28 @@ describe('Chat screen', () => {
 
     expect(texts(again, 'question')).toEqual(['which pods restarted?']);
     expect(texts(again, 'reply')).toEqual(['Two pods restarted.']);
+  });
+
+  it('shows a notice Scout posted on its own as a Scout message with no question', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+
+    bridge.push([
+      {
+        id: 'notice:1',
+        question: '',
+        reply: 'The script for Span<T> in C# is ready.',
+        citations: [],
+        state: 'done',
+        notice: true,
+      },
+    ]);
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(texts(fixture, 'question')).toEqual([]);
+    expect(texts(fixture, 'reply')).toEqual(['The script for Span<T> in C# is ready.']);
   });
 
   it('Clear empties the conversation', async () => {

@@ -49,6 +49,8 @@ A throwaway console app, outside the repository, with `Microsoft.SemanticKernel`
 | Semantic Kernel over `AsChatCompletionService()` with a system prompt | works with that middleware |
 | Kernel function, `FunctionChoiceBehavior.Auto()`, adapter alone | the model returns a function call; nothing invokes it; empty answer |
 | Same, with `UseFunctionInvocation()` on the `IChatClient` before `AsChatCompletionService()` | the kernel function runs and the answer uses it |
+
+Amended 2026-11-03: production uses Semantic Kernel's `UseKernelFunctionInvocation()` instead, so calls pass through the kernel's filters and the write gate ([[pages/history/llm]]).
 | A non-streaming call | 400 `Stream must be set to true`; the middleware must serve non-streaming requests by aggregating a stream |
 
 The request shape that works: `store: false` (`CreateResponseOptions.StoredOutputEnabled = false` through `ChatOptions.RawRepresentationFactory`), no `temperature`, no `max_output_tokens`, instructions instead of system messages, streaming always.

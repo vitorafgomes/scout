@@ -2,7 +2,10 @@ import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import path from 'node:path';
 import {
+  ControlPlaneInvalidArgumentError,
+  ControlPlaneNotFoundError,
   ControlPlaneNotImplementedError,
+  ControlPlanePermissionDeniedError,
   ControlPlaneUnauthenticatedError,
   ControlPlaneUnavailableError,
   ControlPlaneWriteConfirmationError,
@@ -13,6 +16,10 @@ import {
   type FeatureSettingFieldDto,
   type FeatureStatus,
   type FeatureWriteClass,
+  type ClaimStatus,
+  type MandateDto,
+  type MandateSaveRequest,
+  type OperatorProjectDto,
   type PendingActionDto,
   type WriteLogEntryDto,
 } from '@scout/shared';
@@ -55,6 +62,17 @@ export interface ControlPlaneClient {
   approveAction(id: string, reason?: string): Promise<PendingActionDto>;
   rejectAction(id: string, reason?: string): Promise<PendingActionDto>;
   listWrites(limit: number): Promise<WriteLogEntryDto[]>;
+  getMandate(): Promise<MandateDto | null>;
+  saveMandate(mandate: MandateSaveRequest): Promise<MandateDto>;
+  listProjects(limit: number): Promise<OperatorProjectDto[]>;
+  getProject(id: string): Promise<OperatorProjectDto>;
+  startProject(topic: string): Promise<OperatorProjectDto>;
+  decideClaim(
+    projectId: string,
+    claimId: string,
+    status: ClaimStatus,
+    note?: string,
+  ): Promise<OperatorProjectDto>;
   close(): void;
 }
 
@@ -108,6 +126,47 @@ interface WriteLogEntryMessage {
   outcome: string;
   approvedBy?: string;
   actionId?: string;
+}
+
+interface MandateMessage {
+  objective: string;
+  audience: string;
+  pillars: string[];
+  cadence: string;
+  language: string;
+  voiceAndStyle: string;
+  blockedTopics: string[];
+  targetMetric: string;
+  targetValue: string;
+  updatedAt?: string;
+}
+
+interface ProjectMessage {
+  id: string;
+  topic: string;
+  status: string;
+  origin: string;
+  createdAt: string;
+  updatedAt: string;
+  candidates: { title: string; reason: string; fit: number }[];
+  script?: {
+    hook: string;
+    sections: { heading: string; narration: string }[];
+    callToAction: string;
+    titleVariants: string[];
+    description: string;
+    tags: string[];
+    chapters: { at: string; title: string }[];
+  } | null;
+  claims: {
+    id: string;
+    text: string;
+    risk: string;
+    sourceUrls: string[];
+    status: string;
+    note?: string;
+  }[];
+  error?: string;
 }
 
 type UnaryMethod = (
@@ -201,6 +260,55 @@ function toPendingAction(message: PendingActionMessage): PendingActionDto {
   };
 }
 
+function toMandate(message: MandateMessage): MandateDto {
+  return {
+    objective: message.objective,
+    audience: message.audience,
+    pillars: message.pillars,
+    cadence: message.cadence,
+    language: message.language,
+    voiceAndStyle: message.voiceAndStyle,
+    blockedTopics: message.blockedTopics,
+    targetMetric: message.targetMetric,
+    targetValue: message.targetValue,
+    updatedAt: message.updatedAt ?? null,
+  };
+}
+
+function toProject(message: ProjectMessage): OperatorProjectDto {
+  const script = message.script ?? null;
+  return {
+    id: message.id,
+    topic: message.topic,
+    status: message.status,
+    origin: message.origin,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    candidates: message.candidates.map(({ title, reason, fit }) => ({ title, reason, fit })),
+    script:
+      script === null
+        ? null
+        : {
+            hook: script.hook,
+            sections: script.sections.map(({ heading, narration }) => ({ heading, narration })),
+            callToAction: script.callToAction,
+            titleVariants: script.titleVariants,
+            description: script.description,
+            tags: script.tags,
+            chapters: script.chapters.map(({ at, title }) => ({ at, title })),
+          },
+    claims: message.claims.map((claim) => ({
+      id: claim.id,
+      text: claim.text,
+      risk: claim.risk,
+      sourceUrls: claim.sourceUrls,
+      status: claim.status,
+      note: claim.note ?? null,
+    })),
+    error: message.error ?? null,
+  };
+}
+
 function toWriteLogEntry(message: WriteLogEntryMessage): WriteLogEntryDto {
   return {
     at: message.at,
@@ -227,13 +335,21 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
   }
 
   const definition = protoLoader.loadSync(
-    [path.join(protoDir, 'providers.proto'), path.join(protoDir, 'features.proto')],
+    [
+      path.join(protoDir, 'providers.proto'),
+      path.join(protoDir, 'features.proto'),
+      path.join(protoDir, 'operator.proto'),
+    ],
     { enums: String, longs: Number, defaults: true },
   );
   const loaded = grpc.loadPackageDefinition(definition) as unknown as {
     scout: {
       controlplane: {
-        v1: { Providers: grpc.ServiceClientConstructor; Features: grpc.ServiceClientConstructor };
+        v1: {
+          Providers: grpc.ServiceClientConstructor;
+          Features: grpc.ServiceClientConstructor;
+          Operator: grpc.ServiceClientConstructor;
+        };
       };
     };
   };
@@ -243,6 +359,10 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     grpc.credentials.createInsecure(),
   );
   const features = new loaded.scout.controlplane.v1.Features(
+    target,
+    grpc.credentials.createInsecure(),
+  );
+  const operator = new loaded.scout.controlplane.v1.Operator(
     target,
     grpc.credentials.createInsecure(),
   );
@@ -293,6 +413,29 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       throw new ControlPlaneWriteConfirmationError(details, { cause: err });
     }
   }
+  async function operatorCall<T>(method: string, request: object): Promise<T> {
+    try {
+      return await call<T>(operator, method, request);
+    } catch (err: unknown) {
+      const { code, details } = err as Partial<grpc.ServiceError>;
+      if (code === grpc.status.INVALID_ARGUMENT) {
+        throw new ControlPlaneInvalidArgumentError(details ?? 'The request was not valid.', {
+          cause: err,
+        });
+      }
+      if (code === grpc.status.NOT_FOUND) {
+        throw new ControlPlaneNotFoundError(details ?? 'Not found.', { cause: err });
+      }
+      if (code === grpc.status.PERMISSION_DENIED) {
+        throw new ControlPlanePermissionDeniedError(details ?? 'The owner has not allowed this.', {
+          cause: err,
+        });
+      }
+      throw err;
+    }
+  }
+  const project = async (method: string, request: object): Promise<OperatorProjectDto> =>
+    toProject(await operatorCall<ProjectMessage>(method, request));
   const decide = async (method: string, id: string, reason?: string): Promise<PendingActionDto> =>
     toPendingAction(await call<PendingActionMessage>(features, method, { id, reason }));
 
@@ -333,10 +476,33 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       });
       return response.entries.map(toWriteLogEntry);
     },
+    async getMandate(): Promise<MandateDto | null> {
+      try {
+        const mandate = toMandate(await operatorCall<MandateMessage>('GetMandate', {}));
+        return mandate.updatedAt === null ? null : mandate;
+      } catch (err: unknown) {
+        if (err instanceof ControlPlaneNotFoundError) return null;
+        throw err;
+      }
+    },
+    async saveMandate(mandate): Promise<MandateDto> {
+      return toMandate(await operatorCall<MandateMessage>('SaveMandate', { ...mandate }));
+    },
+    async listProjects(limit): Promise<OperatorProjectDto[]> {
+      const response = await operatorCall<{ projects: ProjectMessage[] }>('ListProjects', {
+        limit,
+      });
+      return response.projects.map(toProject);
+    },
+    getProject: (id) => project('GetProject', { id }),
+    startProject: (topic) => project('StartProject', { topic }),
+    decideClaim: (projectId, claimId, status, note) =>
+      project('DecideClaim', { projectId, claimId, status, note }),
     close(): void {
       closed = true;
       providers.close();
       features.close();
+      operator.close();
     },
   };
 }

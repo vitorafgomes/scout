@@ -162,6 +162,37 @@ public sealed class TokenAuthInterceptorTests
         ex.StatusCode.ShouldBe(StatusCode.PermissionDenied);
     }
 
+    [Theory]
+    [InlineData("/scout.controlplane.v1.Operator/GetMandate")]
+    [InlineData("/scout.controlplane.v1.Operator/SaveMandate")]
+    [InlineData("/scout.controlplane.v1.Operator/ListProjects")]
+    [InlineData("/scout.controlplane.v1.Operator/GetProject")]
+    [InlineData("/scout.controlplane.v1.Operator/StartProject")]
+    [InlineData("/scout.controlplane.v1.Operator/DecideClaim")]
+    public async Task The_Operator_Service_Belongs_To_The_Desktop_Alone(string method)
+    {
+        var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, method));
+
+        (await Call(Token, method)).ShouldBe("ok");
+        worker.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        worker.Status.Detail.ShouldBe($"This caller may not call {method}.");
+    }
+
+    [Theory]
+    [InlineData("/scout.controlplane.v1.WorkerGate/GetOperatorMandate")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/SaveOperatorProject")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/NextQueuedProject")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/GetOperatorProject")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/ListOperatorProjects")]
+    public async Task The_Workers_Operator_Rpcs_Belong_To_The_Worker_Alone(string method)
+    {
+        var desktop = await Should.ThrowAsync<RpcException>(() => Call(Token, method));
+
+        (await Call(WorkerToken, method)).ShouldBe("ok");
+        desktop.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        desktop.Status.Detail.ShouldBe($"This caller may not call {method}.");
+    }
+
     private sealed class NoopStreamWriter<T> : IServerStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }

@@ -52,6 +52,11 @@ export const appRoutes: Routes = [
     loadComponent: () => import('./features/features.component').then((m) => m.FeaturesComponent),
   },
   {
+    path: 'production',
+    loadComponent: () =>
+      import('./production/production.component').then((m) => m.ProductionComponent),
+  },
+  {
     path: 'review',
     loadComponent: () => import('./review/review.component').then((m) => m.ReviewComponent),
   },

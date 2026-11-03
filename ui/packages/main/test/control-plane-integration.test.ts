@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ControlPlaneNotImplementedError,
+  ControlPlanePermissionDeniedError,
   ControlPlaneUnauthenticatedError,
   ControlPlaneWriteConfirmationError,
 } from '@scout/shared';
@@ -44,6 +45,10 @@ const clients: ControlPlaneClient[] = [];
 const socketDir = mkdtempSync(path.join(os.tmpdir(), 'scout-cpi-'));
 const featureStateFile = path.join(socketDir, 'features.json');
 
+function developerStateFile(name: string): string {
+  return path.join(path.dirname(developerFeatureStateFile()), name);
+}
+
 function developerFeatureStateFile(): string {
   if (process.platform === 'darwin') {
     return path.join(os.homedir(), 'Library', 'Application Support', 'Scout', 'features.json');
@@ -59,6 +64,9 @@ function snapshotOf(file: string): number | null {
 }
 
 const developerStateBefore = snapshotOf(developerFeatureStateFile());
+const developerOperatorBefore = ['mandate.json', 'projects.json'].map((name) =>
+  snapshotOf(developerStateFile(name)),
+);
 
 function connect(token: string): ControlPlaneClient {
   if (result.kind !== 'launched') throw new Error('control-plane host was not launched');
@@ -320,6 +328,102 @@ describe('control plane over UDS', () => {
       expect(disabled.enabled).toBe(false);
       expect(existsSync(featureStateFile)).toBe(true);
       expect(snapshotOf(developerFeatureStateFile())).toBe(developerStateBefore);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+describe('operator over UDS', () => {
+  it(
+    'the desktop saves the mandate with SaveMandate and reads the same mandate back with GetMandate',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const fields = {
+        objective: 'Grow a .NET channel',
+        audience: 'Backend developers',
+        pillars: ['Performance', 'Testing'],
+        cadence: 'weekly',
+        language: 'en',
+        voiceAndStyle: 'calm',
+        blockedTopics: ['politics'],
+        targetMetric: 'watch_hours',
+        targetValue: '500',
+      };
+
+      const before = await client.getMandate();
+      const saved = await client.saveMandate(fields);
+      const read = await client.getMandate();
+
+      expect(before).toBeNull();
+      expect(read).toEqual(saved);
+      expect({ ...read, updatedAt: undefined }).toEqual({ ...fields, updatedAt: undefined });
+      expect(Number.isNaN(Date.parse(read?.updatedAt ?? ''))).toBe(false);
+      expect(existsSync(path.join(socketDir, 'mandate.json'))).toBe(true);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'StartProject is refused without the owner grant of youtube, and with it queues a project from the desktop that ListProjects shows queued',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+
+      const refused = await client.startProject('Records in C#').then(
+        () => null,
+        (err: unknown) => err,
+      );
+      await client.setWriteGrant('youtube', true, true);
+      const { started, listed } = await (async () => {
+        try {
+          const project = await client.startProject('  Span<T> in C# ');
+          return { started: project, listed: await client.listProjects(50) };
+        } finally {
+          await client.setWriteGrant('youtube', false, false);
+        }
+      })();
+
+      expect(refused).toBeInstanceOf(ControlPlanePermissionDeniedError);
+      expect((refused as Error).message).toBe(
+        'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.',
+      );
+      expect([started.topic, started.status, started.origin]).toEqual([
+        'Span<T> in C#',
+        'queued',
+        'desktop',
+      ]);
+      expect(listed.find((p) => p.id === started.id)?.status).toBe('queued');
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "operator state is written to the test's temp folder and never to the developer's mandate or projects file",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        await client.startProject('Records in C#');
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+
+      expect(existsSync(path.join(socketDir, 'projects.json'))).toBe(true);
+      expect(
+        ['mandate.json', 'projects.json'].map((name) => snapshotOf(developerStateFile(name))),
+      ).toEqual(developerOperatorBefore);
     },
     TEST_TIMEOUT_MS,
   );

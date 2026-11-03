@@ -27,6 +27,7 @@ public static class LocalServiceCollectionExtensions
 
         services.AddSingleton<LocalChatAdapter>();
         services.AddSingleton<IChatAdapter>(sp => sp.GetRequiredService<LocalChatAdapter>());
+        services.AddSingleton<IOriginPoster, LocalOriginPoster>();
         return services;
     }
 }

@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+service Operator {
+  rpc GetMandate(GetMandateRequest) returns (Mandate);
+  rpc SaveMandate(Mandate) returns (Mandate);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetProject(GetProjectRequest) returns (Project);
+  rpc StartProject(StartProjectRequest) returns (Project);
+  rpc DecideClaim(DecideClaimRequest) returns (Project);
+}
+
+message GetMandateRequest {}
+
+message Mandate {
+  string objective = 1;
+  string audience = 2;
+  repeated string pillars = 3;
+  string cadence = 4;
+  string language = 5;
+  string voice_and_style = 6;
+  repeated string blocked_topics = 7;
+  string target_metric = 8;
+  string target_value = 9;
+  optional string updated_at = 10;
+}
+
+message ListProjectsRequest {
+  int32 limit = 1;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message GetProjectRequest {
+  string id = 1;
+}
+
+message StartProjectRequest {
+  string topic = 1;
+}
+
+message DecideClaimRequest {
+  string project_id = 1;
+  string claim_id = 2;
+  string status = 3;
+  optional string note = 4;
+}
+
+message Project {
+  string id = 1;
+  string topic = 2;
+  string status = 3;
+  string origin = 4;
+  string created_at = 5;
+  string updated_at = 6;
+  repeated TopicCandidate candidates = 7;
+  optional Script script = 8;
+  repeated Claim claims = 9;
+  optional string error = 10;
+}
+
+message TopicCandidate {
+  string title = 1;
+  string reason = 2;
+  double fit = 3;
+}
+
+message Script {
+  string hook = 1;
+  repeated ScriptSection sections = 2;
+  string call_to_action = 3;
+  repeated string title_variants = 4;
+  string description = 5;
+  repeated string tags = 6;
+  repeated Chapter chapters = 7;
+}
+
+message ScriptSection {
+  string heading = 1;
+  string narration = 2;
+}
+
+message Chapter {
+  string at = 1;
+  string title = 2;
+}
+
+message Claim {
+  string id = 1;
+  string text = 2;
+  string risk = 3;
+  repeated string source_urls = 4;
+  string status = 5;
+  optional string note = 6;
+}

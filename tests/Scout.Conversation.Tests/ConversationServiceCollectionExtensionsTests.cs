@@ -156,4 +156,22 @@ public sealed class ConversationServiceCollectionExtensionsTests
         sink.FinalText.ShouldBe(expectedReply);
         gateway.ReceivedCalls().ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task Resolved_Origin_Notifier_Posts_Through_The_Poster_An_Adapter_Registered()
+    {
+        var poster = Substitute.For<IOriginPoster>();
+        poster.Kind.Returns("slack");
+        poster.PostAsync("C1:1.2", "Video rendered.", Arg.Any<CancellationToken>()).Returns(true);
+        var services = new ServiceCollection();
+        services.AddSingleton(Substitute.For<IChatGateway>());
+        services.AddSingleton(poster);
+        services.AddScoutConversation(Config());
+        using var provider = services.BuildServiceProvider();
+
+        var posted = await provider.GetRequiredService<IOriginNotifier>()
+            .PostAsync("slack:C1:1.2", "Video rendered.", CancellationToken.None);
+
+        posted.ShouldBeTrue();
+    }
 }

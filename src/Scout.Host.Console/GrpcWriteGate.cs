@@ -49,6 +49,11 @@ internal sealed class GrpcWriteGate : IWriteGate, IDisposable
         _deadline = deadline ?? TimeSpan.FromSeconds(10);
     }
 
+    internal WorkerGate.WorkerGateClient Client => _client;
+
+    internal CallOptions CallOptions(CancellationToken cancellationToken)
+        => new(_headers, DateTime.UtcNow.Add(_deadline), cancellationToken);
+
     public async Task<WriteGateDecision> RequestAsync(
         string featureId,
         string scope,

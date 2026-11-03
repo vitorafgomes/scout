@@ -76,6 +76,12 @@ describe('CHANNEL constant', () => {
         'llmListOllamaModels',
         'llmPullOllamaModel',
         'llmPullOllamaProgress',
+        'operatorDecideClaim',
+        'operatorMandate',
+        'operatorProject',
+        'operatorProjects',
+        'operatorSaveMandate',
+        'operatorStartProject',
         'providerRestart',
         'providerSetAutostart',
         'providerStart',
@@ -156,6 +162,26 @@ describe('review channels', () => {
   });
 });
 
+describe('operator channels', () => {
+  test('the Production screen reads and saves the mandate, lists and reads projects, starts one and decides a claim on six scout:operator channels', () => {
+    expect([
+      CHANNEL.operatorMandate,
+      CHANNEL.operatorSaveMandate,
+      CHANNEL.operatorProjects,
+      CHANNEL.operatorProject,
+      CHANNEL.operatorStartProject,
+      CHANNEL.operatorDecideClaim,
+    ]).toEqual([
+      'scout:operator.mandate',
+      'scout:operator.saveMandate',
+      'scout:operator.projects',
+      'scout:operator.project',
+      'scout:operator.startProject',
+      'scout:operator.decideClaim',
+    ]);
+  });
+});
+
 describe('ChannelName type', () => {
   test('accepts exact literal values only (compile-time check)', () => {
     // Compile-time: each literal is a valid ChannelName. If any CHANNEL value
@@ -216,6 +242,12 @@ describe('ChannelName type', () => {
       'scout:actions.changed': true,
       'scout:features.changed': true,
       'scout:writes.list': true,
+      'scout:operator.mandate': true,
+      'scout:operator.saveMandate': true,
+      'scout:operator.projects': true,
+      'scout:operator.project': true,
+      'scout:operator.startProject': true,
+      'scout:operator.decideClaim': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

@@ -42,7 +42,7 @@ public static class ControlPlaneServiceRegistration
         return services;
     }
 
-    /// <summary>Map the four gRPC services on the endpoint route builder.</summary>
+    /// <summary>Map the five gRPC services on the endpoint route builder.</summary>
     public static void MapControlPlaneServices(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -54,5 +54,7 @@ public static class ControlPlaneServiceRegistration
             .MapGrpcService<FeaturesGrpcService>(endpoints);
         Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
             .MapGrpcService<WorkerGateGrpcService>(endpoints);
+        Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
+            .MapGrpcService<OperatorGrpcService>(endpoints);
     }
 }

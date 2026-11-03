@@ -165,6 +165,7 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     const source = join(UI_ROOT, protos!.from);
     expect(existsSync(join(source, 'features.proto'))).toBe(true);
     expect(existsSync(join(source, 'providers.proto'))).toBe(true);
+    expect(existsSync(join(source, 'operator.proto'))).toBe(true);
     expect(resolveProtoDir(packaged)).toBe(join(RESOURCES, protos!.to));
   });
 

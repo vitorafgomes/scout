@@ -223,6 +223,62 @@ public sealed class GrpcWriteGateTests
             Record = request;
             return RecordFailure is null ? Task.FromResult(new RecordWriteResponse()) : throw RecordFailure;
         }
+
+        public Mandate MandateReply { get; init; } = new();
+
+        public NextQueuedProjectResponse NextReply { get; init; } = new();
+
+        public RpcException? OperatorFailure { get; init; }
+
+        public SaveOperatorProjectRequest? Saved { get; private set; }
+
+        public override Task<Mandate> GetOperatorMandate(GetMandateRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(MandateReply) : throw OperatorFailure;
+        }
+
+        public override Task<Project> SaveOperatorProject(SaveOperatorProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Saved = request;
+            if (OperatorFailure is not null)
+            {
+                throw OperatorFailure;
+            }
+
+            var saved = request.Project.Clone();
+            saved.Id = string.IsNullOrEmpty(saved.Id) ? "cp-1" : saved.Id;
+            return Task.FromResult(saved);
+        }
+
+        public override Task<NextQueuedProjectResponse> NextQueuedProject(NextQueuedProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(NextReply) : throw OperatorFailure;
+        }
+
+        public ListProjectsResponse ListReply { get; init; } = new();
+
+        public ListProjectsRequest? Listed { get; private set; }
+
+        public GetProjectRequest? Got { get; private set; }
+
+        public override Task<Project> GetOperatorProject(GetProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Got = request;
+            return OperatorFailure is null
+                ? Task.FromResult(ListReply.Projects.First(p => p.Id == request.Id))
+                : throw OperatorFailure;
+        }
+
+        public override Task<ListProjectsResponse> ListOperatorProjects(ListProjectsRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Listed = request;
+            return OperatorFailure is null ? Task.FromResult(ListReply) : throw OperatorFailure;
+        }
     }
 
     private sealed class RecordingLogger : ILogger<WriteGateFilter>

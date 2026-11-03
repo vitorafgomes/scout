@@ -76,7 +76,9 @@ import { WavRecorder } from './wav-recorder';
       <ol #turnList class="turns" data-test="turns" aria-live="polite">
         @for (turn of turns(); track turn.id) {
           <li class="turn">
-            <p class="asked" data-test="asked" [textContent]="turn.question"></p>
+            @if (!turn.notice) {
+              <p class="asked" data-test="asked" [textContent]="turn.question"></p>
+            }
             <p
               class="reply"
               data-test="reply"

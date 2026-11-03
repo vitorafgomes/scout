@@ -61,6 +61,15 @@ import {
   type PendingActionsResponse,
   type WritesListRequest,
   type WritesListResponse,
+  type MandateDto,
+  type MandateResponse,
+  type MandateSaveRequest,
+  type OperatorProjectDto,
+  type OperatorProjectRequest,
+  type OperatorProjectsRequest,
+  type OperatorProjectsResponse,
+  type StartProjectRequest,
+  type ClaimDecisionRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -202,6 +211,16 @@ function createFakeBridge(): ScoutBridge {
       return (): void => undefined;
     },
     writesList: (_req: WritesListRequest): Promise<WritesListResponse> => rejectNotAvailable(),
+    operatorMandate: (): Promise<MandateResponse> => rejectNotAvailable(),
+    operatorSaveMandate: (_req: MandateSaveRequest): Promise<MandateDto> => rejectNotAvailable(),
+    operatorProjects: (_req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> =>
+      rejectNotAvailable(),
+    operatorProject: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartProject: (_req: StartProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideClaim: (_req: ClaimDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubCancel: (): Promise<void> => rejectNotAvailable(),
@@ -476,6 +495,30 @@ export class ScoutBridgeService {
 
   async writesList(req: WritesListRequest): Promise<WritesListResponse> {
     return this.bridge.writesList(req);
+  }
+
+  async operatorMandate(): Promise<MandateResponse> {
+    return this.bridge.operatorMandate();
+  }
+
+  async operatorSaveMandate(req: MandateSaveRequest): Promise<MandateDto> {
+    return this.bridge.operatorSaveMandate(req);
+  }
+
+  async operatorProjects(req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> {
+    return this.bridge.operatorProjects(req);
+  }
+
+  async operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProject(req);
+  }
+
+  async operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartProject(req);
+  }
+
+  async operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideClaim(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

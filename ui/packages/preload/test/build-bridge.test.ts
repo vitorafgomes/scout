@@ -76,6 +76,12 @@ describe('buildBridge', () => {
       'actionsReject',
       'onActionsChanged',
       'writesList',
+      'operatorMandate',
+      'operatorSaveMandate',
+      'operatorProjects',
+      'operatorProject',
+      'operatorStartProject',
+      'operatorDecideClaim',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -455,6 +461,44 @@ describe('buildBridge', () => {
       [CHANNEL.actionsApprove, { id: 'act-1' }],
       [CHANNEL.actionsReject, { id: 'act-1', reason: 'Wrong thumbnail' }],
       [CHANNEL.writesList, { limit: 50 }],
+    ]);
+  });
+
+  it('the operator methods reach main only through their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const mandate = {
+      objective: 'Grow the channel',
+      audience: 'Developers',
+      pillars: ['.NET'],
+      cadence: 'weekly',
+      language: 'en',
+      voiceAndStyle: 'calm',
+      blockedTopics: [],
+      targetMetric: 'views',
+      targetValue: '10000',
+    };
+    const decision = {
+      projectId: 'p1',
+      claimId: 'c1',
+      status: 'waived' as const,
+      note: 'Common knowledge',
+    };
+
+    await bridge.operatorMandate();
+    await bridge.operatorSaveMandate(mandate);
+    await bridge.operatorProjects({ limit: 50 });
+    await bridge.operatorProject({ id: 'p1' });
+    await bridge.operatorStartProject({ topic: 'Span<T> in C#' });
+    await bridge.operatorDecideClaim(decision);
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorMandate],
+      [CHANNEL.operatorSaveMandate, mandate],
+      [CHANNEL.operatorProjects, { limit: 50 }],
+      [CHANNEL.operatorProject, { id: 'p1' }],
+      [CHANNEL.operatorStartProject, { topic: 'Span<T> in C#' }],
+      [CHANNEL.operatorDecideClaim, decision],
     ]);
   });
 

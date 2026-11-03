@@ -32,6 +32,7 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
     internal const string UnavailableMessage = "YouTube is currently unavailable. Try again later.";
 
     private const int MaxResults = 50;
+    private const int MaxSearchResults = 25;
     private const string ChannelParts = "snippet,statistics,contentDetails";
 
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -83,6 +84,23 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
             .DistinctBy(v => v.Id)
             .ToDictionary(v => v.Id!, StringComparer.Ordinal);
         return wanted.Where(byId.ContainsKey).Select(id => ToVideo(byId[id])).ToList();
+    }
+
+    public async Task<IReadOnlyList<YouTubeSearchResult>> SearchVideosAsync(string query, int max, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        var page = await GetAsync<ListDto<SearchResultDto>>(
+            $"search?part=snippet&type=video&order=relevance&maxResults={Math.Clamp(max, 1, MaxSearchResults)}&q={Uri.EscapeDataString(query.Trim())}",
+            ct).ConfigureAwait(false);
+        return (page.Items ?? [])
+            .Where(i => i.Id?.VideoId is not null)
+            .Select(i => new YouTubeSearchResult(
+                VideoId: i.Id!.VideoId!,
+                Title: i.Snippet?.Title ?? string.Empty,
+                ChannelTitle: i.Snippet?.ChannelTitle ?? string.Empty,
+                PublishedAt: i.Snippet?.PublishedAt ?? default,
+                Description: i.Snippet?.Description ?? string.Empty))
+            .ToList();
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken ct, bool mine = false)
@@ -241,6 +259,19 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
 
     private sealed record VideoContentDetailsDto(
         [property: JsonPropertyName("duration")] string? Duration);
+
+    private sealed record SearchResultDto(
+        [property: JsonPropertyName("id")] SearchIdDto? Id,
+        [property: JsonPropertyName("snippet")] SearchSnippetDto? Snippet);
+
+    private sealed record SearchIdDto(
+        [property: JsonPropertyName("videoId")] string? VideoId);
+
+    private sealed record SearchSnippetDto(
+        [property: JsonPropertyName("title")] string? Title,
+        [property: JsonPropertyName("description")] string? Description,
+        [property: JsonPropertyName("channelTitle")] string? ChannelTitle,
+        [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt);
 
     private sealed record ErrorEnvelopeDto(
         [property: JsonPropertyName("error")] ErrorDto? Error);
