@@ -15,6 +15,7 @@ import {
   type OperatorProjectRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
+  type PackageMetadataRequest,
   type ReadinessDto,
   type SceneLockRequest,
   type SceneMediaKind,
@@ -43,6 +44,10 @@ export type OperatorClient = Pick<
   | 'attachSceneMedia'
   | 'getMediaDirectory'
   | 'getReadiness'
+  | 'assembleProject'
+  | 'confirmMediaRights'
+  | 'editPackageMetadata'
+  | 'approvePackage'
 >;
 
 const DEFAULT_PROJECTS_LIMIT = 50;
@@ -53,6 +58,10 @@ const MIN_TOPIC_LENGTH = 3;
 const MAX_TOPIC_LENGTH = 200;
 const CLAIM_STATUSES: readonly ClaimStatus[] = ['supported', 'unsupported', 'waived'];
 const MEDIA_KINDS: readonly SceneMediaKind[] = ['audio', 'visual'];
+const MAX_TITLE_LENGTH = 100;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_TAG_LENGTH = 100;
+const MAX_TAGS_LENGTH = 500;
 
 function throwSerialized(err: unknown): never {
   const serialized = serializeError(err);
@@ -108,7 +117,39 @@ function validMandate(req: MandateSaveRequest | undefined): MandateSaveRequest {
   return mandate;
 }
 
-/** Registers the Production screen's channels, which reach the control plane's Operator service only. */
+/** How YouTube counts tags: their characters, two more for a tag with a space, and a comma between tags. */
+function youTubeTagsLength(tags: readonly string[]): number {
+  return (
+    tags.reduce((total, tag) => total + tag.length + (tag.includes(' ') ? 2 : 0), 0) +
+    Math.max(0, tags.length - 1)
+  );
+}
+
+function validMetadata(req: PackageMetadataRequest | undefined): PackageMetadataRequest {
+  const metadata: PackageMetadataRequest = {
+    projectId: requiredId(req?.projectId, 'The project id'),
+    title: text(req?.title),
+    description: text(req?.description),
+    tags: list(req?.tags),
+  };
+  const errors: string[] = [];
+  if (metadata.title.length === 0 || metadata.title.length > MAX_TITLE_LENGTH) {
+    errors.push(`The title is 1 to ${MAX_TITLE_LENGTH} characters.`);
+  }
+  if (metadata.description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.push(`The description is at most ${MAX_DESCRIPTION_LENGTH} characters.`);
+  }
+  if (metadata.tags.some((tag) => tag.length > MAX_TAG_LENGTH)) {
+    errors.push(`Each tag is 1 to ${MAX_TAG_LENGTH} characters.`);
+  }
+  if (youTubeTagsLength(metadata.tags) > MAX_TAGS_LENGTH) {
+    errors.push(`The tags are at most ${MAX_TAGS_LENGTH} characters together.`);
+  }
+  if (errors.length > 0) invalid(errors.join(' '));
+  return metadata;
+}
+
+/** Registers the Production and Assembly pages' channels, which reach the control plane's Operator service only. */
 export function registerOperatorHandlers(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
   getClient: () => Promise<OperatorClient>,
@@ -327,6 +368,47 @@ export function registerOperatorHandlers(
     }
   });
 
+  const packageStep = (
+    channel: string,
+    name: string,
+    call: (client: OperatorClient, id: string) => Promise<OperatorProjectDto>,
+  ): void => {
+    ipcMain.handle(
+      channel,
+      async (_event, req: OperatorProjectRequest | undefined): Promise<OperatorProjectDto> => {
+        try {
+          return await call(await getClient(), requiredId(req?.id, 'The project id'));
+        } catch (err: unknown) {
+          logger.warn(`operator: ${name} failed`, { id: req?.id, err: String(err) });
+          throwSerialized(err);
+        }
+      },
+    );
+  };
+  packageStep(CHANNEL.operatorAssembly, 'assembly', (client, id) => client.assembleProject(id));
+  packageStep(CHANNEL.operatorMediaRights, 'media rights', (client, id) =>
+    client.confirmMediaRights(id),
+  );
+  packageStep(CHANNEL.operatorPackageApproval, 'package approval', (client, id) =>
+    client.approvePackage(id),
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorPackageMetadata,
+    async (_event, req: PackageMetadataRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const { projectId, title, description, tags } = validMetadata(req);
+        return await (await getClient()).editPackageMetadata(projectId, title, description, tags);
+      } catch (err: unknown) {
+        logger.warn('operator: package metadata failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
   return () => {
     ipcMain.removeHandler(CHANNEL.operatorMandate);
     ipcMain.removeHandler(CHANNEL.operatorSaveMandate);
@@ -340,5 +422,9 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorSceneRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneMedia);
     ipcMain.removeHandler(CHANNEL.operatorReadiness);
+    ipcMain.removeHandler(CHANNEL.operatorAssembly);
+    ipcMain.removeHandler(CHANNEL.operatorMediaRights);
+    ipcMain.removeHandler(CHANNEL.operatorPackageMetadata);
+    ipcMain.removeHandler(CHANNEL.operatorPackageApproval);
   };
 }

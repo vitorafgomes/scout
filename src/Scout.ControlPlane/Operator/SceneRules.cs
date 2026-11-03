@@ -13,6 +13,8 @@ internal static class SceneRules
     public const string Ready = "ready";
     public const string Audio = "audio";
     public const string Visual = "visual";
+    public const string Video = "video";
+    public const string Thumbnail = "thumbnail";
 
     private const int MaxFileNameLength = 120;
 
@@ -21,12 +23,20 @@ internal static class SceneRules
     private static readonly string[] VisualSources = ["generated", Owner, TextCard];
     private static readonly string[] AudioExtensions = [".mp3", ".wav", ".m4a", ".ogg"];
     private static readonly string[] VisualExtensions = [".png", ".jpg", ".jpeg", ".webp"];
+    private static readonly string[] VideoExtensions = [".mp4"];
+    private static readonly string[] ThumbnailExtensions = [".png", ".jpg"];
 
-    /// <summary>Refuse a media file name that is not a plain name of the kind's extensions.</summary>
+    /// <summary>Refuse a media file name that is not a plain name of the kind's extensions: audio, visual, video or thumbnail.</summary>
     /// <exception cref="OperatorValidationException">The name is empty, too long, hidden, a path, or of another type.</exception>
     public static void ValidateFileName(string? name, string kind)
     {
-        var extensions = kind == Audio ? AudioExtensions : VisualExtensions;
+        var (noun, extensions) = kind switch
+        {
+            Audio => ("an audio", AudioExtensions),
+            Video => ("a video", VideoExtensions),
+            Thumbnail => ("a thumbnail", ThumbnailExtensions),
+            _ => ("a visual", VisualExtensions),
+        };
         if (string.IsNullOrEmpty(name)
             || name.Length > MaxFileNameLength
             || name.StartsWith('.')
@@ -36,7 +46,7 @@ internal static class SceneRules
             || !extensions.Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
         {
             throw new OperatorValidationException(
-                $"'{name}' is not {(kind == Audio ? "an audio" : "a visual")} file Scout accepts: a plain file name of at most {MaxFileNameLength} characters, "
+                $"'{name}' is not {noun} file Scout accepts: a plain file name of at most {MaxFileNameLength} characters, "
                 + $"without a folder or a leading dot, ending in {string.Join(", ", extensions)}.");
         }
     }

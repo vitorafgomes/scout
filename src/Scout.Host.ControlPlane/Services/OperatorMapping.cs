@@ -4,19 +4,25 @@ using Scout.ControlPlane.Operator;
 using DomainChapter = Scout.ControlPlane.Operator.Chapter;
 using DomainClaim = Scout.ControlPlane.Operator.Claim;
 using DomainMandate = Scout.ControlPlane.Operator.Mandate;
+using DomainPackage = Scout.ControlPlane.Operator.VideoPackage;
+using DomainPackageCheck = Scout.ControlPlane.Operator.PackageCheck;
 using DomainReadiness = Scout.ControlPlane.Operator.Readiness;
 using DomainScene = Scout.ControlPlane.Operator.Scene;
 using DomainScript = Scout.ControlPlane.Operator.Script;
 using DomainScriptSection = Scout.ControlPlane.Operator.ScriptSection;
+using DomainShortClip = Scout.ControlPlane.Operator.ShortClip;
 using DomainTopicCandidate = Scout.ControlPlane.Operator.TopicCandidate;
 using WireChapter = Scout.ControlPlane.Contracts.Chapter;
 using WireClaim = Scout.ControlPlane.Contracts.Claim;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
+using WirePackage = Scout.ControlPlane.Contracts.VideoPackage;
+using WirePackageCheck = Scout.ControlPlane.Contracts.PackageCheck;
 using WireProject = Scout.ControlPlane.Contracts.Project;
 using WireReadiness = Scout.ControlPlane.Contracts.Readiness;
 using WireScene = Scout.ControlPlane.Contracts.Scene;
 using WireScript = Scout.ControlPlane.Contracts.Script;
 using WireScriptSection = Scout.ControlPlane.Contracts.ScriptSection;
+using WireShortClip = Scout.ControlPlane.Contracts.ShortClip;
 using WireTopicCandidate = Scout.ControlPlane.Contracts.TopicCandidate;
 
 namespace Scout.Host.ControlPlane.Services;
@@ -86,6 +92,10 @@ internal static class OperatorMapping
             wire.Error = project.Error;
         }
         wire.Scenes.AddRange(project.Scenes.Select(ToWire));
+        if (project.Package is { } package)
+        {
+            wire.Package = ToWire(package);
+        }
         return wire;
     }
 
@@ -120,6 +130,7 @@ internal static class OperatorMapping
             s.HasAudioFile ? s.AudioFile : null,
             s.HasVisualFile ? s.VisualFile : null,
             s.DurationMs)).ToList(),
+        Package = wire.Package is null ? null : ToDomain(wire.Package),
     };
 
     public static WireReadiness ToWire(DomainReadiness readiness)
@@ -245,6 +256,65 @@ internal static class OperatorMapping
         }
         return wire;
     }
+
+    private static WirePackage ToWire(DomainPackage package)
+    {
+        var wire = new WirePackage
+        {
+            Status = package.Status,
+            RightsConfirmed = package.RightsConfirmed,
+            Title = package.Title,
+            Description = package.Description,
+            DurationMs = package.DurationMs,
+            MetadataEdited = package.MetadataEdited,
+        };
+        if (package.VideoFile is not null)
+        {
+            wire.VideoFile = package.VideoFile;
+        }
+        if (package.ThumbnailFile is not null)
+        {
+            wire.ThumbnailFile = package.ThumbnailFile;
+        }
+        if (package.ApprovedAt is { } approvedAt)
+        {
+            wire.ApprovedAt = Iso(approvedAt);
+        }
+        if (package.Error is not null)
+        {
+            wire.Error = package.Error;
+        }
+        wire.Shorts.AddRange(package.Shorts.Select(s => new WireShortClip
+        {
+            File = s.File,
+            StartMs = s.StartMs,
+            DurationMs = s.DurationMs,
+            Hook = s.Hook,
+        }));
+        wire.Checks.AddRange(package.Checks.Select(c => new WirePackageCheck { Name = c.Name, Result = c.Result, Detail = c.Detail }));
+        wire.Tags.AddRange(package.Tags);
+        return wire;
+    }
+
+    private static DomainPackage ToDomain(WirePackage wire) => new(
+        wire.Status,
+        wire.HasVideoFile ? wire.VideoFile : null,
+        wire.Shorts.Select(s => new DomainShortClip(s.File, s.StartMs, s.DurationMs, s.Hook)).ToList(),
+        wire.HasThumbnailFile ? wire.ThumbnailFile : null,
+        wire.Checks.Select(c => new DomainPackageCheck(c.Name, c.Result, c.Detail)).ToList(),
+        wire.RightsConfirmed,
+        wire.HasApprovedAt ? ParseIso(wire.ApprovedAt) : null,
+        wire.Title,
+        wire.Description,
+        wire.Tags.ToList(),
+        wire.DurationMs,
+        wire.HasError ? wire.Error : null,
+        wire.MetadataEdited);
+
+    private static DateTimeOffset ParseIso(string value) =>
+        DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : throw new OperatorValidationException($"'{value}' is not a time Scout accepts.");
 
     private static string Iso(DateTimeOffset value) => value.ToString("O", CultureInfo.InvariantCulture);
 }

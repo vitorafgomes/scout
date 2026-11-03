@@ -52,11 +52,6 @@ export const appRoutes: Routes = [
     loadComponent: () => import('./features/features.component').then((m) => m.FeaturesComponent),
   },
   {
-    path: 'production',
-    loadComponent: () =>
-      import('./production/production.component').then((m) => m.ProductionComponent),
-  },
-  {
     path: 'review',
     loadComponent: () => import('./review/review.component').then((m) => m.ReviewComponent),
   },
@@ -86,6 +81,29 @@ export const appRoutes: Routes = [
   {
     path: 'quick-ask',
     loadComponent: () => import('./quick-ask/quick-ask.component').then((m) => m.QuickAskComponent),
+  },
+  {
+    path: 'operator',
+    loadComponent: () =>
+      import('./operator/operator-shell.component').then((m) => m.OperatorShellComponent),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'production' },
+      {
+        path: 'production',
+        loadComponent: () =>
+          import('./production/production.component').then((m) => m.ProductionComponent),
+      },
+      {
+        path: 'assembly',
+        loadComponent: () =>
+          import('./assembly/assembly.component').then((m) => m.AssemblyComponent),
+      },
+      {
+        path: 'approvals',
+        data: { feature: 'youtube' },
+        loadComponent: () => import('./review/review.component').then((m) => m.ReviewComponent),
+      },
+    ],
   },
   {
     path: 'floating-button',

@@ -400,7 +400,7 @@ public sealed class OperatorServiceTests : IDisposable
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.SaveProjectFromWorkerAsync(project with { Status = status }, null, CancellationToken.None));
 
-        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, failed.");
+        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed.");
         (await _operator.GetProjectAsync(project.Id, CancellationToken.None)).Status.ShouldBe("script_ready");
     }
 
@@ -1419,5 +1419,814 @@ public sealed class OperatorServiceTests : IDisposable
 
         (await File.ReadAllBytesAsync(_store.ProjectsPath)).ShouldBe(bytes);
         File.ReadAllText(_store.MediaRoot).ShouldBe("a file where the folder belongs");
+    }
+
+    private static readonly CancellationToken None = CancellationToken.None;
+
+    private static VideoPackage? Normal(VideoPackage? package) =>
+        package is null ? null : package with { Shorts = [.. package.Shorts], Checks = [.. package.Checks], Tags = [.. package.Tags] };
+
+    private async Task<OperatorProject> AssemblingAsync()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1), Scene("s2", 2));
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        taken.Status.ShouldBe("assembling");
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        foreach (var name in new[] { "video.mp4", "short-1.mp4", "thumb.png" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, name), "media");
+        }
+        return taken;
+    }
+
+    private static VideoPackage Rendered(VideoPackage queued) => queued with
+    {
+        Status = "assembled",
+        VideoFile = "video.mp4",
+        Shorts = [new ShortClip("short-1.mp4", 0, 30000, "Rivers never run straight.")],
+        ThumbnailFile = "thumb.png",
+        Checks = [new PackageCheck("duration", "pass", "6 seconds"), new PackageCheck("loudness", "warn", "-12 LUFS")],
+        Title = "Why rivers bend",
+        Description = "Meanders explained.",
+        Tags = ["rivers", "geography"],
+        DurationMs = 6000,
+    };
+
+    private async Task<OperatorProject> AssembledAsync(Func<VideoPackage, VideoPackage>? change = null)
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package.ShouldNotBeNull());
+        return await _operator.SaveProjectFromWorkerAsync(
+            taken with { Status = "assembled", Package = change is null ? package : change(package) }, null, None);
+    }
+
+    private async Task<OperatorProject> ReadyToApproveAsync(Func<VideoPackage, VideoPackage>? change = null)
+    {
+        var project = await AssembledAsync(change);
+        return await _operator.ConfirmMediaRightsAsync(project.Id, None);
+    }
+
+    private Task SetStoredAsync(string id, Func<OperatorProject, OperatorProject> change) =>
+        _store.UpdateProjectsAsync(
+            projects =>
+            {
+                var index = projects.FindIndex(p => p.Id == id);
+                projects[index] = change(projects[index]);
+                return 0;
+            },
+            None);
+
+    [Fact]
+    public async Task Next_Takes_A_Project_Queued_For_Assembly_After_Production_And_Before_Stale_Ones_And_A_Stale_Assembly_Again()
+    {
+        await GrantYouTubeAsync();
+        var now = DateTimeOffset.UtcNow;
+        var queuedPackage = PackageRules.Queue(null);
+        OperatorProject Stored(string id, string status, TimeSpan idle, VideoPackage? package = null) =>
+            new(id, $"Topic {id}", status, "desktop", now.AddHours(-3), now - idle, [], null, []) { Package = package };
+        await _store.UpdateProjectsAsync(
+            projects =>
+            {
+                projects.Add(Stored("stuck-assembling", "assembling", TimeSpan.FromMinutes(30), queuedPackage with { Status = "assembling" }));
+                projects.Add(Stored("live-assembling", "assembling", TimeSpan.FromMinutes(2), queuedPackage with { Status = "assembling" }));
+                projects.Add(Stored("assemble-me", "assembly_queued", TimeSpan.FromMinutes(1), queuedPackage));
+                projects.Add(Stored("produce-me", "production_queued", TimeSpan.FromMinutes(1)));
+                projects.Add(Stored("queued", "queued", TimeSpan.FromMinutes(1)));
+                return 0;
+            },
+            None);
+
+        var taken = new List<OperatorProject?>();
+        for (var i = 0; i < 5; i++)
+        {
+            taken.Add(await _operator.NextQueuedProjectAsync(None));
+        }
+
+        taken.Select(p => (p?.Id, p?.Status, p?.Package?.Status)).ShouldBe([
+            ("queued", "researching", null),
+            ("produce-me", "producing", null),
+            ("assemble-me", "assembling", "assembling"),
+            ("stuck-assembling", "assembling", "assembling"),
+            (null, null, null),
+        ]);
+        (await StoredAsync("live-assembling")).UpdatedAt.ShouldBe(now - TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    public async Task Assembling_A_Media_Ready_Project_With_Every_Scene_Ready_Queues_It_With_An_Empty_Package()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1), Scene("s2", 2));
+
+        var queued = await _operator.AssembleProjectAsync(project.Id, None);
+
+        queued.Status.ShouldBe("assembly_queued");
+        Normal(queued.Package).ShouldBeEquivalentTo(Normal(new VideoPackage(
+            "assembly_queued", null, [], null, [], false, null, string.Empty, string.Empty, [], 0, null, false)));
+        (await StoredAsync(project.Id)).Status.ShouldBe("assembly_queued");
+    }
+
+    [Fact]
+    public async Task Assembling_A_Failed_Assembly_Again_Clears_The_Project_And_Package_Errors()
+    {
+        var taken = await AssemblingAsync();
+        await _operator.SaveProjectFromWorkerAsync(
+            taken with { Status = "failed", Error = "Assembly failed.", Package = taken.Package! with { Status = "failed", Error = "ffmpeg exited with 1." } },
+            null,
+            None);
+
+        var queued = await _operator.AssembleProjectAsync(taken.Id, None);
+
+        (queued.Status, queued.Error, queued.Package!.Status, queued.Package.Error)
+            .ShouldBe(("assembly_queued", (string?)null, "assembly_queued", (string?)null));
+    }
+
+    [Theory]
+    [InlineData("script_ready")]
+    [InlineData("producing")]
+    [InlineData("assembly_queued")]
+    [InlineData("assembling")]
+    [InlineData("approved")]
+    public async Task Only_A_Media_Ready_Assembled_Or_Failed_Project_Is_Assembled(string status)
+    {
+        var project = await WithScenesAsync(Scene("s1", 1));
+        await SetStoredAsync(project.Id, p => p with { Status = status });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.AssembleProjectAsync(project.Id, None));
+
+        ex.Message.ShouldBe($"Only a project with its media ready, an assembled one, or a failed one with every scene ready is assembled; this one is {status}.");
+        (await StoredAsync(project.Id)).Status.ShouldBe(status);
+    }
+
+    [Theory]
+    [InlineData("media_ready", 1, "1 scene is not ready; regenerate it or attach its media before assembly.")]
+    [InlineData("failed", 1, "1 scene is not ready; regenerate it or attach its media before assembly.")]
+    [InlineData("failed", 2, "2 scenes are not ready; regenerate them or attach their media before assembly.")]
+    [InlineData("media_ready", 0, "The project has no scenes to assemble.")]
+    public async Task A_Project_With_A_Scene_Not_Ready_Or_No_Scenes_Is_Not_Assembled(string status, int notReady, string message)
+    {
+        var project = await WithScenesAsync(Scene("s1", 1), Scene("s2", 2), Scene("s3", 3));
+        await SetStoredAsync(project.Id, p => p with
+        {
+            Status = status,
+            Scenes = notReady == 0 ? [] : [.. p.Scenes.Select((s, i) => i < notReady ? s with { Status = "failed" } : s)],
+        });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.AssembleProjectAsync(project.Id, None));
+
+        ex.Message.ShouldBe(message);
+        (await StoredAsync(project.Id)).Status.ShouldBe(status);
+    }
+
+    [Fact]
+    public async Task A_Failed_Project_With_Every_Scene_Ready_Is_Assembled()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1));
+        await SetStoredAsync(project.Id, p => p with { Status = "failed", Error = "Speech timed out." });
+
+        var queued = await _operator.AssembleProjectAsync(project.Id, None);
+
+        (queued.Status, queued.Error).ShouldBe(("assembly_queued", (string?)null));
+    }
+
+    [Fact]
+    public async Task Without_The_Owners_Grant_A_Project_Is_Not_Assembled_And_A_Package_Not_Approved()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1));
+        var ready = await ReadyToApproveAsync();
+        await RevokeYouTubeAsync();
+
+        var assemble = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.AssembleProjectAsync(project.Id, None));
+        var approve = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.ApprovePackageAsync(ready.Id, None));
+
+        (assemble.Message, approve.Message).ShouldBe((NotAllowed, NotAllowed));
+        ((await StoredAsync(project.Id)).Status, (await StoredAsync(ready.Id)).Status).ShouldBe(("media_ready", "assembled"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Assembling_Again_Clears_The_Rights_And_The_Approval_And_Keeps_The_Metadata_Only_When_The_Owner_Edited_It(bool edited)
+    {
+        var project = await ReadyToApproveAsync();
+        if (edited)
+        {
+            await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None);
+            await _operator.ConfirmMediaRightsAsync(project.Id, None);
+        }
+        await _operator.ApprovePackageAsync(project.Id, None);
+        await SetStoredAsync(project.Id, p => p with { Status = "assembled" });
+
+        var package = (await _operator.AssembleProjectAsync(project.Id, None)).Package.ShouldNotBeNull();
+
+        (package.RightsConfirmed, package.ApprovedAt, package.VideoFile, package.Shorts.Count, package.Checks.Count)
+            .ShouldBe((false, (DateTimeOffset?)null, (string?)null, 0, 0));
+        (package.Title, package.Description, string.Join("|", package.Tags), package.MetadataEdited).ShouldBe(edited
+            ? ("My title", "My description", "mine", true)
+            : (string.Empty, string.Empty, string.Empty, false));
+    }
+
+    [Fact]
+    public async Task The_Worker_Reports_An_Assembled_Package_Whose_Files_Are_In_The_Media_Folder()
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package!);
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None);
+
+        saved.Status.ShouldBe("assembled");
+        Normal(saved.Package).ShouldBeEquivalentTo(Normal(package));
+        Normal((await StoredAsync(taken.Id)).Package).ShouldBeEquivalentTo(Normal(package));
+        (await _writes.ListAsync(1, None)).Single().Outcome.ShouldBe("saved assembled");
+    }
+
+    [Theory]
+    [InlineData("video", "'video.mp4' is not in the project's media folder.")]
+    [InlineData("short", "'short-1.mp4' is not in the project's media folder.")]
+    [InlineData("thumbnail", "'thumb.png' is not in the project's media folder.")]
+    [InlineData("no-video", "An assembled package needs its video file.")]
+    public async Task An_Assembled_Report_Naming_A_File_Not_In_The_Media_Folder_Or_Without_A_Video_Is_Refused(string missing, string message)
+    {
+        var taken = await AssemblingAsync();
+        var media = await _operator.GetMediaDirectoryAsync(taken.Id, None);
+        var package = Rendered(taken.Package!);
+        switch (missing)
+        {
+            case "video": File.Delete(Path.Combine(media, "video.mp4")); break;
+            case "short": File.Delete(Path.Combine(media, "short-1.mp4")); break;
+            case "thumbnail": File.Delete(Path.Combine(media, "thumb.png")); break;
+            default: package = package with { VideoFile = null }; break;
+        }
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None));
+
+        ex.Message.ShouldBe(message);
+        (await StoredAsync(taken.Id)).Status.ShouldBe("assembling");
+    }
+
+    [Theory]
+    [InlineData("video", "../video.mp4", "'../video.mp4' is not a video file Scout accepts")]
+    [InlineData("video", "video.mov", "'video.mov' is not a video file Scout accepts")]
+    [InlineData("video", ".video.mp4", "'.video.mp4' is not a video file Scout accepts")]
+    [InlineData("short", "short/1.mp4", "'short/1.mp4' is not a video file Scout accepts")]
+    [InlineData("short", "short-1.png", "'short-1.png' is not a video file Scout accepts")]
+    [InlineData("thumbnail", "thumb.webp", "'thumb.webp' is not a thumbnail file Scout accepts")]
+    [InlineData("thumbnail", "..\\thumb.png", "'..\\thumb.png' is not a thumbnail file Scout accepts")]
+    public async Task An_Unsafe_Or_Foreign_Package_File_Name_Is_Refused(string kind, string name, string message)
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package!) with { Status = "assembling" };
+        package = kind switch
+        {
+            "video" => package with { VideoFile = name },
+            "short" => package with { Shorts = [new ShortClip(name, 0, 1000, "Hook")] },
+            _ => package with { ThumbnailFile = name },
+        };
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Package = package }, null, None));
+
+        ex.Message.ShouldStartWith(message);
+        (await StoredAsync(taken.Id)).Package!.VideoFile.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("check", "Check 'duration' has a result the operator does not accept: pass, warn, fail.")]
+    [InlineData("unnamed-check", "Every check needs a name.")]
+    [InlineData("duration", "A package or Shorts duration, or a Shorts start, is below 0.")]
+    [InlineData("short-start", "A package or Shorts duration, or a Shorts start, is below 0.")]
+    [InlineData("status", "Package status 'published' is not one the operator accepts: assembly_queued, assembling, assembled, approved, failed.")]
+    public async Task A_Package_Outside_The_Vocabulary_Is_Refused(string change, string message)
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package!) with { Status = "assembling" };
+        package = change switch
+        {
+            "check" => package with { Checks = [new PackageCheck("duration", "maybe", string.Empty)] },
+            "unnamed-check" => package with { Checks = [new PackageCheck(" ", "pass", string.Empty)] },
+            "duration" => package with { DurationMs = -1 },
+            "short-start" => package with { Shorts = [new ShortClip("short-1.mp4", -1, 1000, "Hook")] },
+            _ => package with { Status = "published" },
+        };
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Package = package }, null, None));
+
+        ex.Message.ShouldBe(message);
+    }
+
+    [Theory]
+    [InlineData("rights", "Only the owner confirms the media rights of project '{0}'.")]
+    [InlineData("approved-at", "Only the owner approves the package of project '{0}'.")]
+    [InlineData("approved", "Only the owner sets the package of project '{0}' to approved.")]
+    [InlineData("assembly_queued", "Only the owner sets the package of project '{0}' to assembly_queued.")]
+    [InlineData("edited", "Only the owner edits the package metadata of project '{0}'.")]
+    public async Task The_Worker_Cannot_Confirm_Rights_Approve_Queue_Or_Mark_The_Metadata_Edited(string change, string message)
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package!);
+        package = change switch
+        {
+            "rights" => package with { RightsConfirmed = true },
+            "approved-at" => package with { ApprovedAt = DateTimeOffset.UtcNow },
+            "edited" => package with { MetadataEdited = true },
+            _ => package with { Status = change },
+        };
+
+        var ex = await Should.ThrowAsync<OperatorTamperingException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None));
+
+        ex.Message.ShouldBe(string.Format(System.Globalization.CultureInfo.InvariantCulture, message, taken.Id));
+        var stored = (await StoredAsync(taken.Id)).Package.ShouldNotBeNull();
+        (stored.Status, stored.RightsConfirmed, stored.ApprovedAt, stored.MetadataEdited)
+            .ShouldBe(("assembling", false, (DateTimeOffset?)null, false));
+    }
+
+    [Theory]
+    [InlineData("title")]
+    [InlineData("description")]
+    [InlineData("tags")]
+    public async Task Once_The_Owner_Edited_The_Metadata_The_Worker_Cannot_Change_It(string field)
+    {
+        var project = await AssembledAsync();
+        await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None);
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var package = Rendered(taken.Package!) with { Title = "My title", Description = "My description", Tags = ["mine"], MetadataEdited = true };
+        var changed = field switch
+        {
+            "title" => package with { Title = "Why rivers bend" },
+            "description" => package with { Description = "Meanders explained." },
+            _ => package with { Tags = ["mine", "rivers"] },
+        };
+
+        var ex = await Should.ThrowAsync<OperatorTamperingException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = changed }, null, None));
+        var saved = await _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None);
+
+        ex.Message.ShouldBe($"The owner edited the package metadata of project '{taken.Id}'; the worker may not change it.");
+        (saved.Package!.Title, saved.Package.Description, saved.Package.Tags.Single()).ShouldBe(("My title", "My description", "mine"));
+    }
+
+    [Fact]
+    public async Task Until_The_Owner_Edits_It_The_Worker_Sets_The_Title_Description_And_Tags()
+    {
+        var project = await AssembledAsync();
+
+        (project.Package!.Title, project.Package.Description, string.Join("|", project.Package.Tags), project.Package.MetadataEdited)
+            .ShouldBe(("Why rivers bend", "Meanders explained.", "rivers|geography", false));
+    }
+
+    [Theory]
+    [InlineData("media_ready", "assembling")]
+    [InlineData("media_ready", "assembled")]
+    [InlineData("media_ready", "package")]
+    [InlineData("assembly_queued", "failed")]
+    [InlineData("assembled", "package")]
+    [InlineData("assembled", "assembled")]
+    [InlineData("approved", "failed")]
+    public async Task A_Worker_Save_Of_Assembly_On_A_Project_That_Is_Not_Assembling_Is_Refused(string stored, string sent)
+    {
+        var taken = await AssemblingAsync();
+        var assembled = await _operator.SaveProjectFromWorkerAsync(
+            taken with { Status = "assembled", Package = Rendered(taken.Package!) }, null, None);
+        await SetStoredAsync(taken.Id, p => p with { Status = stored });
+        var before = await StoredAsync(taken.Id);
+        var save = sent switch
+        {
+            "package" => assembled with { Status = "failed", Package = assembled.Package! with { DurationMs = 7000 } },
+            _ => assembled with { Status = sent },
+        };
+
+        var ex = await Should.ThrowAsync<OperatorTamperingException>(() =>
+            _operator.SaveProjectFromWorkerAsync(save, null, None));
+
+        ex.Message.ShouldBe("The project is no longer assembling.");
+        var after = await StoredAsync(taken.Id);
+        (after.Status, after.UpdatedAt).ShouldBe((before.Status, before.UpdatedAt));
+        Normal(after.Package).ShouldBeEquivalentTo(Normal(before.Package));
+    }
+
+    [Theory]
+    [InlineData("assembling")]
+    [InlineData("assembled")]
+    [InlineData("package")]
+    public async Task A_Project_The_Worker_Starts_Cannot_Start_Assembled_Or_With_A_Package(string sent)
+    {
+        await GrantYouTubeAsync();
+        var draft = sent == "package"
+            ? NewDraft("Glaciers explained", "researching") with { Package = PackageRules.Queue(null) with { Status = "assembling" } }
+            : NewDraft("Glaciers explained", sent);
+
+        var ex = await Should.ThrowAsync<OperatorTamperingException>(() => _operator.SaveProjectFromWorkerAsync(draft, null, None));
+
+        ex.Message.ShouldBe("The project is no longer assembling.");
+        (await _operator.ListProjectsAsync(0, None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_Worker_Save_Without_A_Package_Keeps_The_Stored_Package()
+    {
+        var project = await AssembledAsync();
+        await SetStoredAsync(project.Id, p => p with { Status = "producing" });
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(project with { Status = "producing", Package = null }, null, None);
+
+        Normal(saved.Package).ShouldBeEquivalentTo(Normal(project.Package));
+    }
+
+    [Fact]
+    public async Task The_Owner_Edits_The_Metadata_Trimmed_And_It_Is_Marked_As_The_Owners()
+    {
+        var project = await AssembledAsync();
+
+        var edited = await _operator.EditPackageMetadataAsync(project.Id, "  My title ", " My description ", [" mine ", "rivers"], None);
+
+        (edited.Status, edited.Package!.Status, edited.Package.Title, edited.Package.Description, string.Join("|", edited.Package.Tags), edited.Package.MetadataEdited)
+            .ShouldBe(("assembled", "assembled", "My title", "My description", "mine|rivers", true));
+    }
+
+    [Theory]
+    [InlineData(0, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(101, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(10, 5001, 10, 1, "The description is at most 5000 characters.")]
+    [InlineData(10, 10, 101, 1, "Each tag is 1 to 100 characters.")]
+    [InlineData(10, 10, 0, 1, "Each tag is 1 to 100 characters.")]
+    [InlineData(10, 10, 100, 6, "The tags are at most 500 characters together.")]
+    [InlineData(0, 5001, 10, 1, "The title is 1 to 100 characters. The description is at most 5000 characters.")]
+    public async Task Metadata_Outside_YouTubes_Limits_Is_Refused_And_Not_Saved(int title, int description, int tag, int tags, string message)
+    {
+        var project = await AssembledAsync();
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.EditPackageMetadataAsync(
+            project.Id, new string('t', title), new string('d', description), [.. Enumerable.Repeat(new string('g', tag), tags)], None));
+
+        ex.Message.ShouldBe(message);
+        (await StoredAsync(project.Id)).Package!.MetadataEdited.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Metadata_At_YouTubes_Limits_Is_Accepted()
+    {
+        var project = await AssembledAsync();
+        var tags = Enumerable.Range(0, 4).Select(i => new string((char)('a' + i), 100)).Append(new string('e', 96)).ToList();
+
+        var edited = await _operator.EditPackageMetadataAsync(project.Id, new string('t', 100), new string('d', 5000), tags, None);
+
+        (edited.Package!.Title.Length, edited.Package.Description.Length, PackageRules.TagsLength(edited.Package.Tags)).ShouldBe((100, 5000, 500));
+    }
+
+    [Theory]
+    [InlineData(new[] { "rivers", "river bends" }, 6 + 13 + 1)]
+    [InlineData(new[] { "a b c" }, 7)]
+    [InlineData(new string[0], 0)]
+    public void Tags_Are_Counted_The_Way_YouTube_Counts_Them_With_Two_For_A_Tag_With_A_Space_And_A_Comma_Between_Tags(string[] tags, int length)
+        => PackageRules.TagsLength(tags).ShouldBe(length);
+
+    [Fact]
+    public async Task Tags_Whose_Characters_Fit_500_But_Not_With_YouTubes_Commas_And_Quotes_Are_Refused()
+    {
+        var project = await AssembledAsync();
+        var tags = Enumerable.Range(0, 4).Select(i => new string((char)('a' + i), 100)).Append(new string('r', 90) + " bends").ToList();
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.EditPackageMetadataAsync(project.Id, "Why rivers bend", string.Empty, tags, None));
+
+        tags.Sum(t => t.Length).ShouldBe(496);
+        ex.Message.ShouldBe("The tags are at most 500 characters together.");
+    }
+
+    [Fact]
+    public async Task Editing_The_Metadata_Of_An_Approved_Package_Sends_It_Back_To_Assembled_Without_Its_Approval()
+    {
+        var project = await ReadyToApproveAsync();
+        await _operator.ApprovePackageAsync(project.Id, None);
+
+        var edited = await _operator.EditPackageMetadataAsync(project.Id, "My title", string.Empty, [], None);
+
+        (edited.Status, edited.Package!.Status, edited.Package.ApprovedAt, edited.Package.RightsConfirmed)
+            .ShouldBe(("assembled", "assembled", (DateTimeOffset?)null, true));
+    }
+
+    [Theory]
+    [InlineData("assembling")]
+    [InlineData("assembly_queued")]
+    [InlineData("failed")]
+    public async Task Metadata_Is_Edited_And_Rights_Confirmed_Only_On_An_Assembled_Package(string status)
+    {
+        var project = await AssembledAsync();
+        await SetStoredAsync(project.Id, p => p with { Status = status });
+
+        var edit = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.EditPackageMetadataAsync(project.Id, "My title", string.Empty, [], None));
+        var rights = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ConfirmMediaRightsAsync(project.Id, None));
+
+        edit.Message.ShouldBe($"Only the metadata of an assembled or approved package is edited; this one is {status}.");
+        rights.Message.ShouldBe($"Media rights are confirmed on an assembled package; this one is {status}.");
+        var stored = (await StoredAsync(project.Id)).Package!;
+        (stored.MetadataEdited, stored.RightsConfirmed).ShouldBe((false, false));
+    }
+
+    [Fact]
+    public async Task A_Project_Without_A_Package_Has_No_Metadata_Or_Rights_To_Set()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1));
+        await SetStoredAsync(project.Id, p => p with { Status = "assembled" });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ConfirmMediaRightsAsync(project.Id, None));
+
+        ex.Message.ShouldBe($"Project '{project.Id}' has no package yet; assemble it first.");
+    }
+
+    [Fact]
+    public async Task The_Owner_Confirms_The_Media_Rights_Of_An_Assembled_Package()
+    {
+        var project = await AssembledAsync();
+
+        var confirmed = await _operator.ConfirmMediaRightsAsync(project.Id, None);
+
+        (confirmed.Status, confirmed.Package!.RightsConfirmed).ShouldBe(("assembled", true));
+        (await StoredAsync(project.Id)).Package!.RightsConfirmed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Approving_A_Package_With_Rights_Confirmed_No_Failed_Check_And_Every_Claim_Decided_Records_The_Owners_Approval()
+    {
+        var project = await ReadyToApproveAsync();
+        await SetStoredAsync(project.Id, p => p with { Claims = [Claim("c1", "supported"), Claim("c2", "waived", "Said as disputed")] });
+        var before = DateTimeOffset.UtcNow;
+
+        var approved = await _operator.ApprovePackageAsync(project.Id, None);
+
+        (approved.Status, approved.Package!.Status).ShouldBe(("approved", "approved"));
+        approved.Package.ApprovedAt.ShouldNotBeNull().ShouldBeInRange(before, DateTimeOffset.UtcNow);
+        (await StoredAsync(project.Id)).Package!.ApprovedAt.ShouldBe(approved.Package.ApprovedAt);
+        (await _writes.ListAsync(1, None)).Select(e => (e.FeatureId, e.Action, e.Target, e.Outcome, e.ApprovedBy, e.ActionId)).ShouldBe([
+            ("youtube", "Scout's data folder", project.Id, "approved package", (string?)"owner", (string?)null),
+        ]);
+    }
+
+    [Theory]
+    [InlineData("rights", "Confirm the media rights first.")]
+    [InlineData("one-failed-check", "1 check failed.")]
+    [InlineData("two-failed-checks", "2 checks failed.")]
+    [InlineData("pending", "1 claim is not supported or waived.")]
+    [InlineData("unsupported", "2 claims are not supported or waived.")]
+    [InlineData("all", "Confirm the media rights first. 1 check failed. 1 claim is not supported or waived.")]
+    public async Task Approval_Is_Blocked_By_Unconfirmed_Rights_A_Failed_Check_Or_A_Claim_Not_Supported_Or_Waived(string cause, string message)
+    {
+        static PackageCheck Failed(string name) => new(name, "fail", "Placeholder media.");
+        var project = cause switch
+        {
+            "rights" => await AssembledAsync(),
+            "one-failed-check" => await ReadyToApproveAsync(p => p with { Checks = [.. p.Checks, Failed("placeholder")] }),
+            "two-failed-checks" => await ReadyToApproveAsync(p => p with { Checks = [Failed("placeholder"), Failed("captions")] }),
+            "all" => await AssembledAsync(p => p with { Checks = [Failed("placeholder")] }),
+            _ => await ReadyToApproveAsync(),
+        };
+        await SetStoredAsync(project.Id, p => p with
+        {
+            Claims = cause switch
+            {
+                "pending" or "all" => [Claim("c1", "supported"), Claim("c2", "pending")],
+                "unsupported" => [Claim("c1", "unsupported"), Claim("c2", "pending"), Claim("c3", "waived", "Disputed")],
+                _ => [Claim("c1", "supported")],
+            },
+        });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ApprovePackageAsync(project.Id, None));
+
+        ex.Message.ShouldBe(message);
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.Package!.ApprovedAt).ShouldBe(("assembled", (DateTimeOffset?)null));
+        (await _writes.ListAsync(1, None)).Single().Outcome.ShouldNotBe("approved package");
+    }
+
+    [Theory]
+    [InlineData("assembling")]
+    [InlineData("approved")]
+    [InlineData("media_ready")]
+    public async Task Only_An_Assembled_Package_Is_Approved(string status)
+    {
+        var project = await ReadyToApproveAsync();
+        await SetStoredAsync(project.Id, p => p with { Status = status });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ApprovePackageAsync(project.Id, None));
+
+        ex.Message.ShouldBe($"Only an assembled package is approved; this one is {status}.");
+        (await StoredAsync(project.Id)).Package!.ApprovedAt.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("assembly_queued")]
+    [InlineData("approved")]
+    public async Task The_Worker_Cannot_Set_A_Status_Only_The_Owner_Sets(string status)
+    {
+        var project = await ScriptReadyAsync();
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveProjectFromWorkerAsync(project with { Status = status }, null, None));
+
+        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed.");
+    }
+
+    [Fact]
+    public async Task An_Owner_Regenerate_During_Assembly_Refuses_The_Assemblers_Save_As_No_Longer_Assembling_And_Keeps_The_Regenerate()
+    {
+        var taken = await AssemblingAsync();
+        var regenerated = await _operator.RegenerateSceneAsync(taken.Id, "s1", None);
+
+        var ex = await Should.ThrowAsync<OperatorTamperingException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = Rendered(taken.Package!) }, null, None));
+
+        ex.Message.ShouldBe("The project is no longer assembling.");
+        var stored = await StoredAsync(taken.Id);
+        stored.Status.ShouldBe("production_queued");
+        stored.Scenes.ShouldBe(regenerated.Scenes);
+    }
+
+    [Theory]
+    [InlineData("reorder", "media_ready")]
+    [InlineData("attach", "media_ready")]
+    [InlineData("regenerate", "production_queued")]
+    public async Task An_Owner_Scene_Edit_On_An_Approved_Package_Clears_The_Rights_And_The_Approval_Until_It_Is_Assembled_Again(string edit, string status)
+    {
+        var project = await ReadyToApproveAsync();
+        await _operator.ApprovePackageAsync(project.Id, None);
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await File.WriteAllTextAsync(Path.Combine(media, "mine.png"), "image");
+
+        var edited = edit switch
+        {
+            "reorder" => await _operator.ReorderScenesAsync(project.Id, ["s2", "s1"], None),
+            "lock" => await _operator.SetSceneLockedAsync(project.Id, "s1", true, None),
+            "attach" => await _operator.AttachSceneMediaAsync(project.Id, "s1", "visual", "mine.png", None),
+            _ => await _operator.RegenerateSceneAsync(project.Id, "s1", None),
+        };
+        var approve = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ApprovePackageAsync(project.Id, None));
+        var rights = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ConfirmMediaRightsAsync(project.Id, None));
+
+        var package = edited.Package.ShouldNotBeNull();
+        (edited.Status, package.Status, package.RightsConfirmed, package.ApprovedAt, package.VideoFile)
+            .ShouldBe((status, "assembled", false, (DateTimeOffset?)null, (string?)"video.mp4"));
+        approve.Message.ShouldBe($"Only an assembled package is approved; this one is {status}.");
+        rights.Message.ShouldBe($"Media rights are confirmed on an assembled package; this one is {status}.");
+        File.Exists(Path.Combine(media, "video.mp4")).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(101, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(0, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(10, 5001, 10, 1, "The description is at most 5000 characters.")]
+    [InlineData(10, 10, 101, 1, "Each tag is 1 to 100 characters.")]
+    [InlineData(10, 10, 100, 6, "The tags are at most 500 characters together.")]
+    public async Task Approval_Is_Blocked_By_Metadata_Outside_YouTubes_Limits(int title, int description, int tag, int tags, string message)
+    {
+        var project = await ReadyToApproveAsync();
+        await SetStoredAsync(project.Id, p => p with
+        {
+            Package = p.Package! with
+            {
+                Title = new string('t', title),
+                Description = new string('d', description),
+                Tags = [.. Enumerable.Repeat(new string('g', tag), tags)],
+            },
+        });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ApprovePackageAsync(project.Id, None));
+
+        ex.Message.ShouldBe(message);
+        (await StoredAsync(project.Id)).Package!.ApprovedAt.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(101, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(0, 10, 10, 1, "The title is 1 to 100 characters.")]
+    [InlineData(10, 5001, 10, 1, "The description is at most 5000 characters.")]
+    [InlineData(10, 10, 101, 1, "Each tag is 1 to 100 characters.")]
+    [InlineData(10, 10, 100, 6, "The tags are at most 500 characters together.")]
+    public async Task The_Workers_Metadata_Outside_YouTubes_Limits_Is_Refused_Once_It_Writes_Any(int title, int description, int tag, int tags, string message)
+    {
+        var taken = await AssemblingAsync();
+        var package = Rendered(taken.Package!) with
+        {
+            Title = new string('t', title),
+            Description = new string('d', description),
+            Tags = [.. Enumerable.Repeat(new string('g', tag), tags)],
+        };
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None));
+        var unwritten = await _operator.SaveProjectFromWorkerAsync(taken, null, None);
+
+        ex.Message.ShouldBe(message);
+        (unwritten.Status, unwritten.Package!.Title, unwritten.Package.Tags.Count).ShouldBe(("assembling", string.Empty, 0));
+    }
+
+    [Fact]
+    public async Task Editing_The_Metadata_Runs_The_Metadata_And_Discoverability_Checks_Again_Over_The_Owners_Values_And_Keeps_The_Others()
+    {
+        await _operator.SaveMandateAsync(Mandate(pillars: ["Geography"]), None);
+        var project = await AssembledAsync(p => p with
+        {
+            Checks = [.. p.Checks, new PackageCheck("metadata", "pass", "worker"), new PackageCheck("discoverability", "pass", "worker")],
+        });
+
+        var unfound = await _operator.EditPackageMetadataAsync(project.Id, "You will not believe this", "No list here.", [], None);
+        var found = await _operator.EditPackageMetadataAsync(project.Id, "Amazing geography", "Intro\n\n0:00 Start\n0:30 Bends", [], None);
+        var byTopic = await _operator.EditPackageMetadataAsync(project.Id, "Rivers explained", "0:00 Start", [], None);
+
+        unfound.Package!.Checks.Select(c => (c.Name, c.Result, c.Detail)).ShouldBe([
+            ("duration", "pass", "6 seconds"),
+            ("loudness", "warn", "-12 LUFS"),
+            ("metadata", "pass", "The title, description and tags fit YouTube's limits."),
+            ("discoverability", "warn", "Viewers may not find this video: the title shares no word with the topic or the channel's pillars; the description has no chapters list."),
+        ]);
+        found.Package!.Checks.Single(c => c.Name == "discoverability").ShouldBe(
+            new PackageCheck("discoverability", "pass", "The title matches the topic and the description lists chapters."));
+        byTopic.Package!.Checks.Single(c => c.Name == "discoverability").Result.ShouldBe("pass");
+        (await StoredAsync(project.Id)).Package!.Checks.Count.ShouldBe(4);
+    }
+
+    [Fact]
+    public void The_Metadata_Check_Of_Edited_Metadata_Fails_Outside_YouTubes_Limits()
+    {
+        var checks = PackageRules.WithMetadataChecks([], new string('t', 101), "0:00 Start", ["rivers"], "rivers", []);
+
+        checks.Single(c => c.Name == "metadata").ShouldBe(
+            new PackageCheck("metadata", "fail", "YouTube would refuse this metadata: The title is 1 to 100 characters."));
+    }
+
+    [Theory]
+    [InlineData("assembling", "attach")]
+    [InlineData("assembling", "reorder")]
+    [InlineData("assembly_queued", "attach")]
+    [InlineData("assembly_queued", "reorder")]
+    public async Task A_Scene_Edit_That_Changes_The_Video_During_Assembly_Queues_It_Again_So_The_Running_Assembly_Is_No_Longer_Assembling(string stage, string edit)
+    {
+        var project = await WithScenesAsync(Scene("s1", 1), Scene("s2", 2));
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = stage == "assembling" ? (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull() : await StoredAsync(project.Id);
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await File.WriteAllTextAsync(Path.Combine(media, "mine.png"), "image");
+        foreach (var name in new[] { "video.mp4", "short-1.mp4", "thumb.png" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, name), "media");
+        }
+
+        var edited = edit == "attach"
+            ? await _operator.AttachSceneMediaAsync(project.Id, "s1", "visual", "mine.png", None)
+            : await _operator.ReorderScenesAsync(project.Id, ["s2", "s1"], None);
+        var save = await Should.ThrowAsync<OperatorTamperingException>(() =>
+            _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = Rendered(taken.Package!) with { Status = "assembled" } }, null, None));
+
+        (edited.Status, edited.Package!.Status).ShouldBe(("assembly_queued", "assembly_queued"));
+        save.Message.ShouldBe("The project is no longer assembling.");
+        var next = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        (next.Id, next.Status).ShouldBe((project.Id, "assembling"));
+    }
+
+    [Fact]
+    public async Task Regenerating_A_Scene_During_Assembly_Sends_The_Project_To_Production_And_The_Package_Back_To_Queued_For_Assembly()
+    {
+        var taken = await AssemblingAsync();
+
+        var regenerated = await _operator.RegenerateSceneAsync(taken.Id, "s1", None);
+
+        (regenerated.Status, regenerated.Package!.Status).ShouldBe(("production_queued", "assembly_queued"));
+    }
+
+    [Theory]
+    [InlineData("lock")]
+    [InlineData("unchanged order")]
+    public async Task A_Lock_Or_The_Order_The_Scenes_Already_Have_Keeps_The_Approval_The_Rights_And_The_Status(string edit)
+    {
+        var project = await ReadyToApproveAsync();
+        var approved = await _operator.ApprovePackageAsync(project.Id, None);
+
+        var edited = edit == "lock"
+            ? await _operator.SetSceneLockedAsync(project.Id, "s1", true, None)
+            : await _operator.ReorderScenesAsync(project.Id, ["s1", "s2"], None);
+
+        var package = edited.Package.ShouldNotBeNull();
+        (edited.Status, package.Status, package.RightsConfirmed, package.ApprovedAt).ShouldBe(("approved", "approved", true, approved.Package!.ApprovedAt));
+    }
+
+    [Theory]
+    [InlineData("lock")]
+    [InlineData("unchanged order")]
+    public async Task A_Lock_Or_The_Order_The_Scenes_Already_Have_During_Assembly_Leaves_The_Assembly_Running(string edit)
+    {
+        var taken = await AssemblingAsync();
+
+        var edited = edit == "lock"
+            ? await _operator.SetSceneLockedAsync(taken.Id, "s1", true, None)
+            : await _operator.ReorderScenesAsync(taken.Id, ["s1", "s2"], None);
+        var saved = await _operator.SaveProjectFromWorkerAsync(
+            taken with { Status = "assembled", Scenes = edited.Scenes, Package = Rendered(taken.Package!) }, null, None);
+
+        (edited.Status, edited.Package!.Status).ShouldBe(("assembling", "assembling"));
+        saved.Status.ShouldBe("assembled");
     }
 }

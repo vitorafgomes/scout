@@ -9,9 +9,11 @@ namespace Scout.ControlPlane.Operator;
 /// produces projects under the owner's live write grant of the YouTube feature, decides claims and
 /// edits scenes; the worker reads the mandate, reports its readiness, and reads projects, takes
 /// queued ones and saves its drafts under the same grant, each save and each take recorded in the
-/// write log. The worker can never mark a claim supported or waived, change an owner's decision,
-/// change a project's topic or origin, or reorder, lock, change a locked scene or replace the
-/// owner's media. The desktop never receives a project's origin reference.
+/// write log. The owner queues an assembly, edits the package metadata, confirms its media rights
+/// and approves it. The worker can never mark a claim supported or waived, change an owner's decision,
+/// change a project's topic or origin, reorder, lock, change a locked scene or replace the owner's
+/// media, or confirm, approve or change the owner's metadata of a package. The desktop never
+/// receives a project's origin reference.
 /// </summary>
 public sealed class OperatorService
 {
@@ -35,6 +37,11 @@ public sealed class OperatorService
     private const string Failed = "failed";
     private const string NotReported = "The Scout worker has not reported yet.";
     private const string NoLongerProducing = "The project is no longer producing.";
+    private const string NoLongerAssembling = "The project is no longer assembling.";
+    private const string AssemblyQueued = PackageRules.AssemblyQueued;
+    private const string Assembling = PackageRules.Assembling;
+    private const string Assembled = PackageRules.Assembled;
+    private const string Approved = PackageRules.Approved;
     private const string ReadinessNotSaved = "Scout could not save the worker's readiness report in its data folder.";
     private const string DataFolderScope = "Scout's data folder";
     private const int DefaultListLimit = 50;
@@ -45,7 +52,7 @@ public sealed class OperatorService
     private const int MaxTopicLength = 200;
 
     private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(15);
-    private static readonly string[] WorkerStatuses = [Researching, Scripting, ScriptReady, Producing, MediaReady, Failed];
+    private static readonly string[] WorkerStatuses = [Researching, Scripting, ScriptReady, Producing, MediaReady, Assembling, Assembled, Failed];
     private static readonly string[] WorkerClaimStatuses = ["pending", "unsupported"];
     private static readonly string[] OwnerClaimStatuses = ["supported", "unsupported", "waived"];
 
@@ -190,8 +197,10 @@ public sealed class OperatorService
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
     /// <exception cref="OperatorValidationException">A status, claim id or topic the operator does not accept.</exception>
     /// <exception cref="OperatorTamperingException">
-    /// A change only the owner or the desktop may make, any save on a project the owner queued for production again,
-    /// or a save of producing, media ready or any scene change on a project that is no longer producing.
+    /// A change only the owner or the desktop may make, any save on a project the owner queued for production or
+    /// assembly again or approved, a save of producing, media ready or any scene change on a project that is no longer
+    /// producing, or a save of assembling, assembled or any package change on a project that is no longer assembling
+    /// or whose scenes it changes.
     /// </exception>
     /// <exception cref="OperatorNotFoundException">No project has the id.</exception>
     public async Task<OperatorProject> SaveProjectFromWorkerAsync(
@@ -210,9 +219,18 @@ public sealed class OperatorService
 
         ValidateClaims(project.Claims);
         SceneRules.Validate(project.Scenes);
+        if (project.Package is not null)
+        {
+            PackageRules.Validate(project.Package);
+        }
 
         if (string.IsNullOrEmpty(project.Id))
         {
+            if (project.Status is Assembling or Assembled || project.Package is not null)
+            {
+                throw new OperatorTamperingException(NoLongerAssembling);
+            }
+
             RefuseOwnerStatuses(project.Claims, []);
             var created = NewProject(project.Topic, project.Status, ChatOrigin, originReference) with
             {
@@ -224,7 +242,7 @@ public sealed class OperatorService
             };
             await _store.UpdateProjectsAsync(projects => { projects.Add(created); return created; }, ct)
                 .ConfigureAwait(false);
-            await LogSaveAsync(created, ct).ConfigureAwait(false);
+            await LogAsync(created.Id, $"saved {created.Status}", approvedBy: null, ct).ConfigureAwait(false);
             return created;
         }
 
@@ -242,11 +260,22 @@ public sealed class OperatorService
 
                     var claims = MergeClaims(stored.Claims, project.Claims);
                     var scenes = SceneRules.MergeFromWorker(stored.Id, stored.Scenes, project.Scenes);
-                    if (stored.Status == ProductionQueued
-                        || (stored.Status != Producing
-                            && (project.Status is Producing or MediaReady || !scenes.SequenceEqual(stored.Scenes))))
+                    var package = PackageRules.MergeFromWorker(stored.Id, stored.Package, project.Package);
+                    var productionSave = project.Status is Producing or MediaReady || !scenes.SequenceEqual(stored.Scenes);
+                    var assemblySave = project.Status is Assembling or Assembled || !PackageRules.Same(package, stored.Package);
+                    if (assemblySave
+                            ? stored.Status != Assembling || productionSave
+                            : stored.Status is AssemblyQueued or Approved)
+                    {
+                        throw new OperatorTamperingException(NoLongerAssembling);
+                    }
+                    if (stored.Status == ProductionQueued || (stored.Status != Producing && productionSave))
                     {
                         throw new OperatorTamperingException(NoLongerProducing);
+                    }
+                    if (project.Status == Assembled)
+                    {
+                        PackageRules.RequireFiles(MediaDirectoryOf(stored.Id), package);
                     }
 
                     projects[index] = stored with
@@ -258,12 +287,13 @@ public sealed class OperatorService
                         Claims = claims,
                         Error = project.Error,
                         Scenes = scenes,
+                        Package = package,
                     };
                     return projects[index];
                 },
                 ct)
             .ConfigureAwait(false);
-        await LogSaveAsync(saved, ct).ConfigureAwait(false);
+        await LogAsync(saved.Id, $"saved {saved.Status}", approvedBy: null, ct).ConfigureAwait(false);
         return saved;
     }
 
@@ -287,9 +317,11 @@ public sealed class OperatorService
     /// <summary>
     /// Under the owner's write grant take, in one step so two callers never take the same project,
     /// the oldest queued project and move it to researching; else the oldest project queued for
-    /// production and move it to producing; else the oldest project left in researching, scripting
-    /// or producing with no save for 15 minutes, back in researching or producing. The take is
-    /// recorded in the write log. Null when none waits, and then the projects file is not written.
+    /// production and move it to producing; else the oldest project queued for assembly and move it
+    /// and its package to assembling; else the oldest project left in researching, scripting,
+    /// producing or assembling with no save for 15 minutes, back in researching, producing or
+    /// assembling. The take is recorded in the write log. Null when none waits, and then the
+    /// projects file is not written.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
     public async Task<OperatorProject?> NextQueuedProjectAsync(CancellationToken ct)
@@ -310,14 +342,20 @@ public sealed class OperatorService
                         return null;
                     }
 
-                    projects[index] = projects[index] with { Status = status, UpdatedAt = now };
+                    var package = projects[index].Package;
+                    projects[index] = projects[index] with
+                    {
+                        Status = status,
+                        UpdatedAt = now,
+                        Package = status == Assembling && package is not null ? package with { Status = Assembling } : package,
+                    };
                     return projects[index];
                 },
                 ct)
             .ConfigureAwait(false);
         if (taken is not null)
         {
-            await LogSaveAsync(taken, ct).ConfigureAwait(false);
+            await LogAsync(taken.Id, $"saved {taken.Status}", approvedBy: null, ct).ConfigureAwait(false);
         }
 
         return taken;
@@ -360,7 +398,12 @@ public sealed class OperatorService
         return ForDesktop(produced);
     }
 
-    /// <summary>Put the project's scenes in the owner's order; <paramref name="sceneIds"/> names every scene once, and the first is order 1.</summary>
+    /// <summary>
+    /// Put the project's scenes in the owner's order; <paramref name="sceneIds"/> names every scene once,
+    /// and the first is order 1. An order that changes the video sends an assembled or approved project
+    /// back to media ready without its rights and approval, and one queued for assembly or assembling
+    /// back to queued for assembly; the order it already has changes neither.
+    /// </summary>
     /// <exception cref="OperatorValidationException">The ids are not exactly the project's scenes.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
     public async Task<OperatorProject> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct)
@@ -381,7 +424,8 @@ public sealed class OperatorService
                     var scenes = sceneIds
                         .Select((id, i) => project.Scenes.First(s => s.Id == id) with { Order = i + 1 })
                         .ToList();
-                    projects[index] = project with { Scenes = scenes, UpdatedAt = DateTimeOffset.UtcNow };
+                    var moved = !sceneIds.SequenceEqual(project.Scenes.OrderBy(s => s.Order).Select(s => s.Id), StringComparer.Ordinal);
+                    projects[index] = (moved ? AfterSceneEdit(project, null) : project) with { Scenes = scenes, UpdatedAt = DateTimeOffset.UtcNow };
                     return projects[index];
                 },
                 ct)
@@ -389,14 +433,18 @@ public sealed class OperatorService
         return ForDesktop(reordered);
     }
 
-    /// <summary>Lock or unlock one scene; a locked scene is never changed by the worker or regenerated.</summary>
+    /// <summary>
+    /// Lock or unlock one scene; a locked scene is never changed by the worker or regenerated. A lock
+    /// does not change the video, so the project's status, rights and approval stay as they are.
+    /// </summary>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
     public Task<OperatorProject> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct) =>
-        ChangeSceneAsync(projectId, sceneId, scene => scene with { Locked = locked }, projectStatus: null, ct);
+        ChangeSceneAsync(projectId, sceneId, scene => scene with { Locked = locked }, projectStatus: null, changesVideo: false, ct);
 
     /// <summary>
     /// Send one unlocked scene back to planned and the project to production: the scene keeps the
-    /// owner's media and loses its generated files and error.
+    /// owner's media and loses its generated files and error. The package goes back to assembled
+    /// without its rights and approval, or to queued for assembly when it was queued or assembling.
     /// </summary>
     /// <exception cref="OperatorValidationException">The scene is locked.</exception>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
@@ -423,13 +471,16 @@ public sealed class OperatorService
                 };
             },
             ProductionQueued,
+            changesVideo: true,
             ct);
 
     /// <summary>
     /// Use the owner's own audio or visual for one scene. The file must already be in the project's
     /// media directory. The scene is ready once it has a visual file, or a text card production chose,
     /// and an audio file, or no audio production chose; a scene production has not made yet counts only
-    /// files. The owner's audio leaves the duration unknown, 0.
+    /// files. The owner's audio leaves the duration unknown, 0. An assembled or approved project goes
+    /// back to media ready without its rights and approval, and one queued for assembly or assembling
+    /// back to queued for assembly, so a running assembly stops and the next one uses the new media.
     /// </summary>
     /// <exception cref="OperatorValidationException">The kind, the file name or the file is not acceptable.</exception>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
@@ -467,6 +518,7 @@ public sealed class OperatorService
                 return ready ? attached with { Status = SceneRules.Ready, Error = null } : attached;
             },
             projectStatus: null,
+            changesVideo: true,
             ct);
     }
 
@@ -489,6 +541,167 @@ public sealed class OperatorService
     {
         await RequireGrantAsync(projectId, ct).ConfigureAwait(false);
         return await GetMediaDirectoryAsync(projectId, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Queue a project for assembly under the owner's write grant: one with its media ready, an
+    /// assembled one, or a failed one, every scene of it ready. The project's and the package's
+    /// error are cleared, and the package starts again: no files, checks, rights or approval, and the
+    /// owner's metadata kept only when the owner edited it.
+    /// </summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorValidationException">The project's status, no scenes, or a scene not ready.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public async Task<OperatorProject> AssembleProjectAsync(string id, CancellationToken ct)
+    {
+        await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        var queued = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, id);
+                    var project = projects[index];
+                    if (project.Status is not (MediaReady or Assembled or Failed))
+                    {
+                        throw new OperatorValidationException(
+                            $"Only a project with its media ready, an assembled one, or a failed one with every scene ready is assembled; this one is {project.Status}.");
+                    }
+                    if (project.Scenes.Count == 0)
+                    {
+                        throw new OperatorValidationException("The project has no scenes to assemble.");
+                    }
+
+                    var notReady = project.Scenes.Count(s => s.Status != SceneRules.Ready);
+                    if (notReady > 0)
+                    {
+                        throw new OperatorValidationException(notReady == 1
+                            ? "1 scene is not ready; regenerate it or attach its media before assembly."
+                            : $"{notReady} scenes are not ready; regenerate them or attach their media before assembly.");
+                    }
+
+                    projects[index] = project with
+                    {
+                        Status = AssemblyQueued,
+                        Error = null,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        Package = PackageRules.Queue(project.Package),
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        return ForDesktop(queued);
+    }
+
+    /// <summary>Record the owner's confirmation that they hold the rights to every medium of an assembled package.</summary>
+    /// <exception cref="OperatorValidationException">The project is not assembled.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public Task<OperatorProject> ConfirmMediaRightsAsync(string id, CancellationToken ct) =>
+        ChangePackageAsync(
+            id,
+            (project, package) => project.Status == Assembled
+                ? project with { Package = package with { RightsConfirmed = true } }
+                : throw new OperatorValidationException(
+                    $"Media rights are confirmed on an assembled package; this one is {project.Status}."),
+            ct);
+
+    /// <summary>
+    /// Replace the package's title, description and tags with the owner's, trimmed, within YouTube's
+    /// limits, and mark them the owner's; the metadata and discoverability checks are run again over
+    /// them against the project's topic and the mandate's pillars. An approved package goes back to
+    /// assembled and loses its approval.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The metadata breaks a limit, or the project is not assembled or approved.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public async Task<OperatorProject> EditPackageMetadataAsync(
+        string id,
+        string title,
+        string description,
+        IReadOnlyList<string> tags,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(tags);
+
+        var trimmedTitle = (title ?? string.Empty).Trim();
+        var trimmedDescription = (description ?? string.Empty).Trim();
+        var trimmedTags = tags.Select(t => t.Trim()).ToList();
+        PackageRules.ValidateMetadata(trimmedTitle, trimmedDescription, trimmedTags);
+        var pillars = (await GetMandateAsync(ct).ConfigureAwait(false)).Pillars;
+        return await ChangePackageAsync(
+            id,
+            (project, package) => project.Status is Assembled or Approved
+                ? project with
+                {
+                    Status = Assembled,
+                    Package = package with
+                    {
+                        Status = Assembled,
+                        ApprovedAt = null,
+                        Title = trimmedTitle,
+                        Description = trimmedDescription,
+                        Tags = trimmedTags,
+                        Checks = PackageRules.WithMetadataChecks(
+                            package.Checks, trimmedTitle, trimmedDescription, trimmedTags, project.Topic, pillars),
+                        MetadataEdited = true,
+                    },
+                }
+                : throw new OperatorValidationException(
+                    $"Only the metadata of an assembled or approved package is edited; this one is {project.Status}."),
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Approve an assembled package under the owner's write grant once the owner confirmed its media
+    /// rights, no check failed and every claim is supported or waived; the approval is recorded in the
+    /// write log as the owner's.
+    /// </summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorValidationException">The project is not assembled, or what still blocks the approval.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public async Task<OperatorProject> ApprovePackageAsync(string id, CancellationToken ct)
+    {
+        await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        var approved = await ChangePackageAsync(
+                id,
+                (project, package) =>
+                {
+                    if (project.Status != Assembled)
+                    {
+                        throw new OperatorValidationException($"Only an assembled package is approved; this one is {project.Status}.");
+                    }
+
+                    var blocks = new List<string>();
+                    if (!package.RightsConfirmed)
+                    {
+                        blocks.Add("Confirm the media rights first.");
+                    }
+
+                    var failed = package.Checks.Count(c => c.Result == PackageRules.Fail);
+                    if (failed > 0)
+                    {
+                        blocks.Add(failed == 1 ? "1 check failed." : $"{failed} checks failed.");
+                    }
+
+                    var open = project.Claims.Count(c => c.Status is not ("supported" or "waived"));
+                    if (open > 0)
+                    {
+                        blocks.Add(open == 1 ? "1 claim is not supported or waived." : $"{open} claims are not supported or waived.");
+                    }
+                    blocks.AddRange(PackageRules.MetadataErrors(package.Title, package.Description, package.Tags));
+                    if (blocks.Count > 0)
+                    {
+                        throw new OperatorValidationException(string.Join(" ", blocks));
+                    }
+
+                    return project with
+                    {
+                        Status = Approved,
+                        Package = package with { Status = Approved, ApprovedAt = DateTimeOffset.UtcNow },
+                    };
+                },
+                ct)
+            .ConfigureAwait(false);
+        await LogAsync(approved.Id, "approved package", "owner", ct).ConfigureAwait(false);
+        return approved;
     }
 
     /// <summary>Keep the worker's latest readiness report, stamped with the time it arrived.</summary>
@@ -529,8 +742,14 @@ public sealed class OperatorService
             return (production, Producing);
         }
 
-        var stale = FirstIndex(projects, p => p.Status is Researching or Scripting or Producing && now - p.UpdatedAt > StaleAfter);
-        return stale < 0 ? (-1, string.Empty) : (stale, projects[stale].Status == Producing ? Producing : Researching);
+        var assembly = FirstIndex(projects, p => p.Status == AssemblyQueued);
+        if (assembly >= 0)
+        {
+            return (assembly, Assembling);
+        }
+
+        var stale = FirstIndex(projects, p => p.Status is Researching or Scripting or Producing or Assembling && now - p.UpdatedAt > StaleAfter);
+        return stale < 0 ? (-1, string.Empty) : (stale, projects[stale].Status is Producing or Assembling ? projects[stale].Status : Researching);
     }
 
     private static int FirstIndex(IReadOnlyList<OperatorProject> projects, Func<OperatorProject, bool> match)
@@ -547,6 +766,18 @@ public sealed class OperatorService
     }
 
     private static OperatorProject ForDesktop(OperatorProject project) => project with { OriginReference = null };
+
+    private static OperatorProject AfterSceneEdit(OperatorProject project, string? projectStatus) =>
+        project with
+        {
+            Status = projectStatus ?? project.Status switch
+            {
+                Assembled or Approved => MediaReady,
+                AssemblyQueued or Assembling => AssemblyQueued,
+                _ => project.Status,
+            },
+            Package = PackageRules.AfterSceneEdit(project.Package),
+        };
 
     private static OperatorProject NewProject(string topic, string status, string origin, string? originReference)
     {
@@ -652,6 +883,7 @@ public sealed class OperatorService
         string sceneId,
         Func<Scene, Scene> change,
         string? projectStatus,
+        bool changesVideo,
         CancellationToken ct)
     {
         var changed = await _store.UpdateProjectsAsync(
@@ -667,10 +899,9 @@ public sealed class OperatorService
                     }
 
                     scenes[sceneIndex] = change(scenes[sceneIndex]);
-                    projects[index] = project with
+                    projects[index] = (changesVideo ? AfterSceneEdit(project, projectStatus) : project) with
                     {
                         Scenes = scenes,
-                        Status = projectStatus ?? project.Status,
                         UpdatedAt = DateTimeOffset.UtcNow,
                     };
                     return projects[index];
@@ -680,15 +911,35 @@ public sealed class OperatorService
         return ForDesktop(changed);
     }
 
-    private Task LogSaveAsync(OperatorProject project, CancellationToken ct) =>
+    private async Task<OperatorProject> ChangePackageAsync(
+        string projectId,
+        Func<OperatorProject, VideoPackage, OperatorProject> change,
+        CancellationToken ct)
+    {
+        var changed = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    var package = project.Package
+                        ?? throw new OperatorValidationException($"Project '{projectId}' has no package yet; assemble it first.");
+                    projects[index] = change(project, package) with { UpdatedAt = DateTimeOffset.UtcNow };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        return ForDesktop(changed);
+    }
+
+    private Task LogAsync(string projectId, string outcome, string? approvedBy, CancellationToken ct) =>
         _writes.AppendAsync(
             new WriteLogEntry(
                 DateTimeOffset.UtcNow,
                 FeatureCatalog.YouTubeId,
                 DataFolderScope,
-                project.Id,
-                $"saved {project.Status}",
-                ApprovedBy: null,
+                projectId,
+                outcome,
+                approvedBy,
                 ActionId: null),
             ct);
 

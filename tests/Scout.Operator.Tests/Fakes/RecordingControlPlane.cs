@@ -7,7 +7,7 @@ namespace Scout.Operator.Tests.Fakes;
 /// <see cref="RefuseStaleScenes"/> it refuses a save whose scene ids, order and locks are not the stored ones, stricter
 /// than the control plane, which keeps the stored order and locks; <see cref="OwnerActs"/> changes the stored project after the given save, as the owner would;
 /// <see cref="NoLongerProducingOn"/> refuses the given save the way the control plane refuses a save on a project the
-/// owner sent back to production meanwhile.
+/// owner sent back to production meanwhile, and <see cref="NoLongerAssemblingOn"/> the same for assembly.
 /// </summary>
 internal sealed class RecordingControlPlane : IOperatorControlPlane
 {
@@ -35,6 +35,8 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
     public bool RefuseStaleScenes { get; init; }
 
     public Func<int, bool> NoLongerProducingOn { get; init; } = _ => false;
+
+    public Func<int, bool> NoLongerAssemblingOn { get; init; } = _ => false;
 
     public Func<int, OperatorProjectState, OperatorProjectState?> OwnerActs { get; init; } = (_, _) => null;
 
@@ -81,6 +83,11 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
             if (NoLongerProducingOn(_saves.Count))
             {
                 return Task.FromException<OperatorProjectState>(new InvalidOperationException("The project is no longer producing."));
+            }
+
+            if (NoLongerAssemblingOn(_saves.Count))
+            {
+                return Task.FromException<OperatorProjectState>(new InvalidOperationException("The project is no longer assembling."));
             }
 
             if (RefuseStaleScenes

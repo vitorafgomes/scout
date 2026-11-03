@@ -84,6 +84,7 @@ function makeBridge(first: YouTubeStatus) {
       return notConnected;
     }),
     appOpenExternal: vi.fn(async () => undefined),
+    operatorOpenWindow: vi.fn(async () => undefined),
   };
 }
 
@@ -320,6 +321,46 @@ describe('YouTube card', () => {
 
     expect(text(fixture, 'youtube-action-error')).toBe('Could not open the browser to sign in.');
     expect(el(fixture, 'youtube-pending')).toBeNull();
+  });
+
+  it('Open YouTube operator asks main for the operator window once YouTube is connected', async () => {
+    const bridge = makeBridge(signedIn);
+    const fixture = await render(bridge);
+
+    const button = el(fixture, 'youtube-open-operator') as HTMLButtonElement;
+    button.click();
+    await settle(fixture);
+
+    expect(button.textContent?.trim()).toBe('Open YouTube operator');
+    expect(button.disabled).toBe(false);
+    expect(bridge.operatorOpenWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('Open YouTube operator is disabled and opens nothing while YouTube is not connected', async () => {
+    const bridge = makeBridge(notConnected);
+    const fixture = await render(bridge);
+
+    const button = el(fixture, 'youtube-open-operator') as HTMLButtonElement;
+    button.click();
+    await settle(fixture);
+
+    expect(button.disabled).toBe(true);
+    expect(bridge.operatorOpenWindow).not.toHaveBeenCalled();
+  });
+
+  it('shows why the operator window did not open under the card', async () => {
+    const bridge = makeBridge(signedIn);
+    bridge.operatorOpenWindow.mockImplementationOnce(async () => {
+      throw new Error(
+        "Error invoking remote method 'scout:operator.window': Error: [scout:operator/window-failed] The operator window could not open.",
+      );
+    });
+    const fixture = await render(bridge);
+
+    el(fixture, 'youtube-open-operator')!.click();
+    await settle(fixture);
+
+    expect(text(fixture, 'youtube-action-error')).toBe('The operator window could not open.');
   });
 
   describe('polling', () => {

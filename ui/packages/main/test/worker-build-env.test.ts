@@ -115,6 +115,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'OpenAI',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -150,6 +152,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'Gemini',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -233,6 +237,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -257,6 +263,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -278,6 +286,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -342,6 +352,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'ChatGptPlan',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -375,6 +387,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -510,6 +524,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -529,6 +545,8 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -945,6 +963,33 @@ describe('buildEnv worker gate', () => {
       return silent;
     },
   };
+
+  it('always gives the worker the bundled ffmpeg and font paths, empty for either the build did not bundle, so inherited values cannot override them', async () => {
+    const bundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: {
+        ffmpeg: '/opt/Scout/resources/media-tools/linux-x64/ffmpeg',
+        font: '/opt/Scout/resources/fonts/NotoSans-Regular.ttf',
+      },
+    });
+    const notBundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: { ffmpeg: '', font: '' },
+    });
+    const absent = await buildEnv({ vaultGet: async () => null });
+    const paths = (env: Record<string, string>) => [
+      env['SCOUT__OPERATOR__FFMPEGPATH'],
+      env['SCOUT__OPERATOR__FONTPATH'],
+    ];
+
+    expect(paths(bundled)).toEqual([
+      '/opt/Scout/resources/media-tools/linux-x64/ffmpeg',
+      '/opt/Scout/resources/fonts/NotoSans-Regular.ttf',
+    ]);
+    expect(paths(notBundled)).toEqual(['', '']);
+    expect(paths(absent)).toEqual(['', '']);
+    expect(Object.keys(bundled).filter((key) => key.toUpperCase().includes('FFPROBE'))).toEqual([]);
+  });
 
   it('always sets the worker gate socket and token, empty while the control plane is not launched, so inherited values cannot override them', async () => {
     const absent = await buildEnv({ vaultGet: async () => null });

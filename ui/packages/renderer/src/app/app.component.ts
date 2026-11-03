@@ -9,7 +9,7 @@ import { ShellComponent } from './shell/shell.component';
   imports: [ShellComponent, RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (quickAsk) {
+    @if (ownWindow) {
       <router-outlet />
     } @else {
       <sc-shell />
@@ -17,8 +17,8 @@ import { ShellComponent } from './shell/shell.component';
   `,
 })
 export class AppComponent {
-  /** The quick-ask and floating button windows load the app on their routes and show them without the wizard shell. */
-  readonly quickAsk = ['#/quick-ask', '#/floating-button'].some(
+  /** The quick-ask, floating button and operator windows load the app on their routes and show them without the wizard shell. */
+  readonly ownWindow = ['#/quick-ask', '#/floating-button', '#/operator'].some(
     (route) => globalThis.location?.hash.startsWith(route) ?? false,
   );
 }

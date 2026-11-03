@@ -74,17 +74,20 @@ internal static class Given
         ScriptedChat chat,
         Scout.Conversation.Abstractions.IOriginNotifier notifier,
         Kernel? media = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        IProcessRunner? runner = null)
     {
         var kernel = media ?? Media();
         var capabilities = Capabilities(kernel);
+        var visuals = new VisualGenerator(kernel, capabilities, time ?? new FakeTimeProvider(Now));
         return new(
             controlPlane,
             Researcher(youtube, chat),
             new ScriptWriter(chat),
             new ScenePlanner(chat),
             new NarrationGenerator(kernel, capabilities),
-            new VisualGenerator(kernel, capabilities, time ?? new FakeTimeProvider(Now)),
+            visuals,
+            Assembly(runner ?? new FakeProcessRunner(), visuals),
             notifier,
             NullLogger<OperatorPipeline>.Instance);
     }
@@ -160,6 +163,21 @@ internal static class Given
                 []),
             Scenes = scenes,
         };
+
+    /// <summary>The font path the tests configure: a file that exists, so the toolset finds a font.</summary>
+    public static readonly string Font = typeof(Given).Assembly.Location;
+
+    public static FfmpegToolset Toolset(IProcessRunner runner, string? font = null, string ffmpeg = "/opt/scout/ffmpeg", TimeProvider? time = null)
+        => new(runner, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions { FfmpegPath = ffmpeg, FontPath = font ?? Font }), time ?? new FakeTimeProvider(Now));
+
+    public static FfmpegTools Tools(string encoder = "libopenh264")
+        => new("/opt/scout/ffmpeg", "/fonts/NotoSans-Regular.ttf", encoder);
+
+    public static AssemblyStage Assembly(IProcessRunner runner, VisualGenerator visuals)
+    {
+        var toolset = Toolset(runner);
+        return new(toolset, new MediaProbe(runner), new Assembler(toolset), new ShortsCutter(toolset), new ThumbnailMaker(visuals, toolset));
+    }
 
     public static string Prompts(int count)
         => "{\"prompts\":[" + string.Join(",", Enumerable.Range(1, count).Select(i => $"\"Picture {i}\"")) + "]}";

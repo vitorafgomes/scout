@@ -37,6 +37,9 @@ public sealed record OperatorProject(
 {
     /// <summary>The scenes of the video, empty until the worker plans them.</summary>
     public IReadOnlyList<Scene> Scenes { get; init; } = [];
+
+    /// <summary>The assembled video and its metadata, null until the owner first asks for assembly.</summary>
+    public VideoPackage? Package { get; init; }
 }
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
@@ -89,6 +92,33 @@ public sealed record Scene(
     string? AudioFile,
     string? VisualFile,
     int DurationMs);
+
+/// <summary>
+/// The assembled video of a project: the MP4, its Shorts and thumbnail as plain file names inside
+/// the project's media directory, the checks the worker ran, and the upload metadata. Only the owner
+/// confirms the media rights, approves the package or edits its metadata; once the owner edited it,
+/// the worker keeps the title, description and tags as they are.
+/// </summary>
+public sealed record VideoPackage(
+    string Status,
+    string? VideoFile,
+    IReadOnlyList<ShortClip> Shorts,
+    string? ThumbnailFile,
+    IReadOnlyList<PackageCheck> Checks,
+    bool RightsConfirmed,
+    DateTimeOffset? ApprovedAt,
+    string Title,
+    string Description,
+    IReadOnlyList<string> Tags,
+    int DurationMs,
+    string? Error,
+    bool MetadataEdited);
+
+/// <summary>One vertical Shorts cut of the video, from <c>StartMs</c> into it, with its hook line.</summary>
+public sealed record ShortClip(string File, int StartMs, int DurationMs, string Hook);
+
+/// <summary>One check the worker ran on the package; <c>Result</c> is pass, warn or fail.</summary>
+public sealed record PackageCheck(string Name, string Result, string Detail);
 
 /// <summary>What the worker reported it can produce, stamped by the control plane when it arrived.</summary>
 public sealed record Readiness(

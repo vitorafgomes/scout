@@ -742,6 +742,7 @@ const projectDto: OperatorProjectDto = {
   claims: [{ ...projectWire.claims[0]!, note: null }],
   error: null,
   scenes: [],
+  package: null,
 };
 
 const readyScene = {
@@ -772,6 +773,27 @@ const failedScene = {
 };
 
 const producingWire = { ...projectWire, status: 'producing', scenes: [readyScene, failedScene] };
+
+const packageWire = {
+  status: 'assembled',
+  videoFile: 'video.mp4',
+  shorts: [
+    { file: 'short-1.mp4', startMs: 12000, durationMs: 45000, hook: 'Span never allocates.' },
+  ],
+  thumbnailFile: 'thumbnail.png',
+  checks: [
+    { name: 'Loudness', result: 'pass', detail: '-14 LUFS' },
+    { name: 'Length', result: 'warn', detail: 'Under 60 s' },
+  ],
+  rightsConfirmed: false,
+  title: 'Span<T> explained',
+  description: 'A tour of Span<T>.',
+  tags: ['dotnet', 'span'],
+  durationMs: 98000,
+  metadataEdited: false,
+};
+
+const assembledWire = { ...projectWire, status: 'assembled', package: packageWire };
 
 const readinessWire = {
   speechAvailable: false,
@@ -827,6 +849,18 @@ async function startOperatorServer(
       path: '/home/owner/.local/share/Scout/operator/p1/media',
     })),
     GetReadiness: handler('GetReadiness', () => readinessWire),
+    AssembleProject: handler('AssembleProject', () => ({
+      ...projectWire,
+      status: 'assembly_queued',
+      package: { status: 'assembly_queued', error: 'The last assembly failed.' },
+    })),
+    ConfirmMediaRights: handler('ConfirmMediaRights', () => assembledWire),
+    EditPackageMetadata: handler('EditPackageMetadata', () => assembledWire),
+    ApprovePackage: handler('ApprovePackage', () => ({
+      ...assembledWire,
+      status: 'approved',
+      package: { ...packageWire, status: 'approved', approvedAt: '2026-11-03T11:00:00Z' },
+    })),
   });
   await new Promise<void>((resolve, reject) => {
     server.bindAsync(`unix:${socketPath}`, grpc.ServerCredentials.createInsecure(), (err) =>
@@ -861,7 +895,7 @@ describe('createControlPlaneClient operator', () => {
     expect(saved).toEqual(mandateWire);
     expect(projects).toEqual([
       projectDto,
-      { ...queuedWire, script: null, error: 'model unavailable', scenes: [] },
+      { ...queuedWire, script: null, error: 'model unavailable', scenes: [], package: null },
     ]);
     expect(one).toEqual(projectDto);
     expect([started.id, started.status, started.script]).toEqual(['p2', 'queued', null]);
@@ -1084,6 +1118,128 @@ describe('createControlPlaneClient operator', () => {
     expect((refused as Error).message).toBe('youtube may not write');
     expect(missing).toBeInstanceOf(ControlPlaneNotFoundError);
     expect((missing as Error).message).toBe('Project p9 not found');
+  });
+
+  it('maps the video package with its Shorts, checks and absent optional fields, and sends assemble, media rights, metadata and approval with the token', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const queued = await client.assembleProject('p1');
+    const confirmed = await client.confirmMediaRights('p1');
+    await client.editPackageMetadata('p1', 'Span<T> explained', 'A tour of Span<T>.', [
+      'dotnet',
+      'span',
+    ]);
+    const approved = await client.approvePackage('p1');
+
+    expect([queued.status, queued.package]).toEqual([
+      'assembly_queued',
+      {
+        status: 'assembly_queued',
+        videoFile: null,
+        shorts: [],
+        thumbnailFile: null,
+        checks: [],
+        rightsConfirmed: false,
+        approvedAt: null,
+        title: '',
+        description: '',
+        tags: [],
+        durationMs: 0,
+        error: 'The last assembly failed.',
+        metadataEdited: false,
+      },
+    ]);
+    expect(confirmed.package).toEqual({ ...packageWire, approvedAt: null, error: null });
+    expect([approved.status, approved.package?.status, approved.package?.approvedAt]).toEqual([
+      'approved',
+      'approved',
+      '2026-11-03T11:00:00Z',
+    ]);
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'AssembleProject', request: { id: 'p1' } },
+      { method: 'ConfirmMediaRights', request: { id: 'p1' } },
+      {
+        method: 'EditPackageMetadata',
+        request: {
+          projectId: 'p1',
+          title: 'Span<T> explained',
+          description: 'A tour of Span<T>.',
+          tags: ['dotnet', 'span'],
+        },
+      },
+      { method: 'ApprovePackage', request: { id: 'p1' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('an approval the control plane refuses rejects with ControlPlaneInvalidArgumentError carrying what still blocks it, and an assembly without the grant with ControlPlanePermissionDeniedError', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const blocks = 'Confirm the media rights first. 1 check failed.';
+    const deniedSocket = tempSocketPath();
+    const denied = await startOperatorServer(deniedSocket, [], {
+      failWith: { code: grpc.status.PERMISSION_DENIED, details: 'youtube may not write' },
+    });
+    const deniedClient = createControlPlaneClient({
+      socketPath: deniedSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: blocks },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const refused = await client.approvePackage('p1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const ungranted = await deniedClient.assembleProject('p1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    deniedClient.close();
+    denied.forceShutdown();
+
+    expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((refused as Error).message).toBe(blocks);
+    expect(ungranted).toBeInstanceOf(ControlPlanePermissionDeniedError);
+    expect((ungranted as Error).message).toBe('youtube may not write');
+  });
+
+  it('approvePackage rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    client = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const startedAt = Date.now();
+    const error = await client.approvePackage('p1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
   });
 
   it('getReadiness rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {

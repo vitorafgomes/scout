@@ -202,6 +202,20 @@ public sealed class TokenAuthInterceptorTests
         desktop.Status.Detail.ShouldBe($"This caller may not call {method}.");
     }
 
+    [Theory]
+    [InlineData("/scout.controlplane.v1.Operator/AssembleProject")]
+    [InlineData("/scout.controlplane.v1.Operator/ConfirmMediaRights")]
+    [InlineData("/scout.controlplane.v1.Operator/EditPackageMetadata")]
+    [InlineData("/scout.controlplane.v1.Operator/ApprovePackage")]
+    public async Task The_Owners_Package_Rpcs_Belong_To_The_Desktop_Alone(string method)
+    {
+        var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, method));
+
+        (await Call(Token, method)).ShouldBe("ok");
+        worker.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        worker.Status.Detail.ShouldBe($"This caller may not call {method}.");
+    }
+
     private sealed class NoopStreamWriter<T> : IServerStreamWriter<T>
     {
         public WriteOptions? WriteOptions { get; set; }

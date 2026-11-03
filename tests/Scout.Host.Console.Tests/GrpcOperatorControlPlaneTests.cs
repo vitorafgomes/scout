@@ -277,6 +277,90 @@ public sealed class GrpcOperatorControlPlaneTests
         }
     }
 
+    [Fact]
+    public async Task A_Package_Travels_Field_By_Field_With_The_Owners_Fields_As_Read_And_An_Absent_File_Or_Error_Stays_Absent_On_The_Wire()
+    {
+        var assembled = new OperatorPackage(
+            "assembled",
+            "video.mp4",
+            [new OperatorShort("short-1.mp4", 2000, 30_000, "Bread in ten minutes?")],
+            "thumbnail.png",
+            [new OperatorCheck("loudness", "warn", "The video plays at -20.0 LUFS; aim between -18 and -11 LUFS.")],
+            true,
+            "2026-11-03T13:00:00Z",
+            "Bread in ten minutes",
+            "How to bake.\n\n0:00 Starter",
+            ["bread", "sourdough"],
+            95_000,
+            null,
+            true);
+        var failed = assembled with { Status = "failed", VideoFile = null, ThumbnailFile = null, ApprovedAt = null, Error = "Scout could not render scene 2", Shorts = [], Checks = [], RightsConfirmed = false, MetadataEdited = false };
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var saved = await controlPlane.SaveProjectAsync(Ready() with { Status = "assembled", Package = assembled }, null, CancellationToken.None);
+        var wire = service.Saved.ShouldNotBeNull().Project.Package;
+        var savedFailed = await controlPlane.SaveProjectAsync(Ready() with { Status = "failed", Package = failed }, null, CancellationToken.None);
+        var failedWire = service.Saved.ShouldNotBeNull().Project.Package;
+        var none = await controlPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+
+        (wire.Status, wire.VideoFile, wire.ThumbnailFile, wire.RightsConfirmed, wire.ApprovedAt, wire.Title, wire.Description, wire.DurationMs, wire.HasError, wire.MetadataEdited)
+            .ShouldBe(("assembled", "video.mp4", "thumbnail.png", true, "2026-11-03T13:00:00Z", "Bread in ten minutes", "How to bake.\n\n0:00 Starter", 95_000, false, true));
+        wire.Shorts.ShouldHaveSingleItem().ShouldBe(new ShortClip { File = "short-1.mp4", StartMs = 2000, DurationMs = 30_000, Hook = "Bread in ten minutes?" });
+        wire.Checks.ShouldHaveSingleItem().ShouldBe(new PackageCheck { Name = "loudness", Result = "warn", Detail = "The video plays at -20.0 LUFS; aim between -18 and -11 LUFS." });
+        wire.Tags.ShouldBe(["bread", "sourdough"]);
+        (failedWire.HasVideoFile, failedWire.HasThumbnailFile, failedWire.HasApprovedAt, failedWire.Error).ShouldBe((false, false, false, "Scout could not render scene 2"));
+        var back = saved.Package.ShouldNotBeNull();
+        (back with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(assembled with { Shorts = [], Checks = [], Tags = [] });
+        (back.Shorts.ShouldHaveSingleItem(), back.Checks.ShouldHaveSingleItem()).ShouldBe((assembled.Shorts[0], assembled.Checks[0]));
+        back.Tags.ShouldBe(["bread", "sourdough"]);
+        (savedFailed.Package! with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(failed with { Shorts = [], Checks = [], Tags = [] });
+        none.Package.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_Ffmpeg_And_Font_Paths_Bind_From_Scout_Operator_And_Reach_The_Toolset_That_Probes_Them()
+    {
+        var font = typeof(GrpcOperatorControlPlaneTests).Assembly.Location;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Plugins:YouTube:ApiKey"] = "youtube-key",
+                ["Scout:Operator:FfmpegPath"] = "/opt/scout/bin/ffmpeg",
+                ["Scout:Operator:FontPath"] = font,
+            })
+            .Build();
+        var runner = new ListingRunner();
+        var services = new ServiceCollection().AddLogging().AddScoutHost(configuration);
+        services.AddSingleton<IProcessRunner>(runner);
+        using var provider = services.BuildServiceProvider();
+
+        var probe = await provider.GetRequiredService<FfmpegToolset>().ProbeAsync(CancellationToken.None);
+
+        probe.Tools.ShouldBe(new FfmpegTools("/opt/scout/bin/ffmpeg", font, "libopenh264"));
+        runner.Programs.ShouldAllBe(p => p == "/opt/scout/bin/ffmpeg");
+        runner.Programs.Count.ShouldBe(4);
+    }
+
+    private sealed class ListingRunner : IProcessRunner
+    {
+        public List<string> Programs { get; } = [];
+
+        public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+        {
+            Programs.Add(program);
+            var listing = arguments[^1] switch
+            {
+                "-filters" => string.Concat(FfmpegToolset.Filters.Select(f => $" ... {f}  V->V  A filter.\n")),
+                "-demuxers" => " ---\n D  concat  Virtual concatenation script\n D d lavfi  Libavfilter virtual input device\n",
+                _ => " ------\n V....D libopenh264  OpenH264\n A....D aac  AAC\n",
+            };
+            return Task.FromResult(new ProcessResult(0, listing, string.Empty));
+        }
+    }
+
     private sealed class ScriptComparer : IEqualityComparer<OperatorScript?>
     {
         public bool Equals(OperatorScript? x, OperatorScript? y)

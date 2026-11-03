@@ -88,6 +88,11 @@ describe('buildBridge', () => {
       'operatorRegenerateScene',
       'operatorAttachSceneMedia',
       'operatorReadiness',
+      'operatorOpenWindow',
+      'operatorAssemble',
+      'operatorConfirmMediaRights',
+      'operatorEditPackageMetadata',
+      'operatorApprovePackage',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -527,6 +532,39 @@ describe('buildBridge', () => {
       [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'audio' }],
       [CHANNEL.operatorReadiness],
     ]);
+  });
+
+  it('assembly, media rights, package metadata and package approval reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const metadata = {
+      projectId: 'p1',
+      title: 'Span<T> explained',
+      description: 'A tour of Span<T>.',
+      tags: ['dotnet', 'span'],
+    };
+
+    await bridge.operatorAssemble({ id: 'p1' });
+    await bridge.operatorConfirmMediaRights({ id: 'p1' });
+    await bridge.operatorEditPackageMetadata(metadata);
+    await bridge.operatorApprovePackage({ id: 'p1' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorAssembly, { id: 'p1' }],
+      [CHANNEL.operatorMediaRights, { id: 'p1' }],
+      [CHANNEL.operatorPackageMetadata, metadata],
+      [CHANNEL.operatorPackageApproval, { id: 'p1' }],
+    ]);
+  });
+
+  it('operatorOpenWindow asks main for the operator window on scout:operator.window with no payload', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorOpenWindow();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([[CHANNEL.operatorWindow]]);
+    expect(CHANNEL.operatorWindow).toBe('scout:operator.window');
   });
 
   it('onActionsChanged calls the listener each time main announces a change and unsubscribes the same handler', () => {

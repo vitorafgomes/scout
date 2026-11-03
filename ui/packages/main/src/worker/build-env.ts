@@ -10,6 +10,7 @@ import {
 import type { ControlPlaneClient } from '../control-plane/client.js';
 import type { WorkerGateAccess } from '../control-plane/launcher.js';
 import type { Logger } from '../util/logger.js';
+import type { MediaToolPaths } from './resolve-binary.js';
 
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
@@ -25,6 +26,8 @@ export interface BuildEnvDeps {
   grantedWriteFeatures?: readonly string[];
   /** The control plane's write gate for the worker; null while the control plane is not launched. */
   workerGate?: WorkerGateAccess | null;
+  /** The bundled ffmpeg and font; the worker gets each path, empty when not bundled. */
+  mediaTools?: MediaToolPaths;
 }
 
 /** The Slack bot token and app-level token the owner saved; the worker needs both. */
@@ -89,6 +92,8 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   env['SCOUT__FEATURES__GRANTEDWRITES'] = (deps.grantedWriteFeatures ?? []).join(',');
   env['SCOUT__WORKERGATE__SOCKETPATH'] = deps.workerGate?.socketPath ?? '';
   env['SCOUT__WORKERGATE__TOKEN'] = deps.workerGate?.token ?? '';
+  env['SCOUT__OPERATOR__FFMPEGPATH'] = deps.mediaTools?.ffmpeg ?? '';
+  env['SCOUT__OPERATOR__FONTPATH'] = deps.mediaTools?.font ?? '';
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

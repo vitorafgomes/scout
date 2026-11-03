@@ -19,6 +19,7 @@ export type MainOnlyVaultKey =
   | 'quick-ask.shortcut'
   | 'quick-ask.bubble'
   | 'quick-ask.window'
+  | 'operator.window'
   | 'update.check-enabled'
   | 'update.skipped-version'
   | 'update.last-check';

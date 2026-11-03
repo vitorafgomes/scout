@@ -222,7 +222,7 @@ public sealed class OperatorGrpcTests
         }).ResponseAsync);
 
         (ex.StatusCode, ex.Status.Detail).ShouldBe((StatusCode.InvalidArgument,
-            "Status 'published' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, failed."));
+            "Status 'published' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed."));
         (await host.Services.GetRequiredService<OperatorService>().ListProjectsAsync(0, CancellationToken.None)).ShouldBeEmpty();
     }
 
@@ -438,5 +438,141 @@ public sealed class OperatorGrpcTests
         (back.SpeechAvailable, back.ImagesAvailable, back.Provider, back.FfmpegAvailable, back.YouTubeSignedIn, back.ReportedAt)
             .ShouldBe((true, false, "openai", true, false, (DateTimeOffset?)null));
         back.Notes.ShouldBe(["No image model is configured."]);
+    }
+
+    [Fact]
+    public async Task The_Worker_Token_Is_Denied_The_Package_Rpcs_And_Changes_Nothing()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        var queued = await QueueAsync(host, "Why rivers meander");
+        using var channel = host.CreateWorkerChannel();
+        var client = new GrpcOperator.OperatorClient(channel);
+        var id = new GetProjectRequest { Id = queued.Id };
+
+        var denied = new Dictionary<string, RpcException>(StringComparer.Ordinal)
+        {
+            ["AssembleProject"] = await Denied(() => client.AssembleProjectAsync(id).ResponseAsync),
+            ["ConfirmMediaRights"] = await Denied(() => client.ConfirmMediaRightsAsync(id).ResponseAsync),
+            ["EditPackageMetadata"] = await Denied(() => client.EditPackageMetadataAsync(new EditPackageMetadataRequest { ProjectId = queued.Id, Title = "Mine" }).ResponseAsync),
+            ["ApprovePackage"] = await Denied(() => client.ApprovePackageAsync(id).ResponseAsync),
+        };
+
+        foreach (var (method, ex) in denied)
+        {
+            ex.StatusCode.ShouldBe(StatusCode.PermissionDenied, method);
+            ex.Status.Detail.ShouldBe($"This caller may not call /scout.controlplane.v1.Operator/{method}.", method);
+        }
+
+        var stored = (await host.Services.GetRequiredService<OperatorService>().ListProjectsAsync(0, CancellationToken.None)).ShouldHaveSingleItem();
+        (stored.Status, stored.Package).ShouldBe(("queued", (Scout.ControlPlane.Operator.VideoPackage?)null));
+    }
+
+    [Fact]
+    public async Task A_Package_Is_Assembled_By_The_Worker_Edited_Confirmed_And_Approved_By_The_Owner_Over_The_Wire()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var id = new GetProjectRequest { Id = started.Id };
+        var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        draft.Status = "script_ready";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+        await desktop.ProduceProjectAsync(id);
+        var producing = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        producing.Status = "media_ready";
+        producing.Scenes.Add(new WireScene { Id = "s1", Order = 1, Status = "ready", AudioSource = "generated", VisualSource = "generated", AudioFile = "s1.mp3", VisualFile = "s1.png", DurationMs = 4200 });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = producing });
+        var media = (await desktop.GetMediaDirectoryAsync(id)).Path;
+        await File.WriteAllTextAsync(Path.Combine(media, "video.mp4"), "video");
+        await File.WriteAllTextAsync(Path.Combine(media, "thumb.jpg"), "image");
+
+        var queued = await desktop.AssembleProjectAsync(id);
+        var assembling = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        var report = assembling.Clone();
+        report.Status = "assembled";
+        report.Package.Status = "assembled";
+        report.Package.VideoFile = "video.mp4";
+        report.Package.ThumbnailFile = "thumb.jpg";
+        report.Package.Title = "Why rivers bend";
+        report.Package.Checks.Add(new PackageCheck { Name = "duration", Result = "pass", Detail = "4 seconds" });
+        var forged = report.Clone();
+        forged.Package.RightsConfirmed = true;
+        var forgedRefused = await Denied(() => gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = forged }).ResponseAsync);
+        var longTitle = report.Clone();
+        longTitle.Package.Title = new string('t', 101);
+        var longTitleRefused = await Denied(() => gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = longTitle }).ResponseAsync);
+        var badTime = report.Clone();
+        badTime.Package.ApprovedAt = "yesterday";
+        var badTimeRefused = await Denied(() => gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = badTime }).ResponseAsync);
+        var assembled = await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = report });
+        var unconfirmed = await Denied(() => desktop.ApprovePackageAsync(id).ResponseAsync);
+        var edit = new EditPackageMetadataRequest { ProjectId = started.Id, Title = " My title ", Description = "Meanders." };
+        edit.Tags.AddRange(["rivers", "geography"]);
+        var edited = await desktop.EditPackageMetadataAsync(edit);
+        var tooLong = await Denied(() => desktop.EditPackageMetadataAsync(new EditPackageMetadataRequest { ProjectId = started.Id, Title = new string('t', 101) }).ResponseAsync);
+        await desktop.ConfirmMediaRightsAsync(id);
+        var approved = await desktop.ApprovePackageAsync(id);
+        var logged = await features.ListWritesAsync(new ListWritesRequest());
+
+        (queued.Status, queued.Package.Status, queued.Package.HasVideoFile).ShouldBe(("assembly_queued", "assembly_queued", false));
+        (assembling.Id, assembling.Status, assembling.Package.Status).ShouldBe((started.Id, "assembling", "assembling"));
+        (longTitleRefused.StatusCode, longTitleRefused.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The title is 1 to 100 characters."));
+        (forgedRefused.StatusCode, forgedRefused.Status.Detail).ShouldBe((StatusCode.FailedPrecondition, $"Only the owner confirms the media rights of project '{started.Id}'."));
+        (badTimeRefused.StatusCode, badTimeRefused.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "'yesterday' is not a time Scout accepts."));
+        assembled.Package.ShouldBe(report.Package);
+        (unconfirmed.StatusCode, unconfirmed.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "Confirm the media rights first."));
+        (edited.Package.Title, string.Join("|", edited.Package.Tags), edited.Package.MetadataEdited).ShouldBe(("My title", "rivers|geography", true));
+        (tooLong.StatusCode, tooLong.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The title is 1 to 100 characters."));
+        (approved.Status, approved.Package.Status, approved.Package.RightsConfirmed, approved.Package.HasApprovedAt).ShouldBe(("approved", "approved", true, true));
+        logged.Entries.First().ShouldSatisfyAllConditions(
+            e => e.Outcome.ShouldBe("approved package"),
+            e => e.Target.ShouldBe(started.Id),
+            e => e.ApprovedBy.ShouldBe("owner"));
+    }
+
+    [Fact]
+    public void A_Package_Maps_To_The_Wire_And_Back_Field_For_Field_With_Unset_Optionals_For_Absent_Values()
+    {
+        var at = new DateTimeOffset(2026, 11, 3, 10, 30, 0, TimeSpan.Zero);
+        var full = new Scout.ControlPlane.Operator.VideoPackage(
+            "approved",
+            "video.mp4",
+            [new Scout.ControlPlane.Operator.ShortClip("short-1.mp4", 1500, 30000, "Rivers never run straight.")],
+            "thumb.png",
+            [new Scout.ControlPlane.Operator.PackageCheck("loudness", "warn", "-12 LUFS")],
+            true,
+            at,
+            "Why rivers bend",
+            "Meanders explained.",
+            ["rivers", "geography"],
+            61000,
+            "Shorts cut skipped.",
+            true);
+        var bare = new Scout.ControlPlane.Operator.VideoPackage(
+            "assembly_queued", null, [], null, [], false, null, string.Empty, string.Empty, [], 0, null, false);
+        Scout.ControlPlane.Operator.OperatorProject Project(Scout.ControlPlane.Operator.VideoPackage? package) =>
+            new("p1", "Why rivers meander", "approved", "desktop", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, [], null, []) { Package = package };
+
+        var wire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(full)).Package;
+        var bareWire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(bare)).Package;
+        var none = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(null));
+        var back = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(full))).Package.ShouldNotBeNull();
+        var bareBack = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(bare))).Package.ShouldNotBeNull();
+
+        (wire.Status, wire.VideoFile, wire.ThumbnailFile, wire.RightsConfirmed, wire.ApprovedAt, wire.Title, wire.Description, wire.DurationMs, wire.Error, wire.MetadataEdited)
+            .ShouldBe(("approved", "video.mp4", "thumb.png", true, "2026-11-03T10:30:00.0000000+00:00", "Why rivers bend", "Meanders explained.", 61000, "Shorts cut skipped.", true));
+        wire.Shorts.Select(s => (s.File, s.StartMs, s.DurationMs, s.Hook)).ShouldBe([("short-1.mp4", 1500, 30000, "Rivers never run straight.")]);
+        wire.Checks.Select(c => (c.Name, c.Result, c.Detail)).ShouldBe([("loudness", "warn", "-12 LUFS")]);
+        wire.Tags.ShouldBe(["rivers", "geography"]);
+        (bareWire.HasVideoFile, bareWire.HasThumbnailFile, bareWire.HasApprovedAt, bareWire.HasError).ShouldBe((false, false, false, false));
+        none.Package.ShouldBeNull();
+        (back with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(full with { Shorts = [], Checks = [], Tags = [] });
+        (back.Shorts.Single(), back.Checks.Single(), string.Join("|", back.Tags)).ShouldBe((full.Shorts[0], full.Checks[0], "rivers|geography"));
+        (bareBack.VideoFile, bareBack.ThumbnailFile, bareBack.ApprovedAt, bareBack.Error).ShouldBe(((string?)null, (string?)null, (DateTimeOffset?)null, (string?)null));
     }
 }

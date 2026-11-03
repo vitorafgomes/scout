@@ -93,6 +93,33 @@ describe('the scout-media protocol', () => {
     expect(asked).toEqual(['p1', 'p1']);
   });
 
+  it('serves the assembled video as video/mp4, streamed in byte ranges, and its jpg thumbnail, confined to the media directory like every file', async () => {
+    const { root, media } = projectWithMedia();
+    const MP4 = Buffer.from('....ftypisom assembled video bytes');
+    writeFileSync(path.join(media, 'video.mp4'), MP4);
+    writeFileSync(path.join(media, 'thumbnail.jpg'), PNG);
+    writeFileSync(path.join(root, 'p1', 'other.mp4'), MP4);
+    const handler = createMediaProtocolHandler(async () => media);
+
+    const whole = await read(await handler(new Request(`${MEDIA_SCHEME}://p1/video.mp4`)));
+    const ranged = await handler(
+      new Request(`${MEDIA_SCHEME}://p1/video.mp4?v=2026-11-03T10%3A00%3A00Z`, {
+        headers: { range: 'bytes=4-11' },
+      }),
+    );
+    const thumbnail = await fetchMedia(`${MEDIA_SCHEME}://p1/thumbnail.jpg`, async () => media);
+    const escaped = await fetchMedia(`${MEDIA_SCHEME}://p1/..%2Fother.mp4`, async () => media);
+
+    expect([whole.status, whole.type, whole.body.equals(MP4)]).toEqual([200, 'video/mp4', true]);
+    expect([ranged.status, ranged.headers.get('content-range')]).toEqual([
+      206,
+      `bytes 4-11/${MP4.length}`,
+    ]);
+    expect((await read(ranged)).body.toString()).toBe(MP4.subarray(4, 12).toString());
+    expect([thumbnail.status, thumbnail.type]).toEqual([200, 'image/jpeg']);
+    expect(escaped.status).toBe(404);
+  });
+
   it('streams the whole file without a Range header, saying its length and that it accepts byte ranges', async () => {
     const { media } = projectWithMedia();
     const handler = createMediaProtocolHandler(async () => media);

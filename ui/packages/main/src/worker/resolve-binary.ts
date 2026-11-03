@@ -87,3 +87,32 @@ export function resolveTrayIcon(
   }
   return path.join(findRepoRoot(cwd), 'ui', 'build', 'icons', 'icon.png');
 }
+
+/** The ffmpeg and caption font the worker assembles videos with; an empty path for either the build did not bundle. */
+export interface MediaToolPaths {
+  readonly ffmpeg: string;
+  readonly font: string;
+}
+
+/**
+ * The bundled media tools: under `resources/media-tools/<platform>-<arch>` and `resources/fonts` when packaged, read
+ * from `ui/packages/main/resources` otherwise; each one only when its file is there.
+ */
+export function resolveMediaTools(
+  deps: Omit<ResolveBinaryDeps, 'platform' | 'arch'> &
+    Partial<Pick<ResolveBinaryDeps, 'platform' | 'arch'>>,
+  exists: (file: string) => boolean = fs.existsSync,
+): MediaToolPaths {
+  const { app, resourcesPath, cwd, platform = process.platform, arch = process.arch } = deps;
+  const root =
+    app?.isPackaged === true && resourcesPath != null
+      ? resourcesPath
+      : path.join(findRepoRoot(cwd), 'ui', 'packages', 'main', 'resources');
+  const exe = platform === 'win32' ? '.exe' : '';
+  const tools = path.join(root, 'media-tools', `${platform}-${arch}`);
+  const present = (file: string): string => (exists(file) ? file : '');
+  return {
+    ffmpeg: present(path.join(tools, `ffmpeg${exe}`)),
+    font: present(path.join(root, 'fonts', 'NotoSans-Regular.ttf')),
+  };
+}

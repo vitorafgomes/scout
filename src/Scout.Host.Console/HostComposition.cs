@@ -63,7 +63,7 @@ internal static class HostComposition
         services.AddKubernetesPlugin(configuration);
         services.AddYouTubePlugin(configuration);
         var gateOpen = AddWriteGate(services, configuration);
-        AddYouTubeOperator(services, gateOpen);
+        AddYouTubeOperator(services, configuration, gateOpen);
 
         services.AddHostedService<ConversationWorker>();
 
@@ -99,9 +99,10 @@ internal static class HostComposition
 
     /// <summary>
     /// The YouTube channel operator, only when the YouTube plugin registered its client; it reaches the control
-    /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed.
+    /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed. The ffmpeg
+    /// and font paths bind from <c>Scout:Operator</c>, which the desktop sets as environment variables.
     /// </summary>
-    private static void AddYouTubeOperator(IServiceCollection services, bool gateOpen)
+    private static void AddYouTubeOperator(IServiceCollection services, IConfiguration configuration, bool gateOpen)
     {
         if (!services.Any(d => d.ServiceType == typeof(IYouTubeClient)))
         {
@@ -117,6 +118,7 @@ internal static class HostComposition
             services.AddSingleton<IOperatorControlPlane, ClosedOperatorControlPlane>();
         }
 
+        services.AddOptions<OperatorMediaOptions>().Bind(configuration.GetSection(OperatorMediaOptions.Section));
         services.AddYouTubeOperator();
     }
 

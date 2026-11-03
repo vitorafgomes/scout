@@ -4,10 +4,12 @@ import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppComponent } from './app.component';
+import { AssemblyComponent } from './assembly/assembly.component';
 import { appRoutes } from './app.routes';
 import { MenuPreferences } from './core/menu-preferences';
 import { ScoutBridgeService } from './core/scout-bridge';
 import { FloatingButtonComponent } from './floating-button/floating-button.component';
+import { OperatorShellComponent } from './operator/operator-shell.component';
 import { ProductionComponent } from './production/production.component';
 import { ReviewComponent } from './review/review.component';
 
@@ -56,15 +58,58 @@ describe('app routes', () => {
     expect(route.component).toBe(ReviewComponent);
   });
 
-  it('production resolves to the Production screen', async () => {
+  it('operator opens on Production inside the operator shell', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/operator');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/operator/production');
+    expect(route.component).toBe(ProductionComponent);
+    expect(route.parent?.component).toBe(OperatorShellComponent);
+  });
+
+  it('operator/assembly resolves to the Assembly page inside the operator shell', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/operator/assembly');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/operator/assembly');
+    expect(route.component).toBe(AssemblyComponent);
+    expect(route.parent?.component).toBe(OperatorShellComponent);
+  });
+
+  it('operator/approvals resolves to the Review screen filtered to youtube', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/operator/approvals');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/operator/approvals');
+    expect(route.component).toBe(ReviewComponent);
+    expect(route.snapshot.data['feature']).toBe('youtube');
+  });
+
+  it('the main window no longer has a production route', async () => {
     const router = TestBed.inject(Router);
 
     await router.navigateByUrl('/production');
 
+    expect(router.url).toBe('/');
+  });
+
+  it('the review route of the main window keeps every feature', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/review');
+
     let route = TestBed.inject(ActivatedRoute);
     while (route.firstChild !== null) route = route.firstChild;
-    expect(router.url).toBe('/production');
-    expect(route.component).toBe(ProductionComponent);
+    expect(route.snapshot.data['feature']).toBeUndefined();
   });
 
   it('floating-button resolves to the floating button component', async () => {
@@ -82,6 +127,24 @@ describe('app routes', () => {
 describe('the floating button window', () => {
   afterEach(() => {
     history.replaceState(null, '', '#/');
+  });
+
+  it('renders the operator route outside the wizard shell', () => {
+    history.replaceState(null, '', '#/operator');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideRouter([]),
+        { provide: ScoutBridgeService, useValue: {} },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('sc-shell')).toBeNull();
+    expect(fixture.nativeElement.querySelector('router-outlet')).not.toBeNull();
   });
 
   it('renders the floating button route outside the wizard shell', () => {

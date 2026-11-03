@@ -12,7 +12,7 @@ namespace Scout.Host.Console.Tests;
 
 /// <summary>
 /// What Scout.Operator sends, checked against the control plane that validates it: the statuses, the claim
-/// status and the scope of its declared write.
+/// status, the scope of its declared write, and the package metadata both sides count and check the same way.
 /// </summary>
 public sealed class OperatorContractTests : IDisposable
 {
@@ -148,5 +148,43 @@ public sealed class OperatorContractTests : IDisposable
             .ShouldHaveSingleItem();
 
         OperatorServiceCollectionExtensions.DataFolderScope.ShouldBe(row.Scope);
+    }
+
+    public static TheoryData<string[]> TagSets() => new()
+    {
+        Array.Empty<string>(),
+        new[] { "rivers" },
+        new[] { "rivers", "river bends", "oxbow lakes", "geography" },
+        new[] { "a b c d", " ", "x" },
+        Enumerable.Range(0, 30).Select(i => $"tag {i} with spaces").ToArray(),
+    };
+
+    [Theory]
+    [MemberData(nameof(TagSets))]
+    public void The_Operator_And_The_Control_Plane_Count_Tags_The_Same_Way_YouTube_Does(string[] tags)
+        => PackageChecks.TagsLength(tags).ShouldBe(PackageRules.TagsLength(tags));
+
+    [Theory]
+    [InlineData("Why Rivers Bend", "Intro\n\n0:00 Erosion\n0:20 Floods", "rivers")]
+    [InlineData("Amazing Geography", "0:00 Erosion", "rivers")]
+    [InlineData("You will not believe this", "No list here.", "rivers")]
+    [InlineData("Rivers", "Chapters 0:00 inline only", "why rivers bend")]
+    public void The_Operator_And_The_Control_Plane_Check_Discoverability_The_Same_Way(string title, string description, string topic)
+    {
+        var worker = PackageChecks.Discoverability(title, description, topic, new OperatorMandate(
+            "Teach", "Students", ["geography"], "weekly", "en", "calm", [], "views", "1000"));
+        var controlPlane = PackageRules.WithMetadataChecks([], title, description, [], topic, ["geography"]).Single(c => c.Name == "discoverability");
+
+        (controlPlane.Name, controlPlane.Result, controlPlane.Detail).ShouldBe((worker.Name, worker.Result, worker.Detail));
+    }
+
+    [Fact]
+    public void A_First_Title_From_A_120_Character_Variant_Or_A_200_Character_Topic_Is_Metadata_The_Control_Plane_Accepts()
+    {
+        var script = new OperatorScript("Hook", [], "Subscribe", [string.Join(' ', Enumerable.Repeat("Sourdough", 12)) + " bread"], "How to bake.", ["bread"], []);
+        var topic200 = string.Concat(Enumerable.Repeat("sourdough ", 19)) + "starter bread";
+
+        PackageRules.MetadataErrors(PackageChecks.Title(script, "sourdough"), "How to bake.", ["bread"]).ShouldBeEmpty();
+        PackageRules.MetadataErrors(PackageChecks.Title(script with { TitleVariants = [] }, topic200), "How to bake.", ["bread"]).ShouldBeEmpty();
     }
 }

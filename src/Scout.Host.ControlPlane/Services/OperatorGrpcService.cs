@@ -9,8 +9,8 @@ namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
-/// the projects, the owner's claim decisions, production, the scene edits, the media directory
-/// and the worker's readiness.
+/// the projects, the owner's claim decisions, production, the scene edits, the media directory,
+/// the worker's readiness, assembly, and the owner's package metadata, media rights and approval.
 /// </summary>
 public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 {
@@ -96,4 +96,26 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<WireReadiness> GetReadiness(GetReadinessRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () =>
             OperatorMapping.ToWire(await _operator.GetReadinessAsync(context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> AssembleProject(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.AssembleProjectAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> ConfirmMediaRights(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ConfirmMediaRightsAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> EditPackageMetadata(EditPackageMetadataRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.EditPackageMetadataAsync(
+                    request.ProjectId,
+                    request.Title,
+                    request.Description,
+                    request.Tags.ToList(),
+                    context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ApprovePackage(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ApprovePackageAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
 }

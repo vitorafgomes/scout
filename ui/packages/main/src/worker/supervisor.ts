@@ -386,12 +386,14 @@ const RESERVED_WORKER_KEYS = new Set([
   'scout__features__grantedwrites',
   'scout_controlplane_token',
   'scout_controlplane_worker_token',
+  'scout__operator__ffmpegpath',
+  'scout__operator__fontpath',
 ]);
 
 /**
  * The parent environment minus every variable the worker would read as its write gate, its write
- * grants or a control-plane token, in any casing or ':' spelling, with or without the ASPNETCORE_ or
- * DOTNET_ prefix; only the values buildEnv sets reach the worker.
+ * grants, a control-plane token or an operator media tool path, in any casing or ':' spelling, with
+ * or without the ASPNETCORE_ or DOTNET_ prefix; only the values buildEnv sets reach the worker.
  */
 function workerInheritableEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(

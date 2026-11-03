@@ -49,4 +49,31 @@ public sealed class MediaFilesTests : IDisposable
         MediaFiles.Exists(media, "scene-s1.png").ShouldBeTrue();
         MediaFiles.Exists(media, "../scene-s1.png").ShouldBeFalse();
     }
+
+    [Fact]
+    public async Task A_Render_That_Fails_Or_Writes_Nothing_Leaves_The_Previous_File_Whole_And_No_Temporary_File()
+    {
+        var media = Directory.CreateDirectory(Path.Combine(_root, "p3")).FullName;
+        File.WriteAllBytes(Path.Combine(media, "video.mp4"), [1]);
+        var temps = new List<string>();
+
+        var failed = await Should.ThrowAsync<InvalidOperationException>(() => MediaFiles.RenderAsync(media, "video.mp4", "Scout could not join the scenes into the video", temp =>
+        {
+            temps.Add(temp);
+            File.WriteAllBytes(temp, [2]);
+            throw new InvalidOperationException("Scout could not join the scenes into the video (ffmpeg: boom)");
+        }, CancellationToken.None));
+        var empty = await Should.ThrowAsync<InvalidOperationException>(
+            () => MediaFiles.RenderAsync(media, "video.mp4", "Scout could not join the scenes into the video", _ => Task.CompletedTask, CancellationToken.None));
+        byte[] rendered = [.. Enumerable.Repeat((byte)3, 1024)];
+        await MediaFiles.RenderAsync(media, "video.mp4", "Scout could not join the scenes into the video", temp => File.WriteAllBytesAsync(temp, rendered), CancellationToken.None);
+
+        failed.Message.ShouldBe("Scout could not join the scenes into the video (ffmpeg: boom)");
+        empty.Message.ShouldBe("Scout could not save video.mp4 in the project's media folder.");
+        Path.GetDirectoryName(temps.ShouldHaveSingleItem()).ShouldBe(media);
+        Path.GetFileName(temps[0]).ShouldStartWith(".");
+        Path.GetExtension(temps[0]).ShouldBe(".mp4");
+        Directory.GetFiles(media).ShouldBe([Path.Combine(media, "video.mp4")]);
+        File.ReadAllBytes(Path.Combine(media, "video.mp4")).ShouldBe(rendered);
+    }
 }

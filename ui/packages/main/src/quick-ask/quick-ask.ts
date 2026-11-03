@@ -176,7 +176,7 @@ function toBubbleSettings(raw: unknown): LocalBubbleSettings | null {
   };
 }
 
-function toBounds(raw: string | null): Rectangle | null {
+export function toBounds(raw: string | null): Rectangle | null {
   if (raw === null) return null;
   try {
     const r = JSON.parse(raw) as Record<string, unknown>;

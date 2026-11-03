@@ -129,6 +129,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         }
 
         wire.Scenes.AddRange(project.Scenes.Select(ToWire));
+        if (project.Package is { } package)
+        {
+            wire.Package = ToWire(package);
+        }
+
         return wire;
     }
 
@@ -199,6 +204,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
                 s.HasAudioFile ? s.AudioFile : null,
                 s.HasVisualFile ? s.VisualFile : null,
                 s.DurationMs))],
+            Package = wire.Package is null ? null : FromWire(wire.Package),
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -224,4 +230,57 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         wire.Notes.AddRange(readiness.Notes);
         await CallAsync(() => gate.Client.ReportReadinessAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
     }
+
+    private static VideoPackage ToWire(OperatorPackage package)
+    {
+        var wire = new VideoPackage
+        {
+            Status = package.Status,
+            RightsConfirmed = package.RightsConfirmed,
+            Title = package.Title,
+            Description = package.Description,
+            DurationMs = package.DurationMs,
+            MetadataEdited = package.MetadataEdited,
+        };
+        if (package.VideoFile is not null)
+        {
+            wire.VideoFile = package.VideoFile;
+        }
+
+        if (package.ThumbnailFile is not null)
+        {
+            wire.ThumbnailFile = package.ThumbnailFile;
+        }
+
+        if (package.ApprovedAt is not null)
+        {
+            wire.ApprovedAt = package.ApprovedAt;
+        }
+
+        if (package.Error is not null)
+        {
+            wire.Error = package.Error;
+        }
+
+        wire.Shorts.AddRange(package.Shorts.Select(s => new ShortClip { File = s.File, StartMs = s.StartMs, DurationMs = s.DurationMs, Hook = s.Hook }));
+        wire.Checks.AddRange(package.Checks.Select(c => new PackageCheck { Name = c.Name, Result = c.Result, Detail = c.Detail }));
+        wire.Tags.AddRange(package.Tags);
+        return wire;
+    }
+
+    private static OperatorPackage FromWire(VideoPackage wire)
+        => new(
+            wire.Status,
+            wire.HasVideoFile ? wire.VideoFile : null,
+            [.. wire.Shorts.Select(s => new OperatorShort(s.File, s.StartMs, s.DurationMs, s.Hook))],
+            wire.HasThumbnailFile ? wire.ThumbnailFile : null,
+            [.. wire.Checks.Select(c => new OperatorCheck(c.Name, c.Result, c.Detail))],
+            wire.RightsConfirmed,
+            wire.HasApprovedAt ? wire.ApprovedAt : null,
+            wire.Title,
+            wire.Description,
+            [.. wire.Tags],
+            wire.DurationMs,
+            wire.HasError ? wire.Error : null,
+            wire.MetadataEdited);
 }

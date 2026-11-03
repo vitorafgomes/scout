@@ -8,7 +8,7 @@ namespace Scout.Operator;
 
 /// <summary>
 /// Tells the control plane what this worker can produce, when it starts and every <see cref="Interval"/>: speech and
-/// images as the connected provider's media services allow, the provider's name, no <c>ffmpeg</c> yet, whether the
+/// images as the connected provider's media services allow, the provider's name, whether videos can be assembled, with a note naming the encoder or why not, whether the
 /// YouTube token file the desktop writes at sign-in is on disk, and a note for each thing the owner has to supply.
 /// A control plane that cannot take the report is logged once until it takes one again.
 /// </summary>
@@ -17,7 +17,8 @@ internal sealed class ReadinessReporter(
     MediaCapabilities media,
     IOptions<YouTubeOptions> youtube,
     TimeProvider time,
-    ILogger<ReadinessReporter> logger) : BackgroundService
+    ILogger<ReadinessReporter> logger,
+    FfmpegToolset ffmpeg) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
@@ -26,7 +27,7 @@ internal sealed class ReadinessReporter(
     internal const string NoProvider = "No AI Source is connected; narration needs your own audio and visuals become text cards.";
 
     /// <summary>What this worker can produce now.</summary>
-    internal OperatorReadiness Current()
+    internal async Task<OperatorReadiness> CurrentAsync(CancellationToken ct)
     {
         var notes = new List<string>();
         if (media.Provider == "None")
@@ -53,7 +54,9 @@ internal sealed class ReadinessReporter(
             notes.Add(NotSignedIn);
         }
 
-        return new OperatorReadiness(media.Speech, media.Images, media.Provider, false, signedIn, notes);
+        var assembly = await ffmpeg.ProbeAsync(ct).ConfigureAwait(false);
+        notes.Add(assembly.Note);
+        return new OperatorReadiness(media.Speech, media.Images, media.Provider, assembly.Tools is not null, signedIn, notes);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -66,7 +69,7 @@ internal sealed class ReadinessReporter(
             {
                 try
                 {
-                    await controlPlane.ReportReadinessAsync(Current(), stoppingToken).ConfigureAwait(false);
+                    await controlPlane.ReportReadinessAsync(await CurrentAsync(stoppingToken).ConfigureAwait(false), stoppingToken).ConfigureAwait(false);
                     failureLogged = false;
                 }
                 catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

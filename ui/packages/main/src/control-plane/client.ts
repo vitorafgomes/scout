@@ -24,6 +24,7 @@ import {
   type ReadinessDto,
   type SceneDto,
   type SceneMediaKind,
+  type VideoPackageDto,
   type WriteLogEntryDto,
 } from '@scout/shared';
 
@@ -88,6 +89,15 @@ export interface ControlPlaneClient {
   ): Promise<OperatorProjectDto>;
   getMediaDirectory(projectId: string): Promise<string>;
   getReadiness(): Promise<ReadinessDto>;
+  assembleProject(id: string): Promise<OperatorProjectDto>;
+  confirmMediaRights(id: string): Promise<OperatorProjectDto>;
+  editPackageMetadata(
+    projectId: string,
+    title: string,
+    description: string,
+    tags: readonly string[],
+  ): Promise<OperatorProjectDto>;
+  approvePackage(id: string): Promise<OperatorProjectDto>;
   close(): void;
 }
 
@@ -183,6 +193,23 @@ interface ProjectMessage {
   }[];
   error?: string;
   scenes: SceneMessage[];
+  package?: PackageMessage | null;
+}
+
+interface PackageMessage {
+  status: string;
+  videoFile?: string;
+  shorts: { file: string; startMs: number; durationMs: number; hook: string }[];
+  thumbnailFile?: string;
+  checks: { name: string; result: string; detail: string }[];
+  rightsConfirmed: boolean;
+  approvedAt?: string;
+  title: string;
+  description: string;
+  tags: string[];
+  durationMs: number;
+  error?: string;
+  metadataEdited: boolean;
 }
 
 interface SceneMessage {
@@ -348,6 +375,30 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
     })),
     error: message.error ?? null,
     scenes: message.scenes.map(toScene),
+    package: message.package == null ? null : toPackage(message.package),
+  };
+}
+
+function toPackage(message: PackageMessage): VideoPackageDto {
+  return {
+    status: message.status,
+    videoFile: message.videoFile ?? null,
+    shorts: message.shorts.map(({ file, startMs, durationMs, hook }) => ({
+      file,
+      startMs,
+      durationMs,
+      hook,
+    })),
+    thumbnailFile: message.thumbnailFile ?? null,
+    checks: message.checks.map(({ name, result, detail }) => ({ name, result, detail })),
+    rightsConfirmed: message.rightsConfirmed,
+    approvedAt: message.approvedAt ?? null,
+    title: message.title,
+    description: message.description,
+    tags: message.tags,
+    durationMs: message.durationMs,
+    error: message.error ?? null,
+    metadataEdited: message.metadataEdited,
   };
 }
 
@@ -582,6 +633,11 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     async getReadiness(): Promise<ReadinessDto> {
       return toReadiness(await operatorCall<ReadinessMessage>('GetReadiness', {}));
     },
+    assembleProject: (id) => project('AssembleProject', { id }),
+    confirmMediaRights: (id) => project('ConfirmMediaRights', { id }),
+    editPackageMetadata: (projectId, title, description, tags) =>
+      project('EditPackageMetadata', { projectId, title, description, tags }),
+    approvePackage: (id) => project('ApprovePackage', { id }),
     close(): void {
       closed = true;
       providers.close();

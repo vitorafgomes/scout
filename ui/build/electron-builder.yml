@@ -24,6 +24,8 @@ files:
   - packages/preload/dist/**
   - packages/renderer/dist/**
   - package.json
+  - "!packages/main/resources/media-tools/**"
+  - "!packages/main/resources/fonts/**"
   - "!**/node_modules/**/{test,__tests__,tests,*.md,*.map}"
   - "!**/*.ts"
 
@@ -44,6 +46,15 @@ extraResources:
     to: icons
     filter:
       - "icon.png"
+  - from: packages/main/resources/media-tools
+    to: media-tools
+    filter:
+      - "**/*"
+  - from: packages/main/resources/fonts
+    to: fonts
+    filter:
+      - "*.ttf"
+      - "OFL.txt"
 
 electronLanguages:
   - en-US

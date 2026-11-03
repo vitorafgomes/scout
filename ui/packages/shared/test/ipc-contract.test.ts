@@ -76,8 +76,12 @@ describe('CHANNEL constant', () => {
         'llmListOllamaModels',
         'llmPullOllamaModel',
         'llmPullOllamaProgress',
+        'operatorAssembly',
         'operatorDecideClaim',
         'operatorMandate',
+        'operatorMediaRights',
+        'operatorPackageApproval',
+        'operatorPackageMetadata',
         'operatorProduction',
         'operatorProject',
         'operatorProjects',
@@ -88,6 +92,7 @@ describe('CHANNEL constant', () => {
         'operatorSceneOrder',
         'operatorSceneRegeneration',
         'operatorStartProject',
+        'operatorWindow',
         'providerRestart',
         'providerSetAutostart',
         'providerStart',
@@ -204,6 +209,20 @@ describe('operator channels', () => {
       'scout:operator.readiness',
     ]);
   });
+
+  test('assembling a video, confirming its media rights, editing its metadata and approving its package each have their own scout:operator channel, named as nouns', () => {
+    expect([
+      CHANNEL.operatorAssembly,
+      CHANNEL.operatorMediaRights,
+      CHANNEL.operatorPackageMetadata,
+      CHANNEL.operatorPackageApproval,
+    ]).toEqual([
+      'scout:operator.assembly',
+      'scout:operator.mediaRights',
+      'scout:operator.packageMetadata',
+      'scout:operator.packageApproval',
+    ]);
+  });
 });
 
 describe('ChannelName type', () => {
@@ -278,6 +297,11 @@ describe('ChannelName type', () => {
       'scout:operator.sceneRegeneration': true,
       'scout:operator.sceneMedia': true,
       'scout:operator.readiness': true,
+      'scout:operator.window': true,
+      'scout:operator.assembly': true,
+      'scout:operator.mediaRights': true,
+      'scout:operator.packageMetadata': true,
+      'scout:operator.packageApproval': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

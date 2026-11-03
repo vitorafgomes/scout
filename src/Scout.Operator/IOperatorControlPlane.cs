@@ -19,7 +19,8 @@ public interface IOperatorControlPlane
 
     /// <summary>
     /// Take the oldest queued project moved to researching, else the oldest project queued for production moved to
-    /// producing, else one left unfinished 15 minutes; null when none waits.
+    /// producing, else the oldest project queued for assembly moved to assembling, else one left unfinished 15 minutes;
+    /// null when none waits.
     /// </summary>
     Task<QueuedProject?> NextQueuedAsync(CancellationToken ct);
 
@@ -64,6 +65,9 @@ public sealed record OperatorProjectState(
 {
     /// <summary>The scenes of the video, empty until the worker plans them.</summary>
     public IReadOnlyList<OperatorScene> Scenes { get; init; } = [];
+
+    /// <summary>The assembled video and its metadata, null until the worker assembles it.</summary>
+    public OperatorPackage? Package { get; init; }
 }
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>
@@ -127,3 +131,30 @@ public sealed record OperatorReadiness(
     bool FfmpegAvailable,
     bool YouTubeSignedIn,
     IReadOnlyList<string> Notes);
+
+/// <summary>
+/// The assembled video, as the control plane's <c>VideoPackage</c> message carries it. Files are plain names inside the
+/// project's media directory. The worker sets the status, the files, the checks, the duration and the error, and the
+/// title, description and tags only while <see cref="MetadataEdited"/> is false; <see cref="RightsConfirmed"/>,
+/// <see cref="ApprovedAt"/> and <see cref="MetadataEdited"/> are the owner's and go back exactly as read.
+/// </summary>
+public sealed record OperatorPackage(
+    string Status,
+    string? VideoFile,
+    IReadOnlyList<OperatorShort> Shorts,
+    string? ThumbnailFile,
+    IReadOnlyList<OperatorCheck> Checks,
+    bool RightsConfirmed,
+    string? ApprovedAt,
+    string Title,
+    string Description,
+    IReadOnlyList<string> Tags,
+    int DurationMs,
+    string? Error,
+    bool MetadataEdited);
+
+/// <summary>One vertical Short cut from the video: its file, where it starts in the video, its length and its hook.</summary>
+public sealed record OperatorShort(string File, int StartMs, int DurationMs, string Hook);
+
+/// <summary>One check of the package: its name, <c>pass</c>, <c>warn</c> or <c>fail</c>, and a sentence saying why.</summary>
+public sealed record OperatorCheck(string Name, string Result, string Detail);

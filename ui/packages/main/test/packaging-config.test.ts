@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { load } from 'js-yaml';
 import {
   resolveControlPlaneBinary,
+  resolveMediaTools,
   resolveProtoDir,
   resolveTrayIcon,
 } from '../src/worker/resolve-binary.js';
@@ -35,6 +36,7 @@ interface ExtraResource {
 
 interface BuilderConfig {
   appId: string;
+  files: string[];
   electronVersion: string;
   productName: string;
   asar: boolean;
@@ -190,6 +192,27 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     expect(resolveControlPlaneBinary(packaged, {})).toBe(
       join(RESOURCES, worker!.to, 'linux-x64', 'Scout.Host.ControlPlane'),
     );
+  });
+
+  it('ships the bundled ffmpeg and fonts once, as resources where resolveMediaTools looks for them', () => {
+    const tools = config.extraResources.find((r) => r.to === 'media-tools');
+    const fonts = config.extraResources.find((r) => r.to === 'fonts');
+    const everyFile = new Set([
+      join(RESOURCES, 'media-tools', 'linux-x64', 'ffmpeg'),
+      join(RESOURCES, 'fonts', 'NotoSans-Regular.ttf'),
+    ]);
+
+    expect([tools?.from, fonts?.from]).toEqual([
+      'packages/main/resources/media-tools',
+      'packages/main/resources/fonts',
+    ]);
+    expect(fonts!.filter).toEqual(['*.ttf', 'OFL.txt']);
+    expect(config.files).toContain('!packages/main/resources/media-tools/**');
+    expect(config.files).toContain('!packages/main/resources/fonts/**');
+    expect(resolveMediaTools(packaged, (file) => everyFile.has(file))).toEqual({
+      ffmpeg: join(RESOURCES, tools!.to, 'linux-x64', 'ffmpeg'),
+      font: join(RESOURCES, fonts!.to, 'NotoSans-Regular.ttf'),
+    });
   });
 
   it.each(['publish-worker.sh', 'publish-worker.ps1'])(

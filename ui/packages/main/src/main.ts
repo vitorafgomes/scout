@@ -44,6 +44,7 @@ import { registerWhisperHandlers, whisperRootDir } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
+import { registerOperatorWindow, type OperatorWindow } from './operator/operator-window.js';
 import {
   MEDIA_SCHEME,
   MEDIA_SCHEME_PRIVILEGES,
@@ -90,6 +91,7 @@ import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
 import {
   resolveControlPlaneBinary,
+  resolveMediaTools,
   resolveProtoDir,
   resolveTrayIcon,
   resolveWorkerBinary,
@@ -203,6 +205,7 @@ let gitHubAuth: GitHubAuth | null = null;
 let unregisterYouTube: (() => void) | null = null;
 let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
+let operatorWindow: OperatorWindow | null = null;
 let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
 let updateNotice: UpdateNoticeHandle | null = null;
@@ -220,6 +223,7 @@ function sendToAllWindows(channel: string, log: typeof logger): void {
 
 function disposeAll(): void {
   quickAsk?.dispose();
+  operatorWindow?.dispose();
   trayController?.destroy();
   updateNotice?.dispose();
   desktop?.dispose();
@@ -486,6 +490,11 @@ app
             logger.child({ module: 'supervisor' }),
           ),
           workerGate: controlPlane?.workerGate() ?? null,
+          mediaTools: resolveMediaTools({
+            app,
+            resourcesPath: process.resourcesPath,
+            cwd: __dirname,
+          }),
         }),
       onPaired: (userId) =>
         void reportPairing(userId, access, () => readAllowedUserIds(vault), presence),
@@ -698,6 +707,16 @@ app
       env: process.env,
       execPath: process.execPath,
       windows: () => BrowserWindow.getAllWindows(),
+    });
+    operatorWindow = await registerOperatorWindow({
+      ipcMain,
+      createWindow: (opts) => new BrowserWindow(opts),
+      preloadPath,
+      indexHtmlPath,
+      ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
+      vault,
+      screen,
+      logger: logger.child({ module: 'operator-window' }),
     });
 
     openMainWindow = (show) => {

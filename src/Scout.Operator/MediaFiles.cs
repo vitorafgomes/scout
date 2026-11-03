@@ -59,7 +59,7 @@ internal static class MediaFiles
         }
     }
 
-    private static string PathFor(string directory, string fileName)
+    internal static string PathFor(string directory, string fileName)
     {
         if (string.IsNullOrWhiteSpace(directory)
             || !Path.IsPathFullyQualified(directory)
@@ -80,5 +80,68 @@ internal static class MediaFiles
         }
 
         return path;
+    }
+
+    /// <summary>
+    /// Have <paramref name="render"/> write <paramref name="fileName"/> to the temporary path it is given, a hidden file in
+    /// the same directory with the same extension, and move it over the target only when it is there and holds at least
+    /// 1 KB; a smaller file fails with <paramref name="failure"/>, the step's sentence. On any failure the temporary file
+    /// is deleted and the target is left as it was.
+    /// </summary>
+    public static async Task RenderAsync(string directory, string fileName, string failure, Func<string, Task> render, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(render);
+        var path = PathFor(directory, fileName);
+        var temp = Path.Combine(Path.GetDirectoryName(path)!, $".{Guid.NewGuid():N}.{fileName}");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await render(temp).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (!File.Exists(temp))
+            {
+                throw new InvalidOperationException(CouldNotSave(fileName));
+            }
+
+            if (new FileInfo(temp).Length < 1024)
+            {
+                throw new InvalidOperationException($"{failure} (ffmpeg wrote an empty file)");
+            }
+
+            File.Move(temp, path, overwrite: true);
+        }
+        catch (Exception ex)
+        {
+            TryDelete(temp);
+            if (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new InvalidOperationException(CouldNotSave(fileName), ex);
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>Delete <paramref name="fileName"/> from the media directory when it is there; a name that would leave it, or a delete that fails, is ignored.</summary>
+    public static void Delete(string directory, string fileName)
+    {
+        try
+        {
+            TryDelete(PathFor(directory, fileName));
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 }

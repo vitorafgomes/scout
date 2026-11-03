@@ -18,6 +18,10 @@ service Operator {
   rpc AttachSceneMedia(AttachSceneMediaRequest) returns (Project);
   rpc GetMediaDirectory(GetProjectRequest) returns (MediaDirectory);
   rpc GetReadiness(GetReadinessRequest) returns (Readiness);
+  rpc AssembleProject(GetProjectRequest) returns (Project);
+  rpc ConfirmMediaRights(GetProjectRequest) returns (Project);
+  rpc EditPackageMetadata(EditPackageMetadataRequest) returns (Project);
+  rpc ApprovePackage(GetProjectRequest) returns (Project);
 }
 
 message GetMandateRequest {}
@@ -70,6 +74,7 @@ message Project {
   repeated Claim claims = 9;
   optional string error = 10;
   repeated Scene scenes = 11;
+  optional VideoPackage package = 12;
 }
 
 message TopicCandidate {
@@ -159,4 +164,40 @@ message Readiness {
   bool youtube_signed_in = 5;
   repeated string notes = 6;
   optional string reported_at = 7;
+}
+
+message VideoPackage {
+  string status = 1;
+  optional string video_file = 2;
+  repeated ShortClip shorts = 3;
+  optional string thumbnail_file = 4;
+  repeated PackageCheck checks = 5;
+  bool rights_confirmed = 6;
+  optional string approved_at = 7;
+  string title = 8;
+  string description = 9;
+  repeated string tags = 10;
+  int32 duration_ms = 11;
+  optional string error = 12;
+  bool metadata_edited = 13;
+}
+
+message ShortClip {
+  string file = 1;
+  int32 start_ms = 2;
+  int32 duration_ms = 3;
+  string hook = 4;
+}
+
+message PackageCheck {
+  string name = 1;
+  string result = 2;
+  string detail = 3;
+}
+
+message EditPackageMetadataRequest {
+  string project_id = 1;
+  string title = 2;
+  string description = 3;
+  repeated string tags = 4;
 }

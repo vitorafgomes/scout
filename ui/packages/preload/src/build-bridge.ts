@@ -347,6 +347,34 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.operatorReadiness) as ReturnType<ScoutBridge['operatorReadiness']>;
     },
 
+    operatorOpenWindow() {
+      return ipc.invoke(CHANNEL.operatorWindow) as ReturnType<ScoutBridge['operatorOpenWindow']>;
+    },
+
+    operatorAssemble(req) {
+      return ipc.invoke(CHANNEL.operatorAssembly, req) as ReturnType<
+        ScoutBridge['operatorAssemble']
+      >;
+    },
+
+    operatorConfirmMediaRights(req) {
+      return ipc.invoke(CHANNEL.operatorMediaRights, req) as ReturnType<
+        ScoutBridge['operatorConfirmMediaRights']
+      >;
+    },
+
+    operatorEditPackageMetadata(req) {
+      return ipc.invoke(CHANNEL.operatorPackageMetadata, req) as ReturnType<
+        ScoutBridge['operatorEditPackageMetadata']
+      >;
+    },
+
+    operatorApprovePackage(req) {
+      return ipc.invoke(CHANNEL.operatorPackageApproval, req) as ReturnType<
+        ScoutBridge['operatorApprovePackage']
+      >;
+    },
+
     githubSignIn() {
       return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
     },

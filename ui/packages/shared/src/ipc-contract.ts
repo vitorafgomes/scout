@@ -70,6 +70,11 @@ export const CHANNEL = {
   operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
   operatorSceneMedia: 'scout:operator.sceneMedia',
   operatorReadiness: 'scout:operator.readiness',
+  operatorWindow: 'scout:operator.window',
+  operatorAssembly: 'scout:operator.assembly',
+  operatorMediaRights: 'scout:operator.mediaRights',
+  operatorPackageMetadata: 'scout:operator.packageMetadata',
+  operatorPackageApproval: 'scout:operator.packageApproval',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -615,6 +620,51 @@ export interface OperatorProjectDto {
   readonly claims: readonly ClaimDto[];
   readonly error: string | null;
   readonly scenes: readonly SceneDto[];
+  /** The assembled video and its upload metadata; null until the owner first asks for assembly. */
+  readonly package: VideoPackageDto | null;
+}
+
+/**
+ * The assembled video of a project: the MP4, its Shorts and thumbnail named inside the project's media directory,
+ * the checks the worker ran, the owner's media-rights confirmation and approval, and the upload metadata.
+ */
+export interface VideoPackageDto {
+  readonly status: string;
+  readonly videoFile: string | null;
+  readonly shorts: readonly ShortClipDto[];
+  readonly thumbnailFile: string | null;
+  readonly checks: readonly PackageCheckDto[];
+  readonly rightsConfirmed: boolean;
+  readonly approvedAt: string | null;
+  readonly title: string;
+  readonly description: string;
+  readonly tags: readonly string[];
+  readonly durationMs: number;
+  readonly error: string | null;
+  readonly metadataEdited: boolean;
+}
+
+/** One vertical Shorts cut, `startMs` into the video, with its hook line. */
+export interface ShortClipDto {
+  readonly file: string;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly hook: string;
+}
+
+/** One check the worker ran on the package; `result` is pass, warn or fail. */
+export interface PackageCheckDto {
+  readonly name: string;
+  readonly result: string;
+  readonly detail: string;
+}
+
+/** The owner's upload metadata for a package, within YouTube's limits. */
+export interface PackageMetadataRequest {
+  readonly projectId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly tags: readonly string[];
 }
 
 /** One scene of a video: its narration, the picture it needs, and the media files made for it, named inside the project's media directory. */
@@ -993,6 +1043,12 @@ export interface ScoutBridge {
   operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
   operatorReadiness(): Promise<ReadinessDto>;
+  /** Opens the YouTube operator window, or brings it to the front when it is already open. */
+  operatorOpenWindow(): Promise<void>;
+  operatorAssemble(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto>;
+  operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

@@ -13,3 +13,6 @@ coverage/
 .vite/
 # Google OAuth client written at package time from SCOUT_GOOGLE_CLIENT_SECRET; never committed
 packages/main/resources/google-client.json
+packages/main/resources/media-tools/
+packages/main/resources/fonts/
+build/media-cache/

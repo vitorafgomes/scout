@@ -21,10 +21,11 @@ public sealed class OperatorWorkerTests
         FakeTimeProvider clock,
         ILogger<OperatorWorker> logger,
         ScriptedChat? model = null,
-        IYouTubeClient? youtube = null)
+        IYouTubeClient? youtube = null,
+        IProcessRunner? runner = null)
         => new(
             controlPlane,
-            Given.Pipeline(controlPlane, youtube ?? Given.YouTube(), model ?? Model(), Substitute.For<IOriginNotifier>()),
+            Given.Pipeline(controlPlane, youtube ?? Given.YouTube(), model ?? Model(), Substitute.For<IOriginNotifier>(), runner: runner),
             started,
             clock,
             logger);
@@ -138,5 +139,34 @@ public sealed class OperatorWorkerTests
 
         controlPlane.Saves.Select(s => (s.Project.Status, s.Project.Error)).ShouldBe([("failed", quota), ("failed", quota)]);
         (await controlPlane.GetProjectAsync("chat-3", CancellationToken.None)).Error.ShouldBe(quota);
+    }
+
+    [Fact]
+    public async Task When_The_Worker_Saves_An_Assembling_Project_As_Failed_Its_Package_Fails_Too_And_Keeps_The_Owners_Fields()
+    {
+        const string reason = "Scout could not run ffmpeg, so videos cannot be assembled.";
+        var failedSaves = 0;
+        var controlPlane = new RecordingControlPlane
+        {
+            FailOn = status => status == "failed" && Interlocked.Increment(ref failedSaves) == 1,
+        };
+        var owners = new OperatorPackage("assembling", null, [], null, [], false, null, "My own title", "My own description", ["mine"], 0, null, true);
+        var project = Given.Project(id: "asm-1", status: "assembling") with { Package = owners };
+        var runner = new FakeProcessRunner { Answer = (program, _) => throw new InvalidOperationException(ProcessRunner.NotStarted(program)) };
+        var started = Channel.CreateUnbounded<QueuedProject>();
+        using var worker = Worker(controlPlane, started, new FakeTimeProvider(Given.Now), new RecordingLogger<OperatorWorker>(), runner: runner);
+        await worker.StartAsync(CancellationToken.None);
+
+        controlPlane.Store(project);
+        await started.Writer.WriteAsync(new QueuedProject(project, null));
+        await Until(() => controlPlane.Saves.Count >= 2);
+        await worker.StopAsync(CancellationToken.None);
+
+        var saved = controlPlane.Saves[^1].Project;
+        (saved.Status, saved.Error).ShouldBe(("failed", reason));
+        var package = saved.Package.ShouldNotBeNull();
+        (package.Status, package.Error).ShouldBe(("failed", reason));
+        (package.Title, package.Description, package.MetadataEdited).ShouldBe(("My own title", "My own description", true));
+        package.Tags.ShouldBe(["mine"]);
     }
 }

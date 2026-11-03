@@ -618,6 +618,137 @@ describe('operator production over UDS', () => {
   );
 });
 
+async function mediaReadyAsWorker(client: ControlPlaneClient, topic: string) {
+  const started = await client.startProject(topic);
+  const identity = { id: started.id, topic: started.topic, origin: started.origin };
+  const scenes = [
+    {
+      id: 's1',
+      order: 0,
+      narration: 'Records compare by value.',
+      visualPrompt: 'Two equal cards',
+      status: 'ready',
+      audioSource: 'none',
+      visualSource: 'text_card',
+      durationMs: 4000,
+    },
+  ];
+  await saveAsWorker({ ...identity, status: 'script_ready' });
+  await client.produceProject(started.id);
+  await takeForProductionAsWorker(started.id);
+  await saveAsWorker({ ...identity, status: 'producing', scenes });
+  await saveAsWorker({ ...identity, status: 'media_ready', scenes });
+  return { identity, scenes };
+}
+
+describe('operator assembly over UDS', () => {
+  it(
+    'AssembleProject refuses a project whose media is not ready, naming its status',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Records in C#');
+
+        const refused = await client.assembleProject(started.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+
+        expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((refused as Error).message).toBe(
+          'Only a project with its media ready, an assembled one, or a failed one with every scene ready is assembled; this one is queued.',
+        );
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "the owner assembles a media-ready video, the worker's assembled package arrives with its files served by scout-media, and the owner edits its metadata, confirms the rights and approves it",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const { identity, scenes } = await mediaReadyAsWorker(client, 'Records in C#');
+        const queued = await client.assembleProject(identity.id);
+        await takeForProductionAsWorker(identity.id);
+        const directory = await client.getMediaDirectory(identity.id);
+        for (const name of ['video.mp4', 'short-1.mp4', 'thumbnail.png']) {
+          writeFileSync(path.join(directory, name), `${name} bytes`);
+        }
+        await saveAsWorker({
+          ...identity,
+          status: 'assembled',
+          scenes,
+          package: {
+            status: 'assembled',
+            videoFile: 'video.mp4',
+            shorts: [
+              { file: 'short-1.mp4', startMs: 0, durationMs: 30000, hook: 'Equal by value.' },
+            ],
+            thumbnailFile: 'thumbnail.png',
+            checks: [{ name: 'Loudness', result: 'pass', detail: '-14 LUFS' }],
+            title: 'Records explained',
+            description: 'Value equality in C#.',
+            tags: ['dotnet'],
+            durationMs: 4000,
+          },
+        });
+        const served = await createMediaProtocolHandler((id) => client.getMediaDirectory(id))(
+          new Request(`${MEDIA_SCHEME}://${identity.id}/video.mp4`),
+        );
+
+        const unconfirmed = await client.approvePackage(identity.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const edited = await client.editPackageMetadata(
+          identity.id,
+          '  Records, explained ',
+          ' Value equality in C#. ',
+          [' dotnet ', 'records'],
+        );
+        const confirmed = await client.confirmMediaRights(identity.id);
+        const approved = await client.approvePackage(identity.id);
+
+        expect([queued.status, queued.package?.status]).toEqual([
+          'assembly_queued',
+          'assembly_queued',
+        ]);
+        expect([served.status, served.headers.get('content-type')]).toEqual([200, 'video/mp4']);
+        expect(unconfirmed).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((unconfirmed as Error).message).toBe('Confirm the media rights first.');
+        expect(edited.package).toMatchObject({
+          title: 'Records, explained',
+          description: 'Value equality in C#.',
+          tags: ['dotnet', 'records'],
+          metadataEdited: true,
+          videoFile: 'video.mp4',
+          shorts: [{ file: 'short-1.mp4', startMs: 0, durationMs: 30000, hook: 'Equal by value.' }],
+          thumbnailFile: 'thumbnail.png',
+        });
+        expect(confirmed.package?.rightsConfirmed).toBe(true);
+        expect([approved.status, approved.package?.status]).toEqual(['approved', 'approved']);
+        expect(Number.isNaN(Date.parse(approved.package?.approvedAt ?? ''))).toBe(false);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
 function freeTcpPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();

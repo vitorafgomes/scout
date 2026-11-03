@@ -76,6 +76,7 @@ const project: OperatorProjectDto = {
   claims: [],
   error: null,
   scenes: [],
+  package: null,
 };
 
 const readiness: ReadinessDto = {
@@ -118,6 +119,10 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     attachSceneMedia: mock(async () => project),
     getMediaDirectory: mock(async () => '/nowhere'),
     getReadiness: mock(async () => readiness),
+    assembleProject: mock(async () => ({ ...project, status: 'assembly_queued' })),
+    confirmMediaRights: mock(async () => project),
+    editPackageMetadata: mock(async () => project),
+    approvePackage: mock(async () => ({ ...project, status: 'approved' })),
     ...overrides,
   };
 }
@@ -536,7 +541,126 @@ describe('registerOperatorHandlers', () => {
     expect(readdirSync(media)).toEqual([]);
   });
 
-  it('the returned unregister removes the twelve operator handlers', () => {
+  it('assembly, media rights and approval forward the trimmed project id, and refuse a missing one before reaching the control plane', async () => {
+    const assembled = await invoke(CHANNEL.operatorAssembly, { id: ' p1 ' });
+    await invoke(CHANNEL.operatorMediaRights, { id: 'p1' });
+    const approved = await invoke(CHANNEL.operatorPackageApproval, { id: 'p1 ' });
+    const missing = await Promise.all(
+      [CHANNEL.operatorAssembly, CHANNEL.operatorMediaRights, CHANNEL.operatorPackageApproval].map(
+        (channel) => rejection(invoke(channel, { id: '  ' })),
+      ),
+    );
+
+    expect((assembled as OperatorProjectDto).status).toBe('assembly_queued');
+    expect((approved as OperatorProjectDto).status).toBe('approved');
+    expect(client.assembleProject.mock.calls).toEqual([['p1']]);
+    expect(client.confirmMediaRights.mock.calls).toEqual([['p1']]);
+    expect(client.approvePackage.mock.calls).toEqual([['p1']]);
+    expect(missing).toEqual(
+      missing.map(() => ({
+        code: 'operator/invalid-request',
+        message: 'The project id is required.',
+      })),
+    );
+  });
+
+  it('package metadata forwards the trimmed title, description and tags without empty tags', async () => {
+    await invoke(CHANNEL.operatorPackageMetadata, {
+      projectId: ' p1 ',
+      title: '  Span<T> explained ',
+      description: ' A tour of Span<T>. ',
+      tags: [' dotnet ', '', '  ', 'span'],
+    });
+
+    expect(client.editPackageMetadata.mock.calls).toEqual([
+      ['p1', 'Span<T> explained', 'A tour of Span<T>.', ['dotnet', 'span']],
+    ]);
+  });
+
+  it("package metadata outside YouTube's limits is refused before reaching the control plane, naming every limit it breaks", async () => {
+    const at = (length: number): string => 'x'.repeat(length);
+    const refused = await Promise.all([
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: 'p1',
+          title: '  ',
+          description: '',
+          tags: [],
+        }),
+      ),
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: 'p1',
+          title: at(101),
+          description: at(5001),
+          tags: [],
+        }),
+      ),
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: 'p1',
+          title: 'Span',
+          description: '',
+          tags: [at(101)],
+        }),
+      ),
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: 'p1',
+          title: 'Span',
+          description: '',
+          tags: [at(100), at(100), at(100), at(100), at(100), 'x'],
+        }),
+      ),
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: 'p1',
+          title: 'Span',
+          description: '',
+          tags: [at(100), at(100), at(100), at(100), `${at(90)} bends`],
+        }),
+      ),
+      rejection(
+        invoke(CHANNEL.operatorPackageMetadata, {
+          projectId: '',
+          title: 'Span',
+          description: '',
+          tags: [],
+        }),
+      ),
+    ]);
+    const atTheLimits = await invoke(CHANNEL.operatorPackageMetadata, {
+      projectId: 'p1',
+      title: at(100),
+      description: at(5000),
+      tags: [at(100), at(100), at(100), at(100), at(96)],
+    });
+
+    expect(refused.map((r) => r.message)).toEqual([
+      'The title is 1 to 100 characters.',
+      'The title is 1 to 100 characters. The description is at most 5000 characters.',
+      'Each tag is 1 to 100 characters.',
+      'The tags are at most 500 characters together.',
+      'The tags are at most 500 characters together.',
+      'The project id is required.',
+    ]);
+    expect(refused.every((r) => r.code === 'operator/invalid-request')).toBe(true);
+    expect(atTheLimits).toEqual(project);
+    expect(client.editPackageMetadata.mock.calls.length).toBe(1);
+  });
+
+  it('an approval the control plane refuses reaches the renderer as control-plane/invalid-argument with what still blocks it', async () => {
+    const reason = 'Confirm the media rights first. 2 checks failed.';
+    client.approvePackage = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
+    });
+
+    const refused = await rejection(invoke(CHANNEL.operatorPackageApproval, { id: 'p1' }));
+
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
+  });
+
+  it('the returned unregister removes the sixteen operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -562,6 +686,10 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorSceneRegeneration,
         CHANNEL.operatorSceneMedia,
         CHANNEL.operatorReadiness,
+        CHANNEL.operatorAssembly,
+        CHANNEL.operatorMediaRights,
+        CHANNEL.operatorPackageMetadata,
+        CHANNEL.operatorPackageApproval,
       ].sort(),
     );
     expect(own.handlers.size).toBe(0);

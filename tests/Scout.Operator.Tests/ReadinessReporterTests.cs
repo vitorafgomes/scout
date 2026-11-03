@@ -18,68 +18,68 @@ public sealed class ReadinessReporterTests : IDisposable
         RecordingControlPlane? controlPlane = null,
         string tokenFile = "",
         TimeProvider? time = null,
-        ILogger<ReadinessReporter>? logger = null)
+        ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
-            logger ?? new RecordingLogger<ReadinessReporter>());
+            logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()));
 
     [Fact]
-    public void Gemini_Reports_No_Speech_And_No_Images_With_The_Note_That_Narration_Needs_Own_Audio_And_Visuals_Become_Text_Cards()
+    public async Task Gemini_Reports_No_Speech_And_No_Images_With_The_Note_That_Narration_Needs_Own_Audio_And_Visuals_Become_Text_Cards()
     {
-        var readiness = Reporter(new MediaCapabilities(false, false, "Gemini")).Current();
+        var readiness = await Reporter(new MediaCapabilities(false, false, "Gemini")).CurrentAsync(CancellationToken.None);
 
         (readiness.SpeechAvailable, readiness.ImagesAvailable, readiness.Provider, readiness.FfmpegAvailable)
-            .ShouldBe((false, false, "Gemini", false));
+            .ShouldBe((false, false, "Gemini", true));
         readiness.Notes.ShouldContain(
             "Gemini has no speech or image service in Scout; narration needs your own audio and visuals become text cards.");
     }
 
     [Fact]
-    public void OpenAI_Reports_Speech_And_Images_With_No_Media_Note()
+    public async Task OpenAI_Reports_Speech_And_Images_With_No_Media_Note()
     {
         var token = Path.Combine(_folder, "youtube-token.json");
         File.WriteAllText(token, "{}");
 
-        var readiness = Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: token).Current();
+        var readiness = await Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: token).CurrentAsync(CancellationToken.None);
 
         (readiness.SpeechAvailable, readiness.ImagesAvailable, readiness.Provider, readiness.FfmpegAvailable, readiness.YouTubeSignedIn)
-            .ShouldBe((true, true, "OpenAI", false, true));
-        readiness.Notes.ShouldBeEmpty();
+            .ShouldBe((true, true, "OpenAI", true, true));
+        readiness.Notes.ShouldBe(["Videos are assembled with ffmpeg and the libopenh264 encoder."]);
     }
 
     [Theory]
     [InlineData(true, false, "AzureOpenAI has no image service in Scout; visuals become text cards unless you attach your own images.")]
     [InlineData(false, true, "AzureOpenAI has no speech service in Scout; narration needs your own audio.")]
-    public void A_Provider_With_Only_One_Media_Service_Names_The_One_It_Lacks(bool speech, bool images, string note)
+    public async Task A_Provider_With_Only_One_Media_Service_Names_The_One_It_Lacks(bool speech, bool images, string note)
     {
         var token = Path.Combine(_folder, "youtube-token.json");
         File.WriteAllText(token, "{}");
 
-        var readiness = Reporter(new MediaCapabilities(speech, images, "AzureOpenAI"), tokenFile: token).Current();
+        var readiness = await Reporter(new MediaCapabilities(speech, images, "AzureOpenAI"), tokenFile: token).CurrentAsync(CancellationToken.None);
 
-        readiness.Notes.ShouldBe([note]);
+        readiness.Notes.ShouldBe([note, "Videos are assembled with ffmpeg and the libopenh264 encoder."]);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("missing-token.json")]
-    public void Without_A_YouTube_Token_File_On_Disk_The_Report_Says_Scout_Is_Not_Signed_In(string tokenFile)
+    public async Task Without_A_YouTube_Token_File_On_Disk_The_Report_Says_Scout_Is_Not_Signed_In(string tokenFile)
     {
         var path = tokenFile.Length == 0 ? string.Empty : Path.Combine(_folder, tokenFile);
 
-        var readiness = Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: path).Current();
+        var readiness = await Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: path).CurrentAsync(CancellationToken.None);
 
         readiness.YouTubeSignedIn.ShouldBeFalse();
-        readiness.Notes.ShouldBe(["Scout is not signed in to YouTube; research goes on without the channel's own uploads."]);
+        readiness.Notes.ShouldBe(["Scout is not signed in to YouTube; research goes on without the channel's own uploads.", "Videos are assembled with ffmpeg and the libopenh264 encoder."]);
     }
 
     [Fact]
-    public void With_No_AI_Source_Connected_The_Note_Says_So()
+    public async Task With_No_AI_Source_Connected_The_Note_Says_So()
     {
-        var readiness = Reporter(new MediaCapabilities(false, false, "None")).Current();
+        var readiness = await Reporter(new MediaCapabilities(false, false, "None")).CurrentAsync(CancellationToken.None);
 
         readiness.Notes.ShouldContain("No AI Source is connected; narration needs your own audio and visuals become text cards.");
     }
@@ -105,6 +105,19 @@ public sealed class ReadinessReporterTests : IDisposable
         controlPlane.Reports.Select(r => r.Provider).ShouldBe(["Gemini", "Gemini"]);
         logger.Entries.ShouldHaveSingleItem().Message.ShouldBe(
             "The worker could not report its readiness: Scout could not reach its control plane.");
+    }
+
+    [Fact]
+    public async Task Without_A_Usable_Ffmpeg_The_Report_Says_Videos_Cannot_Be_Assembled_And_Why()
+    {
+        var token = Path.Combine(_folder, "youtube-token.json");
+        File.WriteAllText(token, "{}");
+        var runner = new FakeProcessRunner { EncoderList = " ------\n V....D libx264  H.264\n A....D aac  AAC\n" };
+
+        var readiness = await Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: token, runner: runner).CurrentAsync(CancellationToken.None);
+
+        readiness.FfmpegAvailable.ShouldBeFalse();
+        readiness.Notes.ShouldBe(["The ffmpeg Scout found has no H.264 or VP9 encoder it can use, so videos cannot be assembled."]);
     }
 
     private static async Task WaitFor(Func<bool> condition)

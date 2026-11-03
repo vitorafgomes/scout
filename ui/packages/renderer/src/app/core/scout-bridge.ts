@@ -66,6 +66,7 @@ import {
   type MandateSaveRequest,
   type OperatorProjectDto,
   type OperatorProjectRequest,
+  type PackageMetadataRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
   type StartProjectRequest,
@@ -238,6 +239,15 @@ function createFakeBridge(): ScoutBridge {
     operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
       rejectNotAvailable(),
     operatorReadiness: (): Promise<ReadinessDto> => rejectNotAvailable(),
+    operatorOpenWindow: (): Promise<void> => rejectNotAvailable(),
+    operatorAssemble: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorConfirmMediaRights: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditPackageMetadata: (_req: PackageMetadataRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorApprovePackage: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubCancel: (): Promise<void> => rejectNotAvailable(),
@@ -560,6 +570,26 @@ export class ScoutBridgeService {
 
   async operatorReadiness(): Promise<ReadinessDto> {
     return this.bridge.operatorReadiness();
+  }
+
+  async operatorOpenWindow(): Promise<void> {
+    return this.bridge.operatorOpenWindow();
+  }
+
+  async operatorAssemble(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAssemble(req);
+  }
+
+  async operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorConfirmMediaRights(req);
+  }
+
+  async operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditPackageMetadata(req);
+  }
+
+  async operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorApprovePackage(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

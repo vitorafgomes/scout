@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import path from 'node:path';
-import { resolveWorkerBinary } from '../src/worker/resolve-binary.js';
+import { resolveMediaTools, resolveWorkerBinary } from '../src/worker/resolve-binary.js';
 
 // Normalize paths to POSIX so assertions work on both POSIX and Windows runners.
 const posix = (p: string): string => p.replace(/\\/g, '/');
@@ -98,5 +98,56 @@ describe('resolveWorkerBinary', () => {
       });
       expect(result).toContain('Scout.Host.Console.exe');
     });
+  });
+});
+
+describe('resolveMediaTools', () => {
+  const packaged = {
+    app: { isPackaged: true },
+    resourcesPath: '/opt/Scout/resources',
+    cwd: '/any',
+  };
+
+  it('finds the packaged Windows ffmpeg.exe of its platform and arch, and the regular Noto Sans', () => {
+    const present = new Set([
+      path.join('/opt/Scout/resources', 'media-tools', 'win32-x64', 'ffmpeg.exe'),
+      path.join('/opt/Scout/resources', 'fonts', 'NotoSans-Regular.ttf'),
+    ]);
+
+    const tools = resolveMediaTools({ ...packaged, platform: 'win32', arch: 'x64' }, (file) =>
+      present.has(file),
+    );
+
+    expect(tools).toEqual({
+      ffmpeg: path.join('/opt/Scout/resources', 'media-tools', 'win32-x64', 'ffmpeg.exe'),
+      font: path.join('/opt/Scout/resources', 'fonts', 'NotoSans-Regular.ttf'),
+    });
+  });
+
+  it('answers an empty path for every tool the build did not bundle, as on macOS', () => {
+    const tools = resolveMediaTools(
+      { ...packaged, platform: 'darwin', arch: 'arm64' },
+      () => false,
+    );
+
+    expect(tools).toEqual({ ffmpeg: '', font: '' });
+  });
+
+  it('in development reads ui/packages/main/resources of the repo', () => {
+    const repo = path.resolve(import.meta.dirname, '../../../..');
+    const seen: string[] = [];
+
+    resolveMediaTools(
+      { platform: 'linux', arch: 'x64', cwd: path.join(repo, 'ui/packages/main/src') },
+      (file) => {
+        seen.push(file);
+        return false;
+      },
+    );
+
+    expect(seen.map(posix)).toEqual([
+      posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/ffmpeg')),
+      posix(path.join(repo, 'ui/packages/main/resources/fonts/NotoSans-Regular.ttf')),
+    ]);
   });
 });

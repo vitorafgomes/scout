@@ -147,6 +147,15 @@ const POLL_MS = 3000;
             </button>
           }
         }
+        <button
+          type="button"
+          class="btn btn--secondary operator"
+          data-test="youtube-open-operator"
+          [disabled]="!s.connected"
+          (click)="openOperator()"
+        >
+          Open YouTube operator
+        </button>
       </section>
     }
     @if (actionError(); as message) {
@@ -159,6 +168,9 @@ const POLL_MS = 3000;
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      .operator {
+        align-self: flex-start;
       }
       .row {
         display: flex;
@@ -281,6 +293,14 @@ export class YouTubeConnectComponent implements OnInit, OnDestroy {
   async open(url: string): Promise<void> {
     try {
       await this.bridge.appOpenExternal({ url });
+    } catch (err: unknown) {
+      this.actionError.set(readIpcError(err).message);
+    }
+  }
+
+  async openOperator(): Promise<void> {
+    try {
+      await this.bridge.operatorOpenWindow();
     } catch (err: unknown) {
       this.actionError.set(readIpcError(err).message);
     }

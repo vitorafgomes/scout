@@ -16,7 +16,10 @@ namespace Scout.Operator;
 /// scene that is not ready or whose generated files are gone, saved after each scene, ending <c>media_ready</c>.
 /// Production reads the project again before each scene and each save; once the project is no longer
 /// <c>producing</c>, because the owner regenerated a scene or produced it again, read so or refused so by the control
-/// plane, the run stops without saving.
+/// plane, the run stops without saving. A project taken as <c>assembling</c> runs the assembly stage: the video, its
+/// Shorts, its thumbnail and its checks rendered in the media directory and saved as the package, ending
+/// <c>assembled</c> with the segments of that video kept and older ones removed, or <c>failed</c> with the reason and
+/// the partial files removed; it stops the same way once the project is no longer <c>assembling</c>.
 /// </summary>
 internal sealed class OperatorPipeline(
     IOperatorControlPlane controlPlane,
@@ -25,6 +28,7 @@ internal sealed class OperatorPipeline(
     ScenePlanner planner,
     NarrationGenerator narration,
     VisualGenerator visuals,
+    AssemblyStage assembly,
     IOriginNotifier notifier,
     ILogger<OperatorPipeline> logger)
 {
@@ -43,6 +47,8 @@ internal sealed class OperatorPipeline(
     internal const string TextCard = "text_card";
     internal const string NoScript = "The project has no script to produce; write the script first.";
     internal const string NoLongerProducing = "The project is no longer producing.";
+    internal const string Assembling = "assembling";
+    internal const string NoLongerAssembling = "The project is no longer assembling.";
 
     internal static string ResearchingNotice(string topic) => $"Researching {topic}...";
 
@@ -53,6 +59,11 @@ internal sealed class OperatorPipeline(
 
     internal static string MediaReadyNotice(string topic) =>
         $"Media ready for {topic}: review the scenes in Scout Desktop, Production.";
+
+    internal static string AssemblingNotice(string topic) => $"Assembling {topic}...";
+
+    internal static string AssembledNotice(string topic) =>
+        $"Video ready to review for {topic}: open Scout Desktop, YouTube operator.";
 
     internal static string FailedNotice(string topic, string error) =>
         $"The video project on {topic} stopped: {error}";
@@ -65,14 +76,22 @@ internal sealed class OperatorPipeline(
         ArgumentNullException.ThrowIfNull(queued);
         var id = queued.Project.Id;
         var topic = queued.Project.Topic;
-        var producing = queued.Project.Status == Producing;
-        await NotifyAsync(queued.OriginReference, producing ? ProducingNotice(topic) : ResearchingNotice(topic), ct)
-            .ConfigureAwait(false);
+        var status = queued.Project.Status;
+        var producing = status == Producing;
+        var assembling = status == Assembling;
+        await NotifyAsync(
+            queued.OriginReference,
+            assembling ? AssemblingNotice(topic) : producing ? ProducingNotice(topic) : ResearchingNotice(topic),
+            ct).ConfigureAwait(false);
 
         var finished = true;
         try
         {
-            if (producing)
+            if (assembling)
+            {
+                finished = await AssembleAsync(id, ct).ConfigureAwait(false);
+            }
+            else if (producing)
             {
                 finished = await ProduceAsync(id, ct).ConfigureAwait(false);
             }
@@ -88,10 +107,13 @@ internal sealed class OperatorPipeline(
             var left = false;
             try
             {
-                if (producing)
+                if (producing || assembling)
                 {
-                    left = await SaveProductionAsync(id, current => current with { Status = Failed, Error = reason }, ct)
-                        .ConfigureAwait(false) is null;
+                    left = await SaveStageAsync(
+                        id,
+                        status,
+                        current => assembling ? AssemblyStage.Failed(current, reason) : current with { Status = Failed, Error = reason },
+                        ct).ConfigureAwait(false) is null;
                 }
                 else
                 {
@@ -115,12 +137,14 @@ internal sealed class OperatorPipeline(
 
         if (!finished)
         {
-            logger.LogInformation("Video project {ProjectId} left production while it ran; the run stopped.", id);
+            logger.LogInformation("Video project {ProjectId} left {Status} while it ran; the run stopped.", id, status);
             return;
         }
 
-        await NotifyAsync(queued.OriginReference, producing ? MediaReadyNotice(topic) : ReadyNotice(topic), ct)
-            .ConfigureAwait(false);
+        await NotifyAsync(
+            queued.OriginReference,
+            assembling ? AssembledNotice(topic) : producing ? MediaReadyNotice(topic) : ReadyNotice(topic),
+            ct).ConfigureAwait(false);
     }
 
     private async Task WriteScriptAsync(string id, string topic, CancellationToken ct)
@@ -233,11 +257,19 @@ internal sealed class OperatorPipeline(
     /// Save a change to the project as the control plane holds it now, read immediately before; null, and nothing saved,
     /// when the project is no longer producing, read so or refused so by the control plane.
     /// </summary>
-    private async Task<OperatorProjectState?> SaveProductionAsync(
+    private Task<OperatorProjectState?> SaveProductionAsync(
         string id, Func<OperatorProjectState, OperatorProjectState> change, CancellationToken ct)
+        => SaveStageAsync(id, Producing, change, ct);
+
+    /// <summary>
+    /// Save a change to the project as the control plane holds it now, read immediately before; null, and nothing saved,
+    /// when the project is no longer in <paramref name="stage"/>, read so or refused so by the control plane.
+    /// </summary>
+    private async Task<OperatorProjectState?> SaveStageAsync(
+        string id, string stage, Func<OperatorProjectState, OperatorProjectState> change, CancellationToken ct)
     {
         var current = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
-        if (current.Status != Producing)
+        if (current.Status != stage)
         {
             return null;
         }
@@ -246,10 +278,45 @@ internal sealed class OperatorPipeline(
         {
             return await controlPlane.SaveProjectAsync(change(current), null, ct).ConfigureAwait(false);
         }
-        catch (InvalidOperationException ex) when (ex.Message == NoLongerProducing)
+        catch (InvalidOperationException ex) when (ex.Message == (stage == Assembling ? NoLongerAssembling : NoLongerProducing))
         {
             return null;
         }
+    }
+
+    private async Task<bool> AssembleAsync(string id, CancellationToken ct)
+    {
+        var tools = await assembly.ToolsAsync(ct).ConfigureAwait(false);
+        var directory = await controlPlane.GetMediaDirectoryAsync(id, ct).ConfigureAwait(false);
+        var project = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
+        if (project.Status != Assembling)
+        {
+            return false;
+        }
+
+        var mandate = await controlPlane.GetMandateAsync(ct).ConfigureAwait(false);
+        var render = await assembly.RenderAsync(tools, project, directory, ct).ConfigureAwait(false);
+        OperatorProjectState? saved;
+        try
+        {
+            saved = await SaveStageAsync(
+                id,
+                Assembling,
+                current => current with { Status = AssemblyStage.Assembled, Error = null, Package = AssemblyStage.Package(current, render, mandate) },
+                ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            AssemblyStage.Discard(directory);
+            throw;
+        }
+
+        if (saved is not null)
+        {
+            AssemblyStage.Prune(directory, render);
+        }
+
+        return saved is not null;
     }
 
     private static bool NeedsMedia(OperatorScene scene, string directory)
@@ -280,9 +347,12 @@ internal sealed class OperatorPipeline(
     private static OperatorProjectState WithScene(OperatorProjectState current, string sceneId, Func<OperatorScene, OperatorScene> change)
         => current with { Scenes = [.. current.Scenes.Select(s => s.Id == sceneId && !s.Locked ? change(s) : s)] };
 
-    /// <summary>Save the project as failed with <paramref name="error"/>, starting from the control plane's copy.</summary>
+    /// <summary>
+    /// Save the project as failed with <paramref name="error"/>, starting from the control plane's copy; an assembling
+    /// project's package fails with it, keeping the owner's fields.
+    /// </summary>
     public Task SaveFailedAsync(string id, string error, CancellationToken ct)
-        => SaveAsync(id, current => current with { Status = Failed, Error = error }, ct);
+        => SaveAsync(id, current => current.Status == Assembling ? AssemblyStage.Failed(current, error) : current with { Status = Failed, Error = error }, ct);
 
     private async Task SaveAsync(string id, Func<OperatorProjectState, OperatorProjectState> change, CancellationToken ct)
     {

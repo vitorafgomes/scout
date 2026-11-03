@@ -13,12 +13,12 @@ public static class OperatorServiceCollectionExtensions
     public const string DataFolderScope = "Scout's data folder";
 
     /// <summary>
-    /// Register the operator: the research, script, scene, narration, visual and pipeline stages, the background
-    /// worker, the readiness reporter, and the
-    /// <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
+    /// Register the operator: the research, script, scene, narration, visual, assembly and pipeline stages, the background
+    /// worker, the readiness reporter, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
     /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
     /// client and an origin notifier registered by the caller, and the kernel and media capabilities of
-    /// <c>AddScoutLlm</c>.
+    /// <c>AddScoutLlm</c>. The ffmpeg and font paths come from <see cref="OperatorMediaOptions"/>, which the
+    /// caller binds.
     /// </summary>
     public static IServiceCollection AddYouTubeOperator(this IServiceCollection services)
     {
@@ -46,6 +46,14 @@ public static class OperatorServiceCollectionExtensions
             "youtube",
             DataFolderScope,
             summaryArguments: ["topic"]);
+        services.TryAddSingleton<IProcessRunner, ProcessRunner>();
+        services.AddOptions<OperatorMediaOptions>();
+        services.AddSingleton<FfmpegToolset>();
+        services.AddSingleton<MediaProbe>();
+        services.AddSingleton<Assembler>();
+        services.AddSingleton<ShortsCutter>();
+        services.AddSingleton<ThumbnailMaker>();
+        services.AddSingleton<AssemblyStage>();
         return services;
     }
 }

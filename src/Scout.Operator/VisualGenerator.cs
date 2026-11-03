@@ -80,4 +80,44 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
         await MediaFiles.WriteAsync(directory, file, data, ct).ConfigureAwait(false);
         return new VisualResult(OperatorPipeline.Generated, file, null);
     }
+
+    /// <summary>
+    /// Make a picture for the thumbnail of a video titled <paramref name="title"/> and save it as
+    /// <paramref name="fileName"/>, counted against the same day's <see cref="PerDay"/> pictures; false, with nothing
+    /// saved, when there is no image service, the day's pictures are spent, or the service fails or returns no bytes,
+    /// which gives its place back.
+    /// </summary>
+    public async Task<bool> ThumbnailAsync(string title, string directory, string fileName, CancellationToken ct)
+    {
+        var images = kernel.Services.GetService<ITextToImageService>();
+        if (images is null || !_today.TryTake())
+        {
+            return false;
+        }
+
+        ReadOnlyMemory<byte>? bytes;
+        try
+        {
+            var made = await images.GetImageContentsAsync(new TextContent(ThumbnailPrompt(title)), media.ImageSettings, kernel: null, ct)
+                .ConfigureAwait(false);
+            bytes = made.Count > 0 ? made[0].Data : null;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            bytes = null;
+        }
+
+        if (bytes is not { IsEmpty: false } data)
+        {
+            _today.GiveBack();
+            return false;
+        }
+
+        await MediaFiles.WriteAsync(directory, fileName, data, ct).ConfigureAwait(false);
+        return true;
+    }
+
+    internal static string ThumbnailPrompt(string title) =>
+        $"A YouTube thumbnail picture for a video titled \"{title}\": one bold, simple subject, strong contrast, no text, " +
+        "no letters, no logos, no trademarks, no real person's likeness and no public figure.";
 }
