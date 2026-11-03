@@ -4,6 +4,7 @@ import {
   ControlPlaneNotImplementedError,
   ControlPlaneUnavailableError,
   readIpcError,
+  ScoutError,
   ControlPlaneWriteConfirmationError,
   type FeatureDto,
   type PendingActionDto,
@@ -440,6 +441,107 @@ describe('registerFeaturesHandlers', () => {
       ['youtube', false, false],
     ]);
     expect(onWriteGrantChanged.mock.calls.length).toBe(3);
+  });
+
+  it("a write grant runs main's own check for that feature first and reaches the control plane only after it; a refused check grants nothing and reaches the renderer with its reason", async () => {
+    const order: string[] = [];
+    let refuse = false;
+    const client = makeClient({
+      setWriteGrant: mock(async (id: string, granted: boolean) => {
+        order.push(`grant ${id} ${granted}`);
+        return youtubeDto;
+      }),
+    });
+    register(ipcMain, client, logger, {
+      prepareWriteGrant: async (id) => {
+        order.push(`prepare ${id}`);
+        if (refuse) {
+          throw new ScoutError(
+            'youtube/scopes-missing',
+            'Google did not grant youtube.force-ssl, so writes stay off.',
+          );
+        }
+      },
+    });
+    const grant = ipcMain.handlers.get(CHANNEL.featureWriteGrant)!;
+
+    await grant(NULL_EVENT, { id: 'youtube', granted: true, confirmWrites: true });
+    refuse = true;
+    const thrown = await rejection(
+      grant(NULL_EVENT, { id: 'youtube', granted: true, confirmWrites: true }),
+    );
+
+    expect(order).toEqual(['prepare youtube', 'grant youtube true', 'prepare youtube']);
+    expect(readIpcError(new Error((thrown as Error).message))).toEqual({
+      code: 'youtube/scopes-missing',
+      message: 'Google did not grant youtube.force-ssl, so writes stay off.',
+    });
+  });
+
+  it('enabling a feature with its writes confirmed runs the same check first, and a refused check enables nothing', async () => {
+    const client = makeClient();
+    register(ipcMain, client, logger, {
+      prepareWriteGrant: async () => {
+        throw new ScoutError('youtube/sign-in-cancelled', 'The Google sign-in was cancelled.');
+      },
+    });
+
+    const thrown = await rejection(
+      ipcMain.handlers.get(CHANNEL.featureEnable)!(NULL_EVENT, {
+        id: 'youtube',
+        confirmWrites: true,
+      }),
+    );
+
+    expect(readIpcError(new Error((thrown as Error).message)).code).toBe(
+      'youtube/sign-in-cancelled',
+    );
+    expect(client.enableFeature).not.toHaveBeenCalled();
+  });
+
+  it("revoking a write grant revokes it on the control plane first, then runs main's own revoke step, then tells main the grants changed; a revoke step that fails is logged and the revoked grant is still returned", async () => {
+    const order: string[] = [];
+    const { logger: recording, lines } = makeRecordingLogger();
+    let fail = false;
+    const client = makeClient({
+      setWriteGrant: mock(async (id: string, granted: boolean) => {
+        order.push(`grant ${id} ${granted}`);
+        return youtubeDto;
+      }),
+    });
+    register(ipcMain, client, recording, {
+      afterWriteRevoke: async (id) => {
+        order.push(`after ${id}`);
+        if (fail) throw new ScoutError('youtube/token-file-not-removed', 'still connected');
+      },
+      onWriteGrantChanged: () => order.push('changed'),
+    });
+    const grant = ipcMain.handlers.get(CHANNEL.featureWriteGrant)!;
+
+    await grant(NULL_EVENT, { id: 'youtube', granted: false, confirmWrites: false });
+    fail = true;
+    const returned = await grant(NULL_EVENT, {
+      id: 'youtube',
+      granted: false,
+      confirmWrites: false,
+    });
+
+    expect(order).toEqual([
+      'grant youtube false',
+      'after youtube',
+      'changed',
+      'grant youtube false',
+      'after youtube',
+      'changed',
+    ]);
+    expect(returned).toEqual(youtubeDto);
+    expect(
+      lines.some(
+        (l) =>
+          l.includes('features: revoke step failed') &&
+          l.includes('youtube/token-file-not-removed'),
+      ),
+    ).toBe(true);
   });
 
   it('a write grant for an unknown feature id is refused before reaching the control plane', async () => {

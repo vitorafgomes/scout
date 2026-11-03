@@ -174,6 +174,10 @@ public sealed class HostOperatorTurnTests
         public Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct) => throw new NotSupportedException();
 
         public Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct) => Task.CompletedTask;
+
+        public Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct) => Task.FromResult<OperatorAction?>(null);
+
+        public Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FinalTextSink : IResponseSink

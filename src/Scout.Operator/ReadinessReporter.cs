@@ -18,7 +18,8 @@ internal sealed class ReadinessReporter(
     IOptions<YouTubeOptions> youtube,
     TimeProvider time,
     ILogger<ReadinessReporter> logger,
-    FfmpegToolset ffmpeg) : BackgroundService
+    FfmpegToolset ffmpeg,
+    ScheduleNotes? schedule = null) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
@@ -56,6 +57,11 @@ internal sealed class ReadinessReporter(
 
         var assembly = await ffmpeg.ProbeAsync(ct).ConfigureAwait(false);
         notes.Add(assembly.Note);
+        if (schedule?.Missed is { } missed)
+        {
+            notes.Add(missed);
+        }
+
         return new OperatorReadiness(media.Speech, media.Images, media.Provider, assembly.Tools is not null, signedIn, notes);
     }
 

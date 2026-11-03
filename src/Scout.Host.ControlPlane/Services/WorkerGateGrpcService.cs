@@ -10,7 +10,9 @@ namespace Scout.Host.ControlPlane.Services;
 /// <summary>
 /// Thin gRPC adapter over <see cref="WriteGateService"/> and the worker side of
 /// <see cref="OperatorService"/>, reachable with the worker token only. A write that cannot be
-/// recorded answers <see cref="StatusCode.FailedPrecondition"/>.
+/// recorded answers <see cref="StatusCode.FailedPrecondition"/>; the next approved action answers an empty
+/// response when none is due or the owner has not granted YouTube, and carries its project's origin reference,
+/// like the next queued project, only when the project has one.
 /// </summary>
 public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
 {
@@ -124,4 +126,21 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.ReportReadinessAsync(OperatorMapping.ToDomain(request), context.CancellationToken)
                 .ConfigureAwait(false)));
+
+    public override async Task<NextApprovedActionResponse> NextApprovedAction(
+        NextApprovedActionRequest request,
+        ServerCallContext context)
+    {
+        var action = await _operator.NextApprovedActionAsync(context.CancellationToken).ConfigureAwait(false);
+        var response = new NextApprovedActionResponse();
+        if (action is not null)
+        {
+            response.Action = FeatureMapping.ToWire(action);
+            if (await _operator.OriginReferenceForWorkerAsync(action, context.CancellationToken).ConfigureAwait(false) is { } reference)
+            {
+                response.OriginReference = reference;
+            }
+        }
+        return response;
+    }
 }

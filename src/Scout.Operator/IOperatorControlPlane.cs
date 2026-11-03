@@ -35,7 +35,125 @@ public interface IOperatorControlPlane
 
     /// <summary>Tell the control plane what this worker can produce now.</summary>
     Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct);
+
+    /// <summary>
+    /// Claim the oldest YouTube action the owner approved that no write has recorded yet; null when none waits. A claim the
+    /// worker did not record within 30 minutes is handed out again.
+    /// </summary>
+    Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Record that the worker ran <paramref name="action"/>, <c>succeeded</c> or <c>failed: </c> and why, which consumes it. A
+    /// record the control plane already has returns normally. A grant the owner revoked after approving is a
+    /// <see cref="WriteRevokedException"/>, any other refusal the control plane words an
+    /// <see cref="InvalidOperationException"/>, and an unreachable control plane a <see cref="ControlPlaneUnavailableException"/>.
+    /// </summary>
+    Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct);
 }
+
+/// <summary>
+/// The control plane could not be reached, as opposed to a refusal it worded; the call can succeed later unchanged.
+/// </summary>
+public sealed class ControlPlaneUnavailableException : InvalidOperationException
+{
+    /// <summary>Build the exception with the sentence the owner reads.</summary>
+    public ControlPlaneUnavailableException(string message, Exception? inner = null)
+        : base(message, inner)
+    {
+    }
+}
+
+/// <summary>
+/// The control plane refused to record an action because the owner revoked the feature's writes after approving it; the
+/// control plane logged the write "after revoke" and consumed the action.
+/// </summary>
+public sealed class WriteRevokedException : InvalidOperationException
+{
+    /// <summary>Build the exception with the control plane's words.</summary>
+    public WriteRevokedException(string message, Exception? inner = null)
+        : base(message, inner)
+    {
+    }
+}
+
+/// <summary>
+/// An irreversible action the owner approved on the Review screen, as the control plane's <c>PendingAction</c> carries it:
+/// its catalog scope in <see cref="Action"/> (<c>videos.insert</c>, <c>videos.update</c>, <c>thumbnails.set</c>) and what it
+/// acts on in <see cref="Target"/>; <see cref="OriginReference"/> names the chat the project came from, null for a project
+/// the desktop started.
+/// </summary>
+public sealed record OperatorAction(string Id, string FeatureId, string Action, string Target, string Summary, string? OriginReference = null);
+
+/// <summary>
+/// A project's life on YouTube, as the control plane's <c>Publication</c> message carries it. The owner sets the privacy, the
+/// publish time, the made-for-kids and synthetic-media declarations, the proposal decisions and the experiment's start and
+/// arms; the worker sets the status, the video id, the upload time, the error, the snapshots, new proposals and the
+/// experiment's timing, metrics, winner and result, and sends everything else back exactly as read.
+/// </summary>
+public sealed record OperatorPublication(
+    string Status,
+    string? VideoId,
+    string PrivacyStatus,
+    string? PublishAt,
+    bool MadeForKids,
+    bool SyntheticMedia,
+    string? UploadedAt,
+    string? Error,
+    IReadOnlyList<OperatorSnapshot> Snapshots,
+    IReadOnlyList<OperatorProposal> Proposals,
+    OperatorExperiment? Experiment);
+
+/// <summary>
+/// A video's numbers over one window (<c>24h</c> or <c>7d</c>) as the Analytics API and the reach report returned them;
+/// impressions and their click-through rate are null when no reach report covered the window.
+/// </summary>
+public sealed record OperatorSnapshot(
+    string Window,
+    string TakenAt,
+    long Views,
+    double MinutesWatched,
+    double AverageViewDurationSeconds,
+    double AverageViewPercentage,
+    long SubscribersGained,
+    long SubscribersLost,
+    long Likes,
+    long Comments,
+    long Shares,
+    long? Impressions,
+    double? ImpressionsCtr,
+    IReadOnlyList<OperatorRetentionPoint> Retention);
+
+/// <summary>The share of the audience still watching at a share of the video's length.</summary>
+public sealed record OperatorRetentionPoint(double ElapsedRatio, double AudienceWatchRatio);
+
+/// <summary>
+/// A change the worker proposes (<c>title</c>, <c>thumbnail</c>, <c>topic</c> or <c>strategy</c>), always
+/// <c>proposed</c> when the worker makes it; the owner accepts or rejects it.
+/// </summary>
+public sealed record OperatorProposal(string Id, string Kind, string Text, string Reason, string Status, string? ThumbnailFile);
+
+/// <summary>A title or thumbnail test the owner started: its arms, its status, and the worker's winner and result.</summary>
+public sealed record OperatorExperiment(
+    string Id,
+    string Kind,
+    string Status,
+    IReadOnlyList<OperatorExperimentArm> Arms,
+    string? WinnerArmId,
+    string? Result);
+
+/// <summary>
+/// One arm of an experiment: the title, or the thumbnail's file name in the media directory, it puts live, when it went live
+/// and ended, and the impressions, clicks and average view percentage collected for its window.
+/// </summary>
+public sealed record OperatorExperimentArm(
+    string Id,
+    string Label,
+    string Value,
+    string? StartedAt,
+    string? EndedAt,
+    long Impressions,
+    long Clicks,
+    double AverageViewPercentage);
 
 /// <summary>The owner's brief for the channel, as the control plane's <c>Mandate</c> message carries it.</summary>
 public sealed record OperatorMandate(
@@ -68,6 +186,9 @@ public sealed record OperatorProjectState(
 
     /// <summary>The assembled video and its metadata, null until the worker assembles it.</summary>
     public OperatorPackage? Package { get; init; }
+
+    /// <summary>The video's publication on YouTube, null until the owner publishes the package.</summary>
+    public OperatorPublication? Publication { get; init; }
 }
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>

@@ -97,6 +97,7 @@ public sealed class OperatorGrpcTests
             ["NextQueuedProject"] = await Denied(() => gate.NextQueuedProjectAsync(new NextQueuedProjectRequest()).ResponseAsync),
             ["GetOperatorMediaDirectory"] = await Denied(() => gate.GetOperatorMediaDirectoryAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
             ["ReportReadiness"] = await Denied(() => gate.ReportReadinessAsync(new WireReadiness { Provider = "openai" }).ResponseAsync),
+            ["NextApprovedAction"] = await Denied(() => gate.NextApprovedActionAsync(new NextApprovedActionRequest()).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -441,7 +442,7 @@ public sealed class OperatorGrpcTests
     }
 
     [Fact]
-    public async Task The_Worker_Token_Is_Denied_The_Package_Rpcs_And_Changes_Nothing()
+    public async Task The_Worker_Token_Is_Denied_The_Package_And_Publication_Rpcs_And_Changes_Nothing()
     {
         await using var host = await ControlPlaneTestHost.StartAsync();
         var queued = await QueueAsync(host, "Why rivers meander");
@@ -455,6 +456,10 @@ public sealed class OperatorGrpcTests
             ["ConfirmMediaRights"] = await Denied(() => client.ConfirmMediaRightsAsync(id).ResponseAsync),
             ["EditPackageMetadata"] = await Denied(() => client.EditPackageMetadataAsync(new EditPackageMetadataRequest { ProjectId = queued.Id, Title = "Mine" }).ResponseAsync),
             ["ApprovePackage"] = await Denied(() => client.ApprovePackageAsync(id).ResponseAsync),
+            ["PublishPackage"] = await Denied(() => client.PublishPackageAsync(new PublishPackageRequest { ProjectId = queued.Id, PrivacyStatus = "public" }).ResponseAsync),
+            ["DecideProposal"] = await Denied(() => client.DecideProposalAsync(new DecideProposalRequest { ProjectId = queued.Id, ProposalId = "t1", Accept = true }).ResponseAsync),
+            ["StartExperiment"] = await Denied(() => client.StartExperimentAsync(new StartExperimentRequest { ProjectId = queued.Id }).ResponseAsync),
+            ["AdoptExperimentWinner"] = await Denied(() => client.AdoptExperimentWinnerAsync(id).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -464,7 +469,7 @@ public sealed class OperatorGrpcTests
         }
 
         var stored = (await host.Services.GetRequiredService<OperatorService>().ListProjectsAsync(0, CancellationToken.None)).ShouldHaveSingleItem();
-        (stored.Status, stored.Package).ShouldBe(("queued", (Scout.ControlPlane.Operator.VideoPackage?)null));
+        (stored.Status, stored.Package, stored.Publication).ShouldBe(("queued", (Scout.ControlPlane.Operator.VideoPackage?)null, (Scout.ControlPlane.Operator.Publication?)null));
     }
 
     [Fact]
@@ -574,5 +579,255 @@ public sealed class OperatorGrpcTests
         (back with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(full with { Shorts = [], Checks = [], Tags = [] });
         (back.Shorts.Single(), back.Checks.Single(), string.Join("|", back.Tags)).ShouldBe((full.Shorts[0], full.Checks[0], "rivers|geography"));
         (bareBack.VideoFile, bareBack.ThumbnailFile, bareBack.ApprovedAt, bareBack.Error).ShouldBe(((string?)null, (string?)null, (DateTimeOffset?)null, (string?)null));
+    }
+
+    private static async Task<Scout.ControlPlane.Operator.OperatorProject> ApprovedAsync(ControlPlaneTestHost host, string? originReference = null)
+    {
+        var approved = new Scout.ControlPlane.Operator.OperatorProject(
+            Guid.NewGuid().ToString("N"), "Why rivers meander", "approved", originReference is null ? "desktop" : "chat",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [], null, [], OriginReference: originReference)
+        {
+            Package = new Scout.ControlPlane.Operator.VideoPackage(
+                "approved", "video.mp4", [], null, [], true, DateTimeOffset.UtcNow, "Why rivers bend", "Meanders.", [], 6000, null, false),
+        };
+        await host.Services.GetRequiredService<JsonFileOperatorStore>()
+            .UpdateProjectsAsync(projects => { projects.Add(approved); return 0; }, CancellationToken.None);
+        return approved;
+    }
+
+    [Fact]
+    public async Task The_Owner_Publishes_Over_The_Wire_And_The_Worker_Claims_The_Approved_Upload()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var approved = await ApprovedAsync(host);
+        var at = DateTimeOffset.UtcNow.AddDays(1);
+        var request = new PublishPackageRequest
+        {
+            ProjectId = approved.Id,
+            PrivacyStatus = "private",
+            PublishAt = at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture),
+            MadeForKids = true,
+            SyntheticMedia = true,
+        };
+        var badTime = request.Clone();
+        badTime.PublishAt = "tomorrow";
+
+        var refused = await Denied(() => desktop.PublishPackageAsync(badTime).ResponseAsync);
+        var published = await desktop.PublishPackageAsync(request);
+        var claimed = await gate.NextApprovedActionAsync(new NextApprovedActionRequest());
+        var waiting = await gate.NextApprovedActionAsync(new NextApprovedActionRequest());
+
+        (refused.StatusCode, refused.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "'tomorrow' is not a time Scout accepts."));
+        (published.Publication.Status, published.Publication.PrivacyStatus, published.Publication.HasVideoId, published.Publication.MadeForKids, published.Publication.SyntheticMedia)
+            .ShouldBe(("publish_approved", "private", false, true, true));
+        DateTimeOffset.Parse(published.Publication.PublishAt, System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldBe(at, TimeSpan.FromMilliseconds(1));
+        (claimed.Action.FeatureId, claimed.Action.Action, claimed.Action.Target, claimed.Action.Status)
+            .ShouldBe(("youtube", "videos.insert", approved.Id, "executing"));
+        waiting.Action.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_Worker_Saves_A_Publication_And_An_Experiment_Over_The_Wire_In_Its_Own_Time_Format()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel)
+            .SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var approved = await ApprovedAsync(host);
+        var id = new GetProjectRequest { Id = approved.Id };
+        await desktop.PublishPackageAsync(new PublishPackageRequest { ProjectId = approved.Id, PrivacyStatus = "public" });
+
+        var uploaded = await gate.GetOperatorProjectAsync(id);
+        uploaded.Publication.Status = "published";
+        uploaded.Publication.VideoId = "vid-1";
+        uploaded.Publication.UploadedAt = "2026-11-03T10:30:00Z";
+        uploaded.Publication.Proposals.Add(new Proposal { Id = "t1", Kind = "title", Text = "Rivers bend", Reason = "Shorter", Status = "proposed" });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = uploaded });
+        await desktop.DecideProposalAsync(new DecideProposalRequest { ProjectId = approved.Id, ProposalId = "t1", Accept = true });
+        await desktop.StartExperimentAsync(new StartExperimentRequest { ProjectId = approved.Id });
+        var measuring = await gate.GetOperatorProjectAsync(id);
+        measuring.Publication.Experiment.Arms[0].StartedAt = "2026-11-03T11:00:00Z";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = measuring });
+        var echoed = await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = await gate.GetOperatorProjectAsync(id) });
+
+        (echoed.Status, echoed.Publication.Status, echoed.Publication.VideoId, echoed.Publication.UploadedAt)
+            .ShouldBe(("approved", "published", "vid-1", "2026-11-03T10:30:00.0000000+00:00"));
+        (echoed.Publication.Experiment.Status, echoed.Publication.Experiment.Arms[0].StartedAt)
+            .ShouldBe(("running", "2026-11-03T11:00:00.0000000+00:00"));
+    }
+
+    [Fact]
+    public async Task An_Approved_Action_Carries_Its_Projects_Origin_Reference_To_The_Worker_Only_When_It_Has_One()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel)
+            .SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var fromChat = await ApprovedAsync(host, "discord:guild-1:channel-2:message-3");
+        var fromDesktop = await ApprovedAsync(host);
+        await desktop.PublishPackageAsync(new PublishPackageRequest { ProjectId = fromChat.Id, PrivacyStatus = "public" });
+        await desktop.PublishPackageAsync(new PublishPackageRequest { ProjectId = fromDesktop.Id, PrivacyStatus = "public" });
+
+        var chat = await gate.NextApprovedActionAsync(new NextApprovedActionRequest());
+        var owner = await gate.NextApprovedActionAsync(new NextApprovedActionRequest());
+        var published = await desktop.GetProjectAsync(new GetProjectRequest { Id = fromChat.Id });
+
+        (chat.Action.Target, chat.HasOriginReference, chat.OriginReference).ShouldBe((fromChat.Id, true, "discord:guild-1:channel-2:message-3"));
+        (owner.Action.Target, owner.HasOriginReference).ShouldBe((fromDesktop.Id, false));
+        published.ToString().ShouldNotContain("message-3");
+    }
+
+    [Fact]
+    public async Task Without_The_Grant_The_Worker_Gets_No_Approved_Action_And_No_Error()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var workerChannel = host.CreateWorkerChannel();
+        var approved = await ApprovedAsync(host);
+        await host.Services.GetRequiredService<Scout.ControlPlane.Actions.IActionQueue>()
+            .EnqueueApprovedAsync("youtube", [("videos.insert", approved.Id, "Upload")], CancellationToken.None);
+
+        var response = await new WorkerGate.WorkerGateClient(workerChannel).NextApprovedActionAsync(new NextApprovedActionRequest());
+
+        response.Action.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_Publication_Maps_To_The_Wire_And_Back_Field_For_Field_Without_The_Arm_Hours()
+    {
+        var at = new DateTimeOffset(2026, 11, 3, 10, 30, 0, TimeSpan.Zero);
+        var publication = new Scout.ControlPlane.Operator.Publication(
+            "published",
+            "vid-1",
+            "private",
+            at.AddDays(1),
+            true,
+            true,
+            at,
+            "Thumbnail skipped.",
+            [new Scout.ControlPlane.Operator.Snapshot("24h", at, 100, 12.5, 31, 42.5, 3, 1, 9, 4, 2, 1500, 0.052, [new Scout.ControlPlane.Operator.RetentionPoint(0.5, 0.61)])],
+            [new Scout.ControlPlane.Operator.Proposal("th1", "thumbnail", "Blue river", "Brighter", "accepted", "river.png")],
+            new Scout.ControlPlane.Operator.Experiment(
+                "e1",
+                "thumbnail",
+                "concluded",
+                [new Scout.ControlPlane.Operator.ExperimentArm("control", "Control", "thumb.png", at, at.AddDays(2), 2000, 80, 41.5)],
+                "control",
+                "Control wins.",
+                72));
+        var bare = publication with { VideoId = null, PublishAt = null, UploadedAt = null, Error = null, Snapshots = [], Proposals = [], Experiment = null };
+        Scout.ControlPlane.Operator.OperatorProject Project(Scout.ControlPlane.Operator.Publication? value) =>
+            new("p1", "Why rivers meander", "approved", "desktop", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, [], null, []) { Publication = value };
+
+        var wire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(publication)).Publication;
+        var bareWire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(bare)).Publication;
+        var back = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(publication))).Publication.ShouldNotBeNull();
+        var bareBack = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(Project(bare))).Publication.ShouldNotBeNull();
+
+        (wire.Status, wire.VideoId, wire.PrivacyStatus, wire.PublishAt, wire.MadeForKids, wire.SyntheticMedia, wire.UploadedAt, wire.Error)
+            .ShouldBe(("published", "vid-1", "private", "2026-11-04T10:30:00.0000000+00:00", true, true, "2026-11-03T10:30:00.0000000+00:00", "Thumbnail skipped."));
+        var snapshot = wire.Snapshots.Single();
+        (snapshot.Window, snapshot.TakenAt, snapshot.Views, snapshot.MinutesWatched, snapshot.AverageViewDurationSeconds, snapshot.AverageViewPercentage)
+            .ShouldBe(("24h", "2026-11-03T10:30:00.0000000+00:00", 100L, 12.5, 31.0, 42.5));
+        (snapshot.SubscribersGained, snapshot.SubscribersLost, snapshot.Likes, snapshot.Comments, snapshot.Shares, snapshot.Impressions, snapshot.ImpressionsCtr)
+            .ShouldBe((3L, 1L, 9L, 4L, 2L, 1500L, 0.052));
+        snapshot.Retention.Select(r => (r.ElapsedRatio, r.AudienceWatchRatio)).ShouldBe([(0.5, 0.61)]);
+        wire.Proposals.Select(p => (p.Id, p.Kind, p.Text, p.Reason, p.Status, p.ThumbnailFile)).ShouldBe([("th1", "thumbnail", "Blue river", "Brighter", "accepted", "river.png")]);
+        (wire.Experiment.Id, wire.Experiment.Kind, wire.Experiment.Status, wire.Experiment.WinnerArmId, wire.Experiment.Result)
+            .ShouldBe(("e1", "thumbnail", "concluded", "control", "Control wins."));
+        wire.Experiment.Arms.Select(a => (a.Id, a.Label, a.Value, a.StartedAt, a.EndedAt, a.Impressions, a.Clicks, a.AverageViewPercentage))
+            .ShouldBe([("control", "Control", "thumb.png", "2026-11-03T10:30:00.0000000+00:00", "2026-11-05T10:30:00.0000000+00:00", 2000L, 80L, 41.5)]);
+        (bareWire.HasVideoId, bareWire.HasPublishAt, bareWire.HasUploadedAt, bareWire.HasError, bareWire.Experiment).ShouldBe((false, false, false, false, (Experiment?)null));
+        System.Text.Json.JsonSerializer.Serialize(back).ShouldBe(System.Text.Json.JsonSerializer.Serialize(publication with { Experiment = publication.Experiment! with { ArmHours = 48 } }));
+        System.Text.Json.JsonSerializer.Serialize(bareBack).ShouldBe(System.Text.Json.JsonSerializer.Serialize(bare));
+    }
+
+    [Fact]
+    public async Task Deleting_The_YouTube_Credentials_Purges_What_Scout_Read_From_YouTube()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        var approved = await ApprovedAsync(host);
+        var store = host.Services.GetRequiredService<JsonFileOperatorStore>();
+        await store.UpdateProjectsAsync(
+            projects =>
+            {
+                projects[0] = projects[0] with
+                {
+                    Candidates = [new Scout.ControlPlane.Operator.TopicCandidate("Rivers", "Fits", 0.9)],
+                    Claims = [new Scout.ControlPlane.Operator.Claim("c1", "Rivers meander.", "low", ["https://example.org"], "supported")],
+                };
+                return 0;
+            },
+            CancellationToken.None);
+
+        await features.DeleteCredentialsAsync(new DeleteCredentialsRequest { Id = "youtube" });
+
+        var stored = (await store.ReadProjectsAsync(CancellationToken.None)).Single();
+        (stored.Id, stored.Candidates.Count, stored.Claims.Single().SourceUrls.Count, stored.Claims.Single().Text, stored.Package!.VideoFile)
+            .ShouldBe((approved.Id, 0, 0, "Rivers meander.", "video.mp4"));
+    }
+
+    [Fact]
+    public async Task A_Purge_That_Cannot_Write_Fails_The_Disconnect_And_Keeps_The_YouTube_Grant()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        Directory.CreateDirectory(host.Services.GetRequiredService<JsonFileOperatorStore>().ProjectsPath);
+
+        var failed = await Denied(() => features.DeleteCredentialsAsync(new DeleteCredentialsRequest { Id = "youtube" }).ResponseAsync);
+
+        failed.StatusCode.ShouldBe(StatusCode.Unknown);
+        (await features.ListFeaturesAsync(new ListFeaturesRequest())).Features.Single(f => f.Id == "youtube").Granted.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("revoke")]
+    [InlineData("disconnect")]
+    [InlineData("disable")]
+    public async Task Revoking_Or_Disconnecting_YouTube_Rejects_Its_Approved_Actions_Over_The_Wire(string how)
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var approved = await ApprovedAsync(host);
+        await new GrpcOperator.OperatorClient(desktopChannel)
+            .PublishPackageAsync(new PublishPackageRequest { ProjectId = approved.Id, PrivacyStatus = "public" });
+
+        if (how == "revoke")
+        {
+            await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = false });
+        }
+        else if (how == "disconnect")
+        {
+            await features.DeleteCredentialsAsync(new DeleteCredentialsRequest { Id = "youtube" });
+        }
+        else
+        {
+            await features.DisableAsync(new DisableRequest { Id = "youtube" });
+        }
+
+        var writes = (await features.ListWritesAsync(new ListWritesRequest())).Entries;
+        var queue = host.Services.GetRequiredService<Scout.ControlPlane.Actions.IActionQueue>();
+        var upload = (await queue.FindAsync(writes.First(e => e.Action == "videos.insert").ActionId, CancellationToken.None)).ShouldNotBeNull();
+        (upload.Status, upload.Reason).ShouldBe((Scout.ControlPlane.Actions.PendingActionStatus.Rejected, "The owner revoked YouTube writes before this action ran."));
+        writes.Count(e => e.Outcome == "rejected: The owner revoked YouTube writes before this action ran.").ShouldBe(1);
+        (await features.ListPendingActionsAsync(new ListPendingActionsRequest())).Actions.ShouldBeEmpty();
     }
 }

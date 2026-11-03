@@ -40,6 +40,7 @@ const notConnected: YouTubeStatus = {
   error: null,
   clientConfigPath: CLIENT_FILE,
   source: 'file',
+  scopes: [],
 };
 
 const pending: YouTubeStatus = { ...notConnected, pending: true };
@@ -388,6 +389,59 @@ describe('YouTube card', () => {
       await vi.advanceTimersByTimeAsync(30_000);
 
       expect(bridge.youtubeStatus).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('granted scopes', () => {
+    const read = [
+      'https://www.googleapis.com/auth/youtube.readonly',
+      'https://www.googleapis.com/auth/yt-analytics.readonly',
+    ];
+    const write = [
+      'https://www.googleapis.com/auth/youtube.upload',
+      'https://www.googleapis.com/auth/youtube.force-ssl',
+    ];
+
+    it('a Google sign-in shows the scopes Google granted by their short names; an API key shows none', async () => {
+      const fixture = await render(makeBridge({ ...signedIn, scopes: read }));
+      const shown = text(fixture, 'youtube-scopes');
+      TestBed.resetTestingModule();
+      const keyed = await render(makeBridge(withKey));
+
+      expect(shown).toBe('Google access: youtube.readonly, yt-analytics.readonly');
+      expect(el(keyed, 'youtube-scopes')).toBeNull();
+    });
+
+    it('the card reads its status again when main announces a feature change, so the write scopes show once writes are allowed', async () => {
+      const bridge = makeBridge({ ...signedIn, scopes: read });
+      const fixture = await render(bridge);
+
+      bridge.setStatus({ ...signedIn, scopes: [...read, ...write] });
+      for (const [listener] of bridge.onFeaturesChanged.mock.calls as unknown as [() => void][]) {
+        listener();
+      }
+      await settle(fixture);
+
+      expect(text(fixture, 'youtube-scopes')).toBe(
+        'Google access: youtube.readonly, yt-analytics.readonly, youtube.upload, youtube.force-ssl',
+      );
+    });
+
+    it('a sign-in waiting for the browser while still connected, as when writes are allowed or revoked, shows Waiting for the browser with Cancel', async () => {
+      const bridge = makeBridge({ ...signedIn, scopes: read, pending: true });
+      const fixture = await render(bridge);
+      const waiting = [
+        text(fixture, 'youtube-pending-connected'),
+        text(fixture, 'youtube-connected'),
+      ];
+
+      bridge.setStatus({ ...signedIn, scopes: read });
+      el(fixture, 'youtube-cancel-connected')!.click();
+      await settle(fixture);
+
+      expect(waiting).toEqual(['Waiting for the browser...', 'Connected to Scout Test Channel']);
+      expect(bridge.youtubeCancelSignIn).toHaveBeenCalledTimes(1);
+      expect(el(fixture, 'youtube-pending-connected')).toBeNull();
     });
   });
 });

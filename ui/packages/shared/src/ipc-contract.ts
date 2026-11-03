@@ -75,6 +75,10 @@ export const CHANNEL = {
   operatorMediaRights: 'scout:operator.mediaRights',
   operatorPackageMetadata: 'scout:operator.packageMetadata',
   operatorPackageApproval: 'scout:operator.packageApproval',
+  operatorPublication: 'scout:operator.publication',
+  operatorProposalDecision: 'scout:operator.proposalDecision',
+  operatorExperiment: 'scout:operator.experiment',
+  operatorExperimentAdoption: 'scout:operator.experimentAdoption',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -622,6 +626,93 @@ export interface OperatorProjectDto {
   readonly scenes: readonly SceneDto[];
   /** The assembled video and its upload metadata; null until the owner first asks for assembly. */
   readonly package: VideoPackageDto | null;
+  readonly publication: PublicationDto | null;
+}
+
+export type PrivacyStatus = 'public' | 'private' | 'unlisted';
+
+export interface PublicationDto {
+  readonly status: string;
+  readonly videoId: string | null;
+  readonly privacyStatus: string;
+  readonly publishAt: string | null;
+  readonly madeForKids: boolean;
+  readonly syntheticMedia: boolean;
+  readonly uploadedAt: string | null;
+  readonly error: string | null;
+  readonly snapshots: readonly SnapshotDto[];
+  readonly proposals: readonly ProposalDto[];
+  readonly experiment: ExperimentDto | null;
+}
+
+export interface SnapshotDto {
+  readonly window: string;
+  readonly takenAt: string;
+  readonly views: number;
+  readonly minutesWatched: number;
+  readonly averageViewDurationSeconds: number;
+  readonly averageViewPercentage: number;
+  readonly subscribersGained: number;
+  readonly subscribersLost: number;
+  readonly likes: number;
+  readonly comments: number;
+  readonly shares: number;
+  readonly impressions: number | null;
+  readonly impressionsCtr: number | null;
+  readonly retention: readonly RetentionPointDto[];
+}
+
+export interface RetentionPointDto {
+  readonly elapsedRatio: number;
+  readonly audienceWatchRatio: number;
+}
+
+export interface ProposalDto {
+  readonly id: string;
+  readonly kind: string;
+  readonly text: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly thumbnailFile: string | null;
+}
+
+export interface ExperimentDto {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly arms: readonly ExperimentArmDto[];
+  readonly winnerArmId: string | null;
+  readonly result: string | null;
+}
+
+export interface ExperimentArmDto {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  readonly startedAt: string | null;
+  readonly endedAt: string | null;
+  readonly impressions: number;
+  readonly clicks: number;
+  readonly averageViewPercentage: number;
+}
+
+export interface PublishPackageRequest {
+  readonly projectId: string;
+  readonly privacyStatus: PrivacyStatus;
+  readonly publishAt: string | null;
+  readonly madeForKids: boolean;
+  readonly syntheticMedia: boolean;
+}
+
+export interface ProposalDecisionRequest {
+  readonly projectId: string;
+  readonly proposalId: string;
+  readonly accept: boolean;
+}
+
+export interface ExperimentStartRequest {
+  readonly projectId: string;
+  readonly armHours: number;
 }
 
 /**
@@ -797,6 +888,7 @@ export interface YouTubeStatus {
   readonly error: string | null;
   readonly clientConfigPath: string;
   readonly source: 'env' | 'file' | 'bundled' | 'embedded' | null;
+  readonly scopes: readonly string[];
 }
 
 /** A YouTube Data API key the owner pastes; travels renderer to main once and is never sent back. */
@@ -1049,6 +1141,10 @@ export interface ScoutBridge {
   operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto>;
   operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorPublishPackage(req: PublishPackageRequest): Promise<OperatorProjectDto>;
+  operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto>;
+  operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto>;
+  operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

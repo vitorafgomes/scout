@@ -18,6 +18,9 @@ public sealed class OperatorMediaOptions
 
     /// <summary>The font file captions and text cards are drawn with.</summary>
     public string FontPath { get; set; } = string.Empty;
+
+    /// <summary>The YouTube category an upload is filed under; <c>22</c>, People &amp; Blogs, unless configured.</summary>
+    public string CategoryId { get; set; } = "22";
 }
 
 /// <summary>The program, the font and the encoders an assembly uses.</summary>

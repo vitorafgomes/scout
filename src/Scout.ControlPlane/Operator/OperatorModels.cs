@@ -40,6 +40,9 @@ public sealed record OperatorProject(
 
     /// <summary>The assembled video and its metadata, null until the owner first asks for assembly.</summary>
     public VideoPackage? Package { get; init; }
+
+    /// <summary>The project's life on YouTube, null until the owner publishes the approved package.</summary>
+    public Publication? Publication { get; init; }
 }
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
@@ -129,3 +132,69 @@ public sealed record Readiness(
     bool YouTubeSignedIn,
     IReadOnlyList<string> Notes,
     DateTimeOffset? ReportedAt = null);
+
+/// <summary>
+/// A project's life on YouTube. The owner sets the privacy, the publish time, the made-for-kids and synthetic-media
+/// declarations, the proposal decisions and the experiment's start and arms; the worker sets the status after
+/// <c>publish_approved</c>, the video id once, the upload time, the error, the snapshots, new proposals and the
+/// running experiment's timing, metrics, winner and result.
+/// </summary>
+public sealed record Publication(
+    string Status,
+    string? VideoId,
+    string PrivacyStatus,
+    DateTimeOffset? PublishAt,
+    bool MadeForKids,
+    bool SyntheticMedia,
+    DateTimeOffset? UploadedAt,
+    string? Error,
+    IReadOnlyList<Snapshot> Snapshots,
+    IReadOnlyList<Proposal> Proposals,
+    Experiment? Experiment);
+
+/// <summary>A video's numbers over one window; impressions and their click-through rate are null without a reach report.</summary>
+public sealed record Snapshot(
+    string Window,
+    DateTimeOffset TakenAt,
+    long Views,
+    double MinutesWatched,
+    double AverageViewDurationSeconds,
+    double AverageViewPercentage,
+    long SubscribersGained,
+    long SubscribersLost,
+    long Likes,
+    long Comments,
+    long Shares,
+    long? Impressions,
+    double? ImpressionsCtr,
+    IReadOnlyList<RetentionPoint> Retention);
+
+/// <summary>The share of the audience still watching at a share of the video's length.</summary>
+public sealed record RetentionPoint(double ElapsedRatio, double AudienceWatchRatio);
+
+/// <summary>A change the worker proposes, <c>proposed</c> until the owner accepts or rejects it.</summary>
+public sealed record Proposal(string Id, string Kind, string Text, string Reason, string Status, string? ThumbnailFile);
+
+/// <summary>
+/// A title or thumbnail test the owner started. <c>ArmHours</c> is how long each arm stays live; only the control
+/// plane keeps it.
+/// </summary>
+public sealed record Experiment(
+    string Id,
+    string Kind,
+    string Status,
+    IReadOnlyList<ExperimentArm> Arms,
+    string? WinnerArmId,
+    string? Result,
+    int ArmHours = 48);
+
+/// <summary>One arm of an experiment: the title, or the thumbnail file name, it puts live, its window and its numbers.</summary>
+public sealed record ExperimentArm(
+    string Id,
+    string Label,
+    string Value,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? EndedAt,
+    long Impressions,
+    long Clicks,
+    double AverageViewPercentage);

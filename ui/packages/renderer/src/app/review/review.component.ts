@@ -54,32 +54,36 @@ const WRITES_SHOWN = 50;
                   >
                 </div>
                 <p class="summary">{{ a.summary }}</p>
-                <div class="decide">
-                  <input
-                    #reason
-                    type="text"
-                    placeholder="Reason (optional)"
-                    [attr.data-test]="'reason-' + a.id"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    [attr.data-test]="'approve-' + a.id"
-                    [disabled]="deciding() === a.id"
-                    (click)="decide(a, 'approve', reason)"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    [attr.data-test]="'reject-' + a.id"
-                    [disabled]="deciding() === a.id"
-                    (click)="decide(a, 'reject', reason)"
-                  >
-                    Reject
-                  </button>
-                </div>
+                @if (a.status === 'executing') {
+                  <span class="badge" [attr.data-test]="'executing-' + a.id">Executing</span>
+                } @else {
+                  <div class="decide">
+                    <input
+                      #reason
+                      type="text"
+                      placeholder="Reason (optional)"
+                      [attr.data-test]="'reason-' + a.id"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      [attr.data-test]="'approve-' + a.id"
+                      [disabled]="deciding() === a.id"
+                      (click)="decide(a, 'approve', reason)"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'reject-' + a.id"
+                      [disabled]="deciding() === a.id"
+                      (click)="decide(a, 'reject', reason)"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                }
               </li>
             }
           </ul>
@@ -182,6 +186,14 @@ const WRITES_SHOWN = 50;
         flex-direction: column;
         gap: 8px;
         font-size: 13px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #1e3a8a;
+        color: #bfdbfe;
       }
       .summary {
         margin: 0;

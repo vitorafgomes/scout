@@ -90,6 +90,7 @@ internal static class FeatureMapping
                 PendingActionStatus.Approved => "approved",
                 PendingActionStatus.Rejected => "rejected",
                 PendingActionStatus.Executed => "executed",
+                PendingActionStatus.Executing => "executing",
                 _ => throw new ArgumentOutOfRangeException(nameof(action), action.Status, null),
             },
         };

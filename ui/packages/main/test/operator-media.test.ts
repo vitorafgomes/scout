@@ -120,6 +120,22 @@ describe('the scout-media protocol', () => {
     expect(escaped.status).toBe(404);
   });
 
+  it('serves a proposed thumbnail named thumbnail-proposal-<id>.png as image/png from the media directory', async () => {
+    const { media } = projectWithMedia();
+    writeFileSync(path.join(media, 'thumbnail-proposal-pr_2-a.png'), PNG);
+
+    const proposal = await fetchMedia(
+      `${MEDIA_SCHEME}://p1/thumbnail-proposal-pr_2-a.png?v=2026-11-04T09%3A00%3A00Z`,
+      async () => media,
+    );
+
+    expect([proposal.status, proposal.type, proposal.body.equals(PNG)]).toEqual([
+      200,
+      'image/png',
+      true,
+    ]);
+  });
+
   it('streams the whole file without a Range header, saying its length and that it accepts byte ranges', async () => {
     const { media } = projectWithMedia();
     const handler = createMediaProtocolHandler(async () => media);

@@ -128,6 +128,21 @@ describe('ReviewComponent', () => {
     expect(text(fixture, 'pending-empty')).toContain('Nothing is waiting.');
   });
 
+  it('an action the worker is executing shows an Executing badge and can no longer be approved or rejected', async () => {
+    const { bridge } = makeBridge({
+      actionsList: vi.fn(async () => ({
+        actions: [upload, { ...upload, id: 'act-2', status: 'executing' }],
+      })),
+    });
+    const fixture = await mount(bridge);
+    const q = (id: string) => fixture.nativeElement.querySelector(`[data-test="${id}"]`);
+
+    expect(text(fixture, 'executing-act-2')).toBe('Executing');
+    expect([q('approve-act-2'), q('reject-act-2')]).toEqual([null, null]);
+    expect(q('executing-act-1')).toBeNull();
+    expect([q('approve-act-1'), q('reject-act-1')].every((b) => b !== null)).toBe(true);
+  });
+
   it('Reject sends the reason', async () => {
     const { bridge } = makeBridge({ actionsList: vi.fn(async () => ({ actions: [upload] })) });
     const fixture = await mount(bridge);

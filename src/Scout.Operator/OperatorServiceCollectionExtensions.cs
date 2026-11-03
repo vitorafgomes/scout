@@ -35,6 +35,7 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton(Channel.CreateUnbounded<QueuedProject>());
         services.AddHostedService<OperatorWorker>();
         services.AddHostedService<ReadinessReporter>();
+        services.TryAddSingleton<ScheduleNotes>();
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new YouTubeOperatorPlugin(
                 sp.GetRequiredService<IOperatorControlPlane>(),
@@ -54,6 +55,31 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton<ShortsCutter>();
         services.AddSingleton<ThumbnailMaker>();
         services.AddSingleton<AssemblyStage>();
+        return services;
+    }
+
+    /// <summary>
+    /// Register what publishes and learns from the owner's videos: the executor of the actions the owner approved, and the
+    /// scheduler of the analytics, experiment, proposal and published-check jobs. Needs <see cref="AddYouTubeOperator"/>, an
+    /// <see cref="Scout.Llm.Abstractions.IWriteGate"/>, and the write, Analytics and Reporting clients the YouTube plugin
+    /// registers only with the owner's sign-in.
+    /// </summary>
+    public static IServiceCollection AddYouTubePublishing(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddHostedService<ActionExecutor>();
+        services.AddSingleton<PublishedCheck>();
+        services.AddSingleton<ReachReports>();
+        services.AddSingleton<ExperimentRunner>();
+        services.AddSingleton<LearningLoop>();
+        services.AddSingleton(sp => ScheduledJob.Daily("generation", 6, true, sp.GetRequiredService<LearningLoop>().ProposeNextTopicAsync));
+        services.AddSingleton(sp => ScheduledJob.Weekly("strategy review", DayOfWeek.Sunday, 8, true, sp.GetRequiredService<LearningLoop>().ReviewWeekAsync));
+        services.AddSingleton(sp => ScheduledJob.Daily("analytics", 9, true, sp.GetRequiredService<LearningLoop>().SnapshotAsync));
+        services.AddSingleton(sp => ScheduledJob.Daily("optimisation", 22, true, sp.GetRequiredService<LearningLoop>().ProposeAsync));
+        services.AddSingleton(sp => ScheduledJob.Every("experiments", TimeSpan.FromHours(4), true, sp.GetRequiredService<ExperimentRunner>().RunAsync));
+        services.AddSingleton(sp => ScheduledJob.Every("published check", PublishedCheck.Every, true, sp.GetRequiredService<PublishedCheck>().RunAsync));
+        services.AddHostedService<OperatorScheduler>();
         return services;
     }
 }

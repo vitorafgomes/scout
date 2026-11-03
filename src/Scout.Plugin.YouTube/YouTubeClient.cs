@@ -122,7 +122,7 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
         }
     }
 
-    private static async Task<YouTubeApiException> ToApiExceptionAsync(
+    internal static async Task<YouTubeApiException> ToApiExceptionAsync(
         HttpResponseMessage response, bool mine, CancellationToken ct)
     {
         var status = response.StatusCode;
@@ -134,11 +134,11 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
         switch (status)
         {
             case HttpStatusCode.Unauthorized:
-                return new YouTubeApiException(SignInAgainMessage, status);
+                return new YouTubeApiException(SignInAgainMessage, status) { Retryable = true };
             case HttpStatusCode.Forbidden:
                 var forbiddenReason = await ReadReasonAsync(response, ct).ConfigureAwait(false);
                 return forbiddenReason is "quotaExceeded" or "dailyLimitExceeded"
-                    ? new YouTubeApiException(QuotaMessage, status)
+                    ? new YouTubeApiException(QuotaMessage, status) { Retryable = true }
                     : new YouTubeApiException(ForbiddenMessage, status);
             case HttpStatusCode.NotFound:
                 return new YouTubeApiException(NotFoundMessage, status);
@@ -149,12 +149,12 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
                     status);
             default:
                 return (int)status >= 500
-                    ? new YouTubeApiException(UnavailableMessage, status)
-                    : new YouTubeApiException($"YouTube request failed ({(int)status}).", status);
+                    ? new YouTubeApiException(UnavailableMessage, status) { Retryable = true }
+                    : new YouTubeApiException($"YouTube request failed ({(int)status}).", status) { Retryable = status == HttpStatusCode.TooManyRequests };
         }
     }
 
-    private static async Task<string?> ReadReasonAsync(HttpResponseMessage response, CancellationToken ct)
+    internal static async Task<string?> ReadReasonAsync(HttpResponseMessage response, CancellationToken ct)
     {
         try
         {

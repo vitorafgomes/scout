@@ -25,6 +25,20 @@ import {
 
 const SCOPES =
   'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly';
+const READONLY = 'https://www.googleapis.com/auth/youtube.readonly';
+const ANALYTICS = 'https://www.googleapis.com/auth/yt-analytics.readonly';
+const UPLOAD = 'https://www.googleapis.com/auth/youtube.upload';
+const FORCE_SSL = 'https://www.googleapis.com/auth/youtube.force-ssl';
+
+function grantedTokens(scope: string): Record<string, unknown> {
+  return {
+    access_token: 'ya29.write-access',
+    expires_in: 3599,
+    refresh_token: '1//refresh-write',
+    scope,
+    token_type: 'Bearer',
+  };
+}
 
 async function rejection(promise: Promise<unknown>): Promise<ScoutError> {
   try {
@@ -102,6 +116,7 @@ describe('Google sign-in through the browser', () => {
       expiresAt: fake.clock.now + ONE_HOUR_MS,
       channelId: 'UCscoutTestChannel',
       channelTitle: 'Scout Test Channel',
+      scopes: [READONLY, ANALYTICS],
     });
     expect(fake.files.get(TOKEN_FILE)?.mode).toBe(0o600);
     expect(tokenFile(fake)).toEqual({
@@ -123,6 +138,7 @@ describe('Google sign-in through the browser', () => {
       error: null,
       clientConfigPath: CLIENT_FILE,
       source: 'file',
+      scopes: [READONLY, ANALYTICS],
     });
     expect(await fake.auth.workerEnv()).toEqual({ SCOUT__PLUGINS__YOUTUBE__TOKENFILE: TOKEN_FILE });
     expect(fake.connectionChanges).toBe(1);
@@ -400,6 +416,169 @@ describe('Google sign-in through the browser', () => {
     expect(status.error).toBeNull();
     expect(await eventually(() => portIsFree(port))).toBe(true);
     expect(tokenPosts(fake)).toHaveLength(0);
+  });
+});
+
+describe('Google write scopes', () => {
+  it('allowing writes on a read-only sign-in runs a fresh sign-in asking for the read scopes plus youtube.upload and youtube.force-ssl, and stores the scopes Google granted with the session', async () => {
+    const fake = makeGoogleFake();
+    await connect(fake);
+    fake.tokenReplies.push(grantedTokens(`${FORCE_SSL} ${READONLY} ${UPLOAD} ${ANALYTICS}`));
+
+    await fake.auth.ensureWriteScopes();
+    const status = await fake.auth.status();
+
+    expect(fake.authorizeUrls).toHaveLength(2);
+    expect(fake.authorizeUrls[1]?.searchParams.get('scope')).toBe(
+      `${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`,
+    );
+    expect(fake.authorizeUrls[1]?.searchParams.get('code_challenge_method')).toBe('S256');
+    expect(fake.authorizeUrls[1]?.searchParams.has('include_granted_scopes')).toBe(false);
+    expect(JSON.parse(fake.vault.get('youtube.session') ?? '{}').scopes).toEqual([
+      FORCE_SSL,
+      READONLY,
+      UPLOAD,
+      ANALYTICS,
+    ]);
+    expect(status.scopes).toEqual([FORCE_SSL, READONLY, UPLOAD, ANALYTICS]);
+    expect(tokenFile(fake)?.access_token).toBe('ya29.write-access');
+  });
+
+  it('a sign-in that already holds both write scopes allows writes without opening the browser again', async () => {
+    const fake = makeGoogleFake();
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`));
+    await connect(fake);
+
+    await fake.auth.ensureWriteScopes();
+
+    expect(fake.authorizeUrls).toHaveLength(1);
+  });
+
+  it('an API key, or no connection, gets the fresh sign-in with the write scopes too', async () => {
+    const fake = makeGoogleFake();
+    await fake.auth.saveApiKey(API_KEY);
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`));
+
+    await fake.auth.ensureWriteScopes();
+    const status = await fake.auth.status();
+
+    expect(fake.authorizeUrls[0]?.searchParams.get('scope')).toContain(UPLOAD);
+    expect([status.method, status.scopes.includes(FORCE_SSL)]).toEqual(['oauth', true]);
+  });
+
+  it('when the owner grants only some scopes, writes are refused naming the scope that is missing, the partly granted token is revoked at Google and Scout signs in again with the read scopes, so no write scope remains', async () => {
+    const fake = makeGoogleFake();
+    await connect(fake);
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS} ${UPLOAD}`));
+
+    const refused = await rejection(fake.auth.ensureWriteScopes());
+    const tokenAfterRefusal = tokenFile(fake);
+    await fake.auth.settled();
+    const status = await fake.auth.status();
+
+    expect(refused.code).toBe('youtube/scopes-missing');
+    expect(refused.message).toBe(
+      "Google did not grant youtube.force-ssl, so writes stay off. Click Allow writes again and allow every permission on Google's page.",
+    );
+    expect(fake.requests.filter((r) => r.url === REVOKE_URL).map((r) => r.form)).toEqual([
+      { token: '1//refresh-write' },
+    ]);
+    expect(tokenAfterRefusal).toBeNull();
+    expect(fake.authorizeUrls.map((u) => u.searchParams.get('scope'))).toEqual([
+      SCOPES,
+      `${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`,
+      SCOPES,
+    ]);
+    expect([status.connected, status.scopes]).toEqual([true, [READONLY, ANALYTICS]]);
+    expect(tokenFile(fake)?.access_token).toBe('ya29.first-access');
+  });
+
+  it('when the owner grants neither write scope, the read-only sign-in Google returned is kept as it is', async () => {
+    const fake = makeGoogleFake();
+    await connect(fake);
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS}`));
+
+    const refused = await rejection(fake.auth.ensureWriteScopes());
+    const status = await fake.auth.status();
+
+    expect(refused.code).toBe('youtube/scopes-missing');
+    expect(fake.requests.filter((r) => r.url === REVOKE_URL)).toHaveLength(0);
+    expect([status.connected, status.scopes]).toEqual([true, [READONLY, ANALYTICS]]);
+  });
+
+  it('a cancelled or refused upgrade sign-in does not allow writes', async () => {
+    const fake = makeGoogleFake();
+    await connect(fake);
+    fake.browserCallsBack = false;
+
+    const waiting = rejection(fake.auth.ensureWriteScopes());
+    await eventually(async () => fake.authorizeUrls.length === 2);
+    fake.auth.cancelSignIn();
+    const cancelled = await waiting;
+    fake.browserCallsBack = true;
+    fake.callbackParams = (authorize) => ({
+      error: 'access_denied',
+      state: authorize.searchParams.get('state') ?? '',
+    });
+    const denied = await rejection(fake.auth.ensureWriteScopes());
+
+    expect(cancelled.code).toBe('youtube/sign-in-cancelled');
+    expect(denied.code).toBe('youtube/sign-in-cancelled');
+    expect(JSON.parse(fake.vault.get('youtube.session') ?? '{}').scopes).toEqual([
+      READONLY,
+      ANALYTICS,
+    ]);
+  });
+
+  it('revoking writes revokes the token at Google, clears the sign-in and signs in again with the read scopes only', async () => {
+    const fake = makeGoogleFake();
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`));
+    await connect(fake);
+    fake.ops.length = 0;
+
+    await fake.auth.dropWriteScopes();
+    await fake.auth.settled();
+    const status = await fake.auth.status();
+
+    expect(fake.requests.filter((r) => r.url === REVOKE_URL).map((r) => r.form)).toEqual([
+      { token: '1//refresh-write' },
+    ]);
+    expect(fake.ops.slice(0, 4)).toEqual([
+      `POST ${REVOKE_URL}`,
+      'rm youtube-token.json',
+      'rm youtube-token.json.tmp',
+      'vault.delete youtube.session',
+    ]);
+    expect(fake.authorizeUrls[1]?.searchParams.get('scope')).toBe(SCOPES);
+    expect([status.connected, status.scopes]).toEqual([true, [READONLY, ANALYTICS]]);
+  });
+
+  it('when the owner cancels the read-only sign-in after revoking writes, Scout stays signed out and offers Sign in', async () => {
+    const fake = makeGoogleFake();
+    fake.tokenReplies.push(grantedTokens(`${READONLY} ${ANALYTICS} ${UPLOAD} ${FORCE_SSL}`));
+    await connect(fake);
+    fake.browserCallsBack = false;
+
+    await fake.auth.dropWriteScopes();
+    const waiting = await fake.auth.status();
+    fake.auth.cancelSignIn();
+    await fake.auth.settled();
+    const status = await fake.auth.status();
+
+    expect([waiting.connected, waiting.pending]).toEqual([false, true]);
+    expect([status.connected, status.pending, status.scopes]).toEqual([false, false, []]);
+    expect(fake.vault.has('youtube.session')).toBe(false);
+  });
+
+  it('revoking writes on a read-only sign-in leaves it as it is', async () => {
+    const fake = makeGoogleFake();
+    await connect(fake);
+
+    await fake.auth.dropWriteScopes();
+
+    expect(fake.requests.filter((r) => r.url === REVOKE_URL)).toHaveLength(0);
+    expect(fake.authorizeUrls).toHaveLength(1);
+    expect((await fake.auth.status()).connected).toBe(true);
   });
 });
 

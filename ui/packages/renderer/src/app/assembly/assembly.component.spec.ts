@@ -8,6 +8,7 @@ import {
   encodeIpcErrorMessage,
   serializeError,
   type OperatorProjectDto,
+  type PublicationDto,
   type SceneDto,
   type VideoPackageDto,
 } from '@scout/shared';
@@ -82,6 +83,7 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     error: null,
     scenes: [scene(), scene({ id: 's2', order: 2 })],
     package: null,
+    publication: null,
     ...overrides,
   };
 }
@@ -124,6 +126,8 @@ function makeBridge(projects: OperatorProjectDto[], overrides: Record<string, un
         { status: 'approved' },
       ),
     ),
+    operatorPublishPackage: vi.fn(async (): Promise<OperatorProjectDto> => project()),
+    appOpenExternal: vi.fn(async (_req: { url: string }) => undefined),
     ...overrides,
   };
 }
@@ -586,5 +590,243 @@ describe('AssemblyComponent', () => {
     expect(bridge.operatorProjects.mock.calls.length).toBe(2);
     expect(el(fixture, 'package-video')).not.toBeNull();
     expect(el(fixture, 'assembly-progress')).toBeNull();
+  });
+
+  describe('publishing an approved package', () => {
+    function approved(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDto {
+      return assembled(
+        { status: 'approved', rightsConfirmed: true, approvedAt: '2026-11-03T11:00:00Z' },
+        { status: 'approved', ...overrides },
+      );
+    }
+
+    function publication(overrides: Partial<PublicationDto> = {}): PublicationDto {
+      return {
+        status: 'publish_approved',
+        videoId: null,
+        privacyStatus: 'private',
+        publishAt: null,
+        madeForKids: false,
+        syntheticMedia: true,
+        uploadedAt: null,
+        error: null,
+        snapshots: [],
+        proposals: [],
+        experiment: null,
+        ...overrides,
+      };
+    }
+
+    async function choose(fixture: ComponentFixture<AssemblyComponent>, testId: string) {
+      const input = el<HTMLInputElement>(fixture, testId)!;
+      input.checked = true;
+      input.dispatchEvent(new Event('change'));
+      await settle(fixture);
+    }
+
+    function blocks(fixture: ComponentFixture<AssemblyComponent>): string[] {
+      return Array.from(
+        fixture.nativeElement.querySelectorAll('[data-test="publish-blocked"] li'),
+      ).map((li) => (li as HTMLElement).textContent?.trim() ?? '');
+    }
+
+    it('only an approved package without a publication offers Publish', async () => {
+      const fixture = await mount(
+        makeBridge([
+          assembled({ rightsConfirmed: true }, { id: 'p1' }),
+          approved({ id: 'p2' }),
+          approved({ id: 'p3', publication: publication() }),
+        ]),
+        'p1',
+      );
+      const offered = [el(fixture, 'publish-open') !== null];
+      for (const id of ['p2', 'p3']) {
+        const picker = el<HTMLSelectElement>(fixture, 'assembly-project')!;
+        picker.value = id;
+        picker.dispatchEvent(new Event('change'));
+        await settle(fixture);
+        offered.push(el(fixture, 'publish-open') !== null);
+      }
+
+      expect(offered).toEqual([false, true, false]);
+    });
+
+    it('the dialog requires a privacy choice and a made for kids answer, with no privacy chosen at first', async () => {
+      const fixture = await mount(makeBridge([approved()]), 'p1');
+      await click(fixture, 'publish-open');
+
+      const radios = ['public', 'private', 'unlisted'].map(
+        (v) => el<HTMLInputElement>(fixture, `privacy-${v}`)!.checked,
+      );
+      const before = blocks(fixture);
+      const disabledBefore = el<HTMLButtonElement>(fixture, 'publish-confirm')!.disabled;
+      await choose(fixture, 'privacy-unlisted');
+      await choose(fixture, 'kids-no');
+
+      expect(radios).toEqual([false, false, false]);
+      expect(before).toEqual([
+        'Choose public, private or unlisted.',
+        'Say whether the video is made for kids.',
+      ]);
+      expect(disabledBefore).toBe(true);
+      expect(blocks(fixture)).toEqual([]);
+      expect(el<HTMLButtonElement>(fixture, 'publish-confirm')!.disabled).toBe(false);
+    });
+
+    it('the schedule is enabled only with private, and choosing public clears it', async () => {
+      const fixture = await mount(makeBridge([approved()]), 'p1');
+      await click(fixture, 'publish-open');
+
+      const disabledAtFirst = el<HTMLInputElement>(fixture, 'publish-schedule')!.disabled;
+      await choose(fixture, 'privacy-private');
+      const enabledWithPrivate = !el<HTMLInputElement>(fixture, 'publish-schedule')!.disabled;
+      await type(fixture, 'publish-schedule', '2099-07-01T10:00');
+      await choose(fixture, 'privacy-public');
+
+      expect([disabledAtFirst, enabledWithPrivate]).toEqual([true, true]);
+      expect(el<HTMLInputElement>(fixture, 'publish-schedule')!.disabled).toBe(true);
+      expect(el<HTMLInputElement>(fixture, 'publish-schedule')!.value).toBe('');
+    });
+
+    it('a schedule in the past is refused, and a London summer time is shown and converted to UTC', async () => {
+      const fixture = await mount(makeBridge([approved()]), 'p1');
+      await click(fixture, 'publish-open');
+      await choose(fixture, 'privacy-private');
+      await choose(fixture, 'kids-no');
+
+      await type(fixture, 'publish-schedule', '2020-07-01T10:00');
+      const past = blocks(fixture);
+      await type(fixture, 'publish-schedule', '2099-07-01T10:00');
+
+      expect(past).toEqual(['The scheduled time must be in the future.']);
+      expect(blocks(fixture)).toEqual([]);
+      expect(text(fixture, 'publish-schedule-utc')).toBe(
+        'Publishes 2099-07-01 10:00 Europe/London (2099-07-01T09:00:00.000Z UTC).',
+      );
+    });
+
+    it('lists the actions that will run, and Confirm and publish sends the choices with the schedule in UTC', async () => {
+      const bridge = makeBridge([approved()], {
+        operatorPublishPackage: vi.fn(async () => approved({ publication: publication() })),
+      });
+      const fixture = await mount(bridge, 'p1');
+      await click(fixture, 'publish-open');
+      await choose(fixture, 'privacy-private');
+      await choose(fixture, 'kids-yes');
+      await type(fixture, 'publish-schedule', '2099-12-01T18:30');
+
+      const actions = Array.from(
+        fixture.nativeElement.querySelectorAll('[data-test="publish-actions"] li'),
+      ).map((li) => (li as HTMLElement).textContent?.replace(/\s+/g, ' ').trim());
+      await click(fixture, 'publish-confirm');
+
+      expect(actions).toEqual([
+        'Upload video: "Span<T> explained" as private',
+        'Set thumbnail: thumbnail.png',
+        'Schedule: public at 2099-12-01 18:30 Europe/London',
+      ]);
+      expect(bridge.operatorPublishPackage).toHaveBeenCalledWith({
+        projectId: 'p1',
+        privacyStatus: 'private',
+        publishAt: '2099-12-01T18:30:00.000Z',
+        madeForKids: true,
+        syntheticMedia: true,
+      });
+      expect(el(fixture, 'publish-dialog')).toBeNull();
+      expect(text(fixture, 'publication-status')).toBe('publish_approved');
+    });
+
+    it('synthetic media is ticked when a scene used generated narration or pictures, unticked otherwise, and the owner can change it', async () => {
+      const owned = scene({ audioSource: 'owner', visualSource: 'owner' });
+      const bridge = makeBridge(
+        [
+          approved(),
+          approved({
+            id: 'p2',
+            scenes: [owned, { ...owned, id: 's2', visualSource: 'text_card' }],
+          }),
+        ],
+        { operatorPublishPackage: vi.fn(async () => approved({ id: 'p2' })) },
+      );
+      const fixture = await mount(bridge, 'p1');
+      await click(fixture, 'publish-open');
+      const generated = el<HTMLInputElement>(fixture, 'publish-synthetic')!.checked;
+      await click(fixture, 'publish-cancel');
+      const picker = el<HTMLSelectElement>(fixture, 'assembly-project')!;
+      picker.value = 'p2';
+      picker.dispatchEvent(new Event('change'));
+      await settle(fixture);
+      await click(fixture, 'publish-open');
+      const ownMedia = el<HTMLInputElement>(fixture, 'publish-synthetic')!.checked;
+      const box = el<HTMLInputElement>(fixture, 'publish-synthetic')!;
+      box.checked = true;
+      box.dispatchEvent(new Event('change'));
+      await choose(fixture, 'privacy-public');
+      await choose(fixture, 'kids-no');
+      await click(fixture, 'publish-confirm');
+
+      expect([generated, ownMedia]).toEqual([true, false]);
+      expect(bridge.operatorPublishPackage).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'p2', publishAt: null, syntheticMedia: true }),
+      );
+    });
+
+    it('a refused publish keeps the dialog open with the reason', async () => {
+      const reason =
+        'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.';
+      const bridge = makeBridge([approved()], {
+        operatorPublishPackage: vi.fn(async () => {
+          throw refusedWith('scout:operator.publication', reason);
+        }),
+      });
+      const fixture = await mount(bridge, 'p1');
+      await click(fixture, 'publish-open');
+      await choose(fixture, 'privacy-unlisted');
+      await choose(fixture, 'kids-no');
+      await click(fixture, 'publish-confirm');
+
+      expect(text(fixture, 'publish-error')).toBe(reason);
+      expect(el(fixture, 'publish-dialog')).not.toBeNull();
+    });
+
+    it('the publication panel shows the status, the video link opened through the allow-listed open, the scheduled time in London and the error', async () => {
+      const bridge = makeBridge(
+        [
+          approved({
+            publication: publication({
+              status: 'scheduled',
+              videoId: 'dQw4w9WgXcQ',
+              publishAt: '2099-07-01T09:00:00.000Z',
+              error: 'The thumbnail was not set: YouTube answered 403.',
+            }),
+          }),
+        ],
+        { appOpenExternal: vi.fn(async () => undefined) },
+      );
+      const fixture = await mount(bridge, 'p1');
+
+      await click(fixture, 'publication-video');
+
+      expect(text(fixture, 'publication-status')).toBe('scheduled');
+      expect(text(fixture, 'publication-video')).toBe(
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      );
+      expect(bridge.appOpenExternal).toHaveBeenCalledWith({
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      });
+      expect(text(fixture, 'publication-scheduled')).toBe('2099-07-01 10:00 Europe/London');
+      expect(text(fixture, 'publication-error')).toBe(
+        'The thumbnail was not set: YouTube answered 403.',
+      );
+    });
+
+    it('a project keeps its place in the picker once it has a publication, whatever its status', async () => {
+      const fixture = await mount(
+        makeBridge([approved({ status: 'published', publication: publication() })]),
+        'p1',
+      );
+
+      expect(text(fixture, 'publication-status')).toBe('publish_approved');
+    });
   });
 });

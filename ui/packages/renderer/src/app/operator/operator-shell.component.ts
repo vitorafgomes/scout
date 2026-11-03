@@ -10,6 +10,8 @@ interface OperatorNavItem {
 const NAV_ITEMS: readonly OperatorNavItem[] = Object.freeze([
   { path: '/operator/production', label: 'Production', testId: 'operator-nav-production' },
   { path: '/operator/assembly', label: 'Assembly', testId: 'operator-nav-assembly' },
+  { path: '/operator/reports', label: 'Reports', testId: 'operator-nav-reports' },
+  { path: '/operator/experiments', label: 'Experiments', testId: 'operator-nav-experiments' },
   { path: '/operator/approvals', label: 'Approvals', testId: 'operator-nav-approvals' },
 ]);
 

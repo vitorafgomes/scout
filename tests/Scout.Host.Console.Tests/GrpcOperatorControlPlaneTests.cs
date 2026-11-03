@@ -321,6 +321,198 @@ public sealed class GrpcOperatorControlPlaneTests
     }
 
     [Fact]
+    public async Task A_Publication_Travels_Field_By_Field_With_The_Owners_Choices_As_Read_And_Absent_Values_Stay_Absent_On_The_Wire()
+    {
+        var snapshot = new OperatorSnapshot("24h", "2026-11-07T09:00:00Z", 1234, 2500, 121, 43.7, 12, 1, 40, 9, 5, 20_000, 0.052,
+            [new OperatorRetentionPoint(0.5, 0.42)]);
+        var arm = new OperatorExperimentArm("b", "Shorter title", "Bread in ten minutes", "2026-11-08T09:00:00Z", null, 1500, 80, 41.5);
+        var publication = new OperatorPublication(
+            "scheduled", "newVideo001", "private", "2026-11-10T17:00:00Z", false, true, "2026-11-03T14:00:00Z", null,
+            [snapshot],
+            [new OperatorProposal("24h-1", "thumbnail", "A loaf on a dark table", "Higher contrast", "proposed", "thumbnail-proposal-24h-1.png")],
+            new OperatorExperiment("e1", "title", "running", [arm], null, null));
+        var bare = new OperatorPublication("publish_approved", null, "unlisted", null, true, false, null, null, [], [], null);
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var saved = await controlPlane.SaveProjectAsync(Ready() with { Publication = publication }, null, CancellationToken.None);
+        var wire = service.Saved.ShouldNotBeNull().Project.Publication;
+        var savedBare = await controlPlane.SaveProjectAsync(Ready() with { Publication = bare }, null, CancellationToken.None);
+        var bareWire = service.Saved.ShouldNotBeNull().Project.Publication;
+        var none = await controlPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+
+        (wire.Status, wire.VideoId, wire.PrivacyStatus, wire.PublishAt, wire.MadeForKids, wire.SyntheticMedia, wire.UploadedAt, wire.HasError)
+            .ShouldBe(("scheduled", "newVideo001", "private", "2026-11-10T17:00:00Z", false, true, "2026-11-03T14:00:00Z", false));
+        var wireSnapshot = wire.Snapshots.ShouldHaveSingleItem();
+        (wireSnapshot.Window, wireSnapshot.Views, wireSnapshot.Impressions, wireSnapshot.ImpressionsCtr, wireSnapshot.Retention.ShouldHaveSingleItem().AudienceWatchRatio)
+            .ShouldBe(("24h", 1234L, 20_000L, 0.052, 0.42));
+        wire.Proposals.ShouldHaveSingleItem().ThumbnailFile.ShouldBe("thumbnail-proposal-24h-1.png");
+        var wireArm = wire.Experiment.Arms.ShouldHaveSingleItem();
+        (wireArm.StartedAt, wireArm.HasEndedAt, wireArm.Clicks, wire.Experiment.HasWinnerArmId, wire.Experiment.HasResult)
+            .ShouldBe(("2026-11-08T09:00:00Z", false, 80L, false, false));
+        (bareWire.HasVideoId, bareWire.HasPublishAt, bareWire.HasUploadedAt, bareWire.HasError, bareWire.Experiment, bareWire.MadeForKids)
+            .ShouldBe((false, false, false, false, (Experiment?)null, true));
+        var back = saved.Publication.ShouldNotBeNull();
+        (back with { Snapshots = [], Proposals = [], Experiment = null }).ShouldBe(publication with { Snapshots = [], Proposals = [], Experiment = null });
+        (back.Snapshots.ShouldHaveSingleItem() with { Retention = [] }).ShouldBe(snapshot with { Retention = [] });
+        back.Snapshots[0].Retention.ShouldBe(snapshot.Retention);
+        back.Proposals.ShouldBe(publication.Proposals);
+        (back.Experiment.ShouldNotBeNull() with { Arms = [] }).ShouldBe(publication.Experiment! with { Arms = [] });
+        back.Experiment.Arms.ShouldBe([arm]);
+        (savedBare.Publication.ShouldNotBeNull() with { Snapshots = [], Proposals = [] }).ShouldBe(bare with { Snapshots = [], Proposals = [] });
+        none.Publication.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_Next_Approved_Action_Arrives_Whole_And_An_Empty_Reply_Means_None()
+    {
+        var pending = new PendingAction
+        {
+            Id = "a1",
+            FeatureId = "youtube",
+            Action = "videos.insert",
+            Target = "p1",
+            Summary = "Upload sourdough as private",
+            Status = "approved",
+        };
+        var service = new FakeWorkerGate { ActionReply = new NextApprovedActionResponse { Action = pending, OriginReference = "discord:3333:42" } };
+        await using var server = await WorkerGateServer.StartAsync(service);
+        await using var empty = await WorkerGateServer.StartAsync(new FakeWorkerGate());
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        using var emptyGate = new GrpcWriteGate(empty.SocketPath, Token);
+
+        var action = await new GrpcOperatorControlPlane(gate).NextApprovedActionAsync(CancellationToken.None);
+        var none = await new GrpcOperatorControlPlane(emptyGate).NextApprovedActionAsync(CancellationToken.None);
+
+        action.ShouldBe(new OperatorAction("a1", "youtube", "videos.insert", "p1", "Upload sourdough as private", "discord:3333:42"));
+        service.Authorizations.ShouldBe(["Bearer worker-session-token"]);
+        none.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_Run_Action_Is_Recorded_With_Its_Id_Scope_Target_And_Outcome_And_A_Refused_Record_Keeps_The_Control_Planes_Words()
+    {
+        var action = new OperatorAction("a1", "youtube", "videos.update", "p1:e1:b", "Set title");
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        await using var refusing = await WorkerGateServer.StartAsync(new FakeWorkerGate
+        {
+            OperatorFailure = new RpcException(new Status(StatusCode.FailedPrecondition, "The owner has not allowed youtube to write.")),
+        });
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        using var refusingGate = new GrpcWriteGate(refusing.SocketPath, Token);
+
+        await new GrpcOperatorControlPlane(gate).RecordActionAsync(action, "succeeded", CancellationToken.None);
+        var refused = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(refusingGate).RecordActionAsync(action, "succeeded", CancellationToken.None));
+
+        var record = service.Record.ShouldNotBeNull();
+        (record.FeatureId, record.Scope, record.Target, record.Outcome, record.ActionId)
+            .ShouldBe(("youtube", "videos.update", "p1:e1:b", "succeeded", "a1"));
+        service.Authorizations.ShouldBe(["Bearer worker-session-token"]);
+        refused.ShouldNotBeOfType<ControlPlaneUnavailableException>();
+        refused.Message.ShouldBe("The owner has not allowed youtube to write.");
+    }
+
+    [Theory]
+    [InlineData("Action 'a1' is already recorded in the write log.", null)]
+    [InlineData("The owner revoked youtube's write permission before this action ran.", typeof(WriteRevokedException))]
+    [InlineData("Action 'a1' is not approved by the owner.", typeof(InvalidOperationException))]
+    public async Task A_Record_Already_Logged_Is_A_Success_And_A_Record_Refused_After_A_Revoke_Is_Told_Apart(string detail, Type? expected)
+    {
+        await using var server = await WorkerGateServer.StartAsync(
+            new FakeWorkerGate { OperatorFailure = new RpcException(new Status(StatusCode.FailedPrecondition, detail)) });
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var action = new OperatorAction("a1", "youtube", "videos.insert", "p1", "Upload");
+
+        var thrown = await Record.ExceptionAsync(() => new GrpcOperatorControlPlane(gate).RecordActionAsync(action, "succeeded", CancellationToken.None));
+
+        thrown?.GetType().ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task The_Refusal_Phrases_Match_The_Words_Of_The_Control_Planes_Write_Gate()
+    {
+        var directory = Directory.CreateTempSubdirectory("scout-record-phrases-").FullName;
+        try
+        {
+            var options = Microsoft.Extensions.Options.Options.Create(new Scout.ControlPlane.Features.FeatureStateStoreOptions { FilePath = Path.Combine(directory, "features.json") });
+            var states = new Scout.ControlPlane.Features.JsonFileFeatureStateStore(options, Microsoft.Extensions.Logging.Abstractions.NullLogger<Scout.ControlPlane.Features.JsonFileFeatureStateStore>.Instance);
+            var actions = new Scout.ControlPlane.Actions.JsonFileActionQueue(options, Microsoft.Extensions.Logging.Abstractions.NullLogger<Scout.ControlPlane.Actions.JsonFileActionQueue>.Instance);
+            var writes = new Scout.ControlPlane.Actions.JsonLinesWriteLog(options, Microsoft.Extensions.Logging.Abstractions.NullLogger<Scout.ControlPlane.Actions.JsonLinesWriteLog>.Instance);
+            var gate = new Scout.ControlPlane.WriteGate.WriteGateService(new Scout.ControlPlane.Features.FeatureCatalog(), states, actions, writes);
+            var granted = new Scout.ControlPlane.Features.FeatureState(true, null, new Dictionary<string, string?>(), Granted: true);
+            await states.SetAsync("youtube", granted, CancellationToken.None);
+            var queued = await actions.EnqueueApprovedAsync("youtube", [("videos.insert", "p1", "Upload"), ("videos.insert", "p2", "Upload")], CancellationToken.None);
+            var first = (await actions.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (a, _) => a.Id == queued[0].Id, CancellationToken.None))!;
+            await writes.AppendAsync(
+                new Scout.ControlPlane.Actions.WriteLogEntry(DateTimeOffset.UtcNow, "youtube", "videos.insert", "p1", "succeeded", "owner", first.Id),
+                CancellationToken.None);
+
+            var again = await Should.ThrowAsync<Scout.ControlPlane.WriteGate.WriteNotRecordableException>(
+                () => gate.RecordAsync("youtube", "videos.insert", "p1", "succeeded", first.Id, CancellationToken.None));
+            var second = (await actions.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (a, _) => a.Id == queued[1].Id, CancellationToken.None))!;
+            await states.SetAsync("youtube", granted with { Granted = false }, CancellationToken.None);
+            var revoked = await Should.ThrowAsync<Scout.ControlPlane.WriteGate.WriteNotRecordableException>(
+                () => gate.RecordAsync("youtube", "videos.insert", "p2", "succeeded", second.Id, CancellationToken.None));
+
+            again.Message.ShouldContain(GrpcOperatorControlPlane.AlreadyRecordedPhrase);
+            revoked.Message.ShouldContain(GrpcOperatorControlPlane.RevokedPhrase);
+            again.Message.ShouldNotContain(GrpcOperatorControlPlane.RevokedPhrase);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task An_Unreachable_Control_Plane_Is_Told_Apart_From_A_Refusal_It_Words()
+    {
+        await using var refusing = await WorkerGateServer.StartAsync(
+            new FakeWorkerGate { OperatorFailure = new RpcException(new Status(StatusCode.NotFound, "No video project has the id p9.")) });
+        using var refusingGate = new GrpcWriteGate(refusing.SocketPath, Token);
+        using var missing = new GrpcWriteGate(Path.Combine(Path.GetTempPath(), $"scout-missing-{Guid.NewGuid():N}.sock"), Token);
+
+        var refused = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(refusingGate).GetProjectAsync("p9", CancellationToken.None));
+        var unreachable = await Should.ThrowAsync<ControlPlaneUnavailableException>(
+            () => new GrpcOperatorControlPlane(missing).NextApprovedActionAsync(CancellationToken.None));
+
+        refused.ShouldNotBeOfType<ControlPlaneUnavailableException>();
+        refused.Message.ShouldBe("No video project has the id p9.");
+        unreachable.Message.ShouldBe(GrpcOperatorControlPlane.Unreachable);
+    }
+
+    [Theory]
+    [InlineData("youtube-key", null, false)]
+    [InlineData(null, "/nonexistent/youtube-token.json", true)]
+    public void Publishing_Is_Composed_Only_When_The_Owner_Signed_In_And_Files_Uploads_Under_The_Configured_Category(
+        string? youtubeKey, string? tokenFile, bool publishes)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Plugins:YouTube:ApiKey"] = youtubeKey,
+                ["Scout:Plugins:YouTube:TokenFile"] = tokenFile,
+                ["Scout:Operator:CategoryId"] = "27",
+            })
+            .Build();
+        var services = new ServiceCollection().AddLogging().AddScoutHost(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        services.Any(d => d.ImplementationType == typeof(ActionExecutor)).ShouldBe(publishes);
+        services.Any(d => d.ImplementationType == typeof(OperatorScheduler)).ShouldBe(publishes);
+        provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OperatorMediaOptions>>().Value.CategoryId.ShouldBe("27");
+    }
+
+    [Fact]
+    public void Uploads_Are_Filed_Under_People_And_Blogs_Unless_Configured()
+        => new OperatorMediaOptions().CategoryId.ShouldBe("22");
+
+    [Fact]
     public async Task The_Ffmpeg_And_Font_Paths_Bind_From_Scout_Operator_And_Reach_The_Toolset_That_Probes_Them()
     {
         var font = typeof(GrpcOperatorControlPlaneTests).Assembly.Location;

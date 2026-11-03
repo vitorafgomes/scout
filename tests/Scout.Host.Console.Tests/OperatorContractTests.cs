@@ -141,13 +141,16 @@ public sealed class OperatorContractTests : IDisposable
     }
 
     [Fact]
-    public void The_Operators_Data_Folder_Scope_Is_The_Text_Of_The_Youtube_Write_Row_Of_The_Catalog()
+    public void Every_Scope_The_Operator_Writes_Under_Is_A_YouTube_Catalog_Row_Of_The_Same_Access()
     {
-        var row = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull().ScopeMatrix.ShouldNotBeNull()
-            .Where(r => r.Access == ScopeAccess.Write)
-            .ShouldHaveSingleItem();
+        var rows = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull().ScopeMatrix.ShouldNotBeNull()
+            .ToDictionary(r => r.Scope, r => r.Access);
 
-        OperatorServiceCollectionExtensions.DataFolderScope.ShouldBe(row.Scope);
+        new[] { OperatorServiceCollectionExtensions.DataFolderScope, ReachReports.JobScope }
+            .ShouldAllBe(scope => rows.ContainsKey(scope) && rows[scope] == ScopeAccess.Write);
+        new[] { ActionExecutor.Insert, ActionExecutor.Update, ActionExecutor.Thumbnail }
+            .ShouldAllBe(scope => rows.ContainsKey(scope) && rows[scope] == ScopeAccess.IrreversibleWrite);
+        ActionExecutor.FeatureId.ShouldBe(FeatureCatalog.YouTubeId);
     }
 
     public static TheoryData<string[]> TagSets() => new()

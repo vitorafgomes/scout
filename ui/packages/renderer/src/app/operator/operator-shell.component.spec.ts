@@ -35,7 +35,7 @@ describe('OperatorShellComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('its nav shows Production, Assembly and Approvals, and nothing from the main window sidebar', async () => {
+  it('its nav shows Production, Assembly, Reports, Experiments and Approvals, and nothing from the main window sidebar', async () => {
     const { fixture } = await setup();
 
     const links = Array.from(
@@ -45,6 +45,8 @@ describe('OperatorShellComponent', () => {
     expect(links).toEqual([
       ['Production', '/operator/production'],
       ['Assembly', '/operator/assembly'],
+      ['Reports', '/operator/reports'],
+      ['Experiments', '/operator/experiments'],
       ['Approvals', '/operator/approvals'],
     ]);
     expect(fixture.nativeElement.querySelector('[data-test="nav-features"]')).toBeNull();

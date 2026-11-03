@@ -12,7 +12,7 @@ namespace Scout.ControlPlane.Tests.Operator;
 /// <summary>
 /// The operator's state over the real catalog, write gate and Scout's own files in a temp folder.
 /// </summary>
-public sealed class OperatorServiceTests : IDisposable
+public sealed partial class OperatorServiceTests : IDisposable
 {
     private const string NotAllowed =
         "The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.";

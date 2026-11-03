@@ -93,6 +93,10 @@ describe('buildBridge', () => {
       'operatorConfirmMediaRights',
       'operatorEditPackageMetadata',
       'operatorApprovePackage',
+      'operatorPublishPackage',
+      'operatorDecideProposal',
+      'operatorStartExperiment',
+      'operatorAdoptExperimentWinner',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -557,6 +561,30 @@ describe('buildBridge', () => {
     ]);
   });
 
+  it('publishing, deciding a proposal, starting an experiment and adopting its winner reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const publish = {
+      projectId: 'p1',
+      privacyStatus: 'private' as const,
+      publishAt: '2026-12-01T10:00:00.000Z',
+      madeForKids: false,
+      syntheticMedia: true,
+    };
+
+    await bridge.operatorPublishPackage(publish);
+    await bridge.operatorDecideProposal({ projectId: 'p1', proposalId: 'pr1', accept: true });
+    await bridge.operatorStartExperiment({ projectId: 'p1', armHours: 48 });
+    await bridge.operatorAdoptExperimentWinner({ id: 'p1' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorPublication, publish],
+      [CHANNEL.operatorProposalDecision, { projectId: 'p1', proposalId: 'pr1', accept: true }],
+      [CHANNEL.operatorExperiment, { projectId: 'p1', armHours: 48 }],
+      [CHANNEL.operatorExperimentAdoption, { id: 'p1' }],
+    ]);
+  });
+
   it('operatorOpenWindow asks main for the operator window on scout:operator.window with no payload', async () => {
     const ipc = makeFakeIpc();
     const bridge = buildBridge(ipc);
@@ -719,6 +747,7 @@ describe('buildBridge', () => {
       error: null,
       clientConfigPath: '/user-data/google-oauth-client.json',
       source: 'file',
+      scopes: [],
     };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
     const bridge = buildBridge(ipc);

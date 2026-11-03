@@ -10,7 +10,8 @@ namespace Scout.Host.ControlPlane.Services;
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
 /// the projects, the owner's claim decisions, production, the scene edits, the media directory,
-/// the worker's readiness, assembly, and the owner's package metadata, media rights and approval.
+/// the worker's readiness, assembly, the owner's package metadata, media rights and approval, publication,
+/// proposal decisions and experiments.
 /// </summary>
 public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 {
@@ -118,4 +119,29 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<Project> ApprovePackage(GetProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.ApprovePackageAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> PublishPackage(PublishPackageRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.PublishPackageAsync(
+                    request.ProjectId,
+                    request.PrivacyStatus,
+                    OperatorMapping.ToDomainTime(request.HasPublishAt, request.PublishAt),
+                    request.MadeForKids,
+                    request.SyntheticMedia,
+                    context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> DecideProposal(DecideProposalRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.DecideProposalAsync(request.ProjectId, request.ProposalId, request.Accept, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> StartExperiment(StartExperimentRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.StartExperimentAsync(request.ProjectId, request.ArmHours, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> AdoptExperimentWinner(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.AdoptExperimentWinnerAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
 }

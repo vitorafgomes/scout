@@ -18,13 +18,28 @@ public sealed class ReadinessReporterTests : IDisposable
         RecordingControlPlane? controlPlane = null,
         string tokenFile = "",
         TimeProvider? time = null,
-        ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null)
+        ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
-            logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()));
+            logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()), schedule);
+
+    [Fact]
+    public async Task The_Scheduled_Jobs_Scout_Ran_Late_At_Start_Are_Named_In_The_Notes()
+    {
+        var token = Path.Combine(_folder, "youtube-token.json");
+        File.WriteAllText(token, "{}");
+        var schedule = new ScheduleNotes { Missed = "Scout was not running for these scheduled jobs and ran them when it started: analytics 09:00." };
+
+        var readiness = await Reporter(new MediaCapabilities(true, true, "OpenAI"), tokenFile: token, schedule: schedule).CurrentAsync(CancellationToken.None);
+
+        readiness.Notes.ShouldBe([
+            "Videos are assembled with ffmpeg and the libopenh264 encoder.",
+            "Scout was not running for these scheduled jobs and ran them when it started: analytics 09:00.",
+        ]);
+    }
 
     [Fact]
     public async Task Gemini_Reports_No_Speech_And_No_Images_With_The_Note_That_Narration_Needs_Own_Audio_And_Visuals_Become_Text_Cards()

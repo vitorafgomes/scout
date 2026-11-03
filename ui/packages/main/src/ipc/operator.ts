@@ -8,6 +8,7 @@ import {
   serializeError,
   type ClaimDecisionRequest,
   type ClaimStatus,
+  type ExperimentStartRequest,
   type MandateDto,
   type MandateResponse,
   type MandateSaveRequest,
@@ -16,6 +17,9 @@ import {
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
   type PackageMetadataRequest,
+  type PrivacyStatus,
+  type ProposalDecisionRequest,
+  type PublishPackageRequest,
   type ReadinessDto,
   type SceneLockRequest,
   type SceneMediaKind,
@@ -48,6 +52,10 @@ export type OperatorClient = Pick<
   | 'confirmMediaRights'
   | 'editPackageMetadata'
   | 'approvePackage'
+  | 'publishPackage'
+  | 'decideProposal'
+  | 'startExperiment'
+  | 'adoptExperimentWinner'
 >;
 
 const DEFAULT_PROJECTS_LIMIT = 50;
@@ -62,6 +70,10 @@ const MAX_TITLE_LENGTH = 100;
 const MAX_DESCRIPTION_LENGTH = 5000;
 const MAX_TAG_LENGTH = 100;
 const MAX_TAGS_LENGTH = 500;
+const PRIVACY_STATUSES: readonly PrivacyStatus[] = ['public', 'private', 'unlisted'];
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/;
+const MIN_ARM_HOURS = 24;
+const MAX_ARM_HOURS = 168;
 
 function throwSerialized(err: unknown): never {
   const serialized = serializeError(err);
@@ -147,6 +159,37 @@ function validMetadata(req: PackageMetadataRequest | undefined): PackageMetadata
   }
   if (errors.length > 0) invalid(errors.join(' '));
   return metadata;
+}
+
+function validPublication(req: PublishPackageRequest | undefined): PublishPackageRequest {
+  const projectId = requiredId(req?.projectId, 'The project id');
+  const privacyStatus = req?.privacyStatus as PrivacyStatus;
+  if (!PRIVACY_STATUSES.includes(privacyStatus)) invalid('Choose public, private or unlisted.');
+  if (typeof req?.madeForKids !== 'boolean') invalid('Say whether the video is made for kids.');
+  if (typeof req.syntheticMedia !== 'boolean') {
+    invalid('Say whether the video contains realistic synthetic or altered media.');
+  }
+  const publishAt = req.publishAt ?? null;
+  if (publishAt !== null) {
+    if (privacyStatus !== 'private') {
+      invalid('A scheduled time needs private; YouTube makes the video public at that time.');
+    }
+    if (
+      typeof publishAt !== 'string' ||
+      !ISO_UTC.test(publishAt) ||
+      !Number.isFinite(Date.parse(publishAt))
+    ) {
+      invalid('The scheduled time is not an ISO UTC time.');
+    }
+    if (Date.parse(publishAt) <= Date.now()) invalid('The scheduled time must be in the future.');
+  }
+  return {
+    projectId,
+    privacyStatus,
+    publishAt,
+    madeForKids: req.madeForKids,
+    syntheticMedia: req.syntheticMedia,
+  };
 }
 
 /** Registers the Production and Assembly pages' channels, which reach the control plane's Operator service only. */
@@ -392,6 +435,72 @@ export function registerOperatorHandlers(
   packageStep(CHANNEL.operatorPackageApproval, 'package approval', (client, id) =>
     client.approvePackage(id),
   );
+  packageStep(CHANNEL.operatorExperimentAdoption, 'experiment adoption', (client, id) =>
+    client.adoptExperimentWinner(id),
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorPublication,
+    async (_event, req: PublishPackageRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const { projectId, privacyStatus, publishAt, madeForKids, syntheticMedia } =
+          validPublication(req);
+        return await (
+          await getClient()
+        ).publishPackage(projectId, privacyStatus, publishAt, madeForKids, syntheticMedia);
+      } catch (err: unknown) {
+        logger.warn('operator: publication failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorProposalDecision,
+    async (_event, req: ProposalDecisionRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const proposalId = requiredId(req?.proposalId, 'The proposal id');
+        if (typeof req?.accept !== 'boolean') invalid('A proposal is accepted or rejected.');
+        return await (await getClient()).decideProposal(projectId, proposalId, req.accept);
+      } catch (err: unknown) {
+        logger.warn('operator: proposal decision failed', {
+          projectId: req?.projectId,
+          proposalId: req?.proposalId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorExperiment,
+    async (_event, req: ExperimentStartRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const armHours = req?.armHours;
+        if (
+          typeof armHours !== 'number' ||
+          !Number.isInteger(armHours) ||
+          armHours < MIN_ARM_HOURS ||
+          armHours > MAX_ARM_HOURS
+        ) {
+          invalid(`Each arm runs ${MIN_ARM_HOURS} to ${MAX_ARM_HOURS} hours.`);
+        }
+        return await (await getClient()).startExperiment(projectId, armHours);
+      } catch (err: unknown) {
+        logger.warn('operator: experiment failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
 
   ipcMain.handle(
     CHANNEL.operatorPackageMetadata,
@@ -426,5 +535,9 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorMediaRights);
     ipcMain.removeHandler(CHANNEL.operatorPackageMetadata);
     ipcMain.removeHandler(CHANNEL.operatorPackageApproval);
+    ipcMain.removeHandler(CHANNEL.operatorPublication);
+    ipcMain.removeHandler(CHANNEL.operatorProposalDecision);
+    ipcMain.removeHandler(CHANNEL.operatorExperiment);
+    ipcMain.removeHandler(CHANNEL.operatorExperimentAdoption);
   };
 }

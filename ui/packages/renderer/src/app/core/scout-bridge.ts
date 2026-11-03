@@ -67,6 +67,9 @@ import {
   type OperatorProjectDto,
   type OperatorProjectRequest,
   type PackageMetadataRequest,
+  type PublishPackageRequest,
+  type ProposalDecisionRequest,
+  type ExperimentStartRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
   type StartProjectRequest,
@@ -247,6 +250,14 @@ function createFakeBridge(): ScoutBridge {
     operatorEditPackageMetadata: (_req: PackageMetadataRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorApprovePackage: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorPublishPackage: (_req: PublishPackageRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideProposal: (_req: ProposalDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartExperiment: (_req: ExperimentStartRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAdoptExperimentWinner: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
@@ -590,6 +601,22 @@ export class ScoutBridgeService {
 
   async operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorApprovePackage(req);
+  }
+
+  async operatorPublishPackage(req: PublishPackageRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorPublishPackage(req);
+  }
+
+  async operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideProposal(req);
+  }
+
+  async operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartExperiment(req);
+  }
+
+  async operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAdoptExperimentWinner(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

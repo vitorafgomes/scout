@@ -193,6 +193,7 @@ public sealed class TokenAuthInterceptorTests
     [InlineData("/scout.controlplane.v1.WorkerGate/ListOperatorProjects")]
     [InlineData("/scout.controlplane.v1.WorkerGate/GetOperatorMediaDirectory")]
     [InlineData("/scout.controlplane.v1.WorkerGate/ReportReadiness")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/NextApprovedAction")]
     public async Task The_Workers_Operator_Rpcs_Belong_To_The_Worker_Alone(string method)
     {
         var desktop = await Should.ThrowAsync<RpcException>(() => Call(Token, method));
@@ -208,6 +209,20 @@ public sealed class TokenAuthInterceptorTests
     [InlineData("/scout.controlplane.v1.Operator/EditPackageMetadata")]
     [InlineData("/scout.controlplane.v1.Operator/ApprovePackage")]
     public async Task The_Owners_Package_Rpcs_Belong_To_The_Desktop_Alone(string method)
+    {
+        var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, method));
+
+        (await Call(Token, method)).ShouldBe("ok");
+        worker.StatusCode.ShouldBe(StatusCode.PermissionDenied);
+        worker.Status.Detail.ShouldBe($"This caller may not call {method}.");
+    }
+
+    [Theory]
+    [InlineData("/scout.controlplane.v1.Operator/PublishPackage")]
+    [InlineData("/scout.controlplane.v1.Operator/DecideProposal")]
+    [InlineData("/scout.controlplane.v1.Operator/StartExperiment")]
+    [InlineData("/scout.controlplane.v1.Operator/AdoptExperimentWinner")]
+    public async Task The_Owners_Publication_Rpcs_Belong_To_The_Desktop_Alone(string method)
     {
         var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, method));
 

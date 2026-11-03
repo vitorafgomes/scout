@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.ControlPlane.Actions;
@@ -168,4 +170,88 @@ public sealed class ActionQueueTests : IDisposable
         (await File.ReadAllBytesAsync(queue.FilePath)).ShouldBe(content);
         _logger.Entries.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task Writing_The_Queue_Drops_Rejected_Actions_After_30_Days_And_Executed_Ones_After_90_And_Keeps_Pending_Approved_And_Executing()
+    {
+        using var queue = Queue();
+        var now = DateTimeOffset.UtcNow;
+        PendingAction Seed(string id, PendingActionStatus status, int daysAgo) =>
+            new(id, "youtube", "videos.insert", $"{id}.mp4", "Upload", now.AddDays(-daysAgo - 1), status, now.AddDays(-daysAgo));
+        var seeded = new List<PendingAction>
+        {
+            Seed("pending-400", PendingActionStatus.Pending, 400) with { DecidedAt = null },
+            Seed("approved-400", PendingActionStatus.Approved, 400),
+            Seed("rejected-31", PendingActionStatus.Rejected, 31),
+            Seed("rejected-29", PendingActionStatus.Rejected, 29),
+            Seed("executed-91", PendingActionStatus.Executed, 91),
+            Seed("executed-89", PendingActionStatus.Executed, 89),
+            Seed("executing-400", PendingActionStatus.Executing, 400),
+        };
+        await File.WriteAllTextAsync(queue.FilePath, JsonSerializer.Serialize(seeded, FileJson));
+
+        var added = await queue.EnqueueAsync("youtube", "videos.insert", "new.mp4", "Upload new", CancellationToken.None);
+
+        var kept = JsonSerializer.Deserialize<List<PendingAction>>(await File.ReadAllTextAsync(queue.FilePath), FileJson);
+        kept.ShouldNotBeNull().Select(a => a.Id).ShouldBe(["pending-400", "approved-400", "rejected-29", "executed-89", "executing-400", added.Id]);
+    }
+
+    [Fact]
+    public async Task An_Approved_Batch_Is_Written_Approved_In_Its_Order()
+    {
+        using var queue = Queue();
+
+        var batch = await queue.EnqueueApprovedAsync(
+            "youtube", [("videos.insert", "p1", "Upload"), ("thumbnails.set", "p1", "Thumbnail")], CancellationToken.None);
+
+        using var reopened = Queue();
+        var read = await Task.WhenAll(batch.Select(a => reopened.FindAsync(a.Id, CancellationToken.None)));
+        read.Select(a => (a!.Action, a.Status, a.DecidedAt is not null)).ShouldBe([
+            ("videos.insert", PendingActionStatus.Approved, true),
+            ("thumbnails.set", PendingActionStatus.Approved, true),
+        ]);
+        (await reopened.ListPendingAsync(CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Two_Concurrent_Claims_Never_Get_The_Same_Action()
+    {
+        using var queue = Queue();
+        var approved = (await queue.EnqueueApprovedAsync("youtube", [("videos.insert", "p1", "Upload")], CancellationToken.None)).Single();
+        using var start = new ManualResetEventSlim();
+
+        var claims = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ => Task.Run(() =>
+        {
+            start.Wait();
+            return queue.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (_, _) => true, CancellationToken.None);
+        })).Append(Task.Run(() => { start.Set(); return (PendingAction?)null; })));
+
+        claims.Take(2).Count(c => c is not null).ShouldBe(1);
+        claims.Take(2).Single(c => c is not null)!.Id.ShouldBe(approved.Id);
+        (await queue.FindAsync(approved.Id, CancellationToken.None))!.Status.ShouldBe(PendingActionStatus.Executing);
+    }
+
+    [Fact]
+    public async Task An_Executing_Action_Is_Listed_With_The_Pending_Ones_And_Cannot_Be_Decided()
+    {
+        using var queue = Queue();
+        var pending = await queue.EnqueueAsync("youtube", "comments.insert", "c1", "Reply", CancellationToken.None);
+        var claimed = (await queue.EnqueueApprovedAsync("youtube", [("videos.insert", "p1", "Upload")], CancellationToken.None)).Single();
+        var waiting = (await queue.EnqueueApprovedAsync("youtube", [("thumbnails.set", "p2", "Thumbnail")], CancellationToken.None)).Single();
+        await queue.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (a, _) => a.Id == claimed.Id, CancellationToken.None);
+
+        var listed = await queue.ListPendingAsync(CancellationToken.None);
+        var approve = await Should.ThrowAsync<PendingActionAlreadyDecidedException>(() => queue.ApproveAsync(claimed.Id, null, CancellationToken.None));
+        var reject = await Should.ThrowAsync<PendingActionAlreadyDecidedException>(() => queue.RejectAsync(claimed.Id, "No", CancellationToken.None));
+
+        listed.Select(a => (a.Id, a.Status)).ShouldBe([(pending.Id, PendingActionStatus.Pending), (claimed.Id, PendingActionStatus.Executing)]);
+        listed.ShouldNotContain(a => a.Id == waiting.Id);
+        (approve.Message, reject.Message).ShouldBe(($"Action '{claimed.Id}' is already executing.", $"Action '{claimed.Id}' is already executing."));
+        (await queue.FindAsync(claimed.Id, CancellationToken.None))!.Status.ShouldBe(PendingActionStatus.Executing);
+    }
+
+    private static readonly JsonSerializerOptions FileJson = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+    };
 }

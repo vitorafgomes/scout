@@ -99,6 +99,15 @@ export const appRoutes: Routes = [
           import('./assembly/assembly.component').then((m) => m.AssemblyComponent),
       },
       {
+        path: 'reports',
+        loadComponent: () => import('./reports/reports.component').then((m) => m.ReportsComponent),
+      },
+      {
+        path: 'experiments',
+        loadComponent: () =>
+          import('./experiments/experiments.component').then((m) => m.ExperimentsComponent),
+      },
+      {
         path: 'approvals',
         data: { feature: 'youtube' },
         loadComponent: () => import('./review/review.component').then((m) => m.ReviewComponent),

@@ -156,12 +156,90 @@ public sealed class YouTubeOperatorPluginTests
         services.AddYouTubeOperator();
         using var provider = services.BuildServiceProvider();
 
-        var declaration = provider.GetServices<WriteFunctionDeclaration>().ShouldHaveSingleItem();
+        var declaration = provider.GetServices<WriteFunctionDeclaration>().Single(d => d.FunctionName == YouTubeOperatorPlugin.MakeVideo);
         var plugin = provider.GetServices<KernelPlugin>().ShouldHaveSingleItem();
 
         (declaration.PluginName, declaration.FeatureId, declaration.Scope).ShouldBe((plugin.Name, "youtube", "Scout's data folder"));
         plugin.TryGetFunction(declaration.FunctionName, out var function).ShouldBeTrue();
         declaration.SummaryArguments.ShouldBe(["topic"]);
         function.Metadata.Parameters.Select(p => p.Name).ShouldBe(["topic"]);
+    }
+
+    [Fact]
+    public void Publishing_Is_No_Write_The_Gate_Could_Queue_Only_Making_A_Video_Is_Declared()
+    {
+        var services = new ServiceCollection().AddLogging();
+        services.AddSingleton<IOperatorControlPlane>(_controlPlane);
+        services.AddSingleton(Substitute.For<IYouTubeClient>());
+        services.AddSingleton(Substitute.For<IChatCompletionService>());
+        services.AddSingleton(Substitute.For<IOriginNotifier>());
+        services.AddYouTubeOperator();
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetServices<WriteFunctionDeclaration>().Select(d => d.FunctionName).ShouldBe([YouTubeOperatorPlugin.MakeVideo]);
+        provider.GetServices<KernelPlugin>().ShouldHaveSingleItem().TryGetFunction(YouTubeOperatorPlugin.PublishVideo, out _).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Publishing_Changes_Nothing_And_Points_To_The_Assembly_Page()
+    {
+        var reply = await YouTubeOperatorPlugin.PublishVideoAsync(" sourdough ");
+
+        reply.ShouldBe("Publishing sourdough happens on the Assembly page of Scout Desktop's YouTube operator, where the owner chooses its privacy; Scout uploads nothing from chat.");
+        _controlPlane.Saves.ShouldBeEmpty();
+        _started.Reader.TryRead(out _).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("uploaded", "unlisted", null, "sourdough: Uploaded sourdough as unlisted: https://youtu.be/newVideo001")]
+    [InlineData("scheduled", "public", "2026-07-10T16:00:00Z", "sourdough: Scheduled sourdough for Friday 10 July 2026 17:00 London time: https://youtu.be/newVideo001")]
+    [InlineData("scheduled", "public", "2026-11-10T17:00:00Z", "sourdough: Scheduled sourdough for Tuesday 10 November 2026 17:00 London time: https://youtu.be/newVideo001")]
+    [InlineData("published", "public", null, "sourdough: Published sourdough: https://youtu.be/newVideo001")]
+    public async Task Status_Shows_Where_A_Published_Video_Stands_With_Its_Link(string status, string privacy, string? publishAt, string expected)
+    {
+        _controlPlane.Store(Given.Project(status: "approved") with
+        {
+            Publication = new OperatorPublication(status, "newVideo001", privacy, publishAt, false, true, "2026-11-03T12:00:00Z", null, [], [], null),
+        });
+
+        (await Plugin().VideoStatusAsync()).ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task Status_Shows_A_Failed_Upload_With_Its_Reason()
+    {
+        _controlPlane.Store(Given.Project(status: "approved") with
+        {
+            Publication = new OperatorPublication("failed", null, "private", null, false, true, null, "YouTube rejected the request (invalidTitle).", [], [], null),
+        });
+
+        (await Plugin().VideoStatusAsync()).ShouldBe("sourdough: upload failed (YouTube rejected the request (invalidTitle).)");
+    }
+
+    [Fact]
+    public async Task Status_Shows_The_Last_Snapshot_Of_A_Published_Video()
+    {
+        OperatorSnapshot Snap(string window, long views) => new(window, "2026-11-07T09:00:00Z", views, 2500, 121, 43.7, 12, 1, 40, 9, 5, 20_000, 0.0523, []);
+        _controlPlane.Store(Given.Project(status: "approved") with
+        {
+            Publication = new OperatorPublication("published", "newVideo001", "public", null, false, true, "2026-11-03T12:00:00Z", null,
+                [Snap("24h", 1234), Snap("7d", 15_230) with { Impressions = null, ImpressionsCtr = null }], [], null),
+        });
+
+        (await Plugin().VideoStatusAsync()).ShouldBe(
+            "sourdough: Published sourdough: https://youtu.be/newVideo001; first 7d: 15,230 views, 43.7% average view percentage");
+    }
+
+    [Fact]
+    public async Task Status_Shows_The_Click_Through_Rate_When_The_Snapshot_Has_Impressions()
+    {
+        _controlPlane.Store(Given.Project(status: "approved") with
+        {
+            Publication = new OperatorPublication("published", "newVideo001", "public", null, false, true, "2026-11-03T12:00:00Z", null,
+                [new OperatorSnapshot("24h", "2026-11-07T09:00:00Z", 1234, 2500, 121, 43.7, 12, 1, 40, 9, 5, 20_000, 0.0523, [])], [], null),
+        });
+
+        (await Plugin().VideoStatusAsync()).ShouldBe(
+            "sourdough: Published sourdough: https://youtu.be/newVideo001; first 24h: 1,234 views, 43.7% average view percentage, 5.2% click-through rate on 20,000 impressions");
     }
 }

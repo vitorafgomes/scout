@@ -85,6 +85,10 @@ describe('CHANNEL constant', () => {
         'operatorProduction',
         'operatorProject',
         'operatorProjects',
+        'operatorPublication',
+        'operatorProposalDecision',
+        'operatorExperiment',
+        'operatorExperimentAdoption',
         'operatorReadiness',
         'operatorSaveMandate',
         'operatorSceneLock',
@@ -223,6 +227,29 @@ describe('operator channels', () => {
       'scout:operator.packageApproval',
     ]);
   });
+
+  test('publishing a package, deciding a proposal, starting an experiment and adopting its winner each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
+      CHANNEL.operatorPublication,
+      CHANNEL.operatorProposalDecision,
+      CHANNEL.operatorExperiment,
+      CHANNEL.operatorExperimentAdoption,
+    ];
+
+    expect(channels).toEqual([
+      'scout:operator.publication',
+      'scout:operator.proposalDecision',
+      'scout:operator.experiment',
+      'scout:operator.experimentAdoption',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('ChannelName type', () => {
@@ -302,6 +329,10 @@ describe('ChannelName type', () => {
       'scout:operator.mediaRights': true,
       'scout:operator.packageMetadata': true,
       'scout:operator.packageApproval': true,
+      'scout:operator.publication': true,
+      'scout:operator.proposalDecision': true,
+      'scout:operator.experiment': true,
+      'scout:operator.experimentAdoption': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.ControlPlane.Actions;
@@ -49,6 +50,21 @@ public sealed class WriteLogTests : IDisposable
     }
 
     [Fact]
+    public async Task Listing_Since_A_Time_Reads_Back_Only_To_The_First_Older_Entry()
+    {
+        using var log = Log();
+        await File.WriteAllTextAsync(log.FilePath, "{ an old broken line\n");
+        await log.AppendAsync(Entry(1, "videos.insert"), CancellationToken.None);
+        await log.AppendAsync(Entry(5, "thumbnails.set"), CancellationToken.None);
+        await log.AppendAsync(Entry(6, "videos.update"), CancellationToken.None);
+
+        var since = await log.ListSinceAsync(T0.AddMinutes(3), CancellationToken.None);
+
+        since.Select(e => e.Action).ShouldBe(["videos.update", "thumbnails.set"]);
+        _logger.Entries.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_Corrupt_Log_Line_Is_Skipped_And_Logged()
     {
         using var log = Log();
@@ -62,5 +78,50 @@ public sealed class WriteLogTests : IDisposable
         var warning = _logger.Entries.ShouldHaveSingleItem();
         warning.Level.ShouldBe(LogLevel.Warning);
         warning.Message.ShouldContain("Skipped malformed line 2");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(400)]
+    public async Task The_Tail_Read_Lists_The_Newest_Entries_First_For_Small_And_Large_Files_And_Lines_Longer_Than_A_Block(int count)
+    {
+        using var log = Log();
+        var appended = new List<WriteLogEntry>();
+        for (var i = 0; i < count; i++)
+        {
+            var target = i % 50 == 7 ? new string('x', JsonLinesWriteLog.BlockSize * 3) : $"video-{i}";
+            var entry = new WriteLogEntry(T0.AddMinutes(i), "youtube", "videos.insert", target, "ok", "owner", $"action-{i}");
+            appended.Add(entry);
+            await log.AppendAsync(entry, CancellationToken.None);
+        }
+
+        var newestFirst = Enumerable.Reverse(appended).ToList();
+        foreach (var limit in new[] { 1, 2, (count / 2) + 1, count, count + 10 })
+        {
+            (await log.ListAsync(limit, CancellationToken.None)).ShouldBe(newestFirst.Take(limit).ToList(), $"limit {limit}");
+        }
+    }
+
+    [Fact]
+    public async Task The_Tail_Read_Skips_Blank_Lines_Reads_A_Last_Line_Without_Newline_And_Counts_A_Malformed_Line_From_The_End()
+    {
+        using var log = Log();
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        await File.WriteAllTextAsync(
+            log.FilePath,
+            JsonSerializer.Serialize(Entry(1, "videos.insert"), json) + "\n{ half a line\n\n   \n"
+            + JsonSerializer.Serialize(Entry(2, "videos.update"), json) + "\n"
+            + JsonSerializer.Serialize(Entry(3, "thumbnails.set"), json));
+
+        var lastTwo = await log.ListAsync(2, CancellationToken.None);
+        var lastThree = await log.ListAsync(3, CancellationToken.None);
+        var all = await log.ListAsync(10, CancellationToken.None);
+
+        lastTwo.ShouldBe([Entry(3, "thumbnails.set"), Entry(2, "videos.update")]);
+        lastThree.ShouldBe([Entry(3, "thumbnails.set"), Entry(2, "videos.update")]);
+        all.ShouldBe([Entry(3, "thumbnails.set"), Entry(2, "videos.update"), Entry(1, "videos.insert")]);
+        _logger.Entries.Select(e => e.Message).Distinct().ShouldHaveSingleItem()
+            .ShouldBe($"Skipped malformed line 5 from the end of the write log at {log.FilePath}");
     }
 }

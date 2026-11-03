@@ -10,9 +10,15 @@ import {
   type WritableSignal,
 } from '@angular/core';
 
-import { readIpcError, type OperatorProjectDto, type VideoPackageDto } from '@scout/shared';
+import {
+  readIpcError,
+  type OperatorProjectDto,
+  type PrivacyStatus,
+  type VideoPackageDto,
+} from '@scout/shared';
 
 import { ScoutBridgeService } from '../core/scout-bridge';
+import { formatLondon, londonToUtcIso } from '../operator/london';
 
 const POLL_MS = 10_000;
 const PROJECTS_READ = 50;
@@ -30,6 +36,7 @@ const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 5000;
 const MAX_TAG = 100;
 const MAX_TAGS = 500;
+const PRIVACY: readonly PrivacyStatus[] = ['public', 'private', 'unlisted'];
 
 /** The assembled video of a project: assembly, the video, Shorts and thumbnail, the checks, the metadata, the media rights and the approval. */
 @Component({
@@ -299,8 +306,167 @@ const MAX_TAGS = 500;
                 <p class="err" data-test="approve-error">{{ message }}</p>
               }
             }
+
+            @if (publishable(p)) {
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-test="publish-open"
+                (click)="openPublish(p)"
+              >
+                Publish
+              </button>
+            }
+          }
+
+          @if (p.publication; as pub) {
+            <h2>Publication</h2>
+            <dl class="publication">
+              <dt>Status</dt>
+              <dd data-test="publication-status">{{ pub.status }}</dd>
+              @if (pub.videoId; as id) {
+                <dt>Video</dt>
+                <dd>
+                  <button
+                    type="button"
+                    class="link"
+                    data-test="publication-video"
+                    (click)="openVideo(id)"
+                  >
+                    {{ watchUrl(id) }}
+                  </button>
+                </dd>
+              }
+              @if (pub.publishAt; as at) {
+                <dt>Scheduled</dt>
+                <dd data-test="publication-scheduled">{{ london(at) }} Europe/London</dd>
+              }
+            </dl>
+            @if (pub.error; as message) {
+              <p class="err" data-test="publication-error">{{ message }}</p>
+            }
+            @if (openError(); as message) {
+              <p class="err" data-test="publication-open-error">{{ message }}</p>
+            }
           }
         </section>
+      }
+
+      @if (publishing(); as p) {
+        <div
+          class="backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="publish-title"
+          data-test="publish-dialog"
+        >
+          <div class="dialog">
+            <h2 id="publish-title">Publish {{ p.package?.title }}</h2>
+            <fieldset>
+              <legend>Privacy</legend>
+              @for (v of privacyChoices; track v) {
+                <label class="check">
+                  <input
+                    type="radio"
+                    name="publish-privacy"
+                    [attr.data-test]="'privacy-' + v"
+                    [checked]="privacy() === v"
+                    (change)="choosePrivacy(v)"
+                  />
+                  {{ v }}
+                </label>
+              }
+            </fieldset>
+            <label>
+              Publish at (Europe/London, only with private)
+              <input
+                type="datetime-local"
+                data-test="publish-schedule"
+                [disabled]="privacy() !== 'private'"
+                [value]="schedule()"
+                (input)="schedule.set($any($event.target).value)"
+              />
+            </label>
+            @if (scheduleUtc(); as utc) {
+              <p class="meta" data-test="publish-schedule-utc">
+                Publishes {{ schedule().replace('T', ' ') }} Europe/London ({{ utc }} UTC).
+              </p>
+            }
+            <fieldset>
+              <legend>Made for kids</legend>
+              <label class="check">
+                <input
+                  type="radio"
+                  name="publish-kids"
+                  data-test="kids-yes"
+                  [checked]="madeForKids() === true"
+                  (change)="madeForKids.set(true)"
+                />
+                Yes
+              </label>
+              <label class="check">
+                <input
+                  type="radio"
+                  name="publish-kids"
+                  data-test="kids-no"
+                  [checked]="madeForKids() === false"
+                  (change)="madeForKids.set(false)"
+                />
+                No
+              </label>
+            </fieldset>
+            <label class="check">
+              <input
+                type="checkbox"
+                data-test="publish-synthetic"
+                [checked]="synthetic()"
+                (change)="synthetic.set($any($event.target).checked)"
+              />
+              Contains realistic synthetic or altered media
+            </label>
+            <h3>What will run</h3>
+            <ul data-test="publish-actions">
+              <li>
+                Upload video: "{{ p.package?.title }}" as {{ privacy() ?? '(choose privacy)' }}
+              </li>
+              @if (p.package?.thumbnailFile; as file) {
+                <li>Set thumbnail: {{ file }}</li>
+              }
+              @if (scheduleUtc() !== null) {
+                <li>Schedule: public at {{ schedule().replace('T', ' ') }} Europe/London</li>
+              }
+            </ul>
+            @if (publishBlocks().length > 0) {
+              <ul class="blocked" data-test="publish-blocked">
+                @for (reason of publishBlocks(); track reason) {
+                  <li>{{ reason }}</li>
+                }
+              </ul>
+            }
+            @if (publishError(); as message) {
+              <p class="err" data-test="publish-error">{{ message }}</p>
+            }
+            <div class="row">
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="publish-cancel"
+                (click)="publishing.set(null)"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-test="publish-confirm"
+                [disabled]="busy() || publishBlocks().length > 0"
+                (click)="publish(p)"
+              >
+                Confirm and publish
+              </button>
+            </div>
+          </div>
+        </div>
       }
     </main>
   `,
@@ -497,6 +663,41 @@ const MAX_TAGS = 500;
         color: #e4e8f0;
         border-color: #252b3b;
       }
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .dialog {
+        background: #11131a;
+        border: 1px solid #252b3b;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 560px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      fieldset {
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        display: flex;
+        gap: 16px;
+      }
+      .publication dt {
+        color: #7b8299;
+      }
+      .link {
+        background: none;
+        border: none;
+        color: #60a5fa;
+        cursor: pointer;
+        padding: 0;
+      }
     `,
   ],
 })
@@ -521,6 +722,29 @@ export class AssemblyComponent implements OnInit, OnDestroy {
   readonly metadataError = signal<string | null>(null);
   readonly rightsError = signal<string | null>(null);
   readonly approveError = signal<string | null>(null);
+  readonly openError = signal<string | null>(null);
+
+  readonly privacyChoices = PRIVACY;
+  readonly publishing = signal<OperatorProjectDto | null>(null);
+  readonly privacy = signal<PrivacyStatus | null>(null);
+  readonly madeForKids = signal<boolean | null>(null);
+  readonly synthetic = signal(false);
+  readonly schedule = signal('');
+  readonly publishError = signal<string | null>(null);
+  readonly scheduleUtc = computed(() =>
+    this.privacy() === 'private' ? londonToUtcIso(this.schedule()) : null,
+  );
+  readonly publishBlocks = computed(() => {
+    const reasons: string[] = [];
+    if (this.privacy() === null) reasons.push('Choose public, private or unlisted.');
+    if (this.madeForKids() === null) reasons.push('Say whether the video is made for kids.');
+    const utc = this.scheduleUtc();
+    if (this.schedule() !== '' && utc === null) reasons.push('Enter a date and a time.');
+    if (utc !== null && Date.parse(utc) <= Date.now()) {
+      reasons.push('The scheduled time must be in the future.');
+    }
+    return reasons;
+  });
 
   readonly title = signal('');
   readonly description = signal('');
@@ -590,6 +814,63 @@ export class AssemblyComponent implements OnInit, OnDestroy {
       );
     }
     return reasons;
+  }
+
+  publishable(project: OperatorProjectDto): boolean {
+    const pub = project.publication;
+    return (
+      project.package?.approvedAt != null &&
+      (pub === null || (pub.status === 'failed' && pub.videoId === null))
+    );
+  }
+
+  openPublish(project: OperatorProjectDto): void {
+    this.privacy.set(null);
+    this.madeForKids.set(null);
+    this.schedule.set('');
+    this.publishError.set(null);
+    this.synthetic.set(
+      project.scenes.some((s) => s.audioSource === 'generated' || s.visualSource === 'generated'),
+    );
+    this.publishing.set(project);
+  }
+
+  choosePrivacy(privacy: PrivacyStatus): void {
+    this.privacy.set(privacy);
+    if (privacy !== 'private') this.schedule.set('');
+  }
+
+  async publish(project: OperatorProjectDto): Promise<void> {
+    const privacyStatus = this.privacy();
+    const madeForKids = this.madeForKids();
+    if (privacyStatus === null || madeForKids === null) return;
+    await this.act(this.publishError, () =>
+      this.bridge.operatorPublishPackage({
+        projectId: project.id,
+        privacyStatus,
+        publishAt: this.scheduleUtc(),
+        madeForKids,
+        syntheticMedia: this.synthetic(),
+      }),
+    );
+    if (this.publishError() === null) this.publishing.set(null);
+  }
+
+  watchUrl(videoId: string): string {
+    return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+  }
+
+  async openVideo(videoId: string): Promise<void> {
+    this.openError.set(null);
+    try {
+      await this.bridge.appOpenExternal({ url: this.watchUrl(videoId) });
+    } catch (err: unknown) {
+      this.openError.set(readIpcError(err).message);
+    }
+  }
+
+  london(iso: string): string {
+    return formatLondon(iso);
   }
 
   mediaUrl(project: OperatorProjectDto, fileName: string): string {
@@ -671,7 +952,7 @@ export class AssemblyComponent implements OnInit, OnDestroy {
       const { projects } = await this.bridge.operatorProjects({ limit: PROJECTS_READ });
       this.projects.set(
         projects
-          .filter((p) => ASSEMBLY_STATUSES.includes(p.status))
+          .filter((p) => ASSEMBLY_STATUSES.includes(p.status) || p.publication !== null)
           .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
       );
       this.fill();

@@ -100,7 +100,8 @@ internal static class HostComposition
     /// <summary>
     /// The YouTube channel operator, only when the YouTube plugin registered its client; it reaches the control
     /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed. The ffmpeg
-    /// and font paths bind from <c>Scout:Operator</c>, which the desktop sets as environment variables.
+    /// and font paths and the upload category bind from <c>Scout:Operator</c>, which the desktop sets as environment variables.
+    /// Publishing and learning are composed only when the owner signed in, because an API key cannot upload or read analytics.
     /// </summary>
     private static void AddYouTubeOperator(IServiceCollection services, IConfiguration configuration, bool gateOpen)
     {
@@ -120,6 +121,10 @@ internal static class HostComposition
 
         services.AddOptions<OperatorMediaOptions>().Bind(configuration.GetSection(OperatorMediaOptions.Section));
         services.AddYouTubeOperator();
+        if (services.Any(d => d.ServiceType == typeof(IYouTubeWriteClient)))
+        {
+            services.AddYouTubePublishing();
+        }
     }
 
     /// <summary>

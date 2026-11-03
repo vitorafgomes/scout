@@ -21,6 +21,8 @@ import {
   type MandateSaveRequest,
   type OperatorProjectDto,
   type PendingActionDto,
+  type PrivacyStatus,
+  type PublicationDto,
   type ReadinessDto,
   type SceneDto,
   type SceneMediaKind,
@@ -98,6 +100,20 @@ export interface ControlPlaneClient {
     tags: readonly string[],
   ): Promise<OperatorProjectDto>;
   approvePackage(id: string): Promise<OperatorProjectDto>;
+  publishPackage(
+    projectId: string,
+    privacyStatus: PrivacyStatus,
+    publishAt: string | null,
+    madeForKids: boolean,
+    syntheticMedia: boolean,
+  ): Promise<OperatorProjectDto>;
+  decideProposal(
+    projectId: string,
+    proposalId: string,
+    accept: boolean,
+  ): Promise<OperatorProjectDto>;
+  startExperiment(projectId: string, armHours: number): Promise<OperatorProjectDto>;
+  adoptExperimentWinner(id: string): Promise<OperatorProjectDto>;
   close(): void;
 }
 
@@ -194,6 +210,59 @@ interface ProjectMessage {
   error?: string;
   scenes: SceneMessage[];
   package?: PackageMessage | null;
+  publication?: PublicationMessage | null;
+}
+
+interface PublicationMessage {
+  status: string;
+  videoId?: string;
+  privacyStatus: string;
+  publishAt?: string;
+  madeForKids: boolean;
+  syntheticMedia: boolean;
+  uploadedAt?: string;
+  error?: string;
+  snapshots: {
+    window: string;
+    takenAt: string;
+    views: number;
+    minutesWatched: number;
+    averageViewDurationSeconds: number;
+    averageViewPercentage: number;
+    subscribersGained: number;
+    subscribersLost: number;
+    likes: number;
+    comments: number;
+    shares: number;
+    impressions?: number;
+    impressionsCtr?: number;
+    retention: { elapsedRatio: number; audienceWatchRatio: number }[];
+  }[];
+  proposals: {
+    id: string;
+    kind: string;
+    text: string;
+    reason: string;
+    status: string;
+    thumbnailFile?: string;
+  }[];
+  experiment?: {
+    id: string;
+    kind: string;
+    status: string;
+    arms: {
+      id: string;
+      label: string;
+      value: string;
+      startedAt?: string;
+      endedAt?: string;
+      impressions: number;
+      clicks: number;
+      averageViewPercentage: number;
+    }[];
+    winnerArmId?: string;
+    result?: string;
+  } | null;
 }
 
 interface PackageMessage {
@@ -376,6 +445,68 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
     error: message.error ?? null,
     scenes: message.scenes.map(toScene),
     package: message.package == null ? null : toPackage(message.package),
+    publication: message.publication == null ? null : toPublication(message.publication),
+  };
+}
+
+function toPublication(message: PublicationMessage): PublicationDto {
+  const experiment = message.experiment ?? null;
+  return {
+    status: message.status,
+    videoId: message.videoId ?? null,
+    privacyStatus: message.privacyStatus,
+    publishAt: message.publishAt ?? null,
+    madeForKids: message.madeForKids,
+    syntheticMedia: message.syntheticMedia,
+    uploadedAt: message.uploadedAt ?? null,
+    error: message.error ?? null,
+    snapshots: message.snapshots.map((snapshot) => ({
+      window: snapshot.window,
+      takenAt: snapshot.takenAt,
+      views: snapshot.views,
+      minutesWatched: snapshot.minutesWatched,
+      averageViewDurationSeconds: snapshot.averageViewDurationSeconds,
+      averageViewPercentage: snapshot.averageViewPercentage,
+      subscribersGained: snapshot.subscribersGained,
+      subscribersLost: snapshot.subscribersLost,
+      likes: snapshot.likes,
+      comments: snapshot.comments,
+      shares: snapshot.shares,
+      impressions: snapshot.impressions ?? null,
+      impressionsCtr: snapshot.impressionsCtr ?? null,
+      retention: snapshot.retention.map(({ elapsedRatio, audienceWatchRatio }) => ({
+        elapsedRatio,
+        audienceWatchRatio,
+      })),
+    })),
+    proposals: message.proposals.map((proposal) => ({
+      id: proposal.id,
+      kind: proposal.kind,
+      text: proposal.text,
+      reason: proposal.reason,
+      status: proposal.status,
+      thumbnailFile: proposal.thumbnailFile ?? null,
+    })),
+    experiment:
+      experiment === null
+        ? null
+        : {
+            id: experiment.id,
+            kind: experiment.kind,
+            status: experiment.status,
+            arms: experiment.arms.map((arm) => ({
+              id: arm.id,
+              label: arm.label,
+              value: arm.value,
+              startedAt: arm.startedAt ?? null,
+              endedAt: arm.endedAt ?? null,
+              impressions: arm.impressions,
+              clicks: arm.clicks,
+              averageViewPercentage: arm.averageViewPercentage,
+            })),
+            winnerArmId: experiment.winnerArmId ?? null,
+            result: experiment.result ?? null,
+          },
   };
 }
 
@@ -638,6 +769,18 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     editPackageMetadata: (projectId, title, description, tags) =>
       project('EditPackageMetadata', { projectId, title, description, tags }),
     approvePackage: (id) => project('ApprovePackage', { id }),
+    publishPackage: (projectId, privacyStatus, publishAt, madeForKids, syntheticMedia) =>
+      project('PublishPackage', {
+        projectId,
+        privacyStatus,
+        publishAt: publishAt ?? undefined,
+        madeForKids,
+        syntheticMedia,
+      }),
+    decideProposal: (projectId, proposalId, accept) =>
+      project('DecideProposal', { projectId, proposalId, accept }),
+    startExperiment: (projectId, armHours) => project('StartExperiment', { projectId, armHours }),
+    adoptExperimentWinner: (id) => project('AdoptExperimentWinner', { id }),
     close(): void {
       closed = true;
       providers.close();

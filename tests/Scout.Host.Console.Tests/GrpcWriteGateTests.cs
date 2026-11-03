@@ -219,6 +219,11 @@ public sealed class GrpcWriteGateTests
 
         public override Task<RecordWriteResponse> RecordWrite(RecordWriteRequest request, ServerCallContext context)
         {
+            if (OperatorFailure is not null)
+            {
+                throw OperatorFailure;
+            }
+
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
             Record = request;
             return RecordFailure is null ? Task.FromResult(new RecordWriteResponse()) : throw RecordFailure;
@@ -289,6 +294,14 @@ public sealed class GrpcWriteGateTests
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
             Got = request;
             return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = MediaPath }) : throw OperatorFailure;
+        }
+
+        public NextApprovedActionResponse ActionReply { get; init; } = new();
+
+        public override Task<NextApprovedActionResponse> NextApprovedAction(NextApprovedActionRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(ActionReply) : throw OperatorFailure;
         }
 
         public override Task<Readiness> ReportReadiness(Readiness request, ServerCallContext context)

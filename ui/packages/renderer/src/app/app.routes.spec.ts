@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppComponent } from './app.component';
 import { AssemblyComponent } from './assembly/assembly.component';
+import { ExperimentsComponent } from './experiments/experiments.component';
+import { ReportsComponent } from './reports/reports.component';
 import { appRoutes } from './app.routes';
 import { MenuPreferences } from './core/menu-preferences';
 import { ScoutBridgeService } from './core/scout-bridge';
@@ -80,6 +82,23 @@ describe('app routes', () => {
     expect(router.url).toBe('/operator/assembly');
     expect(route.component).toBe(AssemblyComponent);
     expect(route.parent?.component).toBe(OperatorShellComponent);
+  });
+
+  it('operator/reports and operator/experiments resolve to their pages inside the operator shell', async () => {
+    const router = TestBed.inject(Router);
+    const resolved: unknown[] = [];
+
+    for (const url of ['/operator/reports', '/operator/experiments']) {
+      await router.navigateByUrl(url);
+      let route = TestBed.inject(ActivatedRoute);
+      while (route.firstChild !== null) route = route.firstChild;
+      resolved.push([router.url, route.component, route.parent?.component]);
+    }
+
+    expect(resolved).toEqual([
+      ['/operator/reports', ReportsComponent, OperatorShellComponent],
+      ['/operator/experiments', ExperimentsComponent, OperatorShellComponent],
+    ]);
   });
 
   it('operator/approvals resolves to the Review screen filtered to youtube', async () => {

@@ -3,33 +3,47 @@ using Grpc.Core;
 using Scout.ControlPlane.Operator;
 using DomainChapter = Scout.ControlPlane.Operator.Chapter;
 using DomainClaim = Scout.ControlPlane.Operator.Claim;
+using DomainExperiment = Scout.ControlPlane.Operator.Experiment;
+using DomainExperimentArm = Scout.ControlPlane.Operator.ExperimentArm;
 using DomainMandate = Scout.ControlPlane.Operator.Mandate;
 using DomainPackage = Scout.ControlPlane.Operator.VideoPackage;
 using DomainPackageCheck = Scout.ControlPlane.Operator.PackageCheck;
+using DomainProposal = Scout.ControlPlane.Operator.Proposal;
+using DomainPublication = Scout.ControlPlane.Operator.Publication;
 using DomainReadiness = Scout.ControlPlane.Operator.Readiness;
+using DomainRetentionPoint = Scout.ControlPlane.Operator.RetentionPoint;
 using DomainScene = Scout.ControlPlane.Operator.Scene;
 using DomainScript = Scout.ControlPlane.Operator.Script;
 using DomainScriptSection = Scout.ControlPlane.Operator.ScriptSection;
 using DomainShortClip = Scout.ControlPlane.Operator.ShortClip;
+using DomainSnapshot = Scout.ControlPlane.Operator.Snapshot;
 using DomainTopicCandidate = Scout.ControlPlane.Operator.TopicCandidate;
 using WireChapter = Scout.ControlPlane.Contracts.Chapter;
 using WireClaim = Scout.ControlPlane.Contracts.Claim;
+using WireExperiment = Scout.ControlPlane.Contracts.Experiment;
+using WireExperimentArm = Scout.ControlPlane.Contracts.ExperimentArm;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
 using WirePackage = Scout.ControlPlane.Contracts.VideoPackage;
 using WirePackageCheck = Scout.ControlPlane.Contracts.PackageCheck;
 using WireProject = Scout.ControlPlane.Contracts.Project;
+using WireProposal = Scout.ControlPlane.Contracts.Proposal;
+using WirePublication = Scout.ControlPlane.Contracts.Publication;
 using WireReadiness = Scout.ControlPlane.Contracts.Readiness;
+using WireRetentionPoint = Scout.ControlPlane.Contracts.RetentionPoint;
 using WireScene = Scout.ControlPlane.Contracts.Scene;
 using WireScript = Scout.ControlPlane.Contracts.Script;
 using WireScriptSection = Scout.ControlPlane.Contracts.ScriptSection;
 using WireShortClip = Scout.ControlPlane.Contracts.ShortClip;
+using WireSnapshot = Scout.ControlPlane.Contracts.Snapshot;
 using WireTopicCandidate = Scout.ControlPlane.Contracts.TopicCandidate;
 
 namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Maps the operator's mandate and projects to and from their wire messages, and its exceptions
-/// to gRPC status codes. A project's origin reference never goes into a <c>Project</c> message.
+/// to gRPC status codes. A project's origin reference never goes into a <c>Project</c> message, nor an
+/// experiment's arm hours into an <c>Experiment</c> message. A time is read as any ISO 8601 form and written as
+/// the round-trip form.
 /// </summary>
 internal static class OperatorMapping
 {
@@ -96,6 +110,10 @@ internal static class OperatorMapping
         {
             wire.Package = ToWire(package);
         }
+        if (project.Publication is { } publication)
+        {
+            wire.Publication = ToWire(publication);
+        }
         return wire;
     }
 
@@ -131,7 +149,10 @@ internal static class OperatorMapping
             s.HasVisualFile ? s.VisualFile : null,
             s.DurationMs)).ToList(),
         Package = wire.Package is null ? null : ToDomain(wire.Package),
+        Publication = wire.Publication is null ? null : ToDomain(wire.Publication),
     };
+
+    public static DateTimeOffset? ToDomainTime(bool has, string value) => has ? ParseIso(value) : null;
 
     public static WireReadiness ToWire(DomainReadiness readiness)
     {
@@ -311,8 +332,161 @@ internal static class OperatorMapping
         wire.HasError ? wire.Error : null,
         wire.MetadataEdited);
 
+    private static WirePublication ToWire(DomainPublication publication)
+    {
+        var wire = new WirePublication
+        {
+            Status = publication.Status,
+            PrivacyStatus = publication.PrivacyStatus,
+            MadeForKids = publication.MadeForKids,
+            SyntheticMedia = publication.SyntheticMedia,
+        };
+        if (publication.VideoId is not null)
+        {
+            wire.VideoId = publication.VideoId;
+        }
+        if (publication.PublishAt is { } publishAt)
+        {
+            wire.PublishAt = Iso(publishAt);
+        }
+        if (publication.UploadedAt is { } uploadedAt)
+        {
+            wire.UploadedAt = Iso(uploadedAt);
+        }
+        if (publication.Error is not null)
+        {
+            wire.Error = publication.Error;
+        }
+        wire.Snapshots.AddRange(publication.Snapshots.Select(ToWire));
+        wire.Proposals.AddRange(publication.Proposals.Select(p =>
+        {
+            var proposal = new WireProposal { Id = p.Id, Kind = p.Kind, Text = p.Text, Reason = p.Reason, Status = p.Status };
+            if (p.ThumbnailFile is not null)
+            {
+                proposal.ThumbnailFile = p.ThumbnailFile;
+            }
+            return proposal;
+        }));
+        if (publication.Experiment is { } experiment)
+        {
+            wire.Experiment = ToWire(experiment);
+        }
+        return wire;
+    }
+
+    private static WireSnapshot ToWire(DomainSnapshot snapshot)
+    {
+        var wire = new WireSnapshot
+        {
+            Window = snapshot.Window,
+            TakenAt = Iso(snapshot.TakenAt),
+            Views = snapshot.Views,
+            MinutesWatched = snapshot.MinutesWatched,
+            AverageViewDurationSeconds = snapshot.AverageViewDurationSeconds,
+            AverageViewPercentage = snapshot.AverageViewPercentage,
+            SubscribersGained = snapshot.SubscribersGained,
+            SubscribersLost = snapshot.SubscribersLost,
+            Likes = snapshot.Likes,
+            Comments = snapshot.Comments,
+            Shares = snapshot.Shares,
+        };
+        if (snapshot.Impressions is { } impressions)
+        {
+            wire.Impressions = impressions;
+        }
+        if (snapshot.ImpressionsCtr is { } ctr)
+        {
+            wire.ImpressionsCtr = ctr;
+        }
+        wire.Retention.AddRange(snapshot.Retention.Select(r => new WireRetentionPoint
+        {
+            ElapsedRatio = r.ElapsedRatio,
+            AudienceWatchRatio = r.AudienceWatchRatio,
+        }));
+        return wire;
+    }
+
+    private static WireExperiment ToWire(DomainExperiment experiment)
+    {
+        var wire = new WireExperiment { Id = experiment.Id, Kind = experiment.Kind, Status = experiment.Status };
+        if (experiment.WinnerArmId is not null)
+        {
+            wire.WinnerArmId = experiment.WinnerArmId;
+        }
+        if (experiment.Result is not null)
+        {
+            wire.Result = experiment.Result;
+        }
+        wire.Arms.AddRange(experiment.Arms.Select(a =>
+        {
+            var arm = new WireExperimentArm
+            {
+                Id = a.Id,
+                Label = a.Label,
+                Value = a.Value,
+                Impressions = a.Impressions,
+                Clicks = a.Clicks,
+                AverageViewPercentage = a.AverageViewPercentage,
+            };
+            if (a.StartedAt is { } startedAt)
+            {
+                arm.StartedAt = Iso(startedAt);
+            }
+            if (a.EndedAt is { } endedAt)
+            {
+                arm.EndedAt = Iso(endedAt);
+            }
+            return arm;
+        }));
+        return wire;
+    }
+
+    private static DomainPublication ToDomain(WirePublication wire) => new(
+        wire.Status,
+        wire.HasVideoId ? wire.VideoId : null,
+        wire.PrivacyStatus,
+        ToDomainTime(wire.HasPublishAt, wire.PublishAt),
+        wire.MadeForKids,
+        wire.SyntheticMedia,
+        ToDomainTime(wire.HasUploadedAt, wire.UploadedAt),
+        wire.HasError ? wire.Error : null,
+        wire.Snapshots.Select(s => new DomainSnapshot(
+            s.Window,
+            ParseIso(s.TakenAt),
+            s.Views,
+            s.MinutesWatched,
+            s.AverageViewDurationSeconds,
+            s.AverageViewPercentage,
+            s.SubscribersGained,
+            s.SubscribersLost,
+            s.Likes,
+            s.Comments,
+            s.Shares,
+            s.HasImpressions ? s.Impressions : null,
+            s.HasImpressionsCtr ? s.ImpressionsCtr : null,
+            s.Retention.Select(r => new DomainRetentionPoint(r.ElapsedRatio, r.AudienceWatchRatio)).ToList())).ToList(),
+        wire.Proposals.Select(p => new DomainProposal(
+            p.Id, p.Kind, p.Text, p.Reason, p.Status, p.HasThumbnailFile ? p.ThumbnailFile : null)).ToList(),
+        wire.Experiment is null
+            ? null
+            : new DomainExperiment(
+                wire.Experiment.Id,
+                wire.Experiment.Kind,
+                wire.Experiment.Status,
+                wire.Experiment.Arms.Select(a => new DomainExperimentArm(
+                    a.Id,
+                    a.Label,
+                    a.Value,
+                    ToDomainTime(a.HasStartedAt, a.StartedAt),
+                    ToDomainTime(a.HasEndedAt, a.EndedAt),
+                    a.Impressions,
+                    a.Clicks,
+                    a.AverageViewPercentage)).ToList(),
+                wire.Experiment.HasWinnerArmId ? wire.Experiment.WinnerArmId : null,
+                wire.Experiment.HasResult ? wire.Experiment.Result : null));
+
     private static DateTimeOffset ParseIso(string value) =>
-        DateTimeOffset.TryParseExact(value, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
             ? parsed
             : throw new OperatorValidationException($"'{value}' is not a time Scout accepts.");
 

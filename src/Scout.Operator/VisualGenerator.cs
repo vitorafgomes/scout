@@ -87,7 +87,15 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
     /// saved, when there is no image service, the day's pictures are spent, or the service fails or returns no bytes,
     /// which gives its place back.
     /// </summary>
-    public async Task<bool> ThumbnailAsync(string title, string directory, string fileName, CancellationToken ct)
+    public Task<bool> ThumbnailAsync(string title, string directory, string fileName, CancellationToken ct)
+        => PictureAsync(ThumbnailPrompt(title), directory, fileName, ct);
+
+    /// <summary>
+    /// Make a picture from <paramref name="prompt"/> and save it as <paramref name="fileName"/>, counted against the same
+    /// day's <see cref="PerDay"/> pictures; false, with nothing saved, when there is no image service, the day's pictures are
+    /// spent, or the service fails or returns no bytes, which gives its place back.
+    /// </summary>
+    public async Task<bool> PictureAsync(string prompt, string directory, string fileName, CancellationToken ct)
     {
         var images = kernel.Services.GetService<ITextToImageService>();
         if (images is null || !_today.TryTake())
@@ -98,7 +106,7 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
         ReadOnlyMemory<byte>? bytes;
         try
         {
-            var made = await images.GetImageContentsAsync(new TextContent(ThumbnailPrompt(title)), media.ImageSettings, kernel: null, ct)
+            var made = await images.GetImageContentsAsync(new TextContent(prompt), media.ImageSettings, kernel: null, ct)
                 .ConfigureAwait(false);
             bytes = made.Count > 0 ? made[0].Data : null;
         }

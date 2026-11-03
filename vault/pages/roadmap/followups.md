@@ -22,21 +22,16 @@ reliability: medium
 
 ## Entries
 
+### The revoke sentence is not shown on a write recorded after a revoke (2026-11-03)
+
+- **Gap:** when the owner revokes YouTube writes while an approved action is running, the executor saves what YouTube took (the video id or the arm timing) and records the action once as "after revoke" ([[pages/invariants/no-executive-writes]], [[pages/services/operator]]); the record consumes the action, so the executor's follow-up save of "The owner revoked YouTube writes after approving this action" is refused and only logged. The write itself is shown and logged correctly; the project just does not say why.
+- **Unblocks with:** the control plane's after-revoke record path writing that sentence on the action's project in the same step ([[pages/services/control-plane]]).
+
 ### No LGPL ffmpeg is bundled for macOS (2026-11-03)
 
 - **Blocker:** the operator's assembly needs ffmpeg (ffprobe is no longer used). Linux and Windows bundle the BtbN LGPL static builds (libopenh264, AAC, libfreetype), pinned by SHA-256; no reputable LGPL static build exists for macOS arm64 (martin-riedl, evermeet and osxexperts builds are GPL, Homebrew is GPL), so on macOS Scout uses an ffmpeg the owner installed and the readiness banner says when none is found ([[pages/decisions/0033-channel-operator-architecture]], [[pages/services/operator]]).
 - **Unblocks with:** a CI job on a macos runner that builds ffmpeg from a pinned tag with an LGPL configure (no `--enable-gpl`, `--enable-videotoolbox`, libopus, libfreetype) and publishes it as a pinned release asset.
 - **Also noted:** the bundled H.264 encoder is a self-compiled libopenh264; Cisco's patent licence covers only Cisco's own binary, so the owner carries the same H.264 patent position as any project that ships an H.264 encoder; VP9 with Opus is the runtime fallback.
-
-### Write gate residuals after review (2026-11-02)
-
-- **Blocker:** three gaps left by the write-gate review round, none reachable while no write function is declared: a worker started from the tray before the control plane connects still runs without grants, because `connectControlPlane` runs after `createSupervisor` in `ui/packages/main/src/main.ts`; an approved irreversible action can still be recorded after the owner revokes the grant (only reversible rows check the grant at record time); and `RecordAsync` in `src/Scout.ControlPlane/WriteGate/WriteGateService.cs` marks the action executed before appending to the write log, so a failed append leaves an executed action without a log entry.
-- **Unblocks with:** phase 5 of [[pages/roadmap/youtube-channel-operator]], when the first irreversible write is executed: connect the control plane before the supervisor, refuse a record whose feature is no longer granted, and append the log entry before marking the action executed (or both under one gate).
-
-### The approval queue and the write log are never trimmed (2026-11-02)
-
-- **Blocker:** every Review poll (every 15 seconds while the screen is open) parses all of `actions.json`, decided actions included, and walks all of `writes.log` to keep its last entries; neither file is ever trimmed, so the cost grows with lifetime history (performance lens of the write-gate review, `src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs` and `JsonLinesWriteLog.cs`).
-- **Unblocks with:** the first feature that enqueues actions (phase 5 of [[pages/roadmap/youtube-channel-operator]]): drop rejected actions, and approved ones once no `RecordWrite` can still look them up, when the queue is written; read only the tail of `writes.log` by seeking from the end.
 
 ### One-click update covers only the AppImage and Windows (2026-11-02)
 

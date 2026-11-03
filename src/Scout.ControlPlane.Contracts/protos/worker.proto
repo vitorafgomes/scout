@@ -5,6 +5,7 @@ package scout.controlplane.v1;
 option csharp_namespace = "Scout.ControlPlane.Contracts";
 
 import "protos/operator.proto";
+import "protos/features.proto";
 
 service WorkerGate {
   rpc RequestWrite(RequestWriteRequest) returns (RequestWriteResponse);
@@ -16,6 +17,7 @@ service WorkerGate {
   rpc ListOperatorProjects(ListProjectsRequest) returns (ListProjectsResponse);
   rpc GetOperatorMediaDirectory(GetProjectRequest) returns (MediaDirectory);
   rpc ReportReadiness(Readiness) returns (Readiness);
+  rpc NextApprovedAction(NextApprovedActionRequest) returns (NextApprovedActionResponse);
 }
 
 message RequestWriteRequest {
@@ -50,5 +52,12 @@ message NextQueuedProjectRequest {}
 
 message NextQueuedProjectResponse {
   optional Project project = 1;
+  optional string origin_reference = 2;
+}
+
+message NextApprovedActionRequest {}
+
+message NextApprovedActionResponse {
+  optional PendingAction action = 1;
   optional string origin_reference = 2;
 }

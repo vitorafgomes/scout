@@ -743,6 +743,7 @@ const projectDto: OperatorProjectDto = {
   error: null,
   scenes: [],
   package: null,
+  publication: null,
 };
 
 const readyScene = {
@@ -794,6 +795,98 @@ const packageWire = {
 };
 
 const assembledWire = { ...projectWire, status: 'assembled', package: packageWire };
+
+const publicationWire = {
+  status: 'scheduled',
+  videoId: 'dQw4w9WgXcQ',
+  privacyStatus: 'private',
+  publishAt: '2026-11-10T09:00:00Z',
+  madeForKids: false,
+  syntheticMedia: true,
+  uploadedAt: '2026-11-03T12:00:00Z',
+  snapshots: [
+    {
+      window: '24h',
+      takenAt: '2026-11-04T12:00:00Z',
+      views: 1234,
+      minutesWatched: 2050.5,
+      averageViewDurationSeconds: 99.7,
+      averageViewPercentage: 41.2,
+      subscribersGained: 12,
+      subscribersLost: 1,
+      likes: 88,
+      comments: 9,
+      shares: 4,
+      retention: [
+        { elapsedRatio: 0, audienceWatchRatio: 1 },
+        { elapsedRatio: 0.5, audienceWatchRatio: 0.42 },
+      ],
+    },
+    {
+      window: '7d',
+      takenAt: '2026-11-10T12:00:00Z',
+      views: 5000,
+      minutesWatched: 8000,
+      averageViewDurationSeconds: 96,
+      averageViewPercentage: 39.5,
+      subscribersGained: 40,
+      subscribersLost: 3,
+      likes: 300,
+      comments: 31,
+      shares: 17,
+      impressions: 64000,
+      impressionsCtr: 5.1,
+      retention: [],
+    },
+  ],
+  proposals: [
+    {
+      id: 'pr1',
+      kind: 'title',
+      text: 'Span<T> in 5 minutes',
+      reason: 'CTR under the channel median',
+      status: 'proposed',
+    },
+    {
+      id: 'pr2',
+      kind: 'thumbnail',
+      text: 'Bigger face',
+      reason: 'Low CTR',
+      status: 'accepted',
+      thumbnailFile: 'thumbnail-proposal-pr2.png',
+    },
+  ],
+  experiment: {
+    id: 'e1',
+    kind: 'title',
+    status: 'decided',
+    arms: [
+      {
+        id: 'control',
+        label: 'Control',
+        value: 'Span<T> explained',
+        startedAt: '2026-11-11T00:00:00Z',
+        endedAt: '2026-11-12T00:00:00Z',
+        impressions: 2000,
+        clicks: 80,
+        averageViewPercentage: 40,
+      },
+      {
+        id: 'a1',
+        label: 'Variant',
+        value: 'Span<T> in 5 minutes',
+        startedAt: '2026-11-12T00:00:00Z',
+        impressions: 0,
+        clicks: 0,
+        averageViewPercentage: 0,
+      },
+    ],
+    winnerArmId: 'a1',
+    result: 'Variant wins: z = 2.31 on 2000 and 2100 impressions.',
+  },
+};
+
+const publishedWire = { ...assembledWire, status: 'approved', publication: publicationWire };
 
 const readinessWire = {
   speechAvailable: false,
@@ -855,6 +948,13 @@ async function startOperatorServer(
       package: { status: 'assembly_queued', error: 'The last assembly failed.' },
     })),
     ConfirmMediaRights: handler('ConfirmMediaRights', () => assembledWire),
+    PublishPackage: handler('PublishPackage', () => ({
+      ...assembledWire,
+      publication: { status: 'publish_approved', privacyStatus: 'unlisted', madeForKids: true },
+    })),
+    DecideProposal: handler('DecideProposal', () => publishedWire),
+    StartExperiment: handler('StartExperiment', () => publishedWire),
+    AdoptExperimentWinner: handler('AdoptExperimentWinner', () => publishedWire),
     EditPackageMetadata: handler('EditPackageMetadata', () => assembledWire),
     ApprovePackage: handler('ApprovePackage', () => ({
       ...assembledWire,
@@ -895,7 +995,14 @@ describe('createControlPlaneClient operator', () => {
     expect(saved).toEqual(mandateWire);
     expect(projects).toEqual([
       projectDto,
-      { ...queuedWire, script: null, error: 'model unavailable', scenes: [], package: null },
+      {
+        ...queuedWire,
+        script: null,
+        error: 'model unavailable',
+        scenes: [],
+        package: null,
+        publication: null,
+      },
     ]);
     expect(one).toEqual(projectDto);
     expect([started.id, started.status, started.script]).toEqual(['p2', 'queued', null]);
@@ -1178,6 +1285,122 @@ describe('createControlPlaneClient operator', () => {
       { method: 'ApprovePackage', request: { id: 'p1' } },
     ]);
     expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('maps the publication with its snapshots, retention, proposals and experiment and absent optional fields as null, and sends publish, proposal decision, experiment start and adoption with the token', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const requested = await client.publishPackage('p1', 'unlisted', null, true, false);
+    await client.publishPackage('p1', 'private', '2026-11-10T09:00:00.000Z', false, true);
+    const decided = await client.decideProposal('p1', 'pr1', false);
+    await client.startExperiment('p1', 48);
+    await client.adoptExperimentWinner('p1');
+
+    expect(requested.publication).toEqual({
+      status: 'publish_approved',
+      videoId: null,
+      privacyStatus: 'unlisted',
+      publishAt: null,
+      madeForKids: true,
+      syntheticMedia: false,
+      uploadedAt: null,
+      error: null,
+      snapshots: [],
+      proposals: [],
+      experiment: null,
+    });
+    expect(decided.publication as unknown).toEqual({
+      ...publicationWire,
+      error: null,
+      snapshots: [
+        { ...publicationWire.snapshots[0]!, impressions: null, impressionsCtr: null },
+        publicationWire.snapshots[1]!,
+      ],
+      proposals: [
+        { ...publicationWire.proposals[0]!, thumbnailFile: null },
+        publicationWire.proposals[1]!,
+      ],
+      experiment: {
+        ...publicationWire.experiment,
+        arms: [
+          publicationWire.experiment.arms[0]!,
+          { ...publicationWire.experiment.arms[1]!, endedAt: null },
+        ],
+      },
+    });
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      {
+        method: 'PublishPackage',
+        request: {
+          projectId: 'p1',
+          privacyStatus: 'unlisted',
+          madeForKids: true,
+          syntheticMedia: false,
+        },
+      },
+      {
+        method: 'PublishPackage',
+        request: {
+          projectId: 'p1',
+          privacyStatus: 'private',
+          publishAt: '2026-11-10T09:00:00.000Z',
+          madeForKids: false,
+          syntheticMedia: true,
+        },
+      },
+      { method: 'DecideProposal', request: { projectId: 'p1', proposalId: 'pr1', accept: false } },
+      { method: 'StartExperiment', request: { projectId: 'p1', armHours: 48 } },
+      { method: 'AdoptExperimentWinner', request: { id: 'p1' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('publishPackage rejects with ControlPlaneUnavailableError within the deadline when nothing listens, and a publish the gate refuses with ControlPlanePermissionDeniedError', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const deniedSocket = tempSocketPath();
+    server = await startOperatorServer(deniedSocket, [], {
+      failWith: { code: grpc.status.PERMISSION_DENIED, details: 'youtube may not write' },
+    });
+    const deniedClient = createControlPlaneClient({
+      socketPath: deniedSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    client = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const startedAt = Date.now();
+    const unreachable = await client.publishPackage('p1', 'private', null, false, false).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const elapsed = Date.now() - startedAt;
+    const refused = await deniedClient.publishPackage('p1', 'private', null, false, false).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    deniedClient.close();
+
+    expect(unreachable).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(elapsed).toBeLessThan(5_000);
+    expect(refused).toBeInstanceOf(ControlPlanePermissionDeniedError);
+    expect((refused as Error).message).toBe('youtube may not write');
   });
 
   it('an approval the control plane refuses rejects with ControlPlaneInvalidArgumentError carrying what still blocks it, and an assembly without the grant with ControlPlanePermissionDeniedError', async () => {

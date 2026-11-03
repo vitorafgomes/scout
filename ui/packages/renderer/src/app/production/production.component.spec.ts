@@ -63,6 +63,7 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     error: null,
     scenes: [],
     package: null,
+    publication: null,
     ...overrides,
   };
 }

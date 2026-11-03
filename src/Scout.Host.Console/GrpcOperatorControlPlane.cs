@@ -8,11 +8,16 @@ namespace Scout.Host.Console;
 /// <see cref="IOperatorControlPlane"/> over the control plane's <c>WorkerGate</c> service, on the channel, the
 /// worker token and the deadline of the <see cref="GrpcWriteGate"/> it is given. A refusal the control plane
 /// words (no grant, a value it does not accept, a change only the owner may make, an unknown project) keeps its
-/// words; any other failure reads "Scout could not reach its control plane."
+/// words; any other failure reads "Scout could not reach its control plane." A record the control plane already logged
+/// is a success, and a record refused because the owner revoked the grant is a <see cref="WriteRevokedException"/>.
 /// </summary>
 internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorControlPlane
 {
     internal const string Unreachable = "Scout could not reach its control plane.";
+
+    internal const string AlreadyRecordedPhrase = "already recorded in the write log";
+
+    internal const string RevokedPhrase = "revoked";
 
     public async Task<OperatorMandate> GetMandateAsync(CancellationToken ct)
     {
@@ -85,8 +90,9 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         {
             var worded = ex.StatusCode is StatusCode.PermissionDenied or StatusCode.FailedPrecondition
                 or StatusCode.InvalidArgument or StatusCode.NotFound;
-            throw new InvalidOperationException(
-                worded && !string.IsNullOrWhiteSpace(ex.Status.Detail) ? ex.Status.Detail : Unreachable, ex);
+            throw worded && !string.IsNullOrWhiteSpace(ex.Status.Detail)
+                ? new InvalidOperationException(ex.Status.Detail, ex)
+                : new ControlPlaneUnavailableException(Unreachable, ex);
         }
     }
 
@@ -132,6 +138,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         if (project.Package is { } package)
         {
             wire.Package = ToWire(package);
+        }
+
+        if (project.Publication is { } publication)
+        {
+            wire.Publication = ToWire(publication);
         }
 
         return wire;
@@ -205,6 +216,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
                 s.HasVisualFile ? s.VisualFile : null,
                 s.DurationMs))],
             Package = wire.Package is null ? null : FromWire(wire.Package),
+            Publication = wire.Publication is null ? null : FromWire(wire.Publication),
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -230,6 +242,203 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         wire.Notes.AddRange(readiness.Notes);
         await CallAsync(() => gate.Client.ReportReadinessAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
     }
+
+    public async Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct)
+    {
+        var next = await CallAsync(
+            () => gate.Client.NextApprovedActionAsync(new NextApprovedActionRequest(), gate.CallOptions(ct)).ResponseAsync, ct)
+            .ConfigureAwait(false);
+        return next.Action is not { } action
+            ? null
+            : new OperatorAction(action.Id, action.FeatureId, action.Action, action.Target, action.Summary, next.HasOriginReference ? next.OriginReference : null);
+    }
+
+    public async Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        var request = new RecordWriteRequest
+        {
+            FeatureId = action.FeatureId,
+            Scope = action.Action,
+            Target = action.Target,
+            Outcome = outcome,
+            ActionId = action.Id,
+        };
+        try
+        {
+            await CallAsync(() => gate.Client.RecordWriteAsync(request, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex) when (ex is not ControlPlaneUnavailableException
+            && ex.Message.Contains(AlreadyRecordedPhrase, StringComparison.Ordinal))
+        {
+        }
+        catch (InvalidOperationException ex) when (ex is not ControlPlaneUnavailableException
+            && ex.Message.Contains(RevokedPhrase, StringComparison.Ordinal))
+        {
+            throw new WriteRevokedException(ex.Message, ex);
+        }
+    }
+
+    private static Publication ToWire(OperatorPublication publication)
+    {
+        var wire = new Publication
+        {
+            Status = publication.Status,
+            PrivacyStatus = publication.PrivacyStatus,
+            MadeForKids = publication.MadeForKids,
+            SyntheticMedia = publication.SyntheticMedia,
+        };
+        if (publication.VideoId is not null)
+        {
+            wire.VideoId = publication.VideoId;
+        }
+
+        if (publication.PublishAt is not null)
+        {
+            wire.PublishAt = publication.PublishAt;
+        }
+
+        if (publication.UploadedAt is not null)
+        {
+            wire.UploadedAt = publication.UploadedAt;
+        }
+
+        if (publication.Error is not null)
+        {
+            wire.Error = publication.Error;
+        }
+
+        wire.Snapshots.AddRange(publication.Snapshots.Select(ToWire));
+        wire.Proposals.AddRange(publication.Proposals.Select(p =>
+        {
+            var proposal = new Proposal { Id = p.Id, Kind = p.Kind, Text = p.Text, Reason = p.Reason, Status = p.Status };
+            if (p.ThumbnailFile is not null)
+            {
+                proposal.ThumbnailFile = p.ThumbnailFile;
+            }
+
+            return proposal;
+        }));
+        if (publication.Experiment is { } experiment)
+        {
+            wire.Experiment = ToWire(experiment);
+        }
+
+        return wire;
+    }
+
+    private static Snapshot ToWire(OperatorSnapshot snapshot)
+    {
+        var wire = new Snapshot
+        {
+            Window = snapshot.Window,
+            TakenAt = snapshot.TakenAt,
+            Views = snapshot.Views,
+            MinutesWatched = snapshot.MinutesWatched,
+            AverageViewDurationSeconds = snapshot.AverageViewDurationSeconds,
+            AverageViewPercentage = snapshot.AverageViewPercentage,
+            SubscribersGained = snapshot.SubscribersGained,
+            SubscribersLost = snapshot.SubscribersLost,
+            Likes = snapshot.Likes,
+            Comments = snapshot.Comments,
+            Shares = snapshot.Shares,
+        };
+        if (snapshot.Impressions is { } impressions)
+        {
+            wire.Impressions = impressions;
+        }
+
+        if (snapshot.ImpressionsCtr is { } ctr)
+        {
+            wire.ImpressionsCtr = ctr;
+        }
+
+        wire.Retention.AddRange(snapshot.Retention.Select(r => new RetentionPoint { ElapsedRatio = r.ElapsedRatio, AudienceWatchRatio = r.AudienceWatchRatio }));
+        return wire;
+    }
+
+    private static Experiment ToWire(OperatorExperiment experiment)
+    {
+        var wire = new Experiment { Id = experiment.Id, Kind = experiment.Kind, Status = experiment.Status };
+        if (experiment.WinnerArmId is not null)
+        {
+            wire.WinnerArmId = experiment.WinnerArmId;
+        }
+
+        if (experiment.Result is not null)
+        {
+            wire.Result = experiment.Result;
+        }
+
+        wire.Arms.AddRange(experiment.Arms.Select(a =>
+        {
+            var arm = new ExperimentArm
+            {
+                Id = a.Id,
+                Label = a.Label,
+                Value = a.Value,
+                Impressions = a.Impressions,
+                Clicks = a.Clicks,
+                AverageViewPercentage = a.AverageViewPercentage,
+            };
+            if (a.StartedAt is not null)
+            {
+                arm.StartedAt = a.StartedAt;
+            }
+
+            if (a.EndedAt is not null)
+            {
+                arm.EndedAt = a.EndedAt;
+            }
+
+            return arm;
+        }));
+        return wire;
+    }
+
+    private static OperatorPublication FromWire(Publication wire)
+        => new(
+            wire.Status,
+            wire.HasVideoId ? wire.VideoId : null,
+            wire.PrivacyStatus,
+            wire.HasPublishAt ? wire.PublishAt : null,
+            wire.MadeForKids,
+            wire.SyntheticMedia,
+            wire.HasUploadedAt ? wire.UploadedAt : null,
+            wire.HasError ? wire.Error : null,
+            [.. wire.Snapshots.Select(s => new OperatorSnapshot(
+                s.Window,
+                s.TakenAt,
+                s.Views,
+                s.MinutesWatched,
+                s.AverageViewDurationSeconds,
+                s.AverageViewPercentage,
+                s.SubscribersGained,
+                s.SubscribersLost,
+                s.Likes,
+                s.Comments,
+                s.Shares,
+                s.HasImpressions ? s.Impressions : null,
+                s.HasImpressionsCtr ? s.ImpressionsCtr : null,
+                [.. s.Retention.Select(r => new OperatorRetentionPoint(r.ElapsedRatio, r.AudienceWatchRatio))]))],
+            [.. wire.Proposals.Select(p => new OperatorProposal(p.Id, p.Kind, p.Text, p.Reason, p.Status, p.HasThumbnailFile ? p.ThumbnailFile : null))],
+            wire.Experiment is not { } experiment
+                ? null
+                : new OperatorExperiment(
+                    experiment.Id,
+                    experiment.Kind,
+                    experiment.Status,
+                    [.. experiment.Arms.Select(a => new OperatorExperimentArm(
+                        a.Id,
+                        a.Label,
+                        a.Value,
+                        a.HasStartedAt ? a.StartedAt : null,
+                        a.HasEndedAt ? a.EndedAt : null,
+                        a.Impressions,
+                        a.Clicks,
+                        a.AverageViewPercentage))],
+                    experiment.HasWinnerArmId ? experiment.WinnerArmId : null,
+                    experiment.HasResult ? experiment.Result : null));
 
     private static VideoPackage ToWire(OperatorPackage package)
     {

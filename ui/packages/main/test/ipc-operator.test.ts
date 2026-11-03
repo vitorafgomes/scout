@@ -77,6 +77,7 @@ const project: OperatorProjectDto = {
   error: null,
   scenes: [],
   package: null,
+  publication: null,
 };
 
 const readiness: ReadinessDto = {
@@ -123,6 +124,10 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     confirmMediaRights: mock(async () => project),
     editPackageMetadata: mock(async () => project),
     approvePackage: mock(async () => ({ ...project, status: 'approved' })),
+    publishPackage: mock(async () => project),
+    decideProposal: mock(async () => project),
+    startExperiment: mock(async () => project),
+    adoptExperimentWinner: mock(async () => project),
     ...overrides,
   };
 }
@@ -660,7 +665,129 @@ describe('registerOperatorHandlers', () => {
     expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
   });
 
-  it('the returned unregister removes the sixteen operator handlers', () => {
+  it('publication forwards the privacy, made for kids, synthetic media and a future schedule with private', async () => {
+    const future = '2099-01-01T09:30:00.000Z';
+
+    await invoke(CHANNEL.operatorPublication, {
+      projectId: ' p1 ',
+      privacyStatus: 'private',
+      publishAt: future,
+      madeForKids: false,
+      syntheticMedia: true,
+    });
+    await invoke(CHANNEL.operatorPublication, {
+      projectId: 'p1',
+      privacyStatus: 'unlisted',
+      publishAt: null,
+      madeForKids: true,
+      syntheticMedia: false,
+    });
+
+    expect(client.publishPackage.mock.calls).toEqual([
+      ['p1', 'private', future, false, true],
+      ['p1', 'unlisted', null, true, false],
+    ]);
+  });
+
+  it('a publication without a privacy choice or a made for kids answer, a schedule with public or unlisted, a schedule that is not an ISO UTC time or is in the past is refused before reaching the control plane', async () => {
+    const base = {
+      projectId: 'p1',
+      privacyStatus: 'private',
+      publishAt: null,
+      madeForKids: false,
+      syntheticMedia: false,
+    };
+
+    const refused = [
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, privacyStatus: undefined })),
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, privacyStatus: 'friends' })),
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, madeForKids: undefined })),
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, madeForKids: 'no' })),
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, syntheticMedia: undefined })),
+      await rejection(
+        invoke(CHANNEL.operatorPublication, {
+          ...base,
+          privacyStatus: 'public',
+          publishAt: '2099-01-01T09:30:00.000Z',
+        }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorPublication, { ...base, publishAt: '2099-01-01 09:30' }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorPublication, { ...base, publishAt: '2020-01-01T09:30:00.000Z' }),
+      ),
+      await rejection(invoke(CHANNEL.operatorPublication, { ...base, projectId: ' ' })),
+    ];
+
+    expect(refused.map((r) => r.message)).toEqual([
+      'Choose public, private or unlisted.',
+      'Choose public, private or unlisted.',
+      'Say whether the video is made for kids.',
+      'Say whether the video is made for kids.',
+      'Say whether the video contains realistic synthetic or altered media.',
+      'A scheduled time needs private; YouTube makes the video public at that time.',
+      'The scheduled time is not an ISO UTC time.',
+      'The scheduled time must be in the future.',
+      'The project id is required.',
+    ]);
+    expect(refused.every((r) => r.code === 'operator/invalid-request')).toBe(true);
+    expect(client.publishPackage).not.toHaveBeenCalled();
+  });
+
+  it('a proposal decision forwards accept or reject, and refuses a decision that is not a boolean', async () => {
+    await invoke(CHANNEL.operatorProposalDecision, {
+      projectId: 'p1',
+      proposalId: ' pr1 ',
+      accept: true,
+    });
+    await invoke(CHANNEL.operatorProposalDecision, {
+      projectId: 'p1',
+      proposalId: 'pr2',
+      accept: false,
+    });
+    const refused = await rejection(
+      invoke(CHANNEL.operatorProposalDecision, {
+        projectId: 'p1',
+        proposalId: 'pr3',
+        accept: 'yes',
+      }),
+    );
+
+    expect(client.decideProposal.mock.calls).toEqual([
+      ['p1', 'pr1', true],
+      ['p1', 'pr2', false],
+    ]);
+    expect(refused).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A proposal is accepted or rejected.',
+    });
+  });
+
+  it('an experiment starts with arm hours from 24 to 168 only, and the winner is adopted by project id', async () => {
+    await invoke(CHANNEL.operatorExperiment, { projectId: 'p1', armHours: 24 });
+    await invoke(CHANNEL.operatorExperiment, { projectId: 'p1', armHours: 168 });
+    const refused = await Promise.all(
+      [23, 169, 48.5, '48', undefined].map((armHours) =>
+        rejection(invoke(CHANNEL.operatorExperiment, { projectId: 'p1', armHours })),
+      ),
+    );
+    await invoke(CHANNEL.operatorExperimentAdoption, { id: ' p1 ' });
+
+    expect(client.startExperiment.mock.calls).toEqual([
+      ['p1', 24],
+      ['p1', 168],
+    ]);
+    expect(refused).toEqual(
+      refused.map(() => ({
+        code: 'operator/invalid-request',
+        message: 'Each arm runs 24 to 168 hours.',
+      })),
+    );
+    expect(client.adoptExperimentWinner.mock.calls).toEqual([['p1']]);
+  });
+
+  it('the returned unregister removes the twenty operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -690,6 +817,10 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorMediaRights,
         CHANNEL.operatorPackageMetadata,
         CHANNEL.operatorPackageApproval,
+        CHANNEL.operatorPublication,
+        CHANNEL.operatorProposalDecision,
+        CHANNEL.operatorExperiment,
+        CHANNEL.operatorExperimentAdoption,
       ].sort(),
     );
     expect(own.handlers.size).toBe(0);

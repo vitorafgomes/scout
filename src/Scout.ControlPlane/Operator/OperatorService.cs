@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Features;
 using Scout.ControlPlane.WriteGate;
@@ -12,8 +14,10 @@ namespace Scout.ControlPlane.Operator;
 /// write log. The owner queues an assembly, edits the package metadata, confirms its media rights
 /// and approves it. The worker can never mark a claim supported or waived, change an owner's decision,
 /// change a project's topic or origin, reorder, lock, change a locked scene or replace the owner's
-/// media, or confirm, approve or change the owner's metadata of a package. The desktop never
-/// receives a project's origin reference.
+/// media, or confirm, approve or change the owner's metadata of a package. The owner publishes an approved
+/// package and starts title and thumbnail experiments, each creating the YouTube actions it needs as approved by
+/// the owner; the worker claims them one at a time and saves the publication's progress, never the owner's
+/// settings or decisions. The desktop never receives a project's origin reference.
 /// </summary>
 public sealed class OperatorService
 {
@@ -46,12 +50,24 @@ public sealed class OperatorService
     private const string DataFolderScope = "Scout's data folder";
     private const int DefaultListLimit = 50;
     private const int MaxListLimit = 200;
+    private const int MaxWorkerListLimit = 5000;
+    private const string Superseded = "superseded by a new publish";
+    private const string ArmNotRun = "The experiment ended before this arm ran.";
     private const int MaxPillars = 5;
     private const int MaxPillarLength = 80;
     private const int MinTopicLength = 3;
     private const int MaxTopicLength = 200;
+    private const int DefaultArmHours = 48;
+    private const int MinArmHours = 24;
+    private const int MaxArmHours = 168;
+    private const int MaxVariants = 2;
+    private const string Insert = "videos.insert";
+    private const string Update = "videos.update";
+    private const string SetThumbnail = "thumbnails.set";
 
     private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan ResearchKeptFor = TimeSpan.FromDays(30);
     private static readonly string[] WorkerStatuses = [Researching, Scripting, ScriptReady, Producing, MediaReady, Assembling, Assembled, Failed];
     private static readonly string[] WorkerClaimStatuses = ["pending", "unsupported"];
     private static readonly string[] OwnerClaimStatuses = ["supported", "unsupported", "waived"];
@@ -59,13 +75,18 @@ public sealed class OperatorService
     private readonly JsonFileOperatorStore _store;
     private readonly WriteGateService _gate;
     private readonly IWriteLog _writes;
+    private readonly IActionQueue _actions;
 
-    /// <summary>Build the service over its store, the write gate that holds the grant check, and the write log.</summary>
+    /// <summary>
+    /// Build the service over its store, the write gate that holds the grant check and the approval queue, and the
+    /// write log.
+    /// </summary>
     public OperatorService(JsonFileOperatorStore store, WriteGateService gate, IWriteLog writes)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+        _actions = gate.Actions;
     }
 
     /// <summary>The saved mandate, or the empty one when the owner has not written it.</summary>
@@ -117,13 +138,12 @@ public sealed class OperatorService
         return trimmed;
     }
 
+    /// <summary>The reason a revoke or a disconnect of YouTube gives every action it cancels.</summary>
+    public const string RevokedReason = "The owner revoked YouTube writes before this action ran.";
+
     /// <summary>The newest projects first; a <paramref name="limit"/> of 0 or less means 50, and at most 200 are returned.</summary>
-    public async Task<IReadOnlyList<OperatorProject>> ListProjectsAsync(int limit, CancellationToken ct)
-    {
-        var take = limit <= 0 ? DefaultListLimit : Math.Min(limit, MaxListLimit);
-        var projects = await _store.ReadProjectsAsync(ct).ConfigureAwait(false);
-        return Enumerable.Reverse(projects).Take(take).Select(ForDesktop).ToList();
-    }
+    public Task<IReadOnlyList<OperatorProject>> ListProjectsAsync(int limit, CancellationToken ct) =>
+        ListNewestAsync(limit, MaxListLimit, ct);
 
     /// <summary>One project, without its origin reference.</summary>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
@@ -198,9 +218,10 @@ public sealed class OperatorService
     /// <exception cref="OperatorValidationException">A status, claim id or topic the operator does not accept.</exception>
     /// <exception cref="OperatorTamperingException">
     /// A change only the owner or the desktop may make, any save on a project the owner queued for production or
-    /// assembly again or approved, a save of producing, media ready or any scene change on a project that is no longer
-    /// producing, or a save of assembling, assembled or any package change on a project that is no longer assembling
-    /// or whose scenes it changes.
+    /// assembly again, a save of an approved project that changes more than its publication and the research it may
+    /// clear, a save of producing, media ready or any scene change on a project that is no longer producing, or a save
+    /// of assembling, assembled or any package change on a project that is no longer assembling or whose scenes it
+    /// changes. A project created more than 30 days ago may have its topic candidates and its claims' sources cleared.
     /// </exception>
     /// <exception cref="OperatorNotFoundException">No project has the id.</exception>
     public async Task<OperatorProject> SaveProjectFromWorkerAsync(
@@ -210,11 +231,15 @@ public sealed class OperatorService
     {
         ArgumentNullException.ThrowIfNull(project);
 
-        await RequireGrantAsync(project.Id, ct).ConfigureAwait(false);
-        if (!WorkerStatuses.Contains(project.Status, StringComparer.Ordinal))
+        var refusal = await GrantRefusalAsync(project.Id, ct).ConfigureAwait(false);
+        if (refusal is not null && (string.IsNullOrEmpty(project.Id) || !await RunningOnYouTubeAsync(project.Id, ct).ConfigureAwait(false)))
         {
-            throw new OperatorValidationException(
-                $"Status '{project.Status}' is not one the worker may set: {string.Join(", ", WorkerStatuses)}.");
+            throw new OperatorWriteRefusedException(refusal);
+        }
+
+        if (!WorkerStatuses.Contains(project.Status, StringComparer.Ordinal) && project.Status != Approved)
+        {
+            throw NotAWorkerStatus(project.Status);
         }
 
         ValidateClaims(project.Claims);
@@ -226,6 +251,10 @@ public sealed class OperatorService
 
         if (string.IsNullOrEmpty(project.Id))
         {
+            if (project.Status == Approved)
+            {
+                throw NotAWorkerStatus(project.Status);
+            }
             if (project.Status is Assembling or Assembled || project.Package is not null)
             {
                 throw new OperatorTamperingException(NoLongerAssembling);
@@ -246,6 +275,7 @@ public sealed class OperatorService
             return created;
         }
 
+        string? ended = null;
         var saved = await _store.UpdateProjectsAsync(
                 projects =>
                 {
@@ -258,42 +288,81 @@ public sealed class OperatorService
                             $"The worker may not change the topic or origin of project '{stored.Id}'.");
                     }
 
-                    var claims = MergeClaims(stored.Claims, project.Claims);
+                    var mayClear = stored.CreatedAt < DateTimeOffset.UtcNow - ResearchKeptFor;
+                    var claims = MergeClaims(stored.Claims, project.Claims, mayClear);
                     var scenes = SceneRules.MergeFromWorker(stored.Id, stored.Scenes, project.Scenes);
                     var package = PackageRules.MergeFromWorker(stored.Id, stored.Package, project.Package);
-                    var productionSave = project.Status is Producing or MediaReady || !scenes.SequenceEqual(stored.Scenes);
-                    var assemblySave = project.Status is Assembling or Assembled || !PackageRules.Same(package, stored.Package);
-                    if (assemblySave
-                            ? stored.Status != Assembling || productionSave
-                            : stored.Status is AssemblyQueued or Approved)
-                    {
-                        throw new OperatorTamperingException(NoLongerAssembling);
-                    }
-                    if (stored.Status == ProductionQueued || (stored.Status != Producing && productionSave))
-                    {
-                        throw new OperatorTamperingException(NoLongerProducing);
-                    }
-                    if (project.Status == Assembled)
-                    {
-                        PackageRules.RequireFiles(MediaDirectoryOf(stored.Id), package);
-                    }
-
-                    projects[index] = stored with
+                    var publication = PublicationRules.MergeFromWorker(stored.Id, stored.Publication, project.Publication);
+                    var next = stored with
                     {
                         Status = project.Status,
-                        UpdatedAt = DateTimeOffset.UtcNow,
                         Candidates = project.Candidates,
                         Script = project.Script,
                         Claims = claims,
                         Error = project.Error,
                         Scenes = scenes,
                         Package = package,
+                        Publication = publication,
                     };
+                    if (refusal is not null && !OnlyWhatARunningActionDid(stored, next))
+                    {
+                        throw new OperatorWriteRefusedException(refusal);
+                    }
+
+                    if (stored.Status == Approved || project.Status == Approved)
+                    {
+                        if (stored.Status != Approved)
+                        {
+                            throw NotAWorkerStatus(project.Status);
+                        }
+                        if (!OnlyPublicationOrClearedResearch(stored, next, mayClear))
+                        {
+                            throw new OperatorTamperingException(NoLongerAssembling);
+                        }
+                    }
+                    else
+                    {
+                        var productionSave = project.Status is Producing or MediaReady || !scenes.SequenceEqual(stored.Scenes);
+                        var assemblySave = project.Status is Assembling or Assembled || !PackageRules.Same(package, stored.Package);
+                        if (assemblySave
+                                ? stored.Status != Assembling || productionSave
+                                : stored.Status == AssemblyQueued)
+                        {
+                            throw new OperatorTamperingException(NoLongerAssembling);
+                        }
+                        if (stored.Status == ProductionQueued || (stored.Status != Producing && productionSave))
+                        {
+                            throw new OperatorTamperingException(NoLongerProducing);
+                        }
+                        if (project.Status == Assembled)
+                        {
+                            PackageRules.RequireFiles(MediaDirectoryOf(stored.Id), package);
+                        }
+                    }
+
+                    if (stored.Publication?.Experiment is { Status: PublicationRules.Running } running
+                        && publication?.Experiment is { Status: not PublicationRules.Running })
+                    {
+                        ended = running.Id;
+                    }
+
+                    projects[index] = next with { UpdatedAt = DateTimeOffset.UtcNow };
                     return projects[index];
                 },
                 ct)
             .ConfigureAwait(false);
         await LogAsync(saved.Id, $"saved {saved.Status}", approvedBy: null, ct).ConfigureAwait(false);
+        if (ended is not null)
+        {
+            var prefix = $"{saved.Id}:{ended}:";
+            await CancelAsync(
+                    (action, approved) => action.Target.StartsWith(prefix, StringComparison.Ordinal)
+                        && !ReferenceEquals(action, approved.LastOrDefault(a => a.Target == prefix + PublicationRules.Control)),
+                    ArmNotRun,
+                    ct)
+                .ConfigureAwait(false);
+        }
+
         return saved;
     }
 
@@ -302,16 +371,30 @@ public sealed class OperatorService
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
     public async Task<OperatorProject> GetProjectForWorkerAsync(string id, CancellationToken ct)
     {
-        await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        if (await GrantRefusalAsync(id, ct).ConfigureAwait(false) is { } refusal && !await RunningOnYouTubeAsync(id, ct).ConfigureAwait(false))
+        {
+            throw new OperatorWriteRefusedException(refusal);
+        }
+
         return await GetProjectAsync(id, ct).ConfigureAwait(false);
     }
 
-    /// <summary>The newest projects first for the worker under the owner's write grant, with the desktop's limit rules.</summary>
+    /// <summary>
+    /// The newest projects first for the worker under the owner's write grant; a <paramref name="limit"/> of 0 or less
+    /// means 50, and at most 5000 are returned, so the worker's data hygiene reaches older projects.
+    /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
     public async Task<IReadOnlyList<OperatorProject>> ListProjectsForWorkerAsync(int limit, CancellationToken ct)
     {
         await RequireGrantAsync("operator projects", ct).ConfigureAwait(false);
-        return await ListProjectsAsync(limit, ct).ConfigureAwait(false);
+        return await ListNewestAsync(limit, MaxWorkerListLimit, ct).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<OperatorProject>> ListNewestAsync(int limit, int max, CancellationToken ct)
+    {
+        var take = limit <= 0 ? DefaultListLimit : Math.Min(limit, max);
+        var projects = await _store.ReadProjectsAsync(ct).ConfigureAwait(false);
+        return Enumerable.Reverse(projects).Take(take).Select(ForDesktop).ToList();
     }
 
     /// <summary>
@@ -704,6 +787,406 @@ public sealed class OperatorService
         return approved;
     }
 
+    /// <summary>
+    /// Publish an approved package under the owner's write grant with the owner's privacy (public, private or
+    /// unlisted), optional publish time, in the future and only for a private video, and declarations. The
+    /// publication becomes <c>publish_approved</c>, and the upload, and the thumbnail when the package has one, are
+    /// queued as approved by the owner, who confirmed them in the desktop, each approval logged as the owner's. A
+    /// project already on YouTube, queued for upload or uploading, or with a YouTube action running, is not published
+    /// again; one whose upload failed before YouTube took it is, and its earlier approved actions are rejected as
+    /// superseded so none of them blocks the new upload.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">A setting outside those, or the project cannot be published now.</exception>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
+    public async Task<OperatorProject> PublishPackageAsync(
+        string projectId,
+        string privacyStatus,
+        DateTimeOffset? publishAt,
+        bool madeForKids,
+        bool syntheticMedia,
+        CancellationToken ct)
+    {
+        if (!PublicationRules.PrivacyStatuses.Contains(privacyStatus, StringComparer.Ordinal))
+        {
+            throw new OperatorValidationException("A video is published as public, private or unlisted.");
+        }
+        if (publishAt is { } at && at <= DateTimeOffset.UtcNow)
+        {
+            throw new OperatorValidationException("The publish time must be in the future.");
+        }
+        if (publishAt is not null && privacyStatus != PublicationRules.Private)
+        {
+            throw new OperatorValidationException("A video with a publish time is uploaded as private; YouTube makes it public at that time.");
+        }
+
+        await RequireGrantAsync(projectId, ct).ConfigureAwait(false);
+        var grantedAt = await _gate.GrantedAtAsync(FeatureCatalog.YouTubeId, ct).ConfigureAwait(false);
+        if ((await _actions.ListPendingAsync(ct).ConfigureAwait(false))
+            .Any(a => a.Status == PendingActionStatus.Executing && !Stale(a, grantedAt) && ProjectOf(a) == projectId))
+        {
+            throw new OperatorValidationException("A YouTube action of this project is running; wait for it to end.");
+        }
+
+        var published = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    if (project.Status != Approved || project.Package is not { Status: Approved })
+                    {
+                        throw new OperatorValidationException($"Only an approved package is published; this one is {project.Status}.");
+                    }
+                    if (project.Publication is { } before
+                        && (before.VideoId is not null || before.Status != PublicationRules.Failed))
+                    {
+                        throw new OperatorValidationException(before.VideoId is not null
+                            ? "The video of this project is already on YouTube."
+                            : $"The video of this project is {before.Status}; wait for the upload to end.");
+                    }
+
+                    projects[index] = project with
+                    {
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        Publication = new Publication(
+                            PublicationRules.PublishApproved,
+                            null,
+                            privacyStatus,
+                            publishAt,
+                            madeForKids,
+                            syntheticMedia,
+                            null,
+                            null,
+                            project.Publication?.Snapshots ?? [],
+                            project.Publication?.Proposals ?? [],
+                            project.Publication?.Experiment),
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+
+        var title = published.Package!.Title;
+        var when = publishAt is { } time
+            ? $" as private, made public at {time.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)}"
+            : $" as {privacyStatus}";
+        List<(string, string, string)> actions = [(Insert, projectId, $"Upload \"{title}\" to YouTube{when}.")];
+        if (published.Package.ThumbnailFile is not null)
+        {
+            actions.Add((SetThumbnail, projectId, $"Set the thumbnail of \"{title}\" on YouTube."));
+        }
+
+        await CancelAsync((action, _) => ProjectOf(action) == projectId, Superseded, ct).ConfigureAwait(false);
+        await ApproveAsync(actions, ct).ConfigureAwait(false);
+        return ForDesktop(published);
+    }
+
+    /// <summary>Record the owner's decision on a proposal the worker made: accepted or rejected.</summary>
+    /// <exception cref="OperatorValidationException">The proposal is already decided.</exception>
+    /// <exception cref="OperatorNotFoundException">The project or the proposal does not exist.</exception>
+    public async Task<OperatorProject> DecideProposalAsync(string projectId, string proposalId, bool accept, CancellationToken ct)
+    {
+        var decided = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    var proposals = project.Publication?.Proposals.ToList() ?? [];
+                    var at = proposals.FindIndex(p => string.Equals(p.Id, proposalId, StringComparison.Ordinal));
+                    if (at < 0)
+                    {
+                        throw new OperatorNotFoundException($"Unknown proposal '{proposalId}' in project '{projectId}'.");
+                    }
+                    if (proposals[at].Status != PublicationRules.Proposed)
+                    {
+                        throw new OperatorValidationException($"Proposal '{proposalId}' is already {proposals[at].Status}.");
+                    }
+
+                    proposals[at] = proposals[at] with { Status = accept ? PublicationRules.Accepted : PublicationRules.Rejected };
+                    projects[index] = project with
+                    {
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        Publication = project.Publication! with { Proposals = proposals },
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        return ForDesktop(decided);
+    }
+
+    /// <summary>
+    /// Start a title or thumbnail experiment on a published or scheduled video under the owner's write grant: the
+    /// kind of the newest accepted title or thumbnail proposal, a control arm with the package's title or thumbnail
+    /// and one arm for each of the first two accepted proposals of that kind, which become <c>tested</c> so no later
+    /// experiment uses them again, each live for
+    /// <paramref name="armHours"/> hours, 24 to 168, 0 meaning 48. One approved action per arm, in order, then one
+    /// that restores the control, each logged as the owner's approval; an arm action is claimed only once the arm
+    /// before it has been live that long.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The arm hours, or what the video still lacks.</exception>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
+    public async Task<OperatorProject> StartExperimentAsync(string projectId, int armHours, CancellationToken ct)
+    {
+        var hours = armHours == 0 ? DefaultArmHours : armHours;
+        if (hours is < MinArmHours or > MaxArmHours)
+        {
+            throw new OperatorValidationException($"Each arm runs {MinArmHours} to {MaxArmHours} hours.");
+        }
+
+        await RequireGrantAsync(projectId, ct).ConfigureAwait(false);
+        var started = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    var publication = project.Publication;
+                    if (publication is not { VideoId: not null, Status: PublicationRules.Published or PublicationRules.Scheduled })
+                    {
+                        throw new OperatorValidationException(
+                            $"Only a published or scheduled video is tested; this one is {publication?.Status ?? "not published"}.");
+                    }
+                    if (publication.Experiment is { Status: PublicationRules.Running })
+                    {
+                        throw new OperatorValidationException("An experiment is already running on this video.");
+                    }
+
+                    var accepted = publication.Proposals
+                        .Where(p => p.Status == PublicationRules.Accepted && p.Kind is PublicationRules.Title or PublicationRules.Thumbnail)
+                        .ToList();
+                    if (accepted.Count == 0)
+                    {
+                        throw new OperatorValidationException("Accept a title or thumbnail proposal first.");
+                    }
+
+                    var kind = accepted[^1].Kind;
+                    var control = kind == PublicationRules.Title ? project.Package?.Title : project.Package?.ThumbnailFile;
+                    if (string.IsNullOrEmpty(control))
+                    {
+                        throw new OperatorValidationException($"The package has no {kind} to come back to.");
+                    }
+
+                    var used = accepted.Where(p => p.Kind == kind).Take(MaxVariants).ToList();
+                    var variants = used
+                        .Select((p, i) => new ExperimentArm(
+                            $"variant-{(char)('a' + i)}", $"Variant {(char)('A' + i)}", kind == PublicationRules.Title ? p.Text : p.ThumbnailFile!, null, null, 0, 0, 0));
+                    var experiment = new Experiment(
+                        Guid.NewGuid().ToString("N"),
+                        kind,
+                        PublicationRules.Running,
+                        [new ExperimentArm(PublicationRules.Control, "Control", control, null, null, 0, 0, 0), .. variants],
+                        null,
+                        null,
+                        hours);
+                    projects[index] = project with
+                    {
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        Publication = publication with
+                        {
+                            Experiment = experiment,
+                            Proposals = [.. publication.Proposals.Select(p => used.Contains(p) ? p with { Status = PublicationRules.Tested } : p)],
+                        },
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+
+        var experiment = started.Publication!.Experiment!;
+        var actions = experiment.Arms
+            .Select(arm => ArmAction(projectId, experiment, arm, $"for {experiment.ArmHours} hours, {arm.Label} of a {experiment.Kind} test"))
+            .Append(ArmAction(projectId, experiment, experiment.Arms[0], $"again when the {experiment.Kind} test ends"))
+            .ToList();
+        await ApproveAsync(actions, ct).ConfigureAwait(false);
+        return ForDesktop(started);
+    }
+
+    /// <summary>
+    /// Put the winner of a concluded experiment live for good under the owner's write grant: the winner becomes the
+    /// package's title or thumbnail, so a later experiment's control and restore use it, the experiment becomes
+    /// <c>adopted</c> so it is adopted once, and one action approved by the owner and logged as the owner's approval
+    /// puts it on YouTube.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The experiment is not concluded with a winner.</exception>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
+    public async Task<OperatorProject> AdoptExperimentWinnerAsync(string projectId, CancellationToken ct)
+    {
+        await RequireGrantAsync(projectId, ct).ConfigureAwait(false);
+        ExperimentArm? winner = null;
+        var adopted = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    var experiment = project.Publication?.Experiment;
+                    if (experiment is { Status: PublicationRules.Adopted })
+                    {
+                        throw new OperatorValidationException("The winner of this experiment is already adopted.");
+                    }
+
+                    winner = experiment is { Status: PublicationRules.Concluded }
+                        ? experiment.Arms.FirstOrDefault(a => a.Id == experiment.WinnerArmId)
+                        : null;
+                    if (winner is null || project.Package is not { } package)
+                    {
+                        throw new OperatorValidationException("Only a concluded experiment with a winner is adopted.");
+                    }
+
+                    projects[index] = project with
+                    {
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                        Publication = project.Publication! with { Experiment = experiment! with { Status = PublicationRules.Adopted } },
+                        Package = experiment!.Kind == PublicationRules.Title
+                            ? package with { Title = winner.Value }
+                            : package with { ThumbnailFile = winner.Value },
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+
+        var tested = adopted.Publication!.Experiment!;
+        await ApproveAsync([ArmAction(projectId, tested, winner!, $"for good, the winner of the {tested.Kind} test")], ct)
+            .ConfigureAwait(false);
+        return ForDesktop(adopted);
+    }
+
+    /// <summary>
+    /// For the worker: claim the oldest YouTube action the owner approved that no write recorded yet, as executing,
+    /// so no other caller gets it until its claim is 30 minutes old. An action waits while an older one of the same
+    /// project is open, and an arm of a running experiment waits until the arm live before it has run its hours.
+    /// An action approved, or claimed, before the owner's current grant is stale: it is never handed out again and
+    /// never holds back its project. Null without the owner's YouTube grant.
+    /// </summary>
+    public async Task<PendingAction?> NextApprovedActionAsync(CancellationToken ct)
+    {
+        var decision = await _gate.RequestAsync(
+                FeatureCatalog.YouTubeId, DataFolderScope, "next approved action", "Read the owner's approved actions", ct)
+            .ConfigureAwait(false);
+        if (decision.Kind != WriteDecisionKind.Allowed)
+        {
+            return null;
+        }
+
+        var grantedAt = await _gate.GrantedAtAsync(FeatureCatalog.YouTubeId, ct).ConfigureAwait(false);
+        var projects = await _store.ReadProjectsAsync(ct).ConfigureAwait(false);
+        var now = DateTimeOffset.UtcNow;
+        return await _actions.ClaimNextAsync(
+                FeatureCatalog.YouTubeId,
+                ClaimLease,
+                (action, open) => !Stale(action, grantedAt)
+                    && ReferenceEquals(open.First(o => !Stale(o, grantedAt) && ProjectOf(o) == ProjectOf(action)), action)
+                    && Due(action, projects, now),
+                ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// For the worker: the origin reference of the project an approved action acts on, the first part of its target;
+    /// null when the project has none or no longer exists.
+    /// </summary>
+    public async Task<string?> OriginReferenceForWorkerAsync(PendingAction action, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        var projects = await _store.ReadProjectsAsync(ct).ConfigureAwait(false);
+        return projects.FirstOrDefault(p => string.Equals(p.Id, ProjectOf(action), StringComparison.Ordinal))?.OriginReference;
+    }
+
+    /// <summary>
+    /// Once the owner revokes YouTube writes or disconnects YouTube: reject every approved YouTube action with
+    /// <see cref="RevokedReason"/>, each logged, so no stale approval runs under a later grant, and end every running
+    /// experiment <c>inconclusive</c> with that reason. An action a worker is executing is left to its record.
+    /// </summary>
+    public async Task CancelApprovedYouTubeActionsAsync(CancellationToken ct)
+    {
+        await CancelAsync((_, _) => true, RevokedReason, ct).ConfigureAwait(false);
+        await _store.UpdateProjectsAsync<object?>(
+                projects =>
+                {
+                    var changed = false;
+                    for (var i = 0; i < projects.Count; i++)
+                    {
+                        if (projects[i].Publication is { Experiment.Status: PublicationRules.Running } publication)
+                        {
+                            projects[i] = projects[i] with
+                            {
+                                Publication = publication with
+                                {
+                                    Experiment = publication.Experiment! with { Status = PublicationRules.Inconclusive, Result = RevokedReason },
+                                },
+                            };
+                            changed = true;
+                        }
+                    }
+
+                    return changed ? projects.Count : null;
+                },
+                ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Clear the topic candidates, drawn from other channels' videos, of every project created more than 30 days ago,
+    /// as YouTube's developer policies require; it needs no grant, so it runs with writes off or only an API key set.
+    /// The projects file is written only when a project had candidates to clear.
+    /// </summary>
+    public Task ClearOldResearchAsync(CancellationToken ct) =>
+        _store.UpdateProjectsAsync<object?>(
+            projects =>
+            {
+                var cutoff = DateTimeOffset.UtcNow - ResearchKeptFor;
+                var cleared = 0;
+                for (var i = 0; i < projects.Count; i++)
+                {
+                    if (projects[i].CreatedAt < cutoff && projects[i].Candidates.Count > 0)
+                    {
+                        projects[i] = projects[i] with { Candidates = [] };
+                        cleared++;
+                    }
+                }
+
+                return cleared > 0 ? cleared : null;
+            },
+            ct);
+
+    /// <summary>
+    /// Remove what Scout read from YouTube once the owner disconnects it: every publication's snapshots, every
+    /// experiment arm's impressions, clicks and average view percentage, and every project's topic candidates and
+    /// claim sources. The owner's content stays: scripts, scenes, media, packages, video ids, and the experiments'
+    /// arms, times, winners and results. It needs no grant, which the disconnect takes away.
+    /// </summary>
+    public Task PurgeYouTubeDataAsync(CancellationToken ct) =>
+        _store.UpdateProjectsAsync(
+            projects =>
+            {
+                for (var i = 0; i < projects.Count; i++)
+                {
+                    projects[i] = projects[i] with
+                    {
+                        Candidates = [],
+                        Claims = [.. projects[i].Claims.Select(c => c with { SourceUrls = [] })],
+                        Publication = projects[i].Publication is { } publication
+                            ? publication with
+                            {
+                                Snapshots = [],
+                                Experiment = publication.Experiment is { } experiment
+                                    ? experiment with
+                                    {
+                                        Arms = [.. experiment.Arms.Select(a => a with { Impressions = 0, Clicks = 0, AverageViewPercentage = 0 })],
+                                    }
+                                    : null,
+                            }
+                            : null,
+                    };
+                }
+
+                return projects.Count;
+            },
+            ct);
+
     /// <summary>Keep the worker's latest readiness report, stamped with the time it arrived.</summary>
     /// <exception cref="OperatorStoreException">The report could not be saved; the earlier one stays.</exception>
     public async Task<Readiness> ReportReadinessAsync(Readiness readiness, CancellationToken ct)
@@ -763,6 +1246,76 @@ public sealed class OperatorService
         }
 
         return -1;
+    }
+
+    private static OperatorValidationException NotAWorkerStatus(string status) =>
+        new($"Status '{status}' is not one the worker may set: {string.Join(", ", WorkerStatuses)}.");
+
+    private static string ProjectOf(PendingAction action) => action.Target.Split(':')[0];
+
+    private static bool Stale(PendingAction action, DateTimeOffset? grantedAt) =>
+        grantedAt is { } since
+        && (action.Status == PendingActionStatus.Executing ? action.ClaimedAt : action.DecidedAt) < since;
+
+    private static bool Due(PendingAction action, IReadOnlyList<OperatorProject> projects, DateTimeOffset now)
+    {
+        var parts = action.Target.Split(':');
+        var experiment = parts.Length == 3
+            ? projects.FirstOrDefault(p => p.Id == parts[0])?.Publication?.Experiment
+            : null;
+        if (experiment is not { Status: PublicationRules.Running } || experiment.Id != parts[1])
+        {
+            return true;
+        }
+
+        var live = experiment.Arms.FirstOrDefault(a => a.StartedAt is not null && a.EndedAt is null);
+        return live is null || live.StartedAt!.Value.AddHours(experiment.ArmHours) <= now;
+    }
+
+    private static (string Action, string Target, string Summary) ArmAction(string projectId, Experiment experiment, ExperimentArm arm, string when) =>
+        experiment.Kind == PublicationRules.Title
+            ? (Update, $"{projectId}:{experiment.Id}:{arm.Id}", $"Change the video's title to \"{arm.Value}\" {when}.")
+            : (SetThumbnail, $"{projectId}:{experiment.Id}:{arm.Id}", $"Change the video's thumbnail to {arm.Value} {when}.");
+
+    private static bool OnlyPublicationOrClearedResearch(OperatorProject stored, OperatorProject next, bool mayClear)
+    {
+        var expected = stored with
+        {
+            Claims = [.. stored.Claims.Select(c => mayClear && next.Claims.FirstOrDefault(n => n.Id == c.Id) is { SourceUrls.Count: 0 }
+                ? c with { SourceUrls = [] }
+                : c)],
+        };
+        return JsonSerializer.Serialize(expected with { Publication = null })
+            == JsonSerializer.Serialize(next with { Publication = null });
+    }
+
+    private async Task CancelAsync(Func<PendingAction, IReadOnlyList<PendingAction>, bool> match, string reason, CancellationToken ct)
+    {
+        foreach (var action in await _actions.RejectApprovedAsync(FeatureCatalog.YouTubeId, match, reason, ct).ConfigureAwait(false))
+        {
+            await _writes.AppendAsync(
+                    new WriteLogEntry(DateTimeOffset.UtcNow, action.FeatureId, action.Action, action.Target, $"rejected: {reason}", "owner", action.Id),
+                    ct)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task ApproveAsync(IReadOnlyList<(string Action, string Target, string Summary)> actions, CancellationToken ct)
+    {
+        foreach (var action in await _actions.EnqueueApprovedAsync(FeatureCatalog.YouTubeId, actions, ct).ConfigureAwait(false))
+        {
+            await _writes.AppendAsync(
+                    new WriteLogEntry(
+                        DateTimeOffset.UtcNow,
+                        action.FeatureId,
+                        action.Action,
+                        action.Target,
+                        WriteGateService.ApprovedOutcome,
+                        "owner",
+                        action.Id),
+                    ct)
+                .ConfigureAwait(false);
+        }
     }
 
     private static OperatorProject ForDesktop(OperatorProject project) => project with { OriginReference = null };
@@ -847,7 +1400,7 @@ public sealed class OperatorService
         }
     }
 
-    private static List<Claim> MergeClaims(IReadOnlyList<Claim> stored, IReadOnlyList<Claim> incoming)
+    private static List<Claim> MergeClaims(IReadOnlyList<Claim> stored, IReadOnlyList<Claim> incoming, bool mayClearSources)
     {
         foreach (var decided in stored.Where(c => c.DecidedAt is not null))
         {
@@ -857,7 +1410,8 @@ public sealed class OperatorService
                 || !string.Equals(sent.Status, decided.Status, StringComparison.Ordinal)
                 || !string.Equals(sent.Note, decided.Note, StringComparison.Ordinal)
                 || !string.Equals(sent.Risk, decided.Risk, StringComparison.Ordinal)
-                || !sent.SourceUrls.SequenceEqual(decided.SourceUrls, StringComparer.Ordinal))
+                || !(sent.SourceUrls.SequenceEqual(decided.SourceUrls, StringComparer.Ordinal)
+                    || (mayClearSources && sent.SourceUrls.Count == 0)))
             {
                 throw new OperatorTamperingException(
                     $"Claim '{decided.Id}' carries the owner's decision; the worker may not change or drop it.");
@@ -945,6 +1499,14 @@ public sealed class OperatorService
 
     private async Task RequireGrantAsync(string target, CancellationToken ct)
     {
+        if (await GrantRefusalAsync(target, ct).ConfigureAwait(false) is { } refusal)
+        {
+            throw new OperatorWriteRefusedException(refusal);
+        }
+    }
+
+    private async Task<string?> GrantRefusalAsync(string target, CancellationToken ct)
+    {
         var decision = await _gate.RequestAsync(
                 FeatureCatalog.YouTubeId,
                 DataFolderScope,
@@ -952,9 +1514,30 @@ public sealed class OperatorService
                 "Save the channel operator's state",
                 ct)
             .ConfigureAwait(false);
-        if (decision.Kind != WriteDecisionKind.Allowed)
+        return decision.Kind == WriteDecisionKind.Allowed ? null : decision.Reason;
+    }
+
+    private async Task<bool> RunningOnYouTubeAsync(string projectId, CancellationToken ct) =>
+        (await _actions.ListPendingAsync(ct).ConfigureAwait(false))
+            .Any(a => a.Status == PendingActionStatus.Executing && a.FeatureId == FeatureCatalog.YouTubeId && ProjectOf(a) == projectId);
+
+    private static bool OnlyWhatARunningActionDid(OperatorProject stored, OperatorProject next)
+    {
+        if (stored.Publication is not { } before || next.Publication is not { } after)
         {
-            throw new OperatorWriteRefusedException(decision.Reason);
+            return false;
         }
+
+        var expected = before with
+        {
+            Status = after.Status,
+            VideoId = after.VideoId,
+            UploadedAt = after.UploadedAt,
+            Error = after.Error,
+            Experiment = before.Experiment is { } experiment && after.Experiment is { } sent
+                ? experiment with { Arms = [.. experiment.Arms.Zip(sent.Arms, (a, s) => a with { StartedAt = s.StartedAt, EndedAt = s.EndedAt })] }
+                : before.Experiment,
+        };
+        return JsonSerializer.Serialize(stored with { Publication = expected }) == JsonSerializer.Serialize(next);
     }
 }

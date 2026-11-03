@@ -749,6 +749,176 @@ describe('operator assembly over UDS', () => {
   );
 });
 
+async function approvedAsOwner(client: ControlPlaneClient, topic: string) {
+  const { identity, scenes } = await mediaReadyAsWorker(client, topic);
+  await client.assembleProject(identity.id);
+  await takeForProductionAsWorker(identity.id);
+  const directory = await client.getMediaDirectory(identity.id);
+  for (const name of ['video.mp4', 'thumbnail.png']) {
+    writeFileSync(path.join(directory, name), `${name} bytes`);
+  }
+  await saveAsWorker({
+    ...identity,
+    status: 'assembled',
+    scenes,
+    package: {
+      status: 'assembled',
+      videoFile: 'video.mp4',
+      thumbnailFile: 'thumbnail.png',
+      checks: [{ name: 'Loudness', result: 'pass', detail: '-14 LUFS' }],
+      title: 'Records explained',
+      description: 'Value equality in C#.',
+      tags: ['dotnet'],
+      durationMs: 4000,
+    },
+  });
+  await client.confirmMediaRights(identity.id);
+  await client.approvePackage(identity.id);
+  return { identity, scenes };
+}
+
+describe('operator publishing over UDS', () => {
+  it(
+    'a publish without the YouTube grant is refused, a schedule with unlisted is refused with the control plane words, and an approved package published private with a future time keeps the owner settings',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const future = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const { identity } = await approvedAsOwner(client, 'Records in C#');
+        await client.setWriteGrant('youtube', false, false);
+        const ungranted = await client
+          .publishPackage(identity.id, 'private', null, false, false)
+          .then(
+            () => null,
+            (err: unknown) => err,
+          );
+        await client.setWriteGrant('youtube', true, true);
+        const unlisted = await client
+          .publishPackage(identity.id, 'unlisted', future, false, false)
+          .then(
+            () => null,
+            (err: unknown) => err,
+          );
+
+        const published = await client.publishPackage(identity.id, 'private', future, false, true);
+
+        expect(ungranted).toBeInstanceOf(ControlPlanePermissionDeniedError);
+        expect(unlisted).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((unlisted as Error).message).toBe(
+          'A video with a publish time is uploaded as private; YouTube makes it public at that time.',
+        );
+        expect(published.publication).toMatchObject({
+          status: 'publish_approved',
+          videoId: null,
+          privacyStatus: 'private',
+          madeForKids: false,
+          syntheticMedia: true,
+          experiment: null,
+        });
+        expect(Date.parse(published.publication?.publishAt ?? '')).toBe(Date.parse(future));
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "the worker's scheduled video and its proposal reach the desktop, the owner accepts the proposal and starts a 48-hour title experiment of the control and the accepted title, an adoption before a winner is refused, and deleting the YouTube credentials removes the snapshots and keeps the video id",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const future = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const { identity, scenes } = await approvedAsOwner(client, 'Records in C#');
+        const queued = await client.publishPackage(identity.id, 'private', future, false, false);
+        await saveAsWorker({
+          ...identity,
+          status: 'approved',
+          scenes,
+          publication: {
+            status: 'scheduled',
+            videoId: 'vid-records-1',
+            privacyStatus: 'private',
+            publishAt: queued.publication?.publishAt,
+            madeForKids: false,
+            syntheticMedia: false,
+            uploadedAt: new Date().toISOString(),
+            snapshots: [
+              {
+                window: '24h',
+                takenAt: new Date().toISOString(),
+                views: 120,
+                averageViewPercentage: 41.5,
+                retention: [
+                  { elapsedRatio: 0, audienceWatchRatio: 1 },
+                  { elapsedRatio: 1, audienceWatchRatio: 0.3 },
+                ],
+              },
+            ],
+            proposals: [
+              {
+                id: 'pr1',
+                kind: 'title',
+                text: 'Records in 60 seconds',
+                reason: 'CTR under the channel median',
+                status: 'proposed',
+              },
+            ],
+          },
+        });
+
+        const read = await client.getProject(identity.id);
+        const accepted = await client.decideProposal(identity.id, 'pr1', true);
+        const started = await client.startExperiment(identity.id, 48);
+        const adoption = await client.adoptExperimentWinner(identity.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        await client.deleteFeatureCredentials('youtube');
+        const purged = await client.getProject(identity.id);
+
+        expect(read.publication?.videoId).toBe('vid-records-1');
+        expect(read.publication?.snapshots[0]).toMatchObject({
+          window: '24h',
+          views: 120,
+          impressions: null,
+          impressionsCtr: null,
+          retention: [
+            { elapsedRatio: 0, audienceWatchRatio: 1 },
+            { elapsedRatio: 1, audienceWatchRatio: 0.3 },
+          ],
+        });
+        expect(accepted.publication?.proposals.map((p) => p.status)).toEqual(['accepted']);
+        expect(started.publication?.experiment).toMatchObject({ kind: 'title', status: 'running' });
+        expect(started.publication?.experiment?.arms.map((a) => [a.id, a.label, a.value])).toEqual([
+          ['control', 'Control', 'Records explained'],
+          ['variant-a', 'Variant A', 'Records in 60 seconds'],
+        ]);
+        expect(adoption).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((adoption as Error).message).toBe(
+          'Only a concluded experiment with a winner is adopted.',
+        );
+        expect(purged.publication?.snapshots).toEqual([]);
+        expect(purged.publication?.videoId).toBe('vid-records-1');
+        expect(purged.publication?.proposals.map((p) => p.id)).toEqual(['pr1']);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
 function freeTcpPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();

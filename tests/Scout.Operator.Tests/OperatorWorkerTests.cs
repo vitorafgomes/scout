@@ -112,7 +112,7 @@ public sealed class OperatorWorkerTests
         controlPlane.Saves[^1].Project.Error.ShouldBe("Scout could not reach its control plane.");
         logger.Entries.Select(e => e.Message).ShouldBe([
             "Video project chat-2 could not be run (InvalidOperationException).",
-            "Video project chat-2 could not be saved as failed (InvalidOperationException).",
+            "Video project chat-2 could not be saved as failed (ControlPlaneUnavailableException).",
         ]);
     }
 

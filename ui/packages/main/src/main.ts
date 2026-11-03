@@ -55,7 +55,12 @@ import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ip
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
-import { registerYouTubeHandlers, revokeYouTubeWriteGrant } from './ipc/youtube.js';
+import {
+  registerYouTubeHandlers,
+  deleteYouTubeData,
+  revokeYouTubeWriteGrant,
+  youTubeWriteGrantHooks,
+} from './ipc/youtube.js';
 import {
   DEFAULT_GOOGLE_CLIENT_ID,
   DEFAULT_GOOGLE_CLIENT_SECRET,
@@ -96,7 +101,7 @@ import {
   resolveTrayIcon,
   resolveWorkerBinary,
 } from './worker/resolve-binary.js';
-import { CHANNEL, ControlPlaneUnavailableError } from '@scout/shared';
+import { CHANNEL } from '@scout/shared';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import type { ControlPlaneClient } from './control-plane/client.js';
 import { buildEnv, migrateLegacyApiKey, readGrantedWriteFeatures } from './worker/build-env.js';
@@ -375,12 +380,25 @@ app
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
 
+    const binaryDeps = {
+      app,
+      resourcesPath: process.resourcesPath,
+      platform: process.platform,
+      arch: process.arch,
+      cwd: __dirname,
+    };
+    const connection = connectControlPlane({
+      spawn,
+      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
+      protoDir: resolveProtoDir(binaryDeps),
+      logger: logger.child({ module: 'control-plane' }),
+      platform: process.platform,
+    });
+    controlPlane = connection;
+
     const youTubeLogger = logger.child({ module: 'youtube' });
     const featuresChanged = (): void => sendToAllWindows(CHANNEL.featuresChanged, youTubeLogger);
-    const youTubeControlPlane = (): Promise<ControlPlaneClient> =>
-      controlPlane === null
-        ? Promise.reject(new ControlPlaneUnavailableError())
-        : controlPlane.client;
+    const youTubeControlPlane = (): Promise<ControlPlaneClient> => connection.client;
     const google = new GoogleAuth({
       fetch: globalThis.fetch,
       awaitCallback,
@@ -486,10 +504,10 @@ app
           slackTokens: await readSlackTokens(vault),
           whisperModelPath: await findBestWhisperModel(whisperRootDir()),
           grantedWriteFeatures: await readGrantedWriteFeatures(
-            controlPlane?.client ?? null,
+            connection.client,
             logger.child({ module: 'supervisor' }),
           ),
-          workerGate: controlPlane?.workerGate() ?? null,
+          workerGate: connection.workerGate(),
           mediaTools: resolveMediaTools({
             app,
             resourcesPath: process.resourcesPath,
@@ -586,22 +604,6 @@ app
       logger.child({ module: 'providers' }),
     );
 
-    const binaryDeps = {
-      app,
-      resourcesPath: process.resourcesPath,
-      platform: process.platform,
-      arch: process.arch,
-      cwd: __dirname,
-    };
-    const connection = connectControlPlane({
-      spawn,
-      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
-      protoDir: resolveProtoDir(binaryDeps),
-      logger: logger.child({ module: 'control-plane' }),
-      platform: process.platform,
-    });
-    controlPlane = connection;
-
     const featuresLogger = logger.child({ module: 'features' });
     unregisterFeatures = registerFeaturesHandlers(
       ipcMain,
@@ -609,9 +611,13 @@ app
       featuresLogger,
       {
         onWriteGrantChanged: () => {
+          sendToAllWindows(CHANNEL.featuresChanged, featuresLogger);
           if (supervisor !== null) void restartWorkerIfRunning(supervisor, featuresLogger);
         },
         onActionsChanged: () => sendToAllWindows(CHANNEL.actionsChanged, featuresLogger),
+        ...youTubeWriteGrantHooks(google, () =>
+          deleteYouTubeData(youTubeControlPlane, youTubeLogger),
+        ),
       },
     );
     unregisterOperator = registerOperatorHandlers(

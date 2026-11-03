@@ -11,8 +11,8 @@ namespace Scout.Host.ControlPlane;
 public static class ControlPlaneServiceRegistration
 {
     /// <summary>
-    /// Register gRPC, the role-based token interceptor, the caller tokens and the
-    /// domain services. Tests pin the desktop <paramref name="token"/> and the
+    /// Register gRPC, the role-based token interceptor, the caller tokens, the
+    /// domain services and the timer that clears old research. Tests pin the desktop <paramref name="token"/> and the
     /// <paramref name="workerToken"/>; with a null <paramref name="token"/> the
     /// desktop token is read from the environment or minted and the worker token
     /// is read from <c>SCOUT_CONTROLPLANE_WORKER_TOKEN</c>.
@@ -39,6 +39,7 @@ public static class ControlPlaneServiceRegistration
         });
 
         services.AddControlPlaneDomain(config);
+        services.AddHostedService<ResearchCleanupService>();
         return services;
     }
 
