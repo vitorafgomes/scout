@@ -3,6 +3,7 @@ using Scout.ControlPlane.Contracts;
 using Scout.ControlPlane.Operator;
 using Scout.ControlPlane.WriteGate;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
+using WireReadiness = Scout.ControlPlane.Contracts.Readiness;
 
 namespace Scout.Host.ControlPlane.Services;
 
@@ -112,4 +113,15 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
             response.Projects.AddRange(projects.Select(OperatorMapping.ToWire));
             return response;
         });
+
+    public override Task<MediaDirectory> GetOperatorMediaDirectory(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => new MediaDirectory
+        {
+            Path = await _operator.GetMediaDirectoryForWorkerAsync(request.Id, context.CancellationToken).ConfigureAwait(false),
+        });
+
+    public override Task<WireReadiness> ReportReadiness(WireReadiness request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ReportReadinessAsync(OperatorMapping.ToDomain(request), context.CancellationToken)
+                .ConfigureAwait(false)));
 }

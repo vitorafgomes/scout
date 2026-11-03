@@ -15,6 +15,9 @@ import {
   type ClaimStatus,
   type MandateDto,
   type OperatorProjectDto,
+  type ReadinessDto,
+  type SceneDto,
+  type SceneMediaKind,
 } from '@scout/shared';
 
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -23,6 +26,14 @@ const POLL_MS = 10_000;
 const PROJECTS_SHOWN = 50;
 const PILLAR_SLOTS = [0, 1, 2, 3, 4] as const;
 const MIN_TOPIC_LENGTH = 3;
+const PRODUCIBLE = ['script_ready', 'media_ready'];
+
+const SOURCE_LABELS: Readonly<Record<string, string>> = {
+  generated: 'generated',
+  owner: 'your file',
+  none: 'none',
+  text_card: 'text card',
+};
 
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'views', label: 'Views' },
@@ -47,6 +58,30 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       @if (error(); as message) {
         <p class="err" data-test="production-error">{{ message }}</p>
       }
+
+      <section class="block" data-test="readiness">
+        <h2>What Scout can make</h2>
+        @if (readiness(); as r) {
+          <ul class="plain">
+            <li data-test="readiness-speech">
+              Narration: {{ r.speechAvailable ? 'available' : 'not available' }}
+            </li>
+            <li data-test="readiness-images">
+              Generated pictures: {{ r.imagesAvailable ? 'available' : 'not available' }}
+            </li>
+            <li data-test="readiness-provider">Provider: {{ r.provider || 'none' }}</li>
+            <li data-test="readiness-youtube">
+              YouTube: {{ r.youtubeSignedIn ? 'signed in' : 'not signed in' }}
+            </li>
+            @for (note of r.notes; track $index) {
+              <li class="meta" data-test="readiness-note">{{ note }}</li>
+            }
+          </ul>
+        }
+        @if (readinessError(); as message) {
+          <p class="err" data-test="readiness-error">{{ message }}</p>
+        }
+      </section>
 
       <section class="block" data-test="mandate">
         <h2>Mandate</h2>
@@ -352,6 +387,137 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
           @if (claimError(); as message) {
             <p class="err" data-test="claim-error">{{ message }}</p>
           }
+
+          <h3>Scenes</h3>
+          @if (producible(p)) {
+            <div class="row">
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-test="produce"
+                [disabled]="producing() || pendingClaims(p) > 0"
+                (click)="produce(p)"
+              >
+                Produce video media
+              </button>
+              @if (pendingClaims(p) > 0) {
+                <span class="meta" data-test="produce-blocked">
+                  {{ pendingClaims(p) }} {{ pendingClaims(p) === 1 ? 'claim is' : 'claims are' }}
+                  still pending; decide every claim before producing the video.
+                </span>
+              }
+            </div>
+          }
+          @if (produceError(); as message) {
+            <p class="err" data-test="produce-error">{{ message }}</p>
+          }
+          @if (p.status === 'producing') {
+            <p class="meta" data-test="production-progress">
+              {{ readyScenes(p) }} of {{ p.scenes.length }} scenes ready
+            </p>
+          }
+          @if (p.scenes.length === 0) {
+            <p class="empty" data-test="scenes-empty">No scenes yet.</p>
+          } @else {
+            <ol class="claims">
+              @for (s of orderedScenes(p); track s.id; let first = $first, last = $last) {
+                <li class="claim" [attr.data-test]="'scene-' + s.id">
+                  <p data-test="scene-narration">{{ s.narration }}</p>
+                  <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
+                  <p class="meta">
+                    <span class="badge" [attr.data-test]="'scene-status-' + s.id">{{
+                      s.status
+                    }}</span>
+                    <span [attr.data-test]="'scene-sources-' + s.id"
+                      >Audio: {{ sourceLabel(s.audioSource) }} · Picture:
+                      {{ sourceLabel(s.visualSource) }}</span
+                    >
+                  </p>
+                  @if (s.error; as note) {
+                    @if (s.status === 'failed') {
+                      <p class="err" [attr.data-test]="'scene-failure-' + s.id">{{ note }}</p>
+                    } @else {
+                      <p class="meta" [attr.data-test]="'scene-note-' + s.id">{{ note }}</p>
+                    }
+                  }
+                  @if (s.visualFile; as file) {
+                    <img
+                      class="preview"
+                      [attr.data-test]="'scene-image-' + s.id"
+                      [src]="mediaUrl(p, file)"
+                      [alt]="'Picture of scene ' + s.order"
+                    />
+                  }
+                  @if (s.audioFile; as file) {
+                    <audio
+                      controls
+                      [attr.data-test]="'scene-audio-' + s.id"
+                      [src]="mediaUrl(p, file)"
+                    ></audio>
+                  }
+                  <div class="row">
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-lock-' + s.id"
+                      [disabled]="sceneBusy() !== null"
+                      (click)="toggleLock(p, s)"
+                    >
+                      {{ s.locked ? 'Unlock' : 'Lock' }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-up-' + s.id"
+                      [disabled]="first || sceneBusy() !== null"
+                      (click)="move(p, s, -1)"
+                    >
+                      Move up
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-down-' + s.id"
+                      [disabled]="last || sceneBusy() !== null"
+                      (click)="move(p, s, 1)"
+                    >
+                      Move down
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-regenerate-' + s.id"
+                      [disabled]="s.locked || sceneBusy() !== null"
+                      (click)="regenerate(p, s)"
+                    >
+                      Regenerate
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-attach-audio-' + s.id"
+                      [disabled]="sceneBusy() !== null"
+                      (click)="attach(p, s, 'audio')"
+                    >
+                      Attach audio
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'scene-attach-visual-' + s.id"
+                      [disabled]="sceneBusy() !== null"
+                      (click)="attach(p, s, 'visual')"
+                    >
+                      Attach image
+                    </button>
+                  </div>
+                </li>
+              }
+            </ol>
+          }
+          @if (sceneError(); as message) {
+            <p class="err" data-test="scene-error">{{ message }}</p>
+          }
         </section>
       }
     </main>
@@ -476,6 +642,12 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       .claim p {
         margin: 0 0 4px;
       }
+      .preview {
+        display: block;
+        max-width: 320px;
+        border-radius: 6px;
+        margin: 8px 0;
+      }
       .source {
         display: flex;
         gap: 8px;
@@ -557,9 +729,16 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly deciding = signal<string | null>(null);
   readonly claimError = signal<string | null>(null);
 
+  readonly readiness = signal<ReadinessDto | null>(null);
+  readonly readinessError = signal<string | null>(null);
+  readonly producing = signal(false);
+  readonly produceError = signal<string | null>(null);
+  readonly sceneBusy = signal<string | null>(null);
+  readonly sceneError = signal<string | null>(null);
+
   async ngOnInit(): Promise<void> {
     this.timer = setInterval(() => void this.refresh(), POLL_MS);
-    await Promise.all([this.loadMandate(), this.refresh()]);
+    await Promise.all([this.loadMandate(), this.refresh(), this.loadReadiness()]);
   }
 
   ngOnDestroy(): void {
@@ -614,6 +793,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.selectedId.set(id);
     this.waiving.set(null);
     this.claimError.set(null);
+    this.produceError.set(null);
+    this.sceneError.set(null);
     await this.loadSelected();
   }
 
@@ -632,9 +813,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.deciding.set(claim.id);
     this.claimError.set(null);
     try {
-      const updated = await this.bridge.operatorDecideClaim(req);
-      this.detail.set(updated);
-      this.projects.update((all) => all.map((p) => (p.id === updated.id ? updated : p)));
+      this.apply(await this.bridge.operatorDecideClaim(req));
       this.waiving.set(null);
     } catch (err: unknown) {
       this.claimError.set(readIpcError(err).message);
@@ -643,8 +822,112 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
   }
 
+  producible(project: OperatorProjectDto): boolean {
+    return (
+      PRODUCIBLE.includes(project.status) ||
+      (project.status === 'failed' && project.script !== null)
+    );
+  }
+
+  pendingClaims(project: OperatorProjectDto): number {
+    return project.claims.filter((c) => c.status === 'pending').length;
+  }
+
+  readyScenes(project: OperatorProjectDto): number {
+    return project.scenes.filter((s) => s.status === 'ready').length;
+  }
+
+  orderedScenes(project: OperatorProjectDto): SceneDto[] {
+    return [...project.scenes].sort((a, b) => a.order - b.order);
+  }
+
+  sourceLabel(source: string): string {
+    return SOURCE_LABELS[source] ?? source;
+  }
+
+  mediaUrl(project: OperatorProjectDto, fileName: string): string {
+    return `scout-media://${project.id}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(project.updatedAt)}`;
+  }
+
+  async produce(project: OperatorProjectDto): Promise<void> {
+    this.producing.set(true);
+    this.produceError.set(null);
+    try {
+      this.apply(await this.bridge.operatorProduce({ id: project.id }));
+    } catch (err: unknown) {
+      this.produceError.set(readIpcError(err).message);
+    } finally {
+      this.producing.set(false);
+    }
+  }
+
+  toggleLock(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    return this.sceneAction(scene.id, () =>
+      this.bridge.operatorSetSceneLocked({
+        projectId: project.id,
+        sceneId: scene.id,
+        locked: !scene.locked,
+      }),
+    );
+  }
+
+  move(project: OperatorProjectDto, scene: SceneDto, step: -1 | 1): Promise<void> {
+    const ids = this.orderedScenes(project).map((s) => s.id);
+    const from = ids.indexOf(scene.id);
+    [ids[from], ids[from + step]] = [ids[from + step]!, ids[from]!];
+    return this.sceneAction(scene.id, () =>
+      this.bridge.operatorReorderScenes({ projectId: project.id, sceneIds: ids }),
+    );
+  }
+
+  regenerate(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    return this.sceneAction(scene.id, () =>
+      this.bridge.operatorRegenerateScene({ projectId: project.id, sceneId: scene.id }),
+    );
+  }
+
+  attach(project: OperatorProjectDto, scene: SceneDto, kind: SceneMediaKind): Promise<void> {
+    return this.sceneAction(scene.id, async () => {
+      const { project: updated } = await this.bridge.operatorAttachSceneMedia({
+        projectId: project.id,
+        sceneId: scene.id,
+        kind,
+      });
+      return updated;
+    });
+  }
+
   copy(url: string): void {
     void navigator.clipboard?.writeText(url).catch(() => undefined);
+  }
+
+  private apply(updated: OperatorProjectDto): void {
+    this.detail.set(updated);
+    this.projects.update((all) => all.map((p) => (p.id === updated.id ? updated : p)));
+  }
+
+  private async sceneAction(
+    sceneId: string,
+    action: () => Promise<OperatorProjectDto | null>,
+  ): Promise<void> {
+    this.sceneBusy.set(sceneId);
+    this.sceneError.set(null);
+    try {
+      const updated = await action();
+      if (updated !== null) this.apply(updated);
+    } catch (err: unknown) {
+      this.sceneError.set(readIpcError(err).message);
+    } finally {
+      this.sceneBusy.set(null);
+    }
+  }
+
+  private async loadReadiness(): Promise<void> {
+    try {
+      this.readiness.set(await this.bridge.operatorReadiness());
+    } catch (err: unknown) {
+      this.readinessError.set(readIpcError(err).message);
+    }
   }
 
   private fill(mandate: MandateDto): void {

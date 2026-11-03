@@ -13,10 +13,12 @@ public static class OperatorServiceCollectionExtensions
     public const string DataFolderScope = "Scout's data folder";
 
     /// <summary>
-    /// Register the operator: the research, script and pipeline stages, the background worker, and the
+    /// Register the operator: the research, script, scene, narration, visual and pipeline stages, the background
+    /// worker, the readiness reporter, and the
     /// <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
     /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
-    /// client and an origin notifier registered by the caller.
+    /// client and an origin notifier registered by the caller, and the kernel and media capabilities of
+    /// <c>AddScoutLlm</c>.
     /// </summary>
     public static IServiceCollection AddYouTubeOperator(this IServiceCollection services)
     {
@@ -26,9 +28,13 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton<SearchBudget>();
         services.AddSingleton<TopicResearcher>();
         services.AddSingleton<ScriptWriter>();
+        services.AddSingleton<ScenePlanner>();
+        services.AddSingleton<NarrationGenerator>();
+        services.AddSingleton<VisualGenerator>();
         services.AddSingleton<OperatorPipeline>();
         services.AddSingleton(Channel.CreateUnbounded<QueuedProject>());
         services.AddHostedService<OperatorWorker>();
+        services.AddHostedService<ReadinessReporter>();
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new YouTubeOperatorPlugin(
                 sp.GetRequiredService<IOperatorControlPlane>(),

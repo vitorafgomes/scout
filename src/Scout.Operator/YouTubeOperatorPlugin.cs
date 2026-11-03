@@ -80,7 +80,7 @@ internal sealed class YouTubeOperatorPlugin(
     /// <param name="ct">Cancels the request to the control plane.</param>
     /// <returns>One project per line, newest first, or a sentence when none exists or they cannot be read.</returns>
     [KernelFunction("youtube_video_status")]
-    [Description("Topic and status of the five latest YouTube video projects, newest first: queued, researching, scripting, script_ready, or failed with the reason.")]
+    [Description("Topic and status of the five latest YouTube video projects, newest first: queued, researching, scripting, script_ready, production_queued, producing with how many scenes are ready, media_ready, or failed with the reason.")]
     public async Task<string> VideoStatusAsync(CancellationToken ct = default)
     {
         IReadOnlyList<OperatorProjectState> latest;
@@ -95,8 +95,25 @@ internal sealed class YouTubeOperatorPlugin(
 
         return latest.Count == 0
             ? NoProjects
-            : string.Join("\n", latest.Select(p => p.Error is null
-                ? $"{p.Topic}: {p.Status}"
-                : $"{p.Topic}: {p.Status} ({p.Error})"));
+            : string.Join("\n", latest.Select(Line));
+    }
+
+    private static string Line(OperatorProjectState p)
+    {
+        if (p.Error is not null)
+        {
+            return $"{p.Topic}: {p.Status} ({p.Error})";
+        }
+
+        if (p.Status != OperatorPipeline.Producing || p.Scenes.Count == 0)
+        {
+            return $"{p.Topic}: {p.Status}";
+        }
+
+        var ready = p.Scenes.Count(s => s.Status == OperatorPipeline.Ready);
+        var failed = p.Scenes.Count(s => s.Status == OperatorPipeline.Failed);
+        return failed == 0
+            ? $"{p.Topic}: {p.Status} ({ready} of {p.Scenes.Count} scenes ready)"
+            : $"{p.Topic}: {p.Status} ({ready} of {p.Scenes.Count} scenes ready, {failed} failed)";
     }
 }

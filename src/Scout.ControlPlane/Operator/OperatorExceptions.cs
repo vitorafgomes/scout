@@ -39,3 +39,13 @@ public sealed class OperatorTamperingException : Exception
     {
     }
 }
+
+/// <summary>Thrown when the operator's state cannot be written to Scout's data folder; the earlier state stays.</summary>
+public sealed class OperatorStoreException : Exception
+{
+    /// <summary>Build the exception with what could not be saved and the I/O failure behind it.</summary>
+    public OperatorStoreException(string message, Exception inner)
+        : base(message, inner)
+    {
+    }
+}

@@ -8,8 +8,8 @@ using Scout.ControlPlane.Features;
 namespace Scout.ControlPlane.Operator;
 
 /// <summary>
-/// The operator's state in <c>mandate.json</c> and <c>projects.json</c> beside the feature state
-/// file. Every read-check-write runs under one gate, and writes go through a temp file and an
+/// The operator's state in <c>mandate.json</c>, <c>projects.json</c> and <c>readiness.json</c>
+/// beside the feature state file, and the projects' media under <c>operator/</c> there. Every read-check-write runs under one gate, and writes go through a temp file and an
 /// atomic move. A file that does not parse is moved aside to <c>&lt;name&gt;.corrupt-&lt;UTC
 /// yyyyMMddHHmmss&gt;</c>, never overwritten; a file that cannot be opened or read fails the call
 /// and stays where it is.
@@ -35,6 +35,8 @@ public sealed class JsonFileOperatorStore : IDisposable
         var directory = Path.GetDirectoryName(options.Value.ResolveFilePath()) ?? string.Empty;
         MandatePath = Path.Combine(directory, "mandate.json");
         ProjectsPath = Path.Combine(directory, "projects.json");
+        ReadinessPath = Path.Combine(directory, "readiness.json");
+        MediaRoot = Path.Combine(directory, "operator");
     }
 
     /// <summary>Absolute path of the mandate file.</summary>
@@ -42,6 +44,12 @@ public sealed class JsonFileOperatorStore : IDisposable
 
     /// <summary>Absolute path of the projects file.</summary>
     public string ProjectsPath { get; }
+
+    /// <summary>Absolute path of the worker's latest readiness report.</summary>
+    public string ReadinessPath { get; }
+
+    /// <summary>Absolute path of the folder that holds one media directory per project.</summary>
+    public string MediaRoot { get; }
 
     /// <summary>The saved mandate, or null when the owner has not written one.</summary>
     public async Task<Mandate?> ReadMandateAsync(CancellationToken ct)
@@ -66,6 +74,36 @@ public sealed class JsonFileOperatorStore : IDisposable
         try
         {
             await WriteAsync(MandatePath, mandate, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The worker's latest readiness report, or null when it has not reported.</summary>
+    public async Task<Readiness?> ReadReadinessAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await ReadAsync<Readiness>(ReadinessPath, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Replace the readiness report.</summary>
+    public async Task WriteReadinessAsync(Readiness readiness, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(readiness);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            await WriteAsync(ReadinessPath, readiness, ct).ConfigureAwait(false);
         }
         finally
         {

@@ -8,8 +8,11 @@ import {
   ControlPlaneUnavailableError,
   encodeIpcErrorMessage,
   serializeError,
+  ControlPlaneInvalidArgumentError,
   type MandateDto,
   type OperatorProjectDto,
+  type ReadinessDto,
+  type SceneDto,
 } from '@scout/shared';
 
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -58,8 +61,45 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
       },
     ],
     error: null,
+    scenes: [],
     ...overrides,
   };
+}
+
+function scene(overrides: Partial<SceneDto> = {}): SceneDto {
+  return {
+    id: 's1',
+    order: 1,
+    narration: 'Span is a view over memory.',
+    visualPrompt: 'A ruler laid over a row of bytes',
+    locked: false,
+    status: 'ready',
+    error: null,
+    audioSource: 'generated',
+    visualSource: 'owner',
+    audioFile: 'scene-s1.mp3',
+    visualFile: 'owner-s1-0a1b2c3d4e5f.png',
+    durationMs: 4200,
+    ...overrides,
+  };
+}
+
+const readiness: ReadinessDto = {
+  speechAvailable: false,
+  imagesAvailable: true,
+  provider: 'openai',
+  ffmpegAvailable: true,
+  youtubeSignedIn: false,
+  notes: ['Narration comes from your own audio files with this provider.'],
+  reportedAt: '2026-11-03T09:00:00Z',
+};
+
+function refusedWith(channel: string, message: string): Error {
+  return new Error(
+    `Error invoking remote method '${channel}': Error: ${encodeIpcErrorMessage(
+      serializeError(new ControlPlaneInvalidArgumentError(message)),
+    )}`,
+  );
 }
 
 function ipcFailure(channel: string, message: string): Error {
@@ -80,11 +120,26 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
       project({ id: 'p9', topic: 'Records in C#', status: 'queued', script: null, claims: [] }),
     ),
     operatorDecideClaim: vi.fn(async () => project()),
+    operatorReadiness: vi.fn(async () => readiness),
+    operatorProduce: vi.fn(async () => project({ status: 'production_queued' })),
+    operatorReorderScenes: vi.fn(async () => project()),
+    operatorSetSceneLocked: vi.fn(async () => project()),
+    operatorRegenerateScene: vi.fn(async () => project()),
+    operatorAttachSceneMedia: vi.fn(async () => ({
+      project: project() as OperatorProjectDto | null,
+    })),
     ...overrides,
   };
 }
 
 type Bridge = ReturnType<typeof makeBridge>;
+
+function listing(...projects: OperatorProjectDto[]) {
+  return {
+    operatorProjects: vi.fn(async () => ({ projects })),
+    operatorProject: vi.fn(async ({ id }: { id: string }) => projects.find((p) => p.id === id)!),
+  };
+}
 
 async function mount(bridge: Bridge): Promise<ComponentFixture<ProductionComponent>> {
   TestBed.configureTestingModule({
@@ -475,5 +530,290 @@ describe('ProductionComponent', () => {
     expect(text(fixture, 'production-error')).toBe('socket reset');
     expect(el(fixture, 'project-p1')).not.toBeNull();
     expect(text(fixture, 'project-detail')).toContain('Span<T> is a ref struct.');
+  });
+  it('the readiness banner says whether narration and pictures can be generated, the provider, the YouTube sign-in and the notes', async () => {
+    const fixture = await mount(makeBridge());
+
+    expect(text(fixture, 'readiness-speech')).toBe('Narration: not available');
+    expect(text(fixture, 'readiness-images')).toBe('Generated pictures: available');
+    expect(text(fixture, 'readiness-provider')).toBe('Provider: openai');
+    expect(text(fixture, 'readiness-youtube')).toBe('YouTube: not signed in');
+    expect(text(fixture, 'readiness-note')).toBe(
+      'Narration comes from your own audio files with this provider.',
+    );
+  });
+
+  it('Produce video media is disabled with the reason while claims are pending', async () => {
+    const pending = project({
+      claims: [
+        { ...project().claims[0]!, id: 'c1' },
+        { ...project().claims[0]!, id: 'c2' },
+      ],
+    });
+    const bridge = makeBridge(listing(pending));
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    expect(el<HTMLButtonElement>(fixture, 'produce')!.disabled).toBe(true);
+    expect(text(fixture, 'produce-blocked')).toBe(
+      '2 claims are still pending; decide every claim before producing the video.',
+    );
+  });
+
+  it('Produce video media is enabled on a script_ready or media_ready project with every claim decided, sends the project id and shows the new status', async () => {
+    const decided = project({
+      claims: [{ ...project().claims[0]!, status: 'supported' }],
+    });
+    const bridge = makeBridge(
+      listing(decided, project({ id: 'p2', status: 'media_ready', claims: [] })),
+    );
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const onMediaReady = el<HTMLButtonElement>(fixture, 'produce')?.disabled;
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'produce');
+
+    expect(onMediaReady).toBe(false);
+    expect(el(fixture, 'produce-blocked')).toBeNull();
+    expect(bridge.operatorProduce.mock.calls).toEqual([[{ id: 'p1' }]]);
+    expect(text(fixture, 'project-p1')).toContain('production_queued');
+  });
+
+  it('a project still being scripted offers no Produce video media button', async () => {
+    const bridge = makeBridge({
+      ...listing(project({ status: 'scripting', claims: [] })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    expect(el(fixture, 'produce')).toBeNull();
+  });
+
+  it('a failed project offers Produce video media again when it has a script, and not without one', async () => {
+    const failed = project({ status: 'failed', error: 'Speech timed out.', claims: [] });
+    const unscripted = project({ id: 'p2', status: 'failed', script: null, claims: [] });
+    const bridge = makeBridge({
+      ...listing(failed, unscripted),
+      operatorProduce: vi.fn(async () => project({ status: 'production_queued', claims: [] })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const withoutScript = el(fixture, 'produce');
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'produce');
+
+    expect(withoutScript).toBeNull();
+    expect(bridge.operatorProduce.mock.calls).toEqual([[{ id: 'p1' }]]);
+  });
+
+  it('a refused produce shows the control plane reason', async () => {
+    const reason = 'The owner has not allowed youtube to write.';
+    const bridge = makeBridge({
+      ...listing(project({ claims: [] })),
+      operatorProduce: vi.fn(async () => {
+        throw refusedWith('scout:operator.production', reason);
+      }),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'produce');
+
+    expect(text(fixture, 'produce-error')).toBe(reason);
+  });
+
+  it('lists the scenes in their order with narration, picture prompt, status and where the audio and picture come from', async () => {
+    const scenes = [
+      scene({
+        id: 's2',
+        order: 2,
+        narration: 'It never allocates.',
+        status: 'failed',
+        error: 'Speech is not available.',
+        audioSource: 'none',
+        visualSource: 'text_card',
+        audioFile: null,
+        visualFile: null,
+      }),
+      scene(),
+    ];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    const order = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-test="scene-narration"]',
+      ) as NodeListOf<HTMLElement>,
+    ).map((n) => n.textContent?.trim());
+
+    expect(order).toEqual(['Span is a view over memory.', 'It never allocates.']);
+    expect(text(fixture, 'scene-s1')).toContain('Picture prompt: A ruler laid over a row of bytes');
+    expect(text(fixture, 'scene-status-s1')).toBe('ready');
+    expect(text(fixture, 'scene-sources-s1')).toBe('Audio: generated · Picture: your file');
+    expect(text(fixture, 'scene-status-s2')).toBe('failed');
+    expect(text(fixture, 'scene-sources-s2')).toBe('Audio: none · Picture: text card');
+    expect(text(fixture, 'scene-failure-s2')).toBe('Speech is not available.');
+  });
+
+  it('shows the error of a failed scene as a failure and the note of any other scene as a plain note', async () => {
+    const scenes = [
+      scene({ error: 'No picture: the connected AI Source has no image service in Scout.' }),
+      scene({ id: 's2', order: 2, status: 'failed', error: 'Speech timed out.' }),
+    ];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    expect(text(fixture, 'scene-note-s1')).toBe(
+      'No picture: the connected AI Source has no image service in Scout.',
+    );
+    expect(el(fixture, 'scene-note-s1')!.classList.contains('err')).toBe(false);
+    expect(el(fixture, 'scene-failure-s1')).toBeNull();
+    expect(text(fixture, 'scene-failure-s2')).toBe('Speech timed out.');
+    expect(el(fixture, 'scene-failure-s2')!.classList.contains('err')).toBe(true);
+    expect(el(fixture, 'scene-note-s2')).toBeNull();
+  });
+
+  it('previews a scene image and audio through scout-media:// with the project id and the file name, never a file path', async () => {
+    const scenes = [scene(), scene({ id: 's2', order: 2, audioFile: null, visualFile: null })];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    expect(el(fixture, 'scene-image-s1')!.getAttribute('src')).toBe(
+      'scout-media://p1/owner-s1-0a1b2c3d4e5f.png?v=2026-11-03T09%3A05%3A00Z',
+    );
+    expect(el(fixture, 'scene-image-s1')!.getAttribute('alt')).toBe('Picture of scene 1');
+    expect(el(fixture, 'scene-audio-s1')!.getAttribute('src')).toBe(
+      'scout-media://p1/scene-s1.mp3?v=2026-11-03T09%3A05%3A00Z',
+    );
+    expect(el<HTMLAudioElement>(fixture, 'scene-audio-s1')!.controls).toBe(true);
+    expect([el(fixture, 'scene-image-s2'), el(fixture, 'scene-audio-s2')]).toEqual([null, null]);
+  });
+
+  it('move up and move down send the scene ids in the new order', async () => {
+    const scenes = [
+      scene({ id: 's1', order: 1 }),
+      scene({ id: 's2', order: 2 }),
+      scene({ id: 's3', order: 3 }),
+    ];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+      operatorReorderScenes: vi.fn(async () => project({ scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const edges = [
+      el<HTMLButtonElement>(fixture, 'scene-up-s1')!.disabled,
+      el<HTMLButtonElement>(fixture, 'scene-down-s3')!.disabled,
+    ];
+
+    await click(fixture, 'scene-down-s1');
+    await click(fixture, 'scene-up-s3');
+
+    expect(edges).toEqual([true, true]);
+    expect(bridge.operatorReorderScenes.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneIds: ['s2', 's1', 's3'] }],
+      [{ projectId: 'p1', sceneIds: ['s1', 's3', 's2'] }],
+    ]);
+  });
+
+  it('the lock toggle sends locked and unlocked, and Regenerate is disabled on a locked scene and sends the scene otherwise', async () => {
+    const scenes = [scene({ id: 's1', locked: true }), scene({ id: 's2', order: 2 })];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+      operatorSetSceneLocked: vi.fn(async () => project({ scenes })),
+      operatorRegenerateScene: vi.fn(async () => project({ scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const labels = [text(fixture, 'scene-lock-s1'), text(fixture, 'scene-lock-s2')];
+
+    await click(fixture, 'scene-lock-s1');
+    await click(fixture, 'scene-lock-s2');
+    await click(fixture, 'scene-regenerate-s2');
+
+    expect(labels).toEqual(['Unlock', 'Lock']);
+    expect(el<HTMLButtonElement>(fixture, 'scene-regenerate-s1')!.disabled).toBe(true);
+    expect(bridge.operatorSetSceneLocked.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', locked: false }],
+      [{ projectId: 'p1', sceneId: 's2', locked: true }],
+    ]);
+    expect(bridge.operatorRegenerateScene.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's2' }],
+    ]);
+  });
+
+  it('Attach audio and Attach image send the project, the scene and the kind, and show the attached file', async () => {
+    const before = [scene({ audioFile: null, visualFile: null, audioSource: 'none' })];
+    const after = [scene({ audioFile: 'owner-s1-aaaaaaaaaaaa.mp3', audioSource: 'owner' })];
+    const bridge = makeBridge({
+      ...listing(project({ scenes: before })),
+      operatorAttachSceneMedia: vi.fn(async () => ({
+        project: project({ scenes: after }) as OperatorProjectDto | null,
+      })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'scene-attach-audio-s1');
+    await click(fixture, 'scene-attach-visual-s1');
+
+    expect(bridge.operatorAttachSceneMedia.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', kind: 'audio' }],
+      [{ projectId: 'p1', sceneId: 's1', kind: 'visual' }],
+    ]);
+    expect(el(fixture, 'scene-audio-s1')!.getAttribute('src')).toBe(
+      'scout-media://p1/owner-s1-aaaaaaaaaaaa.mp3?v=2026-11-03T09%3A05%3A00Z',
+    );
+  });
+
+  it('a refused attach shows the reason, and a closed file dialog changes nothing', async () => {
+    const scenes = [scene({ audioFile: null })];
+    let refuse = true;
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+      operatorAttachSceneMedia: vi.fn(async () => {
+        if (refuse)
+          throw refusedWith('scout:operator.sceneMedia', 'Narration files are at most 100 MB.');
+        return { project: null as OperatorProjectDto | null };
+      }),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'scene-attach-audio-s1');
+    const refused = text(fixture, 'scene-error');
+    refuse = false;
+    await click(fixture, 'scene-attach-audio-s1');
+
+    expect(refused).toBe('Narration files are at most 100 MB.');
+    expect(el(fixture, 'scene-error')).toBeNull();
+    expect(el(fixture, 'scene-audio-s1')).toBeNull();
+    expect(text(fixture, 'scene-s1')).toContain('Span is a view over memory.');
+  });
+
+  it('a producing project shows how many of its scenes are ready', async () => {
+    const scenes = [
+      scene({ id: 's1' }),
+      scene({ id: 's2', order: 2, status: 'generating' }),
+      scene({ id: 's3', order: 3, status: 'planned' }),
+    ];
+    const bridge = makeBridge({
+      ...listing(project({ status: 'producing', scenes })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    expect(text(fixture, 'production-progress')).toBe('1 of 3 scenes ready');
   });
 });

@@ -14,6 +14,8 @@ service WorkerGate {
   rpc NextQueuedProject(NextQueuedProjectRequest) returns (NextQueuedProjectResponse);
   rpc GetOperatorProject(GetProjectRequest) returns (Project);
   rpc ListOperatorProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetOperatorMediaDirectory(GetProjectRequest) returns (MediaDirectory);
+  rpc ReportReadiness(Readiness) returns (Readiness);
 }
 
 message RequestWriteRequest {

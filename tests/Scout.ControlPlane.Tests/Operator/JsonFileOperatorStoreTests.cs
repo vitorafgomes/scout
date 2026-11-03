@@ -165,4 +165,41 @@ public sealed class JsonFileOperatorStoreTests : IDisposable
         (await File.ReadAllBytesAsync(store.ProjectsPath)).ShouldBe(content);
         _logger.Entries.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task A_Projects_File_From_Before_Scenes_Reads_With_No_Scenes_And_Scenes_Survive_A_Reopen()
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(_directory, "projects.json"),
+            """[{"id":"p1","topic":"Why rivers meander","status":"script_ready","origin":"desktop","createdAt":"2026-11-01T00:00:00+00:00","updatedAt":"2026-11-01T00:00:00+00:00","candidates":[],"claims":[]}]""");
+        var scene = new Scene("s1", 1, "Rivers bend.", "A river from above", true, "ready", null, "owner", "generated", "voice.mp3", "river.png", 4200);
+
+        using (var store = Store())
+        {
+            (await store.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem().Scenes.ShouldBeEmpty();
+            await store.UpdateProjectsAsync(projects => { projects[0] = projects[0] with { Scenes = [scene] }; return 0; }, CancellationToken.None);
+        }
+
+        using var reopened = Store();
+        (await reopened.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem().Scenes.ShouldHaveSingleItem().ShouldBe(scene);
+    }
+
+    [Fact]
+    public async Task The_Readiness_Report_Survives_A_Reopen_In_Readiness_Json_Beside_Features_Json()
+    {
+        var report = new Readiness(true, false, "openai", true, false, ["No image model is configured."], DateTimeOffset.UnixEpoch);
+
+        using (var store = Store())
+        {
+            (await store.ReadReadinessAsync(CancellationToken.None)).ShouldBeNull();
+            await store.WriteReadinessAsync(report, CancellationToken.None);
+            store.ReadinessPath.ShouldBe(Path.Combine(_directory, "readiness.json"));
+        }
+
+        using var reopened = Store();
+        var read = (await reopened.ReadReadinessAsync(CancellationToken.None)).ShouldNotBeNull();
+        (read.SpeechAvailable, read.ImagesAvailable, read.Provider, read.FfmpegAvailable, read.YouTubeSignedIn, read.ReportedAt)
+            .ShouldBe((true, false, "openai", true, false, (DateTimeOffset?)DateTimeOffset.UnixEpoch));
+        read.Notes.ShouldBe(["No image model is configured."]);
+    }
 }

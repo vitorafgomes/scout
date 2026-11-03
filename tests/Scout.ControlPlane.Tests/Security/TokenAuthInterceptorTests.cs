@@ -169,6 +169,13 @@ public sealed class TokenAuthInterceptorTests
     [InlineData("/scout.controlplane.v1.Operator/GetProject")]
     [InlineData("/scout.controlplane.v1.Operator/StartProject")]
     [InlineData("/scout.controlplane.v1.Operator/DecideClaim")]
+    [InlineData("/scout.controlplane.v1.Operator/ProduceProject")]
+    [InlineData("/scout.controlplane.v1.Operator/ReorderScenes")]
+    [InlineData("/scout.controlplane.v1.Operator/SetSceneLocked")]
+    [InlineData("/scout.controlplane.v1.Operator/RegenerateScene")]
+    [InlineData("/scout.controlplane.v1.Operator/AttachSceneMedia")]
+    [InlineData("/scout.controlplane.v1.Operator/GetMediaDirectory")]
+    [InlineData("/scout.controlplane.v1.Operator/GetReadiness")]
     public async Task The_Operator_Service_Belongs_To_The_Desktop_Alone(string method)
     {
         var worker = await Should.ThrowAsync<RpcException>(() => Call(WorkerToken, method));
@@ -184,6 +191,8 @@ public sealed class TokenAuthInterceptorTests
     [InlineData("/scout.controlplane.v1.WorkerGate/NextQueuedProject")]
     [InlineData("/scout.controlplane.v1.WorkerGate/GetOperatorProject")]
     [InlineData("/scout.controlplane.v1.WorkerGate/ListOperatorProjects")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/GetOperatorMediaDirectory")]
+    [InlineData("/scout.controlplane.v1.WorkerGate/ReportReadiness")]
     public async Task The_Workers_Operator_Rpcs_Belong_To_The_Worker_Alone(string method)
     {
         var desktop = await Should.ThrowAsync<RpcException>(() => Call(Token, method));

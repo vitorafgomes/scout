@@ -279,6 +279,24 @@ public sealed class GrpcWriteGateTests
             Listed = request;
             return OperatorFailure is null ? Task.FromResult(ListReply) : throw OperatorFailure;
         }
+
+        public string MediaPath { get; init; } = "/data/scout/operator/media/p1";
+
+        public Readiness? Reported { get; private set; }
+
+        public override Task<MediaDirectory> GetOperatorMediaDirectory(GetProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Got = request;
+            return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = MediaPath }) : throw OperatorFailure;
+        }
+
+        public override Task<Readiness> ReportReadiness(Readiness request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Reported = request;
+            return OperatorFailure is null ? Task.FromResult(request) : throw OperatorFailure;
+        }
     }
 
     private sealed class RecordingLogger : ILogger<WriteGateFilter>

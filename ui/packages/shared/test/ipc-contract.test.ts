@@ -78,9 +78,15 @@ describe('CHANNEL constant', () => {
         'llmPullOllamaProgress',
         'operatorDecideClaim',
         'operatorMandate',
+        'operatorProduction',
         'operatorProject',
         'operatorProjects',
+        'operatorReadiness',
         'operatorSaveMandate',
+        'operatorSceneLock',
+        'operatorSceneMedia',
+        'operatorSceneOrder',
+        'operatorSceneRegeneration',
         'operatorStartProject',
         'providerRestart',
         'providerSetAutostart',
@@ -180,6 +186,24 @@ describe('operator channels', () => {
       'scout:operator.decideClaim',
     ]);
   });
+
+  test('producing media, ordering, locking and regenerating a scene, attaching an owner file and reading readiness each have their own scout:operator channel, named as nouns', () => {
+    expect([
+      CHANNEL.operatorProduction,
+      CHANNEL.operatorSceneOrder,
+      CHANNEL.operatorSceneLock,
+      CHANNEL.operatorSceneRegeneration,
+      CHANNEL.operatorSceneMedia,
+      CHANNEL.operatorReadiness,
+    ]).toEqual([
+      'scout:operator.production',
+      'scout:operator.sceneOrder',
+      'scout:operator.sceneLock',
+      'scout:operator.sceneRegeneration',
+      'scout:operator.sceneMedia',
+      'scout:operator.readiness',
+    ]);
+  });
 });
 
 describe('ChannelName type', () => {
@@ -248,6 +272,12 @@ describe('ChannelName type', () => {
       'scout:operator.project': true,
       'scout:operator.startProject': true,
       'scout:operator.decideClaim': true,
+      'scout:operator.production': true,
+      'scout:operator.sceneOrder': true,
+      'scout:operator.sceneLock': true,
+      'scout:operator.sceneRegeneration': true,
+      'scout:operator.sceneMedia': true,
+      'scout:operator.readiness': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

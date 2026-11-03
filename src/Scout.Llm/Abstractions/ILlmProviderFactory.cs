@@ -33,4 +33,10 @@ public interface ILlmProviderFactory
     /// kernel transitively, which would form a construction cycle.
     /// </summary>
     IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator();
+
+    /// <summary>
+    /// The media services <see cref="AddToKernel"/> registers; none unless the provider's connector offers
+    /// text to audio or text to image with the owner's credential.
+    /// </summary>
+    MediaCapabilities Media => new(false, false, Name);
 }

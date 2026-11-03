@@ -11,6 +11,13 @@ service Operator {
   rpc GetProject(GetProjectRequest) returns (Project);
   rpc StartProject(StartProjectRequest) returns (Project);
   rpc DecideClaim(DecideClaimRequest) returns (Project);
+  rpc ProduceProject(GetProjectRequest) returns (Project);
+  rpc ReorderScenes(ReorderScenesRequest) returns (Project);
+  rpc SetSceneLocked(SetSceneLockedRequest) returns (Project);
+  rpc RegenerateScene(SceneRequest) returns (Project);
+  rpc AttachSceneMedia(AttachSceneMediaRequest) returns (Project);
+  rpc GetMediaDirectory(GetProjectRequest) returns (MediaDirectory);
+  rpc GetReadiness(GetReadinessRequest) returns (Readiness);
 }
 
 message GetMandateRequest {}
@@ -62,6 +69,7 @@ message Project {
   optional Script script = 8;
   repeated Claim claims = 9;
   optional string error = 10;
+  repeated Scene scenes = 11;
 }
 
 message TopicCandidate {
@@ -97,4 +105,58 @@ message Claim {
   repeated string source_urls = 4;
   string status = 5;
   optional string note = 6;
+}
+
+message Scene {
+  string id = 1;
+  int32 order = 2;
+  string narration = 3;
+  string visual_prompt = 4;
+  bool locked = 5;
+  string status = 6;
+  optional string error = 7;
+  string audio_source = 8;
+  string visual_source = 9;
+  optional string audio_file = 10;
+  optional string visual_file = 11;
+  int32 duration_ms = 12;
+}
+
+message ReorderScenesRequest {
+  string project_id = 1;
+  repeated string scene_ids = 2;
+}
+
+message SetSceneLockedRequest {
+  string project_id = 1;
+  string scene_id = 2;
+  bool locked = 3;
+}
+
+message SceneRequest {
+  string project_id = 1;
+  string scene_id = 2;
+}
+
+message AttachSceneMediaRequest {
+  string project_id = 1;
+  string scene_id = 2;
+  string kind = 3;
+  string file_name = 4;
+}
+
+message MediaDirectory {
+  string path = 1;
+}
+
+message GetReadinessRequest {}
+
+message Readiness {
+  bool speech_available = 1;
+  bool images_available = 2;
+  string provider = 3;
+  bool ffmpeg_available = 4;
+  bool youtube_signed_in = 5;
+  repeated string notes = 6;
+  optional string reported_at = 7;
 }

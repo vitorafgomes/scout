@@ -21,6 +21,9 @@ import {
   type MandateSaveRequest,
   type OperatorProjectDto,
   type PendingActionDto,
+  type ReadinessDto,
+  type SceneDto,
+  type SceneMediaKind,
   type WriteLogEntryDto,
 } from '@scout/shared';
 
@@ -73,6 +76,18 @@ export interface ControlPlaneClient {
     status: ClaimStatus,
     note?: string,
   ): Promise<OperatorProjectDto>;
+  produceProject(id: string): Promise<OperatorProjectDto>;
+  reorderScenes(projectId: string, sceneIds: readonly string[]): Promise<OperatorProjectDto>;
+  setSceneLocked(projectId: string, sceneId: string, locked: boolean): Promise<OperatorProjectDto>;
+  regenerateScene(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
+  attachSceneMedia(
+    projectId: string,
+    sceneId: string,
+    kind: SceneMediaKind,
+    fileName: string,
+  ): Promise<OperatorProjectDto>;
+  getMediaDirectory(projectId: string): Promise<string>;
+  getReadiness(): Promise<ReadinessDto>;
   close(): void;
 }
 
@@ -167,6 +182,32 @@ interface ProjectMessage {
     note?: string;
   }[];
   error?: string;
+  scenes: SceneMessage[];
+}
+
+interface SceneMessage {
+  id: string;
+  order: number;
+  narration: string;
+  visualPrompt: string;
+  locked: boolean;
+  status: string;
+  error?: string;
+  audioSource: string;
+  visualSource: string;
+  audioFile?: string;
+  visualFile?: string;
+  durationMs: number;
+}
+
+interface ReadinessMessage {
+  speechAvailable: boolean;
+  imagesAvailable: boolean;
+  provider: string;
+  ffmpegAvailable: boolean;
+  youtubeSignedIn: boolean;
+  notes: string[];
+  reportedAt?: string;
 }
 
 type UnaryMethod = (
@@ -306,6 +347,36 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
       note: claim.note ?? null,
     })),
     error: message.error ?? null,
+    scenes: message.scenes.map(toScene),
+  };
+}
+
+function toScene(message: SceneMessage): SceneDto {
+  return {
+    id: message.id,
+    order: message.order,
+    narration: message.narration,
+    visualPrompt: message.visualPrompt,
+    locked: message.locked,
+    status: message.status,
+    error: message.error ?? null,
+    audioSource: message.audioSource,
+    visualSource: message.visualSource,
+    audioFile: message.audioFile ?? null,
+    visualFile: message.visualFile ?? null,
+    durationMs: message.durationMs,
+  };
+}
+
+function toReadiness(message: ReadinessMessage): ReadinessDto {
+  return {
+    speechAvailable: message.speechAvailable,
+    imagesAvailable: message.imagesAvailable,
+    provider: message.provider,
+    ffmpegAvailable: message.ffmpegAvailable,
+    youtubeSignedIn: message.youtubeSignedIn,
+    notes: message.notes,
+    reportedAt: message.reportedAt ?? null,
   };
 }
 
@@ -498,6 +569,19 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     startProject: (topic) => project('StartProject', { topic }),
     decideClaim: (projectId, claimId, status, note) =>
       project('DecideClaim', { projectId, claimId, status, note }),
+    produceProject: (id) => project('ProduceProject', { id }),
+    reorderScenes: (projectId, sceneIds) => project('ReorderScenes', { projectId, sceneIds }),
+    setSceneLocked: (projectId, sceneId, locked) =>
+      project('SetSceneLocked', { projectId, sceneId, locked }),
+    regenerateScene: (projectId, sceneId) => project('RegenerateScene', { projectId, sceneId }),
+    attachSceneMedia: (projectId, sceneId, kind, fileName) =>
+      project('AttachSceneMedia', { projectId, sceneId, kind, fileName }),
+    async getMediaDirectory(projectId): Promise<string> {
+      return (await operatorCall<{ path: string }>('GetMediaDirectory', { id: projectId })).path;
+    },
+    async getReadiness(): Promise<ReadinessDto> {
+      return toReadiness(await operatorCall<ReadinessMessage>('GetReadiness', {}));
+    },
     close(): void {
       closed = true;
       providers.close();

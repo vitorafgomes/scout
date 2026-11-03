@@ -17,7 +17,10 @@ public interface IOperatorControlPlane
     /// </summary>
     Task<OperatorProjectState> SaveProjectAsync(OperatorProjectState project, string? originReference, CancellationToken ct);
 
-    /// <summary>Take the oldest queued project, or one left unfinished 15 minutes, moved to researching; null when none waits.</summary>
+    /// <summary>
+    /// Take the oldest queued project moved to researching, else the oldest project queued for production moved to
+    /// producing, else one left unfinished 15 minutes; null when none waits.
+    /// </summary>
     Task<QueuedProject?> NextQueuedAsync(CancellationToken ct);
 
     /// <summary>The project as the control plane holds it now, with the owner's claim decisions.</summary>
@@ -25,6 +28,12 @@ public interface IOperatorControlPlane
 
     /// <summary>The newest <paramref name="limit"/> projects, newest first.</summary>
     Task<IReadOnlyList<OperatorProjectState>> ListRecentAsync(int limit, CancellationToken ct);
+
+    /// <summary>The absolute path of the project's media directory, the one place the worker writes media files.</summary>
+    Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct);
+
+    /// <summary>Tell the control plane what this worker can produce now.</summary>
+    Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct);
 }
 
 /// <summary>The owner's brief for the channel, as the control plane's <c>Mandate</c> message carries it.</summary>
@@ -51,7 +60,11 @@ public sealed record OperatorProjectState(
     IReadOnlyList<OperatorTopicCandidate> Candidates,
     OperatorScript? Script,
     IReadOnlyList<OperatorClaim> Claims,
-    string? Error = null);
+    string? Error = null)
+{
+    /// <summary>The scenes of the video, empty until the worker plans them.</summary>
+    public IReadOnlyList<OperatorScene> Scenes { get; init; } = [];
+}
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>
 public sealed record OperatorTopicCandidate(string Title, string Reason, double Fit);
@@ -86,3 +99,31 @@ public sealed record OperatorClaim(
 
 /// <summary>A project to run and the reference of the chat conversation that asked for it, if any.</summary>
 public sealed record QueuedProject(OperatorProjectState Project, string? OriginReference);
+
+/// <summary>
+/// One scene of the video, as the control plane's <c>Scene</c> message carries it. <see cref="AudioFile"/> and
+/// <see cref="VisualFile"/> are plain file names inside the project's media directory. The worker never changes the
+/// order, the lock, a locked scene, or media whose source is <c>owner</c>.
+/// </summary>
+public sealed record OperatorScene(
+    string Id,
+    int Order,
+    string Narration,
+    string VisualPrompt,
+    bool Locked,
+    string Status,
+    string? Error,
+    string AudioSource,
+    string VisualSource,
+    string? AudioFile,
+    string? VisualFile,
+    int DurationMs);
+
+/// <summary>What the worker can produce, as the control plane's <c>Readiness</c> message carries it.</summary>
+public sealed record OperatorReadiness(
+    bool SpeechAvailable,
+    bool ImagesAvailable,
+    string Provider,
+    bool FfmpegAvailable,
+    bool YouTubeSignedIn,
+    IReadOnlyList<string> Notes);

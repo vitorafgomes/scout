@@ -64,6 +64,12 @@ export const CHANNEL = {
   operatorProject: 'scout:operator.project',
   operatorStartProject: 'scout:operator.startProject',
   operatorDecideClaim: 'scout:operator.decideClaim',
+  operatorProduction: 'scout:operator.production',
+  operatorSceneOrder: 'scout:operator.sceneOrder',
+  operatorSceneLock: 'scout:operator.sceneLock',
+  operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
+  operatorSceneMedia: 'scout:operator.sceneMedia',
+  operatorReadiness: 'scout:operator.readiness',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -608,6 +614,23 @@ export interface OperatorProjectDto {
   readonly script: ScriptDto | null;
   readonly claims: readonly ClaimDto[];
   readonly error: string | null;
+  readonly scenes: readonly SceneDto[];
+}
+
+/** One scene of a video: its narration, the picture it needs, and the media files made for it, named inside the project's media directory. */
+export interface SceneDto {
+  readonly id: string;
+  readonly order: number;
+  readonly narration: string;
+  readonly visualPrompt: string;
+  readonly locked: boolean;
+  readonly status: string;
+  readonly error: string | null;
+  readonly audioSource: string;
+  readonly visualSource: string;
+  readonly audioFile: string | null;
+  readonly visualFile: string | null;
+  readonly durationMs: number;
 }
 
 export interface OperatorProjectsRequest {
@@ -635,6 +658,48 @@ export interface ClaimDecisionRequest {
   readonly claimId: string;
   readonly status: ClaimStatus;
   readonly note?: string;
+}
+
+/** The scenes of a project in the order the owner wants them; every scene id exactly once. */
+export interface SceneOrderRequest {
+  readonly projectId: string;
+  readonly sceneIds: readonly string[];
+}
+
+export interface SceneLockRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly locked: boolean;
+}
+
+export interface SceneRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+}
+
+export type SceneMediaKind = 'audio' | 'visual';
+
+/** Which scene gets an owner's file and of which kind; main asks the owner for the file, the renderer never sends a path. */
+export interface SceneMediaRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly kind: SceneMediaKind;
+}
+
+/** The project after the owner's file was attached, or null when the owner closed the file dialog. */
+export interface SceneMediaResponse {
+  readonly project: OperatorProjectDto | null;
+}
+
+/** What the operator can make on this machine right now, as the worker last reported it. */
+export interface ReadinessDto {
+  readonly speechAvailable: boolean;
+  readonly imagesAvailable: boolean;
+  readonly provider: string;
+  readonly ffmpegAvailable: boolean;
+  readonly youtubeSignedIn: boolean;
+  readonly notes: readonly string[];
+  readonly reportedAt: string | null;
 }
 
 export interface FeatureSetCredentialsRequest {
@@ -922,6 +987,12 @@ export interface ScoutBridge {
   operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto>;
   operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto>;
+  operatorProduce(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto>;
+  operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto>;
+  operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
+  operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
+  operatorReadiness(): Promise<ReadinessDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

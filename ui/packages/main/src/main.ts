@@ -1,12 +1,14 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   Menu,
   nativeImage,
   Notification,
   powerMonitor,
+  protocol,
   screen,
   shell,
   session,
@@ -42,6 +44,12 @@ import { registerWhisperHandlers, whisperRootDir } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
+import {
+  MEDIA_SCHEME,
+  MEDIA_SCHEME_PRIVILEGES,
+  chooseWithDialog,
+  createMediaProtocolHandler,
+} from './operator/media.js';
 import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
@@ -145,7 +153,8 @@ const CSP_PROD = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: scout-media:",
+  'media-src scout-media:',
   "font-src 'self'",
   "connect-src 'self'",
   "frame-src 'none'",
@@ -158,7 +167,8 @@ const CSP_DEV = [
   "default-src 'self'",
   "script-src 'self' http://localhost:4200",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: scout-media:",
+  'media-src scout-media:',
   "font-src 'self'",
   "connect-src 'self' http://localhost:4200 ws://localhost:4200",
   "frame-src 'none'",
@@ -240,6 +250,8 @@ function disposeAll(): void {
 
 const notifierLogger = logger.child({ module: 'notifications' });
 let notifier: ReturnType<typeof createPresenceNotifier> | null = null;
+
+protocol.registerSchemesAsPrivileged([MEDIA_SCHEME_PRIVILEGES]);
 
 const lifecycle = installAppLifecycle({
   app,
@@ -597,6 +609,11 @@ app
       ipcMain,
       () => connection.client,
       logger.child({ module: 'operator' }),
+      chooseWithDialog(dialog),
+    );
+    protocol.handle(
+      MEDIA_SCHEME,
+      createMediaProtocolHandler(async (id) => (await connection.client).getMediaDirectory(id)),
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));

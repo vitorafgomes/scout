@@ -3,12 +3,14 @@ using Scout.ControlPlane.Contracts;
 using Scout.ControlPlane.Operator;
 using GrpcOperator = Scout.ControlPlane.Contracts.Operator;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
+using WireReadiness = Scout.ControlPlane.Contracts.Readiness;
 
 namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
-/// the projects and the owner's claim decisions.
+/// the projects, the owner's claim decisions, production, the scene edits, the media directory
+/// and the worker's readiness.
 /// </summary>
 public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 {
@@ -55,4 +57,43 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
                     request.HasNote ? request.Note : null,
                     context.CancellationToken)
                 .ConfigureAwait(false)));
+
+    public override Task<Project> ProduceProject(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ProduceProjectAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> ReorderScenes(ReorderScenesRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ReorderScenesAsync(request.ProjectId, request.SceneIds.ToList(), context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> SetSceneLocked(SetSceneLockedRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.SetSceneLockedAsync(request.ProjectId, request.SceneId, request.Locked, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> RegenerateScene(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateSceneAsync(request.ProjectId, request.SceneId, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> AttachSceneMedia(AttachSceneMediaRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.AttachSceneMediaAsync(
+                    request.ProjectId,
+                    request.SceneId,
+                    request.Kind,
+                    request.FileName,
+                    context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<MediaDirectory> GetMediaDirectory(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => new MediaDirectory
+        {
+            Path = await _operator.GetMediaDirectoryAsync(request.Id, context.CancellationToken).ConfigureAwait(false),
+        });
+
+    public override Task<WireReadiness> GetReadiness(GetReadinessRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () =>
+            OperatorMapping.ToWire(await _operator.GetReadinessAsync(context.CancellationToken).ConfigureAwait(false)));
 }

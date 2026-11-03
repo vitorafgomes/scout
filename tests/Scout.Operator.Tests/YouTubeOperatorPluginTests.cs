@@ -116,6 +116,20 @@ public sealed class YouTubeOperatorPluginTests
     }
 
     [Fact]
+    public async Task Status_Shows_How_Many_Scenes_Of_A_Producing_Project_Are_Ready()
+    {
+        _controlPlane.Store(Given.Producing(
+            Given.Scene("s1", 1, status: "ready"),
+            Given.Scene("s2", 2, status: "ready"),
+            Given.Scene("s3", 3, status: "failed"),
+            Given.Scene("s4", 4)));
+
+        var status = await Plugin().VideoStatusAsync();
+
+        status.ShouldBe("sourdough: producing (2 of 4 scenes ready, 1 failed)");
+    }
+
+    [Fact]
     public async Task Status_Says_So_When_No_Project_Exists()
         => (await Plugin().VideoStatusAsync()).ShouldBe("No video project exists yet.");
 

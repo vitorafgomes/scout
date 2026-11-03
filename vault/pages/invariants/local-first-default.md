@@ -10,7 +10,7 @@ description: "With no provider configured Scout selects Ollama on localhost, so 
 enforced_by:
   - "src/Scout.Llm/Configuration/LlmOptions.cs:17"
   - "src/Scout.Llm/LlmServiceCollectionExtensions.cs:57"
-  - "src/Scout.Llm/Configuration/LlmOptions.cs:224"
+  - "src/Scout.Llm/Configuration/LlmOptions.cs:248"
   - "src/Scout.Host.Console/appsettings.json:10"
 verified_by:
   - "tests/Scout.Llm.Tests/NoneLlmProviderTests.cs:103"
@@ -39,8 +39,8 @@ An open-source assistant that needs a paid key before it starts loses contributo
 
 ## Where it is enforced
 
-- `src/Scout.Llm/Configuration/LlmOptions.cs:17` defaults `Provider` to `"Ollama"`. `:224` defaults the endpoint to localhost; `:238` and `:246` default the chat and embedding models.
-- `src/Scout.Llm/LlmServiceCollectionExtensions.cs:57` reads `Scout:Llm:Provider`; `:58` to `:61` replace a blank value with the `LlmOptions` default before the switch at `:71`.
+- `src/Scout.Llm/Configuration/LlmOptions.cs:17` defaults `Provider` to `"Ollama"`. `:248` defaults the endpoint to localhost; `:262` and `:270` default the chat and embedding models.
+- `src/Scout.Llm/LlmServiceCollectionExtensions.cs:57` reads `Scout:Llm:Provider`; `:58` to `:61` replace a blank value with the `LlmOptions` default before the switch at `:72`.
 - The read-only guard is off unless `Scout:Guard:TypeSafe:ApiKey` is set (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:63`), so a fresh clone sends nothing to TypeSafe ([[pages/decisions/0016-jev-read-only-guard]]).
 - The committed host settings name Ollama explicitly (`src/Scout.Host.Console/appsettings.json:10`, committed content).
 - `src/Scout.ControlPlane/Providers/OllamaProviderOptions.cs:12` repeats the localhost endpoint for the control plane.

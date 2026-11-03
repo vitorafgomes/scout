@@ -3,7 +3,11 @@ namespace Scout.Operator.Tests.Fakes;
 /// <summary>
 /// An <see cref="IOperatorControlPlane"/> that holds projects by id, keeps a copy of every project saved, as it
 /// was when saved, and answers a save with the project, or with a failure for the statuses
-/// <see cref="FailOn"/> names. A save with an empty id creates the project <c>new-1</c>.
+/// <see cref="FailOn"/> names. A save with an empty id creates the project <c>new-1</c>. With
+/// <see cref="RefuseStaleScenes"/> it refuses a save whose scene ids, order and locks are not the stored ones, stricter
+/// than the control plane, which keeps the stored order and locks; <see cref="OwnerActs"/> changes the stored project after the given save, as the owner would;
+/// <see cref="NoLongerProducingOn"/> refuses the given save the way the control plane refuses a save on a project the
+/// owner sent back to production meanwhile.
 /// </summary>
 internal sealed class RecordingControlPlane : IOperatorControlPlane
 {
@@ -19,6 +23,20 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
     public Exception? NextQueuedFailure { get; init; }
 
     public int NextQueuedCalls { get; private set; }
+
+    public string MediaDirectory { get; init; } = "/nonexistent/scout-media";
+
+    public Exception? MediaDirectoryFailure { get; init; }
+
+    public Exception? ReportFailure { get; init; }
+
+    public List<OperatorReadiness> Reports { get; } = [];
+
+    public bool RefuseStaleScenes { get; init; }
+
+    public Func<int, bool> NoLongerProducingOn { get; init; } = _ => false;
+
+    public Func<int, OperatorProjectState, OperatorProjectState?> OwnerActs { get; init; } = (_, _) => null;
 
     public IReadOnlyList<(OperatorProjectState Project, string? Origin)> Saves
     {
@@ -60,8 +78,22 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
                 return Task.FromException<OperatorProjectState>(new InvalidOperationException("Scout could not reach its control plane."));
             }
 
+            if (NoLongerProducingOn(_saves.Count))
+            {
+                return Task.FromException<OperatorProjectState>(new InvalidOperationException("The project is no longer producing."));
+            }
+
+            if (RefuseStaleScenes
+                && _stored.TryGetValue(project.Id, out var stored)
+                && stored.Scenes.Count > 0
+                && !stored.Scenes.Select(SceneList).Order().SequenceEqual(project.Scenes.Select(SceneList).Order()))
+            {
+                return Task.FromException<OperatorProjectState>(
+                    new InvalidOperationException("The scenes changed since the worker read them; read the project again."));
+            }
+
             var saved = string.IsNullOrEmpty(project.Id) ? project with { Id = "new-1" } : project;
-            _stored[saved.Id] = saved;
+            _stored[saved.Id] = OwnerActs(_saves.Count, saved) ?? saved;
             return Task.FromResult(saved);
         }
     }
@@ -97,4 +129,18 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
             return Task.FromResult<IReadOnlyList<OperatorProjectState>>([.. _stored.Values.Reverse().Take(limit)]);
         }
     }
+
+    public Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
+        => MediaDirectoryFailure is null ? Task.FromResult(MediaDirectory) : Task.FromException<string>(MediaDirectoryFailure);
+
+    public Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            Reports.Add(readiness);
+            return ReportFailure is null ? Task.CompletedTask : Task.FromException(ReportFailure);
+        }
+    }
+
+    private static string SceneList(OperatorScene scene) => $"{scene.Id}|{scene.Order}|{scene.Locked}";
 }

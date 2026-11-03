@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
+using Scout.Llm.Providers.OpenAI;
 
 namespace Scout.Llm.Providers.AzureOpenAI;
 
@@ -19,6 +20,8 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
     private readonly string _chatDeployment;
     private readonly string _embeddingDeployment;
     private readonly HttpClient? _httpClient;
+    private readonly string _speechDeployment;
+    private readonly string _imageDeployment;
 
     /// <summary>
     /// Create the factory from bound <see cref="LlmOptions"/>. Validates the
@@ -87,10 +90,22 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
         _chatDeployment = chat.Deployment;
         _embeddingDeployment = embeddings.Deployment;
         _httpClient = httpClient;
+        _speechDeployment = azure.SpeechDeployment?.Trim() ?? string.Empty;
+        _imageDeployment = azure.ImageDeployment?.Trim() ?? string.Empty;
+        Media = new MediaCapabilities(_speechDeployment.Length > 0, _imageDeployment.Length > 0, Name)
+        {
+            SpeechSettings = _speechDeployment.Length > 0 ? OpenAIMediaSettings.Speech() : null,
+            ImageSettings = _imageDeployment.Length > 0
+                ? OpenAIMediaSettings.Image(string.IsNullOrWhiteSpace(azure.ImageModel) ? "gpt-image-1" : azure.ImageModel.Trim())
+                : null,
+        };
     }
 
     /// <inheritdoc/>
     public string Name => "AzureOpenAI";
+
+    /// <inheritdoc/>
+    public MediaCapabilities Media { get; }
 
     /// <inheritdoc/>
     public void AddToKernel(IKernelBuilder builder)
@@ -99,6 +114,7 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
 
         AddChat(builder);
         AddEmbeddings(builder);
+        AddMedia(builder);
     }
 
     /// <summary>
@@ -133,5 +149,22 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
             endpoint: _endpoint,
             apiKey: _apiKey,
             httpClient: _httpClient);
+#pragma warning restore SKEXP0010
+
+#pragma warning disable SKEXP0010
+    private void AddMedia(IKernelBuilder builder)
+    {
+        if (_speechDeployment.Length > 0)
+        {
+            builder.AddAzureOpenAITextToAudio(
+                deploymentName: _speechDeployment, endpoint: _endpoint, apiKey: _apiKey, httpClient: _httpClient);
+        }
+
+        if (_imageDeployment.Length > 0)
+        {
+            builder.AddAzureOpenAITextToImage(
+                deploymentName: _imageDeployment, endpoint: _endpoint, apiKey: _apiKey, httpClient: _httpClient);
+        }
+    }
 #pragma warning restore SKEXP0010
 }

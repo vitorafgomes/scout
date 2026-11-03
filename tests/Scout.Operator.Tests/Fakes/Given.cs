@@ -1,5 +1,11 @@
+#pragma warning disable SKEXP0001
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.TextToAudio;
+using Microsoft.SemanticKernel.TextToImage;
+using Scout.Llm.Abstractions;
 using Scout.Plugin.YouTube.Abstractions;
 
 namespace Scout.Operator.Tests.Fakes;
@@ -66,11 +72,95 @@ internal static class Given
         IOperatorControlPlane controlPlane,
         IYouTubeClient youtube,
         ScriptedChat chat,
-        Scout.Conversation.Abstractions.IOriginNotifier notifier)
-        => new(
+        Scout.Conversation.Abstractions.IOriginNotifier notifier,
+        Kernel? media = null,
+        TimeProvider? time = null)
+    {
+        var kernel = media ?? Media();
+        var capabilities = Capabilities(kernel);
+        return new(
             controlPlane,
             Researcher(youtube, chat),
             new ScriptWriter(chat),
+            new ScenePlanner(chat),
+            new NarrationGenerator(kernel, capabilities),
+            new VisualGenerator(kernel, capabilities, time ?? new FakeTimeProvider(Now)),
             notifier,
             NullLogger<OperatorPipeline>.Instance);
+    }
+
+    /// <summary>A kernel holding only the given speech and image services, as the connected provider would register them.</summary>
+    public static Kernel Media(ITextToAudioService? speech = null, ITextToImageService? images = null)
+    {
+        var builder = Kernel.CreateBuilder();
+        if (speech is not null)
+        {
+            builder.Services.AddSingleton(speech);
+        }
+
+        if (images is not null)
+        {
+            builder.Services.AddSingleton(images);
+        }
+
+        return builder.Build();
+    }
+
+    public static MediaCapabilities Capabilities(Kernel kernel)
+        => new(
+            kernel.Services.GetService<ITextToAudioService>() is not null,
+            kernel.Services.GetService<ITextToImageService>() is not null,
+            "Test")
+        {
+            SpeechSettings = new PromptExecutionSettings { ModelId = "speech-settings" },
+            ImageSettings = new PromptExecutionSettings { ModelId = "image-settings" },
+        };
+
+    /// <summary>A speech service answering every narration with <paramref name="bytes"/>, as MP3.</summary>
+    public static ITextToAudioService Speech(byte[]? bytes = null)
+    {
+        var speech = Substitute.For<ITextToAudioService>();
+        speech.GetAudioContentsAsync(Arg.Any<string>(), Arg.Any<PromptExecutionSettings?>(), Arg.Any<Kernel?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => (IReadOnlyList<AudioContent>)[new AudioContent(bytes ?? [1, 2, 3], "audio/mpeg")]);
+        return speech;
+    }
+
+    /// <summary>An image service answering every prompt with <paramref name="bytes"/>, as PNG.</summary>
+    public static ITextToImageService Images(byte[]? bytes = null)
+    {
+        var images = Substitute.For<ITextToImageService>();
+        images.GetImageContentsAsync(Arg.Any<TextContent>(), Arg.Any<PromptExecutionSettings?>(), Arg.Any<Kernel?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => (IReadOnlyList<ImageContent>)[new ImageContent(bytes ?? [0x89, 0x50, 0x4E, 0x47], "image/png")]);
+        return images;
+    }
+
+    public static OperatorScene Scene(
+        string id,
+        int order,
+        string narration = "Feed the starter daily.",
+        string status = "planned",
+        bool locked = false,
+        string audioSource = "none",
+        string visualSource = "text_card",
+        string? audioFile = null,
+        string? visualFile = null,
+        int durationMs = 0)
+        => new(id, order, narration, $"A picture for {id}", locked, status, null, audioSource, visualSource, audioFile, visualFile, durationMs);
+
+    public static OperatorProjectState Producing(params OperatorScene[] scenes)
+        => Project(status: "producing") with
+        {
+            Script = new OperatorScript(
+                "Bread in ten minutes?",
+                [new OperatorScriptSection("Starter", "Feed it daily.")],
+                "Subscribe",
+                ["A", "B", "C"],
+                "How to bake.",
+                ["bread"],
+                []),
+            Scenes = scenes,
+        };
+
+    public static string Prompts(int count)
+        => "{\"prompts\":[" + string.Join(",", Enumerable.Range(1, count).Select(i => $"\"Picture {i}\"")) + "]}";
 }

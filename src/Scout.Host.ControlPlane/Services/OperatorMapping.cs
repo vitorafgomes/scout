@@ -4,6 +4,8 @@ using Scout.ControlPlane.Operator;
 using DomainChapter = Scout.ControlPlane.Operator.Chapter;
 using DomainClaim = Scout.ControlPlane.Operator.Claim;
 using DomainMandate = Scout.ControlPlane.Operator.Mandate;
+using DomainReadiness = Scout.ControlPlane.Operator.Readiness;
+using DomainScene = Scout.ControlPlane.Operator.Scene;
 using DomainScript = Scout.ControlPlane.Operator.Script;
 using DomainScriptSection = Scout.ControlPlane.Operator.ScriptSection;
 using DomainTopicCandidate = Scout.ControlPlane.Operator.TopicCandidate;
@@ -11,6 +13,8 @@ using WireChapter = Scout.ControlPlane.Contracts.Chapter;
 using WireClaim = Scout.ControlPlane.Contracts.Claim;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
 using WireProject = Scout.ControlPlane.Contracts.Project;
+using WireReadiness = Scout.ControlPlane.Contracts.Readiness;
+using WireScene = Scout.ControlPlane.Contracts.Scene;
 using WireScript = Scout.ControlPlane.Contracts.Script;
 using WireScriptSection = Scout.ControlPlane.Contracts.ScriptSection;
 using WireTopicCandidate = Scout.ControlPlane.Contracts.TopicCandidate;
@@ -81,6 +85,7 @@ internal static class OperatorMapping
         {
             wire.Error = project.Error;
         }
+        wire.Scenes.AddRange(project.Scenes.Select(ToWire));
         return wire;
     }
 
@@ -100,7 +105,48 @@ internal static class OperatorMapping
             c.SourceUrls.ToList(),
             c.Status,
             c.HasNote ? c.Note : null)).ToList(),
-        wire.HasError ? wire.Error : null);
+        wire.HasError ? wire.Error : null)
+    {
+        Scenes = wire.Scenes.Select(s => new DomainScene(
+            s.Id,
+            s.Order,
+            s.Narration,
+            s.VisualPrompt,
+            s.Locked,
+            s.Status,
+            s.HasError ? s.Error : null,
+            s.AudioSource,
+            s.VisualSource,
+            s.HasAudioFile ? s.AudioFile : null,
+            s.HasVisualFile ? s.VisualFile : null,
+            s.DurationMs)).ToList(),
+    };
+
+    public static WireReadiness ToWire(DomainReadiness readiness)
+    {
+        var wire = new WireReadiness
+        {
+            SpeechAvailable = readiness.SpeechAvailable,
+            ImagesAvailable = readiness.ImagesAvailable,
+            Provider = readiness.Provider,
+            FfmpegAvailable = readiness.FfmpegAvailable,
+            YoutubeSignedIn = readiness.YouTubeSignedIn,
+        };
+        wire.Notes.AddRange(readiness.Notes);
+        if (readiness.ReportedAt is { } reportedAt)
+        {
+            wire.ReportedAt = Iso(reportedAt);
+        }
+        return wire;
+    }
+
+    public static DomainReadiness ToDomain(WireReadiness wire) => new(
+        wire.SpeechAvailable,
+        wire.ImagesAvailable,
+        wire.Provider,
+        wire.FfmpegAvailable,
+        wire.YoutubeSignedIn,
+        wire.Notes.ToList());
 
     public static async Task<T> Guard<T>(Func<Task<T>> action)
     {
@@ -121,6 +167,10 @@ internal static class OperatorMapping
             throw new RpcException(new Status(StatusCode.PermissionDenied, ex.Message));
         }
         catch (OperatorTamperingException ex)
+        {
+            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
+        }
+        catch (OperatorStoreException ex)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
         }
@@ -163,6 +213,35 @@ internal static class OperatorMapping
         if (claim.Note is not null)
         {
             wire.Note = claim.Note;
+        }
+        return wire;
+    }
+
+    private static WireScene ToWire(DomainScene scene)
+    {
+        var wire = new WireScene
+        {
+            Id = scene.Id,
+            Order = scene.Order,
+            Narration = scene.Narration,
+            VisualPrompt = scene.VisualPrompt,
+            Locked = scene.Locked,
+            Status = scene.Status,
+            AudioSource = scene.AudioSource,
+            VisualSource = scene.VisualSource,
+            DurationMs = scene.DurationMs,
+        };
+        if (scene.Error is not null)
+        {
+            wire.Error = scene.Error;
+        }
+        if (scene.AudioFile is not null)
+        {
+            wire.AudioFile = scene.AudioFile;
+        }
+        if (scene.VisualFile is not null)
+        {
+            wire.VisualFile = scene.VisualFile;
         }
         return wire;
     }

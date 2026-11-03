@@ -70,6 +70,12 @@ import {
   type OperatorProjectsResponse,
   type StartProjectRequest,
   type ClaimDecisionRequest,
+  type ReadinessDto,
+  type SceneLockRequest,
+  type SceneMediaRequest,
+  type SceneMediaResponse,
+  type SceneOrderRequest,
+  type SceneRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -221,6 +227,17 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     operatorDecideClaim: (_req: ClaimDecisionRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
+    operatorProduce: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorReorderScenes: (_req: SceneOrderRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorSetSceneLocked: (_req: SceneLockRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegenerateScene: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
+      rejectNotAvailable(),
+    operatorReadiness: (): Promise<ReadinessDto> => rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubCancel: (): Promise<void> => rejectNotAvailable(),
@@ -519,6 +536,30 @@ export class ScoutBridgeService {
 
   async operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorDecideClaim(req);
+  }
+
+  async operatorProduce(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProduce(req);
+  }
+
+  async operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorReorderScenes(req);
+  }
+
+  async operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorSetSceneLocked(req);
+  }
+
+  async operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateScene(req);
+  }
+
+  async operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse> {
+    return this.bridge.operatorAttachSceneMedia(req);
+  }
+
+  async operatorReadiness(): Promise<ReadinessDto> {
+    return this.bridge.operatorReadiness();
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

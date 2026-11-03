@@ -33,7 +33,11 @@ public sealed record OperatorProject(
     Script? Script,
     IReadOnlyList<Claim> Claims,
     string? Error = null,
-    string? OriginReference = null);
+    string? OriginReference = null)
+{
+    /// <summary>The scenes of the video, empty until the worker plans them.</summary>
+    public IReadOnlyList<Scene> Scenes { get; init; } = [];
+}
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
 public sealed record TopicCandidate(string Title, string Reason, double Fit);
@@ -66,3 +70,32 @@ public sealed record Claim(
     string Status,
     string? Note = null,
     DateTimeOffset? DecidedAt = null);
+
+/// <summary>
+/// One scene of the video. <c>AudioFile</c> and <c>VisualFile</c> are plain file names inside the
+/// project's media directory; a source of <c>owner</c> marks media the owner attached, which the
+/// worker can never replace.
+/// </summary>
+public sealed record Scene(
+    string Id,
+    int Order,
+    string Narration,
+    string VisualPrompt,
+    bool Locked,
+    string Status,
+    string? Error,
+    string AudioSource,
+    string VisualSource,
+    string? AudioFile,
+    string? VisualFile,
+    int DurationMs);
+
+/// <summary>What the worker reported it can produce, stamped by the control plane when it arrived.</summary>
+public sealed record Readiness(
+    bool SpeechAvailable,
+    bool ImagesAvailable,
+    string Provider,
+    bool FfmpegAvailable,
+    bool YouTubeSignedIn,
+    IReadOnlyList<string> Notes,
+    DateTimeOffset? ReportedAt = null);

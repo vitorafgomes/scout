@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import * as grpc from '@grpc/grpc-js';
+import * as protoLoader from '@grpc/proto-loader';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  ControlPlaneInvalidArgumentError,
   ControlPlaneNotImplementedError,
   ControlPlanePermissionDeniedError,
   ControlPlaneUnauthenticatedError,
@@ -13,6 +16,8 @@ import {
 import { createControlPlaneClient } from '../src/control-plane/client.js';
 import type { ControlPlaneClient } from '../src/control-plane/client.js';
 import { launchControlPlane } from '../src/control-plane/launcher.js';
+import { registerOperatorHandlers } from '../src/ipc/operator.js';
+import { MEDIA_SCHEME, createMediaProtocolHandler } from '../src/operator/media.js';
 import type {
   LaunchedControlPlane,
   UnsupportedControlPlane,
@@ -424,6 +429,190 @@ describe('operator over UDS', () => {
       expect(
         ['mandate.json', 'projects.json'].map((name) => snapshotOf(developerStateFile(name))),
       ).toEqual(developerOperatorBefore);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+function saveAsWorker(project: object): Promise<unknown> {
+  return callAsWorker('SaveOperatorProject', { project });
+}
+
+async function takeForProductionAsWorker(projectId: string): Promise<void> {
+  for (let i = 0; i < 20; i++) {
+    const next = (await callAsWorker('NextQueuedProject', {})) as { project?: { id: string } };
+    if (next.project === undefined || next.project === null) break;
+    if (next.project.id === projectId) return;
+  }
+  throw new Error(`The worker never took project ${projectId} for production.`);
+}
+
+function callAsWorker(method: string, request: object): Promise<unknown> {
+  const definition = protoLoader.loadSync('protos/worker.proto', {
+    includeDirs: [path.dirname(PROTO_DIR)],
+    enums: String,
+    defaults: true,
+  });
+  const loaded = grpc.loadPackageDefinition(definition) as unknown as {
+    scout: { controlplane: { v1: { WorkerGate: grpc.ServiceClientConstructor } } };
+  };
+  const launched = result as LaunchedControlPlane;
+  const gate = new loaded.scout.controlplane.v1.WorkerGate(
+    `unix:${path.resolve(launched.socketPath)}`,
+    grpc.credentials.createInsecure(),
+  );
+  const metadata = new grpc.Metadata();
+  metadata.set('x-scout-token', launched.workerToken);
+  return new Promise((resolve, reject) => {
+    (
+      gate as unknown as Record<
+        string,
+        (
+          req: object,
+          md: grpc.Metadata,
+          cb: (err: grpc.ServiceError | null, res: unknown) => void,
+        ) => void
+      >
+    )[method]!.call(gate, request, metadata, (err: grpc.ServiceError | null, res: unknown) => {
+      gate.close();
+      if (err === null) resolve(res);
+      else reject(err);
+    });
+  });
+}
+
+describe('operator production over UDS', () => {
+  it(
+    'ProduceProject is refused while a claim is pending, naming how many, and queues production once every claim is decided',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Span<T> in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+          claims: [{ id: 'c1', text: 'Span<T> is a ref struct.', risk: 'low', status: 'pending' }],
+        });
+
+        const refused = await client.produceProject(started.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        await client.decideClaim(started.id, 'c1', 'supported');
+        const queued = await client.produceProject(started.id);
+
+        expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((refused as Error).message).toBe(
+          '1 claim is still pending; decide it before production.',
+        );
+        expect(queued.status).toBe('production_queued');
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'GetReadiness before the worker has reported answers nothing available, no provider, no report time and the note that the worker has not reported',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+
+      const readiness = await client.getReadiness();
+
+      expect(readiness).toEqual({
+        speechAvailable: false,
+        imagesAvailable: false,
+        provider: '',
+        ffmpegAvailable: false,
+        youtubeSignedIn: false,
+        notes: ['The Scout worker has not reported yet.'],
+        reportedAt: null,
+      });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "an owner image attached through main lands in the host's media directory under a generated name, the scene records it, and scout-media serves it",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const handlers = new Map<string, (event: unknown, req: unknown) => Promise<unknown>>();
+      const source = path.join(socketDir, 'Owner picture.png');
+      writeFileSync(source, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      registerOperatorHandlers(
+        {
+          handle: (channel: string, handler: (event: unknown, req: unknown) => Promise<unknown>) =>
+            handlers.set(channel, handler),
+          removeHandler: (channel: string) => handlers.delete(channel),
+        } as never,
+        async () => client,
+        nullLogger,
+        async () => source,
+      );
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Records in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+        });
+        await client.produceProject(started.id);
+        await takeForProductionAsWorker(started.id);
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'producing',
+          scenes: [
+            {
+              id: 's1',
+              order: 0,
+              narration: 'Records compare by value.',
+              visualPrompt: 'Two equal cards',
+              status: 'planned',
+              audioSource: 'none',
+              visualSource: 'text_card',
+            },
+          ],
+        });
+
+        const { project } = (await handlers.get('scout:operator.sceneMedia')!(null, {
+          projectId: started.id,
+          sceneId: 's1',
+          kind: 'visual',
+        })) as { project: { scenes: { visualFile: string | null; visualSource: string }[] } };
+        const fileName = project.scenes[0]!.visualFile!;
+        const directory = await client.getMediaDirectory(started.id);
+        const served = await createMediaProtocolHandler((id) => client.getMediaDirectory(id))(
+          new Request(`${MEDIA_SCHEME}://${started.id}/${fileName}`),
+        );
+
+        expect(fileName).toMatch(/^owner-s1-[0-9a-f]{12}\.png$/);
+        expect(project.scenes[0]!.visualSource).toBe('owner');
+        expect(directory.startsWith(socketDir)).toBe(true);
+        expect(readdirSync(directory)).toEqual([fileName]);
+        expect([served.status, served.headers.get('content-type')]).toEqual([200, 'image/png']);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
     },
     TEST_TIMEOUT_MS,
   );

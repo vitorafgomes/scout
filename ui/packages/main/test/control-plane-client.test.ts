@@ -741,6 +741,45 @@ const projectDto: OperatorProjectDto = {
   ...projectWire,
   claims: [{ ...projectWire.claims[0]!, note: null }],
   error: null,
+  scenes: [],
+};
+
+const readyScene = {
+  id: 's1',
+  order: 0,
+  narration: 'Span is a view over memory.',
+  visualPrompt: 'A ruler laid over a row of bytes',
+  locked: false,
+  status: 'ready',
+  audioSource: 'generated',
+  visualSource: 'owner',
+  audioFile: 'scene-s1.mp3',
+  visualFile: 'owner-s1-0a1b2c3d4e5f.png',
+  durationMs: 4200,
+};
+
+const failedScene = {
+  id: 's2',
+  order: 1,
+  narration: 'It never allocates.',
+  visualPrompt: 'An empty heap',
+  locked: true,
+  status: 'failed',
+  error: 'Speech is not available with this provider.',
+  audioSource: 'none',
+  visualSource: 'text_card',
+  durationMs: 0,
+};
+
+const producingWire = { ...projectWire, status: 'producing', scenes: [readyScene, failedScene] };
+
+const readinessWire = {
+  speechAvailable: false,
+  imagesAvailable: true,
+  provider: 'openai',
+  ffmpegAvailable: true,
+  youtubeSignedIn: false,
+  notes: ['Speech needs OpenAI or Azure OpenAI; narration comes from your own audio files.'],
 };
 
 async function startOperatorServer(
@@ -776,6 +815,18 @@ async function startOperatorServer(
       ...projectWire,
       claims: [{ ...projectWire.claims[0], status: 'waived', note: 'Common knowledge' }],
     })),
+    ProduceProject: handler('ProduceProject', () => ({
+      ...projectWire,
+      status: 'production_queued',
+    })),
+    ReorderScenes: handler('ReorderScenes', () => producingWire),
+    SetSceneLocked: handler('SetSceneLocked', () => producingWire),
+    RegenerateScene: handler('RegenerateScene', () => producingWire),
+    AttachSceneMedia: handler('AttachSceneMedia', () => producingWire),
+    GetMediaDirectory: handler('GetMediaDirectory', () => ({
+      path: '/home/owner/.local/share/Scout/operator/p1/media',
+    })),
+    GetReadiness: handler('GetReadiness', () => readinessWire),
   });
   await new Promise<void>((resolve, reject) => {
     server.bindAsync(`unix:${socketPath}`, grpc.ServerCredentials.createInsecure(), (err) =>
@@ -810,7 +861,7 @@ describe('createControlPlaneClient operator', () => {
     expect(saved).toEqual(mandateWire);
     expect(projects).toEqual([
       projectDto,
-      { ...queuedWire, script: null, error: 'model unavailable' },
+      { ...queuedWire, script: null, error: 'model unavailable', scenes: [] },
     ]);
     expect(one).toEqual(projectDto);
     expect([started.id, started.status, started.script]).toEqual(['p2', 'queued', null]);
@@ -923,6 +974,139 @@ describe('createControlPlaneClient operator', () => {
 
     expect(error).toBeInstanceOf(ControlPlaneNotFoundError);
     expect((error as Error).message).toBe('Project p9 not found');
+  });
+
+  it('maps the scenes with their sources, files and errors and the readiness, and sends produce, reorder, lock, regenerate, attach, media directory and readiness with the token', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const produced = await client.produceProject('p1');
+    const reordered = await client.reorderScenes('p1', ['s2', 's1']);
+    await client.setSceneLocked('p1', 's2', true);
+    await client.regenerateScene('p1', 's1');
+    await client.attachSceneMedia('p1', 's1', 'visual', 'owner-s1-0a1b2c3d4e5f.png');
+    const directory = await client.getMediaDirectory('p1');
+    const readiness = await client.getReadiness();
+
+    expect([produced.id, produced.status, produced.scenes]).toEqual([
+      'p1',
+      'production_queued',
+      [],
+    ]);
+    expect(reordered.scenes).toEqual([
+      { ...readyScene, error: null },
+      { ...failedScene, audioFile: null, visualFile: null },
+    ]);
+    expect(directory).toBe('/home/owner/.local/share/Scout/operator/p1/media');
+    expect(readiness).toEqual({ ...readinessWire, reportedAt: null });
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'ProduceProject', request: { id: 'p1' } },
+      { method: 'ReorderScenes', request: { projectId: 'p1', sceneIds: ['s2', 's1'] } },
+      { method: 'SetSceneLocked', request: { projectId: 'p1', sceneId: 's2', locked: true } },
+      { method: 'RegenerateScene', request: { projectId: 'p1', sceneId: 's1' } },
+      {
+        method: 'AttachSceneMedia',
+        request: {
+          projectId: 'p1',
+          sceneId: 's1',
+          kind: 'visual',
+          fileName: 'owner-s1-0a1b2c3d4e5f.png',
+        },
+      },
+      { method: 'GetMediaDirectory', request: { id: 'p1' } },
+      { method: 'GetReadiness', request: {} },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('a produce refused while claims are pending rejects with ControlPlaneInvalidArgumentError carrying how many are pending', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const reason = '2 claims are still pending; decide every claim before producing the video.';
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: reason },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const error = await client.produceProject('p1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((error as Error).message).toBe(reason);
+  });
+
+  it('a produce without the YouTube write grant rejects with ControlPlanePermissionDeniedError, and an unknown project media directory with ControlPlaneNotFoundError', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const deniedSocket = tempSocketPath();
+    const denied = await startOperatorServer(deniedSocket, [], {
+      failWith: { code: grpc.status.PERMISSION_DENIED, details: 'youtube may not write' },
+    });
+    const deniedClient = createControlPlaneClient({
+      socketPath: deniedSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const socketPath = tempSocketPath();
+    server = await startOperatorServer(socketPath, [], {
+      failWith: { code: grpc.status.NOT_FOUND, details: 'Project p9 not found' },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const refused = await deniedClient.produceProject('p1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const missing = await client.getMediaDirectory('p9').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    deniedClient.close();
+    denied.forceShutdown();
+
+    expect(refused).toBeInstanceOf(ControlPlanePermissionDeniedError);
+    expect((refused as Error).message).toBe('youtube may not write');
+    expect(missing).toBeInstanceOf(ControlPlaneNotFoundError);
+    expect((missing as Error).message).toBe('Project p9 not found');
+  });
+
+  it('getReadiness rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    client = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const startedAt = Date.now();
+    const error = await client.getReadiness().then(
+      () => null,
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
   });
 
   it('listProjects rejects with ControlPlaneUnavailableError within the deadline when nothing listens', async () => {

@@ -143,6 +143,74 @@ public sealed class GrpcOperatorControlPlaneTests
     }
 
     [Fact]
+    public async Task Scenes_Travel_Field_By_Field_And_An_Absent_Error_Or_File_Stays_Absent_On_The_Wire()
+    {
+        var withMedia = new OperatorScene("s1", 1, "Feed it daily.", "A jar of starter", false, "ready", null, "generated", "text_card", "scene-s1.mp3", null, 4000);
+        var failed = new OperatorScene("s2", 2, "Bake it.", "An oven", true, "failed", "The AI Source could not make the picture of scene 2.", "owner", "owner", "mine.wav", "mine.png", 900);
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+
+        var saved = await new GrpcOperatorControlPlane(gate).SaveProjectAsync(
+            Ready() with { Status = "producing", Scenes = [withMedia, failed] }, null, CancellationToken.None);
+
+        var wire = service.Saved.ShouldNotBeNull().Project.Scenes;
+        wire.Select(w => w.Id).ShouldBe(["s1", "s2"]);
+        (wire[0].HasError, wire[0].HasAudioFile, wire[0].HasVisualFile).ShouldBe((false, true, false));
+        (wire[1].Locked, wire[1].Error, wire[1].AudioSource, wire[1].VisualFile).ShouldBe(
+            (true, "The AI Source could not make the picture of scene 2.", "owner", "mine.png"));
+        saved.Scenes.ShouldBe([withMedia, failed]);
+    }
+
+    [Fact]
+    public async Task The_Media_Directory_Is_Asked_For_By_Project_Id_And_Readiness_Is_Reported_Whole()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var directory = await controlPlane.GetMediaDirectoryAsync("p1", CancellationToken.None);
+        await controlPlane.ReportReadinessAsync(
+            new OperatorReadiness(true, false, "AzureOpenAI", false, true, ["AzureOpenAI has no image service in Scout."]),
+            CancellationToken.None);
+
+        directory.ShouldBe("/data/scout/operator/media/p1");
+        service.Got.ShouldNotBeNull().Id.ShouldBe("p1");
+        var reported = service.Reported.ShouldNotBeNull();
+        (reported.SpeechAvailable, reported.ImagesAvailable, reported.Provider, reported.FfmpegAvailable, reported.YoutubeSignedIn)
+            .ShouldBe((true, false, "AzureOpenAI", false, true));
+        reported.Notes.ShouldBe(["AzureOpenAI has no image service in Scout."]);
+        reported.HasReportedAt.ShouldBeFalse();
+        service.Authorizations.ShouldBe(["Bearer worker-session-token", "Bearer worker-session-token"]);
+    }
+
+    [Fact]
+    public async Task A_Media_Directory_Or_Readiness_Call_That_Fails_Reads_As_The_Control_Planes_Words_Or_Unreachable()
+    {
+        await using var refusing = await WorkerGateServer.StartAsync(
+            new FakeWorkerGate { OperatorFailure = new RpcException(new Status(StatusCode.PermissionDenied, "The owner has not granted YouTube writes.")) });
+        await using var broken = await WorkerGateServer.StartAsync(
+            new FakeWorkerGate { OperatorFailure = new RpcException(new Status(StatusCode.Unavailable, "connection reset")) });
+        using var refusingGate = new GrpcWriteGate(refusing.SocketPath, Token);
+        using var brokenGate = new GrpcWriteGate(broken.SocketPath, Token);
+        var missingSocket = Path.Combine(Path.GetTempPath(), $"scout-no-gate-{Guid.NewGuid():N}.sock");
+        using var missingGate = new GrpcWriteGate(missingSocket, Token);
+        var readiness = new OperatorReadiness(false, false, "Gemini", false, false, []);
+
+        var refused = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(refusingGate).GetMediaDirectoryAsync("p1", CancellationToken.None));
+        var reset = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(brokenGate).ReportReadinessAsync(readiness, CancellationToken.None));
+        var missing = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(missingGate).GetMediaDirectoryAsync("p1", CancellationToken.None));
+
+        refused.Message.ShouldBe("The owner has not granted YouTube writes.");
+        reset.Message.ShouldBe("Scout could not reach its control plane.");
+        missing.Message.ShouldBe("Scout could not reach its control plane.");
+    }
+
+    [Fact]
     public async Task With_The_Control_Plane_Down_Make_Video_Starts_No_Project_And_Says_Why()
     {
         var socketPath = Path.Combine(Path.GetTempPath(), $"scout-no-gate-{Guid.NewGuid():N}.sock");
@@ -176,8 +244,13 @@ public sealed class GrpcOperatorControlPlaneTests
             await Should.ThrowAsync<InvalidOperationException>(() => closed.GetProjectAsync("p1", CancellationToken.None)),
             await Should.ThrowAsync<InvalidOperationException>(() => closed.ListRecentAsync(5, CancellationToken.None)),
         };
+        var mediaDirectory = await Should.ThrowAsync<InvalidOperationException>(() => closed.GetMediaDirectoryAsync("p1", CancellationToken.None));
+        var readiness = await Should.ThrowAsync<InvalidOperationException>(
+            () => closed.ReportReadinessAsync(new OperatorReadiness(false, false, "Gemini", false, false, []), CancellationToken.None));
 
         failures.Select(f => f.Message).ShouldAllBe(m => m == "Scout Desktop's control plane is not available, so the video operator is off.");
+        mediaDirectory.Message.ShouldBe("Scout Desktop's control plane is not available, so the video operator is off.");
+        readiness.Message.ShouldBe("Scout Desktop's control plane is not available, so the video operator is off.");
     }
 
     [Theory]

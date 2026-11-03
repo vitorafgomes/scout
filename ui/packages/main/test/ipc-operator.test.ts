@@ -1,12 +1,18 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, afterEach, beforeEach, mock } from 'bun:test';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   CHANNEL,
   ControlPlaneInvalidArgumentError,
+  ControlPlaneNotFoundError,
   ControlPlanePermissionDeniedError,
   ControlPlaneUnavailableError,
   readIpcError,
   type MandateDto,
   type OperatorProjectDto,
+  type ReadinessDto,
+  type SceneMediaKind,
 } from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
@@ -69,7 +75,31 @@ const project: OperatorProjectDto = {
   script: null,
   claims: [],
   error: null,
+  scenes: [],
 };
+
+const readiness: ReadinessDto = {
+  speechAvailable: false,
+  imagesAvailable: false,
+  provider: 'google',
+  ffmpegAvailable: true,
+  youtubeSignedIn: true,
+  notes: ['Speech and images need OpenAI or Azure OpenAI.'],
+  reportedAt: '2026-11-03T09:00:00Z',
+};
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+const tempDirs: string[] = [];
+
+function tempDir(): string {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'scout-ipc-media-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
 
 type StubClient = { [K in keyof OperatorClient]: ReturnType<typeof mock> };
 
@@ -81,6 +111,13 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     getProject: mock(async () => project),
     startProject: mock(async () => project),
     decideClaim: mock(async () => project),
+    produceProject: mock(async () => ({ ...project, status: 'production_queued' })),
+    reorderScenes: mock(async () => project),
+    setSceneLocked: mock(async () => project),
+    regenerateScene: mock(async () => project),
+    attachSceneMedia: mock(async () => project),
+    getMediaDirectory: mock(async () => '/nowhere'),
+    getReadiness: mock(async () => readiness),
     ...overrides,
   };
 }
@@ -98,11 +135,20 @@ async function rejection(
 describe('registerOperatorHandlers', () => {
   let ipcMain: FakeIpcMain;
   let client: StubClient;
+  let chosen: string | null;
+  let chooseFile: ReturnType<typeof mock>;
 
   beforeEach(() => {
     ipcMain = makeFakeIpcMain();
     client = makeClient();
-    registerOperatorHandlers(ipcMain, async () => client as unknown as OperatorClient, logger);
+    chosen = null;
+    chooseFile = mock(async (_kind: SceneMediaKind) => chosen);
+    registerOperatorHandlers(
+      ipcMain,
+      async () => client as unknown as OperatorClient,
+      logger,
+      chooseFile,
+    );
   });
 
   const invoke = (channel: string, req?: unknown): Promise<unknown> =>
@@ -286,22 +332,217 @@ describe('registerOperatorHandlers', () => {
       down,
       () => Promise.reject(new ControlPlaneUnavailableError('socket did not appear')),
       logger,
+      chooseFile,
     );
 
     const refused = await rejection(down.handlers.get(CHANNEL.operatorProjects)!(NULL_EVENT, {}));
+    const attach = await rejection(
+      down.handlers.get(CHANNEL.operatorSceneMedia)!(NULL_EVENT, {
+        projectId: 'p1',
+        sceneId: 's1',
+        kind: 'audio',
+      }),
+    );
 
     expect(refused).toEqual({
       code: 'control-plane/unavailable',
       message: 'socket did not appear',
     });
+    expect(attach).toEqual(refused);
+    expect(chooseFile).not.toHaveBeenCalled();
   });
 
-  it('the returned unregister removes the six operator handlers', () => {
+  it('produce forwards the project id and refuses a missing one before reaching the control plane', async () => {
+    const produced = await invoke(CHANNEL.operatorProduction, { id: ' p1 ' });
+    const missing = await rejection(invoke(CHANNEL.operatorProduction, {}));
+
+    expect((produced as OperatorProjectDto).status).toBe('production_queued');
+    expect(client.produceProject.mock.calls).toEqual([['p1']]);
+    expect(missing).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The project id is required.',
+    });
+  });
+
+  it('a produce refused while claims are pending reaches the renderer as control-plane/invalid-argument naming how many', async () => {
+    const reason = '2 claims are still pending; decide every claim before producing the video.';
+    client.produceProject = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
+    });
+
+    const refused = await rejection(invoke(CHANNEL.operatorProduction, { id: 'p1' }));
+
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
+  });
+
+  it('scene order forwards the ids in the new order and refuses an empty, repeated or non-text list', async () => {
+    await invoke(CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s3', 's1', 's2'] });
+    const refused = await Promise.all([
+      rejection(invoke(CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: [] })),
+      rejection(invoke(CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s1', 's1'] })),
+      rejection(invoke(CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s1', 7] })),
+      rejection(invoke(CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: 's1' })),
+    ]);
+
+    expect(client.reorderScenes.mock.calls).toEqual([['p1', ['s3', 's1', 's2']]]);
+    expect(new Set(refused.map((r) => `${r.code}: ${r.message}`))).toEqual(
+      new Set(['operator/invalid-request: The new order lists every scene id once.']),
+    );
+    expect(refused).toHaveLength(4);
+  });
+
+  it('scene lock forwards locked and unlocked, refuses a lock that is not true or false, and regeneration forwards the scene', async () => {
+    await invoke(CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: true });
+    await invoke(CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: false });
+    const notBoolean = await rejection(
+      invoke(CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: 'yes' }),
+    );
+    await invoke(CHANNEL.operatorSceneRegeneration, { projectId: 'p1', sceneId: 's2' });
+    const noScene = await rejection(invoke(CHANNEL.operatorSceneRegeneration, { projectId: 'p1' }));
+
+    expect(client.setSceneLocked.mock.calls).toEqual([
+      ['p1', 's1', true],
+      ['p1', 's1', false],
+    ]);
+    expect(notBoolean.message).toBe('A scene is locked or unlocked.');
+    expect(client.regenerateScene.mock.calls).toEqual([['p1', 's2']]);
+    expect(noScene.message).toBe('The scene id is required.');
+  });
+
+  it('a regenerate refused on a locked scene reaches the renderer with the control plane reason', async () => {
+    client.regenerateScene = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError('Scene s1 is locked; unlock it to regenerate.');
+    });
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorSceneRegeneration, { projectId: 'p1', sceneId: 's1' }),
+    );
+
+    expect(refused).toEqual({
+      code: 'control-plane/invalid-argument',
+      message: 'Scene s1 is locked; unlock it to regenerate.',
+    });
+  });
+
+  it('readiness answers what the worker last reported', async () => {
+    expect(await invoke(CHANNEL.operatorReadiness)).toEqual(readiness);
+  });
+
+  it("attach asks the owner for a file of the kind, copies it into the project's media directory under a generated name and records that name, and no path reaches the renderer", async () => {
+    const media = path.join(tempDir(), 'p1', 'media');
+    const source = path.join(tempDir(), 'Holiday photo.PNG');
+    writeFileSync(source, PNG);
+    chosen = source;
+    client.getMediaDirectory = mock(async () => media);
+
+    const response = await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: 's1',
+      kind: 'visual',
+    });
+
+    const [copied] = readdirSync(media);
+    expect(copied).toMatch(/^owner-s1-[0-9a-f]{12}\.png$/);
+    expect(readFileSync(path.join(media, copied!)).equals(PNG)).toBe(true);
+    expect(chooseFile.mock.calls).toEqual([['visual']]);
+    expect(client.getMediaDirectory.mock.calls).toEqual([['p1']]);
+    expect(client.attachSceneMedia.mock.calls).toEqual([['p1', 's1', 'visual', copied]]);
+    expect(response).toEqual({ project });
+    expect(JSON.stringify(response)).not.toContain(media);
+    expect(JSON.stringify(response)).not.toContain(source);
+  });
+
+  it('attach answers no project and copies nothing when the owner closes the dialog', async () => {
+    const media = tempDir();
+    client.getMediaDirectory = mock(async () => media);
+
+    const response = await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: 's1',
+      kind: 'audio',
+    });
+
+    expect(response).toEqual({ project: null });
+    expect(chooseFile.mock.calls).toEqual([['audio']]);
+    expect(client.attachSceneMedia).not.toHaveBeenCalled();
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('attach deletes the copied file when the control plane refuses to record it, and the renderer gets the refusal', async () => {
+    const media = tempDir();
+    const source = path.join(tempDir(), 'voice.mp3');
+    writeFileSync(source, 'ID3');
+    chosen = source;
+    client.getMediaDirectory = mock(async () => media);
+    client.attachSceneMedia = mock(async () => {
+      throw new ControlPlaneNotFoundError('Scene s9 not found in project p1');
+    });
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's9', kind: 'audio' }),
+    );
+
+    expect(refused).toEqual({
+      code: 'control-plane/not-found',
+      message: 'Scene s9 not found in project p1',
+    });
+    expect(client.attachSceneMedia).toHaveBeenCalledTimes(1);
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('attach refuses ids with separators or dot segments and an unknown kind before asking the owner or the control plane, and ignores a path the renderer adds', async () => {
+    const bad = [
+      { projectId: '../p1', sceneId: 's1', kind: 'audio' },
+      { projectId: 'p1', sceneId: 's1/../../x', kind: 'audio' },
+      { projectId: 'p1', sceneId: 's1\\x', kind: 'visual' },
+      { projectId: 'p1', sceneId: 's1', kind: 'video' },
+    ];
+
+    const refused = await Promise.all(
+      bad.map((req) => rejection(invoke(CHANNEL.operatorSceneMedia, req))),
+    );
+    const media = tempDir();
+    client.getMediaDirectory = mock(async () => media);
+    await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: 's1',
+      kind: 'visual',
+      path: '/etc/passwd',
+      fileName: '../../etc/passwd',
+    });
+
+    expect(refused.map((r) => r.code)).toEqual(bad.map(() => 'operator/invalid-request'));
+    expect(chooseFile.mock.calls).toEqual([['visual']]);
+    expect(client.attachSceneMedia).not.toHaveBeenCalled();
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('attach refuses a file of the wrong type or over the cap without a path in the message, and records nothing', async () => {
+    const media = tempDir();
+    const source = path.join(tempDir(), 'notes.txt');
+    writeFileSync(source, 'not media');
+    chosen = source;
+    client.getMediaDirectory = mock(async () => media);
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'visual' }),
+    );
+
+    expect(refused).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A picture must be a png, jpg, jpeg or webp file.',
+    });
+    expect(client.attachSceneMedia).not.toHaveBeenCalled();
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('the returned unregister removes the twelve operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
       async () => client as unknown as OperatorClient,
       logger,
+      chooseFile,
     );
 
     const registered = [...own.handlers.keys()].sort();
@@ -315,6 +556,12 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorProject,
         CHANNEL.operatorStartProject,
         CHANNEL.operatorDecideClaim,
+        CHANNEL.operatorProduction,
+        CHANNEL.operatorSceneOrder,
+        CHANNEL.operatorSceneLock,
+        CHANNEL.operatorSceneRegeneration,
+        CHANNEL.operatorSceneMedia,
+        CHANNEL.operatorReadiness,
       ].sort(),
     );
     expect(own.handlers.size).toBe(0);

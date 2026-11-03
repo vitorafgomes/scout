@@ -82,6 +82,12 @@ describe('buildBridge', () => {
       'operatorProject',
       'operatorStartProject',
       'operatorDecideClaim',
+      'operatorProduce',
+      'operatorReorderScenes',
+      'operatorSetSceneLocked',
+      'operatorRegenerateScene',
+      'operatorAttachSceneMedia',
+      'operatorReadiness',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -499,6 +505,27 @@ describe('buildBridge', () => {
       [CHANNEL.operatorProject, { id: 'p1' }],
       [CHANNEL.operatorStartProject, { topic: 'Span<T> in C#' }],
       [CHANNEL.operatorDecideClaim, decision],
+    ]);
+  });
+
+  it('produce, scene order, lock, regeneration, attach and readiness reach main on their own scout:operator channels, and attach carries the ids and the kind only', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorProduce({ id: 'p1' });
+    await bridge.operatorReorderScenes({ projectId: 'p1', sceneIds: ['s2', 's1'] });
+    await bridge.operatorSetSceneLocked({ projectId: 'p1', sceneId: 's1', locked: true });
+    await bridge.operatorRegenerateScene({ projectId: 'p1', sceneId: 's2' });
+    await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: 's1', kind: 'audio' });
+    await bridge.operatorReadiness();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorProduction, { id: 'p1' }],
+      [CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s2', 's1'] }],
+      [CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: true }],
+      [CHANNEL.operatorSceneRegeneration, { projectId: 'p1', sceneId: 's2' }],
+      [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'audio' }],
+      [CHANNEL.operatorReadiness],
     ]);
   });
 

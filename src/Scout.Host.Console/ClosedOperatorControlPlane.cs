@@ -24,4 +24,10 @@ internal sealed class ClosedOperatorControlPlane : IOperatorControlPlane
 
     public Task<IReadOnlyList<OperatorProjectState>> ListRecentAsync(int limit, CancellationToken ct)
         => Task.FromException<IReadOnlyList<OperatorProjectState>>(new InvalidOperationException(Reason));
+
+    public Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
+        => Task.FromException<string>(new InvalidOperationException(Reason));
+
+    public Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct)
+        => Task.FromException(new InvalidOperationException(Reason));
 }

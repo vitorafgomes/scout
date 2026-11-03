@@ -128,6 +128,39 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             wire.Error = project.Error;
         }
 
+        wire.Scenes.AddRange(project.Scenes.Select(ToWire));
+        return wire;
+    }
+
+    private static Scene ToWire(OperatorScene scene)
+    {
+        var wire = new Scene
+        {
+            Id = scene.Id,
+            Order = scene.Order,
+            Narration = scene.Narration,
+            VisualPrompt = scene.VisualPrompt,
+            Locked = scene.Locked,
+            Status = scene.Status,
+            AudioSource = scene.AudioSource,
+            VisualSource = scene.VisualSource,
+            DurationMs = scene.DurationMs,
+        };
+        if (scene.Error is not null)
+        {
+            wire.Error = scene.Error;
+        }
+
+        if (scene.AudioFile is not null)
+        {
+            wire.AudioFile = scene.AudioFile;
+        }
+
+        if (scene.VisualFile is not null)
+        {
+            wire.VisualFile = scene.VisualFile;
+        }
+
         return wire;
     }
 
@@ -151,5 +184,44 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
                     [.. wire.Script.Tags],
                     [.. wire.Script.Chapters.Select(c => new OperatorChapter(c.At, c.Title))]),
             [.. wire.Claims.Select(c => new OperatorClaim(c.Id, c.Text, c.Risk, [.. c.SourceUrls], c.Status, c.HasNote ? c.Note : null))],
-            wire.HasError ? wire.Error : null);
+            wire.HasError ? wire.Error : null)
+        {
+            Scenes = [.. wire.Scenes.Select(s => new OperatorScene(
+                s.Id,
+                s.Order,
+                s.Narration,
+                s.VisualPrompt,
+                s.Locked,
+                s.Status,
+                s.HasError ? s.Error : null,
+                s.AudioSource,
+                s.VisualSource,
+                s.HasAudioFile ? s.AudioFile : null,
+                s.HasVisualFile ? s.VisualFile : null,
+                s.DurationMs))],
+        };
+
+    public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectId);
+        var directory = await CallAsync(
+            () => gate.Client.GetOperatorMediaDirectoryAsync(new GetProjectRequest { Id = projectId }, gate.CallOptions(ct)).ResponseAsync, ct)
+            .ConfigureAwait(false);
+        return directory.Path;
+    }
+
+    public async Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(readiness);
+        var wire = new Readiness
+        {
+            SpeechAvailable = readiness.SpeechAvailable,
+            ImagesAvailable = readiness.ImagesAvailable,
+            Provider = readiness.Provider,
+            FfmpegAvailable = readiness.FfmpegAvailable,
+            YoutubeSignedIn = readiness.YouTubeSignedIn,
+        };
+        wire.Notes.AddRange(readiness.Notes);
+        await CallAsync(() => gate.Client.ReportReadinessAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
+    }
 }
