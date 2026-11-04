@@ -41,18 +41,21 @@ internal sealed class ChatGateway : IChatGateway
     private readonly ChatCompletionAgent? _agent;
     private readonly ILogger<ChatGateway> _logger;
     private readonly string _target;
+    private readonly bool _vision;
 
     public ChatGateway(
         IChatCompletionService chat,
         Kernel? kernel = null,
         IOptions<LlmOptions>? options = null,
         ILogger<ChatGateway>? logger = null,
-        ChatCompletionAgent? agent = null)
+        ChatCompletionAgent? agent = null,
+        MediaCapabilities? media = null)
     {
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _kernel = kernel;
         _agent = agent;
         _logger = logger ?? NullLogger<ChatGateway>.Instance;
+        _vision = media?.Vision ?? false;
 
         _target = DescribeTarget(options?.Value);
     }
@@ -82,9 +85,14 @@ internal sealed class ChatGateway : IChatGateway
                 "ChatRequest.UserMessage must be non-empty.", nameof(request));
         }
 
+        if (request.Image is not null && !_vision)
+        {
+            throw new LlmVisionUnavailableException();
+        }
+
         _logger.LogInformation(
-            "LLM request -> {Target} (inputChars={InputChars}).",
-            _target, request.UserMessage.Length);
+            "LLM request -> {Target} (inputChars={InputChars}, image={Image}).",
+            _target, request.UserMessage.Length, request.Image is null ? "false" : "true");
 
         var outputChars = 0;
         if (_agent is not null)
@@ -142,7 +150,7 @@ internal sealed class ChatGateway : IChatGateway
             }
         }
 
-        history.AddUserMessage(request.UserMessage);
+        history.Add(UserMessage(request));
 
         var settings = BuildSettings(request);
         var stream = _chat.GetStreamingChatMessageContentsAsync(
@@ -185,7 +193,7 @@ internal sealed class ChatGateway : IChatGateway
         ChatRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var message = new ChatMessageContent(AuthorRole.User, request.UserMessage);
+        var message = UserMessage(request);
 
         // Seed the thread with prior turns oldest-first. The current user message is the
         // invoke message, so it is NOT added to the seed (duplicate guard). Empty History
@@ -252,13 +260,20 @@ internal sealed class ChatGateway : IChatGateway
         }
     }
 
+    private static ChatMessageContent UserMessage(ChatRequest request)
+        => request.Image is { } image
+            ? new ChatMessageContent(
+                AuthorRole.User,
+                [new TextContent(request.UserMessage), new ImageContent(image.Bytes, image.ContentType)])
+            : new ChatMessageContent(AuthorRole.User, request.UserMessage);
+
     // Maps a provider HTTP 429 to a domain exception so no SDK exception type
     // leaves this project. The streaming OpenAI connector raises the SDK's
     // ClientResultException while enumerating; other connectors raise
     // HttpOperationException. Returns null for anything that is not a 429, so the
     // original exception propagates unchanged. Must never throw: it runs inside
     // an exception filter, where a throw would be swallowed.
-    private static Exception? TranslateTooManyRequests(Exception ex)
+    internal static Exception? TranslateTooManyRequests(Exception ex)
     {
         var status = ex switch
         {

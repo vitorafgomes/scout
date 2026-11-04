@@ -17,11 +17,39 @@ const MiB = 1024 * 1024;
 
 export const LOCAL_MODEL_CATALOG: readonly LocalModelCatalogEntry[] = Object.freeze([
   {
+    id: 'whisper-tiny',
+    kind: 'transcription',
+    title: 'Whisper Tiny',
+    description: 'Fastest and smallest. Less accurate with accents and background noise.',
+    badges: [],
+    sizeBytes: 77_691_713,
+    ramBytes: Math.round(273 * MiB),
+  },
+  {
+    id: 'whisper-base',
+    kind: 'transcription',
+    title: 'Whisper Base',
+    description:
+      'Recommended for live transcription: words appear within about a second on most computers.',
+    badges: ['recommended'],
+    sizeBytes: 147_951_465,
+    ramBytes: Math.round(388 * MiB),
+  },
+  {
+    id: 'whisper-small',
+    kind: 'transcription',
+    title: 'Whisper Small',
+    description: 'More accurate than Base, and slower for live transcription.',
+    badges: [],
+    sizeBytes: 487_601_967,
+    ramBytes: Math.round(852 * MiB),
+  },
+  {
     id: 'whisper-large-v3',
     kind: 'transcription',
     title: 'Whisper Large v3',
     description: 'Highest local accuracy. Slower and requires more memory.',
-    badges: ['recommended'],
+    badges: [],
     sizeBytes: Math.round(2.9 * GiB),
     ramBytes: Math.round(4.7 * GiB),
   },

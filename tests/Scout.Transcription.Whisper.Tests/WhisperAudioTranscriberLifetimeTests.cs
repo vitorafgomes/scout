@@ -13,10 +13,10 @@ public sealed class WhisperAudioTranscriberLifetimeTests
         public void Dispose() => onDispose();
     }
 
-    private static async IAsyncEnumerable<TranscribedSegment> Heard(float[] samples, [EnumeratorCancellation] CancellationToken ct)
+    private static async IAsyncEnumerable<(TranscribedSegment, string?)> Heard(float[] samples, WhisperAudioTranscriber.Decoding decoding, [EnumeratorCancellation] CancellationToken ct)
     {
         await Task.Yield();
-        yield return new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard");
+        yield return (new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard"), null);
     }
 
     [Fact]
@@ -26,13 +26,13 @@ public sealed class WhisperAudioTranscriberLifetimeTests
         var proceed = new SemaphoreSlim(0);
         var inside = 0;
         var mostAtOnce = 0;
-        async IAsyncEnumerable<TranscribedSegment> Held(float[] samples, [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<(TranscribedSegment, string?)> Held(float[] samples, WhisperAudioTranscriber.Decoding decoding, [EnumeratorCancellation] CancellationToken ct)
         {
             mostAtOnce = Math.Max(mostAtOnce, Interlocked.Increment(ref inside));
             entered.Release();
             await proceed.WaitAsync(ct);
             Interlocked.Decrement(ref inside);
-            yield return new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard");
+            yield return (new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard"), null);
         }
 
         using var transcriber = new WhisperAudioTranscriber(
@@ -63,11 +63,11 @@ public sealed class WhisperAudioTranscriberLifetimeTests
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 28, 9, 0, 0, TimeSpan.Zero));
         var entered = new SemaphoreSlim(0);
         var proceed = new SemaphoreSlim(0);
-        async IAsyncEnumerable<TranscribedSegment> Held(float[] samples, [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<(TranscribedSegment, string?)> Held(float[] samples, WhisperAudioTranscriber.Decoding decoding, [EnumeratorCancellation] CancellationToken ct)
         {
             entered.Release();
             await proceed.WaitAsync(ct);
-            yield return new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard");
+            yield return (new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(1), "heard"), null);
         }
 
         using var transcriber = new WhisperAudioTranscriber(

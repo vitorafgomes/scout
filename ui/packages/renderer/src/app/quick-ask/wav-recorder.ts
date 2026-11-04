@@ -2,6 +2,18 @@ import { Injectable } from '@angular/core';
 
 export const SAMPLE_RATE = 16_000;
 export const MAX_SAMPLES = SAMPLE_RATE * 5 * 60;
+export const NOT_16_KHZ_MESSAGE = 'Scout could not open the microphone at 16 kHz.';
+
+/** Encodes mono float samples as 16-bit little-endian PCM, clamped to [-1, 1]. */
+export function toPcm16(samples: Float32Array): Uint8Array {
+  const bytes = new Uint8Array(samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  samples.forEach((sample, i) => {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(i * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  });
+  return bytes;
+}
 
 /** Encodes mono float samples as a 16-bit PCM WAV file. */
 export function encodeWav(chunks: readonly Float32Array[], sampleRate: number): Uint8Array {
@@ -26,13 +38,17 @@ export function encodeWav(chunks: readonly Float32Array[], sampleRate: number): 
   view.setUint32(40, count * 2, true);
   let offset = 44;
   for (const chunk of chunks) {
-    for (const sample of chunk) {
-      const clamped = Math.max(-1, Math.min(1, sample));
-      view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
-      offset += 2;
-    }
+    bytes.set(toPcm16(chunk), offset);
+    offset += chunk.length * 2;
   }
   return bytes;
+}
+
+/** Opens the owner's microphone, mono with the browser's echo cancellation and noise suppression. */
+function openMicrophone(): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  });
 }
 
 export function toBase64(bytes: Uint8Array): string {
@@ -44,8 +60,9 @@ export function toBase64(bytes: Uint8Array): string {
 }
 
 /**
- * Records the microphone at 16 kHz mono into memory while held, up to 5 minutes;
- * nothing is written to disk and the stream stops when recording ends.
+ * Records the microphone at 16 kHz mono into memory while held, up to 5 minutes, or, given `onChunk`,
+ * hands each buffer on as PCM16 and keeps nothing; nothing is written to disk and the stream stops when
+ * recording ends.
  */
 @Injectable({ providedIn: 'root' })
 export class WavRecorder {
@@ -58,12 +75,20 @@ export class WavRecorder {
   private chunks: Float32Array[] = [];
   private count = 0;
 
-  /** Opens the microphone; a recording still open is released first. */
-  async start(onLimit: () => void): Promise<void> {
+  /**
+   * Opens the microphone, or the stream `source` opens, resampled to 16 kHz mono; a recording still open is
+   * released first. With `onChunk`, each 4096-sample buffer is passed on as PCM16 instead of kept, and a
+   * context that does not open at 16 kHz is refused.
+   */
+  async start(
+    onLimit: () => void,
+    onChunk?: (pcm16: Uint8Array) => void,
+    source: () => Promise<MediaStream> = openMicrophone,
+  ): Promise<void> {
     const starting = this.release().then(() => {
       this.chunks = [];
       this.count = 0;
-      return this.open(onLimit);
+      return this.open(onLimit, onChunk, source);
     });
     this.starting = starting;
     try {
@@ -87,16 +112,26 @@ export class WavRecorder {
     return wav;
   }
 
-  private async open(onLimit: () => void): Promise<void> {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
-    });
+  private async open(
+    onLimit: () => void,
+    onChunk: ((pcm16: Uint8Array) => void) | undefined,
+    source: () => Promise<MediaStream>,
+  ): Promise<void> {
+    this.stream = await source();
     this.context = new AudioContext({ sampleRate: SAMPLE_RATE });
+    if (onChunk !== undefined && this.context.sampleRate !== SAMPLE_RATE) {
+      await this.release();
+      throw new Error(NOT_16_KHZ_MESSAGE);
+    }
     this.source = this.context.createMediaStreamSource(this.stream);
     this.processor = this.context.createScriptProcessor(4096, 1, 1);
     this.processor.onaudioprocess = (event: AudioProcessingEvent) => {
-      if (this.count >= MAX_SAMPLES) return;
       const input = event.inputBuffer.getChannelData(0);
+      if (onChunk !== undefined) {
+        onChunk(toPcm16(input));
+        return;
+      }
+      if (this.count >= MAX_SAMPLES) return;
       const take = Math.min(input.length, MAX_SAMPLES - this.count);
       this.chunks.push(input.slice(0, take));
       this.count += take;

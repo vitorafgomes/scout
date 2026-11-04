@@ -2,6 +2,7 @@ import { describe, it, expect, spyOn } from 'bun:test';
 import type { IpcMainInvokeEvent } from 'electron';
 import { EventEmitter } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { PassThrough } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -9,6 +10,8 @@ import {
   migrateLegacyApiKey,
   readGrantedWriteFeatures,
 } from '../src/worker/build-env.js';
+import { resolveMediaTools } from '../src/worker/resolve-binary.js';
+import { createSupervisor, type SupervisorDeps } from '../src/worker/supervisor.js';
 import {
   connectControlPlane,
   type ControlPlaneLauncherDeps,
@@ -115,6 +118,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -156,6 +160,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -245,6 +250,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -275,6 +281,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -302,6 +309,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -372,6 +380,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -411,6 +420,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -552,6 +562,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -577,6 +588,7 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__MEETINGS__DBPATH: '',
       SCOUT__OPERATOR__FFMPEGPATH: '',
       SCOUT__OPERATOR__FONTPATH: '',
       SCOUT__OPERATOR__PIPERPATH: '',
@@ -1010,11 +1022,22 @@ describe('buildEnv worker gate', () => {
         voices: '/opt/Scout/resources/voices',
         rhubarb: '/opt/Scout/resources/media-tools/linux-x64/rhubarb/rhubarb',
         mouths: '/opt/Scout/resources/mouths',
+        tesseract: '',
+        tessdata: '',
       },
     });
     const notBundled = await buildEnv({
       vaultGet: async () => null,
-      mediaTools: { ffmpeg: '', font: '', piper: '', voices: '', rhubarb: '', mouths: '' },
+      mediaTools: {
+        ffmpeg: '',
+        font: '',
+        piper: '',
+        voices: '',
+        rhubarb: '',
+        mouths: '',
+        tesseract: '',
+        tessdata: '',
+      },
     });
     const absent = await buildEnv({ vaultGet: async () => null });
     const paths = (env: Record<string, string>) => [
@@ -1037,6 +1060,96 @@ describe('buildEnv worker gate', () => {
     expect(paths(notBundled)).toEqual(['', '', '', '', '', '']);
     expect(paths(absent)).toEqual(['', '', '', '', '', '']);
     expect(Object.keys(bundled).filter((key) => key.toUpperCase().includes('FFPROBE'))).toEqual([]);
+  });
+
+  it('the tesseract program, its data folder and the app locale reach the worker environment when bundled, and nothing but the locale is set otherwise', async () => {
+    const tools = path.join('/opt/Scout/resources', 'media-tools', 'linux-x64', 'tesseract');
+    const program = path.join(tools, 'AppRun');
+    const data = path.join(tools, 'tessdata');
+    const packaged = {
+      app: { isPackaged: true },
+      resourcesPath: '/opt/Scout/resources',
+      cwd: '/any',
+    };
+    const resolve = (present: readonly string[]) =>
+      resolveMediaTools(
+        { ...packaged, platform: 'linux', arch: 'x64' },
+        (file) => present.includes(file),
+        () => [],
+      );
+    const screenText = (env: Record<string, string>) =>
+      Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('SCOUT__TOOLS__')));
+
+    const bundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: resolve([program, data]),
+      locale: 'pt-BR',
+    });
+    const notBundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: resolve([]),
+      locale: 'en-GB',
+    });
+
+    expect(screenText(bundled)).toEqual({
+      SCOUT__TOOLS__TESSERACTPATH: program,
+      SCOUT__TOOLS__TESSDATAPATH: data,
+      SCOUT__TOOLS__LOCALE: 'pt-BR',
+    });
+    expect(screenText(notBundled)).toEqual({ SCOUT__TOOLS__LOCALE: 'en-GB' });
+  });
+
+  it('SCOUT__MEETINGS__DBPATH is <userData>/meetings.db and the key is reserved', async () => {
+    const userData = path.join('/home/owner/.config', 'Scout Desktop');
+    const env = await buildEnv({ vaultGet: async () => null, userDataDir: userData });
+    const absent = await buildEnv({ vaultGet: async () => null });
+
+    const inherited: Record<string, string> = {
+      scout__meetings__dbpath: '/tmp/other/meetings.db',
+      'Scout:Meetings:DbPath': '/tmp/other/meetings.db',
+      DOTNET_SCOUT__MEETINGS__DBPATH: '/tmp/other/meetings.db',
+      'ASPNETCORE_Scout:Meetings:DbPath': '/tmp/other/meetings.db',
+    };
+    const saved = new Map(Object.keys(inherited).map((key) => [key, process.env[key]]));
+    Object.assign(process.env, inherited);
+    const child = Object.assign(new EventEmitter(), {
+      pid: 9,
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: () => true,
+    });
+    const spawned: Record<string, string | undefined>[] = [];
+    const spawn = ((_cmd: string, _args: string[], options: { env: Record<string, string> }) => {
+      spawned.push(options.env);
+      return child;
+    }) as unknown as SupervisorDeps['spawn'];
+    try {
+      const supervisor = createSupervisor({
+        spawn,
+        logger: silent,
+        resolveBinary: () => '/fake/Scout.Host.Console',
+        checkBinaryExists: () => true,
+        buildEnv: async () => ({ SCOUT__MEETINGS__DBPATH: env['SCOUT__MEETINGS__DBPATH']! }),
+        readinessTimeoutMs: 200,
+        stopTimeoutMs: 200,
+      });
+      const started = supervisor.start();
+      await Promise.resolve();
+      await Promise.resolve();
+      child.stdout.write('SCOUT_READY\n');
+      await started;
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+
+    expect(env['SCOUT__MEETINGS__DBPATH']).toBe(path.join(userData, 'meetings.db'));
+    expect(absent['SCOUT__MEETINGS__DBPATH']).toBe('');
+    const workerEnv = spawned[0]!;
+    expect(Object.keys(workerEnv).filter((key) => key in inherited)).toEqual([]);
+    expect(workerEnv['SCOUT__MEETINGS__DBPATH']).toBe(path.join(userData, 'meetings.db'));
   });
 
   it('always sets the worker gate socket and token, empty while the control plane is not launched, so inherited values cannot override them', async () => {

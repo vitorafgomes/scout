@@ -28,6 +28,11 @@ export const DEFAULT_CLOUD_MODELS: Readonly<Record<ActiveCloudProvider, string>>
   ChatGptPlan: 'gpt-5.6-luna',
 });
 
+/** The name the AI Sources screen shows for a provider: ChatGPT for the plan sign-in, otherwise its own name. */
+export function providerLabel(provider: Exclude<LlmProvider, 'None'>): string {
+  return provider === 'ChatGptPlan' ? 'ChatGPT' : provider;
+}
+
 function isActiveCloudProvider(value: unknown): value is ActiveCloudProvider {
   return value === 'OpenAI' || value === 'Gemini' || value === 'ChatGptPlan';
 }
@@ -117,6 +122,13 @@ export class LlmConfigStore {
   /** Cloud providers Scout could answer with: an API key in the vault, or a ChatGPT sign-in with plan usage. */
   readonly connectedProviders = this._connectedProviders.asReadonly();
 
+  private readonly _readFailed = signal(false);
+  private readonly _mirroredProvider = signal<Exclude<LlmProvider, 'None'> | null>(null);
+  /** True when the last load could not read the vault, so a provider of null means unknown, not unconfigured. */
+  readonly readFailed = this._readFailed.asReadonly();
+  /** The provider the localStorage mirror held as the last load began: the last one known when the vault read fails. */
+  readonly mirroredProvider = this._mirroredProvider.asReadonly();
+
   readonly isConfigured = computed<boolean>(() => this._model() !== null);
 
   /** The cloud provider the next worker start will use, once its API key is confirmed in the vault; null otherwise. */
@@ -133,6 +145,8 @@ export class LlmConfigStore {
   // claims "configured" when the worker would skip the env vars.
   async loadFromVault(): Promise<void> {
     const persisted = readPersisted();
+    this._readFailed.set(false);
+    this._mirroredProvider.set(persisted?.provider ?? null);
     if (persisted !== null) {
       this._provider.set(persisted.provider);
       this._model.set(persisted.model);
@@ -143,7 +157,10 @@ export class LlmConfigStore {
     for (const provider of CLOUD_PROVIDERS) {
       const res = await this.bridge
         .vaultHas({ key: CLOUD_API_KEY_VAULT_KEYS[provider] })
-        .catch(() => ({ exists: false }));
+        .catch(() => {
+          this._readFailed.set(true);
+          return { exists: false };
+        });
       if (res.exists) connected.add(provider);
     }
     if (this._connectedProviders().has('ChatGptPlan')) connected.add('ChatGptPlan');
@@ -199,6 +216,7 @@ export class LlmConfigStore {
       try {
         requiredInVault = (await this.bridge.vaultHas({ key })).exists;
       } catch {
+        this._readFailed.set(true);
         requiredInVault = false;
       }
     } else {
@@ -214,6 +232,7 @@ export class LlmConfigStore {
     try {
       return (await this.bridge.vaultGetPublic({ key })).value;
     } catch {
+      this._readFailed.set(true);
       return undefined;
     }
   }

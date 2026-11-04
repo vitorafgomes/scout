@@ -46,11 +46,28 @@ import type { FeatureViewModel } from '../core/features.store';
 
       <ng-content />
 
+      @if (readRows().length > 0) {
+        <section class="permissions" [attr.data-test]="'reads-' + feature.id">
+          <h4>Reads</h4>
+          <ul class="scope-rows">
+            @for (row of readRows(); track row.scope) {
+              <li [attr.data-test]="'scope-row-' + row.scope">
+                <code>{{ row.scope }}</code>
+                <span class="access" [attr.data-test]="'access-' + row.scope">{{
+                  row.access
+                }}</span>
+                <span class="row-actions">{{ row.actions.join(', ') }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+
       @if (feature.writeClass !== 'none') {
         <section class="permissions" [attr.data-test]="'permissions-' + feature.id">
           <h4>Permissions</h4>
           <ul class="scope-rows">
-            @for (row of feature.scopeMatrix ?? []; track row.scope) {
+            @for (row of writeRows(); track row.scope) {
               <li [attr.data-test]="'scope-row-' + row.scope">
                 <code>{{ row.scope }}</code>
                 <span
@@ -302,6 +319,14 @@ export class FeatureCardComponent {
   @Output() readonly clearCredentials = new EventEmitter<void>();
   @Output() readonly allowWrites = new EventEmitter<void>();
   @Output() readonly revokeWrites = new EventEmitter<void>();
+
+  readRows(): NonNullable<FeatureViewModel['scopeMatrix']> {
+    return (this.feature.scopeMatrix ?? []).filter((row) => row.access === 'read');
+  }
+
+  writeRows(): NonNullable<FeatureViewModel['scopeMatrix']> {
+    return (this.feature.scopeMatrix ?? []).filter((row) => row.access !== 'read');
+  }
 
   badgeLabel(): string {
     switch (this.feature.status) {

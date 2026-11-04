@@ -216,6 +216,58 @@ describe('FeaturesComponent', () => {
     expect(card.textContent).not.toContain('Needs credentials');
   });
 
+  it('the This computer card shows its name and Connected, with no toggle, no credentials and no allowed-users warning', async () => {
+    const desktop: FeatureDto = {
+      ...github,
+      id: 'desktop',
+      displayName: 'This computer',
+      description: 'Lets Scout see your screen and hear your microphone when you ask it to.',
+      requiresCredentials: false,
+      hasCredentials: false,
+      enabled: false,
+      status: 'disabled',
+      scopeMatrix: [
+        { scope: 'Screen', actions: ['read'], access: 'read' },
+        { scope: 'Microphone', actions: ['read'], access: 'read' },
+      ],
+    };
+    const bridge = {
+      onFeaturesChanged: vi.fn(() => () => undefined),
+      featuresList: vi.fn(async () => ({ features: [desktop] })),
+      featureEnable: vi.fn(),
+      featureDisable: vi.fn(),
+      featureSetCredentials: vi.fn(),
+      featureSetup: vi.fn(),
+      featureDeleteCredentials: vi.fn(),
+      accessGet: vi.fn(async () => ({ userIds: [] })),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+        FeaturesStore,
+      ],
+    });
+    const fixture = TestBed.createComponent(FeaturesComponent);
+    for (let i = 0; i < 3; i++) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+    }
+    fixture.detectChanges();
+    const card = fixture.nativeElement.querySelector('[data-test="card-desktop"]') as HTMLElement;
+
+    expect(card.querySelector('.title')?.textContent?.trim()).toBe('This computer');
+    expect(card.querySelector('[data-test="badge-desktop"]')?.textContent?.trim()).toBe(
+      'Connected',
+    );
+    expect(card.querySelector('[data-test="toggle-desktop"]')).toBeNull();
+    expect(card.querySelector('[data-test="cta-desktop"]')).toBeNull();
+    expect(card.querySelector('[data-test="access-warning-desktop"]')).toBeNull();
+    expect(card.querySelector('[data-test="allow-writes-desktop"]')).toBeNull();
+    expect(card.querySelector('[data-test="access-Screen"]')?.textContent?.trim()).toBe('read');
+    expect(card.querySelector('[data-test="access-Microphone"]')?.textContent?.trim()).toBe('read');
+  });
+
   it('a card says turning the feature on is not available yet when the control plane does not implement it', async () => {
     const bridge = {
       onFeaturesChanged: vi.fn(() => () => undefined),

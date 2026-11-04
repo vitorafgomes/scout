@@ -12,11 +12,11 @@ internal interface IProcessRunner
 {
     /// <summary>
     /// Run <paramref name="program"/> with <paramref name="arguments"/> as separate arguments, never through a shell, and
-    /// return how it ended. <paramref name="input"/>, when given, is written to its standard input as UTF-8, which is then
-    /// closed; without it standard input is closed at once. A program that cannot be started, or runs past
+    /// return how it ended. <paramref name="input"/> as UTF-8, else <paramref name="inputBytes"/> as they are, is written to its
+    /// standard input, which is then closed; without either it is closed at once. A program that cannot be started, or runs past
     /// <paramref name="timeout"/>, fails with an <see cref="InvalidOperationException"/>; a cancelled run is killed.
     /// </summary>
-    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null);
+    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null);
 }
 
 /// <summary>
@@ -36,7 +36,7 @@ internal sealed class ProcessRunner : IProcessRunner
         $"{Path.GetFileName(program)} ran longer than {timeout.TotalSeconds:0} seconds and was stopped.";
 
     public async Task<ProcessResult> RunAsync(
-        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
+        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(program);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -65,7 +65,7 @@ internal sealed class ProcessRunner : IProcessRunner
 
         var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var error = ReadTailAsync(process.StandardError);
-        var feed = FeedAsync(process.StandardInput, input is null ? [] : Encoding.UTF8.GetBytes(input));
+        var feed = FeedAsync(process.StandardInput, input is null ? inputBytes ?? [] : Encoding.UTF8.GetBytes(input));
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
         try

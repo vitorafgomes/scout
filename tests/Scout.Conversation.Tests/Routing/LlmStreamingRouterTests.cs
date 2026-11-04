@@ -2,6 +2,8 @@ using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Routing;
+using Scout.Conversation.Streaming;
+using Scout.Conversation.Tests.Fakes;
 using Scout.Llm.Abstractions;
 using Scout.Skills;
 
@@ -194,5 +196,72 @@ public sealed class LlmStreamingRouterTests
         gateway.DidNotReceive().StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>());
         // Selection is also deferred to enumeration; nothing runs at Route time.
         selector.DidNotReceive().SelectAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_message_image_reaches_the_request()
+    {
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x42, 0x43];
+        var gateway = Substitute.For<IChatGateway>();
+        ChatRequest? captured = null;
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                captured = (ChatRequest)call[0];
+                return Tokens("a terminal");
+            });
+        var message = new ChatMessage("u1", "c1", "what is on my screen?")
+        {
+            Image = new ImageAttachment("image/jpeg", screenshot),
+        };
+
+        await foreach (var _ in Router(gateway).Route(message).Tokens)
+        {
+        }
+
+        var request = captured.ShouldNotBeNull();
+        request.UserMessage.ShouldBe("what is on my screen?");
+        var image = request.Image.ShouldNotBeNull();
+        image.ContentType.ShouldBe("image/jpeg");
+        image.Bytes.ToArray().ShouldBe(screenshot);
+    }
+
+    [Fact]
+    public async Task A_message_without_an_image_sends_no_image()
+    {
+        var gateway = Substitute.For<IChatGateway>();
+        ChatRequest? captured = null;
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                captured = (ChatRequest)call[0];
+                return Tokens("ok");
+            });
+
+        await foreach (var _ in Router(gateway).Route(new ChatMessage("u1", "c1", "hello")).Tokens)
+        {
+        }
+
+        captured.ShouldNotBeNull().Image.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_vision_unavailable_failure_is_answered_with_the_sentence()
+    {
+        var gateway = Substitute.For<IChatGateway>();
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(_ => AsyncSequence.ThenThrow(new LlmVisionUnavailableException(), CancellationToken.None));
+        var message = new ChatMessage("u1", "c1", "what is on my screen?")
+        {
+            Image = new ImageAttachment("image/jpeg", new byte[] { 0xFF, 0xD8 }),
+        };
+        var sink = new RecordingResponseSink(new RenderCapabilities { FineGrainedEdit = true });
+
+        await new StreamPump(new StreamPumpOptions()).RunAsync(Router(gateway).Route(message), sink, CancellationToken.None);
+
+        sink.Completed.ShouldBeTrue();
+        sink.Failed.ShouldBeFalse();
+        sink.FinalText.ShouldBe(
+            "The connected AI source cannot look at pictures; ask it in words or connect one that can.");
     }
 }

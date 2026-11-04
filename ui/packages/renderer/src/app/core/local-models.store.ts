@@ -129,9 +129,7 @@ export class LocalModelsStore {
     const entry = lookupCatalog(id);
     if (entry !== null && this._selected()[entry.kind] === null) {
       this._selected.update((prev) => ({ ...prev, [entry.kind]: id }));
-      if (entry.kind === 'analysis') {
-        void this.persistAnalysisToVault(id);
-      }
+      this.persistSelection(entry.kind, id);
     }
     this.persist();
   }
@@ -142,12 +140,12 @@ export class LocalModelsStore {
 
     const entry = lookupCatalog(id);
     if (entry !== null && this._selected()[entry.kind] === id) {
-      // Selected model was removed — fall back to first remaining downloaded of same kind, else null.
-      const remaining = this.downloadedFor(entry.kind);
-      this._selected.update((prev) => ({
-        ...prev,
-        [entry.kind]: remaining[0]?.id ?? null,
-      }));
+      const fallback = this.downloadedFor(entry.kind)[0]?.id ?? null;
+      this._selected.update((prev) => ({ ...prev, [entry.kind]: fallback }));
+      if (entry.kind === 'transcription') {
+        if (fallback !== null) this.persistSelection(entry.kind, fallback);
+        else void this.clearTranscriptionFromVault();
+      }
     }
     this.persist();
   }
@@ -159,8 +157,14 @@ export class LocalModelsStore {
     if (entry === null || entry.kind !== kind) return;
     this._selected.update((prev) => ({ ...prev, [kind]: id }));
     this.persist();
+    this.persistSelection(kind, id);
+  }
+
+  private persistSelection(kind: LocalModelKind, id: string): void {
     if (kind === 'analysis') {
       void this.persistAnalysisToVault(id);
+    } else {
+      void this.persistTranscriptionToVault(id);
     }
   }
 
@@ -223,6 +227,22 @@ export class LocalModelsStore {
       await this._bridge.vaultStore({ key: 'llm.model', value: tag });
     } catch (err) {
       console.warn('[LocalModelsStore] vault write skipped:', err);
+    }
+  }
+
+  private async persistTranscriptionToVault(catalogId: string): Promise<void> {
+    try {
+      await this._bridge.vaultStore({ key: 'stt.model', value: catalogId });
+    } catch (err) {
+      console.warn('[LocalModelsStore] vault write skipped:', err);
+    }
+  }
+
+  private async clearTranscriptionFromVault(): Promise<void> {
+    try {
+      await this._bridge.vaultDelete({ key: 'stt.model' });
+    } catch (err) {
+      console.warn('[LocalModelsStore] vault delete skipped:', err);
     }
   }
 

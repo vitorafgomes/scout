@@ -26,7 +26,7 @@ public sealed class ChatGatewayTargetLogTests
         var message = await LoggedRequestLine(options);
 
         message.ShouldBe(
-            "LLM request -> provider=Ollama endpoint=http://localhost:11434 model=llama3.1 (inputChars=5).");
+            "LLM request -> provider=Ollama endpoint=http://localhost:11434 model=llama3.1 (inputChars=5, image=false).");
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class ChatGatewayTargetLogTests
         var message = await LoggedRequestLine(options);
 
         message.ShouldBe(
-            "LLM request -> provider=ChatGptPlan endpoint=https://api.openai.com/v1/responses model=gpt-5.6-luna (inputChars=5).");
+            "LLM request -> provider=ChatGptPlan endpoint=https://api.openai.com/v1/responses model=gpt-5.6-luna (inputChars=5, image=false).");
         message.ShouldNotContain("chatgpt-token.json");
     }
 
@@ -122,7 +122,20 @@ public sealed class ChatGatewayTargetLogTests
         message.ShouldContain("provider=Mistral endpoint=unknown model=unknown");
     }
 
-    private static async Task<string> LoggedRequestLine(LlmOptions options)
+    [Fact]
+    public async Task A_Request_With_An_Image_Logs_Image_True_And_Never_The_Bytes()
+    {
+        var options = new LlmOptions { Provider = "OpenAI", OpenAI = new OpenAIOptions { Chat = new ChatModelOptions { Model = "gpt-4o" } } };
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x53, 0x43, 0x4F, 0x55, 0x54];
+
+        var message = await LoggedRequestLine(options, new ChatImage("image/jpeg", screenshot));
+
+        message.ShouldEndWith("(inputChars=5, image=true).");
+        message.ShouldNotContain(Convert.ToBase64String(screenshot));
+        message.ShouldNotContain("image/jpeg");
+    }
+
+    private static async Task<string> LoggedRequestLine(LlmOptions options, ChatImage? image = null)
     {
         var chat = Substitute.For<IChatCompletionService>();
         chat.GetStreamingChatMessageContentsAsync(
@@ -132,10 +145,14 @@ public sealed class ChatGatewayTargetLogTests
                 Arg.Any<CancellationToken>())
             .Returns(_ => Chunks(CancellationToken.None));
         var logger = new RecordingLogger();
-        var gateway = new ChatGateway(chat, options: Options.Create(options), logger: logger);
+        var gateway = new ChatGateway(
+            chat,
+            options: Options.Create(options),
+            logger: logger,
+            media: new MediaCapabilities(false, false, options.Provider) { Vision = true });
 
         await foreach (var _ in gateway.StreamAsync(
-            new ChatRequest { UserMessage = "hello" }, CancellationToken.None))
+            new ChatRequest { UserMessage = "hello", Image = image }, CancellationToken.None))
         {
         }
 

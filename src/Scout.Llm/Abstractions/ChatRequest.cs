@@ -32,6 +32,12 @@ public sealed record ChatRequest
     /// <summary>The user message. Required; must be non-empty.</summary>
     public required string UserMessage { get; init; }
 
+    /// <summary>
+    /// Optional picture sent with <see cref="UserMessage"/> as an image part of the same user message.
+    /// A provider without <see cref="MediaCapabilities.Vision"/> refuses the request instead of dropping it.
+    /// </summary>
+    public ChatImage? Image { get; init; }
+
     /// <summary>Optional sampling temperature. Forwarded only when set.</summary>
     public double? Temperature { get; init; }
 

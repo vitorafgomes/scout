@@ -156,7 +156,7 @@ public sealed partial class ConversationConductor
                 }
 
                 message = new ChatMessage(message.UserId, message.ChannelId, transcript!, message.Timestamp, IsDirectMessage: message.IsDirectMessage)
-                { IsLocalOwner = message.IsLocalOwner, OriginReference = message.OriginReference };
+                { IsLocalOwner = message.IsLocalOwner, OriginReference = message.OriginReference, Image = message.Image };
                 sink = new VoiceReplySink(sink, Quote(transcript!));
             }
 

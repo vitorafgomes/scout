@@ -46,6 +46,12 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
     iconPath: 'M4 4h16v16H4Zm2 2v12h12V6Zm1.6 6.4 1.4-1.4 2 2 4.4-4.4 1.4 1.4-5.8 5.8Z',
   },
   {
+    path: '/meetings',
+    label: 'Meetings',
+    testId: 'nav-meetings',
+    iconPath: 'M5 4h14v2H5Zm0 4h14v12H5Zm2 2v8h10v-8Zm2 2h6v2H9Z',
+  },
+  {
     path: '/logs',
     label: 'Logs',
     testId: 'nav-logs',

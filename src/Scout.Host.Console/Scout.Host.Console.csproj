@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Scout.Plugin.YouTube\Scout.Plugin.YouTube.csproj" />
     <ProjectReference Include="..\Scout.Operator\Scout.Operator.csproj" />
     <ProjectReference Include="..\Scout.Transcription.Whisper\Scout.Transcription.Whisper.csproj" />
+    <ProjectReference Include="..\Scout.Meetings\Scout.Meetings.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Host.Console.Tests" />

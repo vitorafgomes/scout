@@ -182,6 +182,8 @@ describe('resolveMediaTools', () => {
       voices: '',
       rhubarb: '',
       mouths: '',
+      tesseract: '',
+      tessdata: '',
     });
   });
 
@@ -203,6 +205,8 @@ describe('resolveMediaTools', () => {
       posix(path.join(repo, 'ui/packages/main/resources/fonts/NotoSans-Regular.ttf')),
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/piper/piper')),
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/rhubarb/rhubarb')),
+      posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/tesseract/AppRun')),
+      posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/tesseract/tessdata')),
     ]);
   });
 });

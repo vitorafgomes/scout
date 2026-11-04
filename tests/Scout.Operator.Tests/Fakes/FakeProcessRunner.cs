@@ -66,6 +66,7 @@ internal sealed class FakeProcessRunner : IProcessRunner
     private readonly Lock _lock = new();
     private readonly List<TimeSpan> _timeouts = [];
     private readonly List<string?> _inputs = [];
+    private readonly List<byte[]?> _inputBytes = [];
     private readonly List<(string Program, IReadOnlyList<string> Arguments)> _calls = [];
 
     public string EncoderList { get; init; } = AllEncoders;
@@ -113,6 +114,18 @@ internal sealed class FakeProcessRunner : IProcessRunner
         }
     }
 
+    /// <summary>The standard input bytes of every call, in order; null for a call given none.</summary>
+    public IReadOnlyList<byte[]?> InputBytes
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _inputBytes];
+            }
+        }
+    }
+
     public IReadOnlyList<TimeSpan> Timeouts
     {
         get
@@ -137,13 +150,15 @@ internal sealed class FakeProcessRunner : IProcessRunner
         => "Filters:\n  T.. = Timeline support\n  .S. = Slice threading\n  A = Audio input/output\n  V = Video input/output\n  | = Source or sink filter\n"
             + string.Concat(names.Select(n => $" T.. {n,-16} V->V       A filter.\n"));
 
-    public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
+    public Task<ProcessResult> RunAsync(
+        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
     {
         lock (_lock)
         {
             _calls.Add((program, [.. arguments]));
             _timeouts.Add(timeout);
             _inputs.Add(input);
+            _inputBytes.Add(inputBytes?.ToArray());
         }
 
         if (Answer(program, arguments) is { } answered)

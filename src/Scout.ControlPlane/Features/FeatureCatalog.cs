@@ -12,6 +12,8 @@ public sealed class FeatureCatalog : IFeatureCatalog
     /// <summary>Canonical id for the YouTube feature.</summary>
     public const string YouTubeId = "youtube";
 
+    /// <summary>Canonical id for the desktop's own screen, microphone and system audio reads.</summary>
+    public const string DesktopId = "desktop";
 
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
@@ -176,7 +178,35 @@ public sealed class FeatureCatalog : IFeatureCatalog
             "Create an API key for public channels, or sign in with Google from the Scout app to read your own channel.",
         });
 
-    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes, YouTube };
+    private static readonly FeatureMetadata Desktop = new(
+        Id: DesktopId,
+        DisplayName: "Desktop",
+        Description: "What Scout can see and hear on this computer when you ask from the desktop: a screenshot you attach to a question, your microphone while you record or listen, and the system audio while you keep Others on. Nothing is captured unless you click.",
+        RequiresCredentials: false,
+        CredentialFields: Array.Empty<FeatureCredentialField>(),
+        SettingsFields: Array.Empty<FeatureSettingField>(),
+        WriteClass: WriteClass.None,
+        ScopeMatrix: new[]
+        {
+            new FeatureScopeRow(
+                Scope: "Screen",
+                Actions: new[]
+                {
+                    "Send one screenshot with a question when you attach it",
+                    "Read the text on a screenshot with the bundled OCR program",
+                },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "Microphone",
+                Actions: new[] { "Record a voice question", "Listen while you speak" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "System audio",
+                Actions: new[] { "Listen to what this computer plays while you keep Others on" },
+                Access: ScopeAccess.Read),
+        });
+
+    private static readonly IReadOnlyList<FeatureMetadata> AllFeatures = new[] { GitHub, Kubernetes, YouTube, Desktop };
 
     private readonly Dictionary<string, FeatureMetadata> _byId = AllFeatures.ToDictionary(
         f => f.Id,

@@ -10,6 +10,7 @@ import {
 import type { ControlPlaneClient } from '../control-plane/client.js';
 import type { WorkerGateAccess } from '../control-plane/launcher.js';
 import type { Logger } from '../util/logger.js';
+import path from 'node:path';
 import type { MediaToolPaths } from './resolve-binary.js';
 
 export interface BuildEnvDeps {
@@ -26,8 +27,15 @@ export interface BuildEnvDeps {
   grantedWriteFeatures?: readonly string[];
   /** The control plane's write gate for the worker; null while the control plane is not launched. */
   workerGate?: WorkerGateAccess | null;
-  /** The bundled ffmpeg, font, piper, voices, rhubarb and mouths; the worker gets each path, empty when not bundled. */
+  /**
+   * The bundled ffmpeg, font, piper, voices folder, rhubarb and mouths folder, which the worker always gets, empty
+   * when not bundled; and tesseract and its language data folder, set only when bundled.
+   */
   mediaTools?: MediaToolPaths;
+  /** The app's locale, such as `pt-BR`; the worker picks the languages it reads text from a screenshot in. */
+  locale?: string;
+  /** The app's userData folder; the worker keeps the meetings the owner chooses to keep in `meetings.db` there. */
+  userDataDir?: string;
 }
 
 /** The Slack bot token and app-level token the owner saved; the worker needs both. */
@@ -98,6 +106,12 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   env['SCOUT__OPERATOR__VOICESPATH'] = deps.mediaTools?.voices ?? '';
   env['SCOUT__OPERATOR__RHUBARBPATH'] = deps.mediaTools?.rhubarb ?? '';
   env['SCOUT__OPERATOR__MOUTHSPATH'] = deps.mediaTools?.mouths ?? '';
+  const { tesseract = '', tessdata = '' } = deps.mediaTools ?? {};
+  if (tesseract !== '') env['SCOUT__TOOLS__TESSERACTPATH'] = tesseract;
+  if (tessdata !== '') env['SCOUT__TOOLS__TESSDATAPATH'] = tessdata;
+  if (deps.locale !== undefined) env['SCOUT__TOOLS__LOCALE'] = deps.locale;
+  env['SCOUT__MEETINGS__DBPATH'] =
+    deps.userDataDir !== undefined ? path.join(deps.userDataDir, 'meetings.db') : '';
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

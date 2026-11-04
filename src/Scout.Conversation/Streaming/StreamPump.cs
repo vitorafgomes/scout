@@ -44,7 +44,8 @@ public sealed class StreamPump
     /// <see cref="IResponseSink.CompleteAsync"/> with a friendly user-facing
     /// message, and so does a provider quota or billing refusal
     /// (<see cref="LlmQuotaExceededException"/>) or a sign-in the provider needs
-    /// renewed (<see cref="LlmSignInRequiredException"/>); any other mid-stream failure is reported via
+    /// renewed (<see cref="LlmSignInRequiredException"/>), or a picture the provider
+    /// cannot read (<see cref="LlmVisionUnavailableException"/>); any other mid-stream failure is reported via
     /// <see cref="IResponseSink.FailAsync"/>. Neither escapes.
     /// </summary>
     public async Task RunAsync(
@@ -139,6 +140,14 @@ public sealed class StreamPump
                 ? _options.SignInRequiredMessage
                 : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.SignInRequiredMessage;
             await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
+                .ConfigureAwait(false);
+            return;
+        }
+        catch (LlmVisionUnavailableException)
+        {
+            _options.Logger?.LogInformation(
+                "StreamPump stopped: the message has an image and the AI provider cannot read images; finalizing with a user-facing message.");
+            await sink.CompleteAsync(_options.VisionUnavailableMessage, response.Citations, CancellationToken.None)
                 .ConfigureAwait(false);
             return;
         }

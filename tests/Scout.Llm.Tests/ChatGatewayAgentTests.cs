@@ -116,6 +116,30 @@ public sealed class ChatGatewayAgentTests
             .ToList();
 
     [Fact]
+    public async Task An_image_on_the_request_reaches_the_agent_as_an_image_part_of_the_user_message()
+    {
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xDB, 0x01, 0x02];
+        var (chat, captured) = ChatCapturing("a chart");
+        var builder = Kernel.CreateBuilder();
+        builder.Services.AddSingleton(chat);
+        var kernel = builder.Build();
+        var agent = new ChatCompletionAgent { Name = "Project Expert", Instructions = "Ground answers.", Kernel = kernel };
+        var gateway = new ChatGateway(
+            chat, kernel, agent: agent, media: new MediaCapabilities(false, false, "OpenAI") { Vision = true });
+
+        var answer = await gateway.CompleteAsync(
+            new ChatRequest { UserMessage = "what is this chart?", Image = new ChatImage("image/jpeg", screenshot) },
+            CancellationToken.None);
+
+        answer.ShouldBe("a chart");
+        var user = captured.SelectMany(h => h).Last(m => m.Role == AuthorRole.User);
+        user.Items.OfType<TextContent>().ShouldHaveSingleItem().Text.ShouldBe("what is this chart?");
+        var image = user.Items.OfType<ImageContent>().ShouldHaveSingleItem();
+        image.MimeType.ShouldBe("image/jpeg");
+        image.Data!.Value.ToArray().ShouldBe(screenshot);
+    }
+
+    [Fact]
     public async Task StreamAsync_Routes_Through_Agent_And_Yields_Content()
     {
         var chat = ChatReturning("hello ", "world");

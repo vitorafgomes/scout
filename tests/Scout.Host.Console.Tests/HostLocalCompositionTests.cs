@@ -1,8 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSubstitute;
 using Scout.Adapter.Local;
 using Scout.Conversation.Abstractions;
+using Scout.Llm.Abstractions;
+using Scout.Meetings;
+using Scout.Operator;
 using Shouldly;
 using Xunit;
 
@@ -10,7 +14,7 @@ namespace Scout.Host.Console.Tests;
 
 public sealed class HostLocalCompositionTests
 {
-    private static IHost Build(string? localEnabled)
+    private static IHost Build(string? localEnabled, string? whisperModelPath = null)
         => new HostBuilder()
             .ConfigureServices((_, services) =>
             {
@@ -20,6 +24,7 @@ public sealed class HostLocalCompositionTests
                     {
                         ["Scout:Llm:Provider"] = "None",
                         ["Scout:Adapters:Local:Enabled"] = localEnabled,
+                        ["Scout:Transcription:ModelPath"] = whisperModelPath,
                     })
                     .Build());
             })
@@ -46,6 +51,33 @@ public sealed class HostLocalCompositionTests
         using var host = Build(enabled);
 
         host.Services.GetServices<IChatAdapter>().Any(a => a.Name == "Local").ShouldBe(registered);
+    }
+
+    [Fact]
+    public void With_A_Whisper_Model_File_The_Local_Adapter_Receives_The_Live_Transcriber()
+    {
+        var model = Path.Combine(Path.GetTempPath(), $"scout-fake-ggml-{Guid.NewGuid():N}.bin");
+        File.WriteAllBytes(model, new byte[1024]);
+        try
+        {
+            using var host = Build("true", model);
+
+            var adapter = host.Services.GetRequiredService<LocalChatAdapter>();
+            adapter.LiveTranscriber.ShouldNotBeNull().ShouldBeSameAs(host.Services.GetRequiredService<ILiveTranscriber>());
+        }
+        finally
+        {
+            File.Delete(model);
+        }
+    }
+
+    [Fact]
+    public void Without_A_Whisper_Model_File_The_Local_Adapter_Gets_No_Live_Transcriber()
+    {
+        using var host = Build("true", "/nonexistent/scout-test/ggml-base.bin");
+
+        host.Services.GetService<ILiveTranscriber>().ShouldBeNull();
+        host.Services.GetRequiredService<LocalChatAdapter>().LiveTranscriber.ShouldBeNull();
     }
 
     [Fact]
@@ -157,5 +189,140 @@ public sealed class HostLocalCompositionTests
 
         public Task FailAsync(string finalTextSoFar, string reason, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void The_Local_Adapter_Receives_The_Screen_Text_Reader_Only_When_Tesseract_And_Its_Data_Exist(bool program, bool data)
+    {
+        var root = Directory.CreateTempSubdirectory("scout-host-tesseract-").FullName;
+        try
+        {
+            var tesseract = Path.Combine(root, "tesseract");
+            var tessdata = Path.Combine(root, "tessdata");
+            if (program)
+            {
+                File.WriteAllBytes(tesseract, [1]);
+            }
+            if (data)
+            {
+                Directory.CreateDirectory(tessdata);
+            }
+            using var host = new HostBuilder()
+                .ConfigureServices((_, services) => services.AddLogging().AddScoutHost(new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Scout:Llm:Provider"] = "None",
+                        ["Scout:Adapters:Local:Enabled"] = "true",
+                        ["Scout:Tools:TesseractPath"] = tesseract,
+                        ["Scout:Tools:TessdataPath"] = tessdata,
+                    })
+                    .Build()))
+                .Build();
+
+            var reader = host.Services.GetRequiredService<LocalChatAdapter>().ScreenTextReader;
+
+            (reader is not null).ShouldBe(program && data);
+            reader.ShouldBeSameAs(host.Services.GetService<IScreenTextReader>());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Ollama", true)]
+    [InlineData("None", false)]
+    public void The_Local_Adapter_Receives_The_Live_Translator_Only_With_An_AI_Source(string provider, bool translates)
+    {
+        using var host = new HostBuilder()
+            .ConfigureServices((_, services) => services.AddLogging().AddScoutHost(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Scout:Llm:Provider"] = provider,
+                    ["Scout:Llm:Ollama:Endpoint"] = "http://localhost:11434",
+                    ["Scout:Llm:Ollama:Chat:Model"] = "llama3.1",
+                    ["Scout:Llm:Ollama:Embeddings:Model"] = "nomic-embed-text",
+                    ["Scout:Adapters:Local:Enabled"] = "true",
+                    ["Scout:Plugins:YouTube:ApiKey"] = "youtube-dummy-not-real",
+                })
+                .Build()))
+            .Build();
+
+        var translator = host.Services.GetRequiredService<LocalChatAdapter>().Translator;
+
+        (translator is not null).ShouldBe(translates);
+        translator.ShouldBeSameAs(host.Services.GetService<ILiveTranslator>());
+    }
+
+    [Theory]
+    [InlineData("pt-BR", "pt-BR")]
+    [InlineData("", null)]
+    public async Task With_The_Operator_Wired_The_Local_Adapter_Reads_The_Mandate_Language_Through_Its_Control_Plane(
+        string mandateLanguage, string? expected)
+    {
+        var controlPlane = Substitute.For<IOperatorControlPlane>();
+        controlPlane.GetMandateAsync(Arg.Any<CancellationToken>())
+            .Returns(new OperatorMandate("", "", [], "", mandateLanguage, "", [], "", ""));
+        await using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddScoutHost(new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Scout:Llm:Provider"] = "None",
+                    ["Scout:Adapters:Local:Enabled"] = "true",
+                    ["Scout:Plugins:YouTube:ApiKey"] = "youtube-dummy-not-real",
+                })
+                .Build())
+            .AddSingleton(controlPlane)
+            .BuildServiceProvider();
+
+        var mandate = provider.GetRequiredService<LocalChatAdapter>().MandateLanguage.ShouldNotBeNull();
+
+        (await mandate(CancellationToken.None)).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Without_The_Operator_The_Local_Adapter_Has_No_Mandate_Language()
+    {
+        using var host = Build("true");
+
+        host.Services.GetRequiredService<LocalChatAdapter>().MandateLanguage.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void The_Local_Adapter_Receives_The_Meetings_Store_And_Its_Export_Only_With_A_Meetings_Database(bool configured)
+    {
+        var folder = Directory.CreateTempSubdirectory("scout-host-meetings-").FullName;
+        try
+        {
+            using var host = new HostBuilder()
+                .ConfigureServices((_, services) => services.AddLogging().AddScoutHost(new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Scout:Llm:Provider"] = "None",
+                        ["Scout:Adapters:Local:Enabled"] = "true",
+                        ["Scout:Meetings:DbPath"] = configured ? Path.Combine(folder, "meetings.db") : null,
+                    })
+                    .Build()))
+                .Build();
+            var meeting = new MeetingRecord(null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Sync", [], []);
+
+            var adapter = host.Services.GetRequiredService<LocalChatAdapter>();
+
+            (adapter.Meetings is SqliteMeetingStore).ShouldBe(configured);
+            adapter.Meetings.ShouldBeSameAs(host.Services.GetService<IMeetingStore>());
+            (adapter.MeetingRenderer?.Invoke(meeting)).ShouldBe(configured ? MeetingMarkdown.Render(meeting) : null);
+            File.Exists(Path.Combine(folder, "meetings.db")).ShouldBeFalse("composing the host opens no database");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 }

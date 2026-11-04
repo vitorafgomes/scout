@@ -144,6 +144,15 @@ describe('buildBridge', () => {
       'localOpen',
       'localGetBubble',
       'localSetBubble',
+      'localListen',
+      'localAudio',
+      'localStopListening',
+      'onLocalTranscript',
+      'localReadText',
+      'localKeepMeeting',
+      'localMeetings',
+      'localExportMeeting',
+      'localDeleteMeetings',
       'updateGetState',
       'updateSetCheckEnabled',
       'updateCheckNow',
@@ -945,6 +954,87 @@ describe('buildBridge', () => {
     expect(channel).toBe(CHANNEL.localTurns);
     expect(received).toEqual([turns]);
     expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.localTurns, handler);
+  });
+
+  it('live listening reaches main only through its own channels, and onLocalTranscript forwards what main pushes and unsubscribes the same handler', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const received: unknown[] = [];
+    const transcript = { id: 'l-1', text: 'is prod green', final: true };
+
+    await bridge.localListen();
+    await bridge.localAudio({ id: 'l-1', pcm16: 'AAAA' });
+    await bridge.localStopListening({ id: 'l-1' });
+    const unsubscribe = bridge.onLocalTranscript((e) => received.push(e));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, transcript);
+    unsubscribe();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.localListen],
+      [CHANNEL.localAudio, { id: 'l-1', pcm16: 'AAAA' }],
+      [CHANNEL.localStopListening, { id: 'l-1' }],
+    ]);
+    expect(channel).toBe(CHANNEL.localTranscript);
+    expect(received).toEqual([transcript]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.localTranscript, handler);
+  });
+
+  it('localReadText carries the screenshot to main on scout:local.readText and answers what main answers', async () => {
+    const ipc = makeFakeIpc();
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({ text: 'Error 502' }),
+    );
+    const bridge = buildBridge(ipc);
+    const image = { contentType: 'image/jpeg', base64: 'U0hPVA==' } as const;
+
+    const answer = await bridge.localReadText({ image });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.localReadText, { image }],
+    ]);
+    expect(answer).toEqual({ text: 'Error 502' });
+  });
+
+  it('the four meeting calls go to main on their own scout:local channels and answer what main answers', async () => {
+    const ipc = makeFakeIpc();
+    const answers = [{ meetingId: 'm1' }, { items: [] }, { saved: true }, { deleted: 2 }];
+    (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve(answers.shift()),
+    );
+    const bridge = buildBridge(ipc);
+    const meeting = { startedAt: 's', endedAt: 'e', title: 'Standup', lines: [], turns: [] };
+
+    const replies = [
+      await bridge.localKeepMeeting({ meeting }),
+      await bridge.localMeetings({ limit: 100 }),
+      await bridge.localExportMeeting({ meetingId: 'm1' }),
+      await bridge.localDeleteMeetings({ all: true }),
+    ];
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.localKeepMeeting, { meeting }],
+      [CHANNEL.localMeetings, { limit: 100 }],
+      [CHANNEL.localExportMeeting, { meetingId: 'm1' }],
+      [CHANNEL.localDeleteMeetings, { all: true }],
+    ]);
+    expect(replies).toEqual([{ meetingId: 'm1' }, { items: [] }, { saved: true }, { deleted: 2 }]);
+  });
+
+  it('localListen carries the lane to main on scout:local.listen', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.localListen({ lane: 'others' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.localListen, { lane: 'others' }],
+    ]);
   });
 
   it('the update methods reach main only through their own channels with their payloads', async () => {

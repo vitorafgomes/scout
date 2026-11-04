@@ -117,6 +117,9 @@ public sealed class OpenRouterLlmProviderFactory : ILlmProviderFactory
     public string Name => "OpenRouter";
 
     /// <inheritdoc/>
+    public MediaCapabilities Media => new(false, false, Name) { Vision = true };
+
+    /// <inheritdoc/>
     public void AddToKernel(IKernelBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

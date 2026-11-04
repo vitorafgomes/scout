@@ -67,6 +67,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/control-plane-contracts|ControlPlane.Contracts]] - The gRPC contract between the desktop UI and the control-plane host: three proto files compiled to client and server stubs.
 - [[pages/services/control-plane|ControlPlane]] - Domain logic behind the desktop UI: manage the local Ollama runtime and its models, and keep the catalog, state and credentials of optional features.
 - [[pages/services/desktop-ui|Desktop UI]] - Electron app: sets up a Discord bot from its token or a Slack app from a manifest, keeps secrets in the OS keychain, spawns and supervises Scout.Host.Console, stays in the tray and can start at login, manages local models from Node.
+- [[pages/services/desktop-channels|Desktop channels]] - The scout:* IPC channel catalogue of the desktop app, the pinned Whisper models and the update notice.
 - [[pages/services/desktop-quick-ask|Desktop quick ask]] - The floating button, the quick-ask window, the shortcut, voice turns and the shared local conversation.
 - [[pages/services/desktop-operator|Desktop operator window]] - The YouTube operator window: Production and Assembly pages over the control plane's operator state, scout-media previews, and the bundled ffmpeg and fonts.
 - [[pages/services/conversation|Conversation]] - Platform-neutral conversation core: adapter and sink abstractions, the LLM streaming router with short-term memory, and the stream pump that edits a reply as tokens arrive.
@@ -79,6 +80,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/services/plugin-kubernetes|Plugin.Kubernetes]] - Read-only Kubernetes plugin: six GET-only Semantic Kernel functions over the owner's kubeconfig, only for the contexts the owner allowed; self-gates off without a path and a context.
 - [[pages/services/plugin-youtube|Plugin.YouTube]] - YouTube Data API read functions (channel overview, recent videos, video stats); token file or API key.
 - [[pages/services/transcription-whisper|Transcription.Whisper]] - Transcribes Discord voice messages and quick-ask WAV recordings on this machine with a local Whisper model; registered only when the model file exists.
+- [[pages/services/meetings|Meetings]] - Keeps the meetings the owner chose to keep, their transcript lines and their questions, in one SQLite file under Scout's data folder, renders one as Markdown and deletes them so their text does not linger; registered only when the meetings database is configured.
 - [[pages/services/skills|Skills]] - Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools.
 
 ## Invariants
@@ -121,6 +123,10 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0031-desktop-self-update|ADR 0031 Desktop self-update]] - The desktop replaces its own executable only on the user's click, from a checksummed release; macOS and .deb keep Download.
 - [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 Per-feature write permissions]] - Features declare their writes; the owner grants each one and approves irreversible actions in the desktop.
 - [[pages/decisions/0033-channel-operator-architecture|ADR 0033 Channel operator architecture]] - Operator state in the control plane, the pipeline in Scout.Operator, media through the connected AI Source, progress back to the originating chat.
+- [[pages/decisions/0034-live-transcription-on-the-local-adapter|ADR 0034 Live transcription on the local adapter]] - PCM16 chunks over the worker's stdin, an RMS utterance check, greedy partials dropped while busy and beam-5 finals, over the one shared Whisper model.
+- [[pages/decisions/0035-screenshot-attached-to-a-question|ADR 0035 Screenshot attached to a question]] - one JPEG of at most 3 MB on the ask line, sent as an image part when the connected AI source can read images, a plain sentence without a model call otherwise, never stored or logged.
+- [[pages/decisions/0036-text-read-from-a-screenshot-by-a-local-ocr-program|ADR 0036 Text read from a screenshot by a local OCR program]] - the worker runs the bundled tesseract on the JPEG bytes through standard input and output, with the app's locale languages, a 3 s budget and a 5,000-character cap, and registers the reader only when the program and its language data are present; the image and the text are never stored or logged.
+- [[pages/decisions/0037-meetings-kept-locally-in-sqlite|ADR 0037 Meetings kept locally in SQLite]] - a meeting, its lines with their translations and the owner's questions are stored only when the owner chooses Keep this meeting, in one SQLite file under Scout's data folder; listed, exported to Markdown and deleted from the desktop, a delete scrubs the text with secure_delete, VACUUM and a WAL checkpoint, and nothing of it is sent anywhere or logged.
 
 ## Domain
 

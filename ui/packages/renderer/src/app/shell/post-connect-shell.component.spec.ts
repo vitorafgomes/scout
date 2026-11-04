@@ -101,14 +101,22 @@ describe('PostConnectShellComponent', () => {
     const labels = Array.from(fixture.nativeElement.querySelectorAll('.nav-label')).map((el) =>
       ((el as HTMLElement).textContent ?? '').trim(),
     );
-    expect(labels).toEqual(['Chat', 'AI Sources', 'Models', 'Features', 'Review', 'Settings']);
+    expect(labels).toEqual([
+      'Chat',
+      'AI Sources',
+      'Models',
+      'Features',
+      'Review',
+      'Meetings',
+      'Settings',
+    ]);
   });
 
-  it('renders Chat first, then AI Sources, Models, Features, Review, Logs, Settings, with no Status and no Production entry', async () => {
+  it('renders Chat first, then AI Sources, Models, Features, Review, Meetings, Logs, Settings, with no Status and no Production entry', async () => {
     const { fixture } = await setup();
 
     const links = fixture.nativeElement.querySelectorAll('.nav-link');
-    expect(links.length).toBe(7);
+    expect(links.length).toBe(8);
     const labels = Array.from(links).map((el) =>
       ((el as HTMLElement).querySelector('.nav-label')?.textContent ?? '').trim(),
     );
@@ -118,6 +126,7 @@ describe('PostConnectShellComponent', () => {
       'Models',
       'Features',
       'Review',
+      'Meetings',
       'Logs',
       'Settings',
     ]);

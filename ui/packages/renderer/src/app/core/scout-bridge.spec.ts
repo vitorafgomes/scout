@@ -22,3 +22,29 @@ describe('ScoutBridgeService fake bridge', () => {
     });
   });
 });
+
+describe('ScoutBridgeService over the preload bridge', () => {
+  it('localListen hands the lane to the preload bridge', async () => {
+    const asked: unknown[] = [];
+    Object.defineProperty(window, 'scout', {
+      configurable: true,
+      value: {
+        localListen: async (req?: unknown) => {
+          asked.push(req);
+          return { id: 'live-others' };
+        },
+      },
+    });
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
+
+    try {
+      const answer = await TestBed.inject(ScoutBridgeService).localListen({ lane: 'others' });
+
+      expect(answer).toEqual({ id: 'live-others' });
+      expect(asked).toEqual([{ lane: 'others' }]);
+    } finally {
+      Reflect.deleteProperty(window, 'scout');
+    }
+  });
+});

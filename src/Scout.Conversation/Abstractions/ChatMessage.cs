@@ -59,6 +59,9 @@ public sealed record ChatMessage
     /// </summary>
     public string? OriginReference { get; init; }
 
+    /// <summary>A picture the owner attached to this message, sent to the model with its text.</summary>
+    public ImageAttachment? Image { get; init; }
+
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
         builder.Append("UserId = ").Append(UserId)
@@ -67,7 +70,8 @@ public sealed record ChatMessage
             .Append(", Timestamp = ").Append(Timestamp)
             .Append(", IsDirectMessage = ").Append(IsDirectMessage)
             .Append(", Audio = ").Append(Audio)
-            .Append(", IsLocalOwner = ").Append(IsLocalOwner);
+            .Append(", IsLocalOwner = ").Append(IsLocalOwner)
+            .Append(", Image = ").Append(Image is { } image ? $"{image.Bytes.Length} bytes" : "null");
         return true;
     }
 }

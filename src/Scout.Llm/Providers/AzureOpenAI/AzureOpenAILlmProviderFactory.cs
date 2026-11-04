@@ -100,6 +100,7 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
             ImageSettings = _imageDeployment.Length > 0
                 ? OpenAIMediaSettings.Image(string.IsNullOrWhiteSpace(azure.ImageModel) ? "gpt-image-1" : azure.ImageModel.Trim())
                 : null,
+            Vision = true,
         };
     }
 

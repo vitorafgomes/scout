@@ -216,6 +216,8 @@ describe('the packaged app finds the control-plane host and its protos', () => {
       voices: '',
       rhubarb: '',
       mouths: '',
+      tesseract: '',
+      tessdata: '',
     });
   });
 

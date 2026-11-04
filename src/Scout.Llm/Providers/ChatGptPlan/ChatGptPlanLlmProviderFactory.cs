@@ -68,6 +68,9 @@ public sealed class ChatGptPlanLlmProviderFactory : ILlmProviderFactory
     public string Name => "ChatGptPlan";
 
     /// <inheritdoc/>
+    public MediaCapabilities Media => new(false, false, Name) { Vision = true };
+
+    /// <inheritdoc/>
     public void AddToKernel(IKernelBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

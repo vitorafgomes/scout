@@ -89,8 +89,8 @@ export function resolveTrayIcon(
 }
 
 /**
- * The ffmpeg, caption font, piper, voices folder, rhubarb and mouth shapes folder the worker works with; an empty
- * path for any the build did not bundle.
+ * The ffmpeg, caption font, piper, voices folder, rhubarb, mouth shapes folder, tesseract and its language data
+ * folder the worker works with; an empty path for any the build did not bundle.
  */
 export interface MediaToolPaths {
   readonly ffmpeg: string;
@@ -99,6 +99,8 @@ export interface MediaToolPaths {
   readonly voices: string;
   readonly rhubarb: string;
   readonly mouths: string;
+  readonly tesseract: string;
+  readonly tessdata: string;
 }
 
 /** The nine mouth shapes rhubarb names, one PNG each. */
@@ -106,8 +108,8 @@ const MOUTH_SHAPES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'X'].map((shape) =
 
 /**
  * The bundled media tools: under `resources/media-tools/<platform>-<arch>` and `resources/fonts` when packaged, read
- * from `ui/packages/main/resources` otherwise; each one only when its file is there, the voices folder only when it
- * holds a voice model, the mouths folder only when it holds the nine mouth shapes.
+ * from `ui/packages/main/resources` otherwise; each one only when its file or folder is there, the voices folder only
+ * when it holds a voice model, the mouths folder only when it holds the nine mouth shapes.
  */
 export function resolveMediaTools(
   deps: Omit<ResolveBinaryDeps, 'platform' | 'arch'> &
@@ -133,5 +135,7 @@ export function resolveMediaTools(
     voices: list(voices).some((name) => name.endsWith('.onnx')) ? voices : '',
     rhubarb: present(path.join(tools, 'rhubarb', `rhubarb${exe}`)),
     mouths: MOUTH_SHAPES.every((shape) => shapes.includes(shape)) ? mouths : '',
+    tesseract: present(path.join(tools, 'tesseract', 'AppRun')),
+    tessdata: present(path.join(tools, 'tesseract', 'tessdata')),
   };
 }

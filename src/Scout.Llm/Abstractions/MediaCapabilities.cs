@@ -24,4 +24,7 @@ public sealed record MediaCapabilities(bool Speech, bool Images, string Provider
 
     /// <summary>The settings a text-to-image call passes; null without images.</summary>
     public PromptExecutionSettings? ImageSettings { get; init; }
+
+    /// <summary>The chat service accepts image parts in a user message.</summary>
+    public bool Vision { get; init; }
 }

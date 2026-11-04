@@ -39,6 +39,21 @@ export interface MediaToolsTable {
       readonly files: readonly (PinnedFile & { readonly file: string })[];
     }[];
   };
+  readonly tesseract: {
+    readonly version: string;
+    readonly project: string;
+    readonly release: string;
+    readonly source: string;
+    readonly leptonica: string;
+    readonly leptonicaLicense: PinnedFile & { readonly file: string; readonly size: number };
+    readonly archives: Readonly<Record<string, PinnedArchive & { readonly size: number }>>;
+  };
+  readonly tessdata: {
+    readonly repo: string;
+    readonly commit: string;
+    readonly license: string;
+    readonly files: readonly (PinnedFile & { readonly file: string; readonly size: number })[];
+  };
 }
 
 export interface FetchMediaToolsOptions {
@@ -48,6 +63,7 @@ export interface FetchMediaToolsOptions {
   readonly cacheDir: string;
   readonly fetch: (url: string) => Promise<Response>;
   readonly extract: (archive: string, dir: string, members: readonly string[]) => unknown;
+  readonly extractAppImage: (appImage: string, dir: string) => unknown;
   readonly log: (line: string) => unknown;
 }
 
@@ -69,5 +85,7 @@ export declare function extractArchive(
   dir: string,
   members: readonly string[],
 ): void;
+
+export declare function extractAppImage(appImage: string, dir: string): void;
 
 export declare function fetchMediaTools(options: FetchMediaToolsOptions): Promise<void>;

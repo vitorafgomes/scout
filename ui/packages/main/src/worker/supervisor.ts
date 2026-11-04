@@ -392,12 +392,17 @@ const RESERVED_WORKER_KEYS = new Set([
   'scout__operator__voicespath',
   'scout__operator__rhubarbpath',
   'scout__operator__mouthspath',
+  'scout__tools__tesseractpath',
+  'scout__tools__tessdatapath',
+  'scout__tools__locale',
+  'scout__meetings__dbpath',
 ]);
 
 /**
  * The parent environment minus every variable the worker would read as its write gate, its write
- * grants, a control-plane token or an operator media tool path, in any casing or ':' spelling, with
- * or without the ASPNETCORE_ or DOTNET_ prefix; only the values buildEnv sets reach the worker.
+ * grants, a control-plane token, an operator media tool path, a screen text tool setting or the
+ * meetings database path, in any casing or ':' spelling, with or without the ASPNETCORE_ or DOTNET_
+ * prefix; only the values buildEnv sets reach the worker.
  */
 function workerInheritableEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(

@@ -1,5 +1,6 @@
 import {
   CHANNEL,
+  type LocalTranscriptEvent,
   type LocalTurn,
   type ScoutBridge,
   type UpdateNotice,
@@ -628,6 +629,55 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     localSetBubble(req) {
       return ipc.invoke(CHANNEL.localSetBubble, req) as ReturnType<ScoutBridge['localSetBubble']>;
+    },
+
+    localListen(req) {
+      return ipc.invoke(CHANNEL.localListen, req) as ReturnType<ScoutBridge['localListen']>;
+    },
+
+    localAudio(req) {
+      return ipc.invoke(CHANNEL.localAudio, req) as ReturnType<ScoutBridge['localAudio']>;
+    },
+
+    localStopListening(req) {
+      return ipc.invoke(CHANNEL.localStopListening, req) as ReturnType<
+        ScoutBridge['localStopListening']
+      >;
+    },
+
+    onLocalTranscript(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as LocalTranscriptEvent);
+      ipc.on(CHANNEL.localTranscript, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localTranscript, handler);
+      };
+    },
+
+    localReadText(req) {
+      return ipc.invoke(CHANNEL.localReadText, req) as ReturnType<ScoutBridge['localReadText']>;
+    },
+
+    localKeepMeeting(req) {
+      return ipc.invoke(CHANNEL.localKeepMeeting, req) as ReturnType<
+        ScoutBridge['localKeepMeeting']
+      >;
+    },
+
+    localMeetings(req) {
+      return ipc.invoke(CHANNEL.localMeetings, req) as ReturnType<ScoutBridge['localMeetings']>;
+    },
+
+    localExportMeeting(req) {
+      return ipc.invoke(CHANNEL.localExportMeeting, req) as ReturnType<
+        ScoutBridge['localExportMeeting']
+      >;
+    },
+
+    localDeleteMeetings(req) {
+      return ipc.invoke(CHANNEL.localDeleteMeetings, req) as ReturnType<
+        ScoutBridge['localDeleteMeetings']
+      >;
     },
 
     updateGetState() {

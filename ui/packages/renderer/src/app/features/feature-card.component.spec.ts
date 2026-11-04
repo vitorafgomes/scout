@@ -207,6 +207,39 @@ describe('FeatureCardComponent', () => {
     expect(allowWhileConnected.disabled).toBe(false);
   });
 
+  it('a read-only feature lists its read rows under Reads and has no toggle for writes', () => {
+    const fixture = create();
+    setFeature(fixture, {
+      ...base,
+      id: 'desktop',
+      requiresCredentials: false,
+      scopeMatrix: [
+        { scope: 'Screen', actions: ['read'], access: 'read' },
+        { scope: 'Microphone', actions: ['read'], access: 'read' },
+      ],
+    });
+
+    expect(text(fixture, 'reads-desktop')).toContain('Reads');
+    expect(text(fixture, 'access-Screen')).toBe('read');
+    expect(text(fixture, 'access-Microphone')).toBe('read');
+    expect(fixture.nativeElement.querySelector('[data-test="permissions-desktop"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="grant-desktop"]')).toBeNull();
+  });
+
+  it('a write feature lists its reads and its writes in two groups', () => {
+    const fixture = connectionCard(youtube, 'connected');
+    const reads = fixture.nativeElement.querySelector('[data-test="reads-youtube"]') as HTMLElement;
+    const writes = fixture.nativeElement.querySelector(
+      '[data-test="permissions-youtube"]',
+    ) as HTMLElement;
+
+    expect(reads.textContent).toContain('youtube.readonly');
+    expect(reads.textContent).not.toContain('drafts');
+    expect(writes.textContent).toContain('drafts');
+    expect(writes.textContent).toContain('youtube.upload');
+    expect(writes.textContent).not.toContain('youtube.readonly');
+  });
+
   it('a read-only feature shows no permissions block', () => {
     const fixture = create();
     setFeature(fixture, { ...base, hasCredentials: true, status: 'disabled' });

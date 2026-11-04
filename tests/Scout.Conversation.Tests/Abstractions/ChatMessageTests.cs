@@ -57,6 +57,20 @@ public sealed class ChatMessageTests
         text.ShouldNotContain("OriginReference");
         text.ShouldBe(
             "ChatMessage { UserId = U1, ChannelId = C1, Text = start the weekly video, Timestamp = " + at
-            + ", IsDirectMessage = True, Audio = , IsLocalOwner = False }");
+            + ", IsDirectMessage = True, Audio = , IsLocalOwner = False, Image = null }");
+    }
+
+    [Fact]
+    public void ToString_Prints_The_Size_Of_An_Attached_Image_And_Never_Its_Bytes()
+    {
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x53, 0x43];
+        var message = new ChatMessage("U1", "C1", "what is this?")
+        { Image = new ImageAttachment("image/jpeg", screenshot) };
+
+        var text = message.ToString();
+
+        text.ShouldEndWith(", Image = 6 bytes }");
+        text.ShouldNotContain(Convert.ToBase64String(screenshot));
+        text.ShouldNotContain("255");
     }
 }

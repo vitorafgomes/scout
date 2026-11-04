@@ -3,6 +3,23 @@ Phase 7 crystallized on the service, contract, invariant, ADR and roadmap pages:
 
 ## [2026-11-04] integrate | Live assistant roadmap
 Added pages/roadmap/live-assistant.md (stub, six phases: streaming transcription, screenshot, system audio, translation, OCR, meeting session), indexed it and linked it from desktop-quick-ask and transcription-whisper.
+## [2026-11-04] integrate | Desktop channels page
+Split out of services/desktop-ui (over the 300-line limit): the channel catalogue, the Whisper models and the update notice; added to the services list in index.md and linked from desktop-ui, desktop-quick-ask and desktop-operator.
+
+## [2026-11-04] integrate | Meetings service page
+Added to the services list in index.md; adapter-local, host-console and project-map already linked it, conversation now links it from its ADR 0037 line.
+
+## [2026-11-04] integrate | ADR 0037 meetings kept locally in SQLite
+Added to the decisions list in index.md and linked from decisions/0034; services/adapter-local, conversation and host-console already linked it.
+
+## [2026-11-04] integrate | ADR 0036 text read from a screenshot by a local OCR program
+Added to the decisions list in index.md and linked from decisions/0035 and services/desktop-quick-ask; the Desktop feature row now lists the OCR action and the system audio (services/control-plane).
+
+## [2026-11-04] integrate | ADR 0035 screenshot attached to a question
+Added to the decisions list in index.md and linked from decisions/0028; services/llm and services/conversation already linked it. Quick-ask page refusal sentences corrected to the ADR, three stale code refs re-pointed, Desktop added to the Features notes.
+
+## [2026-11-04] feature | Live assistant phase 1, worker side: streaming transcription on the local adapter
+Owner: "o chat ver o que falamos". ADR 0034: the local adapter takes listen, audio (base64 PCM16 LE mono 16 kHz) and stop, one session at a time, and writes partial, final, complete and fail events; Scout.Transcription.Whisper gains an RMS utterance segmenter (20 ms frames, 0.015, 160 ms minimum, 1 s end, 0.75 s windows every 0.6 s, a 20 s ring) and a live transcriber over the voice-message model, gate and idle timer (greedy partials dropped while busy, beam-5 finals never dropped). ILiveTranscriber joins Scout.Conversation. No real-model smoke: no ggml model is installed on this machine. Pages: decisions/0034, 0028 amended, services/transcription-whisper, adapter-local, conversation, index.
 
 ## [2026-11-03] bugfix | Comment sync on a read-only sign-in
 The owner's first sync failed with "The YouTube credentials cannot read this.": Google refuses `commentThreads.list` with `allThreadsRelatedToChannelId` on `youtube.readonly` (403 insufficientPermissions); reading comments needs `youtube.force-ssl` from the write sign-in. The owner's write grant predated phase 5's re-sign-in, so the grant was on and the token read-only. The read now answers that 403 with a sentence that asks the owner to allow writes again; plugin-youtube corrected.

@@ -130,6 +130,64 @@ public sealed class ChatGptPlanProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task An_Image_On_The_Request_Reaches_The_Responses_Api_As_An_Input_Image_Of_The_User_Message()
+    {
+        WriteToken(Token, DateTimeOffset.UtcNow.AddHours(1));
+        var api = ResponsesApiStub.Answering("a terminal");
+        var services = new ServiceCollection().AddScoutLlm(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "ChatGptPlan",
+                ["Scout:Llm:ChatGptPlan:TokenFile"] = TokenFile,
+            })
+            .Build());
+        services.RemoveAll<ILlmProviderFactory>();
+        services.AddSingleton<ILlmProviderFactory>(_ => Factory(api));
+        using var provider = services.BuildServiceProvider();
+        var gateway = provider.GetRequiredService<IChatGateway>();
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x01, 0x02, 0x03];
+
+        var answer = await gateway.CompleteAsync(
+            new ChatRequest { UserMessage = "what is on my screen?", Image = new ChatImage("image/jpeg", screenshot) },
+            CancellationToken.None);
+
+        answer.ShouldBe("a terminal");
+        var user = InputItems(api.Requests.ShouldHaveSingleItem())
+            .Last(item => item["role"]?.GetValue<string>() == "user");
+        var parts = user["content"]!.AsArray().Select(part => part!.AsObject()).ToList();
+        parts.ShouldContain(part => part["type"]!.GetValue<string>() == "input_text"
+            && part["text"]!.GetValue<string>() == "what is on my screen?");
+        parts.ShouldContain(part => part["type"]!.GetValue<string>() == "input_image"
+            && part["image_url"]!.GetValue<string>() == "data:image/jpeg;base64," + Convert.ToBase64String(screenshot));
+    }
+
+    [Fact]
+    public async Task A_Translation_On_The_Plan_Sends_No_Tools_And_No_Token_Cap()
+    {
+        WriteToken(Token, DateTimeOffset.UtcNow.AddHours(1));
+        var api = ResponsesApiStub.Answering("1. Good morning.");
+        var services = new ServiceCollection().AddScoutLlm(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Llm:Provider"] = "ChatGptPlan",
+                ["Scout:Llm:ChatGptPlan:TokenFile"] = TokenFile,
+            })
+            .Build());
+        services.RemoveAll<ILlmProviderFactory>();
+        services.AddSingleton<ILlmProviderFactory>(_ => Factory(api));
+        using var provider = services.BuildServiceProvider();
+
+        var translation = await provider.GetRequiredService<ILiveTranslator>()
+            .TranslateAsync("Bom dia.", [], "en", CancellationToken.None);
+
+        translation.ShouldBe("Good morning.");
+        var request = api.Requests.ShouldHaveSingleItem();
+        request.Path.ShouldBe("/v1/responses");
+        request.Body.ContainsKey("tools").ShouldBeFalse();
+        request.Body.ContainsKey("max_output_tokens").ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task NonStreaming_Call_Is_Sent_As_A_Stream()
     {
         WriteToken(Token, DateTimeOffset.UtcNow.AddHours(1));

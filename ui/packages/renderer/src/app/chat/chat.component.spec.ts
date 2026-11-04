@@ -273,6 +273,53 @@ describe('Chat screen', () => {
     expect(texts(fixture, 'reply')).toEqual(['The script for Span<T> in C# is ready.']);
   });
 
+  it('a turn that carried the transcript shows its question and a with transcript tag', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'what did they ask me?',
+        reply: 'They asked about the release.',
+        citations: [],
+        state: 'done',
+        transcript: true,
+      },
+      { id: 'q-2', question: 'and now?', reply: 'Nothing.', citations: [], state: 'done' },
+    ]);
+    await settle(fixture);
+
+    expect(texts(fixture, 'question')).toEqual(['what did they ask me?', 'and now?']);
+    expect(texts(fixture, 'with-transcript').map((tag) => tag.trim())).toEqual(['with transcript']);
+  });
+
+  it('a turn that carried the screen text shows its question and a with screen text tag', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'what is wrong?',
+        reply: 'The gateway is down.',
+        citations: [],
+        state: 'done',
+        screenText: true,
+      },
+      { id: 'q-2', question: 'and now?', reply: 'Nothing.', citations: [], state: 'done' },
+    ]);
+    await settle(fixture);
+
+    expect(texts(fixture, 'question')).toEqual(['what is wrong?', 'and now?']);
+    expect(texts(fixture, 'with-screen-text').map((tag) => tag.trim())).toEqual([
+      'with screen text',
+    ]);
+    expect(texts(fixture, 'with-transcript')).toEqual([]);
+  });
+
   it('Clear empties the conversation', async () => {
     const bridge = makeBridge();
     configure(bridge);

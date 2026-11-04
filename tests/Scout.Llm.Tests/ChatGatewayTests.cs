@@ -266,4 +266,50 @@ public sealed class ChatGatewayTests
         systemMessages[0].ShouldBe(
             "You are Scout's Code Reviewer.\n\nInjected skill: prefer small diffs.");
     }
+
+    private static readonly byte[] Screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x10, 0x4A, 0x46, 0x49];
+
+    [Fact]
+    public async Task An_image_on_the_request_becomes_an_image_part_of_the_user_message()
+    {
+        var (chat, captured) = ChatCapturing(Chunk("a terminal"));
+        var gateway = new ChatGateway(chat, media: new MediaCapabilities(false, false, "OpenAI") { Vision = true });
+
+        var answer = await gateway.CompleteAsync(
+            new ChatRequest
+            {
+                UserMessage = "what is on my screen?",
+                SystemPrompt = "sys",
+                History = [new ConversationTurn(ConversationRole.User, "earlier")],
+                Image = new ChatImage("image/jpeg", Screenshot),
+            },
+            CancellationToken.None);
+
+        answer.ShouldBe("a terminal");
+        var history = captured.ShouldHaveSingleItem();
+        var user = history[^1];
+        user.Role.ShouldBe(AuthorRole.User);
+        user.Items.OfType<TextContent>().ShouldHaveSingleItem().Text.ShouldBe("what is on my screen?");
+        var image = user.Items.OfType<ImageContent>().ShouldHaveSingleItem();
+        image.MimeType.ShouldBe("image/jpeg");
+        image.Data!.Value.ToArray().ShouldBe(Screenshot);
+        history.Take(history.Count - 1).SelectMany(m => m.Items).OfType<ImageContent>().ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_image_with_a_provider_without_vision_throws_before_any_call(bool mediaKnown)
+    {
+        var chat = ChatReturning(Chunk("never"));
+        var gateway = mediaKnown
+            ? new ChatGateway(chat, media: new MediaCapabilities(true, true, "Ollama"))
+            : new ChatGateway(chat);
+
+        await Should.ThrowAsync<LlmVisionUnavailableException>(() => gateway.CompleteAsync(
+            new ChatRequest { UserMessage = "what is on my screen?", Image = new ChatImage("image/jpeg", Screenshot) },
+            CancellationToken.None));
+
+        chat.ReceivedCalls().ShouldBeEmpty();
+    }
 }

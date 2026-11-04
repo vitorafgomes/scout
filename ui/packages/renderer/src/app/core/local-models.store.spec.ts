@@ -6,13 +6,18 @@ import { ProviderUnreachableError } from '@scout/shared';
 import { LOCAL_MODELS_STORAGE_KEY, LocalModelsStore } from './local-models.store';
 import { ScoutBridgeService } from './scout-bridge';
 
+const vaultStore = vi.fn(async (_req: unknown) => undefined);
+const vaultDelete = vi.fn(async (_req: unknown) => ({ deleted: true }));
+
 function provide(): LocalModelsStore {
+  vaultStore.mockClear();
+  vaultDelete.mockClear();
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
       {
         provide: ScoutBridgeService,
-        useValue: { vaultStore: vi.fn(async () => undefined) } as unknown as ScoutBridgeService,
+        useValue: { vaultStore, vaultDelete } as unknown as ScoutBridgeService,
       },
     ],
   });
@@ -52,6 +57,44 @@ describe('LocalModelsStore', () => {
     store.markDownloaded('whisper-large-v3');
     store.select('transcription', 'whisper-large-v3');
     expect(store.selectedFor('transcription')).toBe('whisper-large-v3');
+  });
+
+  it('selecting a whisper model writes stt.model with the catalog id', () => {
+    const store = provide();
+    store.markDownloaded('whisper-large-v3-turbo');
+    store.markDownloaded('whisper-base');
+    vaultStore.mockClear();
+    store.select('transcription', 'whisper-base');
+    expect(vaultStore).toHaveBeenCalledWith({ key: 'stt.model', value: 'whisper-base' });
+  });
+
+  it('selecting an analysis model does not touch stt.model', () => {
+    const store = provide();
+    store.markDownloaded('qwen-3-vl-2b');
+    store.markDownloaded('qwen-2.5-1.5b-instruct');
+    store.select('analysis', 'qwen-2.5-1.5b-instruct');
+    expect(vaultStore.mock.calls.some(([r]) => (r as { key: string }).key === 'stt.model')).toBe(
+      false,
+    );
+  });
+
+  it('removing the selected whisper model clears stt.model', () => {
+    const store = provide();
+    store.markDownloaded('whisper-base');
+    store.markRemoved('whisper-base');
+    expect(vaultDelete).toHaveBeenCalledWith({ key: 'stt.model' });
+  });
+
+  it('removing the selected whisper model while another remains writes the fallback to stt.model', () => {
+    const store = provide();
+    store.markDownloaded('whisper-base');
+    store.markDownloaded('whisper-large-v3-turbo');
+    vaultStore.mockClear();
+    vaultDelete.mockClear();
+    store.markRemoved('whisper-base');
+    expect(store.selectedFor('transcription')).toBe('whisper-large-v3-turbo');
+    expect(vaultStore).toHaveBeenCalledWith({ key: 'stt.model', value: 'whisper-large-v3-turbo' });
+    expect(vaultDelete).not.toHaveBeenCalled();
   });
 
   it('select rejects a model that is not downloaded', () => {

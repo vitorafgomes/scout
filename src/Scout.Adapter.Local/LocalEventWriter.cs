@@ -22,12 +22,20 @@ internal sealed class LocalEventWriter(TextWriter output)
 
     private readonly TextWriter _output = TextWriter.Synchronized(output);
 
-    public void Write(string? id, string kind, string? text = null, IReadOnlyList<Citation>? citations = null)
+    public void Write(string? id, string kind, string? text = null, IReadOnlyList<Citation>? citations = null, int? seq = null)
+        => Write(new LocalEvent(id, kind, text, citations?.Select(c => new LocalCitation(c.Label, c.Url)).ToArray(), seq));
+
+    public void WriteTranslation(string id, LiveTranslation translation)
+        => Write(new LocalEvent(
+            id, "translation", translation.Text, null, translation.Seq, translation.Language, translation.Error));
+
+    public void WriteMeetingEvent(
+        string id, string kind, string? meetingId = null, string? text = null, IReadOnlyList<MeetingSummary>? items = null, int? count = null)
+        => Write(new LocalEvent(id, kind, text, null, MeetingId: meetingId, Items: items, Count: count));
+
+    private void Write(LocalEvent localEvent)
     {
-        var json = JsonSerializer.Serialize(
-            new LocalEvent(id, kind, text, citations?.Select(c => new LocalCitation(c.Label, c.Url)).ToArray()),
-            Json);
-        _output.WriteLine(Prefix + json);
+        _output.WriteLine(Prefix + JsonSerializer.Serialize(localEvent, Json));
         _output.Flush();
     }
 
@@ -35,7 +43,13 @@ internal sealed class LocalEventWriter(TextWriter output)
         [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Id,
         string Event,
         string? Text,
-        IReadOnlyList<LocalCitation>? Citations);
+        IReadOnlyList<LocalCitation>? Citations,
+        int? Seq = null,
+        string? Language = null,
+        string? Error = null,
+        string? MeetingId = null,
+        IReadOnlyList<MeetingSummary>? Items = null,
+        int? Count = null);
 
     private sealed record LocalCitation(string Label, string? Url);
 }

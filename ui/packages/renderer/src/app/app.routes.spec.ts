@@ -14,6 +14,7 @@ import { ScoutBridgeService } from './core/scout-bridge';
 import { FloatingButtonComponent } from './floating-button/floating-button.component';
 import { OperatorShellComponent } from './operator/operator-shell.component';
 import { ProductionComponent } from './production/production.component';
+import { MeetingsComponent } from './meetings/meetings.component';
 import { ReviewComponent } from './review/review.component';
 
 describe('app routes', () => {
@@ -48,6 +49,17 @@ describe('app routes', () => {
     await router.navigateByUrl('/logs');
 
     expect(router.url).toBe('/settings');
+  });
+
+  it('meetings resolves to the Meetings screen', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/meetings');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/meetings');
+    expect(route.component).toBe(MeetingsComponent);
   });
 
   it('review resolves to the Review screen', async () => {
