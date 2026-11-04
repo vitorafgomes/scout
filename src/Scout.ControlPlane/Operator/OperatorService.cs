@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Features;
 using Scout.ControlPlane.WriteGate;
@@ -11,13 +13,18 @@ namespace Scout.ControlPlane.Operator;
 /// produces projects under the owner's live write grant of the YouTube feature, decides claims and
 /// edits scenes; the worker reads the mandate, reports its readiness, and reads projects, takes
 /// queued ones and saves its drafts under the same grant, each save and each take recorded in the
-/// write log. The owner queues an assembly, edits the package metadata, confirms its media rights
-/// and approves it. The worker can never mark a claim supported or waived, change an owner's decision,
-/// change a project's topic or origin, reorder, lock, change a locked scene or replace the owner's
-/// media, or confirm, approve or change the owner's metadata of a package. The owner publishes an approved
-/// package and starts title and thumbnail experiments, each creating the YouTube actions it needs as approved by
-/// the owner; the worker claims them one at a time and saves the publication's progress, never the owner's
-/// settings or decisions. The desktop never receives a project's origin reference.
+/// write log. A project the worker creates for a chat request keeps the format and the direction the request gave; no
+/// later save of the worker sets a project's format, direction, narration voice, motion or delegation. The owner queues
+/// an assembly, edits the package metadata, confirms its media rights and approves it. Only through the chat calls,
+/// under the same grant, the worker edits a scene's text, regenerates a scene or its narration, locks, unlocks or
+/// reorders scenes, and produces or delegates a project, each the owner's own operation and logged via chat when it
+/// changed the project. Its saves never mark a claim supported or waived, change an owner's decision, a project's topic
+/// or origin or a locked scene, or replace the owner's media, and it never confirms, approves or edits a package.
+/// A project of the owner's own video waits for the owner's recording, attached with no grant, before the worker takes
+/// it to transcribe; the worker sets only the recording's length, while it transcribes.
+/// The owner publishes an approved package and starts title and thumbnail experiments, each creating the YouTube
+/// actions it needs as approved by the owner; the worker claims them one at a time and saves the publication's
+/// progress, never the owner's settings or decisions. The desktop never receives a project's origin reference.
 /// </summary>
 public sealed class OperatorService
 {
@@ -33,8 +40,20 @@ public sealed class OperatorService
     /// <summary>Status of a project the owner sent to production and no worker has taken yet.</summary>
     public const string ProductionQueued = "production_queued";
 
+    /// <summary>Format of a video narrated over pictures Scout makes: the image service, Openverse or a text card.</summary>
+    public const string GeneratedPictures = "generated_pictures";
+
+    /// <summary>Format of a video narrated over the owner's own pictures, one attached per scene.</summary>
+    public const string OwnPictures = "own_pictures";
+
+    /// <summary>Format of a video that is the owner's own recording, transcribed on this machine, every scene a clip of it.</summary>
+    public const string OwnVideo = "own_video";
+
     private const string Researching = "researching";
     private const string Scripting = "scripting";
+    private const string RecordingWaiting = "recording_waiting";
+    private const string Transcribing = "transcribing";
+    private const string Recording = SceneRules.Recording;
     private const string ScriptReady = "script_ready";
     private const string Producing = "producing";
     private const string MediaReady = "media_ready";
@@ -43,6 +62,8 @@ public sealed class OperatorService
     private const string NotReported = "The Scout worker has not reported yet.";
     private const string NoLongerProducing = "The project is no longer producing.";
     private const string NoLongerAssembling = "The project is no longer assembling.";
+    private const string NoLongerTranscribing = "The project is no longer transcribing; the worker's transcript was not saved.";
+    private const string OwnerCopyPrefix = "owner-";
     private const string AssemblyQueued = PackageRules.AssemblyQueued;
     private const string Assembling = PackageRules.Assembling;
     private const string Assembled = PackageRules.Assembled;
@@ -59,8 +80,14 @@ public sealed class OperatorService
     private const int MaxNarrationVoiceLength = 80;
     private const string NarrationVoiceMarks = "_:.#-";
     private const string MalformedNarrationVoice = "A narration voice is an id of at most 80 letters, digits, _ : . # or -.";
-    private const int MaxVisualBriefLength = 500;
-    private const string LongVisualBrief = "A visual brief is at most 500 characters.";
+    private const int MaxDirectionLength = 1000;
+    private const string LongDirection = "A direction is at most 1000 characters.";
+    private const string UnknownFormat = "The format is generated_pictures, own_pictures or own_video.";
+    private const string OwnVideoFromChat = "A video of your own recording is started in Scout Desktop, Production, where you attach the recording.";
+    private const string OwnVideoTakesNoMedia = "A project of your own video shows the recording in every scene; it takes no pictures or narration.";
+    private const string OwnVideoMakesNothingAgain = "A project of your own video has no narration or pictures to make again; edit the scene's text to change its captions.";
+    private const int MaxSceneTextLength = 700;
+    private const string SceneTextLength = "A scene's text is 1 to 700 characters.";
     private const string GentleMotion = "gentle";
     private const string UnknownMotion = "Motion is still, gentle or dynamic.";
     private static readonly string[] Motions = ["still", GentleMotion, "dynamic"];
@@ -77,7 +104,7 @@ public sealed class OperatorService
     private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan ResearchKeptFor = TimeSpan.FromDays(30);
-    private static readonly string[] WorkerStatuses = [Researching, Scripting, ScriptReady, Producing, MediaReady, Assembling, Assembled, Failed];
+    private static readonly string[] WorkerStatuses = [Researching, Scripting, Transcribing, ScriptReady, Producing, MediaReady, Assembling, Assembled, Failed];
     private static readonly string[] WorkerClaimStatuses = ["pending", "unsupported"];
     private static readonly string[] OwnerClaimStatuses = ["supported", "unsupported", "waived"];
 
@@ -85,17 +112,19 @@ public sealed class OperatorService
     private readonly WriteGateService _gate;
     private readonly IWriteLog _writes;
     private readonly IActionQueue _actions;
+    private readonly ILogger<OperatorService> _logger;
 
     /// <summary>
-    /// Build the service over its store, the write gate that holds the grant check and the approval queue, and the
-    /// write log.
+    /// Build the service over its store, the write gate that holds the grant check and the approval queue, the
+    /// write log, and the logger of a chat change the write log could not record.
     /// </summary>
-    public OperatorService(JsonFileOperatorStore store, WriteGateService gate, IWriteLog writes)
+    public OperatorService(JsonFileOperatorStore store, WriteGateService gate, IWriteLog writes, ILogger<OperatorService>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _writes = writes ?? throw new ArgumentNullException(nameof(writes));
         _actions = gate.Actions;
+        _logger = logger ?? NullLogger<OperatorService>.Instance;
     }
 
     /// <summary>The saved mandate, or the empty one when the owner has not written it.</summary>
@@ -163,12 +192,22 @@ public sealed class OperatorService
             ?? throw ProjectNotFound(id));
     }
 
-    /// <summary>Queue a project on <paramref name="topic"/> from the desktop under the owner's write grant.</summary>
-    /// <exception cref="OperatorValidationException">The topic is not 3 to 200 characters after trimming.</exception>
+    /// <summary>
+    /// Queue a project on <paramref name="topic"/> from the desktop under the owner's write grant, in
+    /// <paramref name="format"/>, trimmed, empty meaning generated pictures, with the owner's
+    /// <paramref name="direction"/>, cleaned like a produce's; the format never changes after. A project of the owner's
+    /// own video waits for its recording instead of being queued.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The topic is not 3 to 200 characters after trimming, the format is not one Scout makes, or the direction is over 1000 characters.</exception>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
-    public async Task<OperatorProject> StartProjectAsync(string topic, CancellationToken ct)
+    public async Task<OperatorProject> StartProjectAsync(string topic, string format, string direction, CancellationToken ct)
     {
-        var project = NewProject(topic, Queued, DesktopOrigin, originReference: null);
+        var project = NewProject(topic, Queued, DesktopOrigin, originReference: null) with
+        {
+            Format = FormatOf(format),
+            Direction = DirectionOf(direction),
+        };
+        project = project.Format == OwnVideo ? project with { Status = RecordingWaiting } : project;
         await RequireGrantAsync(project.Topic, ct).ConfigureAwait(false);
         await _store.UpdateProjectsAsync(projects => { projects.Add(project); return project; }, ct)
             .ConfigureAwait(false);
@@ -231,7 +270,7 @@ public sealed class OperatorService
     /// assembly again, a save of an approved project that changes more than its publication and the research it may
     /// clear, a save of producing, media ready or any scene change on a project that is no longer producing, or a save
     /// of assembling, assembled or any package change on a project that is no longer assembling or whose scenes it
-    /// changes. A project created more than 30 days ago may have its topic candidates and its claims' sources cleared.
+    /// changes, or a save of transcribing on a project that is no longer transcribing. A project created more than 30 days ago may have its topic candidates and its claims' sources cleared.
     /// </exception>
     /// <exception cref="OperatorNotFoundException">No project has the id.</exception>
     public async Task<OperatorProject> SaveProjectFromWorkerAsync(
@@ -278,7 +317,14 @@ public sealed class OperatorService
                 Claims = project.Claims.Select(c => c with { DecidedAt = null }).ToList(),
                 Error = project.Error,
                 Scenes = SceneRules.MergeFromWorker(string.Empty, [], project.Scenes),
+                Format = FormatOf(project.Format),
+                Direction = DirectionOf(project.Direction),
             };
+            if (created.Format == OwnVideo)
+            {
+                throw new OperatorValidationException(OwnVideoFromChat);
+            }
+
             await _store.UpdateProjectsAsync(projects => { projects.Add(created); return created; }, ct)
                 .ConfigureAwait(false);
             await LogAsync(created.Id, $"saved {created.Status}", approvedBy: null, ct).ConfigureAwait(false);
@@ -298,6 +344,11 @@ public sealed class OperatorService
                             $"The worker may not change the topic or origin of project '{stored.Id}'.");
                     }
 
+                    if (project.Status == Transcribing && stored.Status != Transcribing)
+                    {
+                        throw new OperatorTamperingException(NoLongerTranscribing);
+                    }
+
                     var mayClear = stored.CreatedAt < DateTimeOffset.UtcNow - ResearchKeptFor;
                     var claims = MergeClaims(stored.Claims, project.Claims, mayClear);
                     var scenes = SceneRules.MergeFromWorker(stored.Id, stored.Scenes, project.Scenes);
@@ -313,6 +364,7 @@ public sealed class OperatorService
                         Scenes = scenes,
                         Package = package,
                         Publication = publication,
+                        RecordingMs = stored.Status == Transcribing ? project.RecordingMs : stored.RecordingMs,
                     };
                     if (refusal is not null && !OnlyWhatARunningActionDid(stored, next))
                     {
@@ -415,12 +467,13 @@ public sealed class OperatorService
 
     /// <summary>
     /// Under the owner's write grant take, in one step so two callers never take the same project,
-    /// the oldest queued project and move it to researching; else the oldest project queued for
-    /// production and move it to producing; else the oldest project queued for assembly and move it
-    /// and its package to assembling; else the oldest project left in researching, scripting,
-    /// producing or assembling with no save for 15 minutes, back in researching, producing or
-    /// assembling. The take is recorded in the write log. Null when none waits, and then the
-    /// projects file is not written.
+    /// the oldest queued project and move it to researching, or to transcribing when it is the owner's own
+    /// video; else the oldest project queued for production and move it to producing; else the oldest
+    /// project queued for assembly and move it and its package to assembling; else the oldest project left
+    /// in researching, scripting, transcribing, producing or assembling with no save for 15 minutes, back in
+    /// researching, transcribing, producing or assembling. A project waiting for its recording is never
+    /// taken. The take is recorded in the write log. Null when none waits, and then the projects file is
+    /// not written.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
     public async Task<OperatorProject?> NextQueuedProjectAsync(CancellationToken ct)
@@ -463,19 +516,24 @@ public sealed class OperatorService
     /// <summary>
     /// Queue a script-ready, media-ready, assembled, approved, or failed project that has a script, for production under
     /// the owner's write grant, once the owner decided every claim; the project's error is cleared, its narration
-    /// voice becomes <paramref name="narrationVoice"/>, trimmed, empty meaning Scout's choice, its visual brief
-    /// <paramref name="visualBrief"/>, trimmed with every control character but a newline made a space, and its motion
+    /// voice becomes <paramref name="narrationVoice"/>, trimmed, empty meaning Scout's choice, its direction
+    /// <paramref name="direction"/>, trimmed with every control character but a newline made a space, and its motion
     /// <paramref name="motion"/>, empty meaning gentle.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
-    /// <exception cref="OperatorValidationException">The narration voice is not an id, the visual brief is over 500 characters, the motion is not a preset, the project has no script to produce, or claims still pending.</exception>
+    /// <exception cref="OperatorValidationException">The narration voice is not an id, the direction is over 1000 characters, the motion is not a preset, the project has no script to produce, or claims still pending.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
-    public async Task<OperatorProject> ProduceProjectAsync(string id, string narrationVoice, string visualBrief, string motion, CancellationToken ct)
+    public async Task<OperatorProject> ProduceProjectAsync(string id, string narrationVoice, string direction, string motion, CancellationToken ct)
     {
         var voice = NarrationVoiceOf(narrationVoice);
-        var brief = VisualBriefOf(visualBrief);
+        var owned = DirectionOf(direction);
         var preset = MotionOf(motion);
         await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        return await ProduceAsync(id, voice, owned, preset, ct).ConfigureAwait(false);
+    }
+
+    private async Task<OperatorProject> ProduceAsync(string id, string? voice, string? owned, string? preset, CancellationToken ct)
+    {
         var produced = await _store.UpdateProjectsAsync(
                 projects =>
                 {
@@ -500,9 +558,9 @@ public sealed class OperatorService
                         Status = ProductionQueued,
                         Error = null,
                         Package = project.Status is Assembled or Approved ? PackageRules.AfterSceneEdit(project.Package) : project.Package,
-                        NarrationVoice = voice,
-                        VisualBrief = brief,
-                        Motion = preset,
+                        NarrationVoice = voice ?? project.NarrationVoice,
+                        Direction = owned ?? project.Direction,
+                        Motion = preset ?? project.Motion,
                         UpdatedAt = DateTimeOffset.UtcNow,
                     };
                     return projects[index];
@@ -516,19 +574,25 @@ public sealed class OperatorService
     /// Delegate a script-ready, media-ready, or failed project that has a script, under the owner's write grant: the
     /// project is marked delegated and queued for its next reversible stage, assembly when its media is ready and every
     /// scene of it is ready and none lacks a narration or picture the worker could still make, else production, whatever claims are still pending; the project's error is cleared and its
-    /// narration voice, visual brief and motion become <paramref name="narrationVoice"/>, <paramref name="visualBrief"/>
-    /// and <paramref name="motion"/> under the rules of <see cref="ProduceProjectAsync"/>.
+    /// narration voice, direction and motion become <paramref name="narrationVoice"/>, <paramref name="direction"/>
+    /// and <paramref name="motion"/> under the rules of <see cref="ProduceProjectAsync"/>. A text card counts as made
+    /// in a project of the owner's own pictures, so its media-ready project goes straight to assembly.
     /// Delegation never approves or publishes anything.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
-    /// <exception cref="OperatorValidationException">The narration voice is not an id, the visual brief is over 500 characters, the motion is not a preset, the project's status, or a failed project without a script.</exception>
+    /// <exception cref="OperatorValidationException">The narration voice is not an id, the direction is over 1000 characters, the motion is not a preset, the project's status, or a failed project without a script.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
-    public async Task<OperatorProject> DelegateProjectAsync(string id, string narrationVoice, string visualBrief, string motion, CancellationToken ct)
+    public async Task<OperatorProject> DelegateProjectAsync(string id, string narrationVoice, string direction, string motion, CancellationToken ct)
     {
         var voice = NarrationVoiceOf(narrationVoice);
-        var brief = VisualBriefOf(visualBrief);
+        var owned = DirectionOf(direction);
         var preset = MotionOf(motion);
         await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        return await DelegateAsync(id, voice, owned, preset, ct).ConfigureAwait(false);
+    }
+
+    private async Task<OperatorProject> DelegateAsync(string id, string? voice, string? owned, string? preset, CancellationToken ct)
+    {
         var readiness = await GetReadinessAsync(ct).ConfigureAwait(false);
         var delegated = await _store.UpdateProjectsAsync(
                 projects =>
@@ -544,15 +608,15 @@ public sealed class OperatorService
                     var assemble = project.Status == MediaReady && EverySceneReady(project.Scenes)
                         && !project.Scenes.Any(s =>
                             (s.AudioSource == SceneRules.NoAudio && readiness.SpeechAvailable)
-                            || (s.VisualSource == SceneRules.TextCard && readiness.ImagesAvailable));
+                            || (s.VisualSource == SceneRules.TextCard && readiness.ImagesAvailable && project.Format != OwnPictures));
                     projects[index] = project with
                     {
                         Status = assemble ? AssemblyQueued : ProductionQueued,
                         Package = assemble ? PackageRules.Queue(project.Package) : project.Package,
                         Delegated = true,
-                        NarrationVoice = voice,
-                        VisualBrief = brief,
-                        Motion = preset,
+                        NarrationVoice = voice ?? project.NarrationVoice,
+                        Direction = owned ?? project.Direction,
+                        Motion = preset ?? project.Motion,
                         Error = null,
                         UpdatedAt = DateTimeOffset.UtcNow,
                     };
@@ -575,10 +639,24 @@ public sealed class OperatorService
         return voice;
     }
 
-    private static string VisualBriefOf(string visualBrief)
+    private static string OwnerText(string text) =>
+        new string([.. (text ?? string.Empty).Select(c => c != '\n' && char.IsControl(c) ? ' ' : c)]).Trim();
+
+    private static string DirectionOf(string direction)
     {
-        var brief = new string([.. (visualBrief ?? string.Empty).Select(c => c != '\n' && char.IsControl(c) ? ' ' : c)]).Trim();
-        return brief.Length > MaxVisualBriefLength ? throw new OperatorValidationException(LongVisualBrief) : brief;
+        var owned = OwnerText(direction);
+        return owned.Length > MaxDirectionLength ? throw new OperatorValidationException(LongDirection) : owned;
+    }
+
+    private static string FormatOf(string format)
+    {
+        var chosen = (format ?? string.Empty).Trim();
+        if (chosen.Length == 0)
+        {
+            return GeneratedPictures;
+        }
+
+        return chosen is GeneratedPictures or OwnPictures or OwnVideo ? chosen : throw new OperatorValidationException(UnknownFormat);
     }
 
     private static string MotionOf(string motion)
@@ -636,21 +714,22 @@ public sealed class OperatorService
     /// </summary>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
     public Task<OperatorProject> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct) =>
-        ChangeSceneAsync(projectId, sceneId, scene => scene with { Locked = locked }, projectStatus: null, changesVideo: false, ct);
+        ChangeSceneAsync(projectId, sceneId, (_, scene) => scene with { Locked = locked }, _ => null, changesVideo: false, ct);
 
     /// <summary>
     /// Send one unlocked scene back to planned and the project to production: the scene keeps the
     /// owner's media and loses its generated files and error, and a stock picture becomes a text card
     /// without its credit. The package goes back to assembled
-    /// without its rights and approval, or to queued for assembly when it was queued or assembling.
+    /// without its rights and approval, or to queued for assembly when it was queued or assembling. A project of the
+    /// owner's own video has nothing to make again and is refused.
     /// </summary>
-    /// <exception cref="OperatorValidationException">The scene is locked.</exception>
+    /// <exception cref="OperatorValidationException">The project is the owner's own video, or the scene is locked.</exception>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
     public Task<OperatorProject> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct) =>
         ChangeSceneAsync(
             projectId,
             sceneId,
-            scene =>
+            (_, scene) =>
             {
                 if (scene.Locked)
                 {
@@ -670,9 +749,79 @@ public sealed class OperatorService
                     DurationMs = ownAudio ? scene.DurationMs : 0,
                 };
             },
-            ProductionQueued,
+            _ => ProductionQueued,
             changesVideo: true,
-            ct);
+            ct,
+            ownVideoRefusal: OwnVideoMakesNothingAgain);
+
+    /// <summary>
+    /// Replace one unlocked scene's text with the owner's <paramref name="text"/>, cleaned like a direction, and
+    /// send its narration back to be made again: the scene is planned without its error, its audio, the owner's
+    /// included, and its duration, and keeps its picture; the project goes to production and its package back to
+    /// assembled without its rights and approval, or to queued for assembly when it was queued or assembling. In a
+    /// project of the owner's own video the text is only the scene's captions: nothing else of the scene changes, nothing
+    /// goes back to production, and an assembled or approved project goes back to media ready without its rights and
+    /// approval, or, when the owner delegated it, to queued for assembly so the new captions are assembled without the
+    /// owner. Scout's own state, so no grant is asked for and nothing is logged.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The text is not 1 to 700 characters, or the scene is locked.</exception>
+    /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
+    public async Task<OperatorProject> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct)
+    {
+        var owned = OwnerText(text);
+        if (owned.Length is 0 or > MaxSceneTextLength)
+        {
+            throw new OperatorValidationException(SceneTextLength);
+        }
+
+        return await ChangeSceneAsync(
+            projectId,
+            sceneId,
+            (project, scene) =>
+            {
+                var locked = $"Scene '{scene.Id}' is locked; unlock it before editing its text.";
+                if (project.Format == OwnVideo)
+                {
+                    return scene.Locked ? throw new OperatorValidationException(locked) : scene with { Narration = owned };
+                }
+
+                return WithoutNarration(scene, locked) with { Narration = owned };
+            },
+            project => project.Format != OwnVideo
+                ? ProductionQueued
+                : project.Delegated && project.Status is Assembled or Approved ? AssemblyQueued : null,
+            changesVideo: true,
+            ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Send one unlocked scene's narration back to be made again, in the project's voice, keeping its text and its
+    /// picture, under the rules of <see cref="EditSceneTextAsync"/>. A project of the owner's own video has no narration
+    /// to make again and is refused.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The project is the owner's own video, or the scene is locked.</exception>
+    /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
+    public Task<OperatorProject> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct) =>
+        ChangeSceneAsync(
+            projectId,
+            sceneId,
+            (_, scene) => WithoutNarration(scene, $"Scene '{scene.Id}' is locked; unlock it before regenerating it."),
+            _ => ProductionQueued,
+            changesVideo: true,
+            ct,
+            ownVideoRefusal: OwnVideoMakesNothingAgain);
+
+    private static Scene WithoutNarration(Scene scene, string locked) =>
+        scene.Locked
+            ? throw new OperatorValidationException(locked)
+            : scene with
+            {
+                Status = SceneRules.Planned,
+                Error = null,
+                AudioSource = SceneRules.NoAudio,
+                AudioFile = null,
+                DurationMs = 0,
+            };
 
     /// <summary>
     /// Use the owner's own audio or visual for one scene. The file must already be in the project's
@@ -684,10 +833,14 @@ public sealed class OperatorService
     /// The kind <c>background</c>, with no scene id and a picture already in the media directory, sets the
     /// project's background picture on a project whose script or media is ready, an assembled, approved or
     /// failed one, or one queued for assembly or assembling; it needs no grant and changes the status like a scene edit.
+    /// The kind <c>recording</c>, with no scene id and a video already in the media directory under the name Scout
+    /// Desktop gives its copy, starting <c>owner-</c>, sets the recording of a project of the owner's own video before
+    /// Scout transcribes it, deletes the recording it replaces from the media directory, and queues the project for its
+    /// transcription; it needs no grant. A project of the owner's own video takes no audio, visual or background.
     /// </summary>
-    /// <exception cref="OperatorValidationException">The kind, the file name, the file, a background's scene id or the project's status is not acceptable.</exception>
+    /// <exception cref="OperatorValidationException">The kind, the file name, the file, a background's or a recording's scene id, the project's format or its status is not acceptable.</exception>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
-    public Task<OperatorProject> AttachSceneMediaAsync(
+    public async Task<OperatorProject> AttachSceneMediaAsync(
         string projectId,
         string sceneId,
         string kind,
@@ -696,20 +849,25 @@ public sealed class OperatorService
     {
         if (kind == Background)
         {
-            return AttachBackgroundAsync(projectId, sceneId, fileName, ct);
+            return await AttachBackgroundAsync(projectId, sceneId, fileName, ct).ConfigureAwait(false);
+        }
+
+        if (kind == Recording)
+        {
+            return await AttachRecordingAsync(projectId, sceneId, fileName, ct).ConfigureAwait(false);
         }
 
         if (kind is not (SceneRules.Audio or SceneRules.Visual))
         {
-            throw new OperatorValidationException("Media is attached as audio, visual or background.");
+            throw new OperatorValidationException("Media is attached as audio, visual, background or recording.");
         }
 
         SceneRules.ValidateFileName(fileName, kind);
         var directory = MediaDirectoryOf(projectId);
-        return ChangeSceneAsync(
+        return await ChangeSceneAsync(
             projectId,
             sceneId,
-            scene =>
+            (_, scene) =>
             {
                 if (!File.Exists(Path.Combine(directory, fileName)))
                 {
@@ -725,9 +883,10 @@ public sealed class OperatorService
                     && (attached.AudioFile is not null || (produced && attached.AudioSource == SceneRules.NoAudio));
                 return ready ? attached with { Status = SceneRules.Ready, Error = null } : attached;
             },
-            projectStatus: null,
+            _ => null,
             changesVideo: true,
-            ct);
+            ct,
+            ownVideoRefusal: OwnVideoTakesNoMedia).ConfigureAwait(false);
     }
 
     private async Task<OperatorProject> AttachBackgroundAsync(string projectId, string sceneId, string fileName, CancellationToken ct)
@@ -744,6 +903,11 @@ public sealed class OperatorService
                 {
                     var index = IndexOf(projects, projectId);
                     var project = projects[index];
+                    if (project.Format == OwnVideo)
+                    {
+                        throw new OperatorValidationException(OwnVideoTakesNoMedia);
+                    }
+
                     if (project.Status is not (ScriptReady or MediaReady or Assembled or Approved or AssemblyQueued or Assembling or Failed))
                     {
                         throw new OperatorValidationException(
@@ -764,6 +928,71 @@ public sealed class OperatorService
         return ForDesktop(attached);
     }
 
+    private async Task<OperatorProject> AttachRecordingAsync(string projectId, string sceneId, string fileName, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(sceneId))
+        {
+            throw new OperatorValidationException("A recording is attached to the project, not to a scene.");
+        }
+
+        SceneRules.ValidateFileName(fileName, SceneRules.Recording);
+        if (!fileName.StartsWith(OwnerCopyPrefix, StringComparison.Ordinal))
+        {
+            throw new OperatorValidationException("A recording is attached from Scout Desktop, which names the copy for you.");
+        }
+
+        var directory = MediaDirectoryOf(projectId);
+        string? previous = null;
+        var attached = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    if (project.Format != OwnVideo)
+                    {
+                        throw new OperatorValidationException("Only a project of your own video takes a recording.");
+                    }
+
+                    if (!(project.Status is RecordingWaiting or Queued || (project.Status == Failed && project.Script is null)))
+                    {
+                        throw new OperatorValidationException(
+                            $"A recording is attached before Scout transcribes it; this one is {project.Status}.");
+                    }
+
+                    if (!File.Exists(Path.Combine(directory, fileName)))
+                    {
+                        throw new OperatorValidationException(
+                            $"'{fileName}' is not in the project's media folder; copy it there first.");
+                    }
+
+                    previous = project.RecordingFile;
+                    projects[index] = project with
+                    {
+                        RecordingFile = fileName,
+                        RecordingMs = 0,
+                        Status = Queued,
+                        Error = null,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        if (previous is not null && previous != fileName && Path.GetFileName(previous) == previous)
+        {
+            try
+            {
+                File.Delete(Path.Combine(directory, previous));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Scout attached the new recording but could not delete the one it replaced.");
+            }
+        }
+
+        return ForDesktop(attached);
+    }
+
     /// <summary>The absolute path of the project's media directory, created when missing.</summary>
     /// <exception cref="OperatorValidationException">The id is not a project id.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
@@ -778,7 +1007,7 @@ public sealed class OperatorService
     /// <summary>
     /// Delete a project the owner no longer wants: it leaves the store and its media directory inside the operator
     /// media root is deleted. Nothing leaves the process, so a video already on YouTube stays there. Refused while the
-    /// project is researching, scripting, producing, assembling or uploading, or while an approved or executing
+    /// project is researching, scripting, transcribing, producing, assembling or uploading, or while an approved or executing
     /// YouTube action targets it.
     /// </summary>
     /// <exception cref="OperatorValidationException">The project is running or has pending YouTube actions.</exception>
@@ -797,11 +1026,11 @@ public sealed class OperatorService
                 {
                     var index = IndexOf(projects, id);
                     var project = projects[index];
-                    if (project.Status is Researching or Scripting or Producing or Assembling
+                    if (project.Status is Researching or Scripting or Transcribing or Producing or Assembling
                         || project.Publication?.Status == PublicationRules.Uploading)
                     {
                         throw new OperatorValidationException(
-                            "A project that is researching, scripting, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+                            "A project that is researching, scripting, transcribing, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
                     }
 
                     projects.RemoveAt(index);
@@ -1480,7 +1709,7 @@ public sealed class OperatorService
         var queued = FirstIndex(projects, p => p.Status == Queued);
         if (queued >= 0)
         {
-            return (queued, Researching);
+            return (queued, projects[queued].Format == OwnVideo ? Transcribing : Researching);
         }
 
         var production = FirstIndex(projects, p => p.Status == ProductionQueued);
@@ -1495,8 +1724,8 @@ public sealed class OperatorService
             return (assembly, Assembling);
         }
 
-        var stale = FirstIndex(projects, p => p.Status is Researching or Scripting or Producing or Assembling && now - p.UpdatedAt > StaleAfter);
-        return stale < 0 ? (-1, string.Empty) : (stale, projects[stale].Status is Producing or Assembling ? projects[stale].Status : Researching);
+        var stale = FirstIndex(projects, p => p.Status is Researching or Scripting or Transcribing or Producing or Assembling && now - p.UpdatedAt > StaleAfter);
+        return stale < 0 ? (-1, string.Empty) : (stale, projects[stale].Status is Transcribing or Producing or Assembling ? projects[stale].Status : Researching);
     }
 
     private static int FirstIndex(IReadOnlyList<OperatorProject> projects, Func<OperatorProject, bool> match)
@@ -1615,7 +1844,9 @@ public sealed class OperatorService
                 AssemblyQueued or Assembling => AssemblyQueued,
                 _ => project.Status,
             },
-            Package = PackageRules.AfterSceneEdit(project.Package),
+            Package = projectStatus == AssemblyQueued
+                ? PackageRules.Queue(PackageRules.AfterSceneEdit(project.Package))
+                : PackageRules.AfterSceneEdit(project.Package),
         };
 
     private static OperatorProject NewProject(string topic, string status, string origin, string? originReference)
@@ -1721,16 +1952,22 @@ public sealed class OperatorService
     private async Task<OperatorProject> ChangeSceneAsync(
         string projectId,
         string sceneId,
-        Func<Scene, Scene> change,
-        string? projectStatus,
+        Func<OperatorProject, Scene, Scene> change,
+        Func<OperatorProject, string?> projectStatus,
         bool changesVideo,
-        CancellationToken ct)
+        CancellationToken ct,
+        string? ownVideoRefusal = null)
     {
         var changed = await _store.UpdateProjectsAsync(
                 projects =>
                 {
                     var index = IndexOf(projects, projectId);
                     var project = projects[index];
+                    if (ownVideoRefusal is not null && project.Format == OwnVideo)
+                    {
+                        throw new OperatorValidationException(ownVideoRefusal);
+                    }
+
                     var scenes = project.Scenes.ToList();
                     var sceneIndex = scenes.FindIndex(s => string.Equals(s.Id, sceneId, StringComparison.Ordinal));
                     if (sceneIndex < 0)
@@ -1738,8 +1975,8 @@ public sealed class OperatorService
                         throw new OperatorNotFoundException($"Unknown scene '{sceneId}' in project '{projectId}'.");
                     }
 
-                    scenes[sceneIndex] = change(scenes[sceneIndex]);
-                    projects[index] = (changesVideo ? AfterSceneEdit(project, projectStatus) : project) with
+                    scenes[sceneIndex] = change(project, scenes[sceneIndex]);
+                    projects[index] = (changesVideo ? AfterSceneEdit(project, projectStatus(project)) : project) with
                     {
                         Scenes = scenes,
                         UpdatedAt = DateTimeOffset.UtcNow,
@@ -1843,4 +2080,77 @@ public sealed class OperatorService
     public Task<string> GetVoiceSamplesDirectoryForWorkerAsync(CancellationToken ct) => GetVoiceSamplesDirectoryAsync(ct);
 
     internal const string VoiceSamplesFolder = "voice-samples";
+
+    /// <summary>The owner's scene text edit asked from the chat: <see cref="EditSceneTextAsync"/> under the grant, logged via chat.</summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> EditSceneTextFromChatAsync(string projectId, string sceneId, string text, CancellationToken ct) =>
+        ViaChatAsync(projectId, $"edited the text of scene {sceneId}", c => EditSceneTextAsync(projectId, sceneId, text, c), ct);
+
+    /// <summary>The owner's narration remake asked from the chat: <see cref="RegenerateNarrationAsync"/> under the grant, logged via chat.</summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> RegenerateNarrationFromChatAsync(string projectId, string sceneId, CancellationToken ct) =>
+        ViaChatAsync(projectId, $"asked for the narration of scene {sceneId} again", c => RegenerateNarrationAsync(projectId, sceneId, c), ct);
+
+    /// <summary>The owner's scene remake asked from the chat: <see cref="RegenerateSceneAsync"/> under the grant, logged via chat.</summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> RegenerateSceneFromChatAsync(string projectId, string sceneId, CancellationToken ct) =>
+        ViaChatAsync(projectId, $"asked for scene {sceneId} again", c => RegenerateSceneAsync(projectId, sceneId, c), ct);
+
+    /// <summary>The owner's lock or unlock asked from the chat: <see cref="SetSceneLockedAsync"/> under the grant, logged via chat.</summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> SetSceneLockedFromChatAsync(string projectId, string sceneId, bool locked, CancellationToken ct) =>
+        ViaChatAsync(projectId, $"{(locked ? "locked" : "unlocked")} scene {sceneId}", c => SetSceneLockedAsync(projectId, sceneId, locked, c), ct);
+
+    /// <summary>The owner's scene order asked from the chat: <see cref="ReorderScenesAsync"/> under the grant, logged via chat.</summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> ReorderScenesFromChatAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct) =>
+        ViaChatAsync(projectId, "reordered the scenes", c => ReorderScenesAsync(projectId, sceneIds, c), ct);
+
+    /// <summary>
+    /// The owner's production asked from the chat: <see cref="ProduceProjectAsync"/> under the grant, logged via chat,
+    /// where a blank voice, direction or motion keeps the project's own.
+    /// </summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> ProduceProjectFromChatAsync(string id, string narrationVoice, string direction, string motion, CancellationToken ct) =>
+        ViaChatAsync(id, "queued production", c => ProduceAsync(id, Kept(narrationVoice, NarrationVoiceOf), Kept(direction, DirectionOf), Kept(motion, MotionOf), c), ct);
+
+    /// <summary>
+    /// The owner's delegation asked from the chat: <see cref="DelegateProjectAsync"/> under the grant, logged via chat,
+    /// where a blank voice, direction or motion keeps the project's own.
+    /// </summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    public Task<OperatorProject> DelegateProjectFromChatAsync(string id, string narrationVoice, string direction, string motion, CancellationToken ct) =>
+        ViaChatAsync(id, "delegated", c => DelegateAsync(id, Kept(narrationVoice, NarrationVoiceOf), Kept(direction, DirectionOf), Kept(motion, MotionOf), c), ct);
+
+    private static string? Kept(string value, Func<string, string> clean) =>
+        string.IsNullOrWhiteSpace(value) ? null : clean(value);
+
+    private async Task<OperatorProject> ViaChatAsync(
+        string projectId,
+        string what,
+        Func<CancellationToken, Task<OperatorProject>> change,
+        CancellationToken ct)
+    {
+        await RequireGrantAsync(projectId, ct).ConfigureAwait(false);
+        var before = (await _store.ReadProjectsAsync(ct).ConfigureAwait(false)).FirstOrDefault(p => p.Id == projectId);
+        var changed = await change(ct).ConfigureAwait(false);
+        if (before is not null && Comparable(before) == Comparable(changed))
+        {
+            return changed;
+        }
+
+        try
+        {
+            await LogAsync(projectId, $"{what} via chat", approvedBy: null, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "Scout changed a project from the chat but could not record the change in the write log.");
+        }
+
+        return changed;
+    }
+
+    private static string Comparable(OperatorProject project) =>
+        JsonSerializer.Serialize(project with { UpdatedAt = default, OriginReference = null });
 }

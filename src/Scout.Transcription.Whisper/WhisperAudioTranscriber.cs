@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Scout.Conversation.Abstractions;
 using Whisper.net;
@@ -9,12 +10,15 @@ namespace Scout.Transcription.Whisper;
 /// Whisper.net, over Ogg Opus voice messages or 16 kHz mono WAV recordings. Audio never leaves the machine. The model is loaded on the first
 /// voice message, not at startup, and unloaded after <see cref="IdleUnload"/>
 /// without one; the spoken language is detected, and Whisper uses half of the
-/// processors so a local LLM keeps running alongside.
+/// processors so a local LLM keeps running alongside. One transcription runs at a time; a voice message waits at most
+/// <see cref="VoiceWait"/> for the model and is then refused with <see cref="TranscriptionBusyException"/>, while a
+/// recording waits for as long as it takes.
 /// </summary>
 public sealed class WhisperAudioTranscriber : IAudioTranscriber, IDisposable
 {
     internal static readonly TimeSpan MaxDuration = TimeSpan.FromMinutes(5);
     internal static readonly TimeSpan IdleUnload = TimeSpan.FromMinutes(10);
+    internal static readonly TimeSpan VoiceWait = TimeSpan.FromSeconds(30);
     private static readonly int Threads = Math.Max(1, Environment.ProcessorCount / 2);
 
     private readonly string _modelPath;
@@ -57,12 +61,58 @@ public sealed class WhisperAudioTranscriber : IAudioTranscriber, IDisposable
                 : throw new NotSupportedException(
                     $"Voice messages in {contentType} are not supported; only Ogg Opus and WAV are.");
 
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var text = new StringBuilder();
+        await foreach (var segment in RunAsync(samples, VoiceWait, cancellationToken).ConfigureAwait(false))
+        {
+            text.Append(segment.Text);
+        }
+
+        return text.ToString().Trim();
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<TranscribedSegment> TranscribeSegmentsAsync(
+        Stream wav, TimeSpan maxDuration, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(wav);
+        var samples = WavDecoder.DecodeMono16k(wav, maxDuration);
+        await foreach (var segment in RunAsync(samples, Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false))
+        {
+            yield return segment;
+        }
+    }
+
+    private async Task EnterAsync(TimeSpan wait, CancellationToken cancellationToken)
+    {
+        if (wait == Timeout.InfiniteTimeSpan)
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        using var bound = new CancellationTokenSource(wait, _time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, bound.Token);
+        try
+        {
+            await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (bound.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TranscriptionBusyException($"Another transcription held the speech model for more than {wait.TotalSeconds:0} seconds.", ex);
+        }
+    }
+
+    private async IAsyncEnumerable<TranscribedSegment> RunAsync(
+        float[] samples, TimeSpan wait, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await EnterAsync(wait, cancellationToken).ConfigureAwait(false);
         try
         {
             _model ??= _load(_modelPath);
-            var text = await _model.Transcribe(samples, cancellationToken).ConfigureAwait(false);
-            return text.Trim();
+            await foreach (var segment in _model.Segments(samples, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return segment;
+            }
         }
         finally
         {
@@ -104,18 +154,19 @@ public sealed class WhisperAudioTranscriber : IAudioTranscriber, IDisposable
     private static LoadedModel LoadWhisper(string modelPath)
     {
         var factory = WhisperFactory.FromPath(modelPath);
-        return new LoadedModel(
-            async (samples, cancellationToken) =>
+        return new LoadedModel(Segments, factory);
+
+        async IAsyncEnumerable<TranscribedSegment> Segments(float[] samples, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            var processor = factory.CreateBuilder().WithLanguageDetection().WithThreads(Threads).Build();
+            await using (processor.ConfigureAwait(false))
             {
-                using var processor = factory.CreateBuilder().WithLanguageDetection().WithThreads(Threads).Build();
-                var text = new StringBuilder();
                 await foreach (var segment in processor.ProcessAsync(samples, cancellationToken).ConfigureAwait(false))
                 {
-                    text.Append(segment.Text);
+                    yield return new TranscribedSegment(segment.Start, segment.End, segment.Text);
                 }
-                return text.ToString();
-            },
-            factory);
+            }
+        }
     }
 
     private static bool IsWav(string contentType)
@@ -126,6 +177,6 @@ public sealed class WhisperAudioTranscriber : IAudioTranscriber, IDisposable
         => contentType.StartsWith("audio/ogg", StringComparison.OrdinalIgnoreCase)
            || contentType.StartsWith("audio/opus", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>A loaded model: how to transcribe with it and how to release it.</summary>
-    internal sealed record LoadedModel(Func<float[], CancellationToken, Task<string>> Transcribe, IDisposable Handle);
+    /// <summary>A loaded model: the segments it hears in 16 kHz mono samples, and how to release it.</summary>
+    internal sealed record LoadedModel(Func<float[], CancellationToken, IAsyncEnumerable<TranscribedSegment>> Segments, IDisposable Handle);
 }

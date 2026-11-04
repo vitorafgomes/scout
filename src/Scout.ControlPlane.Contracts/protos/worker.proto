@@ -21,6 +21,13 @@ service WorkerGate {
   rpc GetComments(ListCommentsRequest) returns (CommentsView);
   rpc SaveComments(CommentsView) returns (CommentsView);
   rpc GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest) returns (MediaDirectory);
+  rpc ChatEditSceneText(EditSceneTextRequest) returns (Project);
+  rpc ChatRegenerateNarration(SceneRequest) returns (Project);
+  rpc ChatRegenerateScene(SceneRequest) returns (Project);
+  rpc ChatSetSceneLocked(SetSceneLockedRequest) returns (Project);
+  rpc ChatReorderScenes(ReorderScenesRequest) returns (Project);
+  rpc ChatProduceProject(ProduceProjectRequest) returns (Project);
+  rpc ChatDelegateProject(DelegateProjectRequest) returns (Project);
 }
 
 message RequestWriteRequest {

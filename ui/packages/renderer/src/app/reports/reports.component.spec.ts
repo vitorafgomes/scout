@@ -32,6 +32,8 @@ function scene(id: string, order: number, durationMs: number): SceneDto {
     audioFile: null,
     visualFile: null,
     durationMs,
+    clipStartMs: 0,
+    clipEndMs: 0,
   };
 }
 
@@ -90,8 +92,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     narrationVoice: '',
     backgroundFile: null,
     delegated: false,
-    visualBrief: '',
+    direction: '',
     motion: 'gentle',
+    format: 'generated_pictures',
+    recordingFile: null,
+    recordingMs: 0,
     ...overrides,
   };
 }

@@ -52,6 +52,31 @@ public sealed class MediaProbeTests : IDisposable
         runner.Calls.ShouldBeEmpty();
     }
 
+    [Theory]
+    [InlineData(
+        "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'owner-recording-1a.mp4':\n  Metadata:\n    title           : Video: my kitchen\n  Duration: 00:10:02.50, start: 0.000000, bitrate: 4628 kb/s\n"
+            + "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080, 4500 kb/s, 30 fps\n"
+            + "  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 128 kb/s\nAt least one output file must be specified",
+        602_500, true, true)]
+    [InlineData(
+        "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'owner-recording-1a.mp4':\n  Duration: 00:03:00.00, start: 0.000000, bitrate: 130 kb/s\n"
+            + "  Stream #0:0[0x1](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s\n"
+            + "  Stream #0:1[0x0]: Video: mjpeg (Baseline), yuvj420p(pc, bt470bg/unknown/unknown), 600x600, 90k tbr, 90k tbn (attached pic)\nAt least one output file must be specified",
+        180_000, false, true)]
+    [InlineData(
+        "Input #0, matroska,webm, from 'owner-recording-1a.webm':\n  Metadata:\n    comment         : Audio: none\n  Duration: 00:00:45.00, start: 0.000000, bitrate: 900 kb/s\n"
+            + "  Stream #0:0(eng): Video: vp9 (Profile 0), yuv420p(tv), 1280x720, SAR 1:1 DAR 16:9, 30 fps, 30 tbr, 1k tbn (default)\nAt least one output file must be specified",
+        45_000, true, false)]
+    public async Task Inspect_Reads_The_Length_And_Whether_There_Is_A_Picture_And_Sound(string report, int ms, bool picture, bool sound)
+    {
+        var runner = new FakeProcessRunner { Answer = (_, _) => new ProcessResult(1, string.Empty, report) };
+
+        var streams = await new MediaProbe(runner).InspectAsync(Given.Tools(), _media, "owner-recording-1a.mp4", CancellationToken.None);
+
+        streams.ShouldBe(new MediaStreams(ms, picture, sound));
+        runner.Calls.ShouldHaveSingleItem().Arguments.ShouldBe(["-hide_banner", "-nostdin", "-i", Path.Combine(_media, "owner-recording-1a.mp4")]);
+    }
+
     private sealed class CallComparer : IEqualityComparer<(string Program, IReadOnlyList<string> Arguments)>
     {
         public bool Equals((string Program, IReadOnlyList<string> Arguments) x, (string Program, IReadOnlyList<string> Arguments) y)

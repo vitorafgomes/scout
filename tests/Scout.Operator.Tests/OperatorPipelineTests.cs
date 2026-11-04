@@ -48,6 +48,23 @@ public sealed class OperatorPipelineTests
     }
 
     [Fact]
+    public async Task A_Queued_Project_Is_Scripted_With_Its_Format_And_Direction()
+    {
+        var project = Given.Project(status: "researching") with { Origin = "desktop", Format = "own_pictures", Direction = "Walk along the river, it's: calm." };
+        var controlPlane = Holding(project);
+        var chat = Model();
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), chat, Substitute.For<IOriginNotifier>())
+            .RunAsync(new QueuedProject(project, null), CancellationToken.None);
+
+        controlPlane.Saves.Select(s => s.Project.Status).ShouldBe(["scripting", "script_ready"]);
+        var script = chat.Requests.Last().Single(m => m.Role == Microsoft.SemanticKernel.ChatCompletion.AuthorRole.System).Text;
+        script.ShouldContain("The video is narration over pictures the owner takes or already has, one per scene; write narration around things the owner can photograph.", Case.Sensitive);
+        script.ShouldContain("Direction the owner gave for this video, which the script follows for its angle, tone and structure: Walk along the river, it's: calm.", Case.Sensitive);
+        controlPlane.Saves.ShouldAllBe(s => s.Project.Format == "own_pictures" && s.Project.Direction == "Walk along the river, it's: calm.");
+    }
+
+    [Fact]
     public async Task A_Project_Without_An_Origin_Posts_Nothing()
     {
         var notifier = Substitute.For<IOriginNotifier>();
@@ -155,5 +172,76 @@ public sealed class OperatorPipelineTests
             ("c4", "Ovens vary", "pending"),
         ]);
         controlPlane.Saves[1].Project.Claims.Take(2).ShouldBe(decided);
+    }
+
+    [Fact]
+    public async Task A_Transcribing_Project_Ends_Script_Ready_Without_Research_Or_A_Script_Request()
+    {
+        var media = Directory.CreateTempSubdirectory("scout-pipeline-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(media, "owner-recording-1a.mp4"), [1, 2, 3]);
+            var project = Given.Project(status: "transcribing") with { Origin = "desktop", Format = "own_video", RecordingFile = "owner-recording-1a.mp4" };
+            var controlPlane = new RecordingControlPlane { MediaDirectory = media };
+            controlPlane.Store(project);
+            var chat = Model();
+            var youtube = Given.YouTube();
+            var transcriber = new ScriptedTranscriber { Heard = _ => ScriptedTranscriber.Segments((0, 4000, "Today we bake bread.")) };
+
+            await Given.Pipeline(
+                    controlPlane, youtube, chat, Substitute.For<IOriginNotifier>(), time: new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Given.Now),
+                    runner: new FakeProcessRunner { ProbedMs = 60_000, ReportsPicture = true }, transcriber: transcriber)
+                .RunAsync(new QueuedProject(project, null), CancellationToken.None);
+
+            controlPlane.Saves.Select(s => s.Project.Status).ShouldBe(["transcribing", "script_ready"]);
+            controlPlane.Saves[^1].Project.Script.ShouldNotBeNull().Sections.ShouldHaveSingleItem().Narration.ShouldBe("Today we bake bread.");
+            chat.Requests.ShouldBeEmpty();
+            youtube.ReceivedCalls().ShouldBeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(media, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task A_Failed_Transcription_Leaves_No_Partial_Transcript()
+    {
+        var media = Directory.CreateTempSubdirectory("scout-pipeline-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(media, "owner-recording-1a.mp4"), [1, 2, 3]);
+            var project = Given.Project(status: "transcribing") with { Origin = "desktop", Format = "own_video", RecordingFile = "owner-recording-1a.mp4" };
+            var controlPlane = new RecordingControlPlane { MediaDirectory = media };
+            controlPlane.Store(project);
+            var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Given.Now);
+            async IAsyncEnumerable<TranscribedSegment> HeardThenFailed()
+            {
+                yield return new TranscribedSegment(TimeSpan.Zero, TimeSpan.FromSeconds(4), "Today we bake bread.");
+                clock.Advance(TimeSpan.FromMinutes(2));
+                yield return new TranscribedSegment(TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(9), "First the starter.");
+                await Task.FromException(new InvalidDataException("The model stopped."));
+            }
+
+            var pipeline = Given.Pipeline(
+                controlPlane, Given.YouTube(), Model(), Substitute.For<IOriginNotifier>(), time: clock,
+                runner: new FakeProcessRunner { ProbedMs = 600_000, ReportsPicture = true }, transcriber: new ScriptedTranscriber { Heard = _ => HeardThenFailed() });
+
+            await pipeline.RunAsync(new QueuedProject(project, null), CancellationToken.None);
+            var failed = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
+            controlPlane.Store(project with { Script = new OperatorScript(string.Empty, [new OperatorScriptSection(string.Empty, "Today we bake bread.")], string.Empty, [], string.Empty, [], []) });
+            await pipeline.SaveFailedAsync("p1", "Scout could not reach its control plane.", CancellationToken.None);
+            var lastResort = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
+
+            controlPlane.Saves.Select(s => (s.Project.Status, s.Project.Script?.Sections.Count)).ShouldBe([
+                ("transcribing", 0), ("transcribing", 2), ("failed", (int?)null), ("failed", (int?)null),
+            ]);
+            (failed.Status, failed.Error, failed.Script).ShouldBe(("failed", "Scout could not transcribe the recording (InvalidDataException: The model stopped.)", (OperatorScript?)null));
+            (lastResort.Status, lastResort.Script).ShouldBe(("failed", (OperatorScript?)null), "the worker's last-resort save of a transcribing project keeps no partial transcript either");
+        }
+        finally
+        {
+            Directory.Delete(media, recursive: true);
+        }
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Access;
+using Scout.Conversation.Memory;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Telemetry;
 
@@ -42,6 +43,7 @@ public sealed partial class ConversationConductor
     internal const string AudioDownloadFailedReply = "Scout could not download that voice message. Try sending it again.";
     internal const string TranscriptionFailedReply = "Scout could not transcribe that voice message. Try again or type the question.";
     internal const string NothingHeardReply = "Scout heard no speech in that voice message.";
+    internal const string TranscriberBusyReply = "Scout is transcribing a recording right now; try the voice message again in a few minutes.";
     internal const long MaxAudioBytes = 25L * 1024 * 1024;
     internal static readonly TimeSpan MaxAudioDuration = TimeSpan.FromMinutes(5);
     private const int QuotedTranscriptLength = 200;
@@ -54,6 +56,7 @@ public sealed partial class ConversationConductor
     private readonly IAudioTranscriber? _transcriber;
     private readonly IPairingSignal? _pairingSignal;
     private readonly TimeProvider _time;
+    private readonly IConversationKeyProvider _keyProvider;
     private int _pairingUsed;
     private int _failedPairingAttempts;
 
@@ -67,7 +70,8 @@ public sealed partial class ConversationConductor
         AccessPolicy? access,
         IAudioTranscriber? transcriber = null,
         IPairingSignal? pairingSignal = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IConversationKeyProvider? keyProvider = null)
     {
         _router = router ?? throw new ArgumentNullException(nameof(router));
         _pump = pump ?? throw new ArgumentNullException(nameof(pump));
@@ -76,6 +80,7 @@ public sealed partial class ConversationConductor
         _transcriber = transcriber;
         _pairingSignal = pairingSignal;
         _time = timeProvider ?? TimeProvider.System;
+        _keyProvider = keyProvider ?? new ConversationKeyProvider();
     }
 
     /// <summary>
@@ -110,7 +115,8 @@ public sealed partial class ConversationConductor
 
         using var activity = ScoutActivitySource.Instance.StartActivity("conversation.handle");
         activity?.SetTag("scout.channel_id", message.ChannelId);
-        using var origin = ChatOrigin.Enter(message.OriginReference);
+        using var origin = ChatOrigin.Enter(
+            message.OriginReference, message.IsLocalOwner || _access.IsOwner(message.UserId), _time, _keyProvider.DeriveKey(message));
         try
         {
             if (!message.IsLocalOwner
@@ -282,6 +288,11 @@ public sealed partial class ConversationConductor
             {
                 transcript = await _transcriber.TranscribeAsync(bytes, audio.ContentType, cancellationToken)
                     .ConfigureAwait(false);
+            }
+            catch (TranscriptionBusyException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("A voice message for channel {ChannelId} waited too long for the speech model.", channelId);
+                return (null, TranscriberBusyReply);
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {

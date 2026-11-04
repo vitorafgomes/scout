@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import {
+  constants,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,6 +10,7 @@ import {
   truncateSync,
   writeFileSync,
 } from 'node:fs';
+import { copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ControlPlaneNotFoundError, ScoutError } from '@scout/shared';
@@ -449,6 +451,29 @@ describe('copyOwnerMedia', () => {
     expect(readdirSync(media)).toEqual([copied]);
   });
 
+  it('copies as a reflink where the filesystem supports one, and refuses an existing target, leaving it as it was', async () => {
+    const media = tempDir();
+    const source = ownerFile('photo.png');
+    const modes: number[] = [];
+    const copied = await copyOwnerMedia(media, 's1', 'visual', source, async (from, to, mode) => {
+      modes.push(mode);
+      await copyFile(from, to, mode);
+    });
+    const occupied: string[] = [];
+    const refused = await refusal(
+      copyOwnerMedia(media, 's1', 'visual', source, async (from, to, mode) => {
+        writeFileSync(to, 'already here');
+        occupied.push(to);
+        await copyFile(from, to, mode);
+      }),
+    );
+
+    expect(modes).toEqual([constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE]);
+    expect(readFileSync(path.join(media, copied)).equals(PNG)).toBe(true);
+    expect((refused as ScoutError).code).toBe('operator/media-unavailable');
+    expect(readFileSync(occupied[0]!, 'utf8')).toBe('already here');
+  });
+
   it('refuses a directory chosen as the file and a media directory that is not absolute', async () => {
     const media = tempDir();
     const folder = path.join(tempDir(), 'album.png');
@@ -460,6 +485,51 @@ describe('copyOwnerMedia', () => {
 
     expect((folderError as ScoutError).message).toBe('Choose a file, not a folder.');
     expect((relativeError as ScoutError).code).toBe('operator/media-unavailable');
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('copies a recording into the media directory as owner-recording-<random>.<ext>, never the original name', async () => {
+    const media = path.join(tempDir(), 'p1', 'media');
+    const bytes = Buffer.from('ftyp recording bytes');
+    const sources = ['Meetup talk.MP4', 'talk.mkv', 'talk.webm', 'talk.MOV'].map((name) =>
+      ownerFile(name, bytes),
+    );
+
+    const copied: string[] = [];
+    for (const source of sources) {
+      copied.push(await copyOwnerMedia(media, 'recording', 'recording', source));
+    }
+
+    expect(copied.map((name) => name.replace(/[0-9a-f]{12}/, '<random>'))).toEqual([
+      'owner-recording-<random>.mp4',
+      'owner-recording-<random>.mkv',
+      'owner-recording-<random>.webm',
+      'owner-recording-<random>.mov',
+    ]);
+    expect(readFileSync(path.join(media, copied[0]!)).equals(bytes)).toBe(true);
+    expect(readdirSync(media).sort()).toEqual([...copied].sort());
+  });
+
+  it('refuses a recording over 8 GB or of another type, and copies nothing', async () => {
+    const media = tempDir();
+    const huge = ownerFile('long talk.mp4', '');
+    truncateSync(huge, 8 * 1024 * 1024 * 1024 + 1);
+    const picture = ownerFile('talk.png');
+    const audio = ownerFile('talk.mp3', MP3);
+    const avi = ownerFile('talk.avi', 'RIFF');
+
+    const errors = await Promise.all(
+      [huge, picture, audio, avi].map((source) =>
+        refusal(copyOwnerMedia(media, 'recording', 'recording', source)),
+      ),
+    );
+
+    expect(errors.map((e) => [(e as ScoutError).code, (e as ScoutError).message])).toEqual([
+      ['operator/invalid-request', 'Recordings are at most 8 GB.'],
+      ['operator/invalid-request', 'A recording must be an mp4, mkv, webm or mov file.'],
+      ['operator/invalid-request', 'A recording must be an mp4, mkv, webm or mov file.'],
+      ['operator/invalid-request', 'A recording must be an mp4, mkv, webm or mov file.'],
+    ]);
     expect(readdirSync(media)).toEqual([]);
   });
 
@@ -504,6 +574,26 @@ describe('chooseWithDialog', () => {
       {
         properties: ['openFile'],
         filters: [{ name: 'Pictures', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      },
+    ]);
+  });
+
+  it('offers Recordings filtered to mp4, mkv, webm and mov', async () => {
+    const opened: unknown[] = [];
+    const choose = chooseWithDialog({
+      showOpenDialog: async (options: unknown) => {
+        opened.push(options);
+        return { canceled: false, filePaths: ['/home/owner/Videos/talk.mp4'] };
+      },
+    });
+
+    const chosen = await choose('recording');
+
+    expect(chosen).toBe('/home/owner/Videos/talk.mp4');
+    expect(opened).toEqual([
+      {
+        properties: ['openFile'],
+        filters: [{ name: 'Recordings', extensions: ['mp4', 'mkv', 'webm', 'mov'] }],
       },
     ]);
   });

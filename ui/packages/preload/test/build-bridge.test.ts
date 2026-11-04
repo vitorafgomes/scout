@@ -88,6 +88,8 @@ describe('buildBridge', () => {
       'operatorReorderScenes',
       'operatorSetSceneLocked',
       'operatorRegenerateScene',
+      'operatorEditSceneText',
+      'operatorRegenerateNarration',
       'operatorAttachSceneMedia',
       'operatorReadiness',
       'operatorOpenWindow',
@@ -511,7 +513,11 @@ describe('buildBridge', () => {
     await bridge.operatorSaveMandate(mandate);
     await bridge.operatorProjects({ limit: 50 });
     await bridge.operatorProject({ id: 'p1' });
-    await bridge.operatorStartProject({ topic: 'Span<T> in C#' });
+    await bridge.operatorStartProject({
+      topic: 'Span<T> in C#',
+      format: 'own_pictures',
+      direction: 'Explain it to a junior developer',
+    });
     await bridge.operatorDecideClaim(decision);
 
     expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
@@ -519,7 +525,14 @@ describe('buildBridge', () => {
       [CHANNEL.operatorSaveMandate, mandate],
       [CHANNEL.operatorProjects, { limit: 50 }],
       [CHANNEL.operatorProject, { id: 'p1' }],
-      [CHANNEL.operatorStartProject, { topic: 'Span<T> in C#' }],
+      [
+        CHANNEL.operatorStartProject,
+        {
+          topic: 'Span<T> in C#',
+          format: 'own_pictures',
+          direction: 'Explain it to a junior developer',
+        },
+      ],
       [CHANNEL.operatorDecideClaim, decision],
     ]);
   });
@@ -531,13 +544,13 @@ describe('buildBridge', () => {
     await bridge.operatorProduce({
       id: 'p1',
       narrationVoice: 'piper:en_GB-cori-medium',
-      visualBrief: 'Chalk on slate',
+      direction: 'Chalk on slate',
       motion: 'still',
     });
     await bridge.operatorDelegate({
       id: 'p1',
       narrationVoice: '',
-      visualBrief: '',
+      direction: '',
       motion: 'gentle',
     });
     await bridge.operatorDeleteProject({ id: 'p1' });
@@ -554,13 +567,13 @@ describe('buildBridge', () => {
         {
           id: 'p1',
           narrationVoice: 'piper:en_GB-cori-medium',
-          visualBrief: 'Chalk on slate',
+          direction: 'Chalk on slate',
           motion: 'still',
         },
       ],
       [
         CHANNEL.operatorDelegation,
-        { id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' },
+        { id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' },
       ],
       [CHANNEL.operatorProjectDeletion, { id: 'p1' }],
       [CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s2', 's1'] }],
@@ -569,6 +582,19 @@ describe('buildBridge', () => {
       [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'audio' }],
       [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'background' }],
       [CHANNEL.operatorReadiness],
+    ]);
+  });
+
+  it('operatorEditSceneText and operatorRegenerateNarration invoke their channels', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorEditSceneText({ projectId: 'p1', sceneId: 's1', text: 'New text.' });
+    await bridge.operatorRegenerateNarration({ projectId: 'p1', sceneId: 's2' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorSceneText, { projectId: 'p1', sceneId: 's1', text: 'New text.' }],
+      [CHANNEL.operatorNarrationRegeneration, { projectId: 'p1', sceneId: 's2' }],
     ]);
   });
 

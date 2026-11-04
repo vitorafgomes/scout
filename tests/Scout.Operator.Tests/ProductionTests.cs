@@ -1,5 +1,6 @@
 #pragma warning disable SKEXP0001
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.TextToAudio;
 using Scout.Conversation.Abstractions;
 using Scout.Operator.Tests.Fakes;
@@ -67,18 +68,80 @@ public sealed class ProductionTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Project_Is_Planned_In_The_Owners_Visual_Brief_And_Its_Brief_And_Motion_Go_Back_As_Read()
+    public async Task A_Project_Is_Planned_In_The_Owners_Direction_And_Its_Format_Direction_And_Motion_Go_Back_As_Read()
     {
-        var project = Given.Producing() with { VisualBrief = "Bold comic panels, it's: loud.", Motion = "still" };
+        var project = Given.Producing() with { Direction = "Bold comic panels, it's: loud.", Motion = "still", Format = "generated_pictures" };
         var controlPlane = Holding(project);
         var chat = ScriptedChat.Answering(Given.Prompts(3));
 
         await Run(controlPlane, project, Given.Media(Given.Speech(), Given.Images()), chat: chat);
 
         chat.Requests.ShouldHaveSingleItem().Single(m => m.Role == Microsoft.SemanticKernel.ChatCompletion.AuthorRole.System).Text
-            .ShouldContain("Visual style the owner asked for: Bold comic panels, it's: loud.", Case.Sensitive);
+            .ShouldContain("Direction the owner gave for this video: Bold comic panels, it's: loud.", Case.Sensitive);
         controlPlane.Saves.ShouldNotBeEmpty();
-        controlPlane.Saves.ShouldAllBe(s => s.Project.VisualBrief == "Bold comic panels, it's: loud." && s.Project.Motion == "still");
+        controlPlane.Saves.ShouldAllBe(s =>
+            s.Project.Direction == "Bold comic panels, it's: loud." && s.Project.Motion == "still" && s.Project.Format == "generated_pictures");
+    }
+
+    [Fact]
+    public async Task An_Edited_Scene_Is_Narrated_Again_And_Keeps_Its_Picture()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.png"), [7, 7]);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s2.mp3"), [1]);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s2.png"), [1]);
+        var (piper, voices) = Given.BundledVoices(Directory.CreateDirectory(Path.Combine(_media, "bundle")).FullName);
+        var edited = Given.Scene("s1", 1, "The owner's new words.", visualSource: "generated", visualFile: "scene-s1.png");
+        var untouched = Given.Scene("s2", 2, "Bake it hot.", "ready", audioSource: "generated", visualSource: "generated", audioFile: "scene-s2.mp3", visualFile: "scene-s2.png", durationMs: 900);
+        var project = Given.Producing(edited, untouched) with { NarrationVoice = "piper:en_GB-aru-medium#0" };
+        var controlPlane = Holding(project);
+        var runner = new FakeProcessRunner();
+        var speech = Given.Speech();
+        var images = Given.Images();
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(speech, images), piper: Given.Piper(runner, piper, voices))
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        var saved = await Stored(controlPlane);
+        saved.Status.ShouldBe("media_ready");
+        var scene = saved.Scenes.First();
+        (scene.Narration, scene.Status, scene.AudioSource, scene.AudioFile).ShouldBe(("The owner's new words.", "ready", "generated", "scene-s1.wav"));
+        (scene.VisualSource, scene.VisualFile).ShouldBe(("generated", "scene-s1.png"));
+        saved.Scenes.Last().ShouldBe(untouched);
+        runner.Calls.ShouldHaveSingleItem().Arguments[^1].ShouldBe("0");
+        runner.Inputs.ShouldHaveSingleItem().ShouldBe("The owner's new words.");
+        images.ReceivedCalls().ShouldBeEmpty();
+        speech.ReceivedCalls().ShouldBeEmpty();
+        File.ReadAllBytes(Path.Combine(_media, "scene-s1.png")).ShouldBe([7, 7]);
+    }
+
+    [Fact]
+    public async Task An_Own_Pictures_Scene_Without_The_Owners_Picture_Is_A_Text_Card_With_A_Note_And_No_Picture_Is_Made()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "mine.jpg"), [1]);
+        var owners = Given.Scene("s2", 2, "Look at this bend.", visualSource: "owner", visualFile: "mine.jpg");
+        var project = Given.Producing(Given.Scene("s1", 1, "Rivers bend."), owners) with { Format = "own_pictures" };
+        var controlPlane = Holding(project);
+        using var openverse = new OpenverseHttp();
+        var images = Given.Images();
+        var pipeline = Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(Given.Speech(), images), openverse: openverse);
+
+        await pipeline.RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+        var first = await Stored(controlPlane);
+        controlPlane.Store(first with { Status = "producing" });
+        var savesBefore = controlPlane.Saves.Count;
+        await pipeline.RunAsync(new QueuedProject(first with { Status = "producing" }, Origin), CancellationToken.None);
+
+        first.Status.ShouldBe("media_ready");
+        first.Scenes.Select(s => (s.Id, s.Status, s.VisualSource, s.VisualFile, s.AudioSource)).ShouldBe([
+            ("s1", "ready", "text_card", (string?)null, "generated"),
+            ("s2", "ready", "owner", (string?)"mine.jpg", "generated"),
+        ]);
+        first.Scenes[0].Error.ShouldBe("No picture: this video uses your own pictures; attach one to this scene in Scout Desktop, Production. Until then it shows the project background or a text card.");
+        first.Scenes[1].Error.ShouldBeNull();
+        images.ReceivedCalls().ShouldBeEmpty();
+        openverse.Requests.ShouldBeEmpty();
+        controlPlane.Saves.Skip(savesBefore).Select(s => s.Project.Status).ShouldBe(["media_ready"]);
+        (await Stored(controlPlane)).Scenes.ShouldBe(first.Scenes);
     }
 
     [Fact]
@@ -140,7 +203,7 @@ public sealed class ProductionTests : IDisposable
             .ShouldBe(("ready", "none", null, "text_card", null, 4000));
         scene.Error.ShouldBe(
             "No narration: the connected AI Source has no speech service in Scout; attach your own audio in Scout Desktop, Production. " +
-            "No picture: the connected AI Source has no image service in Scout; the scene shows a text card, or attach your own image in Scout Desktop, Production.");
+            "No picture: the connected AI Source has no image service in Scout; the scene shows a text card. Attach a background to the project in Scout Desktop, Production (it sits under every scene without a picture), or connect an AI Source with pictures.");
         (await Stored(controlPlane)).Status.ShouldBe("media_ready");
     }
 
@@ -424,5 +487,110 @@ public sealed class ProductionTests : IDisposable
 
         var saved = await Stored(controlPlane);
         (saved.Status, saved.Error).ShouldBe(("failed", "The project has no script to produce; write the script first."));
+    }
+
+    private static OperatorProjectState OwnVideoProducing() => Given.Project(status: "producing") with
+    {
+        Origin = "desktop",
+        Format = "own_video",
+        RecordingFile = "owner-recording-1a.mp4",
+        RecordingMs = 50_000,
+        Script = new OperatorScript(
+            string.Empty,
+            [
+                new OperatorScriptSection(string.Empty, "Today we bake bread.") { StartMs = 0, EndMs = 21000 },
+                new OperatorScriptSection(string.Empty, "First the starter.") { StartMs = 22000, EndMs = 44000 },
+            ],
+            string.Empty, [], string.Empty, [], []),
+    };
+
+    [Fact]
+    public async Task Producing_An_Own_Video_Project_Makes_No_Narration_And_No_Picture_And_Ends_Media_Ready()
+    {
+        var project = OwnVideoProducing();
+        var controlPlane = Holding(project);
+        var speech = Given.Speech();
+        var images = Given.Images();
+        using var openverse = new OpenverseHttp();
+        var chat = ScriptedChat.Answering("{\"title_variants\":[\"Bread\"],\"description\":\"How I bake.\",\"tags\":[],\"chapters\":[{\"scene\":1,\"title\":\"Starting\"}]}");
+        var pipeline = Given.Pipeline(
+            controlPlane, Given.YouTube(), chat, Notifier(), Given.Media(speech, images), openverse: openverse);
+
+        await pipeline.RunAsync(new QueuedProject(project, null), CancellationToken.None);
+        var produced = await Stored(controlPlane);
+
+        produced.Status.ShouldBe("media_ready");
+        produced.Scenes.Select(s => (s.Id, s.Status, s.AudioSource, s.VisualSource, s.AudioFile, s.VisualFile, s.ClipStartMs, s.ClipEndMs)).ShouldBe([
+            ("s1", "ready", "recording", "recording", (string?)null, (string?)null, 0, 22000),
+            ("s2", "ready", "recording", "recording", (string?)null, (string?)null, 22000, 50_000),
+        ]);
+        produced.Script.ShouldNotBeNull().Sections.Select(s => (s.Heading, s.Narration)).ShouldBe([("Starting", "Today we bake bread. First the starter.")]);
+        controlPlane.Saves.Select(s => s.Project.Status).ShouldBe(["producing", "media_ready"]);
+        speech.ReceivedCalls().ShouldBeEmpty();
+        images.ReceivedCalls().ShouldBeEmpty();
+        openverse.Requests.ShouldBeEmpty();
+        chat.Requests.Count.ShouldBe(1);
+        Directory.GetFiles(_media).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Producing_An_Own_Video_Project_Again_With_A_New_Direction_Names_New_Chapters_And_Keeps_The_Clips()
+    {
+        var project = OwnVideoProducing();
+        var controlPlane = Holding(project);
+        var chat = ScriptedChat.Answering(
+            "{\"title_variants\":[\"Bread\"],\"description\":\"How I bake.\",\"tags\":[\"bread\"],\"chapters\":[{\"scene\":1,\"title\":\"Starting\"}]}",
+            "{\"title_variants\":[\"Sourdough for kids\"],\"description\":\"Baking with children.\",\"tags\":[\"kids\"],\"chapters\":[{\"scene\":1,\"title\":\"Mixing\"},{\"scene\":2,\"title\":\"The starter\"}]}");
+        var pipeline = Given.Pipeline(controlPlane, Given.YouTube(), chat, Notifier(), Given.Media(Given.Speech(), Given.Images()));
+        await pipeline.RunAsync(new QueuedProject(project, null), CancellationToken.None);
+        var first = await Stored(controlPlane);
+
+        var again = first with { Status = "producing", Direction = "For children, playful." };
+        controlPlane.Store(again);
+        await pipeline.RunAsync(new QueuedProject(again, null), CancellationToken.None);
+        var second = await Stored(controlPlane);
+
+        second.Status.ShouldBe("media_ready");
+        second.Scenes.ShouldBe(first.Scenes, "producing again leaves the clips as they are");
+        var script = second.Script.ShouldNotBeNull();
+        script.Sections.Select(s => (s.Heading, s.Narration, s.StartMs, s.EndMs)).ShouldBe([
+            ("Mixing", "Today we bake bread.", 0, 22000),
+            ("The starter", "First the starter.", 22000, 50_000),
+        ]);
+        script.TitleVariants.ShouldBe(["Sourdough for kids"]);
+        script.Description.ShouldBe("Baking with children.");
+        script.Tags.ShouldBe(["kids"]);
+        chat.Requests.Count.ShouldBe(2);
+        chat.Requests[1].Single(m => m.Role == AuthorRole.System).Text.ShouldContain("Direction the owner gave for this video: For children, playful.");
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Production_Whose_Chapter_Request_Cannot_Reach_The_Model_Fails_With_The_AI_Source_Sentence_And_Saves_No_Scenes()
+    {
+        var project = OwnVideoProducing();
+        var controlPlane = Holding(project);
+        var chat = new ScriptedChat(() => throw new HttpRequestException("connection refused"));
+
+        await Run(controlPlane, project, Given.Media(Given.Speech(), Given.Images()), chat: chat);
+
+        var saved = await Stored(controlPlane);
+        (saved.Status, saved.Error).ShouldBe(("failed", "The AI model did not answer; check the AI Source in Scout Desktop."));
+        saved.Scenes.ShouldBeEmpty();
+        controlPlane.Saves.Select(s => s.Project.Scenes.Count).ShouldBe([0]);
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Production_Whose_Chapters_Come_Back_Wrong_Twice_Fails_With_The_Chapters_Sentence_And_Saves_No_Scenes()
+    {
+        var project = OwnVideoProducing();
+        var controlPlane = Holding(project);
+        var chat = ScriptedChat.Answering("{\"chapters\":[{\"scene\":2,\"title\":\"Late\"}]}", "not json");
+
+        await Run(controlPlane, project, Given.Media(Given.Speech(), Given.Images()), chat: chat);
+
+        var saved = await Stored(controlPlane);
+        (saved.Status, saved.Error).ShouldBe(("failed", "The AI model did not name the chapters of the recording in the expected form, twice."));
+        saved.Scenes.ShouldBeEmpty();
+        chat.Requests.Count.ShouldBe(2);
     }
 }

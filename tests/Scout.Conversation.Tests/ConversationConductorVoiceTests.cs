@@ -214,6 +214,22 @@ public sealed class ConversationConductorVoiceTests
     }
 
     [Fact]
+    public async Task A_Voice_Message_While_A_Recording_Holds_The_Model_Is_Told_To_Try_Again_In_A_Few_Minutes()
+    {
+        var router = AnsweringRouter();
+        var transcriber = Substitute.For<IAudioTranscriber>();
+        transcriber.TranscribeAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<string>(_ => throw new TranscriptionBusyException("held"));
+        var sink = new RecordingResponseSink(FineGrained);
+
+        await Conductor(router, transcriber).HandleAsync(Voice(Bytes()), sink, CancellationToken.None);
+
+        sink.Completed.ShouldBeTrue();
+        sink.FinalText.ShouldBe("Scout is transcribing a recording right now; try the voice message again in a few minutes.");
+        router.DidNotReceive().Route(Arg.Any<ChatMessage>());
+    }
+
+    [Fact]
     public async Task A_Download_Whose_Body_Stalls_Gets_The_Download_Failed_Reply_Within_The_Timeout()
     {
         var router = AnsweringRouter();

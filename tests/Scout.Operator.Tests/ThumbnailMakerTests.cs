@@ -27,7 +27,7 @@ public sealed class ThumbnailMakerTests : IDisposable
         var images = Given.Images([7, 7, 7]);
         var runner = new FakeProcessRunner();
 
-        var file = await Maker(Given.Media(images: images), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        var file = await Maker(Given.Media(images: images), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         file.ShouldBe("thumbnail.png");
         File.ReadAllBytes(Path.Combine(_media, "thumbnail.png")).ShouldBe(new byte[] { 7, 7, 7 });
@@ -45,13 +45,13 @@ public sealed class ThumbnailMakerTests : IDisposable
         var runner = new FakeProcessRunner();
         var maker = Maker(Given.Media(images: images), runner).Maker;
 
-        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
-        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         images.ReceivedCalls().Count().ShouldBe(1);
         File.ReadAllText(Path.Combine(_media, "thumbnail.txt")).ShouldBe("Why rivers bend");
 
-        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, false, CancellationToken.None);
 
         images.ReceivedCalls().Count().ShouldBe(2);
         File.ReadAllText(Path.Combine(_media, "thumbnail.txt")).ShouldBe("How rivers bend");
@@ -66,7 +66,7 @@ public sealed class ThumbnailMakerTests : IDisposable
         var images = Given.Images([7, 7, 7]);
         var runner = new FakeProcessRunner();
 
-        var file = await Maker(Given.Media(images: images), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        var file = await Maker(Given.Media(images: images), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         file.ShouldBe("thumbnail.png");
         images.ReceivedCalls().Count().ShouldBe(1);
@@ -82,8 +82,8 @@ public sealed class ThumbnailMakerTests : IDisposable
         var runner = new FakeProcessRunner();
         var maker = Maker(Given.Media(), runner).Maker;
 
-        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, CancellationToken.None);
-        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, false, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "How rivers bend", _video, false, CancellationToken.None);
 
         runner.Renders.Count.ShouldBe(2);
         File.Exists(Path.Combine(_media, "thumbnail.txt")).ShouldBeFalse();
@@ -94,7 +94,7 @@ public sealed class ThumbnailMakerTests : IDisposable
     {
         var runner = new FakeProcessRunner();
 
-        await Maker(Given.Media(), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        await Maker(Given.Media(), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         var frame = runner.Renders.ShouldHaveSingleItem();
         frame.Take(9).ShouldBe(["-hide_banner", "-nostdin", "-y", "-ss", "8.000", "-i", Path.Combine(_media, "video.mp4"), "-frames:v", "1"]);
@@ -112,7 +112,7 @@ public sealed class ThumbnailMakerTests : IDisposable
         var runner = new FakeProcessRunner();
         var (maker, visuals) = Maker(Given.Media(images: images), runner);
 
-        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         runner.Renders.ShouldHaveSingleItem().ShouldContain("-frames:v");
         File.Exists(Path.Combine(_media, "thumbnail.png")).ShouldBeTrue();
@@ -135,9 +135,24 @@ public sealed class ThumbnailMakerTests : IDisposable
             (await visuals.ThumbnailAsync("spend", _media, "spent.png", CancellationToken.None)).ShouldBeTrue();
         }
 
-        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, CancellationToken.None);
+        await maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, false, CancellationToken.None);
 
         images.ReceivedCalls().Count().ShouldBe(VisualGenerator.PerDay);
         runner.Renders.ShouldHaveSingleItem().ShouldContain("-frames:v");
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Thumbnail_Is_A_Frame_Of_The_Recording_And_Never_Asks_The_Image_Service()
+    {
+        var images = Given.Images([7, 7, 7]);
+        var runner = new FakeProcessRunner();
+
+        var file = await Maker(Given.Media(images: images), runner).Maker.MakeAsync(Given.Tools(), _media, "Why rivers bend", _video, true, CancellationToken.None);
+
+        file.ShouldBe("thumbnail.png");
+        images.ReceivedCalls().ShouldBeEmpty();
+        runner.Renders.ShouldHaveSingleItem().Take(9).ShouldBe(["-hide_banner", "-nostdin", "-y", "-ss", "8.000", "-i", Path.Combine(_media, "video.mp4"), "-frames:v", "1"]);
+        File.ReadAllBytes(Path.Combine(_media, "thumbnail.png")).Length.ShouldBe(1024, "the frame ffmpeg wrote, not the image service's picture");
+        File.Exists(Path.Combine(_media, "thumbnail.txt")).ShouldBeFalse();
     }
 }

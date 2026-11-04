@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.YouTube;
 
@@ -10,7 +11,8 @@ namespace Scout.Operator;
 /// Tells the control plane what this worker can produce, when it starts and every <see cref="Interval"/>: speech as the
 /// connected provider's speech service or the bundled voices allow, the narration voices of both, each bundled one with its sample file when the voice samples folder holds it, images as the provider's
 /// image service allows, whether pictures come from Openverse without one, the provider's name, whether videos can be assembled, with a note naming the encoder or why not, whether the
-/// YouTube token file the desktop writes at sign-in is on disk, and a note for each thing the owner has to supply.
+/// YouTube token file the desktop writes at sign-in is on disk, whether a speech-to-text model can transcribe the owner's
+/// recording, and a note for each thing the owner has to supply.
 /// A control plane that cannot take the report is logged once until it takes one again.
 /// </summary>
 internal sealed class ReadinessReporter(
@@ -22,7 +24,8 @@ internal sealed class ReadinessReporter(
     FfmpegToolset ffmpeg,
     PiperSpeech piper,
     ScheduleNotes? schedule = null,
-    OpenversePictures? stock = null) : BackgroundService
+    OpenversePictures? stock = null,
+    IAudioTranscriber? transcriber = null) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
@@ -61,7 +64,7 @@ internal sealed class ReadinessReporter(
         }
         else if (!media.Images)
         {
-            notes.Add($"{media.Provider} has no image service in Scout; visuals become text cards unless you attach your own images.");
+            notes.Add($"{media.Provider} has no image service in Scout; visuals become text cards unless you attach a background to the project in Scout Desktop, Production, or connect an AI Source with pictures.");
         }
 
         if (!media.Images && stock is not null)
@@ -98,6 +101,7 @@ internal sealed class ReadinessReporter(
         {
             Voices = voices,
             StockPictures = stock is not null,
+            TranscriptionAvailable = transcriber is not null,
         };
     }
 

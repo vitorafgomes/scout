@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace Scout.Transcription.Whisper;
@@ -12,6 +13,7 @@ internal static class WavDecoder
     private const ushort PcmFormat = 1;
     private const ushort FloatFormat = 3;
     private const ushort ExtensibleFormat = 0xFFFE;
+    private const int ChunkBytes = 64 * 1024;
 
     /// <summary>
     /// Decodes at most <paramref name="maxDuration"/> of audio; anything after
@@ -93,20 +95,44 @@ internal static class WavDecoder
     {
         var bytesPerSample = bitsPerSample / 8;
         var count = (int)Math.Min(size / (uint)bytesPerSample, (uint)maxSamples);
-        var bytes = reader.ReadBytes(count * bytesPerSample);
-        count = bytes.Length / bytesPerSample;
-        if (count == 0)
+        var samples = new float[count];
+        var buffer = ArrayPool<byte>.Shared.Rent(ChunkBytes);
+        var read = 0;
+        try
+        {
+            while (read < count)
+            {
+                var want = Math.Min(count - read, ChunkBytes / bytesPerSample) * bytesPerSample;
+                var got = reader.BaseStream.ReadAtLeast(buffer.AsSpan(0, want), want, throwOnEndOfStream: false) / bytesPerSample;
+                for (var i = 0; i < got; i++)
+                {
+                    samples[read + i] = format == PcmFormat
+                        ? BitConverter.ToInt16(buffer, i * 2) / 32768f
+                        : BitConverter.ToSingle(buffer, i * 4);
+                }
+
+                read += got;
+                if (got * bytesPerSample < want)
+                {
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        if (read == 0)
         {
             throw new InvalidDataException("The WAV file holds no audio.");
         }
 
-        var samples = new float[count];
-        for (var i = 0; i < count; i++)
+        if (read < count)
         {
-            samples[i] = format == PcmFormat
-                ? BitConverter.ToInt16(bytes, i * 2) / 32768f
-                : BitConverter.ToSingle(bytes, i * 4);
+            Array.Resize(ref samples, read);
         }
+
         return samples;
     }
 

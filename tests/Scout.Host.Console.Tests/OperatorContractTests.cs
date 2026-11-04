@@ -367,6 +367,20 @@ public sealed class OperatorContractTests : IDisposable
 
         public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct) => throw new NotSupportedException();
 
+        public Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
+
         private static async Task<T> CallAsync<T>(Func<Task<T>> call)
         {
             try
@@ -400,5 +414,245 @@ public sealed class OperatorContractTests : IDisposable
             sent.SyncedAt is { } s ? Parse(s) : null,
             sent.SyncRequestedAt is { } r ? Parse(r) : null,
             sent.SyncError);
+    }
+
+    [Fact]
+    public async Task The_Chat_Edits_The_Plugin_Sends_Are_Ones_The_Control_Plane_Accepts()
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var service = new OperatorService(_store, new WriteGateService(new FeatureCatalog(), _states, _actions, _writes), _writes);
+        Scene Ready(string id, int order) => new(id, order, $"Narration {id}.", $"Picture {id}", false, OperatorPipeline.Ready, null,
+            OperatorPipeline.Generated, OperatorPipeline.Generated, $"scene-{id}.mp3", $"scene-{id}.png", 800);
+        async Task<string> MediaReadyAsync()
+        {
+            var producing = await service.SaveProjectFromWorkerAsync(
+                new OperatorProject(string.Empty, "Why rivers meander", OperatorPipeline.Producing, string.Empty, default, default, [], null, [])
+                {
+                    Scenes = [Ready("s1", 1), Ready("s2", 2), Ready("s3", 3)],
+                },
+                null,
+                CancellationToken.None);
+            var read = await service.GetProjectForWorkerAsync(producing.Id, CancellationToken.None);
+            return (await service.SaveProjectFromWorkerAsync(read with { Status = OperatorPipeline.MediaReady }, null, CancellationToken.None)).Id;
+        }
+
+        var produced = await MediaReadyAsync();
+        var delegated = await MediaReadyAsync();
+        var plugin = new YouTubeOperatorPlugin(
+            new ChatBridge(service),
+            System.Threading.Channels.Channel.CreateUnbounded<QueuedProject>(),
+            _ => Task.FromResult(new OperatorReadiness(true, true, "OpenAI", true, true, [])));
+        Func<Task<string>>[] calls =
+        [
+            () => plugin.LockSceneAsync(produced, "s1", true),
+            () => plugin.LockSceneAsync(produced, "s1", false),
+            () => plugin.ReorderScenesAsync(produced, "s2,s1,s3"),
+            () => plugin.ProduceProjectAsync(produced, narration_voice: "piper:en_GB-cori-medium", motion: "still"),
+            () => plugin.EditSceneTextAsync(produced, "s2", "Rivers bend where the bank is soft."),
+            () => plugin.RegenerateNarrationAsync(produced, "s2"),
+            () => plugin.RegenerateSceneAsync(produced, "s3"),
+            () => plugin.DelegateProjectAsync(delegated),
+        ];
+        async IAsyncEnumerable<string> RunAll()
+        {
+            await plugin.ProjectStateAsync(produced);
+            await plugin.ProjectStateAsync(delegated);
+            foreach (var call in calls)
+            {
+                string reply;
+                try
+                {
+                    reply = await call();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    reply = $"refused: {ex.Message}";
+                }
+
+                yield return reply + "\n";
+            }
+        }
+
+        var router = Substitute.For<Scout.Conversation.Abstractions.IConversationRouter>();
+        router.Route(Arg.Any<Scout.Conversation.Abstractions.ChatMessage>()).Returns(_ => new Scout.Conversation.Abstractions.ChatResponse(RunAll()));
+        var sink = Substitute.For<Scout.Conversation.Abstractions.IResponseSink>();
+        sink.Capabilities.Returns(new Scout.Conversation.Abstractions.RenderCapabilities { FineGrainedEdit = true, MaxBodyLength = 8192 });
+        string? final = null;
+        sink.CompleteAsync(Arg.Do<string>(text => final = text), Arg.Any<IReadOnlyList<Scout.Conversation.Abstractions.Citation>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+        await new Scout.Conversation.ConversationConductor(router, new Scout.Conversation.Streaming.StreamPump(new Scout.Conversation.Streaming.StreamPumpOptions()))
+            .HandleAsync(
+                new Scout.Conversation.Abstractions.ChatMessage("local-owner", "local", "change the video") { IsLocalOwner = true },
+                sink,
+                CancellationToken.None);
+
+        final.ShouldNotBeNull().Trim().Split('\n').ShouldBe([
+            "Locked scene s1 on Why rivers meander; the project is now media_ready.",
+            "Unlocked scene s1 on Why rivers meander; the project is now media_ready.",
+            "Put the scenes in the order s2, s1, s3 on Why rivers meander; the project is now media_ready.",
+            "Queued production on Why rivers meander; the project is now production_queued.",
+            "Edited the text of scene s2 on Why rivers meander; the project is now production_queued.",
+            "Asked for the narration of scene s2 again on Why rivers meander; the project is now production_queued.",
+            "Asked for scene s3 again on Why rivers meander; the project is now production_queued.",
+            "Delegated it: Scout produces and assembles it and stops at ready to approve on Why rivers meander; the project is now assembly_queued.",
+        ]);
+        (await _writes.ListAsync(50, CancellationToken.None)).Select(w => (w.Target, w.Outcome)).Reverse().ShouldBe([
+            (produced, "saved producing"),
+            (produced, "saved media_ready"),
+            (delegated, "saved producing"),
+            (delegated, "saved media_ready"),
+            (produced, "locked scene s1 via chat"),
+            (produced, "unlocked scene s1 via chat"),
+            (produced, "reordered the scenes via chat"),
+            (produced, "queued production via chat"),
+            (produced, "edited the text of scene s2 via chat"),
+            (produced, "asked for scene s3 again via chat"),
+            (delegated, "delegated via chat"),
+        ]);
+        var stored = await service.GetProjectForWorkerAsync(produced, CancellationToken.None);
+        (stored.NarrationVoice, stored.Motion, stored.Scenes.Single(s => s.Id == "s2").Narration).ShouldBe(
+            ("piper:en_GB-cori-medium", "still", "Rivers bend where the bank is soft."));
+    }
+
+    [Fact]
+    public async Task A_Late_Transcribing_Save_Is_Refused_By_The_Control_Plane_With_The_Sentence_The_Worker_Stops_Quietly_On()
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var service = new OperatorService(_store, new WriteGateService(new FeatureCatalog(), _states, _actions, _writes), _writes);
+        var started = await service.StartProjectAsync("A walk by the river", OperatorPipeline.OwnVideo, string.Empty, CancellationToken.None);
+        await File.WriteAllBytesAsync(
+            Path.Combine(await service.GetMediaDirectoryAsync(started.Id, CancellationToken.None), "owner-recording-0123456789ab.mp4"), [0, 0, 0, 24]);
+        await service.AttachSceneMediaAsync(started.Id, string.Empty, OperatorPipeline.Recording, "owner-recording-0123456789ab.mp4", CancellationToken.None);
+        var taken = (await service.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+        await service.SaveProjectFromWorkerAsync(taken with { Status = OperatorPipeline.Failed, Error = "Scout heard no speech in the recording." }, null, CancellationToken.None);
+
+        var refused = await Should.ThrowAsync<OperatorTamperingException>(
+            () => service.SaveProjectFromWorkerAsync(taken with { RecordingMs = 47_000 }, null, CancellationToken.None));
+
+        refused.Message.ShouldBe(OperatorPipeline.NoLongerTranscribing);
+        (await service.GetProjectForWorkerAsync(started.Id, CancellationToken.None)).Status.ShouldBe(OperatorPipeline.Failed);
+    }
+
+    [Fact]
+    public async Task The_Transcribing_Saves_And_The_Recording_Scenes_With_Clips_The_Worker_Sends_Are_Accepted_By_The_Control_Plane()
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var service = new OperatorService(_store, new WriteGateService(new FeatureCatalog(), _states, _actions, _writes), _writes);
+        var started = await service.StartProjectAsync("A walk by the river", OperatorPipeline.OwnVideo, string.Empty, CancellationToken.None);
+        await File.WriteAllBytesAsync(
+            Path.Combine(await service.GetMediaDirectoryAsync(started.Id, CancellationToken.None), "owner-recording-0123456789ab.mp4"), [0, 0, 0, 24]);
+        await service.AttachSceneMediaAsync(started.Id, string.Empty, OperatorPipeline.Recording, "owner-recording-0123456789ab.mp4", CancellationToken.None);
+        var taken = (await service.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+        OperatorScriptSection[] heard =
+        [
+            new(string.Empty, "Here the river is wide and slow.") { StartMs = 0, EndMs = 12_000 },
+            new(string.Empty, "It bends where the bank is soft.") { StartMs = 12_000, EndMs = 24_000 },
+            new(string.Empty, "And there the water cuts the bank away.") { StartMs = 24_800, EndMs = 46_000 },
+        ];
+        static Script Sent(OperatorScript script) => new(
+            script.Hook,
+            [.. script.Sections.Select(s => new ScriptSection(s.Heading, s.Narration) { StartMs = s.StartMs, EndMs = s.EndMs })],
+            script.CallToAction,
+            script.TitleVariants,
+            script.Description,
+            script.Tags,
+            [.. script.Chapters.Select(c => new Chapter(c.At, c.Title))]);
+        OperatorScript Transcript(int count) => new(string.Empty, [.. heard.Take(count)], string.Empty, [], string.Empty, [], []);
+
+        var saves = new List<OperatorProject>();
+        foreach (var count in new[] { 0, 2, 3 })
+        {
+            saves.Add(await service.SaveProjectFromWorkerAsync(
+                taken with { Status = OperatorPipeline.Transcribing, RecordingMs = 47_000, Script = Sent(Transcript(count)) }, null, CancellationToken.None));
+        }
+
+        saves.Add(await service.SaveProjectFromWorkerAsync(
+            taken with { Status = OperatorPipeline.ScriptReady, RecordingMs = 47_000, Script = Sent(Transcript(3)) }, null, CancellationToken.None));
+        await service.ProduceProjectAsync(started.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
+        var producing = (await service.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+        var plan = await new ScenePlanner(new SequenceChat(
+                """{"title_variants":["A river bends"],"description":"Why rivers bend.","tags":["rivers"],"chapters":[{"scene":1,"title":"The bend"},{"scene":2,"title":"The cut"}]}"""))
+            .PlanRecordingAsync(Transcript(3), producing.RecordingMs, new OperatorMandate("Teach", "Students", ["geography"], "weekly", "en", "calm", [], "views", "1000"), string.Empty, CancellationToken.None);
+        Scene[] scenes = [.. plan.Scenes.Select(s => new Scene(
+            s.Id, s.Order, s.Narration, s.VisualPrompt, s.Locked, s.Status, s.Error, s.AudioSource, s.VisualSource, s.AudioFile, s.VisualFile, s.DurationMs)
+        {
+            ClipStartMs = s.ClipStartMs,
+            ClipEndMs = s.ClipEndMs,
+        })];
+        foreach (var status in new[] { OperatorPipeline.Producing, OperatorPipeline.MediaReady })
+        {
+            saves.Add(await service.SaveProjectFromWorkerAsync(
+                producing with { Status = status, Scenes = scenes, Script = Sent(plan.Script) }, null, CancellationToken.None));
+        }
+
+        saves.Select(p => (p.Status, p.RecordingMs, p.Script?.Sections.Count)).ShouldBe([
+            (OperatorPipeline.Transcribing, 47_000, 0), (OperatorPipeline.Transcribing, 47_000, 2), (OperatorPipeline.Transcribing, 47_000, 3),
+            (OperatorPipeline.ScriptReady, 47_000, 3), (OperatorPipeline.Producing, 47_000, 2), (OperatorPipeline.MediaReady, 47_000, 2),
+        ]);
+        saves[3].Script.ShouldNotBeNull().Sections.Select(s => (s.StartMs, s.EndMs)).ShouldBe([(0, 12_000), (12_000, 24_000), (24_800, 46_000)]);
+        var stored = await service.GetProjectForWorkerAsync(started.Id, CancellationToken.None);
+        stored.Scenes.Select(s => (s.Id, s.AudioSource, s.VisualSource, s.ClipStartMs, s.ClipEndMs, s.DurationMs)).ShouldBe([
+            ("s1", OperatorPipeline.Recording, OperatorPipeline.Recording, 0, 24_800, 24_800),
+            ("s2", OperatorPipeline.Recording, OperatorPipeline.Recording, 24_800, 47_000, 22_200),
+        ]);
+        stored.Script.ShouldNotBeNull().Sections.Select(s => (s.Heading, s.StartMs, s.EndMs)).ShouldBe([("The bend", 0, 24_800), ("The cut", 24_800, 47_000)]);
+    }
+
+    /// <summary>The plugin's chat calls answered by the real operator service's chat methods.</summary>
+    private sealed class ChatBridge(OperatorService service) : IOperatorControlPlane
+    {
+        private static OperatorProjectState ToWorker(OperatorProject p) => new(p.Id, p.Topic, p.Status, p.Origin, string.Empty, string.Empty, [], null, []);
+
+        public async Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct)
+            => ToWorker(await service.EditSceneTextFromChatAsync(projectId, sceneId, text, ct));
+
+        public async Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct)
+            => ToWorker(await service.RegenerateNarrationFromChatAsync(projectId, sceneId, ct));
+
+        public async Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct)
+            => ToWorker(await service.RegenerateSceneFromChatAsync(projectId, sceneId, ct));
+
+        public async Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct)
+            => ToWorker(await service.SetSceneLockedFromChatAsync(projectId, sceneId, locked, ct));
+
+        public async Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct)
+            => ToWorker(await service.ReorderScenesFromChatAsync(projectId, sceneIds, ct));
+
+        public async Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+            => ToWorker(await service.ProduceProjectFromChatAsync(projectId, narrationVoice, direction, motion, ct));
+
+        public async Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+            => ToWorker(await service.DelegateProjectFromChatAsync(projectId, narrationVoice, direction, motion, ct));
+
+        public Task<OperatorMandate> GetMandateAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> SaveProjectAsync(OperatorProjectState project, string? originReference, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<QueuedProject?> NextQueuedAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public async Task<OperatorProjectState> GetProjectAsync(string id, CancellationToken ct)
+            => ToWorker(await service.GetProjectForWorkerAsync(id, ct));
+
+        public Task<IReadOnlyList<OperatorProjectState>> ListRecentAsync(int limit, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorComments> GetCommentsAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct) => throw new NotSupportedException();
     }
 }

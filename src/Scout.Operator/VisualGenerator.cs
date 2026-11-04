@@ -28,7 +28,10 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
     internal const int MaxScenes = 30;
 
     internal const string NoImages =
-        "No picture: the connected AI Source has no image service in Scout; the scene shows a text card, or attach your own image in Scout Desktop, Production.";
+        "No picture: the connected AI Source has no image service in Scout; the scene shows a text card. Attach a background to the project in Scout Desktop, Production (it sits under every scene without a picture), or connect an AI Source with pictures.";
+
+    internal const string NoOwnPicture =
+        "No picture: this video uses your own pictures; attach one to this scene in Scout Desktop, Production. Until then it shows the project background or a text card.";
 
     internal const string PastMaxScenes =
         "Scout makes pictures for at most 30 scenes of a video; this scene shows a text card.";

@@ -17,6 +17,7 @@ import {
   type ClaimStatus,
   type MandateDto,
   type OperatorProjectDto,
+  type ProjectFormat,
   type ProjectMotion,
   type ReadinessDto,
   type VoiceDto,
@@ -41,7 +42,8 @@ const BACKGROUND_ATTACHABLE = [
   'failed',
 ];
 const DELEGABLE = ['script_ready', 'media_ready'];
-const RUNNING = ['researching', 'scripting', 'producing', 'assembling'];
+const RUNNING = ['researching', 'scripting', 'transcribing', 'producing', 'assembling'];
+const RECORDING_ATTACHABLE = ['recording_waiting', 'queued'];
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   generated: 'generated',
@@ -49,6 +51,7 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = {
   none: 'none',
   text_card: 'text card',
   stock: 'Openverse',
+  recording: 'your recording',
 };
 
 const MOTIONS: readonly { readonly value: ProjectMotion; readonly label: string }[] = [
@@ -63,7 +66,14 @@ const MOTION_NAMES: Readonly<Record<ProjectMotion, string>> = {
   dynamic: 'Dynamic',
 };
 
-const MAX_VISUAL_BRIEF = 500;
+const FORMAT_NAMES: Readonly<Record<ProjectFormat, string>> = {
+  generated_pictures: 'Generated pictures',
+  own_pictures: 'Your own pictures',
+  own_video: 'Your own video',
+};
+
+const MAX_DIRECTION = 1000;
+const MAX_SCENE_TEXT = 700;
 
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'views', label: 'Views' },
@@ -246,12 +256,75 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             type="button"
             class="btn btn--primary"
             data-test="start-project"
-            [disabled]="starting() || topic().trim().length < minTopicLength"
+            [disabled]="
+              starting() ||
+              topic().trim().length < minTopicLength ||
+              startDirection().trim().length > maxDirection
+            "
             (click)="startProject()"
           >
             Make a video
           </button>
         </div>
+        <fieldset>
+          <legend>Format</legend>
+          <label
+            ><input
+              type="radio"
+              name="start-format"
+              data-test="format-generated_pictures"
+              [checked]="startFormat() === 'generated_pictures'"
+              (change)="startFormat.set('generated_pictures')"
+            />
+            Generated pictures</label
+          >
+          <label
+            ><input
+              type="radio"
+              name="start-format"
+              data-test="format-own_pictures"
+              [checked]="startFormat() === 'own_pictures'"
+              (change)="startFormat.set('own_pictures')"
+            />
+            Your own pictures</label
+          >
+          <label
+            ><input type="radio" name="start-format" data-test="format-ai_presenter" disabled /> AI
+            presenter</label
+          >
+          <p class="meta" data-test="format-ai_presenter-reason">
+            The connected AI Source has no video model.
+          </p>
+          <label
+            ><input
+              type="radio"
+              name="start-format"
+              data-test="format-own_video"
+              [disabled]="!transcribable()"
+              [checked]="startFormat() === 'own_video'"
+              (change)="startFormat.set('own_video')"
+            />
+            Your own video</label
+          >
+          @if (!transcribable()) {
+            <p class="meta" data-test="format-own_video-reason">
+              Scout has no speech-to-text model on this machine; download one in AI Sources, Local
+              Models.
+            </p>
+          }
+        </fieldset>
+        <label
+          >Direction
+          <textarea
+            rows="3"
+            data-test="start-direction"
+            [value]="startDirection()"
+            (input)="startDirection.set($any($event.target).value)"
+          ></textarea>
+        </label>
+        <span class="meta" data-test="start-direction-count"
+          >{{ startDirection().trim().length }} / {{ maxDirection }}</span
+        >
         @if (queued(); as q) {
           <p class="meta" data-test="queued">
             {{ q.topic }} <span class="badge">{{ q.status }}</span>
@@ -320,9 +393,10 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               </button>
             }
           </div>
+          <p class="meta" data-test="project-format">Format: {{ formatName(p.format) }}</p>
           <p class="meta" data-test="project-visual">Visual: {{ motionName(p.motion) }} motion</p>
-          @if (p.visualBrief) {
-            <p class="meta" data-test="project-brief">{{ p.visualBrief }}</p>
+          @if (p.direction) {
+            <p class="meta" data-test="project-direction">{{ p.direction }}</p>
           }
           @if (p.error; as failure) {
             <p class="err" data-test="project-failure">{{ failure }}</p>
@@ -348,6 +422,11 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               <p><strong>Hook:</strong> {{ s.hook }}</p>
               @for (section of s.sections; track $index) {
                 <div class="section" data-test="script-section">
+                  @if (p.format === 'own_video') {
+                    <p class="meta" data-test="script-section-time">
+                      {{ clock(section.startMs) }} to {{ clock(section.endMs) }}
+                    </p>
+                  }
                   <h4>{{ section.heading }}</h4>
                   <p>{{ section.narration }}</p>
                 </div>
@@ -454,35 +533,61 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <p class="err" data-test="claim-error">{{ message }}</p>
           }
 
-          <h3>Background</h3>
-          <div data-test="background">
-            @if (p.backgroundFile; as file) {
-              <img
-                class="preview"
-                data-test="background-image"
-                [src]="mediaUrl(p, file)"
-                alt="Background of the video"
-              />
-            } @else {
-              <p class="empty" data-test="background-empty">
-                No background yet: every scene without its own picture is a dark text card.
-              </p>
-            }
-            @if (backgroundAttachable(p)) {
-              <button
-                type="button"
-                class="btn btn--secondary"
-                data-test="background-attach"
-                [disabled]="backgroundBusy()"
-                (click)="attachBackground(p)"
-              >
-                {{ p.backgroundFile ? 'Replace background' : 'Attach background' }}
-              </button>
-            }
-            @if (backgroundError(); as message) {
-              <p class="err" data-test="background-error">{{ message }}</p>
-            }
-          </div>
+          @if (p.format === 'own_video') {
+            <h3>Recording</h3>
+            <div data-test="recording">
+              @if (p.recordingFile === null) {
+                <p class="empty" data-test="recording-empty">
+                  No recording yet: attach the video you recorded; Scout transcribes it on this
+                  machine.
+                </p>
+              }
+              @if (recordingAttachable(p)) {
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="recording-attach"
+                  [disabled]="projectMediaBusy()"
+                  (click)="attachProjectMedia(p, 'recording')"
+                >
+                  {{ p.recordingFile ? 'Replace recording' : 'Attach recording' }}
+                </button>
+              }
+              @if (projectMediaError(); as message) {
+                <p class="err" data-test="recording-error">{{ message }}</p>
+              }
+            </div>
+          } @else {
+            <h3>Background</h3>
+            <div data-test="background">
+              @if (p.backgroundFile; as file) {
+                <img
+                  class="preview"
+                  data-test="background-image"
+                  [src]="mediaUrl(p, file)"
+                  alt="Background of the video"
+                />
+              } @else {
+                <p class="empty" data-test="background-empty">
+                  No background yet: every scene without its own picture is a dark text card.
+                </p>
+              }
+              @if (backgroundAttachable(p)) {
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="background-attach"
+                  [disabled]="projectMediaBusy()"
+                  (click)="attachProjectMedia(p, 'background')"
+                >
+                  {{ p.backgroundFile ? 'Replace background' : 'Attach background' }}
+                </button>
+              }
+              @if (projectMediaError(); as message) {
+                <p class="err" data-test="background-error">{{ message }}</p>
+              }
+            </div>
+          }
 
           <h3>Scenes</h3>
           @if (producible(p)) {
@@ -505,41 +610,43 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             </div>
             @if (producePanel() === p.id) {
               <div class="panel" data-test="produce-panel">
-                <label
-                  >Narration voice
-                  <select
-                    data-test="produce-voice"
-                    (change)="produceVoice.set($any($event.target).value)"
+                @if (p.format !== 'own_video') {
+                  <label
+                    >Narration voice
+                    <select
+                      data-test="produce-voice"
+                      (change)="produceVoice.set($any($event.target).value)"
+                    >
+                      <option value="" [selected]="produceVoice() === ''">Scout's choice</option>
+                      @if (unavailableVoice(p); as id) {
+                        <option [value]="id" [selected]="produceVoice() === id" disabled>
+                          {{ id }} (not available on this machine)
+                        </option>
+                      }
+                      @for (group of voiceGroups(); track group.source) {
+                        <optgroup [label]="group.source">
+                          @for (v of group.voices; track v.id) {
+                            <option [value]="v.id" [selected]="produceVoice() === v.id">
+                              {{ v.label }}
+                            </option>
+                          }
+                        </optgroup>
+                      }
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="produce-voice-preview"
+                    [disabled]="voiceSample(produceVoice()) === null"
+                    [attr.title]="voiceSample(produceVoice()) === null ? 'No sample yet' : null"
+                    (click)="playSample(produceVoice())"
                   >
-                    <option value="" [selected]="produceVoice() === ''">Scout's choice</option>
-                    @if (unavailableVoice(p); as id) {
-                      <option [value]="id" [selected]="produceVoice() === id" disabled>
-                        {{ id }} (not available on this machine)
-                      </option>
-                    }
-                    @for (group of voiceGroups(); track group.source) {
-                      <optgroup [label]="group.source">
-                        @for (v of group.voices; track v.id) {
-                          <option [value]="v.id" [selected]="produceVoice() === v.id">
-                            {{ v.label }}
-                          </option>
-                        }
-                      </optgroup>
-                    }
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="produce-voice-preview"
-                  [disabled]="voiceSample(produceVoice()) === null"
-                  [attr.title]="voiceSample(produceVoice()) === null ? 'No sample yet' : null"
-                  (click)="playSample(produceVoice())"
-                >
-                  Preview
-                </button>
+                    Preview
+                  </button>
+                }
                 <label
-                  >Visual brief
+                  >Direction
                   <textarea
                     rows="3"
                     data-test="produce-brief"
@@ -548,21 +655,23 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   ></textarea>
                 </label>
                 <span class="meta" data-test="produce-brief-count"
-                  >{{ produceBrief().trim().length }} / {{ maxVisualBrief }}</span
+                  >{{ produceBrief().trim().length }} / {{ maxDirection }}</span
                 >
-                <label
-                  >Motion
-                  <select
-                    data-test="produce-motion"
-                    (change)="produceMotion.set($any($event.target).value)"
-                  >
-                    @for (m of motions; track m.value) {
-                      <option [value]="m.value" [selected]="produceMotion() === m.value">
-                        {{ m.label }}
-                      </option>
-                    }
-                  </select>
-                </label>
+                @if (p.format !== 'own_video') {
+                  <label
+                    >Motion
+                    <select
+                      data-test="produce-motion"
+                      (change)="produceMotion.set($any($event.target).value)"
+                    >
+                      @for (m of motions; track m.value) {
+                        <option [value]="m.value" [selected]="produceMotion() === m.value">
+                          {{ m.label }}
+                        </option>
+                      }
+                    </select>
+                  </label>
+                }
                 @if (mediaWarning(); as warning) {
                   <p class="meta" data-test="produce-warning">{{ warning }}</p>
                 }
@@ -596,6 +705,11 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               {{ readyScenes(p) }} of {{ p.scenes.length }} scenes ready
             </p>
           }
+          @if (p.status === 'transcribing') {
+            <p class="meta" data-test="transcription-progress">
+              Transcribed {{ clock(transcribedMs(p)) }} of {{ clock(p.recordingMs) }}
+            </p>
+          }
           @if (p.scenes.length === 0) {
             <p class="empty" data-test="scenes-empty">No scenes yet.</p>
           } @else {
@@ -603,7 +717,13 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               @for (s of orderedScenes(p); track s.id; let first = $first, last = $last) {
                 <li class="claim" [attr.data-test]="'scene-' + s.id">
                   <p data-test="scene-narration">{{ s.narration }}</p>
-                  <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
+                  @if (p.format === 'own_video') {
+                    <p class="meta" [attr.data-test]="'scene-clip-' + s.id">
+                      Clip: {{ clock(s.clipStartMs) }} to {{ clock(s.clipEndMs) }}
+                    </p>
+                  } @else {
+                    <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
+                  }
                   <p class="meta">
                     <span class="badge" [attr.data-test]="'scene-status-' + s.id">{{
                       s.status
@@ -651,12 +771,34 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                       </p>
                     </div>
                   }
-                  @if (s.audioFile; as file) {
-                    <audio
-                      controls
-                      [attr.data-test]="'scene-audio-' + s.id"
-                      [src]="mediaUrl(p, file)"
-                    ></audio>
+                  @if (p.format !== 'own_video') {
+                    <div class="row" [attr.data-test]="'scene-audio-row-' + s.id">
+                      @if (s.audioFile; as file) {
+                        <audio
+                          controls
+                          [attr.data-test]="'scene-audio-' + s.id"
+                          [src]="mediaUrl(p, file)"
+                        ></audio>
+                      }
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-narration-regenerate-' + s.id"
+                        [disabled]="s.locked || sceneBusy() !== null"
+                        (click)="askRegenerateNarration(p, s)"
+                      >
+                        Regenerate narration
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-narration-replace-' + s.id"
+                        [disabled]="sceneBusy() !== null"
+                        (click)="attach(p, s, 'audio')"
+                      >
+                        Replace narration
+                      </button>
+                    </div>
                   }
                   <div class="row">
                     <button
@@ -686,34 +828,84 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     >
                       Move down
                     </button>
+                    @if (p.format === 'generated_pictures') {
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-regenerate-' + s.id"
+                        [disabled]="s.locked || sceneBusy() !== null"
+                        (click)="regenerate(p, s)"
+                      >
+                        Regenerate scene
+                      </button>
+                    }
                     <button
                       type="button"
                       class="btn btn--secondary"
-                      [attr.data-test]="'scene-regenerate-' + s.id"
+                      [attr.data-test]="'scene-edit-' + s.id"
                       [disabled]="s.locked || sceneBusy() !== null"
-                      (click)="regenerate(p, s)"
+                      (click)="openSceneText(s)"
                     >
-                      Regenerate
+                      Edit text
                     </button>
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-attach-audio-' + s.id"
-                      [disabled]="sceneBusy() !== null"
-                      (click)="attach(p, s, 'audio')"
-                    >
-                      Attach audio
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-attach-visual-' + s.id"
-                      [disabled]="sceneBusy() !== null"
-                      (click)="attach(p, s, 'visual')"
-                    >
-                      Attach image
-                    </button>
+                    @if (p.format === 'own_pictures') {
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-attach-visual-' + s.id"
+                        [disabled]="sceneBusy() !== null"
+                        (click)="attach(p, s, 'visual')"
+                      >
+                        Attach image
+                      </button>
+                    }
                   </div>
+                  @if (editingScene() === s.id) {
+                    <div class="panel">
+                      @if (p.format === 'own_video') {
+                        <p class="meta" [attr.data-test]="'scene-text-hint-' + s.id">
+                          The new text replaces this scene's captions; the recording is not changed.
+                        </p>
+                      }
+                      <textarea
+                        rows="4"
+                        [attr.data-test]="'scene-text-' + s.id"
+                        [value]="sceneText()"
+                        (input)="sceneText.set($any($event.target).value)"
+                      ></textarea>
+                      <span class="meta" [attr.data-test]="'scene-text-count-' + s.id"
+                        >{{ sceneText().trim().length }} / {{ maxSceneText }}</span
+                      >
+                      @if (sceneTextInvalid()) {
+                        <p class="err" [attr.data-test]="'scene-text-invalid-' + s.id">
+                          A scene's text is 1 to 700 characters.
+                        </p>
+                      }
+                      <div class="row">
+                        <button
+                          type="button"
+                          class="btn btn--primary"
+                          [attr.data-test]="'scene-text-save-' + s.id"
+                          [disabled]="
+                            sceneTextInvalid() ||
+                            sceneText().trim() === s.narration ||
+                            sceneBusy() !== null
+                          "
+                          (click)="saveSceneText(p, s)"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          [attr.data-test]="'scene-text-cancel-' + s.id"
+                          (click)="editingScene.set(null)"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  }
                 </li>
               }
             </ol>
@@ -722,6 +914,42 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <p class="err" data-test="scene-error">{{ message }}</p>
           }
         </section>
+
+        @if (replacingNarration(); as replacing) {
+          <div
+            class="backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="narration-replace-title"
+            data-test="narration-replace-dialog"
+          >
+            <div class="dialog">
+              <h2 id="narration-replace-title">Replace your own narration</h2>
+              <p>
+                Replace your own narration on this scene with Scout's voice? Your file stays on disk
+                but the video will use the generated narration.
+              </p>
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="narration-replace-cancel"
+                  (click)="replacingNarration.set(null)"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-test="narration-replace-confirm"
+                  (click)="confirmRegenerateNarration(p, replacing)"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        }
 
         @if (deleting() === p.id) {
           <div
@@ -773,41 +1001,43 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
           >
             <div class="dialog">
               <h2 id="delegate-title">Delegate {{ p.topic }}</h2>
-              <label
-                >Narration voice
-                <select
-                  data-test="delegate-voice"
-                  (change)="delegateVoice.set($any($event.target).value)"
+              @if (p.format !== 'own_video') {
+                <label
+                  >Narration voice
+                  <select
+                    data-test="delegate-voice"
+                    (change)="delegateVoice.set($any($event.target).value)"
+                  >
+                    <option value="" [selected]="delegateVoice() === ''">Scout's choice</option>
+                    @if (unavailableVoice(p); as id) {
+                      <option [value]="id" [selected]="delegateVoice() === id" disabled>
+                        {{ id }} (not available on this machine)
+                      </option>
+                    }
+                    @for (group of voiceGroups(); track group.source) {
+                      <optgroup [label]="group.source">
+                        @for (v of group.voices; track v.id) {
+                          <option [value]="v.id" [selected]="delegateVoice() === v.id">
+                            {{ v.label }}
+                          </option>
+                        }
+                      </optgroup>
+                    }
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delegate-voice-preview"
+                  [disabled]="voiceSample(delegateVoice()) === null"
+                  [attr.title]="voiceSample(delegateVoice()) === null ? 'No sample yet' : null"
+                  (click)="playSample(delegateVoice())"
                 >
-                  <option value="" [selected]="delegateVoice() === ''">Scout's choice</option>
-                  @if (unavailableVoice(p); as id) {
-                    <option [value]="id" [selected]="delegateVoice() === id" disabled>
-                      {{ id }} (not available on this machine)
-                    </option>
-                  }
-                  @for (group of voiceGroups(); track group.source) {
-                    <optgroup [label]="group.source">
-                      @for (v of group.voices; track v.id) {
-                        <option [value]="v.id" [selected]="delegateVoice() === v.id">
-                          {{ v.label }}
-                        </option>
-                      }
-                    </optgroup>
-                  }
-                </select>
-              </label>
-              <button
-                type="button"
-                class="btn btn--secondary"
-                data-test="delegate-voice-preview"
-                [disabled]="voiceSample(delegateVoice()) === null"
-                [attr.title]="voiceSample(delegateVoice()) === null ? 'No sample yet' : null"
-                (click)="playSample(delegateVoice())"
-              >
-                Preview
-              </button>
+                  Preview
+                </button>
+              }
               <label
-                >Visual brief
+                >Direction
                 <textarea
                   rows="3"
                   data-test="delegate-brief"
@@ -816,21 +1046,23 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                 ></textarea>
               </label>
               <span class="meta" data-test="delegate-brief-count"
-                >{{ delegateBrief().trim().length }} / {{ maxVisualBrief }}</span
+                >{{ delegateBrief().trim().length }} / {{ maxDirection }}</span
               >
-              <label
-                >Motion
-                <select
-                  data-test="delegate-motion"
-                  (change)="delegateMotion.set($any($event.target).value)"
-                >
-                  @for (m of motions; track m.value) {
-                    <option [value]="m.value" [selected]="delegateMotion() === m.value">
-                      {{ m.label }}
-                    </option>
-                  }
-                </select>
-              </label>
+              @if (p.format !== 'own_video') {
+                <label
+                  >Motion
+                  <select
+                    data-test="delegate-motion"
+                    (change)="delegateMotion.set($any($event.target).value)"
+                  >
+                    @for (m of motions; track m.value) {
+                      <option [value]="m.value" [selected]="delegateMotion() === m.value">
+                        {{ m.label }}
+                      </option>
+                    }
+                  </select>
+                </label>
+              }
               @if (mediaWarning(); as warning) {
                 <p class="meta" data-test="delegate-warning">{{ warning }}</p>
               }
@@ -1118,6 +1350,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly targetValue = signal('');
 
   readonly topic = signal('');
+  readonly startFormat = signal<ProjectFormat>('generated_pictures');
+  readonly startDirection = signal('');
   readonly starting = signal(false);
   readonly startError = signal<string | null>(null);
   readonly queued = signal<OperatorProjectDto | null>(null);
@@ -1137,6 +1371,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
   readonly readiness = signal<ReadinessDto | null>(null);
   readonly readinessError = signal<string | null>(null);
+  readonly transcribable = computed(() => this.readiness()?.transcriptionAvailable === true);
   readonly voiceGroups = computed(() => {
     const groups = new Map<string, VoiceDto[]>();
     for (const voice of this.readiness()?.voices ?? []) {
@@ -1146,21 +1381,25 @@ export class ProductionComponent implements OnInit, OnDestroy {
   });
   readonly mediaWarning = computed(() => {
     const r = this.readiness();
-    if (r === null || (r.speechAvailable && (r.imagesAvailable || r.stockPictures))) return null;
+    if (r === null) return null;
+    const format = this.selected()?.format;
+    if (format === 'own_video') return null;
     const provider = r.provider || 'The connected AI Source';
+    const silent = `${provider} has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.`;
+    if (format === 'own_pictures') return r.speechAvailable ? null : silent;
+    if (r.speechAvailable && (r.imagesAvailable || r.stockPictures)) return null;
     if (!r.speechAvailable && !r.imagesAvailable && r.stockPictures) {
-      return `${provider} has no speech or image service in Scout: every scene will be silent and pictures come from Openverse, credited. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.`;
+      return `${provider} has no speech or image service in Scout: every scene will be silent and pictures come from Openverse, credited. Replace the narration on each scene afterwards, or connect an AI Source with speech first.`;
     }
     if (!r.speechAvailable && !r.imagesAvailable) {
-      return `${provider} has no speech or image service in Scout: every scene will be a silent text card. Attach your own audio and pictures on each scene afterwards, or connect an AI Source with speech and pictures first.`;
+      return `${provider} has no speech or image service in Scout: every scene will be a silent text card. Replace the narration on each scene and attach a background afterwards, or connect an AI Source with speech and pictures first.`;
     }
-    if (!r.speechAvailable) {
-      return `${provider} has no speech service in Scout: every scene will be silent. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.`;
-    }
-    return `${provider} has no image service in Scout: every scene will be a text card. Attach your own pictures on each scene afterwards, or connect an AI Source with pictures first.`;
+    if (!r.speechAvailable) return silent;
+    return `${provider} has no image service in Scout: every scene will be a text card. Attach a background afterwards, or connect an AI Source with pictures first.`;
   });
   readonly motions = MOTIONS;
-  readonly maxVisualBrief = MAX_VISUAL_BRIEF;
+  readonly maxDirection = MAX_DIRECTION;
+  readonly maxSceneText = MAX_SCENE_TEXT;
   private readonly samplePlayer = viewChild<ElementRef<HTMLAudioElement>>('samplePlayer');
   readonly producing = signal(false);
   readonly produceError = signal<string | null>(null);
@@ -1175,12 +1414,19 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly delegatingBusy = signal(false);
   readonly delegateError = signal<string | null>(null);
   readonly deleting = signal<string | null>(null);
+  readonly replacingNarration = signal<SceneDto | null>(null);
   readonly deletingBusy = signal(false);
   readonly deleteError = signal<string | null>(null);
-  readonly backgroundBusy = signal(false);
-  readonly backgroundError = signal<string | null>(null);
+  readonly projectMediaBusy = signal(false);
+  readonly projectMediaError = signal<string | null>(null);
   readonly sceneBusy = signal<string | null>(null);
   readonly sceneError = signal<string | null>(null);
+  readonly editingScene = signal<string | null>(null);
+  readonly sceneText = signal('');
+  readonly sceneTextInvalid = computed(() => {
+    const length = this.sceneText().trim().length;
+    return length === 0 || length > MAX_SCENE_TEXT;
+  });
 
   async ngOnInit(): Promise<void> {
     this.timer = setInterval(() => void this.refresh(), POLL_MS);
@@ -1224,9 +1470,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.starting.set(true);
     this.startError.set(null);
     try {
-      const project = await this.bridge.operatorStartProject({ topic: this.topic().trim() });
+      const project = await this.bridge.operatorStartProject({
+        topic: this.topic().trim(),
+        format: this.startFormat(),
+        direction: this.startDirection().trim(),
+      });
       this.queued.set(project);
       this.topic.set('');
+      this.startFormat.set('generated_pictures');
+      this.startDirection.set('');
       await this.refresh();
     } catch (err: unknown) {
       this.startError.set(readIpcError(err).message);
@@ -1243,8 +1495,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.producePanel.set(null);
     this.delegating.set(null);
     this.deleting.set(null);
-    this.backgroundError.set(null);
+    this.replacingNarration.set(null);
+    this.projectMediaError.set(null);
     this.sceneError.set(null);
+    this.editingScene.set(null);
     await this.loadSelected();
   }
 
@@ -1322,6 +1576,24 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return BACKGROUND_ATTACHABLE.includes(project.status);
   }
 
+  recordingAttachable(project: OperatorProjectDto): boolean {
+    return (
+      RECORDING_ATTACHABLE.includes(project.status) ||
+      (project.status === 'failed' && project.script === null)
+    );
+  }
+
+  clock(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const ss = String(seconds % 60).padStart(2, '0');
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}:${ss}`;
+    return `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, '0')}:${ss}`;
+  }
+
+  transcribedMs(project: OperatorProjectDto): number {
+    return project.script?.sections.at(-1)?.endMs ?? 0;
+  }
+
   firstSentence(narration: string): string {
     const text = narration
       .replace(/\p{Cc}/gu, ' ')
@@ -1339,6 +1611,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
   unavailableVoice(project: OperatorProjectDto): string | null {
     const id = project.narrationVoice;
     return id !== '' && this.readiness()?.voices.some((v) => v.id === id) !== true ? id : null;
+  }
+
+  formatName(format: ProjectFormat): string {
+    return FORMAT_NAMES[format];
   }
 
   motionName(motion: ProjectMotion): string {
@@ -1366,7 +1642,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
   }
 
   private briefOf(project: OperatorProjectDto): string {
-    return project.visualBrief || (this.mandate()?.voiceAndStyle ?? '');
+    return project.direction || (this.mandate()?.voiceAndStyle ?? '');
   }
 
   openProduce(project: OperatorProjectDto): void {
@@ -1385,7 +1661,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         await this.bridge.operatorProduce({
           id: project.id,
           narrationVoice: this.produceVoice(),
-          visualBrief: this.produceBrief().trim(),
+          direction: this.produceBrief().trim(),
           motion: this.produceMotion(),
         }),
       );
@@ -1413,7 +1689,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         await this.bridge.operatorDelegate({
           id: project.id,
           narrationVoice: this.delegateVoice(),
-          visualBrief: this.delegateBrief().trim(),
+          direction: this.delegateBrief().trim(),
           motion: this.delegateMotion(),
         }),
       );
@@ -1447,20 +1723,23 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
   }
 
-  async attachBackground(project: OperatorProjectDto): Promise<void> {
-    this.backgroundBusy.set(true);
-    this.backgroundError.set(null);
+  async attachProjectMedia(
+    project: OperatorProjectDto,
+    kind: 'background' | 'recording',
+  ): Promise<void> {
+    this.projectMediaBusy.set(true);
+    this.projectMediaError.set(null);
     try {
       const { project: updated } = await this.bridge.operatorAttachSceneMedia({
         projectId: project.id,
         sceneId: '',
-        kind: 'background',
+        kind,
       });
       if (updated !== null) this.apply(updated);
     } catch (err: unknown) {
-      this.backgroundError.set(readIpcError(err).message);
+      this.projectMediaError.set(readIpcError(err).message);
     } finally {
-      this.backgroundBusy.set(false);
+      this.projectMediaBusy.set(false);
     }
   }
 
@@ -1487,6 +1766,42 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return this.sceneAction(scene.id, () =>
       this.bridge.operatorRegenerateScene({ projectId: project.id, sceneId: scene.id }),
     );
+  }
+
+  askRegenerateNarration(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    if (scene.audioSource !== 'owner') return this.regenerateNarration(project, scene);
+    this.replacingNarration.set(scene);
+    return Promise.resolve();
+  }
+
+  confirmRegenerateNarration(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    this.replacingNarration.set(null);
+    return this.regenerateNarration(project, scene);
+  }
+
+  regenerateNarration(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    return this.sceneAction(scene.id, () =>
+      this.bridge.operatorRegenerateNarration({ projectId: project.id, sceneId: scene.id }),
+    );
+  }
+
+  openSceneText(scene: SceneDto): void {
+    this.sceneText.set(scene.narration);
+    this.sceneError.set(null);
+    this.editingScene.set(scene.id);
+  }
+
+  saveSceneText(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    const text = this.sceneText().trim();
+    return this.sceneAction(scene.id, async () => {
+      const updated = await this.bridge.operatorEditSceneText({
+        projectId: project.id,
+        sceneId: scene.id,
+        text,
+      });
+      this.editingScene.set(null);
+      return updated;
+    });
   }
 
   attach(project: OperatorProjectDto, scene: SceneDto, kind: SceneMediaKind): Promise<void> {

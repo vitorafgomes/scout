@@ -415,4 +415,70 @@ public sealed class AssemblyTests : IDisposable
         Files().ShouldNotContain("thumbnail.png");
         Files().ShouldNotContain("short-1.mp4");
     }
+
+    private static OperatorProjectState OwnVideoAssembling(string thirdSceneText)
+    {
+        static OperatorScene Clip(string id, int order, string narration, int startMs, int endMs)
+        {
+            var scene = Given.Scene(id, order, narration, "ready", audioSource: "recording", visualSource: "recording", durationMs: endMs - startMs);
+            return scene with { VisualPrompt = string.Empty, ClipStartMs = startMs, ClipEndMs = endMs };
+        }
+
+        return Given.Project(status: "assembling") with
+        {
+            Origin = "desktop",
+            Format = "own_video",
+            RecordingFile = "owner-recording-1a.mp4",
+            RecordingMs = 90_000,
+            Script = new OperatorScript(
+                string.Empty,
+                [
+                    new OperatorScriptSection("Getting started", "Today we bake. First the starter.") { StartMs = 0, EndMs = 50_000 },
+                    new OperatorScriptSection("Into the oven", "Then the oven.") { StartMs = 50_000, EndMs = 60_000 },
+                    new OperatorScriptSection("Out of the oven", "And we eat.") { StartMs = 60_000, EndMs = 90_000 },
+                ],
+                string.Empty,
+                ["Bread at home"],
+                "How I bake.",
+                ["bread"],
+                []),
+            Scenes =
+            [
+                Clip("s1", 1, "Today we bake.", 0, 25_000),
+                Clip("s2", 2, "First the starter.", 25_000, 50_000),
+                Clip("s3", 3, thirdSceneText, 50_000, 60_000),
+                Clip("s4", 4, "And we eat.", 60_000, 90_000),
+            ],
+        };
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Description_Lists_The_Chapters_At_Their_Scenes()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "owner-recording-1a.mp4"), [1, 2, 3]);
+        var project = OwnVideoAssembling("Then the oven.");
+        var controlPlane = Holding(project);
+        var runner = new FakeProcessRunner();
+
+        await Run(controlPlane, project, runner);
+
+        var package = controlPlane.Saves.ShouldHaveSingleItem().Project.Package.ShouldNotBeNull();
+        (package.Status, package.DurationMs, package.Title).ShouldBe(("assembled", 90_000, "Bread at home"));
+        package.Description.ShouldBe("How I bake.\n\n0:00 Getting started\n0:50 Into the oven\n1:00 Out of the oven");
+        package.Checks.Single(c => c.Name == "placeholders").Result.ShouldBe("pass");
+        runner.Measured.ShouldNotContain(Path.Combine(_media, "owner-recording-1a.mp4"));
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Keeps_Every_Chapter_After_The_Owner_Edits_The_Captions_Of_A_Chapters_First_Scene()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "owner-recording-1a.mp4"), [1, 2, 3]);
+        var project = OwnVideoAssembling("Now it goes into a hot oven.");
+        var controlPlane = Holding(project);
+
+        await Run(controlPlane, project, new FakeProcessRunner());
+
+        var package = controlPlane.Saves.ShouldHaveSingleItem().Project.Package.ShouldNotBeNull();
+        package.Description.ShouldBe("How I bake.\n\n0:00 Getting started\n0:50 Into the oven\n1:00 Out of the oven");
+    }
 }

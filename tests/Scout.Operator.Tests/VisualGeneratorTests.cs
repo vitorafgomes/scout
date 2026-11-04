@@ -57,7 +57,7 @@ public sealed class VisualGeneratorTests : IDisposable
         result.ShouldBe(new VisualResult(
             "text_card",
             null,
-            "No picture: Scout could not reach Openverse. The scene shows a text card; attach your own image in Scout Desktop, Production."));
+            "No picture: Scout could not reach Openverse. The scene shows a text card; attach a background to the project in Scout Desktop, Production, or connect an AI Source with pictures."));
         Directory.GetFiles(_media).ShouldBeEmpty();
     }
 
@@ -107,7 +107,7 @@ public sealed class VisualGeneratorTests : IDisposable
         result.ShouldBe(new VisualResult(
             "text_card",
             null,
-            "No picture: the connected AI Source has no image service in Scout; the scene shows a text card, or attach your own image in Scout Desktop, Production."));
+            "No picture: the connected AI Source has no image service in Scout; the scene shows a text card. Attach a background to the project in Scout Desktop, Production (it sits under every scene without a picture), or connect an AI Source with pictures."));
         Directory.GetFiles(_media).ShouldBeEmpty();
     }
 

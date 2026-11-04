@@ -178,7 +178,7 @@ public sealed class CommentService
     public async Task<CommentsState> DecideIdeaAsync(string ideaId, bool use, CancellationToken ct)
     {
         var idea = Proposed(await _store.ReadCommentsAsync(ct).ConfigureAwait(false), ideaId);
-        var projectId = use ? (await _operator.StartProjectAsync(idea.Text, ct).ConfigureAwait(false)).Id : null;
+        var projectId = use ? (await _operator.StartProjectAsync(idea.Text, string.Empty, string.Empty, ct).ConfigureAwait(false)).Id : null;
         return Newest(await _store.UpdateCommentsAsync(
                 state =>
                 {

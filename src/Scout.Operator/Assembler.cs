@@ -22,7 +22,9 @@ internal sealed record AssembledVideo(string File, int DurationMs, IReadOnlyList
 /// duration, at least <see cref="MinSceneMs"/>; its narration is burned in as caption lines of at most
 /// <see cref="CaptionWidth"/> characters, timed evenly across the scene. Every file is read and written inside the
 /// project's media directory; a segment is named after its exact command and its inputs, so a segment already rendered
-/// for the same inputs is used again.
+/// for the same inputs is used again. A scene that shows the owner's recording is its clip of the recording, with the
+/// recording's own sound, scaled and padded to the frame at 30 frames a second, for exactly the clip's length, its text
+/// burned in as captions the same way; only the video's first scene fades in and only its last fades out.
 /// </summary>
 internal sealed class Assembler(FfmpegToolset ffmpeg)
 {
@@ -49,10 +51,11 @@ internal sealed class Assembler(FfmpegToolset ffmpeg)
     /// <summary>
     /// Render the video of <paramref name="scenes"/>, whose durations are the real lengths of their narration; a scene
     /// without a picture file of its own is shown over <paramref name="background"/> when the media directory holds it,
-    /// else as a text card, every scene moving under the <paramref name="motion"/> preset.
+    /// else as a text card, every scene moving under the <paramref name="motion"/> preset; a scene that shows the recording
+    /// is its clip of <paramref name="recording"/>, which the media directory must hold.
     /// </summary>
     public async Task<AssembledVideo> AssembleAsync(
-        FfmpegTools tools, IReadOnlyList<OperatorScene> scenes, string directory, string? background, string motion, CancellationToken ct)
+        FfmpegTools tools, IReadOnlyList<OperatorScene> scenes, string directory, string? background, string? recording, string motion, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(scenes);
@@ -60,13 +63,20 @@ internal sealed class Assembler(FfmpegToolset ffmpeg)
         var segments = new List<string>();
         var start = 0;
         var backdrop = Usable(directory, background);
-        foreach (var (position, scene) in scenes.OrderBy(s => s.Order).Index())
+        var footage = Usable(directory, recording);
+        var ordered = scenes.OrderBy(s => s.Order).ToList();
+        foreach (var (position, scene) in ordered.Index())
         {
-            var duration = Math.Max(scene.DurationMs, MinSceneMs);
-            var image = Usable(directory, scene.VisualFile) ?? backdrop;
-            var audio = Usable(directory, scene.AudioFile);
+            var clip = scene.VisualSource == OperatorPipeline.Recording
+                ? footage ?? throw new InvalidOperationException(TranscriptionStage.NotFound)
+                : null;
+            var duration = clip is not null ? scene.ClipEndMs - scene.ClipStartMs : Math.Max(scene.DurationMs, MinSceneMs);
+            var image = clip ?? Usable(directory, scene.VisualFile) ?? backdrop;
+            var audio = clip is not null ? null : Usable(directory, scene.AudioFile);
             var captions = FilterText.Wrap(scene.Narration, CaptionWidth);
-            var arguments = SegmentArguments(tools, scene, position, duration, image, audio, captions, motion, string.Empty);
+            var arguments = clip is not null
+                ? ClipArguments(tools, scene, position == 0, position == ordered.Count - 1, clip, captions, string.Empty)
+                : SegmentArguments(tools, scene, position, duration, image, audio, captions, motion, string.Empty);
             var segment = $"segment-{Key(arguments, image, audio)}.mp4";
             if (!MediaFiles.Exists(directory, segment))
             {
@@ -129,14 +139,7 @@ internal sealed class Assembler(FfmpegToolset ffmpeg)
         arguments.AddRange(audio is not null
             ? ["-i", audio]
             : ["-f", "lavfi", "-t", seconds, "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
-        filters.AddRange(captions.Select((line, i) => FilterText.Draw(
-            tools.FontPath,
-            line,
-            44,
-            940,
-            boxed: true,
-            (int)((long)durationMs * i / captions.Count),
-            (int)((long)durationMs * (i + 1) / captions.Count))));
+        filters.AddRange(Captions(tools, captions, durationMs));
         if (image is not null)
         {
             filters.Add("fade=t=in:st=0:d=0.4");
@@ -157,6 +160,50 @@ internal sealed class Assembler(FfmpegToolset ffmpeg)
         arguments.Add(output);
         return arguments;
     }
+
+    /// <summary>
+    /// The clip of the owner's recording a scene shows: its own picture and sound from the clip's start for the clip's
+    /// length, scaled and padded to 1920x1080 at 30 frames a second, its captions, a fade in on the
+    /// <paramref name="first"/> scene and a fade out on the <paramref name="last"/>.
+    /// </summary>
+    internal static List<string> ClipArguments(
+        FfmpegTools tools, OperatorScene scene, bool first, bool last, string recording, IReadOnlyList<string> captions, string output)
+    {
+        var durationMs = scene.ClipEndMs - scene.ClipStartMs;
+        var seconds = FfmpegToolset.Seconds(durationMs);
+        List<string> filters = ["scale=1920:1080:force_original_aspect_ratio=decrease", "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black", "setsar=1", "fps=30"];
+        filters.AddRange(Captions(tools, captions, durationMs));
+        if (first)
+        {
+            filters.Add("fade=t=in:st=0:d=0.4");
+        }
+
+        if (last)
+        {
+            filters.Add($"fade=t=out:st={FfmpegToolset.Seconds(Math.Max(0, durationMs - 400))}:d=0.4");
+        }
+
+        filters.Add("format=yuv420p");
+        return
+        [
+            "-hide_banner", "-nostdin", "-y", "-ss", FfmpegToolset.Seconds(scene.ClipStartMs), "-t", seconds, "-i", recording,
+            "-filter_complex", $"[0:v]{string.Join(",", filters)}[v];[0:a]aresample=48000,apad[a]",
+            "-map", "[v]", "-map", "[a]", "-t", seconds,
+            .. tools.VideoArguments,
+            .. tools.AudioArguments,
+            output,
+        ];
+    }
+
+    private static IEnumerable<string> Captions(FfmpegTools tools, IReadOnlyList<string> captions, int durationMs)
+        => captions.Select((line, i) => FilterText.Draw(
+            tools.FontPath,
+            line,
+            44,
+            940,
+            boxed: true,
+            (int)((long)durationMs * i / captions.Count),
+            (int)((long)durationMs * (i + 1) / captions.Count)));
 
     internal static List<string> ConcatArguments(FfmpegTools tools, string list, string output)
         => ["-hide_banner", "-nostdin", "-y", "-f", "concat", "-i", list, "-c:v", "copy", .. tools.AudioArguments, "-movflags", "+faststart", output];
@@ -200,8 +247,9 @@ internal sealed class Assembler(FfmpegToolset ffmpeg)
 
     private static bool IsPlaceholder(OperatorScene scene, string? image, string? audio)
         => scene.Status != OperatorPipeline.Ready
-            || (image is null && scene.VisualSource != OperatorPipeline.TextCard)
-            || (audio is null && scene.AudioSource != OperatorPipeline.NoAudio);
+            || (scene.VisualSource != OperatorPipeline.Recording
+                && ((image is null && scene.VisualSource != OperatorPipeline.TextCard)
+                    || (audio is null && scene.AudioSource != OperatorPipeline.NoAudio)));
 
     private static string Key(IEnumerable<string> arguments, string? image, string? audio)
     {

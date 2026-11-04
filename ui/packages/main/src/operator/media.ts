@@ -29,9 +29,12 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = {
   '.mp4': 'video/mp4',
 };
 
+/** What an owner's file is for: a scene's audio or picture, or the recording of a project of the owner's own video. */
+export type OwnerMediaKind = SceneMediaKind | 'recording';
+
 const OWNER_MEDIA: Readonly<
   Record<
-    SceneMediaKind,
+    OwnerMediaKind,
     {
       readonly label: string;
       readonly extensions: readonly string[];
@@ -54,6 +57,13 @@ const OWNER_MEDIA: Readonly<
     maxBytes: 20 * 1024 * 1024,
     wrongType: 'A picture must be a png, jpg, jpeg or webp file.',
     tooLarge: 'Pictures are at most 20 MB.',
+  },
+  recording: {
+    label: 'Recordings',
+    extensions: ['mp4', 'mkv', 'webm', 'mov'],
+    maxBytes: 8 * 1024 * 1024 * 1024,
+    wrongType: 'A recording must be an mp4, mkv, webm or mov file.',
+    tooLarge: 'Recordings are at most 8 GB.',
   },
 };
 
@@ -194,13 +204,16 @@ function refuse(message: string): never {
 
 /**
  * Copies a file the owner chose into the project's media directory under a generated name
- * and answers that name; the original name and path never leave main.
+ * and answers that name; the original name and path never leave main. The copy is a reflink
+ * where the filesystem supports one and a plain copy elsewhere, never over an existing file,
+ * which it leaves as it was. `copy` is a test seam for the file copy.
  */
 export async function copyOwnerMedia(
   directory: string,
   sceneId: string,
-  kind: SceneMediaKind,
+  kind: OwnerMediaKind,
   source: string,
+  copy: (from: string, to: string, mode: number) => Promise<void> = copyFile,
 ): Promise<string> {
   const rule = OWNER_MEDIA[kind];
   const extension = path.extname(source).slice(1).toLowerCase();
@@ -219,9 +232,11 @@ export async function copyOwnerMedia(
   const target = path.join(directory, name);
   try {
     await mkdir(directory, { recursive: true });
-    await copyFile(source, target, constants.COPYFILE_EXCL);
-  } catch {
-    await unlink(target).catch(() => undefined);
+    await copy(source, target, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      await unlink(target).catch(() => undefined);
+    }
     throw unavailable;
   }
   return name;
@@ -236,7 +251,7 @@ export interface OpenFileDialog {
 }
 
 /** Asks the owner for one file of the kind; answers its path, or null when the owner cancels. */
-export type ChooseOwnerFile = (kind: SceneMediaKind) => Promise<string | null>;
+export type ChooseOwnerFile = (kind: OwnerMediaKind) => Promise<string | null>;
 
 /** Opens the native file dialog filtered to the kind's extensions. */
 export function chooseWithDialog(dialog: OpenFileDialog): ChooseOwnerFile {

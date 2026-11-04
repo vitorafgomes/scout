@@ -1,9 +1,9 @@
 ---
 title: "Desktop quick ask"
-version: "1.2"
+version: "1.3"
 date: 2026-11-02
-updated: 2026-11-03
-changes: "A worker notice with a null id becomes its own Scout message in the shared conversation"
+updated: 2026-11-04
+changes: "The notice field of LocalTurn re-pointed by content"
 page_type: service
 description: "The desktop's quick-ask surface: the floating button, the quick-ask window anchored to it, the global shortcut, voice turns and the conversation shared with the Chat screen."
 source:
@@ -39,7 +39,7 @@ The owner's way to ask Scout from anywhere on the desktop, without a chat platfo
   - A new question while a turn is still being answered sends `scout:local.cancel` for it (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:288`), so the worker stops that reply.
 - **Replies.**
   - The supervisor hands each `SCOUT_LOCAL` JSON to `handleWorkerLine`, which applies it to the running turn whose id it carries: `update` sets the reply, `complete` the reply, citations and `done`, `fail` the reply and `failed` (`ui/packages/main/src/quick-ask/quick-ask.ts:535`). Unknown ids, events after `complete` or `fail`, and lines that are not one of these events are dropped; so is a `fail` whose id is null, which the worker sends for a request it could not read.
-  - The worker also sends progress of its own, such as the channel operator's, as `{"id":null,"event":"notice","text":"..."}`. `toLocalEvent` branches on the event kind, not the id: only a `notice` with a null id and non-empty text is kept (`ui/packages/main/src/quick-ask/quick-ask.ts:203`). `handleWorkerLine` appends it as its own turn, never to a running one: id `notice:<n>` (a colon, so it never matches a question id), no question, the text cut to 32,000 characters as the reply, `done`, and `notice: true` on `LocalTurn` (`ui/packages/main/src/quick-ask/quick-ask.ts:538`, `ui/packages/shared/src/ipc-contract.ts:925`). It arrives with or without a question running, is sent to every window like any turn, and counts toward the last 200. The quick-ask window and the Chat screen show it as a Scout message with no question line (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:79`, `ui/packages/renderer/src/app/chat/chat.component.ts:41`), as plain text like every reply.
+  - The worker also sends progress of its own, such as the channel operator's, as `{"id":null,"event":"notice","text":"..."}`. `toLocalEvent` branches on the event kind, not the id: only a `notice` with a null id and non-empty text is kept (`ui/packages/main/src/quick-ask/quick-ask.ts:203`). `handleWorkerLine` appends it as its own turn, never to a running one: id `notice:<n>` (a colon, so it never matches a question id), no question, the text cut to 32,000 characters as the reply, `done`, and `notice: true` on `LocalTurn` (`ui/packages/main/src/quick-ask/quick-ask.ts:538`, `ui/packages/shared/src/ipc-contract.ts:1158`). It arrives with or without a question running, is sent to every window like any turn, and counts toward the last 200. The quick-ask window and the Chat screen show it as a Scout message with no question line (`ui/packages/renderer/src/app/quick-ask/quick-ask.component.ts:79`, `ui/packages/renderer/src/app/chat/chat.component.ts:41`), as plain text like every reply.
   - A failed stdin write, or a worker exit, ends every running turn with "Scout stopped before it finished answering." (`:270`, `:518`).
   - Every change sends the whole conversation on `scout:local.turns` to every open window (`:248`). `scout:local.getTurns` returns it, and `scout:local.clearTurns` empties it unless a turn is running (`:512`). It keeps the last 200 turns, in memory only.
   - The box lists every turn, the question then the reply as plain text with its line breaks, scrolled to the newest. Citations with a URL open through `scout:app.openExternal` and its host allow-list.

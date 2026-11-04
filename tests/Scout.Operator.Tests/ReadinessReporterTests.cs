@@ -19,14 +19,14 @@ public sealed class ReadinessReporterTests : IDisposable
         string tokenFile = "",
         TimeProvider? time = null,
         ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null, PiperSpeech? piper = null,
-        OpenversePictures? stock = null)
+        OpenversePictures? stock = null, Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
             logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()),
-            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock);
+            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock, transcriber);
 
     private PiperSpeech Bundled()
     {
@@ -137,7 +137,7 @@ public sealed class ReadinessReporterTests : IDisposable
     }
 
     [Theory]
-    [InlineData(true, false, "AzureOpenAI has no image service in Scout; visuals become text cards unless you attach your own images.")]
+    [InlineData(true, false, "AzureOpenAI has no image service in Scout; visuals become text cards unless you attach a background to the project in Scout Desktop, Production, or connect an AI Source with pictures.")]
     [InlineData(false, true, "AzureOpenAI has no speech service in Scout; narration needs your own audio.")]
     public async Task A_Provider_With_Only_One_Media_Service_Names_The_One_It_Lacks(bool speech, bool images, string note)
     {
@@ -243,6 +243,18 @@ public sealed class ReadinessReporterTests : IDisposable
         var report = controlPlane.Reports.ShouldHaveSingleItem();
         report.Voices.Select(v => v.Id).ShouldBe(["piper:en_GB-aru-medium#0", "piper:en_GB-aru-medium#1", "piper:en_GB-cori-medium"]);
         report.Voices.ShouldAllBe(v => v.SampleFile == null);
+    }
+
+    [Fact]
+    public async Task Transcription_Is_Available_Only_With_A_Speech_To_Text_Model()
+    {
+        var media = new MediaCapabilities(true, true, "OpenAI");
+
+        var withModel = await Reporter(media, transcriber: new ScriptedTranscriber()).CurrentAsync(CancellationToken.None);
+        var without = await Reporter(media).CurrentAsync(CancellationToken.None);
+
+        withModel.TranscriptionAvailable.ShouldBeTrue();
+        without.TranscriptionAvailable.ShouldBeFalse();
     }
 
     private static async Task WaitFor(Func<bool> condition)

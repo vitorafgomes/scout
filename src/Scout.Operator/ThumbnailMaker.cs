@@ -7,7 +7,7 @@ namespace Scout.Operator;
 /// when that cannot be had, the frame of the video at a tenth of its length. A picture is made once per title: the
 /// title it was made for is kept beside it in <see cref="TitleFile"/>, and a picture already there for the same title
 /// is used again without asking the image service; a title file that cannot be read or written only means the picture
-/// is made again next time.
+/// is made again next time. The thumbnail of a video made from the owner's own recording is always that frame.
 /// </summary>
 internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmpeg)
 {
@@ -17,8 +17,8 @@ internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmp
 
     internal const string FrameFailed = "Scout could not take the thumbnail from the video";
 
-    /// <summary>Make the thumbnail and return its file name.</summary>
-    public async Task<string> MakeAsync(FfmpegTools tools, string directory, string title, AssembledVideo video, CancellationToken ct)
+    /// <summary>Make the thumbnail and return its file name; <paramref name="frameOnly"/> takes the frame without asking the image service.</summary>
+    public async Task<string> MakeAsync(FfmpegTools tools, string directory, string title, AssembledVideo video, bool frameOnly, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(video);
         if (MediaFiles.Exists(directory, FileName) && await MadeForAsync(directory, ct).ConfigureAwait(false) == title)
@@ -26,7 +26,7 @@ internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmp
             return FileName;
         }
 
-        if (await visuals.ThumbnailAsync(title, directory, FileName, ct).ConfigureAwait(false))
+        if (!frameOnly && await visuals.ThumbnailAsync(title, directory, FileName, ct).ConfigureAwait(false))
         {
             try
             {

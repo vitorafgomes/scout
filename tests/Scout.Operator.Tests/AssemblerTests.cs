@@ -201,7 +201,7 @@ public sealed class AssemblerTests : IDisposable
         var second = WithFiles("s2", 2, narration, 6000);
         var first = Given.Scene("s1", 1, "Why do rivers bend?", "ready", durationMs: 900);
 
-        var video = await Assembler(runner).AssembleAsync(Given.Tools(), [second, first], _media, null, "gentle", CancellationToken.None);
+        var video = await Assembler(runner).AssembleAsync(Given.Tools(), [second, first], _media, null, null, "gentle", CancellationToken.None);
 
         video.File.ShouldBe("video.mp4");
         video.DurationMs.ShouldBe(8000);
@@ -230,12 +230,12 @@ public sealed class AssemblerTests : IDisposable
     {
         var runner = new FakeProcessRunner();
         OperatorScene[] scenes = [WithFiles("s1", 1, "Feed it daily.", 3000), WithFiles("s2", 2, "Bake it hot.", 3000)];
-        await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, "gentle", CancellationToken.None);
+        await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, null, "gentle", CancellationToken.None);
         File.WriteAllBytes(Media("scene-s2.png"), [9, 9, 9]);
         File.SetLastWriteTimeUtc(Media("scene-s2.png"), DateTime.UtcNow.AddMinutes(1));
         var again = new FakeProcessRunner();
 
-        await Assembler(again).AssembleAsync(Given.Tools(), scenes, _media, null, "gentle", CancellationToken.None);
+        await Assembler(again).AssembleAsync(Given.Tools(), scenes, _media, null, null, "gentle", CancellationToken.None);
 
         again.Renders.Count.ShouldBe(2);
         again.Renders[0].ShouldContain(Media("scene-s2.png"));
@@ -250,7 +250,7 @@ public sealed class AssemblerTests : IDisposable
         var scene = Given.Scene("s1", 1, "Feed it.", "ready", visualSource: "owner", visualFile: "../outside.png", durationMs: 3000);
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            () => Assembler(runner).AssembleAsync(Given.Tools(), [scene], _media, null, "gentle", CancellationToken.None));
+            () => Assembler(runner).AssembleAsync(Given.Tools(), [scene], _media, null, null, "gentle", CancellationToken.None));
 
         ex.Message.ShouldBe("Scout refused to write a file outside the project's media folder.");
         runner.Calls.ShouldBeEmpty();
@@ -268,7 +268,7 @@ public sealed class AssemblerTests : IDisposable
         OperatorScene[] scenes = [WithFiles("s1", 1, "Feed it daily.", 3000), WithFiles("s2", 2, "Bake it hot.", 3000)];
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            () => Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, "gentle", CancellationToken.None));
+            () => Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, null, "gentle", CancellationToken.None));
 
         ex.Message.ShouldBe("Scout could not render scene 2 (ffmpeg: [png @ 0x1] Invalid PNG signature 0x0902.)");
         var left = Directory.GetFiles(_media).Select(Path.GetFileName).ToList();
@@ -298,7 +298,7 @@ public sealed class AssemblerTests : IDisposable
         };
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            () => Assembler(runner).AssembleAsync(Given.Tools(), [WithFiles("s1", 1, "Feed it daily.", 3000)], _media, null, "gentle", CancellationToken.None));
+            () => Assembler(runner).AssembleAsync(Given.Tools(), [WithFiles("s1", 1, "Feed it daily.", 3000)], _media, null, null, "gentle", CancellationToken.None));
 
         ex.Message.ShouldBe("Scout could not join the scenes into the video (the file came out empty)");
         File.ReadAllBytes(Media("video.mp4")).ShouldBe(previous);
@@ -318,7 +318,7 @@ public sealed class AssemblerTests : IDisposable
             Given.Scene("s3", 3, "A text card.", "ready", durationMs: 3000),
         ];
 
-        var video = await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, "gentle", CancellationToken.None);
+        var video = await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, null, null, "gentle", CancellationToken.None);
 
         video.Cuts.Select(c => c.Placeholder).ShouldBe([true, true, false]);
         runner.Renders.Take(3).ShouldAllBe(r => r.Contains("color=c=0x14181f:s=1920x1080:r=30"));
@@ -338,7 +338,7 @@ public sealed class AssemblerTests : IDisposable
             WithFiles("s3", 3, "My own picture.", 3000),
         ];
 
-        await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", "gentle", CancellationToken.None);
+        await Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", null, "gentle", CancellationToken.None);
 
         var renders = runner.Renders;
         renders.Count.ShouldBe(4);
@@ -365,7 +365,7 @@ public sealed class AssemblerTests : IDisposable
         OperatorScene[] scenes = [WithFiles("s1", 1, "My own picture.", 3000), Given.Scene("s2", 2, "A text card.", "ready", durationMs: 3000)];
 
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            () => Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, "../outside.png", "gentle", CancellationToken.None));
+            () => Assembler(runner).AssembleAsync(Given.Tools(), scenes, _media, "../outside.png", null, "gentle", CancellationToken.None));
 
         ex.Message.ShouldBe("Scout refused to write a file outside the project's media folder.");
         runner.Calls.ShouldBeEmpty();
@@ -376,12 +376,12 @@ public sealed class AssemblerTests : IDisposable
     {
         File.WriteAllBytes(Media("studio.png"), [5, 6]);
         OperatorScene[] scenes = [Given.Scene("s1", 1, "A text card.", "ready", durationMs: 3000)];
-        var first = await Assembler(new FakeProcessRunner()).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", "gentle", CancellationToken.None);
+        var first = await Assembler(new FakeProcessRunner()).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", null, "gentle", CancellationToken.None);
         File.WriteAllBytes(Media("studio.png"), [7, 8, 9]);
         File.SetLastWriteTimeUtc(Media("studio.png"), new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         var again = new FakeProcessRunner();
 
-        var second = await Assembler(again).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", "gentle", CancellationToken.None);
+        var second = await Assembler(again).AssembleAsync(Given.Tools(), scenes, _media, "studio.png", null, "gentle", CancellationToken.None);
 
         second.Segments.ShouldHaveSingleItem().ShouldNotBe(first.Segments.ShouldHaveSingleItem());
         again.Renders.Count.ShouldBe(2);
@@ -396,7 +396,7 @@ public sealed class AssemblerTests : IDisposable
         var names = new List<string>();
         foreach (var motion in new[] { "gentle", "still", "dynamic" })
         {
-            var video = await Assembler(new FakeProcessRunner()).AssembleAsync(Given.Tools(), scenes, _media, null, motion, CancellationToken.None);
+            var video = await Assembler(new FakeProcessRunner()).AssembleAsync(Given.Tools(), scenes, _media, null, null, motion, CancellationToken.None);
             names.Add(video.Segments.ShouldHaveSingleItem());
         }
 
@@ -415,7 +415,7 @@ public sealed class AssemblerTests : IDisposable
             Given.Scene("s2", 2, "Bake it hot.", "ready", durationMs: 3000)) with
         {
             Status = "assembling",
-            VisualBrief = brief,
+            Direction = brief,
             Motion = "dynamic",
         };
         var runner = new FakeProcessRunner { ProbedMs = 3000 };
@@ -438,9 +438,109 @@ public sealed class AssemblerTests : IDisposable
         var runner = new FakeProcessRunner();
 
         await Assembler(runner).AssembleAsync(
-            Given.Tools(), [Given.Scene("s1", 1, "A text card.", "ready", durationMs: 3000)], _media, "studio.png", "gentle", CancellationToken.None);
+            Given.Tools(), [Given.Scene("s1", 1, "A text card.", "ready", durationMs: 3000)], _media, "studio.png", null, "gentle", CancellationToken.None);
 
         runner.Renders[0].ShouldContain("color=c=0x14181f:s=1920x1080:r=30");
         Graph(runner.Renders[0]).ShouldContain("fontsize=64");
+    }
+
+    private static OperatorScene Clip(string id, int order, string narration, int startMs, int endMs)
+    {
+        var scene = Given.Scene(id, order, narration, "ready", audioSource: "recording", visualSource: "recording", durationMs: endMs - startMs);
+        return scene with { VisualPrompt = string.Empty, ClipStartMs = startMs, ClipEndMs = endMs };
+    }
+
+    private string Recorded()
+    {
+        File.WriteAllBytes(Media("owner-recording-1a.mp4"), [1, 2, 3, 4]);
+        return "owner-recording-1a.mp4";
+    }
+
+    [Fact]
+    public async Task A_Recording_Scene_Trims_The_Recording_To_Its_Clip_Scaled_To_1080p30_With_Its_Own_Sound_And_Captions()
+    {
+        var middle = global::Scout.Operator.Assembler.ClipArguments(
+            Given.Tools(), Clip("s2", 2, "Feed the starter daily.", 23000, 75200), first: false, last: false,
+            "/media/p1/owner-recording-1a.mp4", ["Feed the starter daily."], "/media/p1/out.mp4");
+        var runner = new FakeProcessRunner();
+        var recording = Recorded();
+
+        var video = await Assembler(runner).AssembleAsync(
+            Given.Tools(), [Clip("s1", 1, "Hello.", 0, 1500), Clip("s2", 2, "Bye.", 1500, 4000)], _media, null, recording, "dynamic", CancellationToken.None);
+
+        middle.ShouldBe([
+            "-hide_banner", "-nostdin", "-y",
+            "-ss", "23.000", "-t", "52.200", "-i", "/media/p1/owner-recording-1a.mp4",
+            "-filter_complex",
+            "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30," +
+            "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed the starter daily.:fontsize=44:fontcolor=white:" +
+            @"x=(w-text_w)/2:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,52.200)," +
+            "format=yuv420p[v];[0:a]aresample=48000,apad[a]",
+            "-map", "[v]", "-map", "[a]", "-t", "52.200",
+            "-c:v", "libopenh264", "-b:v", "6M", "-pix_fmt", "yuv420p", "-r", "30",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "/media/p1/out.mp4",
+        ]);
+        video.DurationMs.ShouldBe(4000);
+        video.Cuts.Select(c => (c.Scene.Id, c.StartMs, c.DurationMs, c.Captions, c.Placeholder)).ShouldBe([
+            ("s1", 0, 1500, 1, false), ("s2", 1500, 2500, 1, false),
+        ]);
+        runner.Renders.Take(2).Select(r => r.Take(9)).ShouldBe([
+            ["-hide_banner", "-nostdin", "-y", "-ss", "0.000", "-t", "1.500", "-i", Media(recording)],
+            ["-hide_banner", "-nostdin", "-y", "-ss", "1.500", "-t", "2.500", "-i", Media(recording)],
+        ]);
+        runner.Renders.Take(2).ShouldAllBe(r => !Graph(r).Contains("zoompan") && Graph(r).Contains("[0:a]aresample=48000,apad[a]"));
+    }
+
+    [Fact]
+    public async Task Only_The_First_Recording_Scene_Fades_In_And_Only_The_Last_Fades_Out()
+    {
+        var runner = new FakeProcessRunner();
+
+        await Assembler(runner).AssembleAsync(
+            Given.Tools(),
+            [Clip("s3", 3, "Bake it.", 50000, 80000), Clip("s1", 1, "Hello.", 0, 25000), Clip("s2", 2, "Feed it.", 25000, 50000)],
+            _media,
+            null,
+            Recorded(),
+            "gentle",
+            CancellationToken.None);
+
+        var graphs = runner.Renders.Take(3).Select(Graph).ToList();
+        graphs.Select(g => (g.Contains("fade=t=in:st=0:d=0.4"), g.Contains("fade=t=out"))).ShouldBe([(true, false), (false, false), (false, true)]);
+        graphs[2].ShouldContain("fade=t=out:st=29.600:d=0.4");
+    }
+
+    [Fact]
+    public async Task A_Changed_Recording_Renders_Its_Segments_Again()
+    {
+        var recording = Recorded();
+        OperatorScene[] scenes = [Clip("s1", 1, "Hello.", 0, 25000), Clip("s2", 2, "Bye.", 25000, 50000)];
+        var first = await Assembler(new FakeProcessRunner()).AssembleAsync(Given.Tools(), scenes, _media, null, recording, "gentle", CancellationToken.None);
+        var same = new FakeProcessRunner();
+        await Assembler(same).AssembleAsync(Given.Tools(), scenes, _media, null, recording, "gentle", CancellationToken.None);
+        File.WriteAllBytes(Media(recording), [5, 6, 7, 8, 9]);
+        File.SetLastWriteTimeUtc(Media(recording), new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var again = new FakeProcessRunner();
+
+        var second = await Assembler(again).AssembleAsync(Given.Tools(), scenes, _media, null, recording, "gentle", CancellationToken.None);
+
+        same.Renders.ShouldHaveSingleItem().ShouldContain("concat");
+        second.Segments.ShouldNotContain(s => first.Segments.Contains(s));
+        again.Renders.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_Missing_Recording_Fails_The_Assembly()
+    {
+        var runner = new FakeProcessRunner();
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(
+            () => Assembler(runner).AssembleAsync(
+                Given.Tools(), [Clip("s1", 1, "Hello.", 0, 25000)], _media, null, "owner-recording-1a.mp4", "gentle", CancellationToken.None));
+
+        ex.Message.ShouldBe("Scout could not find the recording in the project's media folder.");
+        runner.Calls.ShouldBeEmpty();
+        Directory.GetFiles(_media).ShouldBeEmpty();
     }
 }

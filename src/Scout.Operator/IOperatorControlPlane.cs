@@ -61,6 +61,27 @@ public interface IOperatorControlPlane
 
     /// <summary>The absolute path of the folder for the bundled voices' samples, the one place the worker writes them.</summary>
     Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct);
+
+    /// <summary>From chat, for the owner: set a scene's text, which queues its narration again; the changed project is returned.</summary>
+    Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: make a scene's narration again on the next production run.</summary>
+    Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: make a scene's narration and picture again on the next production run.</summary>
+    Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: lock a scene so production leaves it as it is, or unlock it.</summary>
+    Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: put the scenes in <paramref name="sceneIds"/> order, every scene once.</summary>
+    Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: queue production; an empty voice, direction or motion keeps the project's.</summary>
+    Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct);
+
+    /// <summary>From chat, for the owner: delegate the project up to ready to approve; an empty voice, direction or motion keeps the project's.</summary>
+    Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct);
 }
 
 /// <summary>
@@ -255,16 +276,29 @@ public sealed record OperatorProjectState(
     public string NarrationVoice { get; init; } = string.Empty;
 
     /// <summary>
-    /// The visual style the owner asked for, empty for none, which the scene planner writes the picture prompts and
-    /// search terms in; sent back exactly as read, only the owner sets it.
+    /// The owner's direction for the video, empty for none, which the script writer and the scene planner follow; sent
+    /// back exactly as read, only the owner sets it.
     /// </summary>
-    public string VisualBrief { get; init; } = string.Empty;
+    public string Direction { get; init; } = string.Empty;
 
     /// <summary>
     /// The motion preset the owner chose, <c>still</c>, <c>gentle</c> or <c>dynamic</c>, which the assembler applies;
     /// sent back exactly as read, only the owner sets it.
     /// </summary>
     public string Motion { get; init; } = "gentle";
+
+    /// <summary>
+    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c> or <c>own_video</c>, as the owner chose it
+    /// when starting the project; sent back exactly as read, only the owner sets it, and anything but <c>own_pictures</c>
+    /// or <c>own_video</c> reads as generated pictures.
+    /// </summary>
+    public string Format { get; init; } = "generated_pictures";
+
+    /// <summary>The owner's recording in the media directory a project of the owner's own video is made from, null until the owner attaches one; sent back exactly as read.</summary>
+    public string? RecordingFile { get; init; }
+
+    /// <summary>How long the owner's recording plays, in milliseconds, which the worker measures when it transcribes it; 0 until then.</summary>
+    public int RecordingMs { get; init; }
 }
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>
@@ -281,7 +315,14 @@ public sealed record OperatorScript(
     IReadOnlyList<OperatorChapter> Chapters);
 
 /// <summary>One section of the script.</summary>
-public sealed record OperatorScriptSection(string Heading, string Narration);
+public sealed record OperatorScriptSection(string Heading, string Narration)
+{
+    /// <summary>Where the section starts in the owner's recording, in milliseconds; 0 for a written script.</summary>
+    public int StartMs { get; init; }
+
+    /// <summary>Where the section ends in the owner's recording, in milliseconds; 0 for a written script.</summary>
+    public int EndMs { get; init; }
+}
 
 /// <summary>One chapter marker of the description.</summary>
 public sealed record OperatorChapter(string At, string Title);
@@ -325,6 +366,12 @@ public sealed record OperatorScene(
 
     /// <summary>The attribution of a <c>stock</c> picture, which the video's description credits; null for any other visual.</summary>
     public string? VisualCredit { get; init; }
+
+    /// <summary>Where the scene's clip starts in the owner's recording, in milliseconds, for a scene that shows the recording.</summary>
+    public int ClipStartMs { get; init; }
+
+    /// <summary>Where the scene's clip ends in the owner's recording, in milliseconds, for a scene that shows the recording.</summary>
+    public int ClipEndMs { get; init; }
 }
 
 /// <summary>What the worker can produce, as the control plane's <c>Readiness</c> message carries it.</summary>
@@ -341,6 +388,9 @@ public sealed record OperatorReadiness(
 
     /// <summary>Whether a scene without an AI image service gets a freely licensed, credited picture from Openverse.</summary>
     public bool StockPictures { get; init; }
+
+    /// <summary>Whether this machine has a speech-to-text model, so a project of the owner's own video can be transcribed.</summary>
+    public bool TranscriptionAvailable { get; init; }
 }
 
 /// <summary>A narration voice, as the control plane's <c>Voice</c> message carries it: its id, its label, its source and its sample's file name in the voice samples directory, null when it has none.</summary>

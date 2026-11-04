@@ -349,6 +349,18 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    operatorEditSceneText(req) {
+      return ipc.invoke(CHANNEL.operatorSceneText, req) as ReturnType<
+        ScoutBridge['operatorEditSceneText']
+      >;
+    },
+
+    operatorRegenerateNarration(req) {
+      return ipc.invoke(CHANNEL.operatorNarrationRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateNarration']
+      >;
+    },
+
     operatorAttachSceneMedia(req) {
       return ipc.invoke(CHANNEL.operatorSceneMedia, req) as ReturnType<
         ScoutBridge['operatorAttachSceneMedia']

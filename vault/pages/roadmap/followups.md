@@ -21,6 +21,46 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### The Production screen reads every project in full every 10 seconds (2026-11-04)
+
+- **Gap:** the Production screen refreshes the whole project list every 10 seconds (`ui/packages/renderer/src/app/production/production.component.ts:30`), and every project comes with its script, claims and scenes; an `own_video` project with its timed transcript and scenes is about 100 to 130 KB, so a list of a few long recordings is megabytes over the socket every 10 seconds ([[pages/services/desktop-operator]], [[pages/services/operator]], phase 8b of [[pages/roadmap/youtube-channel-operator]]).
+- **Unblocks with:** a list summary rpc that answers id, topic, status, format, progress and `UpdatedAt` per project, the full project read only for the one the owner opens, with a client test for the summary and a contract test for the rpc.
+
+### A long recording holds the speech model and its samples for the whole transcription (2026-11-04)
+
+- **Gap:** the operator hands the whole recording's WAV to the transcriber in one call, so the transcriber's single gate is held for the whole transcription and a voice message gets the busy sentence after 30 seconds, and the samples of the whole recording, about 230 MB at 60 minutes, are held beside the model ([[pages/services/transcription-whisper]], [[pages/decisions/0024-voice-messages-transcribed-locally]], [[pages/services/operator]]).
+- **Unblocks with:** transcribing in 5-minute windows, each its own `TranscribeSegmentsAsync` call with its offset added to the segments' times and the gate released between windows, so a voice message waits for one window at most and only one window's samples are held; with a test that two windows give one transcript with continuous times and a voice message answered between them.
+
+### Captions in a project of the owner's own video cannot be turned off, and drift a little from the speech (2026-11-04)
+
+- **Gap:** in `own_video` the scene's text is always drawn as captions over the recording, and the assembler spreads them evenly over the scene rather than at each spoken segment, so a caption runs a little ahead of or behind the words; an owner whose recording already carries its own titles, or who wants none, has no way to leave them out ([[pages/services/desktop-operator]], [[pages/services/operator]], phase 8b of [[pages/roadmap/youtube-channel-operator]]).
+- **Unblocks with:** a per-project caption toggle, chosen in the Produce panel and stored on the project like the motion, that the assembler reads; and captions timed from the transcript segments, which the script keeps with their start and end only until the scene plan rewrites it as one section per chapter, so the segment times would need to stay on the scenes.
+
+### The Azure OpenAI image default names a retired model (2026-11-04)
+
+- **Gap:** Azure retired `gpt-image-1` (2025-04-15) on 2026-10-23 per its model retirement schedule, while `AzureOpenAIOptions.ImageModel` still defaults to `"gpt-image-1"` (`src/Scout.Llm/Configuration/LlmOptions.cs:167`); an Azure deployment left at the default answers 410 and every generated picture falls back to Openverse or a text card ([[pages/services/llm]], [[pages/services/operator]]). Found while planning phase 8c of [[pages/roadmap/youtube-channel-operator]].
+- **Unblocks with:** a default that matches the current Azure image model, or no default and a readiness note "name an image deployment" when it is blank, with a test on the readiness.
+
+### A "This is me" mark for the owner's chat ids (2026-11-04)
+
+- **Gap:** the operator's owner-only functions from the chat answer an allowed chat user only when `Scout:Access:OwnerUserIds` lists that id ([[pages/decisions/0021-allowed-users]], amendment of 2026-11-04), and Scout Desktop sets no such list yet, so on Discord and Slack nobody is the owner and the owner acts from the quick ask only.
+- **Unblocks with:** a "This is me" mark beside an id in Settings, "Who can use Scout", that main validates like the allow-list and passes as `SCOUT__ACCESS__OWNERUSERIDS__<n>`, restarting a running worker, with the desktop tests for the mark and the variable.
+
+### The own_pictures text-card decision lives in the production loop, not in VisualGenerator (2026-11-04)
+
+- **Gap:** `OperatorPipeline` masks `imagesNow` for `own_pictures` and builds a synthetic `VisualResult(TextCard, null, NoOwnPicture)` beside `VisualGenerator`, which already answers `TextCard` with a note for `NoImages` and `PastMaxScenes`; a third format (the AI presenter of 8c) would add another branch there ([[pages/services/operator]]).
+- **Unblocks with:** passing the project format to `VisualGenerator.GenerateAsync` and answering the `own_pictures` card there, when 8c touches the generator.
+
+### Editing the first scene of a section can drop its chapter (2026-11-04)
+
+- **Gap:** `PackageChecks.cs:239-243` anchors a chapter by finding the scene's cleaned narration inside its section's narration, so an edited text on a section's first scene no longer matches and the chapter is dropped, and the whole chapter list if fewer than 3 remain ([[pages/services/operator]]). Since 2026-11-04 a scene of the owner's recording is anchored by its clip start instead, so this stays open for the narrated formats only.
+- **Unblocks with:** anchoring chapters by scene id instead of narration text, with a test that edits the first scene of a section and checks the chapter survives.
+
+### An approved upload action survives a scene edit (2026-11-04)
+
+- **Gap:** an approved `videos.insert` stays queued after a scene edit, regenerate or attach; only `ApprovedAt` blocks it at execution, so once the owner re-approves the edited package the old approval runs ([[pages/services/control-plane]], ADR 0032). Pre-existing before 8a.
+- **Unblocks with:** `AfterSceneEdit` cancelling pending upload actions of that project, with a test.
+
 ### A revoke and re-grant during an upload can let a second upload be queued (2026-11-03)
 
 - **Gap:** `PublishPackageAsync` ignores an executing `videos.insert` whose claim predates the current grant (`!Stale(a, grantedAt)` in [[pages/services/control-plane]]), so after the owner revokes YouTube writes mid-upload and grants again, the publication reads failed and a second Publish queues a second upload while the first may still finish on YouTube (`/code-review medium` of 2026-11-03). Rare: it needs a revoke and a re-grant inside one upload.
@@ -225,7 +265,7 @@ reliability: medium
 
 ### Raw gRPC text for feature validation errors (2026-10-23)
 
-- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:390`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
+- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:403`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
 - **Fix:** typed errors for those codes and card copy per code, with a client test for each.
 
 ### Kubernetes pod logs: owner decision (2026-10-23)
@@ -270,5 +310,5 @@ reliability: medium
 
 ### Allowed-user ids are not platform-qualified (2026-10-23)
 
-- **Blocker:** none; the desktop app runs Discord only. An id listed for one platform also admits the same string on another (`src/Scout.Conversation/ConversationConductor.cs:331`).
+- **Blocker:** none; the desktop app runs Discord only. An id listed for one platform also admits the same string on another (`src/Scout.Conversation/ConversationConductor.cs:342`).
 - **Fix:** store and compare `Adapter:UserId`, as [[pages/decisions/0014-per-request-identity-gating]] anticipates, when a second adapter ships in the desktop app.

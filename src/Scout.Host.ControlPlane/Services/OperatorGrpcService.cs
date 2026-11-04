@@ -9,7 +9,7 @@ namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
-/// the projects, the owner's claim decisions, production, delegation, the scene edits, the media directory, project deletion,
+/// the projects, the owner's claim decisions, production, delegation, the scene edits and the scene text, the media directory, project deletion,
 /// the worker's readiness, assembly, the owner's package metadata, media rights and approval, publication,
 /// proposal decisions and experiments, and the comments: the list, a sync request, the owner's decisions, approved
 /// replies and ideas.
@@ -50,7 +50,7 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 
     public override Task<Project> StartProject(StartProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
-            await _operator.StartProjectAsync(request.Topic, context.CancellationToken).ConfigureAwait(false)));
+            await _operator.StartProjectAsync(request.Topic, request.Format, request.Direction, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Project> DecideClaim(DecideClaimRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
@@ -64,11 +64,11 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 
     public override Task<Project> ProduceProject(ProduceProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
-            await _operator.ProduceProjectAsync(request.Id, request.NarrationVoice, request.VisualBrief, request.Motion, context.CancellationToken).ConfigureAwait(false)));
+            await _operator.ProduceProjectAsync(request.Id, request.NarrationVoice, request.Direction, request.Motion, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Project> DelegateProject(DelegateProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
-            await _operator.DelegateProjectAsync(request.Id, request.NarrationVoice, request.VisualBrief, request.Motion, context.CancellationToken).ConfigureAwait(false)));
+            await _operator.DelegateProjectAsync(request.Id, request.NarrationVoice, request.Direction, request.Motion, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Project> ReorderScenes(ReorderScenesRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
@@ -83,6 +83,16 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<Project> RegenerateScene(SceneRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.RegenerateSceneAsync(request.ProjectId, request.SceneId, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> EditSceneText(EditSceneTextRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.EditSceneTextAsync(request.ProjectId, request.SceneId, request.Text, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> RegenerateNarration(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateNarrationAsync(request.ProjectId, request.SceneId, context.CancellationToken)
                 .ConfigureAwait(false)));
 
     public override Task<Project> AttachSceneMedia(AttachSceneMediaRequest request, ServerCallContext context) =>

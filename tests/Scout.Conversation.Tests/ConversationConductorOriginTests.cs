@@ -109,4 +109,90 @@ public sealed class ConversationConductorOriginTests
         seenAtRoute.ShouldBe(["discord:3333:42"]);
         router.Received(1).Route(Arg.Is<ChatMessage>(m => m.Text == "start the weekly video" && m.OriginReference == "discord:3333:42"));
     }
+
+    private static ConversationConductor OwnerConductor(IConversationRouter router, AccessOptions access)
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 4, 9, 0, 0, TimeSpan.Zero));
+        return new ConversationConductor(
+            router, new StreamPump(new StreamPumpOptions { TimeProvider = clock }), null, new AccessPolicy(access), null, null, clock);
+    }
+
+    private static async IAsyncEnumerable<string> OwnerSeenWhileStreaming(Func<Task>? midTurn)
+    {
+        await Task.Yield();
+        if (midTurn is not null)
+        {
+            await midTurn();
+        }
+        yield return ChatOrigin.IsOwner ? "owner" : "not owner";
+    }
+
+    private static IConversationRouter RouterReportingOwner(Func<Task>? midTurn = null)
+    {
+        var router = Substitute.For<IConversationRouter>();
+        router.Route(Arg.Any<ChatMessage>()).Returns(_ => new ChatResponse(OwnerSeenWhileStreaming(midTurn)));
+        return router;
+    }
+
+    private static async Task<string?> OwnerSeenBy(AccessOptions access, ChatMessage message)
+    {
+        var sink = new RecordingResponseSink(FineGrained);
+        await OwnerConductor(RouterReportingOwner(), access).HandleAsync(message, sink, CancellationToken.None);
+        return sink.FinalText;
+    }
+
+    [Fact]
+    public async Task During_A_Local_Owner_Turn_ChatOrigin_IsOwner_Is_True()
+    {
+        var seen = await OwnerSeenBy(
+            new AccessOptions { RequireAllowList = true },
+            new ChatMessage("local-owner", "local", "edit scene s2") { IsLocalOwner = true, OriginReference = "local:quick-ask" });
+
+        seen.ShouldBe("owner");
+    }
+
+    [Fact]
+    public async Task An_Allowed_Sender_Is_Owner_Only_When_Listed_In_OwnerUserIds()
+    {
+        var access = new AccessOptions { AllowedUserIds = ["111", "222"], OwnerUserIds = [" 111 "] };
+
+        var listed = await OwnerSeenBy(access, new ChatMessage("111", "C1", "edit scene s2") { OriginReference = "discord:3333:42" });
+        var notListed = await OwnerSeenBy(access, new ChatMessage("222", "C1", "edit scene s2") { OriginReference = "discord:3333:43" });
+
+        listed.ShouldBe("owner");
+        notListed.ShouldBe("not owner");
+    }
+
+    [Fact]
+    public async Task With_No_Owner_Ids_No_Platform_Sender_Is_Owner_Even_With_An_Open_Allow_List()
+    {
+        var seen = await OwnerSeenBy(new AccessOptions(), new ChatMessage("111", "C1", "edit scene s2") { OriginReference = "discord:3333:42" });
+
+        seen.ShouldBe("not owner");
+    }
+
+    [Fact]
+    public async Task After_A_Turn_And_Across_Concurrent_Turns_IsOwner_Is_Only_Its_Own()
+    {
+        var bothInFlight = new Barrier(2);
+        Task MidTurn() => Task.Run(() => bothInFlight.SignalAndWait(TimeSpan.FromSeconds(5)).ShouldBeTrue());
+        var conductor = OwnerConductor(RouterReportingOwner(MidTurn), new AccessOptions { AllowedUserIds = ["111"], OwnerUserIds = ["999"] });
+        var ownerSink = new RecordingResponseSink(FineGrained);
+        var senderSink = new RecordingResponseSink(FineGrained);
+
+        await Task.WhenAll(
+            Task.Run(() => conductor.HandleAsync(
+                new ChatMessage("local-owner", "local", "first") { IsLocalOwner = true, OriginReference = "local:quick-ask" },
+                ownerSink,
+                CancellationToken.None)),
+            Task.Run(() => conductor.HandleAsync(
+                new ChatMessage("111", "C1", "second") { OriginReference = "discord:3333:42" }, senderSink, CancellationToken.None)));
+
+        await OwnerConductor(RouterReportingOwner(), new AccessOptions()).HandleAsync(
+            new ChatMessage("local-owner", "local", "third") { IsLocalOwner = true }, new RecordingResponseSink(FineGrained), CancellationToken.None);
+
+        ownerSink.FinalText.ShouldBe("owner");
+        senderSink.FinalText.ShouldBe("not owner");
+        ChatOrigin.IsOwner.ShouldBeFalse();
+    }
 }

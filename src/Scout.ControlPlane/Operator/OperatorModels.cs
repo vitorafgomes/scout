@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Scout.ControlPlane.Operator;
 
 /// <summary>The owner's brief for the channel: what it is for, who watches it and how it sounds.</summary>
@@ -59,17 +61,33 @@ public sealed record OperatorProject(
     public string NarrationVoice { get; init; } = string.Empty;
 
     /// <summary>
-    /// The visual style the owner asked for when producing or delegating the project, at most 500 characters, empty
-    /// for none; the scene planner writes the picture prompts and search terms in it. Only the owner's produce or
-    /// delegate sets it.
+    /// The owner's direction for the video, at most 1000 characters, empty for none, given when the project is started,
+    /// produced or delegated; the script writer and the scene planner follow it. Stored under the key of the visual brief
+    /// it replaced, so a projects file written before keeps it. Only the owner sets it.
     /// </summary>
-    public string VisualBrief { get; init; } = string.Empty;
+    [JsonPropertyName("visualBrief")]
+    public string Direction { get; init; } = string.Empty;
 
     /// <summary>
     /// The motion preset the video is assembled with, <c>still</c>, <c>gentle</c> or <c>dynamic</c>, chosen with the
-    /// visual brief. Only the owner's produce or delegate sets it.
+    /// direction. Only the owner's produce or delegate sets it.
     /// </summary>
     public string Motion { get; init; } = "gentle";
+
+    /// <summary>
+    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c> or <c>own_video</c>, chosen when the owner
+    /// starts the project and never changed after; a project stored before formats existed is generated pictures.
+    /// </summary>
+    public string Format { get; init; } = "generated_pictures";
+
+    /// <summary>
+    /// The owner's recording in the media directory, the whole content of a project of the owner's own video; null until
+    /// the owner attaches it. Only the owner sets it.
+    /// </summary>
+    public string? RecordingFile { get; init; }
+
+    /// <summary>The length of the recording in milliseconds, 0 until the worker measures it while transcribing.</summary>
+    public int RecordingMs { get; init; }
 }
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
@@ -86,7 +104,14 @@ public sealed record Script(
     IReadOnlyList<Chapter> Chapters);
 
 /// <summary>One section of the script.</summary>
-public sealed record ScriptSection(string Heading, string Narration);
+public sealed record ScriptSection(string Heading, string Narration)
+{
+    /// <summary>Where the section starts in the owner's recording, in milliseconds; 0 for a written script.</summary>
+    public int StartMs { get; init; }
+
+    /// <summary>Where the section ends in the owner's recording, in milliseconds; 0 for a written script.</summary>
+    public int EndMs { get; init; }
+}
 
 /// <summary>One chapter marker of the video description.</summary>
 public sealed record Chapter(string At, string Title);
@@ -128,6 +153,12 @@ public sealed record Scene(
 
     /// <summary>The attribution of a <c>stock</c> picture, which the video's description credits; null for any other visual.</summary>
     public string? VisualCredit { get; init; }
+
+    /// <summary>Where the scene's clip of the owner's recording starts, in milliseconds; 0 for a scene of another source.</summary>
+    public int ClipStartMs { get; init; }
+
+    /// <summary>Where the scene's clip of the owner's recording ends, in milliseconds; 0 for a scene of another source.</summary>
+    public int ClipEndMs { get; init; }
 }
 
 /// <summary>
@@ -172,6 +203,9 @@ public sealed record Readiness(
 
     /// <summary>Whether a scene without an AI image service gets a freely licensed, credited picture from Openverse.</summary>
     public bool StockPictures { get; init; }
+
+    /// <summary>Whether the worker has a speech-to-text model, so a project of the owner's own video can be transcribed.</summary>
+    public bool TranscriptionAvailable { get; init; }
 }
 
 /// <summary>A narration voice: the id a mandate names, the label the owner reads, where it comes from and its sample's file name in the voice samples directory, null when it has none.</summary>

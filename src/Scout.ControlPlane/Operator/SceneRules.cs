@@ -16,18 +16,20 @@ internal static class SceneRules
     public const string Visual = "visual";
     public const string Video = "video";
     public const string Thumbnail = "thumbnail";
+    public const string Recording = "recording";
 
     private const int MaxFileNameLength = 120;
 
     private static readonly string[] Statuses = [Planned, "generating", Ready, "failed"];
-    private static readonly string[] AudioSources = ["generated", Owner, NoAudio];
-    private static readonly string[] VisualSources = ["generated", Owner, TextCard, Stock];
+    private static readonly string[] AudioSources = ["generated", Owner, NoAudio, Recording];
+    private static readonly string[] VisualSources = ["generated", Owner, TextCard, Stock, Recording];
     private static readonly string[] AudioExtensions = [".mp3", ".wav", ".m4a", ".ogg"];
     private static readonly string[] VisualExtensions = [".png", ".jpg", ".jpeg", ".webp"];
     private static readonly string[] VideoExtensions = [".mp4"];
     private static readonly string[] ThumbnailExtensions = [".png", ".jpg"];
+    private static readonly string[] RecordingExtensions = [".mp4", ".mkv", ".webm", ".mov"];
 
-    /// <summary>Refuse a media file name that is not a plain name of the kind's extensions: audio, visual, video or thumbnail.</summary>
+    /// <summary>Refuse a media file name that is not a plain name of the kind's extensions: audio, visual, video, thumbnail or recording.</summary>
     /// <exception cref="OperatorValidationException">The name is empty, too long, hidden, a path, or of another type.</exception>
     public static void ValidateFileName(string? name, string kind)
     {
@@ -36,6 +38,7 @@ internal static class SceneRules
             Audio => ("an audio", AudioExtensions),
             Video => ("a video", VideoExtensions),
             Thumbnail => ("a thumbnail", ThumbnailExtensions),
+            Recording => ("a recording", RecordingExtensions),
             _ => ("a visual", VisualExtensions),
         };
         if (string.IsNullOrEmpty(name)
@@ -52,7 +55,7 @@ internal static class SceneRules
         }
     }
 
-    /// <summary>Refuse scenes with a missing or repeated id, a value outside the vocabulary, a stock picture without its file or credit, or an unsafe file name.</summary>
+    /// <summary>Refuse scenes with a missing or repeated id, a value outside the vocabulary, a stock picture without its file or credit, a scene of the recording without a clip that ends after it starts, or an unsafe file name.</summary>
     /// <exception cref="OperatorValidationException">The first rule a scene breaks.</exception>
     public static void Validate(IReadOnlyList<Scene> scenes)
     {
@@ -80,6 +83,12 @@ internal static class SceneRules
                 throw new OperatorValidationException(
                     $"Scene '{scene.Id}' shows a stock picture; it needs the picture's file and its credit.");
             }
+            if ((scene.AudioSource == Recording || scene.VisualSource == Recording)
+                && (scene.ClipStartMs < 0 || scene.ClipEndMs <= scene.ClipStartMs))
+            {
+                throw new OperatorValidationException(
+                    $"Scene '{scene.Id}' shows the recording; it needs a clip that ends after it starts.");
+            }
             if (scene.AudioFile is not null)
             {
                 ValidateFileName(scene.AudioFile, Audio);
@@ -95,7 +104,7 @@ internal static class SceneRules
     /// The scene list after a worker save: the worker's scenes when the project had none, else the
     /// stored scenes in their order with what the worker may set taken from <paramref name="incoming"/>.
     /// What the owner owns comes from <paramref name="stored"/> whatever the worker sends: the order,
-    /// the lock, a locked scene whole, and the owner's audio or visual with its file.
+    /// the lock, a locked scene whole, the scene's narration, and the owner's audio or visual with its file.
     /// </summary>
     /// <exception cref="OperatorTamperingException">The worker adds or drops a scene, or claims the owner's media or lock.</exception>
     public static IReadOnlyList<Scene> MergeFromWorker(string projectId, IReadOnlyList<Scene> stored, IReadOnlyList<Scene> incoming)
@@ -129,7 +138,7 @@ internal static class SceneRules
 
             var sent = incoming.First(s => string.Equals(s.Id, before.Id, StringComparison.Ordinal));
             RefuseOwnerMedia(sent, before);
-            var merged = sent with { Order = before.Order, Locked = before.Locked };
+            var merged = sent with { Order = before.Order, Locked = before.Locked, Narration = before.Narration };
             if (before.AudioSource == Owner)
             {
                 var sameAudio = sent.AudioSource == Owner && string.Equals(sent.AudioFile, before.AudioFile, StringComparison.Ordinal);

@@ -13,7 +13,9 @@ namespace Scout.Host.ControlPlane.Services;
 /// recorded answers <see cref="StatusCode.FailedPrecondition"/>; the next approved action answers an empty
 /// response when none is due or the owner has not granted YouTube, and carries its project's origin reference,
 /// like the next queued project, only when the project has one. The worker reads and saves the comments through
-/// <see cref="CommentService"/>.
+/// <see cref="CommentService"/>, and carries the owner's chat edits of a project (scene text, narration, scene,
+/// lock, order, production, delegation) to the chat methods of <see cref="OperatorService"/>, each under the
+/// owner's YouTube grant and logged as done via chat.
 /// </summary>
 public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
 {
@@ -161,4 +163,39 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
         {
             Path = await _operator.GetVoiceSamplesDirectoryForWorkerAsync(context.CancellationToken).ConfigureAwait(false),
         });
+
+    public override Task<Project> ChatEditSceneText(EditSceneTextRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.EditSceneTextFromChatAsync(request.ProjectId, request.SceneId, request.Text, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatRegenerateNarration(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateNarrationFromChatAsync(request.ProjectId, request.SceneId, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatRegenerateScene(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateSceneFromChatAsync(request.ProjectId, request.SceneId, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatSetSceneLocked(SetSceneLockedRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.SetSceneLockedFromChatAsync(request.ProjectId, request.SceneId, request.Locked, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatReorderScenes(ReorderScenesRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ReorderScenesFromChatAsync(request.ProjectId, request.SceneIds.ToList(), context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatProduceProject(ProduceProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.ProduceProjectFromChatAsync(request.Id, request.NarrationVoice, request.Direction, request.Motion, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatDelegateProject(DelegateProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.DelegateProjectFromChatAsync(request.Id, request.NarrationVoice, request.Direction, request.Motion, context.CancellationToken)
+                .ConfigureAwait(false)));
 }
