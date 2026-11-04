@@ -10,9 +10,12 @@ namespace Scout.Host.ControlPlane;
 /// <summary>Shared DI wiring for the gRPC control-plane host (used by Program and tests).</summary>
 public static class ControlPlaneServiceRegistration
 {
+    /// <summary>The largest message the host takes or sends, so a full comments view, 1000 comments of up to 2000 characters each, fits.</summary>
+    public const int MaxMessageBytes = 16 * 1024 * 1024;
+
     /// <summary>
-    /// Register gRPC, the role-based token interceptor, the caller tokens and the
-    /// domain services. Tests pin the desktop <paramref name="token"/> and the
+    /// Register gRPC, the role-based token interceptor, the caller tokens, the
+    /// domain services and the timer that clears old research. Tests pin the desktop <paramref name="token"/> and the
     /// <paramref name="workerToken"/>; with a null <paramref name="token"/> the
     /// desktop token is read from the environment or minted and the worker token
     /// is read from <c>SCOUT_CONTROLPLANE_WORKER_TOKEN</c>.
@@ -36,13 +39,16 @@ public static class ControlPlaneServiceRegistration
         services.AddGrpc(options =>
         {
             options.Interceptors.Add<TokenAuthInterceptor>();
+            options.MaxReceiveMessageSize = MaxMessageBytes;
+            options.MaxSendMessageSize = MaxMessageBytes;
         });
 
         services.AddControlPlaneDomain(config);
+        services.AddHostedService<ResearchCleanupService>();
         return services;
     }
 
-    /// <summary>Map the four gRPC services on the endpoint route builder.</summary>
+    /// <summary>Map the five gRPC services on the endpoint route builder.</summary>
     public static void MapControlPlaneServices(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -54,5 +60,7 @@ public static class ControlPlaneServiceRegistration
             .MapGrpcService<FeaturesGrpcService>(endpoints);
         Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
             .MapGrpcService<WorkerGateGrpcService>(endpoints);
+        Microsoft.AspNetCore.Builder.GrpcEndpointRouteBuilderExtensions
+            .MapGrpcService<OperatorGrpcService>(endpoints);
     }
 }

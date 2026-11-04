@@ -83,6 +83,43 @@ export const appRoutes: Routes = [
     loadComponent: () => import('./quick-ask/quick-ask.component').then((m) => m.QuickAskComponent),
   },
   {
+    path: 'operator',
+    loadComponent: () =>
+      import('./operator/operator-shell.component').then((m) => m.OperatorShellComponent),
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'production' },
+      {
+        path: 'production',
+        loadComponent: () =>
+          import('./production/production.component').then((m) => m.ProductionComponent),
+      },
+      {
+        path: 'assembly',
+        loadComponent: () =>
+          import('./assembly/assembly.component').then((m) => m.AssemblyComponent),
+      },
+      {
+        path: 'reports',
+        loadComponent: () => import('./reports/reports.component').then((m) => m.ReportsComponent),
+      },
+      {
+        path: 'experiments',
+        loadComponent: () =>
+          import('./experiments/experiments.component').then((m) => m.ExperimentsComponent),
+      },
+      {
+        path: 'comments',
+        loadComponent: () =>
+          import('./comments/comments.component').then((m) => m.CommentsComponent),
+      },
+      {
+        path: 'approvals',
+        data: { feature: 'youtube' },
+        loadComponent: () => import('./review/review.component').then((m) => m.ReviewComponent),
+      },
+    ],
+  },
+  {
     path: 'floating-button',
     loadComponent: () =>
       import('./floating-button/floating-button.component').then((m) => m.FloatingButtonComponent),

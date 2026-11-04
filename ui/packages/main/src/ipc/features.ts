@@ -41,6 +41,8 @@ export type FeaturesClient = Pick<
 export interface FeaturesHooks {
   readonly onWriteGrantChanged?: () => void;
   readonly onActionsChanged?: () => void;
+  readonly prepareWriteGrant?: (id: FeatureId) => Promise<void>;
+  readonly afterWriteRevoke?: (id: FeatureId) => Promise<void>;
 }
 
 const DEFAULT_WRITES_LIMIT = 50;
@@ -122,6 +124,7 @@ export function registerFeaturesHandlers(
       let confirmWrites = false;
       try {
         assertFeatureId(req.id);
+        if (req.confirmWrites === true) await hooks.prepareWriteGrant?.(req.id);
         confirmWrites = req.confirmWrites === true;
         return grantChangedBy(await (await getClient()).enableFeature(req.id, confirmWrites));
       } catch (err: unknown) {
@@ -150,9 +153,19 @@ export function registerFeaturesHandlers(
     async (_event, req: FeatureWriteGrantRequest): Promise<FeatureDto> => {
       try {
         assertFeatureId(req.id);
+        const granted = req.granted === true;
+        if (granted) await hooks.prepareWriteGrant?.(req.id);
         const updated = await (
           await getClient()
-        ).setWriteGrant(req.id, req.granted === true, req.confirmWrites === true);
+        ).setWriteGrant(req.id, granted, req.confirmWrites === true);
+        if (!granted) {
+          await hooks.afterWriteRevoke?.(req.id).catch((err: unknown) => {
+            logger.warn('features: revoke step failed', {
+              id: req.id,
+              code: serializeError(err).code,
+            });
+          });
+        }
         hooks.onWriteGrantChanged?.();
         return updated;
       } catch (err: unknown) {

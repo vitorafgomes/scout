@@ -288,6 +288,36 @@ describe('Quick ask', () => {
     expect(texts(fixture, 'reply')).toEqual(['Prod is green.']);
   });
 
+  it('shows a notice Scout posted on its own as a Scout message with no question', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'is prod green?',
+        reply: 'Prod is green.',
+        citations: [],
+        state: 'done',
+      },
+      {
+        id: 'notice:1',
+        question: '',
+        reply: 'The script for Span<T> in C# is ready.',
+        citations: [],
+        state: 'done',
+        notice: true,
+      },
+    ]);
+    await settle(fixture);
+
+    expect(texts(fixture, 'asked')).toEqual(['is prod green?']);
+    expect(texts(fixture, 'reply')).toEqual([
+      'Prod is green.',
+      'The script for Span<T> in C# is ready.',
+    ]);
+  });
+
   it('opens on the conversation main already holds', async () => {
     const bridge = makeBridge();
     bridge.localGetTurns.mockResolvedValueOnce([

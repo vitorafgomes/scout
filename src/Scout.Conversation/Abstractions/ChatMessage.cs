@@ -52,4 +52,22 @@ public sealed record ChatMessage
     /// adapter; it passes the allow-list and is never a pairing attempt. Chat platform adapters never set it.
     /// </summary>
     public bool IsLocalOwner { get; init; }
+
+    /// <summary>
+    /// Opaque reference to the conversation this message came from, <c>&lt;adapter&gt;:&lt;payload&gt;</c>,
+    /// filled by the adapter so a later notice can be posted there. Never shown to the model or logged.
+    /// </summary>
+    public string? OriginReference { get; init; }
+
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append("UserId = ").Append(UserId)
+            .Append(", ChannelId = ").Append(ChannelId)
+            .Append(", Text = ").Append(Text)
+            .Append(", Timestamp = ").Append(Timestamp)
+            .Append(", IsDirectMessage = ").Append(IsDirectMessage)
+            .Append(", Audio = ").Append(Audio)
+            .Append(", IsLocalOwner = ").Append(IsLocalOwner);
+        return true;
+    }
 }

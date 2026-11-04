@@ -88,7 +88,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata YouTube = new(
         Id: YouTubeId,
         DisplayName: "YouTube",
-        Description: "Reads a channel's overview, uploads, statistics, search results and comments; your own channel after you sign in from the desktop. With your write permission it will also produce videos under Scout's folder and, one action at a time with your approval, upload, schedule, reply and change titles or thumbnails. Nothing of the write side is implemented yet.",
+        Description: "Reads a channel's overview, uploads, statistics, search results and comments; your own channel after you sign in from the desktop. With your write permission it also produces videos under Scout's folder and, one action at a time with your approval, uploads, schedules and tests titles and thumbnails. Replying to and moderating comments are not implemented yet.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -125,16 +125,28 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Actions: new[] { "Read the comments on your videos" },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
-                Scope: "analytics (yt-analytics v2)",
-                Actions: new[] { "Read a video's views, watch time and click-through rate" },
+                Scope: "youtubeAnalytics reports.query",
+                Actions: new[] { "Read a video's views, watch time, retention and subscribers gained" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "youtubeReporting reports.list",
+                Actions: new[] { "Read the reach reports with a video's thumbnail impressions and click-through rate" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "api.openverse.org and the host of the picture it names",
+                Actions: new[] { "Search Openverse for a CC0, public domain or CC BY picture for a scene without one, and download the picture it names into the project's media folder" },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Scout's data folder",
                 Actions: new[] { "Save scripts, narration, images, the scene list, the video and thumbnails" },
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
+                Scope: "youtubeReporting jobs.create",
+                Actions: new[] { "Create the channel's reach reporting job once, so YouTube prepares the reach reports" },
+                Access: ScopeAccess.Write),
+            new FeatureScopeRow(
                 Scope: "videos.insert",
-                Actions: new[] { "Upload a video as private or unlisted" },
+                Actions: new[] { "Upload a video as public, private or unlisted, or as private with a time YouTube publishes it" },
                 Access: ScopeAccess.IrreversibleWrite),
             new FeatureScopeRow(
                 Scope: "videos.update",

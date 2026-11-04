@@ -4,9 +4,23 @@ package scout.controlplane.v1;
 
 option csharp_namespace = "Scout.ControlPlane.Contracts";
 
+import "protos/operator.proto";
+import "protos/features.proto";
+
 service WorkerGate {
   rpc RequestWrite(RequestWriteRequest) returns (RequestWriteResponse);
   rpc RecordWrite(RecordWriteRequest) returns (RecordWriteResponse);
+  rpc GetOperatorMandate(GetMandateRequest) returns (Mandate);
+  rpc SaveOperatorProject(SaveOperatorProjectRequest) returns (Project);
+  rpc NextQueuedProject(NextQueuedProjectRequest) returns (NextQueuedProjectResponse);
+  rpc GetOperatorProject(GetProjectRequest) returns (Project);
+  rpc ListOperatorProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetOperatorMediaDirectory(GetProjectRequest) returns (MediaDirectory);
+  rpc ReportReadiness(Readiness) returns (Readiness);
+  rpc NextApprovedAction(NextApprovedActionRequest) returns (NextApprovedActionResponse);
+  rpc GetComments(ListCommentsRequest) returns (CommentsView);
+  rpc SaveComments(CommentsView) returns (CommentsView);
+  rpc GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest) returns (MediaDirectory);
 }
 
 message RequestWriteRequest {
@@ -31,3 +45,22 @@ message RecordWriteRequest {
 }
 
 message RecordWriteResponse {}
+
+message SaveOperatorProjectRequest {
+  Project project = 1;
+  optional string origin_reference = 2;
+}
+
+message NextQueuedProjectRequest {}
+
+message NextQueuedProjectResponse {
+  optional Project project = 1;
+  optional string origin_reference = 2;
+}
+
+message NextApprovedActionRequest {}
+
+message NextApprovedActionResponse {
+  optional PendingAction action = 1;
+  optional string origin_reference = 2;
+}

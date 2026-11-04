@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { load } from 'js-yaml';
 import {
   resolveControlPlaneBinary,
+  resolveMediaTools,
   resolveProtoDir,
   resolveTrayIcon,
 } from '../src/worker/resolve-binary.js';
@@ -35,6 +36,7 @@ interface ExtraResource {
 
 interface BuilderConfig {
   appId: string;
+  files: string[];
   electronVersion: string;
   productName: string;
   asar: boolean;
@@ -165,6 +167,7 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     const source = join(UI_ROOT, protos!.from);
     expect(existsSync(join(source, 'features.proto'))).toBe(true);
     expect(existsSync(join(source, 'providers.proto'))).toBe(true);
+    expect(existsSync(join(source, 'operator.proto'))).toBe(true);
     expect(resolveProtoDir(packaged)).toBe(join(RESOURCES, protos!.to));
   });
 
@@ -189,6 +192,47 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     expect(resolveControlPlaneBinary(packaged, {})).toBe(
       join(RESOURCES, worker!.to, 'linux-x64', 'Scout.Host.ControlPlane'),
     );
+  });
+
+  it('ships the bundled ffmpeg and fonts once, as resources where resolveMediaTools looks for them', () => {
+    const tools = config.extraResources.find((r) => r.to === 'media-tools');
+    const fonts = config.extraResources.find((r) => r.to === 'fonts');
+    const everyFile = new Set([
+      join(RESOURCES, 'media-tools', 'linux-x64', 'ffmpeg'),
+      join(RESOURCES, 'fonts', 'NotoSans-Regular.ttf'),
+    ]);
+
+    expect([tools?.from, fonts?.from]).toEqual([
+      'packages/main/resources/media-tools',
+      'packages/main/resources/fonts',
+    ]);
+    expect(fonts!.filter).toEqual(['*.ttf', 'OFL.txt']);
+    expect(config.files).toContain('!packages/main/resources/media-tools/**');
+    expect(config.files).toContain('!packages/main/resources/fonts/**');
+    expect(resolveMediaTools(packaged, (file) => everyFile.has(file))).toEqual({
+      ffmpeg: join(RESOURCES, tools!.to, 'linux-x64', 'ffmpeg'),
+      font: join(RESOURCES, fonts!.to, 'NotoSans-Regular.ttf'),
+      piper: '',
+      voices: '',
+    });
+  });
+
+  it('ships the voices folder as a resource outside the asar, where resolveMediaTools looks for it, with piper inside media-tools', () => {
+    const voices = config.extraResources.find((r) => r.to === 'voices');
+    const tools = config.extraResources.find((r) => r.to === 'media-tools');
+    const piper = join(RESOURCES, 'media-tools', 'linux-x64', 'piper', 'piper');
+
+    expect(voices?.from).toBe('packages/main/resources/voices');
+    expect(voices!.filter).toEqual(['**/*']);
+    expect(tools!.filter).toEqual(['**/*']);
+    expect(config.files).toContain('!packages/main/resources/voices/**');
+    expect(
+      resolveMediaTools(
+        packaged,
+        (file) => file === piper,
+        (dir) => (dir === join(RESOURCES, 'voices') ? ['en_GB-cori-medium.onnx'] : []),
+      ),
+    ).toMatchObject({ piper, voices: join(RESOURCES, 'voices') });
   });
 
   it.each(['publish-worker.sh', 'publish-worker.ps1'])(

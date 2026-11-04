@@ -29,7 +29,7 @@ internal sealed class YouTubeTokenFileHandler(string tokenFile) : DelegatingHand
         }
 
         response.Dispose();
-        throw new YouTubeApiException(YouTubeClient.SignInAgainMessage, HttpStatusCode.Unauthorized);
+        throw new YouTubeApiException(YouTubeClient.SignInAgainMessage, HttpStatusCode.Unauthorized) { Retryable = true };
     }
 
     private string CurrentToken()
@@ -64,7 +64,7 @@ internal sealed class YouTubeTokenFileHandler(string tokenFile) : DelegatingHand
         {
         }
 
-        throw new YouTubeApiException(NotConnectedMessage);
+        throw new YouTubeApiException(NotConnectedMessage) { Retryable = true };
     }
 
     private sealed record CachedToken(string AccessToken, DateTime WrittenAtUtc);

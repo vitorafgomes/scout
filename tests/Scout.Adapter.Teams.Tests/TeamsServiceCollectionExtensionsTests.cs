@@ -41,4 +41,25 @@ public sealed class TeamsServiceCollectionExtensionsTests
         var provider = Build(null);
         provider.GetServices<IChatAdapter>().ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task Teams_Gets_No_Later_Post_Into_The_Originating_Conversation()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{TeamsServiceCollectionExtensions.ConfigSection}:AppId"] = "00000000-0000-0000-0000-000000000000",
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        Scout.Conversation.ConversationServiceCollectionExtensions.AddScoutConversation(services, configuration);
+        services.AddTeamsAdapter(configuration);
+        await using var provider = services.BuildServiceProvider();
+
+        var posted = await provider.GetRequiredService<IOriginNotifier>()
+            .PostAsync("teams:19:abc@thread.tacv2", "Upload finished.", CancellationToken.None);
+
+        posted.ShouldBeFalse();
+    }
 }

@@ -354,7 +354,7 @@ describe('createSupervisor', () => {
       expect(snapshot).not.toContain(SECRET);
     });
 
-    it('never passes an inherited worker gate, write grant or control-plane token variable to the worker, in any spelling, and passes the values buildEnv sets', async () => {
+    it('never passes an inherited worker gate, write grant, control-plane token or operator media tool variable to the worker, in any spelling, and passes the values buildEnv sets', async () => {
       const inherited: Record<string, string> = {
         scout__workergate__token: 'inherited-token',
         'Scout:WorkerGate:Token': 'inherited-token',
@@ -366,6 +366,14 @@ describe('createSupervisor', () => {
         scout_controlplane_token: 'desktop-token',
         Scout_ControlPlane_Worker_Token: 'worker-token',
         DOTNET_SCOUT_CONTROLPLANE_TOKEN: 'desktop-token',
+        scout__operator__ffmpegpath: '/tmp/other/ffmpeg',
+        'Scout:Operator:FontPath': '/tmp/other/font.ttf',
+        DOTNET_Scout__Operator__FontPath: '/tmp/other/font.ttf',
+        'ASPNETCORE_SCOUT:OPERATOR:FFMPEGPATH': '/tmp/other/ffmpeg',
+        scout__operator__piperpath: '/tmp/other/piper',
+        'Scout:Operator:VoicesPath': '/tmp/other/voices',
+        DOTNET_Scout__Operator__PiperPath: '/tmp/other/piper',
+        'ASPNETCORE_SCOUT:OPERATOR:VOICESPATH': '/tmp/other/voices',
       };
       const unrelatedKey = 'SCOUT__TEST__SUPERVISOR_INHERITED';
       const keys = [...Object.keys(inherited), unrelatedKey];
@@ -376,6 +384,10 @@ describe('createSupervisor', () => {
           SCOUT__WORKERGATE__SOCKETPATH: '/run/scout/cp.sock',
           SCOUT__WORKERGATE__TOKEN: 'gate-token',
           SCOUT__FEATURES__GRANTEDWRITES: '',
+          SCOUT__OPERATOR__FFMPEGPATH: '/opt/Scout/resources/media-tools/linux-x64/ffmpeg',
+          SCOUT__OPERATOR__FONTPATH: '',
+          SCOUT__OPERATOR__PIPERPATH: '/opt/Scout/resources/media-tools/linux-x64/piper/piper',
+          SCOUT__OPERATOR__VOICESPATH: '',
         };
         const { child, ...deps } = makeDeps({ buildEnv: async () => ({ ...fromBuildEnv }) });
         const supervisor = createSupervisor(deps);

@@ -61,6 +61,32 @@ import {
   type PendingActionsResponse,
   type WritesListRequest,
   type WritesListResponse,
+  type MandateDto,
+  type MandateResponse,
+  type MandateSaveRequest,
+  type OperatorProjectDto,
+  type OperatorProjectRequest,
+  type OperatorProduceRequest,
+  type OperatorDelegateRequest,
+  type OperatorProjectDeletionResponse,
+  type PackageMetadataRequest,
+  type PublishPackageRequest,
+  type ProposalDecisionRequest,
+  type ExperimentStartRequest,
+  type CommentsViewDto,
+  type CommentDecisionRequest,
+  type ReplyApprovalRequest,
+  type IdeaDecisionRequest,
+  type OperatorProjectsRequest,
+  type OperatorProjectsResponse,
+  type StartProjectRequest,
+  type ClaimDecisionRequest,
+  type ReadinessDto,
+  type SceneLockRequest,
+  type SceneMediaRequest,
+  type SceneMediaResponse,
+  type SceneOrderRequest,
+  type SceneRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -202,6 +228,57 @@ function createFakeBridge(): ScoutBridge {
       return (): void => undefined;
     },
     writesList: (_req: WritesListRequest): Promise<WritesListResponse> => rejectNotAvailable(),
+    operatorMandate: (): Promise<MandateResponse> => rejectNotAvailable(),
+    operatorSaveMandate: (_req: MandateSaveRequest): Promise<MandateDto> => rejectNotAvailable(),
+    operatorProjects: (_req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> =>
+      rejectNotAvailable(),
+    operatorProject: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartProject: (_req: StartProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideClaim: (_req: ClaimDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorProduce: (_req: OperatorProduceRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDelegate: (_req: OperatorDelegateRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDeleteProject: (
+      _req: OperatorProjectRequest,
+    ): Promise<OperatorProjectDeletionResponse> => rejectNotAvailable(),
+    operatorReorderScenes: (_req: SceneOrderRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorSetSceneLocked: (_req: SceneLockRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegenerateScene: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
+      rejectNotAvailable(),
+    operatorReadiness: (): Promise<ReadinessDto> => rejectNotAvailable(),
+    operatorOpenWindow: (): Promise<void> => rejectNotAvailable(),
+    operatorAssemble: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorConfirmMediaRights: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditPackageMetadata: (_req: PackageMetadataRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorApprovePackage: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorPublishPackage: (_req: PublishPackageRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideProposal: (_req: ProposalDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartExperiment: (_req: ExperimentStartRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAdoptExperimentWinner: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorComments: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorRequestCommentSync: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorDecideComment: (_req: CommentDecisionRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorApproveReply: (_req: ReplyApprovalRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorDecideIdea: (_req: IdeaDecisionRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubCancel: (): Promise<void> => rejectNotAvailable(),
@@ -476,6 +553,120 @@ export class ScoutBridgeService {
 
   async writesList(req: WritesListRequest): Promise<WritesListResponse> {
     return this.bridge.writesList(req);
+  }
+
+  async operatorMandate(): Promise<MandateResponse> {
+    return this.bridge.operatorMandate();
+  }
+
+  async operatorSaveMandate(req: MandateSaveRequest): Promise<MandateDto> {
+    return this.bridge.operatorSaveMandate(req);
+  }
+
+  async operatorProjects(req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> {
+    return this.bridge.operatorProjects(req);
+  }
+
+  async operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProject(req);
+  }
+
+  async operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartProject(req);
+  }
+
+  async operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideClaim(req);
+  }
+
+  async operatorProduce(req: OperatorProduceRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProduce(req);
+  }
+
+  async operatorDelegate(req: OperatorDelegateRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDelegate(req);
+  }
+
+  async operatorDeleteProject(
+    req: OperatorProjectRequest,
+  ): Promise<OperatorProjectDeletionResponse> {
+    return this.bridge.operatorDeleteProject(req);
+  }
+
+  async operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorReorderScenes(req);
+  }
+
+  async operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorSetSceneLocked(req);
+  }
+
+  async operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateScene(req);
+  }
+
+  async operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse> {
+    return this.bridge.operatorAttachSceneMedia(req);
+  }
+
+  async operatorReadiness(): Promise<ReadinessDto> {
+    return this.bridge.operatorReadiness();
+  }
+
+  async operatorOpenWindow(): Promise<void> {
+    return this.bridge.operatorOpenWindow();
+  }
+
+  async operatorAssemble(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAssemble(req);
+  }
+
+  async operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorConfirmMediaRights(req);
+  }
+
+  async operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditPackageMetadata(req);
+  }
+
+  async operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorApprovePackage(req);
+  }
+
+  async operatorPublishPackage(req: PublishPackageRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorPublishPackage(req);
+  }
+
+  async operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideProposal(req);
+  }
+
+  async operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartExperiment(req);
+  }
+
+  async operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAdoptExperimentWinner(req);
+  }
+
+  async operatorComments(): Promise<CommentsViewDto> {
+    return this.bridge.operatorComments();
+  }
+
+  async operatorRequestCommentSync(): Promise<CommentsViewDto> {
+    return this.bridge.operatorRequestCommentSync();
+  }
+
+  async operatorDecideComment(req: CommentDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideComment(req);
+  }
+
+  async operatorApproveReply(req: ReplyApprovalRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorApproveReply(req);
+  }
+
+  async operatorDecideIdea(req: IdeaDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideIdea(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

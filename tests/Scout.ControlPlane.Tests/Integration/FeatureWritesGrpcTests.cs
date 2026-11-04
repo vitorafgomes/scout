@@ -17,7 +17,7 @@ namespace Scout.ControlPlane.Tests.Integration;
 public sealed class FeatureWritesGrpcTests
 {
     private const string YouTubeWriteRows =
-        "Scout's data folder (write), videos.insert (irreversible write), videos.update (irreversible write), " +
+        "Scout's data folder (write), youtubeReporting jobs.create (write), videos.insert (irreversible write), videos.update (irreversible write), " +
         "thumbnails.set (irreversible write), playlistItems.insert (irreversible write), " +
         "comments.insert (irreversible write), comments.setModerationStatus (irreversible write).";
 
@@ -42,7 +42,7 @@ public sealed class FeatureWritesGrpcTests
         listed.Granted.ShouldBeFalse();
         listed.HasGrantedAt.ShouldBeFalse();
         listed.WriteClass.ShouldBe(2);
-        listed.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 2, 2, 2]);
+        listed.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2]);
         var github = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
             .Single(f => f.Id == FeatureCatalog.GitHubId);
         github.WriteClass.ShouldBe(0);

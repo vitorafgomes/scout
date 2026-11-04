@@ -58,6 +58,34 @@ export const CHANNEL = {
   actionsReject: 'scout:actions.reject',
   actionsChanged: 'scout:actions.changed',
   writesList: 'scout:writes.list',
+  operatorMandate: 'scout:operator.mandate',
+  operatorSaveMandate: 'scout:operator.saveMandate',
+  operatorProjects: 'scout:operator.projects',
+  operatorProject: 'scout:operator.project',
+  operatorStartProject: 'scout:operator.startProject',
+  operatorDecideClaim: 'scout:operator.decideClaim',
+  operatorProduction: 'scout:operator.production',
+  operatorDelegation: 'scout:operator.delegation',
+  operatorProjectDeletion: 'scout:operator.projectDeletion',
+  operatorSceneOrder: 'scout:operator.sceneOrder',
+  operatorSceneLock: 'scout:operator.sceneLock',
+  operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
+  operatorSceneMedia: 'scout:operator.sceneMedia',
+  operatorReadiness: 'scout:operator.readiness',
+  operatorWindow: 'scout:operator.window',
+  operatorAssembly: 'scout:operator.assembly',
+  operatorMediaRights: 'scout:operator.mediaRights',
+  operatorPackageMetadata: 'scout:operator.packageMetadata',
+  operatorPackageApproval: 'scout:operator.packageApproval',
+  operatorPublication: 'scout:operator.publication',
+  operatorProposalDecision: 'scout:operator.proposalDecision',
+  operatorExperiment: 'scout:operator.experiment',
+  operatorExperimentAdoption: 'scout:operator.experimentAdoption',
+  operatorComments: 'scout:operator.comments',
+  operatorCommentSync: 'scout:operator.commentSync',
+  operatorCommentDecision: 'scout:operator.commentDecision',
+  operatorReplyApproval: 'scout:operator.replyApproval',
+  operatorIdeaDecision: 'scout:operator.ideaDecision',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -530,6 +558,404 @@ export interface WritesListResponse {
   readonly entries: readonly WriteLogEntryDto[];
 }
 
+/** The channel mandate the operator works to; `updatedAt` is set once the owner saved it. */
+export interface MandateDto {
+  readonly objective: string;
+  readonly audience: string;
+  readonly pillars: readonly string[];
+  readonly cadence: string;
+  readonly language: string;
+  readonly voiceAndStyle: string;
+  readonly blockedTopics: readonly string[];
+  readonly targetMetric: string;
+  readonly targetValue: string;
+  readonly updatedAt: string | null;
+}
+
+/** The mandate fields the owner saves; the control plane stamps the time. */
+export type MandateSaveRequest = Omit<MandateDto, 'updatedAt'>;
+
+/** The saved mandate, or null while the owner has not saved one. */
+export interface MandateResponse {
+  readonly mandate: MandateDto | null;
+}
+
+/** A topic the operator proposed, why, and how well it fits the mandate (0 to 1). */
+export interface TopicCandidateDto {
+  readonly title: string;
+  readonly reason: string;
+  readonly fit: number;
+}
+
+export interface ScriptSectionDto {
+  readonly heading: string;
+  readonly narration: string;
+}
+
+export interface ChapterDto {
+  readonly at: string;
+  readonly title: string;
+}
+
+/** The script draft of a video project, with the metadata the upload would carry. */
+export interface ScriptDto {
+  readonly hook: string;
+  readonly sections: readonly ScriptSectionDto[];
+  readonly callToAction: string;
+  readonly titleVariants: readonly string[];
+  readonly description: string;
+  readonly tags: readonly string[];
+  readonly chapters: readonly ChapterDto[];
+}
+
+/** A factual claim in the script, the sources the operator found for it, and the owner's verdict. */
+export interface ClaimDto {
+  readonly id: string;
+  readonly text: string;
+  readonly risk: string;
+  readonly sourceUrls: readonly string[];
+  readonly status: string;
+  readonly note: string | null;
+}
+
+/** One video the operator works on, from the topic to the script and its claims. */
+export interface OperatorProjectDto {
+  readonly id: string;
+  readonly topic: string;
+  readonly status: string;
+  readonly origin: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly candidates: readonly TopicCandidateDto[];
+  readonly script: ScriptDto | null;
+  readonly claims: readonly ClaimDto[];
+  readonly error: string | null;
+  readonly scenes: readonly SceneDto[];
+  /** The assembled video and its upload metadata; null until the owner first asks for assembly. */
+  readonly package: VideoPackageDto | null;
+  readonly publication: PublicationDto | null;
+  /** The voice id the owner produced this video in; empty means Scout's choice. */
+  readonly narrationVoice: string;
+  /** The picture behind every scene without its own, named inside the project's media directory. */
+  readonly backgroundFile: string | null;
+  /** True once the owner delegated the project: Scout produces and assembles it and stops before the approval. */
+  readonly delegated: boolean;
+  /** The owner's words for the pictures and animation of this video, at most 500 characters; empty for none. */
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
+}
+
+/** How much the assembler moves each picture. */
+export type ProjectMotion = 'still' | 'gentle' | 'dynamic';
+
+export type PrivacyStatus = 'public' | 'private' | 'unlisted';
+
+export interface PublicationDto {
+  readonly status: string;
+  readonly videoId: string | null;
+  readonly privacyStatus: string;
+  readonly publishAt: string | null;
+  readonly madeForKids: boolean;
+  readonly syntheticMedia: boolean;
+  readonly uploadedAt: string | null;
+  readonly error: string | null;
+  readonly snapshots: readonly SnapshotDto[];
+  readonly proposals: readonly ProposalDto[];
+  readonly experiment: ExperimentDto | null;
+}
+
+export interface SnapshotDto {
+  readonly window: string;
+  readonly takenAt: string;
+  readonly views: number;
+  readonly minutesWatched: number;
+  readonly averageViewDurationSeconds: number;
+  readonly averageViewPercentage: number;
+  readonly subscribersGained: number;
+  readonly subscribersLost: number;
+  readonly likes: number;
+  readonly comments: number;
+  readonly shares: number;
+  readonly impressions: number | null;
+  readonly impressionsCtr: number | null;
+  readonly retention: readonly RetentionPointDto[];
+}
+
+export interface RetentionPointDto {
+  readonly elapsedRatio: number;
+  readonly audienceWatchRatio: number;
+}
+
+export interface ProposalDto {
+  readonly id: string;
+  readonly kind: string;
+  readonly text: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly thumbnailFile: string | null;
+}
+
+export interface ExperimentDto {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly arms: readonly ExperimentArmDto[];
+  readonly winnerArmId: string | null;
+  readonly result: string | null;
+}
+
+export interface ExperimentArmDto {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+  readonly startedAt: string | null;
+  readonly endedAt: string | null;
+  readonly impressions: number;
+  readonly clicks: number;
+  readonly averageViewPercentage: number;
+}
+
+export interface PublishPackageRequest {
+  readonly projectId: string;
+  readonly privacyStatus: PrivacyStatus;
+  readonly publishAt: string | null;
+  readonly madeForKids: boolean;
+  readonly syntheticMedia: boolean;
+}
+
+export interface ProposalDecisionRequest {
+  readonly projectId: string;
+  readonly proposalId: string;
+  readonly accept: boolean;
+}
+
+export interface ExperimentStartRequest {
+  readonly projectId: string;
+  readonly armHours: number;
+}
+
+/** One top-level comment on the owner's channel, as Scout stored it, with the model's kind and theme and the owner's reply. */
+export interface AudienceCommentDto {
+  readonly id: string;
+  readonly threadId: string;
+  readonly videoId: string;
+  readonly videoTitle: string;
+  readonly author: string;
+  readonly text: string;
+  readonly publishedAt: string;
+  readonly likeCount: number;
+  readonly kind: string;
+  readonly theme: string;
+  readonly status: string;
+  readonly draft: string;
+  readonly approvedText: string | null;
+  readonly replyId: string | null;
+  readonly error: string | null;
+  readonly decidedAt: string | null;
+  readonly fetchedAt: string;
+}
+
+/** A video idea taken from an audience request; `status` is proposed, used or dismissed. */
+export interface AudienceIdeaDto {
+  readonly id: string;
+  readonly text: string;
+  readonly commentId: string;
+  readonly status: string;
+  readonly projectId: string | null;
+}
+
+/** The stored comments, newest first, the audience ideas and the state of the comment sync. */
+export interface CommentsViewDto {
+  readonly comments: readonly AudienceCommentDto[];
+  readonly ideas: readonly AudienceIdeaDto[];
+  readonly syncedAt: string | null;
+  readonly syncRequestedAt: string | null;
+  readonly syncError: string | null;
+}
+
+export type CommentDecision = 'draft' | 'dismiss' | 'not_spam' | 'hold';
+
+export interface CommentDecisionRequest {
+  readonly commentId: string;
+  readonly decision: CommentDecision;
+}
+
+/** The owner's reply to one comment, 1 to 1000 characters after trimming. */
+export interface ReplyApprovalRequest {
+  readonly commentId: string;
+  readonly text: string;
+}
+
+export interface IdeaDecisionRequest {
+  readonly ideaId: string;
+  readonly use: boolean;
+}
+
+/**
+ * The assembled video of a project: the MP4, its Shorts and thumbnail named inside the project's media directory,
+ * the checks the worker ran, the owner's media-rights confirmation and approval, and the upload metadata.
+ */
+export interface VideoPackageDto {
+  readonly status: string;
+  readonly videoFile: string | null;
+  readonly shorts: readonly ShortClipDto[];
+  readonly thumbnailFile: string | null;
+  readonly checks: readonly PackageCheckDto[];
+  readonly rightsConfirmed: boolean;
+  readonly approvedAt: string | null;
+  readonly title: string;
+  readonly description: string;
+  readonly tags: readonly string[];
+  readonly durationMs: number;
+  readonly error: string | null;
+  readonly metadataEdited: boolean;
+}
+
+/** One vertical Shorts cut, `startMs` into the video, with its hook line. */
+export interface ShortClipDto {
+  readonly file: string;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly hook: string;
+}
+
+/** One check the worker ran on the package; `result` is pass, warn or fail. */
+export interface PackageCheckDto {
+  readonly name: string;
+  readonly result: string;
+  readonly detail: string;
+}
+
+/** The owner's upload metadata for a package, within YouTube's limits. */
+export interface PackageMetadataRequest {
+  readonly projectId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly tags: readonly string[];
+}
+
+/** One scene of a video: its narration, the picture it needs, and the media files made for it, named inside the project's media directory. */
+export interface SceneDto {
+  readonly id: string;
+  readonly order: number;
+  readonly narration: string;
+  readonly visualPrompt: string;
+  readonly locked: boolean;
+  readonly status: string;
+  readonly error: string | null;
+  readonly audioSource: string;
+  readonly visualSource: string;
+  readonly visualQuery: string;
+  readonly visualCredit: string | null;
+  readonly audioFile: string | null;
+  readonly visualFile: string | null;
+  readonly durationMs: number;
+}
+
+export interface OperatorProjectsRequest {
+  readonly limit: number;
+}
+
+export interface OperatorProjectsResponse {
+  readonly projects: readonly OperatorProjectDto[];
+}
+
+export interface OperatorProjectRequest {
+  readonly id: string;
+}
+
+/** The answer to deleting a project: it is gone from Scout's data folder. */
+export interface OperatorProjectDeletionResponse {
+  readonly deleted: true;
+}
+
+/** The project to produce and the voice to narrate it in, a readiness voice id or empty for Scout's choice. */
+export interface OperatorProduceRequest {
+  readonly id: string;
+  readonly narrationVoice: string;
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
+}
+
+/** The project the owner delegates and its narration voice; Scout produces and assembles it and stops before the approval. */
+export interface OperatorDelegateRequest {
+  readonly id: string;
+  readonly narrationVoice: string;
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
+}
+
+/** The topic of a video the owner asks the operator to make; 3 to 200 characters. */
+export interface StartProjectRequest {
+  readonly topic: string;
+}
+
+export type ClaimStatus = 'supported' | 'unsupported' | 'waived';
+
+/** The owner's verdict on one claim; a waived claim needs the note saying why. */
+export interface ClaimDecisionRequest {
+  readonly projectId: string;
+  readonly claimId: string;
+  readonly status: ClaimStatus;
+  readonly note?: string;
+}
+
+/** The scenes of a project in the order the owner wants them; every scene id exactly once. */
+export interface SceneOrderRequest {
+  readonly projectId: string;
+  readonly sceneIds: readonly string[];
+}
+
+export interface SceneLockRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly locked: boolean;
+}
+
+export interface SceneRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+}
+
+export type SceneMediaKind = 'audio' | 'visual';
+
+/**
+ * Which scene gets an owner's file and of which kind, or the project's background picture with an empty scene id;
+ * main asks the owner for the file, the renderer never sends a path.
+ */
+export interface SceneMediaRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly kind: SceneMediaKind | 'background';
+}
+
+/** The project after the owner's file was attached, or null when the owner closed the file dialog. */
+export interface SceneMediaResponse {
+  readonly project: OperatorProjectDto | null;
+}
+
+/** One narration voice this machine offers; `id` is what a project stores, `source` groups the list. */
+export interface VoiceDto {
+  readonly id: string;
+  readonly label: string;
+  readonly source: string;
+  /** A short sample of the voice, named inside the voice-samples directory; null while none is made. */
+  readonly sampleFile: string | null;
+}
+
+/** What the operator can make on this machine right now, as the worker last reported it. */
+export interface ReadinessDto {
+  readonly speechAvailable: boolean;
+  readonly imagesAvailable: boolean;
+  readonly stockPictures: boolean;
+  readonly provider: string;
+  readonly ffmpegAvailable: boolean;
+  readonly youtubeSignedIn: boolean;
+  readonly notes: readonly string[];
+  readonly voices: readonly VoiceDto[];
+  readonly reportedAt: string | null;
+}
+
 export interface FeatureSetCredentialsRequest {
   readonly id: FeatureId;
   readonly body: Readonly<Record<string, string>>;
@@ -575,6 +1001,7 @@ export interface YouTubeStatus {
   readonly error: string | null;
   readonly clientConfigPath: string;
   readonly source: 'env' | 'file' | 'bundled' | 'embedded' | null;
+  readonly scopes: readonly string[];
 }
 
 /** A YouTube Data API key the owner pastes; travels renderer to main once and is never sent back. */
@@ -699,6 +1126,8 @@ export interface LocalTurn {
   readonly state: 'running' | 'done' | 'failed';
   /** True when the question failed because the worker is not running. */
   readonly notRunning?: boolean;
+  /** True for a message Scout posted on its own, such as operator progress; it has no question. */
+  readonly notice?: true;
 }
 
 /**
@@ -807,6 +1236,35 @@ export interface ScoutBridge {
   actionsReject(req: ActionDecisionRequest): Promise<PendingActionDto>;
   onActionsChanged(listener: () => void): () => void;
   writesList(req: WritesListRequest): Promise<WritesListResponse>;
+  operatorMandate(): Promise<MandateResponse>;
+  operatorSaveMandate(req: MandateSaveRequest): Promise<MandateDto>;
+  operatorProjects(req: OperatorProjectsRequest): Promise<OperatorProjectsResponse>;
+  operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto>;
+  operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto>;
+  operatorProduce(req: OperatorProduceRequest): Promise<OperatorProjectDto>;
+  operatorDelegate(req: OperatorDelegateRequest): Promise<OperatorProjectDto>;
+  operatorDeleteProject(req: OperatorProjectRequest): Promise<OperatorProjectDeletionResponse>;
+  operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto>;
+  operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto>;
+  operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
+  operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
+  operatorReadiness(): Promise<ReadinessDto>;
+  /** Opens the YouTube operator window, or brings it to the front when it is already open. */
+  operatorOpenWindow(): Promise<void>;
+  operatorAssemble(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto>;
+  operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorPublishPackage(req: PublishPackageRequest): Promise<OperatorProjectDto>;
+  operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto>;
+  operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto>;
+  operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorComments(): Promise<CommentsViewDto>;
+  operatorRequestCommentSync(): Promise<CommentsViewDto>;
+  operatorDecideComment(req: CommentDecisionRequest): Promise<CommentsViewDto>;
+  operatorApproveReply(req: ReplyApprovalRequest): Promise<CommentsViewDto>;
+  operatorDecideIdea(req: IdeaDecisionRequest): Promise<CommentsViewDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

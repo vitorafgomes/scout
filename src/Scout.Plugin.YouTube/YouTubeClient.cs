@@ -31,7 +31,12 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
 
     internal const string UnavailableMessage = "YouTube is currently unavailable. Try again later.";
 
+    internal const string CommentsNeedWritesMessage =
+        "Reading comments needs Scout's permission to reply to and moderate comments: open the YouTube card in Scout Desktop and allow writes again.";
+
     private const int MaxResults = 50;
+    private const int MaxSearchResults = 25;
+    private const int MaxCommentThreads = 100;
     private const string ChannelParts = "snippet,statistics,contentDetails";
 
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -85,12 +90,56 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
         return wanted.Where(byId.ContainsKey).Select(id => ToVideo(byId[id])).ToList();
     }
 
-    private async Task<T> GetAsync<T>(string path, CancellationToken ct, bool mine = false)
+    public async Task<IReadOnlyList<YouTubeSearchResult>> SearchVideosAsync(string query, int max, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+        var page = await GetAsync<ListDto<SearchResultDto>>(
+            $"search?part=snippet&type=video&order=relevance&maxResults={Math.Clamp(max, 1, MaxSearchResults)}&q={Uri.EscapeDataString(query.Trim())}",
+            ct).ConfigureAwait(false);
+        return (page.Items ?? [])
+            .Where(i => i.Id?.VideoId is not null)
+            .Select(i => new YouTubeSearchResult(
+                VideoId: i.Id!.VideoId!,
+                Title: i.Snippet?.Title ?? string.Empty,
+                ChannelTitle: i.Snippet?.ChannelTitle ?? string.Empty,
+                PublishedAt: i.Snippet?.PublishedAt ?? default,
+                Description: i.Snippet?.Description ?? string.Empty))
+            .ToList();
+    }
+
+    public async Task<YouTubeCommentThreadPage> ListCommentThreadsAsync(string channelId, string? pageToken, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(channelId);
+        var page = await GetAsync<CommentThreadPageDto>(
+            $"commentThreads?part=snippet&allThreadsRelatedToChannelId={Uri.EscapeDataString(channelId)}&order=time&maxResults={MaxCommentThreads}&textFormat=plainText"
+                + (string.IsNullOrEmpty(pageToken) ? string.Empty : $"&pageToken={Uri.EscapeDataString(pageToken)}"),
+            ct,
+            missingPermission: CommentsNeedWritesMessage).ConfigureAwait(false);
+        var threads = (page.Items ?? [])
+            .Where(t => t.Id is not null && t.Snippet?.TopLevelComment?.Id is not null)
+            .Select(t =>
+            {
+                var comment = t.Snippet!.TopLevelComment!;
+                return new YouTubeCommentThread(
+                    ThreadId: t.Id!,
+                    CommentId: comment.Id!,
+                    VideoId: t.Snippet.VideoId ?? comment.Snippet?.VideoId ?? string.Empty,
+                    AuthorDisplayName: comment.Snippet?.AuthorDisplayName ?? string.Empty,
+                    AuthorChannelId: comment.Snippet?.AuthorChannelId?.Value,
+                    Text: comment.Snippet?.TextDisplay ?? string.Empty,
+                    PublishedAt: comment.Snippet?.PublishedAt ?? default,
+                    LikeCount: comment.Snippet?.LikeCount ?? 0);
+            })
+            .ToList();
+        return new YouTubeCommentThreadPage(threads, string.IsNullOrEmpty(page.NextPageToken) ? null : page.NextPageToken);
+    }
+
+    private async Task<T> GetAsync<T>(string path, CancellationToken ct, bool mine = false, string? missingPermission = null)
     {
         using var response = await _http.GetAsync(path, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            throw await ToApiExceptionAsync(response, mine, ct).ConfigureAwait(false);
+            throw await ToApiExceptionAsync(response, mine, ct, missingPermission).ConfigureAwait(false);
         }
 
         try
@@ -104,8 +153,8 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
         }
     }
 
-    private static async Task<YouTubeApiException> ToApiExceptionAsync(
-        HttpResponseMessage response, bool mine, CancellationToken ct)
+    internal static async Task<YouTubeApiException> ToApiExceptionAsync(
+        HttpResponseMessage response, bool mine, CancellationToken ct, string? missingPermission = null)
     {
         var status = response.StatusCode;
         if (mine && status is HttpStatusCode.Unauthorized)
@@ -116,12 +165,15 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
         switch (status)
         {
             case HttpStatusCode.Unauthorized:
-                return new YouTubeApiException(SignInAgainMessage, status);
+                return new YouTubeApiException(SignInAgainMessage, status) { Retryable = true };
             case HttpStatusCode.Forbidden:
                 var forbiddenReason = await ReadReasonAsync(response, ct).ConfigureAwait(false);
-                return forbiddenReason is "quotaExceeded" or "dailyLimitExceeded"
-                    ? new YouTubeApiException(QuotaMessage, status)
-                    : new YouTubeApiException(ForbiddenMessage, status);
+                return forbiddenReason switch
+                {
+                    "insufficientPermissions" when missingPermission is not null => new YouTubeApiException(missingPermission, status) { Retryable = true },
+                    "quotaExceeded" or "dailyLimitExceeded" => new YouTubeApiException(QuotaMessage, status) { Retryable = true },
+                    _ => new YouTubeApiException(ForbiddenMessage, status),
+                };
             case HttpStatusCode.NotFound:
                 return new YouTubeApiException(NotFoundMessage, status);
             case HttpStatusCode.BadRequest:
@@ -131,12 +183,12 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
                     status);
             default:
                 return (int)status >= 500
-                    ? new YouTubeApiException(UnavailableMessage, status)
-                    : new YouTubeApiException($"YouTube request failed ({(int)status}).", status);
+                    ? new YouTubeApiException(UnavailableMessage, status) { Retryable = true }
+                    : new YouTubeApiException($"YouTube request failed ({(int)status}).", status) { Retryable = status == HttpStatusCode.TooManyRequests };
         }
     }
 
-    private static async Task<string?> ReadReasonAsync(HttpResponseMessage response, CancellationToken ct)
+    internal static async Task<string?> ReadReasonAsync(HttpResponseMessage response, CancellationToken ct)
     {
         try
         {
@@ -241,6 +293,46 @@ internal sealed class YouTubeClient(HttpClient http) : IYouTubeClient
 
     private sealed record VideoContentDetailsDto(
         [property: JsonPropertyName("duration")] string? Duration);
+
+    private sealed record SearchResultDto(
+        [property: JsonPropertyName("id")] SearchIdDto? Id,
+        [property: JsonPropertyName("snippet")] SearchSnippetDto? Snippet);
+
+    private sealed record SearchIdDto(
+        [property: JsonPropertyName("videoId")] string? VideoId);
+
+    private sealed record SearchSnippetDto(
+        [property: JsonPropertyName("title")] string? Title,
+        [property: JsonPropertyName("description")] string? Description,
+        [property: JsonPropertyName("channelTitle")] string? ChannelTitle,
+        [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt);
+
+    private sealed record CommentThreadPageDto(
+        [property: JsonPropertyName("items")] List<CommentThreadDto>? Items,
+        [property: JsonPropertyName("nextPageToken")] string? NextPageToken);
+
+    private sealed record CommentThreadDto(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("snippet")] CommentThreadSnippetDto? Snippet);
+
+    private sealed record CommentThreadSnippetDto(
+        [property: JsonPropertyName("videoId")] string? VideoId,
+        [property: JsonPropertyName("topLevelComment")] CommentDto? TopLevelComment);
+
+    private sealed record CommentDto(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("snippet")] CommentSnippetDto? Snippet);
+
+    private sealed record CommentSnippetDto(
+        [property: JsonPropertyName("videoId")] string? VideoId,
+        [property: JsonPropertyName("authorDisplayName")] string? AuthorDisplayName,
+        [property: JsonPropertyName("authorChannelId")] AuthorChannelIdDto? AuthorChannelId,
+        [property: JsonPropertyName("textDisplay")] string? TextDisplay,
+        [property: JsonPropertyName("likeCount")] long? LikeCount,
+        [property: JsonPropertyName("publishedAt")] DateTimeOffset? PublishedAt);
+
+    private sealed record AuthorChannelIdDto(
+        [property: JsonPropertyName("value")] string? Value);
 
     private sealed record ErrorEnvelopeDto(
         [property: JsonPropertyName("error")] ErrorDto? Error);

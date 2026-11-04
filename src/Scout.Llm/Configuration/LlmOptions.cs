@@ -76,6 +76,21 @@ public sealed class OpenAIOptions
 
     /// <summary>Embedding settings; may point at a different endpoint/key than chat.</summary>
     public OpenAIEmbeddingOptions Embeddings { get; set; } = new();
+
+    /// <summary>Text-to-audio model for narration, on the chat endpoint and key.</summary>
+    public string SpeechModel { get; set; } = "gpt-4o-mini-tts";
+
+    /// <summary>Text-to-image model for scene visuals, on the chat endpoint and key.</summary>
+    public string ImageModel { get; set; } = "gpt-image-1";
+
+    /// <summary>Quality a <c>gpt-image</c> model is asked for: low or medium.</summary>
+    public string ImageQuality { get; set; } = "medium";
+
+    /// <summary>
+    /// Register speech and images on an <see cref="Endpoint"/> other than api.openai.com; off by default, because an
+    /// OpenAI-compatible host rarely serves the OpenAI media endpoints.
+    /// </summary>
+    public bool MediaOnCustomEndpoint { get; set; }
 }
 
 /// <summary>Embedding settings for the OpenAI-compatible provider. When
@@ -141,6 +156,15 @@ public sealed class AzureOpenAIOptions
 
     /// <summary>Embedding deployment settings.</summary>
     public AzureDeploymentOptions Embeddings { get; set; } = new();
+
+    /// <summary>Optional text-to-audio deployment for narration; empty registers no speech service.</summary>
+    public string SpeechDeployment { get; set; } = string.Empty;
+
+    /// <summary>Optional text-to-image deployment for scene visuals; empty registers no image service.</summary>
+    public string ImageDeployment { get; set; } = string.Empty;
+
+    /// <summary>The model behind <see cref="ImageDeployment"/>, which decides the picture settings: dall-e-3 or a gpt-image model.</summary>
+    public string ImageModel { get; set; } = "gpt-image-1";
 }
 
 /// <summary>Azure OpenAI deployment settings. The deployment name is the unit the

@@ -8,9 +8,11 @@ using Scout.Conversation;
 using Scout.Conversation.Access;
 using Scout.Knowledge;
 using Scout.Llm;
+using Scout.Operator;
 using Scout.Plugin.GitHub;
 using Scout.Plugin.Kubernetes;
 using Scout.Plugin.YouTube;
+using Scout.Plugin.YouTube.Abstractions;
 using Scout.Skills;
 using Scout.Transcription.Whisper;
 
@@ -25,7 +27,8 @@ internal static class HostComposition
 {
     /// <summary>
     /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project knowledge, voice transcription,
-    /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the write gate, the worker, the watchdog.
+    /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the write gate,
+    /// the YouTube channel operator when YouTube is configured, the worker, the watchdog.
     /// </summary>
     public static IServiceCollection AddScoutHost(
         this IServiceCollection services,
@@ -59,7 +62,8 @@ internal static class HostComposition
         services.AddGitHubPlugin(configuration);
         services.AddKubernetesPlugin(configuration);
         services.AddYouTubePlugin(configuration);
-        AddWriteGate(services, configuration);
+        var gateOpen = AddWriteGate(services, configuration);
+        AddYouTubeOperator(services, configuration, gateOpen);
 
         services.AddHostedService<ConversationWorker>();
 
@@ -76,7 +80,8 @@ internal static class HostComposition
     /// <c>SCOUT__WORKERGATE__SOCKETPATH</c> and <c>SCOUT__WORKERGATE__TOKEN</c>; without
     /// both, a gate that refuses every write. Once read, the token leaves the process environment.
     /// </summary>
-    private static void AddWriteGate(IServiceCollection services, IConfiguration configuration)
+    /// <returns>True when the gate reaches the control plane.</returns>
+    private static bool AddWriteGate(IServiceCollection services, IConfiguration configuration)
     {
         var socketPath = configuration["Scout:WorkerGate:SocketPath"];
         var token = configuration["Scout:WorkerGate:Token"];
@@ -84,10 +89,42 @@ internal static class HostComposition
         if (string.IsNullOrWhiteSpace(socketPath) || string.IsNullOrWhiteSpace(token))
         {
             services.AddSingleton<Scout.Llm.Abstractions.IWriteGate, ClosedWriteGate>();
+            return false;
+        }
+
+        services.AddSingleton(_ => new GrpcWriteGate(socketPath, token));
+        services.AddSingleton<Scout.Llm.Abstractions.IWriteGate>(sp => sp.GetRequiredService<GrpcWriteGate>());
+        return true;
+    }
+
+    /// <summary>
+    /// The YouTube channel operator, only when the YouTube plugin registered its client; it reaches the control
+    /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed. The ffmpeg
+    /// and font paths and the upload category bind from <c>Scout:Operator</c>, which the desktop sets as environment variables.
+    /// Publishing and learning are composed only when the owner signed in, because an API key cannot upload or read analytics.
+    /// </summary>
+    private static void AddYouTubeOperator(IServiceCollection services, IConfiguration configuration, bool gateOpen)
+    {
+        if (!services.Any(d => d.ServiceType == typeof(IYouTubeClient)))
+        {
             return;
         }
 
-        services.AddSingleton<Scout.Llm.Abstractions.IWriteGate>(_ => new GrpcWriteGate(socketPath, token));
+        if (gateOpen)
+        {
+            services.AddSingleton<IOperatorControlPlane>(sp => new GrpcOperatorControlPlane(sp.GetRequiredService<GrpcWriteGate>()));
+        }
+        else
+        {
+            services.AddSingleton<IOperatorControlPlane, ClosedOperatorControlPlane>();
+        }
+
+        services.AddOptions<OperatorMediaOptions>().Bind(configuration.GetSection(OperatorMediaOptions.Section));
+        services.AddYouTubeOperator();
+        if (services.Any(d => d.ServiceType == typeof(IYouTubeWriteClient)))
+        {
+            services.AddYouTubePublishing();
+        }
     }
 
     /// <summary>

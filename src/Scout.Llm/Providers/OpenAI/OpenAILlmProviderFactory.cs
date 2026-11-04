@@ -25,6 +25,11 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
     private readonly string? _embeddingEndpoint;
     private readonly string _embeddingModel;
     private readonly HttpClient? _httpClient;
+    private readonly string _speechModel;
+    private readonly string _imageModel;
+    private readonly bool _media;
+
+    private static readonly string[] ImageQualities = ["low", "medium"];
 
     /// <summary>
     /// Create the factory from bound <see cref="LlmOptions"/>. Validates the
@@ -91,7 +96,30 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
         _embeddingEndpoint = embeddings.Endpoint ?? openAI.Endpoint;
         _embeddingModel = embeddings.Model;
         _httpClient = httpClient;
+        _speechModel = string.IsNullOrWhiteSpace(openAI.SpeechModel) ? "gpt-4o-mini-tts" : openAI.SpeechModel;
+        _imageModel = string.IsNullOrWhiteSpace(openAI.ImageModel) ? "gpt-image-1" : openAI.ImageModel;
+        var quality = string.IsNullOrWhiteSpace(openAI.ImageQuality) ? "medium" : openAI.ImageQuality.Trim();
+        if (!ImageQualities.Contains(quality, StringComparer.Ordinal))
+        {
+            throw new ArgumentException(
+                $"OpenAIOptions.ImageQuality '{openAI.ImageQuality}' must be low or medium.", nameof(options));
+        }
+
+        _media = IsDefaultEndpoint(_chatEndpoint) || openAI.MediaOnCustomEndpoint;
+        Media = _media
+            ? new MediaCapabilities(true, true, Name)
+            {
+                SpeechSettings = OpenAIMediaSettings.Speech(),
+                SpeechVoices = OpenAIMediaSettings.Voices,
+                SpeechSettingsFor = OpenAIMediaSettings.Speech,
+                ImageSettings = OpenAIMediaSettings.Image(_imageModel, quality),
+            }
+            : new MediaCapabilities(false, false, Name);
     }
+
+    private static bool IsDefaultEndpoint(string? endpoint)
+        => endpoint is null
+            || string.Equals(new Uri(endpoint, UriKind.Absolute).Host, "api.openai.com", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateOptionalEndpoint(string? endpoint, string name)
     {
@@ -113,12 +141,19 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
     public string Name => "OpenAI";
 
     /// <inheritdoc/>
+    public MediaCapabilities Media { get; }
+
+    /// <inheritdoc/>
     public void AddToKernel(IKernelBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         AddChat(builder);
         AddEmbeddings(builder);
+        if (_media)
+        {
+            AddMedia(builder);
+        }
     }
 
     /// <summary>
@@ -168,5 +203,18 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
         => builder.AddOpenAIEmbeddingGenerator(
             modelId: _embeddingModel,
             openAIClient: BuildClient(_embeddingApiKey, _embeddingEndpoint));
+#pragma warning restore SKEXP0010
+
+#pragma warning disable SKEXP0010
+    private void AddMedia(IKernelBuilder builder)
+    {
+        var http = _httpClient ?? new HttpClient
+        {
+            BaseAddress = _chatEndpoint is null ? null : new Uri(_chatEndpoint, UriKind.Absolute),
+            Timeout = TimeSpan.FromMinutes(3),
+        };
+        builder.AddOpenAITextToAudio(modelId: _speechModel, apiKey: _chatApiKey, httpClient: http);
+        builder.AddOpenAITextToImage(apiKey: _chatApiKey, modelId: _imageModel, httpClient: http);
+    }
 #pragma warning restore SKEXP0010
 }

@@ -6,6 +6,7 @@
     <Project Path="src/Scout.Adapter.Slack/Scout.Adapter.Slack.csproj" />
     <Project Path="src/Scout.Adapter.Teams/Scout.Adapter.Teams.csproj" />
     <Project Path="src/Scout.Host.Console/Scout.Host.Console.csproj" />
+    <Project Path="src/Scout.Operator/Scout.Operator.csproj" />
     <Project Path="src/Scout.Plugin.GitHub/Scout.Plugin.GitHub.csproj" />
     <Project Path="src/Scout.Plugin.YouTube/Scout.Plugin.YouTube.csproj" />
     <Project Path="src/Scout.Knowledge/Scout.Knowledge.csproj" />
@@ -24,6 +25,7 @@
     <Project Path="tests/Scout.Adapter.Slack.Tests/Scout.Adapter.Slack.Tests.csproj" />
     <Project Path="tests/Scout.Adapter.Teams.Tests/Scout.Adapter.Teams.Tests.csproj" />
     <Project Path="tests/Scout.Host.Console.Tests/Scout.Host.Console.Tests.csproj" />
+    <Project Path="tests/Scout.Operator.Tests/Scout.Operator.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.GitHub.Tests/Scout.Plugin.GitHub.Tests.csproj" />
     <Project Path="tests/Scout.Plugin.YouTube.Tests/Scout.Plugin.YouTube.Tests.csproj" />
     <Project Path="tests/Scout.Knowledge.Tests/Scout.Knowledge.Tests.csproj" />

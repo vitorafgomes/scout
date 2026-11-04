@@ -214,6 +214,33 @@ public sealed class HostCompositionSmokeTests
         kernel.Plugins.ShouldContain(p => p.Name == "YouTube");
     }
 
+    [Fact]
+    public void FullConfig_Puts_The_Operator_On_The_Kernel_And_Resolves_Its_Worker_Without_A_Cycle()
+    {
+        using var host = BuildHost(FullConfig());
+
+        var kernel = ResolveWithin(() => host.Services.GetRequiredService<Kernel>());
+        var hostedServices = ResolveWithin(() => host.Services.GetServices<IHostedService>().ToList());
+
+        kernel.Plugins.ShouldContain(p => p.Name == "YouTubeOperator");
+        hostedServices.ShouldContain(s => s.GetType().Name == "OperatorWorker");
+    }
+
+    [Fact]
+    public void A_Signed_In_Config_Resolves_The_Publishing_Executor_And_The_Scheduler_Without_A_Cycle()
+    {
+        var signedIn = new ConfigurationBuilder()
+            .AddConfiguration(FullConfig())
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Scout:Plugins:YouTube:TokenFile"] = "/nonexistent/scout-test/youtube-token.json" })
+            .Build();
+        using var host = BuildHost(signedIn);
+
+        var hostedServices = ResolveWithin(() => host.Services.GetServices<IHostedService>().ToList());
+
+        hostedServices.Select(s => s.GetType().Name).ShouldContain("ActionExecutor");
+        hostedServices.Select(s => s.GetType().Name).ShouldContain("OperatorScheduler");
+    }
+
     // Run the resolution on a worker thread and join under a budget. A construction
     // cycle re-enters the kernel and deadlocks; the join then times out and the
     // test fails fast instead of hanging the whole run.

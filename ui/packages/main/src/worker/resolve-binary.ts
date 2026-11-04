@@ -87,3 +87,39 @@ export function resolveTrayIcon(
   }
   return path.join(findRepoRoot(cwd), 'ui', 'build', 'icons', 'icon.png');
 }
+
+/** The ffmpeg, caption font, piper and voices folder the worker works with; an empty path for any the build did not bundle. */
+export interface MediaToolPaths {
+  readonly ffmpeg: string;
+  readonly font: string;
+  readonly piper: string;
+  readonly voices: string;
+}
+
+/**
+ * The bundled media tools: under `resources/media-tools/<platform>-<arch>` and `resources/fonts` when packaged, read
+ * from `ui/packages/main/resources` otherwise; each one only when its file is there, the voices folder only when it
+ * holds a voice model.
+ */
+export function resolveMediaTools(
+  deps: Omit<ResolveBinaryDeps, 'platform' | 'arch'> &
+    Partial<Pick<ResolveBinaryDeps, 'platform' | 'arch'>>,
+  exists: (file: string) => boolean = fs.existsSync,
+  list: (dir: string) => string[] = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []),
+): MediaToolPaths {
+  const { app, resourcesPath, cwd, platform = process.platform, arch = process.arch } = deps;
+  const root =
+    app?.isPackaged === true && resourcesPath != null
+      ? resourcesPath
+      : path.join(findRepoRoot(cwd), 'ui', 'packages', 'main', 'resources');
+  const exe = platform === 'win32' ? '.exe' : '';
+  const tools = path.join(root, 'media-tools', `${platform}-${arch}`);
+  const voices = path.join(root, 'voices');
+  const present = (file: string): string => (exists(file) ? file : '');
+  return {
+    ffmpeg: present(path.join(tools, `ffmpeg${exe}`)),
+    font: present(path.join(root, 'fonts', 'NotoSans-Regular.ttf')),
+    piper: present(path.join(tools, 'piper', `piper${exe}`)),
+    voices: list(voices).some((name) => name.endsWith('.onnx')) ? voices : '',
+  };
+}

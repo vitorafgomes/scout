@@ -219,9 +219,121 @@ public sealed class GrpcWriteGateTests
 
         public override Task<RecordWriteResponse> RecordWrite(RecordWriteRequest request, ServerCallContext context)
         {
+            if (OperatorFailure is not null)
+            {
+                throw OperatorFailure;
+            }
+
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
             Record = request;
             return RecordFailure is null ? Task.FromResult(new RecordWriteResponse()) : throw RecordFailure;
+        }
+
+        public Mandate MandateReply { get; init; } = new();
+
+        public NextQueuedProjectResponse NextReply { get; init; } = new();
+
+        public RpcException? OperatorFailure { get; init; }
+
+        public SaveOperatorProjectRequest? Saved { get; private set; }
+
+        public override Task<Mandate> GetOperatorMandate(GetMandateRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(MandateReply) : throw OperatorFailure;
+        }
+
+        public override Task<Project> SaveOperatorProject(SaveOperatorProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Saved = request;
+            if (OperatorFailure is not null)
+            {
+                throw OperatorFailure;
+            }
+
+            var saved = request.Project.Clone();
+            saved.Id = string.IsNullOrEmpty(saved.Id) ? "cp-1" : saved.Id;
+            return Task.FromResult(saved);
+        }
+
+        public override Task<NextQueuedProjectResponse> NextQueuedProject(NextQueuedProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(NextReply) : throw OperatorFailure;
+        }
+
+        public ListProjectsResponse ListReply { get; init; } = new();
+
+        public ListProjectsRequest? Listed { get; private set; }
+
+        public GetProjectRequest? Got { get; private set; }
+
+        public override Task<Project> GetOperatorProject(GetProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Got = request;
+            return OperatorFailure is null
+                ? Task.FromResult(ListReply.Projects.First(p => p.Id == request.Id))
+                : throw OperatorFailure;
+        }
+
+        public override Task<ListProjectsResponse> ListOperatorProjects(ListProjectsRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Listed = request;
+            return OperatorFailure is null ? Task.FromResult(ListReply) : throw OperatorFailure;
+        }
+
+        public string MediaPath { get; init; } = "/data/scout/operator/media/p1";
+
+        public Readiness? Reported { get; private set; }
+
+        public override Task<MediaDirectory> GetOperatorMediaDirectory(GetProjectRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Got = request;
+            return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = MediaPath }) : throw OperatorFailure;
+        }
+
+        public NextApprovedActionResponse ActionReply { get; init; } = new();
+
+        public override Task<NextApprovedActionResponse> NextApprovedAction(NextApprovedActionRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(ActionReply) : throw OperatorFailure;
+        }
+
+        public override Task<Readiness> ReportReadiness(Readiness request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            Reported = request;
+            return OperatorFailure is null ? Task.FromResult(request) : throw OperatorFailure;
+        }
+
+        public CommentsView CommentsReply { get; init; } = new();
+
+        public CommentsView? SavedComments { get; private set; }
+
+        public override Task<CommentsView> GetComments(ListCommentsRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(CommentsReply) : throw OperatorFailure;
+        }
+
+        public override Task<CommentsView> SaveComments(CommentsView request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            SavedComments = request;
+            return OperatorFailure is null ? Task.FromResult(request.Clone()) : throw OperatorFailure;
+        }
+
+        public string VoiceSamplesPath { get; init; } = "/data/scout/operator/voice-samples";
+
+        public override Task<MediaDirectory> GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = VoiceSamplesPath }) : throw OperatorFailure;
         }
     }
 

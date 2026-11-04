@@ -22,8 +22,12 @@ const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const CHANNELS_URL = 'https://www.googleapis.com/youtube/v3/channels';
-const SCOPE =
-  'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly';
+const SCOPE_PREFIX = 'https://www.googleapis.com/auth/';
+const READ_SCOPES = [
+  `${SCOPE_PREFIX}youtube.readonly`,
+  `${SCOPE_PREFIX}yt-analytics.readonly`,
+] as const;
+const WRITE_SCOPES = [`${SCOPE_PREFIX}youtube.upload`, `${SCOPE_PREFIX}youtube.force-ssl`] as const;
 const LOOPBACK_PORT = 8765;
 const LOOPBACK_FALLBACKS = 10;
 const CALLBACK_PATH = '/auth/callback';
@@ -44,6 +48,7 @@ interface StoredSession {
   expiresAt: number;
   channelId: string | null;
   channelTitle: string;
+  scopes?: string[];
 }
 
 interface ClientFields {
@@ -59,6 +64,7 @@ interface TokenResponse {
   accessToken: string;
   refreshToken: string | null;
   expiresIn: number;
+  scopes: string[] | null;
 }
 
 interface ChannelIdentity {
@@ -151,22 +157,45 @@ export class GoogleAuth {
 
   /** Opens Google's consent page once the loopback listener is up; the answer completes in the background. */
   async signIn(): Promise<YouTubeStatus> {
-    if (this.pending !== null) {
+    await this.startSignIn(READ_SCOPES);
+    return this.status();
+  }
+
+  async ensureWriteScopes(): Promise<void> {
+    if (missingWriteScopes(await this.loadSession()).length === 0) return;
+    const abort = await this.startSignIn([...READ_SCOPES, ...WRITE_SCOPES]);
+    await this.flow;
+    if (this.lastError !== null) throw this.lastError;
+    if (abort.signal.aborted) {
       throw new ScoutError(
-        'youtube/already-in-progress',
-        'A Google sign-in is already waiting for the browser.',
+        'youtube/sign-in-cancelled',
+        'The Google sign-in was cancelled, so writes stay off.',
       );
     }
-    const abort = new AbortController();
-    this.pending = abort;
-    this.lastError = null;
-    try {
-      await this.openConsent(abort);
-    } catch (err: unknown) {
-      if (this.pending === abort) this.pending = null;
-      throw err;
+    const missing = missingWriteScopes(await this.loadSession());
+    if (missing.length > 0) {
+      await this.dropWriteScopes();
+      throw new ScoutError(
+        'youtube/scopes-missing',
+        `Google did not grant ${missing.map((scope) => scope.slice(SCOPE_PREFIX.length)).join(' and ')}, so writes stay off. Click Allow writes again and allow every permission on Google's page.`,
+      );
     }
-    return this.status();
+  }
+
+  async dropWriteScopes(): Promise<boolean> {
+    this.cancelSignIn();
+    const dropped = await this.serial(async () => {
+      const session = await this.loadSession();
+      if (!(session?.scopes ?? []).some((scope) => isWriteScope(scope))) return false;
+      await this.revoke(session!);
+      await this.clearSession();
+      return true;
+    });
+    if (!dropped) return false;
+    this.deps.logger.info('youtube: write scopes revoked; signing in with the read scopes');
+    this.deps.onConnectionChanged();
+    await this.startSignIn(READ_SCOPES);
+    return true;
   }
 
   /** Resolves when the sign-in that waits for the browser has finished, either way. */
@@ -233,7 +262,26 @@ export class GoogleAuth {
     return this.serial(() => this.refreshNow());
   }
 
-  private async openConsent(abort: AbortController): Promise<void> {
+  private async startSignIn(scopes: readonly string[]): Promise<AbortController> {
+    if (this.pending !== null) {
+      throw new ScoutError(
+        'youtube/already-in-progress',
+        'A Google sign-in is already waiting for the browser.',
+      );
+    }
+    const abort = new AbortController();
+    this.pending = abort;
+    this.lastError = null;
+    try {
+      await this.openConsent(abort, scopes);
+    } catch (err: unknown) {
+      if (this.pending === abort) this.pending = null;
+      throw err;
+    }
+    return abort;
+  }
+
+  private async openConsent(abort: AbortController, scopes: readonly string[]): Promise<void> {
     const { deps } = this;
     const client = await this.readClientConfig();
     if (client === WEB_CLIENT) throw new ScoutError('youtube/not-configured', WEB_CLIENT_MESSAGE);
@@ -275,7 +323,7 @@ export class GoogleAuth {
       client_id: client.clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
-      scope: SCOPE,
+      scope: scopes.join(' '),
       code_challenge: challenge,
       code_challenge_method: 'S256',
       state,
@@ -313,6 +361,7 @@ export class GoogleAuth {
           refreshToken: tokens.refreshToken,
           expiresAt: deps.now() + tokens.expiresIn * 1000,
           ...identity,
+          scopes: tokens.scopes ?? [],
         });
       });
       deps.logger.info('youtube: signed in', { hasChannel: identity.channelId !== null });
@@ -503,6 +552,7 @@ export class GoogleAuth {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken ?? session.refreshToken,
       expiresAt: deps.now() + tokens.expiresIn * 1000,
+      scopes: tokens.scopes ?? session.scopes ?? [],
     });
     deps.logger.info('youtube: access token refreshed');
   }
@@ -577,6 +627,7 @@ export class GoogleAuth {
       error: this.lastError?.message ?? (client === WEB_CLIENT ? WEB_CLIENT_MESSAGE : null),
       clientConfigPath: this.deps.clientConfigPath,
       source: client !== null && client !== WEB_CLIENT ? client.source : null,
+      scopes: session?.scopes ?? [],
     };
   }
 
@@ -629,6 +680,15 @@ export class GoogleAuth {
     this.queue = next.catch(() => {});
     return next;
   }
+}
+
+function isWriteScope(scope: string): boolean {
+  return (WRITE_SCOPES as readonly string[]).includes(scope);
+}
+
+function missingWriteScopes(session: StoredSession | null): string[] {
+  const granted = session?.scopes ?? [];
+  return WRITE_SCOPES.filter((scope) => !granted.includes(scope));
 }
 
 function signInError(err: unknown): ScoutError {
@@ -720,10 +780,12 @@ function parseTokens(body: Record<string, unknown> | null): TokenResponse | null
   if (typeof accessToken !== 'string' || accessToken.length === 0) return null;
   if (typeof expiresIn !== 'number') return null;
   const refreshToken = body?.['refresh_token'];
+  const scope = body?.['scope'];
   return {
     accessToken,
     refreshToken: typeof refreshToken === 'string' ? refreshToken : null,
     expiresIn,
+    scopes: typeof scope === 'string' ? scope.split(/\s+/).filter((s) => s.length > 0) : null,
   };
 }
 

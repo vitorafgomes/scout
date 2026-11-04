@@ -263,4 +263,92 @@ public sealed class WriteGateServiceTests : IDisposable
         failed.Message.ShouldBe(message);
         (await _writes.ListAsync(10, CancellationToken.None)).ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task RecordWrite_Of_An_Executing_Action_After_The_Owner_Revoked_Logs_It_Once_Consumes_It_And_Is_Refused()
+    {
+        await GrantYouTubeAsync();
+        var gate = Gate();
+        var queued = await gate.RequestAsync("youtube", Upload, "intro.mp4", "Upload", CancellationToken.None);
+        await _actions.ApproveAsync(queued.ActionId!, reason: null, CancellationToken.None);
+        await _actions.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (_, _) => true, CancellationToken.None);
+        await _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: false, confirmWrites: false, CancellationToken.None);
+
+        var revoked = await Should.ThrowAsync<WriteNotRecordableException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None));
+        var again = await Should.ThrowAsync<WriteNotRecordableException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None));
+
+        revoked.Message.ShouldBe("The owner revoked youtube's write permission before this action ran.");
+        again.Message.ShouldBe(revoked.Message);
+        (await _writes.ListAsync(10, CancellationToken.None)).Select(e => (e.Action, e.Outcome, e.ApprovedBy, e.ActionId))
+            .ShouldBe([(Upload, "uploaded as private after revoke", (string?)"owner", queued.ActionId)]);
+        (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status
+            .ShouldBe(PendingActionStatus.Executed);
+    }
+
+    [Fact]
+    public async Task RecordWrite_Of_An_Approved_Action_Never_Claimed_After_The_Owner_Revoked_Is_Refused_And_Logs_Nothing()
+    {
+        await GrantYouTubeAsync();
+        var gate = Gate();
+        var queued = await gate.RequestAsync("youtube", Upload, "intro.mp4", "Upload", CancellationToken.None);
+        await _actions.ApproveAsync(queued.ActionId!, reason: null, CancellationToken.None);
+        await _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: false, confirmWrites: false, CancellationToken.None);
+
+        var revoked = await Should.ThrowAsync<WriteNotRecordableException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None));
+
+        revoked.Message.ShouldBe("The owner revoked youtube's write permission before this action ran.");
+        (await _writes.ListAsync(10, CancellationToken.None)).ShouldBeEmpty();
+        (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status
+            .ShouldBe(PendingActionStatus.Approved);
+    }
+
+    [Fact]
+    public async Task A_Failed_Write_Log_Append_Leaves_The_Action_Approved_And_A_Retry_Records_It_Once()
+    {
+        await GrantYouTubeAsync();
+        var gate = Gate();
+        var queued = await gate.RequestAsync("youtube", Upload, "intro.mp4", "Upload", CancellationToken.None);
+        await _actions.ApproveAsync(queued.ActionId!, reason: null, CancellationToken.None);
+        Directory.CreateDirectory(_writes.FilePath);
+
+        await Should.ThrowAsync<UnauthorizedAccessException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None));
+        var afterFailure = (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status;
+        Directory.Delete(_writes.FilePath);
+        await gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None);
+
+        afterFailure.ShouldBe(PendingActionStatus.Approved);
+        (await _writes.ListAsync(10, CancellationToken.None)).ShouldHaveSingleItem().ActionId.ShouldBe(queued.ActionId);
+        (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status
+            .ShouldBe(PendingActionStatus.Executed);
+    }
+
+    [Fact]
+    public async Task A_Failed_Mark_After_The_Append_Keeps_The_Log_Line_And_The_Retry_Is_Refused_As_Already_Recorded()
+    {
+        await GrantYouTubeAsync();
+        var gate = Gate();
+        var queued = await gate.RequestAsync("youtube", Upload, "intro.mp4", "Upload", CancellationToken.None);
+        await _actions.ApproveAsync(queued.ActionId!, reason: null, CancellationToken.None);
+        var tempPath = _actions.FilePath + ".tmp";
+        Directory.CreateDirectory(tempPath);
+
+        await Should.ThrowAsync<UnauthorizedAccessException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded as private", queued.ActionId, CancellationToken.None));
+        var afterFailure = (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status;
+        var loggedAfterFailure = await _writes.ListAsync(10, CancellationToken.None);
+        Directory.Delete(tempPath);
+        var retry = await Should.ThrowAsync<WriteNotRecordableException>(() =>
+            gate.RecordAsync("youtube", Upload, "intro.mp4", "uploaded again", queued.ActionId, CancellationToken.None));
+
+        afterFailure.ShouldBe(PendingActionStatus.Approved);
+        loggedAfterFailure.ShouldHaveSingleItem().Outcome.ShouldBe("uploaded as private");
+        retry.Message.ShouldBe($"Action '{queued.ActionId}' is already recorded in the write log.");
+        (await _writes.ListAsync(10, CancellationToken.None)).ShouldHaveSingleItem().Outcome.ShouldBe("uploaded as private");
+        (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status
+            .ShouldBe(PendingActionStatus.Executed);
+    }
 }

@@ -97,6 +97,12 @@ jobs:
         shell: bash
         run: bun run worker:publish -- ${{ matrix.rid }}
 
+      - name: Cache media tools
+        uses: actions/cache@v4
+        with:
+          path: ui/build/media-cache
+          key: media-tools-${{ runner.os }}-${{ hashFiles('ui/build/media-tools.json') }}
+
       - name: Package
         working-directory: ui
         shell: bash

@@ -88,6 +88,61 @@ public sealed class YouTubeServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void An_Api_Key_Alone_Registers_No_Write_Analytics_Or_Reporting_Client()
+    {
+        using var provider = Compose("AIzaSyTestOnlyNotARealKey000000000", null);
+
+        provider.GetService<IYouTubeWriteClient>().ShouldBeNull();
+        provider.GetService<IYouTubeAnalyticsClient>().ShouldBeNull();
+        provider.GetService<IYouTubeReportingClient>().ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task With_The_Sign_In_The_Write_Analytics_And_Reporting_Clients_Call_Their_Apis_With_The_Owner_Token()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-youtube-writes-").FullName;
+        try
+        {
+            var tokenFile = Path.Combine(dir, "youtube-token.json");
+            await File.WriteAllTextAsync(tokenFile, """{"access_token":"ya29.owner","expires_at":1793620800000}""");
+            var stub = new StubHttpMessageHandler(_ => StubHttpMessageHandler.Json(HttpStatusCode.OK, """{"items":[],"rows":[]}"""));
+            using var provider = YouTubeComposition.Compose(stub, tokenFile: tokenFile);
+
+            await provider.GetRequiredService<IYouTubeWriteClient>().GetVideoStatusAsync("newVideo001", CancellationToken.None);
+            await provider.GetRequiredService<IYouTubeAnalyticsClient>().ReportAsync(
+                "newVideo001", new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 4), CancellationToken.None);
+            await provider.GetRequiredService<IYouTubeReportingClient>().FindReachJobAsync(CancellationToken.None);
+
+            stub.Requests.Select(r => (r.Uri.Host, r.Uri.AbsolutePath, r.Authorization)).ShouldBe([
+                ("www.googleapis.com", "/youtube/v3/videos", "Bearer ya29.owner"),
+                ("youtubeanalytics.googleapis.com", "/v2/reports", "Bearer ya29.owner"),
+                ("youtubereporting.googleapis.com", "/v1/jobs", "Bearer ya29.owner"),
+            ]);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void The_Write_Client_Waits_As_Long_As_An_Upload_Takes_And_Never_Follows_A_Redirect()
+    {
+        using var provider = Compose(null, "/nonexistent/youtube-token.json");
+
+        provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(IYouTubeWriteClient)).Timeout
+            .ShouldBe(Timeout.InfiniteTimeSpan);
+        var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(nameof(IYouTubeWriteClient));
+        while (handler is DelegatingHandler delegating)
+        {
+            handler = delegating.InnerHandler!;
+        }
+
+        var sockets = handler.ShouldBeOfType<SocketsHttpHandler>();
+        (sockets.AllowAutoRedirect, sockets.ConnectTimeout).ShouldBe((false, TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
     public void Null_Services_Throws()
     {
         Should.Throw<ArgumentNullException>(

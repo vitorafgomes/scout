@@ -165,6 +165,8 @@ public static class LlmServiceCollectionExtensions
                 // instructions and tools apply. Absent, the direct chat path runs.
                 sp.GetService<ChatCompletionAgent>()));
 
+        services.AddSingleton(sp => sp.GetRequiredService<ILlmProviderFactory>().Media);
+
         return services;
     }
 

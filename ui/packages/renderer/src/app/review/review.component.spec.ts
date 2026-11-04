@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -55,11 +56,15 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
 
 async function mount(
   bridge: ReturnType<typeof makeBridge>['bridge'],
+  routeData?: Record<string, unknown>,
 ): Promise<ComponentFixture<ReviewComponent>> {
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
       { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+      ...(routeData === undefined
+        ? []
+        : [{ provide: ActivatedRoute, useValue: { snapshot: { data: routeData } } }]),
     ],
   });
   const fixture = TestBed.createComponent(ReviewComponent);
@@ -123,6 +128,21 @@ describe('ReviewComponent', () => {
     expect(text(fixture, 'pending-empty')).toContain('Nothing is waiting.');
   });
 
+  it('an action the worker is executing shows an Executing badge and can no longer be approved or rejected', async () => {
+    const { bridge } = makeBridge({
+      actionsList: vi.fn(async () => ({
+        actions: [upload, { ...upload, id: 'act-2', status: 'executing' }],
+      })),
+    });
+    const fixture = await mount(bridge);
+    const q = (id: string) => fixture.nativeElement.querySelector(`[data-test="${id}"]`);
+
+    expect(text(fixture, 'executing-act-2')).toBe('Executing');
+    expect([q('approve-act-2'), q('reject-act-2')]).toEqual([null, null]);
+    expect(q('executing-act-1')).toBeNull();
+    expect([q('approve-act-1'), q('reject-act-1')].every((b) => b !== null)).toBe(true);
+  });
+
   it('Reject sends the reason', async () => {
     const { bridge } = makeBridge({ actionsList: vi.fn(async () => ({ actions: [upload] })) });
     const fixture = await mount(bridge);
@@ -159,6 +179,56 @@ describe('ReviewComponent', () => {
     for (const part of ['youtube', 'channel UC1', 'succeeded', 'owner']) {
       expect(newest).toContain(part);
     }
+  });
+
+  it('the Approvals page of the operator window lists only the pending actions and writes of youtube', async () => {
+    const deploy: PendingActionDto = { ...upload, id: 'act-gh', featureId: 'github' };
+    const { bridge } = makeBridge({
+      actionsList: vi.fn(async () => ({ actions: [upload, deploy] })),
+      writesList: vi.fn(async () => ({
+        entries: [
+          write('2026-11-02T09:00:00Z', 'Upload video', 'owner'),
+          { ...write('2026-11-02T10:00:00Z', 'Comment on issue', null), featureId: 'github' },
+        ],
+      })),
+    });
+    const fixture = await mount(bridge, { feature: 'youtube' });
+
+    const writes = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-test="write-action"]',
+      ) as NodeListOf<HTMLElement>,
+    ).map((cell) => cell.textContent?.trim());
+
+    expect(fixture.nativeElement.querySelector('[data-test="action-act-1"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="action-act-gh"]')).toBeNull();
+    expect(writes).toEqual(['Upload video']);
+    expect(fixture.nativeElement.querySelector('h1')?.textContent?.trim()).toBe('Approvals');
+  });
+
+  it('the Review screen of the main window keeps the pending actions and writes of every feature', async () => {
+    const deploy: PendingActionDto = { ...upload, id: 'act-gh', featureId: 'github' };
+    const { bridge } = makeBridge({
+      actionsList: vi.fn(async () => ({ actions: [upload, deploy] })),
+      writesList: vi.fn(async () => ({
+        entries: [
+          write('2026-11-02T09:00:00Z', 'Upload video', 'owner'),
+          { ...write('2026-11-02T10:00:00Z', 'Comment on issue', null), featureId: 'github' },
+        ],
+      })),
+    });
+    const fixture = await mount(bridge);
+
+    const writes = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-test="write-action"]',
+      ) as NodeListOf<HTMLElement>,
+    ).map((cell) => cell.textContent?.trim());
+
+    expect(fixture.nativeElement.querySelector('[data-test="action-act-1"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-test="action-act-gh"]')).not.toBeNull();
+    expect(writes).toEqual(['Comment on issue', 'Upload video']);
+    expect(fixture.nativeElement.querySelector('h1')?.textContent?.trim()).toBe('Review');
   });
 
   it('shows an action main announces at once, and one queued silently within 15 seconds', async () => {

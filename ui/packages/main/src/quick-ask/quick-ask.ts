@@ -58,6 +58,7 @@ const MAX_AUDIO_BASE64_CHARS = 14_000_000;
 const EVENT_KINDS: ReadonlySet<string> = new Set(['begin', 'update', 'complete', 'fail']);
 // ponytail: the shared conversation keeps the last 200 turns in memory only; persist or page it if the owner wants more.
 const MAX_TURNS = 200;
+const MAX_NOTICE_CHARS = 32_000;
 const VOICE_QUESTION = '(voice message)';
 
 export interface QuickAskDeps {
@@ -86,7 +87,7 @@ export interface QuickAskDeps {
 }
 
 export interface QuickAsk {
-  /** Applies the JSON of one `SCOUT_LOCAL ` stdout line to its running turn; anything else is dropped. */
+  /** Applies the JSON of one `SCOUT_LOCAL ` stdout line to its running turn, or appends a worker notice as its own turn; anything else is dropped. */
   handleWorkerLine(json: string): void;
   dispose(): void;
 }
@@ -175,7 +176,7 @@ function toBubbleSettings(raw: unknown): LocalBubbleSettings | null {
   };
 }
 
-function toBounds(raw: string | null): Rectangle | null {
+export function toBounds(raw: string | null): Rectangle | null {
   if (raw === null) return null;
   try {
     const r = JSON.parse(raw) as Record<string, unknown>;
@@ -188,7 +189,7 @@ function toBounds(raw: string | null): Rectangle | null {
   }
 }
 
-function toLocalEvent(json: string): LocalEvent | null {
+function toLocalEvent(json: string): LocalEvent | { readonly notice: string } | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);
@@ -199,6 +200,12 @@ function toLocalEvent(json: string): LocalEvent | null {
   const p = parsed as Record<string, unknown>;
   const id = p['id'];
   const event = p['event'];
+  if (event === 'notice') {
+    const text = p['text'];
+    return id === null && typeof text === 'string' && text.length > 0
+      ? { notice: text.slice(0, MAX_NOTICE_CHARS) }
+      : null;
+  }
   if (typeof id !== 'string' || typeof event !== 'string' || !EVENT_KINDS.has(event)) return null;
 
   const citations: LocalCitation[] = Array.isArray(p['citations'])
@@ -220,6 +227,7 @@ function toLocalEvent(json: string): LocalEvent | null {
 export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   const { ipcMain, supervisor, globalShortcut, vault, logger } = deps;
   const turns: LocalTurn[] = [];
+  let notices = 0;
   let window: BrowserWindow | null = null;
   let bubbleWindow: BrowserWindow | null = null;
   let bubble = DEFAULT_BUBBLE;
@@ -467,15 +475,19 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     return shortcutStatus();
   }
 
+  function append(turn: LocalTurn): void {
+    turns.push(turn);
+    if (turns.length > MAX_TURNS) turns.splice(0, turns.length - MAX_TURNS);
+    broadcast();
+  }
+
   function ask(req: LocalAskRequest | undefined): void {
     const { id, question, line } = toWorkerRequest(req);
     if (turns.some((turn) => turn.id === id)) {
       fail('local/invalid-request', 'That question is already running.');
     }
 
-    turns.push({ id, question, reply: '', citations: [], state: 'running' });
-    if (turns.length > MAX_TURNS) turns.splice(0, turns.length - MAX_TURNS);
-    broadcast();
+    append({ id, question, reply: '', citations: [], state: 'running' });
     const accepted = supervisor.writeStdin(line, (err) => {
       logger.warn('quick-ask: question not delivered to the worker', { error: err.message });
       reshape(id, (turn) => ({ ...turn, reply: STOPPED_REPLY, state: 'failed' }));
@@ -522,7 +534,20 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   return {
     handleWorkerLine(json: string): void {
       const event = toLocalEvent(json);
-      if (event === null || event.event === 'begin') return;
+      if (event === null) return;
+      if ('notice' in event) {
+        notices += 1;
+        append({
+          id: `notice:${notices}`,
+          question: '',
+          reply: event.notice,
+          citations: [],
+          state: 'done',
+          notice: true,
+        });
+        return;
+      }
+      if (event.event === 'begin') return;
       reshape(event.id, (turn) => ({
         ...turn,
         reply: event.text ?? turn.reply,

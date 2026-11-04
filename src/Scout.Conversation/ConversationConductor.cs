@@ -110,7 +110,7 @@ public sealed partial class ConversationConductor
 
         using var activity = ScoutActivitySource.Instance.StartActivity("conversation.handle");
         activity?.SetTag("scout.channel_id", message.ChannelId);
-
+        using var origin = ChatOrigin.Enter(message.OriginReference);
         try
         {
             if (!message.IsLocalOwner
@@ -150,7 +150,7 @@ public sealed partial class ConversationConductor
                 }
 
                 message = new ChatMessage(message.UserId, message.ChannelId, transcript!, message.Timestamp, IsDirectMessage: message.IsDirectMessage)
-                { IsLocalOwner = message.IsLocalOwner };
+                { IsLocalOwner = message.IsLocalOwner, OriginReference = message.OriginReference };
                 sink = new VoiceReplySink(sink, Quote(transcript!));
             }
 

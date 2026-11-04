@@ -182,7 +182,7 @@ public sealed class FeaturesServiceTests
     }
 
     private const string YouTubeWriteRows =
-        "Scout's data folder (write), videos.insert (irreversible write), videos.update (irreversible write), " +
+        "Scout's data folder (write), youtubeReporting jobs.create (write), videos.insert (irreversible write), videos.update (irreversible write), " +
         "thumbnails.set (irreversible write), playlistItems.insert (irreversible write), " +
         "comments.insert (irreversible write), comments.setModerationStatus (irreversible write).";
 
@@ -369,4 +369,22 @@ public sealed class FeaturesServiceTests
         await Should.ThrowAsync<FeatureNotImplementedException>(() =>
             service.EnableAsync(FeatureCatalog.YouTubeId, confirmWrites: true, CancellationToken.None));
     }
+
+    [Fact]
+    public Task Granting_A_Feature_Already_Granted_Keeps_The_Time_The_Grant_Began() =>
+        WithFileStoreAsync(async (store, service) =>
+        {
+            await service.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+            var first = (await store.GetAsync(FeatureCatalog.YouTubeId, CancellationToken.None)).GrantedAt;
+            await Task.Delay(20);
+
+            await service.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+            var kept = (await store.GetAsync(FeatureCatalog.YouTubeId, CancellationToken.None)).GrantedAt;
+            await service.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: false, confirmWrites: false, CancellationToken.None);
+            await service.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+            var renewed = (await store.GetAsync(FeatureCatalog.YouTubeId, CancellationToken.None)).GrantedAt;
+
+            kept.ShouldBe(first);
+            renewed.ShouldNotBeNull().ShouldBeGreaterThan(first.ShouldNotBeNull());
+        });
 }

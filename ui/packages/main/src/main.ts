@@ -1,12 +1,14 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   Menu,
   nativeImage,
   Notification,
   powerMonitor,
+  protocol,
   screen,
   shell,
   session,
@@ -41,11 +43,24 @@ import { registerLmStudioHandlers } from './ipc/lm-studio.js';
 import { registerWhisperHandlers, whisperRootDir } from './ipc/whisper.js';
 import { registerProvidersHandlers } from './ipc/providers.js';
 import { registerFeaturesHandlers } from './ipc/features.js';
+import { registerOperatorHandlers } from './ipc/operator.js';
+import { registerOperatorWindow, type OperatorWindow } from './operator/operator-window.js';
+import {
+  MEDIA_SCHEME,
+  MEDIA_SCHEME_PRIVILEGES,
+  chooseWithDialog,
+  createMediaProtocolHandler,
+} from './operator/media.js';
 import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
 import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
-import { registerYouTubeHandlers, revokeYouTubeWriteGrant } from './ipc/youtube.js';
+import {
+  registerYouTubeHandlers,
+  deleteYouTubeData,
+  revokeYouTubeWriteGrant,
+  youTubeWriteGrantHooks,
+} from './ipc/youtube.js';
 import {
   DEFAULT_GOOGLE_CLIENT_ID,
   DEFAULT_GOOGLE_CLIENT_SECRET,
@@ -81,11 +96,12 @@ import { createProductionVaultDeps } from './vault/deps.js';
 import { createSupervisor } from './worker/supervisor.js';
 import {
   resolveControlPlaneBinary,
+  resolveMediaTools,
   resolveProtoDir,
   resolveTrayIcon,
   resolveWorkerBinary,
 } from './worker/resolve-binary.js';
-import { CHANNEL, ControlPlaneUnavailableError } from '@scout/shared';
+import { CHANNEL } from '@scout/shared';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import type { ControlPlaneClient } from './control-plane/client.js';
 import { buildEnv, migrateLegacyApiKey, readGrantedWriteFeatures } from './worker/build-env.js';
@@ -144,7 +160,8 @@ const CSP_PROD = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: scout-media:",
+  'media-src scout-media:',
   "font-src 'self'",
   "connect-src 'self'",
   "frame-src 'none'",
@@ -157,7 +174,8 @@ const CSP_DEV = [
   "default-src 'self'",
   "script-src 'self' http://localhost:4200",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  "img-src 'self' data: scout-media:",
+  'media-src scout-media:',
   "font-src 'self'",
   "connect-src 'self' http://localhost:4200 ws://localhost:4200",
   "frame-src 'none'",
@@ -180,6 +198,7 @@ let unregisterLmStudio: (() => void) | null = null;
 let unregisterWhisper: (() => void) | null = null;
 let unregisterProviders: (() => void) | null = null;
 let unregisterFeatures: (() => void) | null = null;
+let unregisterOperator: (() => void) | null = null;
 let unregisterProviderKeys: (() => void) | null = null;
 let unregisterChatGpt: (() => void) | null = null;
 let chatGptAuth: ChatGptAuth | null = null;
@@ -191,6 +210,7 @@ let gitHubAuth: GitHubAuth | null = null;
 let unregisterYouTube: (() => void) | null = null;
 let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
+let operatorWindow: OperatorWindow | null = null;
 let trayController: TrayController | null = null;
 let desktop: DesktopHandle | null = null;
 let updateNotice: UpdateNoticeHandle | null = null;
@@ -208,6 +228,7 @@ function sendToAllWindows(channel: string, log: typeof logger): void {
 
 function disposeAll(): void {
   quickAsk?.dispose();
+  operatorWindow?.dispose();
   trayController?.destroy();
   updateNotice?.dispose();
   desktop?.dispose();
@@ -223,6 +244,7 @@ function disposeAll(): void {
   unregisterAccess?.();
   unregisterSlack?.();
   unregisterFeatures?.();
+  unregisterOperator?.();
   unregisterProviders?.();
   unregisterWhisper?.();
   unregisterLlmPull?.();
@@ -237,6 +259,8 @@ function disposeAll(): void {
 
 const notifierLogger = logger.child({ module: 'notifications' });
 let notifier: ReturnType<typeof createPresenceNotifier> | null = null;
+
+protocol.registerSchemesAsPrivileged([MEDIA_SCHEME_PRIVILEGES]);
 
 const lifecycle = installAppLifecycle({
   app,
@@ -356,12 +380,25 @@ app
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
 
+    const binaryDeps = {
+      app,
+      resourcesPath: process.resourcesPath,
+      platform: process.platform,
+      arch: process.arch,
+      cwd: __dirname,
+    };
+    const connection = connectControlPlane({
+      spawn,
+      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
+      protoDir: resolveProtoDir(binaryDeps),
+      logger: logger.child({ module: 'control-plane' }),
+      platform: process.platform,
+    });
+    controlPlane = connection;
+
     const youTubeLogger = logger.child({ module: 'youtube' });
     const featuresChanged = (): void => sendToAllWindows(CHANNEL.featuresChanged, youTubeLogger);
-    const youTubeControlPlane = (): Promise<ControlPlaneClient> =>
-      controlPlane === null
-        ? Promise.reject(new ControlPlaneUnavailableError())
-        : controlPlane.client;
+    const youTubeControlPlane = (): Promise<ControlPlaneClient> => connection.client;
     const google = new GoogleAuth({
       fetch: globalThis.fetch,
       awaitCallback,
@@ -467,10 +504,15 @@ app
           slackTokens: await readSlackTokens(vault),
           whisperModelPath: await findBestWhisperModel(whisperRootDir()),
           grantedWriteFeatures: await readGrantedWriteFeatures(
-            controlPlane?.client ?? null,
+            connection.client,
             logger.child({ module: 'supervisor' }),
           ),
-          workerGate: controlPlane?.workerGate() ?? null,
+          workerGate: connection.workerGate(),
+          mediaTools: resolveMediaTools({
+            app,
+            resourcesPath: process.resourcesPath,
+            cwd: __dirname,
+          }),
         }),
       onPaired: (userId) =>
         void reportPairing(userId, access, () => readAllowedUserIds(vault), presence),
@@ -562,22 +604,6 @@ app
       logger.child({ module: 'providers' }),
     );
 
-    const binaryDeps = {
-      app,
-      resourcesPath: process.resourcesPath,
-      platform: process.platform,
-      arch: process.arch,
-      cwd: __dirname,
-    };
-    const connection = connectControlPlane({
-      spawn,
-      resolveBinary: () => resolveControlPlaneBinary(binaryDeps),
-      protoDir: resolveProtoDir(binaryDeps),
-      logger: logger.child({ module: 'control-plane' }),
-      platform: process.platform,
-    });
-    controlPlane = connection;
-
     const featuresLogger = logger.child({ module: 'features' });
     unregisterFeatures = registerFeaturesHandlers(
       ipcMain,
@@ -585,10 +611,28 @@ app
       featuresLogger,
       {
         onWriteGrantChanged: () => {
+          sendToAllWindows(CHANNEL.featuresChanged, featuresLogger);
           if (supervisor !== null) void restartWorkerIfRunning(supervisor, featuresLogger);
         },
         onActionsChanged: () => sendToAllWindows(CHANNEL.actionsChanged, featuresLogger),
+        ...youTubeWriteGrantHooks(google, () =>
+          deleteYouTubeData(youTubeControlPlane, youTubeLogger),
+        ),
       },
+    );
+    unregisterOperator = registerOperatorHandlers(
+      ipcMain,
+      () => connection.client,
+      logger.child({ module: 'operator' }),
+      chooseWithDialog(dialog),
+    );
+    protocol.handle(
+      MEDIA_SCHEME,
+      createMediaProtocolHandler(
+        async (id) => (await connection.client).getMediaDirectory(id),
+        Date.now,
+        async () => (await connection.client).getVoiceSamplesDirectory(),
+      ),
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));
@@ -673,6 +717,16 @@ app
       env: process.env,
       execPath: process.execPath,
       windows: () => BrowserWindow.getAllWindows(),
+    });
+    operatorWindow = await registerOperatorWindow({
+      ipcMain,
+      createWindow: (opts) => new BrowserWindow(opts),
+      preloadPath,
+      indexHtmlPath,
+      ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
+      vault,
+      screen,
+      logger: logger.child({ module: 'operator-window' }),
     });
 
     openMainWindow = (show) => {

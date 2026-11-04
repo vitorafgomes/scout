@@ -100,7 +100,7 @@ public sealed class ChatGptPlanLlmProviderFactory : ILlmProviderFactory
 
         return new ChatGptPlanChatClient(responses)
             .AsBuilder()
-            .UseFunctionInvocation()
+            .UseKernelFunctionInvocation()
             .Build()
             .AsChatCompletionService();
     }

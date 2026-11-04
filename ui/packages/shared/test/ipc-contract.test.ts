@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { CHANNEL, type ChannelName } from '../src/ipc-contract.js';
+import {
+  CHANNEL,
+  type ChannelName,
+  type MandateDto,
+  type OperatorProjectDto,
+  type ReadinessDto,
+} from '../src/ipc-contract.js';
 
 describe('CHANNEL constant', () => {
   test('all values are unique', () => {
@@ -76,6 +82,34 @@ describe('CHANNEL constant', () => {
         'llmListOllamaModels',
         'llmPullOllamaModel',
         'llmPullOllamaProgress',
+        'operatorAssembly',
+        'operatorCommentDecision',
+        'operatorCommentSync',
+        'operatorComments',
+        'operatorDecideClaim',
+        'operatorDelegation',
+        'operatorMandate',
+        'operatorMediaRights',
+        'operatorPackageApproval',
+        'operatorPackageMetadata',
+        'operatorProduction',
+        'operatorProject',
+        'operatorProjectDeletion',
+        'operatorProjects',
+        'operatorPublication',
+        'operatorProposalDecision',
+        'operatorExperiment',
+        'operatorExperimentAdoption',
+        'operatorIdeaDecision',
+        'operatorReadiness',
+        'operatorReplyApproval',
+        'operatorSaveMandate',
+        'operatorSceneLock',
+        'operatorSceneMedia',
+        'operatorSceneOrder',
+        'operatorSceneRegeneration',
+        'operatorStartProject',
+        'operatorWindow',
         'providerRestart',
         'providerSetAutostart',
         'providerStart',
@@ -156,6 +190,137 @@ describe('review channels', () => {
   });
 });
 
+describe('operator channels', () => {
+  test('the Production screen reads and saves the mandate, lists and reads projects, starts one and decides a claim on six scout:operator channels', () => {
+    expect([
+      CHANNEL.operatorMandate,
+      CHANNEL.operatorSaveMandate,
+      CHANNEL.operatorProjects,
+      CHANNEL.operatorProject,
+      CHANNEL.operatorStartProject,
+      CHANNEL.operatorDecideClaim,
+    ]).toEqual([
+      'scout:operator.mandate',
+      'scout:operator.saveMandate',
+      'scout:operator.projects',
+      'scout:operator.project',
+      'scout:operator.startProject',
+      'scout:operator.decideClaim',
+    ]);
+  });
+
+  test('the project carries its narration voice, its background picture and whether it is delegated, and the mandate has no narration voice', () => {
+    const mandateHasVoice: 'narrationVoice' extends keyof MandateDto ? true : false = false;
+    const project = {
+      narrationVoice: 'piper:en_GB-cori-medium',
+      backgroundFile: 'owner-background-0a1b2c3d4e5f.png',
+      delegated: true,
+    } satisfies Pick<OperatorProjectDto, 'narrationVoice' | 'backgroundFile' | 'delegated'>;
+    const readiness = {
+      voices: [{ id: 'OpenAI:nova', label: 'nova (OpenAI)', source: 'OpenAI', sampleFile: null }],
+    } satisfies Pick<ReadinessDto, 'voices'>;
+
+    expect([mandateHasVoice, project.narrationVoice, readiness.voices[0]?.label]).toEqual([
+      false,
+      'piper:en_GB-cori-medium',
+      'nova (OpenAI)',
+    ]);
+  });
+
+  test('producing media, delegating a project, deleting one, ordering, locking and regenerating a scene, attaching an owner file and reading readiness each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
+      CHANNEL.operatorProduction,
+      CHANNEL.operatorDelegation,
+      CHANNEL.operatorProjectDeletion,
+      CHANNEL.operatorSceneOrder,
+      CHANNEL.operatorSceneLock,
+      CHANNEL.operatorSceneRegeneration,
+      CHANNEL.operatorSceneMedia,
+      CHANNEL.operatorReadiness,
+    ];
+
+    expect(channels).toEqual([
+      'scout:operator.production',
+      'scout:operator.delegation',
+      'scout:operator.projectDeletion',
+      'scout:operator.sceneOrder',
+      'scout:operator.sceneLock',
+      'scout:operator.sceneRegeneration',
+      'scout:operator.sceneMedia',
+      'scout:operator.readiness',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test('assembling a video, confirming its media rights, editing its metadata and approving its package each have their own scout:operator channel, named as nouns', () => {
+    expect([
+      CHANNEL.operatorAssembly,
+      CHANNEL.operatorMediaRights,
+      CHANNEL.operatorPackageMetadata,
+      CHANNEL.operatorPackageApproval,
+    ]).toEqual([
+      'scout:operator.assembly',
+      'scout:operator.mediaRights',
+      'scout:operator.packageMetadata',
+      'scout:operator.packageApproval',
+    ]);
+  });
+
+  test('publishing a package, deciding a proposal, starting an experiment and adopting its winner each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
+      CHANNEL.operatorPublication,
+      CHANNEL.operatorProposalDecision,
+      CHANNEL.operatorExperiment,
+      CHANNEL.operatorExperimentAdoption,
+    ];
+
+    expect(channels).toEqual([
+      'scout:operator.publication',
+      'scout:operator.proposalDecision',
+      'scout:operator.experiment',
+      'scout:operator.experimentAdoption',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test('reading the comments, asking for a sync, deciding a comment, approving a reply and deciding an idea each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
+      CHANNEL.operatorComments,
+      CHANNEL.operatorCommentSync,
+      CHANNEL.operatorCommentDecision,
+      CHANNEL.operatorReplyApproval,
+      CHANNEL.operatorIdeaDecision,
+    ];
+
+    expect(channels).toEqual([
+      'scout:operator.comments',
+      'scout:operator.commentSync',
+      'scout:operator.commentDecision',
+      'scout:operator.replyApproval',
+      'scout:operator.ideaDecision',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe('ChannelName type', () => {
   test('accepts exact literal values only (compile-time check)', () => {
     // Compile-time: each literal is a valid ChannelName. If any CHANNEL value
@@ -216,6 +381,34 @@ describe('ChannelName type', () => {
       'scout:actions.changed': true,
       'scout:features.changed': true,
       'scout:writes.list': true,
+      'scout:operator.mandate': true,
+      'scout:operator.saveMandate': true,
+      'scout:operator.projects': true,
+      'scout:operator.project': true,
+      'scout:operator.startProject': true,
+      'scout:operator.decideClaim': true,
+      'scout:operator.production': true,
+      'scout:operator.delegation': true,
+      'scout:operator.projectDeletion': true,
+      'scout:operator.sceneOrder': true,
+      'scout:operator.sceneLock': true,
+      'scout:operator.sceneRegeneration': true,
+      'scout:operator.sceneMedia': true,
+      'scout:operator.readiness': true,
+      'scout:operator.window': true,
+      'scout:operator.assembly': true,
+      'scout:operator.mediaRights': true,
+      'scout:operator.packageMetadata': true,
+      'scout:operator.packageApproval': true,
+      'scout:operator.publication': true,
+      'scout:operator.proposalDecision': true,
+      'scout:operator.experiment': true,
+      'scout:operator.experimentAdoption': true,
+      'scout:operator.comments': true,
+      'scout:operator.commentSync': true,
+      'scout:operator.commentDecision': true,
+      'scout:operator.replyApproval': true,
+      'scout:operator.ideaDecision': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.SemanticKernel;
 using Scout.Plugin.YouTube.Abstractions;
 
@@ -60,6 +61,43 @@ public static class YouTubeServiceCollectionExtensions
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new YouTubePlugin(sp.GetRequiredService<IYouTubeClient>()), "YouTube"));
 
+        if (useTokenFile)
+        {
+            AddSignedInClients(services, tokenFile!);
+        }
+
         return services;
+    }
+
+    /// <summary>
+    /// The write, Analytics and Reporting clients, which need the owner's sign-in: none of them is a kernel plugin. The write
+    /// client has no timeout of its own, because an upload lasts as long as the video takes to send, and never follows a
+    /// redirect, so YouTube's 308 reaches the resumable upload; a connection takes at most 30 seconds to open.
+    /// </summary>
+    private static void AddSignedInClients(IServiceCollection services, string tokenFile)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddHttpClient<IYouTubeWriteClient, YouTubeWriteClient>(client =>
+            {
+                client.BaseAddress = new Uri("https://www.googleapis.com/");
+                client.Timeout = Timeout.InfiniteTimeSpan;
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("Scout");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(30) })
+            .AddHttpMessageHandler(() => new YouTubeTokenFileHandler(tokenFile))
+            .RemoveAllLoggers();
+        services.AddHttpClient<IYouTubeAnalyticsClient, YouTubeAnalyticsClient>(client => Configure(client, "https://youtubeanalytics.googleapis.com/v2/"))
+            .AddHttpMessageHandler(() => new YouTubeTokenFileHandler(tokenFile))
+            .RemoveAllLoggers();
+        services.AddHttpClient<IYouTubeReportingClient, YouTubeReportingClient>(client => Configure(client, "https://youtubereporting.googleapis.com/v1/"))
+            .AddHttpMessageHandler(() => new YouTubeTokenFileHandler(tokenFile))
+            .RemoveAllLoggers();
+    }
+
+    private static void Configure(HttpClient client, string baseAddress)
+    {
+        client.BaseAddress = new Uri(baseAddress);
+        client.Timeout = TimeSpan.FromMinutes(2);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Scout");
     }
 }

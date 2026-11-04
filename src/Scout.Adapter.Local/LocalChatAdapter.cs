@@ -274,12 +274,12 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
                     bytes.Length,
                     null,
                     _ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false))))
-            { IsLocalOwner = true };
+            { IsLocalOwner = true, OriginReference = LocalOriginPoster.Reference };
         }
 
         return string.IsNullOrWhiteSpace(request.Text)
             ? null
-            : new ChatMessage(OwnerUserId, ChannelId, request.Text) { IsLocalOwner = true };
+            : new ChatMessage(OwnerUserId, ChannelId, request.Text) { IsLocalOwner = true, OriginReference = LocalOriginPoster.Reference };
     }
 
     private void Start(
@@ -350,6 +350,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
             request.Dispose();
         }
     }
+
+    internal LocalEventWriter? RunningWriter => Volatile.Read(ref _lifetime) is null ? null : _writer;
 
     private sealed record LocalRequest(string? Type, string? Id, string? Text, LocalAudio? Audio);
 

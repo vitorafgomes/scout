@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 
 import { readIpcError, type PendingActionDto, type WriteLogEntryDto } from '@scout/shared';
 
@@ -15,7 +16,10 @@ import { ScoutBridgeService } from '../core/scout-bridge';
 const POLL_MS = 15_000;
 const WRITES_SHOWN = 50;
 
-/** The owner's approval surface: irreversible actions waiting for a decision, and the writes Scout made. */
+/**
+ * The owner's approval surface: irreversible actions waiting for a decision, and the writes Scout made.
+ * A route with `data.feature` shows that feature's items only; the main window's Review shows every feature.
+ */
 @Component({
   selector: 'sc-review',
   standalone: true,
@@ -24,7 +28,7 @@ const WRITES_SHOWN = 50;
   template: `
     <main class="page">
       <header class="header">
-        <h1>Review</h1>
+        <h1>{{ feature === null ? 'Review' : 'Approvals' }}</h1>
         <p class="lede">What Scout is waiting to do, and what it did.</p>
       </header>
 
@@ -50,32 +54,36 @@ const WRITES_SHOWN = 50;
                   >
                 </div>
                 <p class="summary">{{ a.summary }}</p>
-                <div class="decide">
-                  <input
-                    #reason
-                    type="text"
-                    placeholder="Reason (optional)"
-                    [attr.data-test]="'reason-' + a.id"
-                  />
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    [attr.data-test]="'approve-' + a.id"
-                    [disabled]="deciding() === a.id"
-                    (click)="decide(a, 'approve', reason)"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    [attr.data-test]="'reject-' + a.id"
-                    [disabled]="deciding() === a.id"
-                    (click)="decide(a, 'reject', reason)"
-                  >
-                    Reject
-                  </button>
-                </div>
+                @if (a.status === 'executing') {
+                  <span class="badge" [attr.data-test]="'executing-' + a.id">Executing</span>
+                } @else {
+                  <div class="decide">
+                    <input
+                      #reason
+                      type="text"
+                      placeholder="Reason (optional)"
+                      [attr.data-test]="'reason-' + a.id"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      [attr.data-test]="'approve-' + a.id"
+                      [disabled]="deciding() === a.id"
+                      (click)="decide(a, 'approve', reason)"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      [attr.data-test]="'reject-' + a.id"
+                      [disabled]="deciding() === a.id"
+                      (click)="decide(a, 'reject', reason)"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                }
               </li>
             }
           </ul>
@@ -179,6 +187,14 @@ const WRITES_SHOWN = 50;
         gap: 8px;
         font-size: 13px;
       }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #1e3a8a;
+        color: #bfdbfe;
+      }
       .summary {
         margin: 0;
       }
@@ -242,6 +258,9 @@ export class ReviewComponent implements OnInit, OnDestroy {
   private timer: ReturnType<typeof setInterval> | null = null;
   private unsubscribe: (() => void) | null = null;
 
+  readonly feature: string | null =
+    (inject(ActivatedRoute, { optional: true })?.snapshot.data['feature'] as string | undefined) ??
+    null;
   readonly actions = signal<readonly PendingActionDto[]>([]);
   readonly writes = signal<readonly WriteLogEntryDto[]>([]);
   readonly error = signal<string | null>(null);
@@ -283,8 +302,14 @@ export class ReviewComponent implements OnInit, OnDestroy {
         this.bridge.actionsList(),
         this.bridge.writesList({ limit: WRITES_SHOWN }),
       ]);
-      this.actions.set(pending.actions);
-      this.writes.set([...log.entries].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)));
+      const shown = (featureId: string): boolean =>
+        this.feature === null || featureId === this.feature;
+      this.actions.set(pending.actions.filter((a) => shown(a.featureId)));
+      this.writes.set(
+        log.entries
+          .filter((w) => shown(w.featureId))
+          .sort((a, b) => Date.parse(b.at) - Date.parse(a.at)),
+      );
       this.error.set(null);
     } catch (err: unknown) {
       this.error.set(readIpcError(err).message);

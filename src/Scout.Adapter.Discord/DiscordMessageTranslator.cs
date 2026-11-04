@@ -77,7 +77,8 @@ public sealed partial class DiscordMessageTranslator
                     voice.SizeBytes,
                     voice.Duration,
                     ct => _download(voice.Url, ct)),
-                IsDirectMessage: isDm);
+                IsDirectMessage: isDm)
+            { OriginReference = DiscordOriginPoster.Reference(inbound.ChannelId, inbound.MessageId) };
             return true;
         }
 
@@ -93,7 +94,8 @@ public sealed partial class DiscordMessageTranslator
             ChannelId: inbound.ChannelId.ToString(),
             Text: stripped,
             Timestamp: inbound.Timestamp,
-            IsDirectMessage: isDm);
+            IsDirectMessage: isDm)
+        { OriginReference = DiscordOriginPoster.Reference(inbound.ChannelId, inbound.MessageId) };
         return true;
     }
 

@@ -11,7 +11,7 @@ namespace Scout.Adapter.Local.Tests;
 
 public sealed class LocalChatAdapterTests
 {
-    private sealed class Harness : IAsyncDisposable
+    internal sealed class Harness : IAsyncDisposable
     {
         private readonly AnonymousPipeServerStream _stdin = new(PipeDirection.Out);
         private readonly AnonymousPipeClientStream _reader;

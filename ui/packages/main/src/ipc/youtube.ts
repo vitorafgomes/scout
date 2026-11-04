@@ -8,6 +8,7 @@ import {
 } from '@scout/shared';
 import type { ControlPlaneClient } from '../control-plane/client.js';
 import type { GoogleAuth } from '../oauth/google-auth.js';
+import type { FeaturesHooks } from './features.js';
 import type { Logger } from '../util/logger.js';
 
 /**
@@ -28,6 +29,43 @@ export async function revokeYouTubeWriteGrant(
   onRevoked?.();
 }
 
+export async function deleteYouTubeData(
+  getControlPlane: () => Promise<Pick<ControlPlaneClient, 'deleteFeatureCredentials'>>,
+  logger: Logger,
+): Promise<void> {
+  try {
+    await (await getControlPlane()).deleteFeatureCredentials('youtube');
+  } catch (err: unknown) {
+    logger.warn('youtube: data not deleted', { code: serializeError(err).code });
+  }
+}
+
+export function youTubeWriteGrantHooks(
+  auth: Pick<GoogleAuth, 'ensureWriteScopes' | 'dropWriteScopes' | 'settled' | 'status'>,
+  deleteData: () => Promise<void>,
+): Pick<FeaturesHooks, 'prepareWriteGrant' | 'afterWriteRevoke'> {
+  const deleteIfSignedOut = async (): Promise<void> => {
+    const status = await auth.status().catch(() => null);
+    if (status?.connected === false) await deleteData();
+  };
+  return {
+    prepareWriteGrant: async (id) => {
+      if (id === 'youtube') await auth.ensureWriteScopes();
+    },
+    afterWriteRevoke: async (id) => {
+      if (id !== 'youtube') return;
+      let dropped: boolean;
+      try {
+        dropped = await auth.dropWriteScopes();
+      } catch (err: unknown) {
+        await deleteIfSignedOut();
+        throw err;
+      }
+      if (dropped) void auth.settled().then(deleteIfSignedOut);
+    },
+  };
+}
+
 export function registerYouTubeHandlers(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
   auth: Pick<
@@ -35,11 +73,14 @@ export function registerYouTubeHandlers(
     'signIn' | 'status' | 'cancelSignIn' | 'signOut' | 'saveApiKey' | 'clearApiKey'
   >,
   logger: Logger,
-  getControlPlane: () => Promise<Pick<ControlPlaneClient, 'setWriteGrant'>>,
+  getControlPlane: () => Promise<
+    Pick<ControlPlaneClient, 'setWriteGrant' | 'deleteFeatureCredentials'>
+  >,
   onWriteGrantRevoked?: () => void,
 ): () => void {
   const revokeWriteGrant = (): Promise<void> =>
     revokeYouTubeWriteGrant(getControlPlane, logger, onWriteGrantRevoked);
+  const deleteData = (): Promise<void> => deleteYouTubeData(getControlPlane, logger);
 
   async function relay<T>(name: string, call: () => Promise<T>): Promise<T> {
     try {
@@ -62,7 +103,9 @@ export function registerYouTubeHandlers(
   ipcMain.handle(CHANNEL.youtubeCancelSignIn, (): void => auth.cancelSignIn());
   ipcMain.handle(CHANNEL.youtubeSignOut, async (): Promise<YouTubeStatus> => {
     await revokeWriteGrant();
-    return relay('sign-out', () => auth.signOut());
+    const status = await relay('sign-out', () => auth.signOut());
+    await deleteData();
+    return status;
   });
   ipcMain.handle(
     CHANNEL.youtubeSaveApiKey,
@@ -71,8 +114,11 @@ export function registerYouTubeHandlers(
   );
   ipcMain.handle(CHANNEL.youtubeClearApiKey, async (): Promise<YouTubeStatus> => {
     const before = await auth.status().catch(() => null);
-    if (before?.method !== 'oauth') await revokeWriteGrant();
-    return relay('clear key', () => auth.clearApiKey());
+    const only = before?.method !== 'oauth';
+    if (only) await revokeWriteGrant();
+    const status = await relay('clear key', () => auth.clearApiKey());
+    if (only) await deleteData();
+    return status;
   });
 
   return () => {

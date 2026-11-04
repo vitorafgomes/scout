@@ -15,5 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.ControlPlane.Tests" />
+    <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
   </ItemGroup>
 </Project>

@@ -8,4 +8,7 @@ public interface IWriteLog
 
     /// <summary>The last <paramref name="limit"/> entries, newest first.</summary>
     Task<IReadOnlyList<WriteLogEntry>> ListAsync(int limit, CancellationToken ct);
+
+    /// <summary>The entries from the end back to the first one older than <paramref name="since"/>, newest first.</summary>
+    Task<IReadOnlyList<WriteLogEntry>> ListSinceAsync(DateTimeOffset since, CancellationToken ct);
 }

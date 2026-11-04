@@ -13,6 +13,8 @@ namespace Scout.ControlPlane.Actions;
 /// through a temp file and an atomic move. A file that does not parse is moved
 /// aside to <c>actions.json.corrupt-&lt;UTC yyyyMMddHHmmss&gt;</c>, never overwritten;
 /// a file that cannot be opened or read fails the call and stays where it is.
+/// Every write drops rejected actions decided more than 30 days ago and executed
+/// ones approved more than 90 days ago; pending, approved and executing actions are kept.
 /// </summary>
 public sealed class JsonFileActionQueue : IActionQueue, IDisposable
 {
@@ -22,6 +24,9 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
+
+    private static readonly TimeSpan RejectedKeptFor = TimeSpan.FromDays(30);
+    private static readonly TimeSpan ExecutedKeptFor = TimeSpan.FromDays(90);
 
     private readonly string _filePath;
     private readonly ILogger<JsonFileActionQueue> _logger;
@@ -81,13 +86,140 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<PendingAction>> EnqueueApprovedAsync(
+        string featureId,
+        IReadOnlyList<(string Action, string Target, string Summary)> actions,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
+        ArgumentNullException.ThrowIfNull(actions);
+
+        var now = DateTimeOffset.UtcNow;
+        var approved = actions
+            .Select(a => new PendingAction(
+                Guid.NewGuid().ToString("N"), featureId, a.Action, a.Target, a.Summary, now, PendingActionStatus.Approved, now))
+            .ToList();
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var all = await ReadAsync(ct).ConfigureAwait(false);
+            all.AddRange(approved);
+            await WriteAsync(all, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        return approved;
+    }
+
+    /// <inheritdoc/>
+    public async Task<PendingAction?> ClaimNextAsync(
+        string featureId,
+        TimeSpan lease,
+        Func<PendingAction, IReadOnlyList<PendingAction>, bool> eligible,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
+        ArgumentNullException.ThrowIfNull(eligible);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var all = await ReadAsync(ct).ConfigureAwait(false);
+            var now = DateTimeOffset.UtcNow;
+            var open = all
+                .Where(a => string.Equals(a.FeatureId, featureId, StringComparison.Ordinal)
+                    && a.Status is PendingActionStatus.Approved or PendingActionStatus.Executing)
+                .OrderBy(a => a.RequestedAt)
+                .ToList();
+            var next = open.FirstOrDefault(a =>
+                (a.Status == PendingActionStatus.Approved || a.ClaimedAt <= now - lease) && eligible(a, open));
+            if (next is null)
+            {
+                return null;
+            }
+
+            var claimed = next with { Status = PendingActionStatus.Executing, ClaimedAt = now };
+            all[all.IndexOf(next)] = claimed;
+            await WriteAsync(all, ct).ConfigureAwait(false);
+            return claimed;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PendingAction>> RejectApprovedAsync(
+        string featureId,
+        Func<PendingAction, IReadOnlyList<PendingAction>, bool> match,
+        string reason,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
+        ArgumentNullException.ThrowIfNull(match);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var all = await ReadAsync(ct).ConfigureAwait(false);
+            var approved = all
+                .Where(a => string.Equals(a.FeatureId, featureId, StringComparison.Ordinal) && a.Status == PendingActionStatus.Approved)
+                .OrderBy(a => a.RequestedAt)
+                .ToList();
+            var now = DateTimeOffset.UtcNow;
+            var rejected = new List<PendingAction>();
+            foreach (var action in approved.Where(a => match(a, approved)))
+            {
+                var decided = action with { Status = PendingActionStatus.Rejected, DecidedAt = now, Reason = reason };
+                all[all.IndexOf(action)] = decided;
+                rejected.Add(decided);
+            }
+
+            if (rejected.Count > 0)
+            {
+                await WriteAsync(all, ct).ConfigureAwait(false);
+            }
+
+            return rejected;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<PendingAction>> ListPendingAsync(CancellationToken ct)
     {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             return (await ReadAsync(ct).ConfigureAwait(false))
-                .Where(a => a.Status == PendingActionStatus.Pending)
+                .Where(a => a.Status is PendingActionStatus.Pending or PendingActionStatus.Executing)
+                .OrderBy(a => a.RequestedAt)
+                .ToList();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PendingAction>> ListOpenAsync(string featureId, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return (await ReadAsync(ct).ConfigureAwait(false))
+                .Where(a => string.Equals(a.FeatureId, featureId, StringComparison.Ordinal)
+                    && a.Status is PendingActionStatus.Approved or PendingActionStatus.Executing)
                 .OrderBy(a => a.RequestedAt)
                 .ToList();
         }
@@ -106,9 +238,17 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
         DecideAsync(id, PendingActionStatus.Rejected, reason, ct);
 
     /// <inheritdoc/>
-    public async Task<PendingAction> MarkExecutedAsync(string id, CancellationToken ct)
+    public Task<PendingAction> MarkExecutedAsync(string id, CancellationToken ct) =>
+        ExecuteAsync(id, _ => Task.CompletedTask, ct);
+
+    /// <inheritdoc/>
+    public async Task<PendingAction> ExecuteAsync(
+        string id,
+        Func<CancellationToken, Task> record,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        ArgumentNullException.ThrowIfNull(record);
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -120,11 +260,12 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
                 throw new PendingActionNotFoundException(id);
             }
 
-            if (all[index].Status != PendingActionStatus.Approved)
+            if (all[index].Status is not (PendingActionStatus.Approved or PendingActionStatus.Executing))
             {
                 throw new PendingActionNotApprovedException(id, all[index].Status);
             }
 
+            await record(ct).ConfigureAwait(false);
             var executed = all[index] with { Status = PendingActionStatus.Executed };
             all[index] = executed;
             await WriteAsync(all, ct).ConfigureAwait(false);
@@ -224,6 +365,14 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
 
     private async Task WriteAsync(List<PendingAction> all, CancellationToken ct)
     {
+        var now = DateTimeOffset.UtcNow;
+        all.RemoveAll(a => a.Status switch
+        {
+            PendingActionStatus.Rejected => a.DecidedAt < now - RejectedKeptFor,
+            PendingActionStatus.Executed => a.DecidedAt < now - ExecutedKeptFor,
+            _ => false,
+        });
+
         var directory = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(directory))
         {

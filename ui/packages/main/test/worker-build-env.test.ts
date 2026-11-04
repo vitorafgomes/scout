@@ -115,6 +115,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'OpenAI',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -150,6 +154,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'Gemini',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -233,6 +241,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -257,6 +269,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -278,6 +294,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -342,6 +362,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'ChatGptPlan',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -375,6 +399,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -510,6 +538,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -529,6 +561,10 @@ describe('buildEnv', () => {
       SCOUT__FEATURES__GRANTEDWRITES: '',
       SCOUT__WORKERGATE__SOCKETPATH: '',
       SCOUT__WORKERGATE__TOKEN: '',
+      SCOUT__OPERATOR__FFMPEGPATH: '',
+      SCOUT__OPERATOR__FONTPATH: '',
+      SCOUT__OPERATOR__PIPERPATH: '',
+      SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -945,6 +981,39 @@ describe('buildEnv worker gate', () => {
       return silent;
     },
   };
+
+  it('always gives the worker the bundled ffmpeg, font, piper and voices paths, empty for any the build did not bundle, so inherited values cannot override them', async () => {
+    const bundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: {
+        ffmpeg: '/opt/Scout/resources/media-tools/linux-x64/ffmpeg',
+        font: '/opt/Scout/resources/fonts/NotoSans-Regular.ttf',
+        piper: '/opt/Scout/resources/media-tools/linux-x64/piper/piper',
+        voices: '/opt/Scout/resources/voices',
+      },
+    });
+    const notBundled = await buildEnv({
+      vaultGet: async () => null,
+      mediaTools: { ffmpeg: '', font: '', piper: '', voices: '' },
+    });
+    const absent = await buildEnv({ vaultGet: async () => null });
+    const paths = (env: Record<string, string>) => [
+      env['SCOUT__OPERATOR__FFMPEGPATH'],
+      env['SCOUT__OPERATOR__FONTPATH'],
+      env['SCOUT__OPERATOR__PIPERPATH'],
+      env['SCOUT__OPERATOR__VOICESPATH'],
+    ];
+
+    expect(paths(bundled)).toEqual([
+      '/opt/Scout/resources/media-tools/linux-x64/ffmpeg',
+      '/opt/Scout/resources/fonts/NotoSans-Regular.ttf',
+      '/opt/Scout/resources/media-tools/linux-x64/piper/piper',
+      '/opt/Scout/resources/voices',
+    ]);
+    expect(paths(notBundled)).toEqual(['', '', '', '']);
+    expect(paths(absent)).toEqual(['', '', '', '']);
+    expect(Object.keys(bundled).filter((key) => key.toUpperCase().includes('FFPROBE'))).toEqual([]);
+  });
 
   it('always sets the worker gate socket and token, empty while the control plane is not launched, so inherited values cannot override them', async () => {
     const absent = await buildEnv({ vaultGet: async () => null });

@@ -54,9 +54,9 @@ internal sealed class ResponsesApiStub : HttpMessageHandler
         Completed("[]"),
     ];
 
-    public static IEnumerable<string> FunctionCallEvents(string name)
+    public static IEnumerable<string> FunctionCallEvents(string name, string arguments = "{}")
     {
-        var item = $$"""{"type":"function_call","id":"fc_1","call_id":"call_1","name":{{JsonValue.Create(name).ToJsonString()}},"arguments":"{}","status":"completed"}""";
+        var item = $$"""{"type":"function_call","id":"fc_1","call_id":"call_1","name":{{JsonValue.Create(name).ToJsonString()}},"arguments":{{JsonValue.Create(arguments).ToJsonString()}},"status":"completed"}""";
         return
         [
             $$"""{"type":"response.output_item.done","sequence_number":1,"output_index":0,"item":{{item}}}""",

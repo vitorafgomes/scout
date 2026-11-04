@@ -1,9 +1,9 @@
 ---
 title: "ADR 0030 - YouTube plugin: read-only over the official APIs, signed in from the desktop through the browser"
-version: "1.2"
+version: "1.3"
 date: 2026-11-02
 updated: 2026-11-02
-changes: "Amended: the catalog entry declares the operator write rows (ADR 0032)"
+changes: "Amended: phase 5 implements the first write rows in a separate write client; write scopes come from a fresh sign-in"
 page_type: adr
 status: accepted
 description: "Scout reads YouTube through the Data API v3 (and, in a later phase, the Analytics API v2) with plain HTTP GETs; the owner signs in from the desktop through the system browser with OAuth 2.0 and PKCE, or pastes an API key for public data; tokens live in the desktop keychain vault and reach the worker through a 0600 token file; the plugin never posts, uploads, edits or schedules anything on YouTube; the write rows the catalog entry declares since ADR 0032 are implemented in later phases of the channel operator."
@@ -30,6 +30,8 @@ reliability: high
 Updated: 2026-11-02. Accepted on the owner's instruction after approving the plan page: start phase 1 of [[pages/roadmap/youtube-creator-assistant]].
 
 Amended 2026-11-02: the plugin stays GET-only today. The `youtube` catalog entry now declares, beside these reads, the write and irreversible-write rows of the channel operator under `WriteClass.Executive`, governed by [[pages/decisions/0032-per-feature-write-permissions]] and implemented in later phases of [[pages/roadmap/youtube-channel-operator]]; nothing below is rewritten.
+
+Amended 2026-11-03 (phase 5 of the channel operator): the read client stays GET-only and is still the only client the model functions reach. The write rows are implemented in a separate write client (upload, thumbnail, title) that only the operator's executor calls, and only for an action the owner approved and the control plane hands out; the Analytics and Reporting clients read the owner's own reports. Write scopes (`youtube.upload`, `youtube.force-ssl`) are requested by a fresh browser sign-in when the owner allows writes and dropped when they revoke, because Google does not support incremental authorization for installed apps ([[pages/decisions/0033-channel-operator-architecture]]).
 
 ## Context
 

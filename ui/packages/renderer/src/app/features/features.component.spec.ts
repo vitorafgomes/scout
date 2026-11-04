@@ -179,6 +179,7 @@ describe('FeaturesComponent', () => {
       error: null,
       clientConfigPath: '/user-data/google-oauth-client.json',
       source: 'file',
+      scopes: [],
     };
     const bridge = {
       onFeaturesChanged: vi.fn(() => () => undefined),
@@ -404,6 +405,7 @@ describe('FeaturesComponent', () => {
       error: null,
       clientConfigPath: '/user-data/google-oauth-client.json',
       source: 'file',
+      scopes: [],
     };
 
     async function mount(features: FeatureDto[], overrides: Record<string, unknown> = {}) {

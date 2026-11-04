@@ -14,12 +14,15 @@ public enum PendingActionStatus
 
     /// <summary>The owner approved it and the worker recorded the write; it cannot be recorded again.</summary>
     Executed,
+
+    /// <summary>The owner approved it and a worker claimed it to run it; the claim lapses after a lease.</summary>
+    Executing,
 }
 
 /// <summary>
 /// An irreversible action a feature asked to perform; it runs only after the
 /// owner approves it in the desktop. <c>Reason</c> carries the owner's note on the
-/// decision, approval or rejection.
+/// decision, approval or rejection; <c>ClaimedAt</c> is when a worker last claimed it.
 /// </summary>
 public sealed record PendingAction(
     string Id,
@@ -30,4 +33,5 @@ public sealed record PendingAction(
     DateTimeOffset RequestedAt,
     PendingActionStatus Status,
     DateTimeOffset? DecidedAt,
-    string? Reason = null);
+    string? Reason = null,
+    DateTimeOffset? ClaimedAt = null);

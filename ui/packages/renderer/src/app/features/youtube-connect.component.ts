@@ -26,9 +26,27 @@ const POLL_MS = 3000;
           @if (s.method === 'oauth') {
             <p class="note" data-test="youtube-connected">Connected to {{ s.channelTitle }}</p>
             <p class="help" data-test="youtube-method">Signed in with Google</p>
+            @if (s.scopes.length > 0) {
+              <p class="help" data-test="youtube-scopes">
+                Google access: {{ shortScopes(s.scopes) }}
+              </p>
+            }
           } @else {
             <p class="note" data-test="youtube-connected">Connected with an API key</p>
             <p class="help" data-test="youtube-method">Public data only.</p>
+          }
+          @if (s.pending) {
+            <div class="row">
+              <p class="note" data-test="youtube-pending-connected">Waiting for the browser...</p>
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="youtube-cancel-connected"
+                (click)="cancel()"
+              >
+                Cancel
+              </button>
+            </div>
           }
           <div class="row">
             <button
@@ -147,6 +165,15 @@ const POLL_MS = 3000;
             </button>
           }
         }
+        <button
+          type="button"
+          class="btn btn--secondary operator"
+          data-test="youtube-open-operator"
+          [disabled]="!s.connected"
+          (click)="openOperator()"
+        >
+          Open YouTube operator
+        </button>
       </section>
     }
     @if (actionError(); as message) {
@@ -159,6 +186,9 @@ const POLL_MS = 3000;
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      .operator {
+        align-self: flex-start;
       }
       .row {
         display: flex;
@@ -226,6 +256,7 @@ export class YouTubeConnectComponent implements OnInit, OnDestroy {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private refreshing: Promise<void> | null = null;
   private destroyed = false;
+  private unsubscribe: (() => void) | null = null;
 
   readonly status = signal<YouTubeStatus | null>(null);
   readonly busy = signal(false);
@@ -238,11 +269,13 @@ export class YouTubeConnectComponent implements OnInit, OnDestroy {
   @Output() readonly connectedChange = new EventEmitter<boolean>();
 
   async ngOnInit(): Promise<void> {
+    this.unsubscribe = this.bridge.onFeaturesChanged(() => void this.refresh());
     await this.refresh();
   }
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.unsubscribe?.();
     this.stopPolling();
   }
 
@@ -272,6 +305,10 @@ export class YouTubeConnectComponent implements OnInit, OnDestroy {
     });
   }
 
+  shortScopes(scopes: readonly string[]): string {
+    return scopes.map((scope) => scope.replace('https://www.googleapis.com/auth/', '')).join(', ');
+  }
+
   studioUrl(channelId: string | null): string {
     return channelId === null
       ? 'https://studio.youtube.com/'
@@ -281,6 +318,14 @@ export class YouTubeConnectComponent implements OnInit, OnDestroy {
   async open(url: string): Promise<void> {
     try {
       await this.bridge.appOpenExternal({ url });
+    } catch (err: unknown) {
+      this.actionError.set(readIpcError(err).message);
+    }
+  }
+
+  async openOperator(): Promise<void> {
+    try {
+      await this.bridge.operatorOpenWindow();
     } catch (err: unknown) {
       this.actionError.set(readIpcError(err).message);
     }

@@ -453,6 +453,101 @@ describe('quick ask: one conversation for every window', () => {
     t.quickAsk.dispose();
   });
 
+  it('a notice from the worker with no question running appears as its own Scout message in every window', async () => {
+    const t = await setup();
+    openQuickAsk();
+    const quickAskWindow = t.quickAskWindow();
+
+    t.quickAsk.handleWorkerLine(
+      '{"id":null,"event":"notice","text":"The script for Span<T> in C# is ready."}',
+    );
+
+    const expected = [
+      {
+        id: 'notice:1',
+        question: '',
+        reply: 'The script for Span<T> in C# is ready.',
+        citations: [],
+        state: 'done',
+        notice: true,
+      },
+    ];
+    expect(pushedTurns(t.mainWindow).at(-1)).toEqual(expected);
+    expect(pushedTurns(quickAskWindow).at(-1)).toEqual(expected);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual(expected);
+    t.quickAsk.dispose();
+  });
+
+  it('a notice during a running question is its own message and leaves that question running unchanged', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'is prod green?' });
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"Look"}');
+
+    t.quickAsk.handleWorkerLine('{"id":null,"event":"notice","text":"Research started."}');
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"complete","text":"Green."}');
+
+    expect(pushedTurns(t.mainWindow).at(-2)).toEqual([
+      turn('q-1', 'is prod green?', { reply: 'Look' }),
+      {
+        id: 'notice:1',
+        question: '',
+        reply: 'Research started.',
+        citations: [],
+        state: 'done',
+        notice: true,
+      },
+    ]);
+    expect(pushedTurns(t.mainWindow).at(-1)).toEqual([
+      turn('q-1', 'is prod green?', { reply: 'Green.', state: 'done' }),
+      {
+        id: 'notice:1',
+        question: '',
+        reply: 'Research started.',
+        citations: [],
+        state: 'done',
+        notice: true,
+      },
+    ]);
+    t.quickAsk.dispose();
+  });
+
+  it('a notice is kept as plain text up to 32000 characters, and one without text or with an id is dropped', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi' });
+    const pushes = pushedTurns(t.mainWindow).length;
+
+    t.quickAsk.handleWorkerLine('{"id":null,"event":"notice"}');
+    t.quickAsk.handleWorkerLine('{"id":null,"event":"notice","text":""}');
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"notice","text":"forged into a turn"}');
+    const dropped = pushedTurns(t.mainWindow).length;
+    t.quickAsk.handleWorkerLine(
+      JSON.stringify({ id: null, event: 'notice', text: `<b>${'x'.repeat(40_000)}` }),
+    );
+
+    const turns = (await t.invoke(CHANNEL.localGetTurns, sender())) as {
+      reply: string;
+      notice?: boolean;
+    }[];
+    expect(dropped).toBe(pushes);
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).toEqual(turn('q-1', 'hi'));
+    expect(turns[1]?.reply).toBe(`<b>${'x'.repeat(31_997)}`);
+    expect(turns[1]?.notice).toBe(true);
+    t.quickAsk.dispose();
+  });
+
+  it('a fail with a null id is still dropped and leaves the running question as it was', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi' });
+    const pushes = pushedTurns(t.mainWindow).length;
+
+    t.quickAsk.handleWorkerLine('{"id":null,"event":"fail","text":"The request was malformed."}');
+
+    expect(pushedTurns(t.mainWindow)).toHaveLength(pushes);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual([turn('q-1', 'hi')]);
+    t.quickAsk.dispose();
+  });
+
   it('refuses an id already in the conversation, even a finished one', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi' });

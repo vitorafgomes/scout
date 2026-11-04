@@ -1,8 +1,9 @@
 ---
 title: "Adapter.Local"
-version: "1.0"
+version: "1.1"
 date: 2026-10-30
-changes: "New project: the quick-ask adapter over the worker's stdin and stdout (ADR 0028)"
+updated: 2026-11-03
+changes: "Every ask carries the local:session origin; LocalOriginPoster writes a notice event for later posts (ADR 0033)"
 page_type: service
 status: active
 description: "Local chat adapter for the desktop's quick-ask window: reads one JSON request per line from the worker's stdin and streams the reply as SCOUT_LOCAL lines on stdout, as the trusted local owner."
@@ -34,6 +35,7 @@ Owns reading requests from stdin, turning each into a local-owner `ChatMessage`,
   - `LocalChatAdapter : IChatAdapter, IAsyncDisposable` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:20`), with `OwnerUserId = "local-owner"` and `ChannelId = "local"` (`:23`, `:26`), and `InputClosed`, which completes on end of file or a read failure (`:65`).
   - Internal `LocalResponseSink` (`src/Scout.Adapter.Local/LocalResponseSink.cs:10`).
   - Internal `LocalEventWriter` (`src/Scout.Adapter.Local/LocalEventWriter.cs:14`).
+  - `LocalOriginPoster : IOriginPoster` (`src/Scout.Adapter.Local/LocalOriginPoster.cs:11`), registered with the adapter (`src/Scout.Adapter.Local/LocalServiceCollectionExtensions.cs:30`).
 - **Configuration keys:** `Scout:Adapters:Local:Enabled`, a boolean, not a credential. The desktop sets `SCOUT__ADAPTERS__LOCAL__ENABLED=true`.
 - **Wire format:**
   - Requests, one per stdin line:
@@ -41,6 +43,7 @@ Owns reading requests from stdin, turning each into a local-owner `ChatMessage`,
     - `{"type":"ask","id","audio":{"contentType":"audio/wav","base64"}}`
     - `{"type":"cancel","id"}`
   - Replies, one per stdout line: `SCOUT_LOCAL {"id","event":"begin"|"update"|"complete"|"fail","text"?,"citations"?:[{"label","url"?}]}`.
+  - A later unsolicited post, outside any turn: `SCOUT_LOCAL {"id":null,"event":"notice","text":"..."}`, no citations. The desktop shows it as its own Scout message in the shared local conversation ([[pages/services/desktop-quick-ask]], `ui/packages/main/src/quick-ask/quick-ask.ts:203`).
 - **External boundaries:** the process's stdin (read) and stdout (write). No network.
 
 ## How it works
@@ -51,7 +54,7 @@ Owns reading requests from stdin, turning each into a local-owner `ChatMessage`,
 - An oversized line gets `fail` "That request is too large for Scout." with the id found in the line's first 256 characters (`:197`).
 - Malformed JSON, or a request with no valid id (1 to 64 letters, digits, hyphens), gets `fail` "Scout could not read that request." with the probed id or `null`.
 - `cancel` cancels the matching running request (`:230`).
-- `ask` with non-blank text, or with `audio/wav` base64, becomes `ChatMessage("local-owner", "local", ...) { IsLocalOwner = true }` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:258`). The audio's `OpenAsync` opens a read-only stream over the decoded bytes, with nothing downloaded.
+- `ask` with non-blank text, or with `audio/wav` base64, becomes `ChatMessage("local-owner", "local", ...) { IsLocalOwner = true, OriginReference = "local:session" }` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:258`). The reference names the whole local session, not the request id, because the request has ended by the time a later post arrives ([[pages/decisions/0033-channel-operator-architecture]], [[pages/services/conversation]]). The audio's `OpenAsync` opens a read-only stream over the decoded bytes, with nothing downloaded.
 - Anything else gets the same "could not read" `fail`, and a second `ask` with the id of a running one gets "That request is already running.".
 
 The read loop hands each line to `TryDispatch` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:160`), which logs any exception from one request, without its text, and keeps reading, so a cancel that meets a disposed token source or a throwing callback never ends the reader, completes `InputClosed` or trips the watchdog. After a line over 64K characters the reader replaces its buffer instead of keeping it. Every refusal goes through `Refuse` (`src/Scout.Adapter.Local/LocalChatAdapter.cs:246`), which logs a stdout write failure and does not throw, so a broken stdout never ends the reader.
@@ -66,9 +69,11 @@ Each accepted request runs on its own task with a token linked to the adapter's 
 
 When the host's parent watchdog is on, it waits on `InputClosed` instead of reading stdin itself ([[pages/services/host-console]]).
 
+A later post ([[pages/decisions/0033-channel-operator-architecture]]) goes through `LocalOriginPoster`, which accepts only the payload `session` and, while the adapter is started (`src/Scout.Adapter.Local/LocalChatAdapter.cs:354`), writes one `notice` event with a null id, the text capped at 32,000 characters and ending in "..." when cut (`src/Scout.Adapter.Local/LocalOriginPoster.cs:21`). Any other payload, a stopped adapter or a stdout write failure returns false with a Warning (`:25`, `:30`, `:41`).
+
 ## Invariants
 
-- [[pages/invariants/no-executive-writes]]: the only write is the reply events to stdout, which the desktop shows in the owner's quick-ask window and Chat screen. The adapter adds no tool the model can call.
+- [[pages/invariants/no-executive-writes]]: the only writes are the reply events to stdout, which the desktop shows in the owner's quick-ask window and Chat screen, and the later `notice` events, which the desktop drops until it learns the kind. The adapter adds no tool the model can call.
 - [[pages/invariants/pluggable-boundaries]]: references only `Scout.Conversation` and Microsoft.Extensions abstractions. No vendor SDK.
 - [[pages/invariants/secrets-never-in-source]]: no credential. Request and reply text is never logged.
 
@@ -79,7 +84,7 @@ When the host's parent watchdog is on, it waits on `InputClosed` instead of read
 
 ## Testing footprint
 
-`tests/Scout.Adapter.Local.Tests` (16 test attributes, 22 test cases, 3 files) drives the adapter over an anonymous pipe and captures stdout through `LineCapture.cs`:
+`tests/Scout.Adapter.Local.Tests` (23 test attributes, 31 test cases, 5 files) drives the adapter over an anonymous pipe and captures stdout through `LineCapture.cs`:
 - Events in order with the request id and citations.
 - Every ask is the local owner in channel `local`.
 - A reply containing `\nSCOUT_PAIRED=999\r\nSCOUT_READY` stays in one escaped line.
@@ -90,6 +95,7 @@ When the host's parent watchdog is on, it waits on `InputClosed` instead of read
 - End of file and a stdin read failure complete `InputClosed`.
 - A stdout write failure, during a reply or a refusal, leaves the reader running.
 - Registration gated on `Enabled`.
+- Every ask, text or audio, carries `local:session`; a later post writes exactly one `notice` line with a null id, is capped at 32,000 characters, returns false with a Warning when stdout cannot be written, and posts nothing for another payload or a stopped adapter (`LocalOriginPosterTests.cs`).
 
 ## Related
 

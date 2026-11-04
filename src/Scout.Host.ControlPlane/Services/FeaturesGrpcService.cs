@@ -2,6 +2,7 @@ using Grpc.Core;
 using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Contracts;
 using Scout.ControlPlane.Features;
+using Scout.ControlPlane.Operator;
 using GrpcFeatures = Scout.ControlPlane.Contracts.Features;
 using WirePendingAction = Scout.ControlPlane.Contracts.PendingAction;
 
@@ -9,7 +10,10 @@ namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="FeaturesService"/>, the action queue and
-/// the write log. Maps domain
+/// the write log. Deleting the YouTube credentials first purges what Scout read from YouTube through
+/// <see cref="OperatorService.PurgeYouTubeDataAsync"/>; a purge that fails keeps the credentials. Revoking the
+/// YouTube write grant, disabling YouTube or deleting its credentials first rejects every approved YouTube action through
+/// <see cref="OperatorService.CancelApprovedYouTubeActionsAsync"/>. Maps domain
 /// exceptions to gRPC status codes; validation failures carry the dotted-path
 /// error map in the status detail.
 /// </summary>
@@ -20,12 +24,14 @@ public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
     private readonly FeaturesService _features;
     private readonly IActionQueue _actions;
     private readonly IWriteLog _writes;
+    private readonly OperatorService _operator;
 
-    public FeaturesGrpcService(FeaturesService features, IActionQueue actions, IWriteLog writes)
+    public FeaturesGrpcService(FeaturesService features, IActionQueue actions, IWriteLog writes, OperatorService @operator)
     {
         _features = features ?? throw new ArgumentNullException(nameof(features));
         _actions = actions ?? throw new ArgumentNullException(nameof(actions));
         _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+        _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
     }
 
     public override async Task<ListFeaturesResponse> ListFeatures(
@@ -76,9 +82,17 @@ public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
     public override Task<Feature> DeleteCredentials(
         DeleteCredentialsRequest request,
         ServerCallContext context) =>
-        Guard(async () => FeatureMapping.ToWire(
-            await _features.DeleteCredentialsAsync(request.Id, context.CancellationToken)
-                .ConfigureAwait(false)));
+        Guard(async () =>
+        {
+            if (request.Id == FeatureCatalog.YouTubeId)
+            {
+                await _operator.PurgeYouTubeDataAsync(context.CancellationToken).ConfigureAwait(false);
+                await _operator.CancelApprovedYouTubeActionsAsync(context.CancellationToken).ConfigureAwait(false);
+            }
+
+            return FeatureMapping.ToWire(
+                await _features.DeleteCredentialsAsync(request.Id, context.CancellationToken).ConfigureAwait(false));
+        });
 
     public override Task<Feature> Enable(EnableRequest request, ServerCallContext context) =>
         Guard(async () => FeatureMapping.ToWire(
@@ -86,16 +100,32 @@ public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
                 .ConfigureAwait(false)));
 
     public override Task<Feature> Disable(DisableRequest request, ServerCallContext context) =>
-        Guard(async () => FeatureMapping.ToWire(
-            await _features.DisableAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+        Guard(async () =>
+        {
+            if (request.Id == FeatureCatalog.YouTubeId)
+            {
+                await _operator.CancelApprovedYouTubeActionsAsync(context.CancellationToken).ConfigureAwait(false);
+            }
+
+            return FeatureMapping.ToWire(
+                await _features.DisableAsync(request.Id, context.CancellationToken).ConfigureAwait(false));
+        });
 
     public override Task<Feature> SetWriteGrant(SetWriteGrantRequest request, ServerCallContext context) =>
-        Guard(async () => FeatureMapping.ToWire(
-            await _features.SetWriteGrantAsync(
-                request.Id,
-                request.Granted,
-                request.ConfirmWrites,
-                context.CancellationToken).ConfigureAwait(false)));
+        Guard(async () =>
+        {
+            if (!request.Granted && request.Id == FeatureCatalog.YouTubeId)
+            {
+                await _operator.CancelApprovedYouTubeActionsAsync(context.CancellationToken).ConfigureAwait(false);
+            }
+
+            return FeatureMapping.ToWire(
+                await _features.SetWriteGrantAsync(
+                    request.Id,
+                    request.Granted,
+                    request.ConfirmWrites,
+                    context.CancellationToken).ConfigureAwait(false));
+        });
 
     public override Task<ListPendingActionsResponse> ListPendingActions(
         ListPendingActionsRequest request,

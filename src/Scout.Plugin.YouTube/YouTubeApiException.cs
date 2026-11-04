@@ -19,4 +19,10 @@ public sealed class YouTubeApiException : Exception
 
     /// <summary>HTTP status that produced the failure, when known.</summary>
     public HttpStatusCode? StatusCode { get; }
+
+    /// <summary>
+    /// True when the same request can succeed later unchanged: YouTube unavailable, a spent quota, a rate limit, or a
+    /// sign-in the owner can renew.
+    /// </summary>
+    public bool Retryable { get; init; }
 }

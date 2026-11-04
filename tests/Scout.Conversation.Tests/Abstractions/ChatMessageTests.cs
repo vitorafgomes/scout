@@ -43,4 +43,20 @@ public sealed class ChatMessageTests
         message.Text.ShouldBe(string.Empty);
         message.Audio.ShouldBeSameAs(audio);
     }
+
+    [Fact]
+    public void ToString_Omits_The_Origin_Reference_And_Keeps_Every_Other_Member()
+    {
+        var at = new DateTimeOffset(2026, 11, 3, 9, 0, 0, TimeSpan.Zero);
+        var message = new ChatMessage("U1", "C1", "start the weekly video", at, IsDirectMessage: true)
+        { OriginReference = "discord:3333:42" };
+
+        var text = message.ToString();
+
+        text.ShouldNotContain("discord:3333:42");
+        text.ShouldNotContain("OriginReference");
+        text.ShouldBe(
+            "ChatMessage { UserId = U1, ChannelId = C1, Text = start the weekly video, Timestamp = " + at
+            + ", IsDirectMessage = True, Audio = , IsLocalOwner = False }");
+    }
 }

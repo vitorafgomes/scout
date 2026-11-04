@@ -21,26 +21,82 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### A revoke and re-grant during an upload can let a second upload be queued (2026-11-03)
 
-### Write gate residuals after review (2026-11-02)
+- **Gap:** `PublishPackageAsync` ignores an executing `videos.insert` whose claim predates the current grant (`!Stale(a, grantedAt)` in [[pages/services/control-plane]]), so after the owner revokes YouTube writes mid-upload and grants again, the publication reads failed and a second Publish queues a second upload while the first may still finish on YouTube (`/code-review medium` of 2026-11-03). Rare: it needs a revoke and a re-grant inside one upload.
+- **Unblocks with:** the executing check counting a stale executing insert as still running, with a test that revokes, re-grants and publishes again.
 
-- **Blocker:** three gaps left by the write-gate review round, none reachable while no write function is declared: a worker started from the tray before the control plane connects still runs without grants, because `connectControlPlane` runs after `createSupervisor` in `ui/packages/main/src/main.ts`; an approved irreversible action can still be recorded after the owner revokes the grant (only reversible rows check the grant at record time); and `RecordAsync` in `src/Scout.ControlPlane/WriteGate/WriteGateService.cs` marks the action executed before appending to the write log, so a failed append leaves an executed action without a log entry.
-- **Unblocks with:** phase 5 of [[pages/roadmap/youtube-channel-operator]], when the first irreversible write is executed: connect the control plane before the supervisor, refuse a record whose feature is no longer granted, and append the log entry before marking the action executed (or both under one gate).
+### A retryable action failure waits for the 30-minute claim lease, not the next tick (2026-11-03)
 
-### The approval queue and the write log are never trimmed (2026-11-02)
+- **Gap:** `ActionExecutor` returns without recording on a retryable failure, so the action stays executing until `ClaimLease` expires ([[pages/services/operator]], [[pages/services/control-plane]]); a `thumbnails.set` waiting on an upload recorded "succeeded, not saved" is re-handed every 30 minutes with no end, and the project cannot be published again while its publication is `uploading`.
+- **Unblocks with:** a bounded wait (the thumbnail giving up after N attempts with a readable reason) and a shorter re-hand for a retryable failure, with a test on the "not saved" upload path.
 
-- **Blocker:** every Review poll (every 15 seconds while the screen is open) parses all of `actions.json`, decided actions included, and walks all of `writes.log` to keep its last entries; neither file is ever trimmed, so the cost grows with lifetime history (performance lens of the write-gate review, `src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs` and `JsonLinesWriteLog.cs`).
-- **Unblocks with:** the first feature that enqueues actions (phase 5 of [[pages/roadmap/youtube-channel-operator]]): drop rejected actions, and approved ones once no `RecordWrite` can still look them up, when the queue is written; read only the tail of `writes.log` by seeking from the end.
+### Using an audience idea starts the project before the idea is marked used (2026-11-03)
+
+- **Gap:** `DecideIdeaAsync(use: true)` calls `StartProjectAsync` first and writes `comments.json` after ([[pages/services/control-plane]]); a comments write that fails leaves a queued project and a still-proposed idea, and a retry starts a second project on the same text.
+- **Unblocks with:** marking the idea used with the project id in the same gated write, or starting the project only after the comments write succeeded and tolerating a used idea without a project.
+
+### The write log parses each tail line twice (2026-11-03)
+
+- **Gap:** `JsonLinesWriteLog.ListSinceAsync` deserializes every line in its stop predicate and again in `ListCoreAsync`, on every `RecordAsync` of an approved action ([[pages/services/control-plane]]). Measured nothing; estimated thousands of lines per record on a busy operator.
+- **Unblocks with:** `ReadTailAsync` handing the parsed entry to the stop predicate, with the existing log tests green.
+
+### YouTube metadata limits and the media file-name rule live in three places (2026-11-03)
+
+- **Gap:** `PackageRules` (control plane) re-implements `PackageChecks` (worker) for the title, description, tag and chapter limits, and the media file-name rule exists in `SceneRules.ValidateFileName`, `MediaFiles.PathFor` and the desktop's `isSafeMediaName`; the comment-id regex exists in `CommentRules`, `CommentDesk` and `operator.ts` ([[pages/services/control-plane]], [[pages/services/operator]], [[pages/services/desktop-operator]]). Drift makes the worker and the control plane disagree on a package.
+- **Unblocks with:** one shared static for the limits in `Scout.ControlPlane.Contracts` (the only assembly both sides reference) and contract tests pinning the desktop copy to it.
+
+### `NextQueuedProjectAsync` reads the projects file twice per poll (2026-11-03)
+
+- **Gap:** a pre-check read precedes `UpdateProjectsAsync`, which re-reads under the gate and already skips the write when the callback answers null ([[pages/services/control-plane]]); the worker polls every 30 s.
+- **Unblocks with:** dropping the pre-check, with the queued-project tests green.
+
+
+### `check-diagnostics` reports two SYSLIB1092 in the control-plane host (2026-11-03)
+
+- **Gap:** `scripts/check-diagnostics.sh` fails on `src/Scout.Host.ControlPlane` with two info-level SYSLIB1092 at `NativeUnix.cs:123`, which were already there before phase 6, and so on `tests/Scout.ControlPlane.Tests`, which references the host. It now fails on `tests/Scout.Host.Console.Tests` too, because that test project references the host for the 16 MB round trip ([[pages/services/host-control-plane]]). The build is still at 0 warnings, since info diagnostics never fail it ([[pages/conventions/tooling]]).
+- **Unblocks with:** the change the SYSLIB1092 message names on the `stat` `LibraryImport` declaration in `NativeUnix`, with a test of the native call.
+
+### Some comment fields have no length limit in the control plane (2026-11-03)
+
+- **Gap:** the control plane bounds a comment's text, draft, theme and id, but not its `Author`, `VideoTitle`, `ThreadId`, `VideoId` or `Error` ([[pages/services/control-plane]]). A worker that misbehaves could grow `comments.json` up to the 16 MB message limit. The security review of phase 6 marked this as hardening only: strangers cannot reach it, and the worker already holds the owner's token.
+- **Unblocks with:** limits in `CommentRules` for those five fields (YouTube's own display-name and title lengths), with a test, in the next change that touches the comment rules.
+
+### The comment poll reads the whole comments state every minute (2026-11-03)
+
+- **Gap:** the worker's comment poll needs only the owner's sync request and the comments marked for a draft, but `GetComments` has one full-state shape, so it reads and maps up to 1000 comments every 60 s under the operator store's single gate ([[pages/services/operator]], [[pages/services/control-plane]]). The performance lens measured nothing and estimated about 0.5 MB a minute at 1000 comments, a fraction of a percent of one core.
+- **Unblocks with:** a measured cost on a busy channel; then an optional `pending_only` flag on `ListCommentsRequest` that answers the sync fields and the `draft_requested` comments only.
+
+### The 6-hour clearing can undo an approval made in the same moment (2026-11-03)
+
+- **Gap:** the control plane's clearing reads the live comment actions before it takes the store's gate; in the few milliseconds between `ApproveReply` writing `reply_approved` and queueing its action, the clearing moves the comment back to `drafted`, and the executor records that action failed without posting ([[pages/services/control-plane]]). Nothing is posted wrongly; the owner approves again.
+- **Unblocks with:** reading the live actions inside the same gate as the comments write, which needs the action queue and the operator store to share one lock or a two-phase check.
+
+### YouTube does not say how `order=time` sorts comment threads (2026-11-03)
+
+- **Gap:** Google's `commentThreads.list` reference (read 2026-11-03) does not say whether `order=time` sorts by the top-level comment's publish time or by the thread's latest activity. The sync reads until a whole page is older than its window, at most 5 pages, and keeps threads by the top-level comment's time ([[pages/services/plugin-youtube]]), so a channel with more than 500 threads touched inside one window can miss the oldest of them until the next window.
+- **Unblocks with:** an observation on a real channel with replies on old threads; then either a larger page budget or a per-video read for the videos the scan stopped on.
+
+### The revoke sentence is not shown on a write recorded after a revoke (2026-11-03)
+
+- **Gap:** when the owner revokes YouTube writes while an approved action is running, the executor saves what YouTube took (the video id or the arm timing) and records the action once as "after revoke" ([[pages/invariants/no-executive-writes]], [[pages/services/operator]]); the record consumes the action, so the executor's follow-up save of "The owner revoked YouTube writes after approving this action" is refused and only logged. The write itself is shown and logged correctly; the project just does not say why.
+- **Unblocks with:** the control plane's after-revoke record path writing that sentence on the action's project in the same step ([[pages/services/control-plane]]).
+
+### No LGPL ffmpeg is bundled for macOS (2026-11-03)
+
+- **Blocker:** the operator's assembly needs ffmpeg (ffprobe is no longer used). Linux and Windows bundle the BtbN LGPL static builds (libopenh264, AAC, libfreetype), pinned by SHA-256; no reputable LGPL static build exists for macOS arm64 (martin-riedl, evermeet and osxexperts builds are GPL, Homebrew is GPL), so on macOS Scout uses an ffmpeg the owner installed and the readiness banner says when none is found ([[pages/decisions/0033-channel-operator-architecture]], [[pages/services/operator]]).
+- **Unblocks with:** a CI job on a macos runner that builds ffmpeg from a pinned tag with an LGPL configure (no `--enable-gpl`, `--enable-videotoolbox`, libopus, libfreetype) and publishes it as a pinned release asset.
+- **Also noted:** the bundled H.264 encoder is a self-compiled libopenh264; Cisco's patent licence covers only Cisco's own binary, so the owner carries the same H.264 patent position as any project that ships an H.264 encoder; VP9 with Opus is the runtime fallback.
 
 ### One-click update covers only the AppImage and Windows (2026-11-02)
 
 - **Blocker:** Update and restart ([[pages/decisions/0031-desktop-self-update]]) needs a package the updater can replace. On macOS, electron-updater applies an update only to a signed and notarized app and reads a `zip` target the build does not produce, and the builds are unsigned (see "Desktop builds are unsigned" below). A `.deb` has no in-place updater: electron-updater's `DebUpdater` installs through `pkexec` or `sudo` and `dpkg`, which is a system package change, not Scout's own file. Both keep the Download button (`canSelfUpdate`, `ui/packages/main/src/update/update-notice.ts:62`).
-- **Unblocks with:** macOS: the signing and notarization in the unsigned-builds entry, plus a `zip` mac target and keeping `latest-mac.yml` and the mac blockmaps in `.github/workflows/release.yml:111`. `.deb`: an apt repository the package manager updates from, which is outside Scout's own installation and needs its own ADR.
+- **Unblocks with:** macOS: the signing and notarization in the unsigned-builds entry, plus a `zip` mac target and keeping `latest-mac.yml` and the mac blockmaps in `.github/workflows/release.yml:120`. `.deb`: an apt repository the package manager updates from, which is outside Scout's own installation and needs its own ADR.
 - **Also noted:** an AppImage whose file name carries a version is replaced under the new release's name, and the old file is deleted (electron-updater's `AppImageUpdater.doInstall`); `refreshLoginEntry` (`ui/packages/main/src/shell/login-item.ts:102`) rewrites the start-at-login entry on the next start.
 
 ### Desktop builds are unsigned (2026-11-02)
 
-- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:61`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
+- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:77`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
 - **Unblocks with:** an Apple Developer ID certificate plus notarization (an App Store Connect API key, `hardenedRuntime: true`), and a Windows code-signing certificate (an OV or EV certificate, or Azure Trusted Signing), each stored as a GitHub Actions secret and read by electron-builder in the `build` job of `.github/workflows/release.yml:32`.
 
 ### Intel Mac package is built but not released (2026-11-02)
@@ -60,15 +116,15 @@ reliability: medium
 
 ### X11 always-on-top unverified on COSMIC (2026-10-31)
 
-- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:103`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
+- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:119`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
 - **Fix:** none expected; what remains open is the owner confirming on screen that the bubble stays above native Wayland windows. If it does not, record it under ADR 0028.
 - **Measured 2026-10-31 with Electron 45 under `--ozone-platform=x11`:** every window COSMIC's X window manager manages, whatever its type, is placed where COSMIC chooses, ignores `setPosition` and `setBounds` before and after `show`, reports not always-on-top and gets a server-side frame. A window created with `focusable: false`, shown, then made focusable and focused stays unmanaged, keeps its position and always-on-top, and `document.hasFocus()` reported focus to its page, but that was not real X keyboard focus (see the last bullet).
 - **Measured 2026-10-31 on the owner's COSMIC session** (AppImage started with `--ozone-platform=x11`, read with `xwininfo` and `xprop` on `DISPLAY=:1`): the bubble window was 64x64 at +1840+1190, the bottom-right corner of the 1920x1080 laptop display (offset +0+190) minus the 16 px margin, so the corner and the display choice hold. COSMIC's X window manager reports itself as "Smithay X WM" and lists `_NET_WM_STATE_ABOVE` and `_NET_WM_STATE_SKIP_TASKBAR` in `_NET_SUPPORTED`. The bubble carries no `WM_STATE` and is absent from `_NET_CLIENT_LIST_STACKING`: with `focusable: false` Electron creates it as a window the X window manager does not manage, which the compositor draws above managed windows. Whether that holds above native Wayland windows is only visible on screen.
-- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:344`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
+- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:352`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
 
 ### Voice transcript shown inside the reply, not as the question (2026-10-31)
 
-- **Blocker:** no worker event carries the transcript. The owner's request is deferred, not done: a voice turn's question is "(voice message)" (`ui/packages/main/src/quick-ask/quick-ask.ts:61`), and what Scout heard reaches the owner only as the reply's opening `> (voice) ` quote, which the worker writes once the reply starts. The owner asked to see what was heard so they can check it ("deveria mostrar o que falei, para que eu veja se esta correto").
+- **Blocker:** no worker event carries the transcript. The owner's request is deferred, not done: a voice turn's question is "(voice message)" (`ui/packages/main/src/quick-ask/quick-ask.ts:62`), and what Scout heard reaches the owner only as the reply's opening `> (voice) ` quote, which the worker writes once the reply starts. The owner asked to see what was heard so they can check it ("deveria mostrar o que falei, para que eu veja se esta correto").
 - **Fix:** a `heard` event from the local adapter, carrying the transcript before the reply, that main sets as the turn's question; the reply then drops the quote for local turns. It touches the worker's local protocol and main's turn handling, with a test on each side.
 
 ### Floating button cannot be dragged (2026-10-31)
@@ -78,12 +134,12 @@ reliability: medium
 
 ### Floating button does not follow display changes (2026-10-31)
 
-- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:279`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
+- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:287`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
 - **Fix:** reposition it on `screen`'s `display-metrics-changed` and `display-removed` events, removing the listeners on dispose, with a test that emits each event on the fake screen.
 
 ### Clear on the Chat screen keeps the worker's local memory (2026-10-30)
 
-- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:500`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
+- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:512`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
 - **Fix:** let Clear also reset the worker's memory for the local channel, for example a `reset` request on the quick-ask stdin protocol that the local adapter turns into a memory reset; it touches only Scout's own state.
 
 ### Provisioning pages still describe the old Discord flow (2026-10-28)
@@ -99,7 +155,7 @@ reliability: medium
 
 ### `electron-builder-squirrel-windows` peer mismatch (2026-10-21)
 
-- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:77` stays `nsis`.
+- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:93` stays `nsis`.
 - **Fix:** add the peer at the matching version only if a Squirrel target is ever configured.
 
 ### Adapter stop has no fault isolation (2026-10-21)
@@ -159,17 +215,17 @@ reliability: medium
 
 ### Feature credentials live in memory and are never validated (2026-10-23)
 
-- **Blocker:** none. The control plane keeps credentials in `InMemoryCredentialStore` (`src/Scout.ControlPlane/ControlPlaneServiceCollectionExtensions.cs:70`), so they are lost when Scout closes, and no host registers an `IFeatureCredentialValidator` (the GitHub and Kubeconfig validators exist only under `src/old/`). Neither catalog entry promises a keyring any more: the desktop GitHub card signs in through the GitHub App ([[pages/decisions/0019-github-app-device-flow]]) and the Kubernetes card reads the kubeconfig on this computer ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The Features screen now says credentials are kept only while Scout is open.
+- **Blocker:** none. The control plane keeps credentials in `InMemoryCredentialStore` (`src/Scout.ControlPlane/ControlPlaneServiceCollectionExtensions.cs:69`), so they are lost when Scout closes, and no host registers an `IFeatureCredentialValidator` (the GitHub and Kubeconfig validators exist only under `src/old/`). Neither catalog entry promises a keyring any more: the desktop GitHub card signs in through the GitHub App ([[pages/decisions/0019-github-app-device-flow]]) and the Kubernetes card reads the kubeconfig on this computer ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The Features screen now says credentials are kept only while Scout is open.
 - **Fix:** a keyring-backed `ICredentialStore` and the validators in the current tree, or catalog text that matches the in-memory store; one change in `Scout.ControlPlane`.
 
 ### Error codes do not cross Electron IPC for most handlers (2026-10-23)
 
-- **Blocker:** none. Electron forwards only the message of an error thrown in an `ipcMain.handle` handler; the `code` property the handlers attach never reaches the renderer (checked on Electron 41.3.0). The Features handlers now encode the code in the message (`ui/packages/shared/src/errors.ts:239`); every other handler does not, so renderer branches on `err.code` never fire in the running app, for example `ui/packages/renderer/src/app/wizard/llm/llm.component.ts:415`.
+- **Blocker:** none. Electron forwards only the message of an error thrown in an `ipcMain.handle` handler; the `code` property the handlers attach never reaches the renderer (checked on Electron 41.3.0). The Features handlers now encode the code in the message (`ui/packages/shared/src/errors.ts:260`); every other handler does not, so renderer branches on `err.code` never fire in the running app, for example `ui/packages/renderer/src/app/wizard/llm/llm.component.ts:415`.
 - **Fix:** encode in every handler and decode once in `ui/packages/preload/src/build-bridge.ts` with `readIpcError`, so the renderer receives a `ScoutError` with its code; drop the Features-only decode in `features.store.ts` then.
 
 ### Raw gRPC text for feature validation errors (2026-10-23)
 
-- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:133`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
+- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:390`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
 - **Fix:** typed errors for those codes and card copy per code, with a client test for each.
 
 ### Kubernetes pod logs: owner decision (2026-10-23)
@@ -199,12 +255,12 @@ reliability: medium
 
 ### The GitHub card bypasses the control-plane Features service (2026-10-23)
 
-- **Blocker:** no activator. The desktop main process owns the GitHub sign-in and hands the worker a token file (`ui/packages/main/src/worker/build-env.ts:65`); the control plane's GitHub entry, its `pat` credential and its enabled state play no part in it, so the GitHub card shows the main-owned connection as its badge and hides the toggle and credential buttons. The Kubernetes card does the same with the kubeconfig selection ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The card also hides with the Features grid when the control plane is not running, although the sign-in does not need it.
+- **Blocker:** no activator. The desktop main process owns the GitHub sign-in and hands the worker a token file (`ui/packages/main/src/worker/build-env.ts:68`); the control plane's GitHub entry, its `pat` credential and its enabled state play no part in it, so the GitHub card shows the main-owned connection as its badge and hides the toggle and credential buttons. The Kubernetes card does the same with the kubeconfig selection ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The card also hides with the Features grid when the control plane is not running, although the sign-in does not need it.
 - **Unblocks when:** a real feature activator exists; then decide whether the control plane reports the GitHub connection or the card leaves the control-plane grid.
 
 ### An API-key provider does not close the bot to other users (2026-10-23)
 
-- **Blocker:** an owner decision. `SCOUT__ACCESS__REQUIREALLOWLIST` is set for GitHub, Kubernetes and the ChatGPT plan only (`ui/packages/main/src/worker/build-env.ts:77`); with an OpenAI or Gemini key in use and no allowed users, anyone who can message the bot spends the owner's API credit ([[pages/decisions/0021-allowed-users]]).
+- **Blocker:** an owner decision. `SCOUT__ACCESS__REQUIREALLOWLIST` is set for GitHub, Kubernetes and the ChatGPT plan only (`ui/packages/main/src/worker/build-env.ts:80`); with an OpenAI or Gemini key in use and no allowed users, anyone who can message the bot spends the owner's API credit ([[pages/decisions/0021-allowed-users]]).
 - **Fix:** add `llm.provider` OpenAI and Gemini to the condition, with the same card warning on those cards, if the owner wants API credit treated as an owner credential.
 
 ### Teams allowed-user ids are Bot Framework ids (2026-10-23)

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'bun:test';
 import { EventEmitter } from 'node:events';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { BrowserWindow, Display, Menu, Tray } from 'electron';
-import type { WorkerStatus } from '@scout/shared';
+import type { FeatureDto, WorkerStatus } from '@scout/shared';
 import { createTrayController } from '../src/tray/tray.js';
+import { buildEnv, readGrantedWriteFeatures } from '../src/worker/build-env.js';
 import type { TrayDeps } from '../src/tray/tray.js';
 import { openQuickAsk, registerQuickAsk } from '../src/quick-ask/quick-ask.js';
 import { recordingLogger } from './kubernetes-fakes.js';
@@ -258,5 +261,81 @@ describe('the tray menu', () => {
 
     expect(fakeTray.destroyed).toBe(true);
     expect(fakeTray.tooltip).toBe('Scout - Idle');
+  });
+});
+
+describe('the tray Start item before the control plane connects', () => {
+  it('a worker started from the tray while the control plane is still connecting gets the write grants', async () => {
+    const { logger } = recordingLogger();
+    let connect: (client: { listFeatures(): Promise<FeatureDto[]> }) => void = () => undefined;
+    const connection = {
+      client: new Promise<{ listFeatures(): Promise<FeatureDto[]> }>((resolve) => {
+        connect = resolve;
+      }),
+      workerGate: () => ({ socketPath: '/run/scout/controlplane-1.sock', token: 'worker-token' }),
+    };
+    const envs: Record<string, string>[] = [];
+    let started: Promise<void> = Promise.resolve();
+    const { fakeTray } = setup({
+      initialStatus: status('stopped'),
+      onStart: () =>
+        (started = (async () => {
+          envs.push(
+            await buildEnv({
+              vaultGet: async () => null,
+              grantedWriteFeatures: await readGrantedWriteFeatures(
+                connection.client,
+                logger,
+                5_000,
+              ),
+              workerGate: connection.workerGate(),
+            }),
+          );
+        })()),
+    });
+
+    fakeTray.click('worker');
+    setTimeout(
+      () =>
+        connect({
+          listFeatures: async () => [
+            { id: 'youtube', granted: true } as FeatureDto,
+            { id: 'github', granted: false } as FeatureDto,
+          ],
+        }),
+      20,
+    );
+    await started;
+
+    expect(envs.map((env) => env['SCOUT__FEATURES__GRANTEDWRITES'])).toEqual(['youtube']);
+    expect(envs[0]!['SCOUT__WORKERGATE__SOCKETPATH']).toBe('/run/scout/controlplane-1.sock');
+  });
+
+  it('main connects the control plane before the YouTube sign-in and the supervisor, so every worker start and every revoke at start use that connection', () => {
+    const main = readFileSync(path.join(import.meta.dirname, '../src/main.ts'), 'utf8');
+
+    expect(main.indexOf('connectControlPlane({')).toBeGreaterThan(-1);
+    expect(main.indexOf('connectControlPlane({')).toBeLessThan(main.indexOf('createSupervisor({'));
+    expect(main.indexOf('connectControlPlane({')).toBeLessThan(main.indexOf('new GoogleAuth({'));
+    expect(main).toContain(
+      'const youTubeControlPlane = (): Promise<ControlPlaneClient> => connection.client;',
+    );
+    expect(main).toMatch(/readGrantedWriteFeatures\(\s*connection\.client,/);
+    expect(main).toContain('workerGate: connection.workerGate(),');
+  });
+
+  it('main runs the YouTube write-grant hooks with the Google sign-in, and a grant change tells every window, so the scope check runs before a grant and the card shows the new scopes', () => {
+    const main = readFileSync(path.join(import.meta.dirname, '../src/main.ts'), 'utf8');
+    const hooks = main.slice(
+      main.indexOf('registerFeaturesHandlers('),
+      main.indexOf('registerOperatorHandlers('),
+    );
+
+    expect(hooks).toMatch(
+      /\.\.\.youTubeWriteGrantHooks\(google, \(\) =>\s*deleteYouTubeData\(youTubeControlPlane, youTubeLogger\),?\s*\)/,
+    );
+    expect(hooks).toMatch(
+      /onWriteGrantChanged: \(\) => \{\s*sendToAllWindows\(CHANNEL\.featuresChanged, featuresLogger\);/,
+    );
   });
 });

@@ -98,8 +98,11 @@ public sealed class FeatureCatalogTests
                 ("videos.list", ScopeAccess.Read),
                 ("search.list", ScopeAccess.Read),
                 ("commentThreads.list", ScopeAccess.Read),
-                ("analytics (yt-analytics v2)", ScopeAccess.Read),
+                ("youtubeAnalytics reports.query", ScopeAccess.Read),
+                ("youtubeReporting reports.list", ScopeAccess.Read),
+                ("api.openverse.org and the host of the picture it names", ScopeAccess.Read),
                 ("Scout's data folder", ScopeAccess.Write),
+                ("youtubeReporting jobs.create", ScopeAccess.Write),
                 ("videos.insert", ScopeAccess.IrreversibleWrite),
                 ("videos.update", ScopeAccess.IrreversibleWrite),
                 ("thumbnails.set", ScopeAccess.IrreversibleWrite),
@@ -107,13 +110,18 @@ public sealed class FeatureCatalogTests
                 ("comments.insert", ScopeAccess.IrreversibleWrite),
                 ("comments.setModerationStatus", ScopeAccess.IrreversibleWrite),
             ]);
-        youTube.ScopeMatrix!.Single(r => r.Access == ScopeAccess.Write).Actions
-            .ShouldBe(["Save scripts, narration, images, the scene list, the video and thumbnails"]);
+        youTube.ScopeMatrix!.Where(r => r.Access == ScopeAccess.Write).Select(r => r.Actions.Single())
+            .ShouldBe([
+                "Save scripts, narration, images, the scene list, the video and thumbnails",
+                "Create the channel's reach reporting job once, so YouTube prepares the reach reports",
+            ]);
+        youTube.ScopeMatrix!.Single(r => r.Scope == "videos.insert").Actions
+            .ShouldBe(["Upload a video as public, private or unlisted, or as private with a time YouTube publishes it"]);
         youTube.Description.ShouldBe(
             "Reads a channel's overview, uploads, statistics, search results and comments; your own channel after " +
-            "you sign in from the desktop. With your write permission it will also produce videos under Scout's " +
-            "folder and, one action at a time with your approval, upload, schedule, reply and change titles or " +
-            "thumbnails. Nothing of the write side is implemented yet.");
+            "you sign in from the desktop. With your write permission it also produces videos under Scout's " +
+            "folder and, one action at a time with your approval, uploads, schedules and tests titles and " +
+            "thumbnails. Replying to and moderating comments are not implemented yet.");
     }
 
     [Fact]

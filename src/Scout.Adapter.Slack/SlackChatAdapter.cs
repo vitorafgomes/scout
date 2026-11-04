@@ -179,7 +179,7 @@ public sealed class SlackChatAdapter : IChatAdapter, IAsyncDisposable
             var sink = new SlackResponseSink(
                 _apiClient, inbound.ChannelId, threadTs, _timeProvider, _logger);
 
-            await handler(chatMessage!, sink, lifetimeToken).ConfigureAwait(false);
+            await handler(chatMessage! with { OriginReference = SlackOriginPoster.Reference(inbound.ChannelId, threadTs) }, sink, lifetimeToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
         {
@@ -217,6 +217,8 @@ public sealed class SlackChatAdapter : IChatAdapter, IAsyncDisposable
             Subtype: subtype,
             BotId: botId,
             AppId: appId);
+
+    internal ISlackApiClient? RunningApiClient => _lifecycle.IsRunning ? _apiClient : null;
 
     // Adapts SlackNet's per-event handler contract to the adapter. SlackNet
     // resolves one handler per event; this thin shim forwards to the long-lived

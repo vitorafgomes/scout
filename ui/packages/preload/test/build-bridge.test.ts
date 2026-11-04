@@ -76,6 +76,34 @@ describe('buildBridge', () => {
       'actionsReject',
       'onActionsChanged',
       'writesList',
+      'operatorMandate',
+      'operatorSaveMandate',
+      'operatorProjects',
+      'operatorProject',
+      'operatorStartProject',
+      'operatorDecideClaim',
+      'operatorProduce',
+      'operatorDelegate',
+      'operatorDeleteProject',
+      'operatorReorderScenes',
+      'operatorSetSceneLocked',
+      'operatorRegenerateScene',
+      'operatorAttachSceneMedia',
+      'operatorReadiness',
+      'operatorOpenWindow',
+      'operatorAssemble',
+      'operatorConfirmMediaRights',
+      'operatorEditPackageMetadata',
+      'operatorApprovePackage',
+      'operatorPublishPackage',
+      'operatorDecideProposal',
+      'operatorStartExperiment',
+      'operatorAdoptExperimentWinner',
+      'operatorComments',
+      'operatorRequestCommentSync',
+      'operatorDecideComment',
+      'operatorApproveReply',
+      'operatorDecideIdea',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -458,6 +486,168 @@ describe('buildBridge', () => {
     ]);
   });
 
+  it('the operator methods reach main only through their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const mandate = {
+      objective: 'Grow the channel',
+      audience: 'Developers',
+      pillars: ['.NET'],
+      cadence: 'weekly',
+      language: 'en',
+      voiceAndStyle: 'calm',
+      blockedTopics: [],
+      targetMetric: 'views',
+      targetValue: '10000',
+    };
+    const decision = {
+      projectId: 'p1',
+      claimId: 'c1',
+      status: 'waived' as const,
+      note: 'Common knowledge',
+    };
+
+    await bridge.operatorMandate();
+    await bridge.operatorSaveMandate(mandate);
+    await bridge.operatorProjects({ limit: 50 });
+    await bridge.operatorProject({ id: 'p1' });
+    await bridge.operatorStartProject({ topic: 'Span<T> in C#' });
+    await bridge.operatorDecideClaim(decision);
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorMandate],
+      [CHANNEL.operatorSaveMandate, mandate],
+      [CHANNEL.operatorProjects, { limit: 50 }],
+      [CHANNEL.operatorProject, { id: 'p1' }],
+      [CHANNEL.operatorStartProject, { topic: 'Span<T> in C#' }],
+      [CHANNEL.operatorDecideClaim, decision],
+    ]);
+  });
+
+  it('produce, delegation, project deletion, scene order, lock, regeneration, attach of a scene file and of a background, and readiness reach main on their own scout:operator channels, and attach carries the ids and the kind only', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorProduce({
+      id: 'p1',
+      narrationVoice: 'piper:en_GB-cori-medium',
+      visualBrief: 'Chalk on slate',
+      motion: 'still',
+    });
+    await bridge.operatorDelegate({
+      id: 'p1',
+      narrationVoice: '',
+      visualBrief: '',
+      motion: 'gentle',
+    });
+    await bridge.operatorDeleteProject({ id: 'p1' });
+    await bridge.operatorReorderScenes({ projectId: 'p1', sceneIds: ['s2', 's1'] });
+    await bridge.operatorSetSceneLocked({ projectId: 'p1', sceneId: 's1', locked: true });
+    await bridge.operatorRegenerateScene({ projectId: 'p1', sceneId: 's2' });
+    await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: 's1', kind: 'audio' });
+    await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: '', kind: 'background' });
+    await bridge.operatorReadiness();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [
+        CHANNEL.operatorProduction,
+        {
+          id: 'p1',
+          narrationVoice: 'piper:en_GB-cori-medium',
+          visualBrief: 'Chalk on slate',
+          motion: 'still',
+        },
+      ],
+      [
+        CHANNEL.operatorDelegation,
+        { id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' },
+      ],
+      [CHANNEL.operatorProjectDeletion, { id: 'p1' }],
+      [CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s2', 's1'] }],
+      [CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: true }],
+      [CHANNEL.operatorSceneRegeneration, { projectId: 'p1', sceneId: 's2' }],
+      [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'audio' }],
+      [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'background' }],
+      [CHANNEL.operatorReadiness],
+    ]);
+  });
+
+  it('assembly, media rights, package metadata and package approval reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const metadata = {
+      projectId: 'p1',
+      title: 'Span<T> explained',
+      description: 'A tour of Span<T>.',
+      tags: ['dotnet', 'span'],
+    };
+
+    await bridge.operatorAssemble({ id: 'p1' });
+    await bridge.operatorConfirmMediaRights({ id: 'p1' });
+    await bridge.operatorEditPackageMetadata(metadata);
+    await bridge.operatorApprovePackage({ id: 'p1' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorAssembly, { id: 'p1' }],
+      [CHANNEL.operatorMediaRights, { id: 'p1' }],
+      [CHANNEL.operatorPackageMetadata, metadata],
+      [CHANNEL.operatorPackageApproval, { id: 'p1' }],
+    ]);
+  });
+
+  it('publishing, deciding a proposal, starting an experiment and adopting its winner reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const publish = {
+      projectId: 'p1',
+      privacyStatus: 'private' as const,
+      publishAt: '2026-12-01T10:00:00.000Z',
+      madeForKids: false,
+      syntheticMedia: true,
+    };
+
+    await bridge.operatorPublishPackage(publish);
+    await bridge.operatorDecideProposal({ projectId: 'p1', proposalId: 'pr1', accept: true });
+    await bridge.operatorStartExperiment({ projectId: 'p1', armHours: 48 });
+    await bridge.operatorAdoptExperimentWinner({ id: 'p1' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorPublication, publish],
+      [CHANNEL.operatorProposalDecision, { projectId: 'p1', proposalId: 'pr1', accept: true }],
+      [CHANNEL.operatorExperiment, { projectId: 'p1', armHours: 48 }],
+      [CHANNEL.operatorExperimentAdoption, { id: 'p1' }],
+    ]);
+  });
+
+  it('reading the comments, asking for a sync, deciding a comment, approving a reply and deciding an idea reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorComments();
+    await bridge.operatorRequestCommentSync();
+    await bridge.operatorDecideComment({ commentId: 'c1', decision: 'hold' });
+    await bridge.operatorApproveReply({ commentId: 'c1', text: 'Thanks for asking.' });
+    await bridge.operatorDecideIdea({ ideaId: 'idea-c1', use: true });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorComments],
+      [CHANNEL.operatorCommentSync],
+      [CHANNEL.operatorCommentDecision, { commentId: 'c1', decision: 'hold' }],
+      [CHANNEL.operatorReplyApproval, { commentId: 'c1', text: 'Thanks for asking.' }],
+      [CHANNEL.operatorIdeaDecision, { ideaId: 'idea-c1', use: true }],
+    ]);
+  });
+
+  it('operatorOpenWindow asks main for the operator window on scout:operator.window with no payload', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorOpenWindow();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([[CHANNEL.operatorWindow]]);
+    expect(CHANNEL.operatorWindow).toBe('scout:operator.window');
+  });
+
   it('onActionsChanged calls the listener each time main announces a change and unsubscribes the same handler', () => {
     const ipc = makeFakeIpc();
     const bridge = buildBridge(ipc);
@@ -610,6 +800,7 @@ describe('buildBridge', () => {
       error: null,
       clientConfigPath: '/user-data/google-oauth-client.json',
       source: 'file',
+      scopes: [],
     };
     (ipc.invoke as ReturnType<typeof mock>).mockImplementation(() => Promise.resolve(status));
     const bridge = buildBridge(ipc);

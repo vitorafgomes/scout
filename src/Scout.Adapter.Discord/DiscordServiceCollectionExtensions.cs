@@ -39,6 +39,7 @@ public static class DiscordServiceCollectionExtensions
         services.AddSingleton<DiscordMessageTranslator>();
         services.AddSingleton<DiscordChatAdapter>();
         services.AddSingleton<IChatAdapter>(sp => sp.GetRequiredService<DiscordChatAdapter>());
+        services.AddSingleton<IOriginPoster, DiscordOriginPoster>();
 
         return services;
     }

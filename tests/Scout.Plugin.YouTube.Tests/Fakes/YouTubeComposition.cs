@@ -31,7 +31,11 @@ internal static class YouTubeComposition
         }
 
         services.AddYouTubePlugin(config);
-        services.AddHttpClient(nameof(IYouTubeClient)).ConfigurePrimaryHttpMessageHandler(() => stub);
+        foreach (var name in new[] { nameof(IYouTubeClient), nameof(IYouTubeWriteClient), nameof(IYouTubeAnalyticsClient), nameof(IYouTubeReportingClient) })
+        {
+            services.AddHttpClient(name).ConfigurePrimaryHttpMessageHandler(() => stub);
+        }
+
         return services.BuildServiceProvider();
     }
 }

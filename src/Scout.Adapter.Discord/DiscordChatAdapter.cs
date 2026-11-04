@@ -230,7 +230,8 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
             var message = thread is null
                 ? chatMessage
                 : new ChatMessage(
-                    chatMessage.UserId, thread.Id.ToString(), chatMessage.Text, chatMessage.Timestamp, chatMessage.Audio);
+                    chatMessage.UserId, thread.Id.ToString(), chatMessage.Text, chatMessage.Timestamp, chatMessage.Audio)
+                { OriginReference = DiscordOriginPoster.Reference(thread.Id) };
             var replyTo = thread is null
                 ? new MessageReference(messageId, inbound.ChannelId, inbound.GuildId, failIfNotExists: false)
                 : null;
@@ -389,5 +390,17 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
         _logger.Log(level, message.Exception, "[Discord] {Source}: {Message}",
             message.Source, message.Message ?? string.Empty);
         return Task.CompletedTask;
+    }
+
+    internal async Task<IMessageChannel?> FindChannelAsync(ulong channelId, CancellationToken cancellationToken)
+    {
+        if (!_lifecycle.IsRunning)
+        {
+            return null;
+        }
+
+        return _client.GetChannel(channelId) as IMessageChannel
+            ?? await _client.GetChannelAsync(channelId, new RequestOptions { CancelToken = cancellationToken })
+                .ConfigureAwait(false) as IMessageChannel;
     }
 }

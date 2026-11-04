@@ -9,11 +9,14 @@ namespace Scout.Host.Console;
 /// <summary>
 /// <see cref="IWriteGate"/> over the control plane's <c>WorkerGate</c> service, on the
 /// Unix socket the desktop passes, with the worker token the desktop passes as a bearer token.
-/// Any decision other than <c>allowed</c> or <c>queued</c> is a refusal.
+/// Any decision other than <c>allowed</c> or <c>queued</c> is a refusal. Messages up to <see cref="MaxMessageBytes"/> go
+/// either way, so a full comments view, 1000 comments of up to 2000 characters each, fits.
 /// </summary>
 internal sealed class GrpcWriteGate : IWriteGate, IDisposable
 {
     internal const string RefusedWithoutReason = "The control plane refused this write.";
+
+    internal const int MaxMessageBytes = 16 * 1024 * 1024;
 
     private readonly GrpcChannel _channel;
     private readonly WorkerGate.WorkerGateClient _client;
@@ -43,11 +46,21 @@ internal sealed class GrpcWriteGate : IWriteGate, IDisposable
                 }
             },
         };
-        _channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions { HttpHandler = handler });
+        _channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
+        {
+            HttpHandler = handler,
+            MaxReceiveMessageSize = MaxMessageBytes,
+            MaxSendMessageSize = MaxMessageBytes,
+        });
         _client = new WorkerGate.WorkerGateClient(_channel);
         _headers = new Metadata { { "authorization", $"Bearer {token}" } };
         _deadline = deadline ?? TimeSpan.FromSeconds(10);
     }
+
+    internal WorkerGate.WorkerGateClient Client => _client;
+
+    internal CallOptions CallOptions(CancellationToken cancellationToken)
+        => new(_headers, DateTime.UtcNow.Add(_deadline), cancellationToken);
 
     public async Task<WriteGateDecision> RequestAsync(
         string featureId,

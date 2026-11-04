@@ -11,6 +11,9 @@ const REPO_ROOT = join(import.meta.dirname, '../../../..');
 interface Step {
   name?: string;
   run?: string;
+  uses?: string;
+  if?: string;
+  with?: Record<string, string>;
   env?: Record<string, string>;
 }
 
@@ -22,6 +25,12 @@ const workflow = (name: string) =>
   load(readFileSync(join(REPO_ROOT, '.github/workflows', name), 'utf8')) as Workflow;
 
 const steps = (name: string) => Object.values(workflow(name).jobs).flatMap((job) => job.steps);
+
+const UI_SCRIPTS = (
+  JSON.parse(readFileSync(join(REPO_ROOT, 'ui/package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  }
+).scripts;
 
 const DIST: Record<string, string[]> = {
   linux: [
@@ -127,6 +136,29 @@ describe('the release workflow', () => {
       expect(packaging.map((step) => step.run!.trim())).toEqual([
         'bun run ${{ matrix.dist_script }} -- --publish never',
       ]);
+    },
+  );
+
+  it.each(['release.yml', 'ui-ci.yml'])(
+    'in %s the media tools are fetched from a download cache keyed by the pinned table on every OS, before electron-builder packages the app',
+    (name) => {
+      const all = steps(name);
+      const cache = all.findIndex((step) => step.with?.['path'] === 'ui/build/media-cache');
+      const packaging = all.findIndex((step) => step.run?.includes('matrix.dist_script'));
+
+      expect(cache).toBeGreaterThanOrEqual(0);
+      expect(cache).toBeLessThan(packaging);
+      expect(all[cache]!.uses).toBe('actions/cache@v4');
+      expect(all[cache]!.if).toBeUndefined();
+      expect(all[cache]!.with!['key']).toContain("hashFiles('ui/build/media-tools.json')");
+      expect(
+        ['dist', 'dist:linux', 'dist:mac', 'dist:win'].filter(
+          (script) => !UI_SCRIPTS[script]!.startsWith('bun run package:all && electron-builder '),
+        ),
+      ).toEqual([]);
+      expect(UI_SCRIPTS['package:all']!.split(' && ')).toContain(
+        'node build/scripts/fetch-media-tools.mjs',
+      );
     },
   );
 });

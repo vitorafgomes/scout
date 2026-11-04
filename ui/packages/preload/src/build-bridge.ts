@@ -281,6 +281,164 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.writesList, req) as ReturnType<ScoutBridge['writesList']>;
     },
 
+    operatorMandate() {
+      return ipc.invoke(CHANNEL.operatorMandate) as ReturnType<ScoutBridge['operatorMandate']>;
+    },
+
+    operatorSaveMandate(req) {
+      return ipc.invoke(CHANNEL.operatorSaveMandate, req) as ReturnType<
+        ScoutBridge['operatorSaveMandate']
+      >;
+    },
+
+    operatorProjects(req) {
+      return ipc.invoke(CHANNEL.operatorProjects, req) as ReturnType<
+        ScoutBridge['operatorProjects']
+      >;
+    },
+
+    operatorProject(req) {
+      return ipc.invoke(CHANNEL.operatorProject, req) as ReturnType<ScoutBridge['operatorProject']>;
+    },
+
+    operatorStartProject(req) {
+      return ipc.invoke(CHANNEL.operatorStartProject, req) as ReturnType<
+        ScoutBridge['operatorStartProject']
+      >;
+    },
+
+    operatorDecideClaim(req) {
+      return ipc.invoke(CHANNEL.operatorDecideClaim, req) as ReturnType<
+        ScoutBridge['operatorDecideClaim']
+      >;
+    },
+
+    operatorProduce(req) {
+      return ipc.invoke(CHANNEL.operatorProduction, req) as ReturnType<
+        ScoutBridge['operatorProduce']
+      >;
+    },
+
+    operatorDelegate(req) {
+      return ipc.invoke(CHANNEL.operatorDelegation, req) as ReturnType<
+        ScoutBridge['operatorDelegate']
+      >;
+    },
+
+    operatorDeleteProject(req) {
+      return ipc.invoke(CHANNEL.operatorProjectDeletion, req) as ReturnType<
+        ScoutBridge['operatorDeleteProject']
+      >;
+    },
+
+    operatorReorderScenes(req) {
+      return ipc.invoke(CHANNEL.operatorSceneOrder, req) as ReturnType<
+        ScoutBridge['operatorReorderScenes']
+      >;
+    },
+
+    operatorSetSceneLocked(req) {
+      return ipc.invoke(CHANNEL.operatorSceneLock, req) as ReturnType<
+        ScoutBridge['operatorSetSceneLocked']
+      >;
+    },
+
+    operatorRegenerateScene(req) {
+      return ipc.invoke(CHANNEL.operatorSceneRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateScene']
+      >;
+    },
+
+    operatorAttachSceneMedia(req) {
+      return ipc.invoke(CHANNEL.operatorSceneMedia, req) as ReturnType<
+        ScoutBridge['operatorAttachSceneMedia']
+      >;
+    },
+
+    operatorReadiness() {
+      return ipc.invoke(CHANNEL.operatorReadiness) as ReturnType<ScoutBridge['operatorReadiness']>;
+    },
+
+    operatorOpenWindow() {
+      return ipc.invoke(CHANNEL.operatorWindow) as ReturnType<ScoutBridge['operatorOpenWindow']>;
+    },
+
+    operatorAssemble(req) {
+      return ipc.invoke(CHANNEL.operatorAssembly, req) as ReturnType<
+        ScoutBridge['operatorAssemble']
+      >;
+    },
+
+    operatorConfirmMediaRights(req) {
+      return ipc.invoke(CHANNEL.operatorMediaRights, req) as ReturnType<
+        ScoutBridge['operatorConfirmMediaRights']
+      >;
+    },
+
+    operatorEditPackageMetadata(req) {
+      return ipc.invoke(CHANNEL.operatorPackageMetadata, req) as ReturnType<
+        ScoutBridge['operatorEditPackageMetadata']
+      >;
+    },
+
+    operatorApprovePackage(req) {
+      return ipc.invoke(CHANNEL.operatorPackageApproval, req) as ReturnType<
+        ScoutBridge['operatorApprovePackage']
+      >;
+    },
+
+    operatorPublishPackage(req) {
+      return ipc.invoke(CHANNEL.operatorPublication, req) as ReturnType<
+        ScoutBridge['operatorPublishPackage']
+      >;
+    },
+
+    operatorDecideProposal(req) {
+      return ipc.invoke(CHANNEL.operatorProposalDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideProposal']
+      >;
+    },
+
+    operatorStartExperiment(req) {
+      return ipc.invoke(CHANNEL.operatorExperiment, req) as ReturnType<
+        ScoutBridge['operatorStartExperiment']
+      >;
+    },
+
+    operatorAdoptExperimentWinner(req) {
+      return ipc.invoke(CHANNEL.operatorExperimentAdoption, req) as ReturnType<
+        ScoutBridge['operatorAdoptExperimentWinner']
+      >;
+    },
+
+    operatorComments() {
+      return ipc.invoke(CHANNEL.operatorComments) as ReturnType<ScoutBridge['operatorComments']>;
+    },
+
+    operatorRequestCommentSync() {
+      return ipc.invoke(CHANNEL.operatorCommentSync) as ReturnType<
+        ScoutBridge['operatorRequestCommentSync']
+      >;
+    },
+
+    operatorDecideComment(req) {
+      return ipc.invoke(CHANNEL.operatorCommentDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideComment']
+      >;
+    },
+
+    operatorApproveReply(req) {
+      return ipc.invoke(CHANNEL.operatorReplyApproval, req) as ReturnType<
+        ScoutBridge['operatorApproveReply']
+      >;
+    },
+
+    operatorDecideIdea(req) {
+      return ipc.invoke(CHANNEL.operatorIdeaDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideIdea']
+      >;
+    },
+
     githubSignIn() {
       return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
     },

@@ -185,6 +185,26 @@ public sealed class DiscordChatAdapterThreadTests
         await NoPost(channel);
     }
 
+    [Fact]
+    public async Task A_Conversation_Moved_Into_A_Thread_Carries_The_Thread_As_Its_Origin()
+    {
+        var (channel, _) = GuildTextChannel();
+
+        var message = await RunAsync(channel, GuildId);
+
+        message.OriginReference.ShouldBe("discord:7777");
+    }
+
+    [Fact]
+    public async Task A_Reply_That_Stays_In_The_Channel_Carries_The_Channel_And_The_Question_As_Its_Origin()
+    {
+        var (channel, _) = GuildTextChannel();
+
+        var message = await RunAsync(channel, GuildId, replyInThreads: false);
+
+        message.OriginReference.ShouldBe("discord:3333:42");
+    }
+
     [Theory]
     [InlineData("short question", "short question")]
     [InlineData("", "Voice message")]

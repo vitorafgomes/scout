@@ -303,6 +303,7 @@ public sealed class FeaturesService
     /// <summary>
     /// Grant or revoke the owner's write permission for a feature that declares
     /// write rows. Granting needs <paramref name="confirmWrites"/>; revoking does not.
+    /// Granting a feature already granted keeps the time the grant began.
     /// </summary>
     public async Task<FeatureSnapshot> SetWriteGrantAsync(
         string id,
@@ -326,7 +327,7 @@ public sealed class FeaturesService
         var existing = await _stateStore.GetAsync(id, ct).ConfigureAwait(false);
         await _stateStore.SetAsync(
                 id,
-                existing with { Granted = granted, GrantedAt = granted ? DateTimeOffset.UtcNow : null },
+                existing with { Granted = granted, GrantedAt = !granted ? null : existing.Granted ? existing.GrantedAt : DateTimeOffset.UtcNow },
                 ct)
             .ConfigureAwait(false);
         return await BuildSnapshotAsync(metadata, ct).ConfigureAwait(false);
