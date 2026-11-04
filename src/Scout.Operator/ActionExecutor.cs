@@ -24,7 +24,12 @@ namespace Scout.Operator;
 /// logged it "after revoke", and the revoke is saved on the publication when the control plane still takes that save. A failure YouTube or the control plane may recover from leaves the action for the next run, with the reason
 /// saved on the publication; any other failure is saved and recorded as failed, which consumes the action, so the queue
 /// moves on. When the project came from a chat, that chat hears the upload, with its link or its publish time on the London
-/// clock, and a failure that consumed the action; a post that fails is logged and never fails the action.
+/// clock, and a failure that consumed the action; a post that fails is logged and never fails the action. A comment action,
+/// on <c>comment:&lt;id&gt;</c>, posts the owner's approved reply text, never the draft, once: the comment is saved
+/// <c>replying</c> before the post and <c>replied</c> with the reply's id after it, a reply id kept in this process is saved
+/// without a second post, and a comment found <c>replying</c> that this process cannot prove unposted fails rather than risk
+/// a second reply; or it holds the comment for review on YouTube, which is safe to repeat, and saves it <c>held</c>. A comment
+/// action that fails for good saves the comment <c>failed</c> with the reason; one that can pass is left for the next run.
 /// </summary>
 internal sealed class ActionExecutor(
     IOperatorControlPlane controlPlane,
@@ -32,7 +37,8 @@ internal sealed class ActionExecutor(
     IOptions<OperatorMediaOptions> options,
     TimeProvider time,
     ILogger<ActionExecutor> logger,
-    IOriginNotifier notifier) : BackgroundService
+    IOriginNotifier notifier,
+    CommentDesk comments) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
 
@@ -40,6 +46,8 @@ internal sealed class ActionExecutor(
     internal const string Insert = "videos.insert";
     internal const string Update = "videos.update";
     internal const string Thumbnail = "thumbnails.set";
+    internal const string Reply = "comments.insert";
+    internal const string Hold = "comments.setModerationStatus";
 
     internal const string PublishApproved = "publish_approved";
     internal const string Uploading = "uploading";
@@ -55,6 +63,9 @@ internal sealed class ActionExecutor(
     internal const string MayAlreadyBeUploaded =
         "The upload may already be on YouTube; check YouTube Studio before publishing again.";
 
+    internal const string MayAlreadyBeReplied =
+        "The reply may already be on YouTube; check the video's comments in YouTube Studio before replying again.";
+
     internal const string SkippedEnded = "skipped: the experiment ended";
 
     internal const string Concluded = "concluded";
@@ -62,6 +73,8 @@ internal sealed class ActionExecutor(
 
     private readonly ConcurrentDictionary<string, string> _uploadedNotSaved = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, UploadSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _repliedNotSaved = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, bool> _notPosted = new(StringComparer.Ordinal);
 
     /// <summary>How many upload sessions this process keeps for actions not ended yet.</summary>
     internal int OpenSessions => _sessions.Count;
@@ -81,6 +94,12 @@ internal sealed class ActionExecutor(
     internal static string Unsupported(string action, string target) => $"Scout does not run {action} on {target}.";
 
     internal static string NoArm(string target) => $"The experiment arm {target} does not exist.";
+
+    internal static string UnknownComment(string id) => $"Comment {id} is no longer in Scout.";
+
+    internal static string NotApprovedReply(string id, string status) => $"Comment {id} is {status}; only a reply the owner approved is posted.";
+
+    internal static string NotApprovedHold(string id, string status) => $"Comment {id} is {status}; only a hold the owner approved is run.";
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -143,6 +162,8 @@ internal sealed class ActionExecutor(
 
             _sessions.TryRemove(action.Id, out _);
             _uploadedNotSaved.TryRemove(action.Id, out _);
+            _repliedNotSaved.TryRemove(action.Id, out _);
+            _notPosted.TryRemove(action.Id, out _);
             outcome = $"failed: {reason}";
         }
 
@@ -173,6 +194,17 @@ internal sealed class ActionExecutor(
         if (action.FeatureId != FeatureId)
         {
             throw new InvalidOperationException(Unsupported(action.Action, action.Target));
+        }
+
+        if (action.Target.StartsWith(CommentDesk.TargetPrefix, StringComparison.Ordinal))
+        {
+            var commentId = action.Target[CommentDesk.TargetPrefix.Length..];
+            return action.Action switch
+            {
+                Reply => await ReplyAsync(action, commentId, ct).ConfigureAwait(false),
+                Hold => await HoldAsync(commentId, ct).ConfigureAwait(false),
+                _ => throw new InvalidOperationException(Unsupported(action.Action, action.Target)),
+            };
         }
 
         var parts = action.Target.Split(':');
@@ -362,6 +394,146 @@ internal sealed class ActionExecutor(
         return null;
     }
 
+    private async Task<string?> ReplyAsync(OperatorAction action, string commentId, CancellationToken ct)
+    {
+        var latest = await controlPlane.GetCommentsAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var comment = latest.Comments.FirstOrDefault(c => c.Id == commentId) ?? throw new InvalidOperationException(UnknownComment(commentId));
+            if (comment.ReplyId is not null)
+            {
+                return null;
+            }
+
+            if (_repliedNotSaved.TryGetValue(action.Id, out var kept))
+            {
+                return await SaveRepliedAsync(action.Id, commentId, kept, latest, ct).ConfigureAwait(false);
+            }
+
+            if (comment.Status == CommentDesk.Replying && !_notPosted.ContainsKey(action.Id))
+            {
+                throw new InvalidOperationException(MayAlreadyBeReplied);
+            }
+
+            if (comment.Status is not (CommentDesk.ReplyApproved or CommentDesk.Replying) || string.IsNullOrWhiteSpace(comment.ApprovedText))
+            {
+                throw new InvalidOperationException(NotApprovedReply(commentId, comment.Status));
+            }
+
+            if (comment.Status == CommentDesk.ReplyApproved)
+            {
+                _notPosted[action.Id] = true;
+                latest = await comments.ChangeAsync(s => Step(s, commentId, c => c with { Status = CommentDesk.Replying }), latest, ct)
+                    .ConfigureAwait(false);
+            }
+
+            _notPosted.TryRemove(action.Id, out _);
+            string replyId;
+            try
+            {
+                replyId = await youtube.ReplyToCommentAsync(commentId, comment.ApprovedText, ct).ConfigureAwait(false);
+            }
+            catch (YouTubeApiException ex) when (SurelyRefused(ex))
+            {
+                _notPosted[action.Id] = true;
+                throw;
+            }
+            catch (YouTubeApiException ex) when ((int?)ex.StatusCode is >= 200 and < 300)
+            {
+                throw new InvalidOperationException(MayAlreadyBeReplied, ex);
+            }
+
+            _repliedNotSaved[action.Id] = replyId;
+            logger.LogInformation("The owner's reply to comment {CommentId} was posted on YouTube.", commentId);
+            return await SaveRepliedAsync(action.Id, commentId, replyId, latest, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && !Retryable(ex))
+        {
+            await SaveCommentFailedAsync(commentId, Reason(ex), latest, ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<string?> SaveRepliedAsync(string actionId, string commentId, string replyId, OperatorComments latest, CancellationToken ct)
+    {
+        try
+        {
+            await comments.ChangeAsync(
+                    s => Step(s, commentId, c => c with { Status = CommentDesk.Replied, ReplyId = replyId, Error = null }), latest, ct)
+                .ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex) when (!ct.IsCancellationRequested && ex is not ControlPlaneUnavailableException)
+        {
+            logger.LogWarning("YouTube took the reply to comment {CommentId}, but the control plane refused to save it: {Reason}", commentId, ex.Message);
+            _repliedNotSaved.TryRemove(actionId, out _);
+            return $"succeeded: comment {commentId}, not saved";
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ReplyNotSavedException(ex);
+        }
+
+        _repliedNotSaved.TryRemove(actionId, out _);
+        return null;
+    }
+
+    private async Task<string?> HoldAsync(string commentId, CancellationToken ct)
+    {
+        var latest = await controlPlane.GetCommentsAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var comment = latest.Comments.FirstOrDefault(c => c.Id == commentId) ?? throw new InvalidOperationException(UnknownComment(commentId));
+            if (comment.Status == CommentDesk.Held)
+            {
+                return null;
+            }
+
+            if (comment.Status != CommentDesk.HoldApproved)
+            {
+                throw new InvalidOperationException(NotApprovedHold(commentId, comment.Status));
+            }
+
+            await youtube.HoldCommentAsync(commentId, ct).ConfigureAwait(false);
+            try
+            {
+                await comments.ChangeAsync(s => Step(s, commentId, c => c with { Status = CommentDesk.Held }), latest, ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex) when (!ct.IsCancellationRequested && ex is not ControlPlaneUnavailableException)
+            {
+                logger.LogWarning("YouTube held comment {CommentId} for review, but the control plane refused to save it: {Reason}", commentId, ex.Message);
+                return $"succeeded: comment {commentId}, not saved";
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && !Retryable(ex))
+        {
+            await SaveCommentFailedAsync(commentId, Reason(ex), latest, ct).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task SaveCommentFailedAsync(string commentId, string reason, OperatorComments latest, CancellationToken ct)
+    {
+        try
+        {
+            await comments.ChangeAsync(
+                    s => Step(s, commentId, c => c.Status is CommentDesk.ReplyApproved or CommentDesk.Replying or CommentDesk.HoldApproved
+                        ? c with { Status = CommentDesk.Failed, Error = reason }
+                        : c),
+                    latest,
+                    ct)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("The failure of the YouTube action on comment {CommentId} could not be saved ({ExceptionType}).", commentId, ex.GetType().Name);
+        }
+    }
+
+    private static OperatorComments Step(OperatorComments state, string commentId, Func<OperatorComment, OperatorComment> change)
+        => state with { Comments = [.. state.Comments.Select(c => c.Id == commentId ? change(c) : c)] };
+
     private async Task<string> MediaPathAsync(string projectId, string file, CancellationToken ct)
     {
         var directory = await controlPlane.GetMediaDirectoryAsync(projectId, ct).ConfigureAwait(false);
@@ -378,7 +550,8 @@ internal sealed class ActionExecutor(
 
     private async Task SaveErrorAsync(OperatorAction action, string reason, bool retry, CancellationToken ct)
     {
-        if (action.FeatureId != FeatureId || action.Target.Contains('.', StringComparison.Ordinal))
+        if (action.FeatureId != FeatureId || action.Target.Contains('.', StringComparison.Ordinal)
+            || action.Target.StartsWith(CommentDesk.TargetPrefix, StringComparison.Ordinal))
         {
             return;
         }
@@ -426,9 +599,16 @@ internal sealed class ActionExecutor(
         }
     }
 
+    /// <summary>
+    /// A reply YouTube never took: a 4xx refusal, or a failure with no status, which only the token handler raises, before
+    /// the request is sent, when the token file is missing. A success status means YouTube took it but its answer was
+    /// unreadable; a 5xx, a timeout or a reset may have landed.
+    /// </summary>
+    private static bool SurelyRefused(YouTubeApiException ex) => ex.StatusCode is null || (int)ex.StatusCode is >= 400 and < 500;
+
     private static bool Retryable(Exception ex) => ex switch
     {
-        ControlPlaneUnavailableException or ActionWaitsException or UploadNotSavedException => true,
+        ControlPlaneUnavailableException or ActionWaitsException or UploadNotSavedException or ReplyNotSavedException => true,
         YouTubeApiException youtubeError => youtubeError.Retryable,
         HttpRequestException or IOException or TaskCanceledException => true,
         _ => false,
@@ -437,7 +617,7 @@ internal sealed class ActionExecutor(
     private static string Reason(Exception ex) => ex switch
     {
         YouTubeApiException or InvalidOperationException => ex.Message,
-        UploadNotSavedException => ex.Message,
+        UploadNotSavedException or ReplyNotSavedException => ex.Message,
         HttpRequestException or IOException or TaskCanceledException => TopicResearcher.YouTubeUnreachable,
         _ => OperatorPipeline.Reason(ex),
     };
@@ -473,6 +653,9 @@ internal sealed class ActionExecutor(
     internal static string Iso(DateTimeOffset at) => at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
     private sealed class ActionWaitsException(string message) : Exception(message);
+
+    private sealed class ReplyNotSavedException(Exception inner)
+        : Exception($"The reply is on YouTube but Scout could not save it: {OperatorPipeline.Reason(inner)}", inner);
 
     private sealed class UploadNotSavedException(Exception inner)
         : Exception($"The video is on YouTube but Scout could not save it: {OperatorPipeline.Reason(inner)}", inner);

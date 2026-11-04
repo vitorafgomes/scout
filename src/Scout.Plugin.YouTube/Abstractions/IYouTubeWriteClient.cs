@@ -1,7 +1,8 @@
 namespace Scout.Plugin.YouTube.Abstractions;
 
 /// <summary>
-/// The YouTube writes the channel operator runs after the owner approved each one: an upload, a thumbnail, a title. Never
+/// The YouTube writes the channel operator runs after the owner approved each one: an upload, a thumbnail, a title, a
+/// reply to a comment, a comment held for review. Never
 /// offered to the model as a function. Needs the desktop sign-in; an API key cannot write.
 /// </summary>
 public interface IYouTubeWriteClient
@@ -25,6 +26,21 @@ public interface IYouTubeWriteClient
 
     /// <summary>The upload and privacy status of <paramref name="videoId"/>; null when YouTube has no such video.</summary>
     Task<YouTubeVideoStatus?> GetVideoStatusAsync(string videoId, CancellationToken ct);
+
+    /// <summary>
+    /// Post <paramref name="text"/> as the owner's reply to the top-level comment <paramref name="parentId"/>
+    /// (<c>comments.insert</c>); the new reply's id. Not idempotent: each call that YouTube takes is one more reply. A
+    /// failure carries the status YouTube answered, a success status when YouTube took the reply but its answer could not
+    /// be read, and no status only when nothing was sent.
+    /// </summary>
+    Task<string> ReplyToCommentAsync(string parentId, string text, CancellationToken ct);
+
+    /// <summary>
+    /// Hold the comment <paramref name="commentId"/> for the owner's review on YouTube
+    /// (<c>comments.setModerationStatus</c> with <c>heldForReview</c>, never rejected and never banning the author); safe
+    /// to repeat.
+    /// </summary>
+    Task HoldCommentAsync(string commentId, CancellationToken ct);
 }
 
 /// <summary>

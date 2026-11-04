@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -8,18 +9,21 @@ using Scout.ControlPlane.Features;
 namespace Scout.ControlPlane.Operator;
 
 /// <summary>
-/// The operator's state in <c>mandate.json</c>, <c>projects.json</c> and <c>readiness.json</c>
-/// beside the feature state file, and the projects' media under <c>operator/</c> there. Every read-check-write runs under one gate, and writes go through a temp file and an
+/// The operator's state in <c>mandate.json</c>, <c>projects.json</c>, <c>readiness.json</c> and
+/// <c>comments.json</c> beside the feature state file, and the projects' media under <c>operator/</c> there. Every read-check-write runs under one gate, and writes go through a temp file and an
 /// atomic move. A file that does not parse is moved aside to <c>&lt;name&gt;.corrupt-&lt;UTC
 /// yyyyMMddHHmmss&gt;</c>, never overwritten; a file that cannot be opened or read fails the call
 /// and stays where it is.
 /// </summary>
 public sealed class JsonFileOperatorStore : IDisposable
 {
+    private const string CommentsNotSaved = "Scout could not save the comments in its data folder.";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     private readonly ILogger<JsonFileOperatorStore> _logger;
@@ -36,6 +40,7 @@ public sealed class JsonFileOperatorStore : IDisposable
         MandatePath = Path.Combine(directory, "mandate.json");
         ProjectsPath = Path.Combine(directory, "projects.json");
         ReadinessPath = Path.Combine(directory, "readiness.json");
+        CommentsPath = Path.Combine(directory, "comments.json");
         MediaRoot = Path.Combine(directory, "operator");
     }
 
@@ -47,6 +52,9 @@ public sealed class JsonFileOperatorStore : IDisposable
 
     /// <summary>Absolute path of the worker's latest readiness report.</summary>
     public string ReadinessPath { get; }
+
+    /// <summary>Absolute path of the comments file.</summary>
+    public string CommentsPath { get; }
 
     /// <summary>Absolute path of the folder that holds one media directory per project.</summary>
     public string MediaRoot { get; }
@@ -144,6 +152,56 @@ public sealed class JsonFileOperatorStore : IDisposable
             }
 
             return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>The stored comments, or the empty state before the first sync.</summary>
+    public async Task<CommentsState> ReadCommentsAsync(CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await ReadAsync<CommentsState>(CommentsPath, ct).ConfigureAwait(false) ?? CommentsState.Empty;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Read the comments, let <paramref name="change"/> check them and answer the new state, and write it back, all
+    /// under the gate; the state after the call is returned. When <paramref name="change"/> throws or answers null,
+    /// nothing is written.
+    /// </summary>
+    /// <exception cref="OperatorStoreException">The comments file could not be written; the earlier one stays.</exception>
+    public async Task<CommentsState> UpdateCommentsAsync(Func<CommentsState, CommentsState?> change, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var stored = await ReadAsync<CommentsState>(CommentsPath, ct).ConfigureAwait(false) ?? CommentsState.Empty;
+            if (change(stored) is not { } next)
+            {
+                return stored;
+            }
+
+            try
+            {
+                await WriteAsync(CommentsPath, next, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new OperatorStoreException(CommentsNotSaved, ex);
+            }
+
+            return next;
         }
         finally
         {

@@ -106,6 +106,10 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             Origin = project.Origin,
             CreatedAt = project.CreatedAt,
             UpdatedAt = project.UpdatedAt,
+            Delegated = project.Delegated,
+            NarrationVoice = project.NarrationVoice,
+            VisualBrief = project.VisualBrief,
+            Motion = project.Motion,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new TopicCandidate { Title = c.Title, Reason = c.Reason, Fit = c.Fit }));
         if (project.Script is { } script)
@@ -145,6 +149,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             wire.Publication = ToWire(publication);
         }
 
+        if (project.BackgroundFile is not null)
+        {
+            wire.BackgroundFile = project.BackgroundFile;
+        }
+
         return wire;
     }
 
@@ -161,6 +170,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             AudioSource = scene.AudioSource,
             VisualSource = scene.VisualSource,
             DurationMs = scene.DurationMs,
+            VisualQuery = scene.VisualQuery,
         };
         if (scene.Error is not null)
         {
@@ -175,6 +185,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         if (scene.VisualFile is not null)
         {
             wire.VisualFile = scene.VisualFile;
+        }
+
+        if (scene.VisualCredit is not null)
+        {
+            wire.VisualCredit = scene.VisualCredit;
         }
 
         return wire;
@@ -214,9 +229,18 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
                 s.VisualSource,
                 s.HasAudioFile ? s.AudioFile : null,
                 s.HasVisualFile ? s.VisualFile : null,
-                s.DurationMs))],
+                s.DurationMs)
+            {
+                VisualQuery = s.VisualQuery,
+                VisualCredit = s.HasVisualCredit ? s.VisualCredit : null,
+            })],
             Package = wire.Package is null ? null : FromWire(wire.Package),
             Publication = wire.Publication is null ? null : FromWire(wire.Publication),
+            BackgroundFile = wire.HasBackgroundFile ? wire.BackgroundFile : null,
+            Delegated = wire.Delegated,
+            NarrationVoice = wire.NarrationVoice,
+            VisualBrief = wire.VisualBrief,
+            Motion = wire.Motion,
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -238,8 +262,10 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             Provider = readiness.Provider,
             FfmpegAvailable = readiness.FfmpegAvailable,
             YoutubeSignedIn = readiness.YouTubeSignedIn,
+            StockPictures = readiness.StockPictures,
         };
         wire.Notes.AddRange(readiness.Notes);
+        wire.Voices.AddRange(readiness.Voices.Select(ToWire));
         await CallAsync(() => gate.Client.ReportReadinessAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
     }
 
@@ -278,6 +304,118 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             throw new WriteRevokedException(ex.Message, ex);
         }
     }
+
+    public async Task<OperatorComments> GetCommentsAsync(CancellationToken ct)
+    {
+        var view = await CallAsync(
+            () => gate.Client.GetCommentsAsync(new ListCommentsRequest(), gate.CallOptions(ct)).ResponseAsync, ct)
+            .ConfigureAwait(false);
+        return FromWire(view);
+    }
+
+    public async Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(comments);
+        var wire = ToWire(comments);
+        var saved = await CallAsync(() => gate.Client.SaveCommentsAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
+        return FromWire(saved);
+    }
+
+    private static CommentsView ToWire(OperatorComments comments)
+    {
+        var wire = new CommentsView();
+        wire.Comments.AddRange(comments.Comments.Select(c =>
+        {
+            var comment = new AudienceComment
+            {
+                Id = c.Id,
+                ThreadId = c.ThreadId,
+                VideoId = c.VideoId,
+                VideoTitle = c.VideoTitle,
+                Author = c.Author,
+                Text = c.Text,
+                PublishedAt = c.PublishedAt,
+                LikeCount = c.LikeCount,
+                Kind = c.Kind,
+                Theme = c.Theme,
+                Status = c.Status,
+                Draft = c.Draft,
+                FetchedAt = c.FetchedAt,
+            };
+            if (c.ApprovedText is not null)
+            {
+                comment.ApprovedText = c.ApprovedText;
+            }
+
+            if (c.ReplyId is not null)
+            {
+                comment.ReplyId = c.ReplyId;
+            }
+
+            if (c.Error is not null)
+            {
+                comment.Error = c.Error;
+            }
+
+            if (c.DecidedAt is not null)
+            {
+                comment.DecidedAt = c.DecidedAt;
+            }
+
+            return comment;
+        }));
+        wire.Ideas.AddRange(comments.Ideas.Select(i =>
+        {
+            var idea = new AudienceIdea { Id = i.Id, Text = i.Text, CommentId = i.CommentId, Status = i.Status };
+            if (i.ProjectId is not null)
+            {
+                idea.ProjectId = i.ProjectId;
+            }
+
+            return idea;
+        }));
+        if (comments.SyncedAt is not null)
+        {
+            wire.SyncedAt = comments.SyncedAt;
+        }
+
+        if (comments.SyncRequestedAt is not null)
+        {
+            wire.SyncRequestedAt = comments.SyncRequestedAt;
+        }
+
+        if (comments.SyncError is not null)
+        {
+            wire.SyncError = comments.SyncError;
+        }
+
+        return wire;
+    }
+
+    private static OperatorComments FromWire(CommentsView wire)
+        => new(
+            [.. wire.Comments.Select(c => new OperatorComment(
+                c.Id,
+                c.ThreadId,
+                c.VideoId,
+                c.VideoTitle,
+                c.Author,
+                c.Text,
+                c.PublishedAt,
+                c.LikeCount,
+                c.Kind,
+                c.Theme,
+                c.Status,
+                c.Draft,
+                c.HasApprovedText ? c.ApprovedText : null,
+                c.HasReplyId ? c.ReplyId : null,
+                c.HasError ? c.Error : null,
+                c.HasDecidedAt ? c.DecidedAt : null,
+                c.FetchedAt))],
+            [.. wire.Ideas.Select(i => new OperatorIdea(i.Id, i.Text, i.CommentId, i.Status, i.HasProjectId ? i.ProjectId : null))],
+            wire.HasSyncedAt ? wire.SyncedAt : null,
+            wire.HasSyncRequestedAt ? wire.SyncRequestedAt : null,
+            wire.HasSyncError ? wire.SyncError : null);
 
     private static Publication ToWire(OperatorPublication publication)
     {
@@ -492,4 +630,23 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             wire.DurationMs,
             wire.HasError ? wire.Error : null,
             wire.MetadataEdited);
+
+    public async Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
+    {
+        var directory = await CallAsync(
+            () => gate.Client.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest(), gate.CallOptions(ct)).ResponseAsync, ct)
+            .ConfigureAwait(false);
+        return directory.Path;
+    }
+
+    private static Voice ToWire(OperatorVoice voice)
+    {
+        var wire = new Voice { Id = voice.Id, Label = voice.Label, Source = voice.Source };
+        if (voice.SampleFile is not null)
+        {
+            wire.SampleFile = voice.SampleFile;
+        }
+
+        return wire;
+    }
 }

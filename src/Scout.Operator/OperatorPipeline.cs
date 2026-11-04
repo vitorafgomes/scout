@@ -13,7 +13,8 @@ namespace Scout.Operator;
 /// carrying the original reason, so a later save records the real cause, never the save's own failure. A topic
 /// the mandate blocks fails the project before any search. A project taken as <c>producing</c> runs the production
 /// stage instead: scenes planned from the script when it has none, then narration and a picture for every unlocked
-/// scene that is not ready or whose generated files are gone, saved after each scene, ending <c>media_ready</c>.
+/// scene that is not ready, or whose narration or picture is not done given the speech and image services
+/// available now, saved after each scene, ending <c>media_ready</c>.
 /// Production reads the project again before each scene and each save; once the project is no longer
 /// <c>producing</c>, because the owner regenerated a scene or produced it again, read so or refused so by the control
 /// plane, the run stops without saving. A project taken as <c>assembling</c> runs the assembly stage: the video, its
@@ -45,6 +46,7 @@ internal sealed class OperatorPipeline(
     internal const string Owner = "owner";
     internal const string NoAudio = "none";
     internal const string TextCard = "text_card";
+    internal const string Stock = "stock";
     internal const string NoScript = "The project has no script to produce; write the script first.";
     internal const string NoLongerProducing = "The project is no longer producing.";
     internal const string Assembling = "assembling";
@@ -180,11 +182,11 @@ internal sealed class OperatorPipeline(
             return false;
         }
 
+        var mandate = await controlPlane.GetMandateAsync(ct).ConfigureAwait(false);
         if (project.Scenes.Count == 0)
         {
             var script = project.Script ?? throw new InvalidOperationException(NoScript);
-            var mandate = await controlPlane.GetMandateAsync(ct).ConfigureAwait(false);
-            var planned = await planner.PlanAsync(script, mandate, ct).ConfigureAwait(false);
+            var planned = await planner.PlanAsync(script, mandate, project.VisualBrief, ct).ConfigureAwait(false);
             project = await SaveProductionAsync(id, current => current.Scenes.Count == 0 ? current with { Scenes = planned } : current, ct)
                 .ConfigureAwait(false);
             if (project is null)
@@ -193,6 +195,8 @@ internal sealed class OperatorPipeline(
             }
         }
 
+        var speechNow = await narration.SpeechAvailableAsync(ct).ConfigureAwait(false);
+        var imagesNow = visuals.ImagesAvailable;
         foreach (var sceneId in project.Scenes.OrderBy(s => s.Order).Select(s => s.Id).ToList())
         {
             var current = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
@@ -209,7 +213,7 @@ internal sealed class OperatorPipeline(
             }
 
             var scene = ordered[position - 1];
-            if (scene.Locked || !NeedsMedia(scene, directory))
+            if (scene.Locked || !NeedsMedia(scene, directory, speechNow, imagesNow))
             {
                 continue;
             }
@@ -218,8 +222,8 @@ internal sealed class OperatorPipeline(
             VisualResult? visual;
             try
             {
-                audio = scene.AudioSource == Owner ? null : await narration.GenerateAsync(scene, directory, ct).ConfigureAwait(false);
-                visual = scene.VisualSource == Owner ? null : await visuals.GenerateAsync(scene, position, directory, ct).ConfigureAwait(false);
+                audio = scene.AudioSource == Owner || (scene.Status == Ready && AudioDone(scene, directory, speechNow)) ? null : await narration.GenerateAsync(scene, current.NarrationVoice, directory, ct).ConfigureAwait(false);
+                visual = scene.VisualSource == Owner || (scene.Status == Ready && VisualDone(scene, directory, imagesNow)) ? null : await visuals.GenerateAsync(scene, position, directory, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -319,10 +323,18 @@ internal sealed class OperatorPipeline(
         return saved is not null;
     }
 
-    private static bool NeedsMedia(OperatorScene scene, string directory)
-        => scene.Status != Ready
-            || (scene.AudioSource == Generated && (scene.AudioFile is null || !MediaFiles.Exists(directory, scene.AudioFile)))
-            || (scene.VisualSource == Generated && (scene.VisualFile is null || !MediaFiles.Exists(directory, scene.VisualFile)));
+    private static bool NeedsMedia(OperatorScene scene, string directory, bool speechNow, bool imagesNow)
+        => scene.Status != Ready || !AudioDone(scene, directory, speechNow) || !VisualDone(scene, directory, imagesNow);
+
+    private static bool AudioDone(OperatorScene scene, string directory, bool speechNow)
+        => scene.AudioSource == Owner
+            || (scene.AudioSource == Generated && scene.AudioFile is not null && MediaFiles.Exists(directory, scene.AudioFile))
+            || (scene.AudioSource == NoAudio && !speechNow);
+
+    private static bool VisualDone(OperatorScene scene, string directory, bool imagesNow)
+        => scene.VisualSource == Owner
+            || (scene.VisualSource is Generated or Stock && scene.VisualFile is not null && MediaFiles.Exists(directory, scene.VisualFile))
+            || (scene.VisualSource == TextCard && !imagesNow);
 
     private static OperatorScene WithMedia(OperatorScene current, NarrationResult? audio, VisualResult? visual)
     {
@@ -338,7 +350,7 @@ internal sealed class OperatorPipeline(
 
         if (visual is not null && current.VisualSource != Owner)
         {
-            next = next with { VisualSource = visual.VisualSource, VisualFile = visual.VisualFile };
+            next = next with { VisualSource = visual.VisualSource, VisualFile = visual.VisualFile, VisualCredit = visual.Credit };
         }
 
         return next;

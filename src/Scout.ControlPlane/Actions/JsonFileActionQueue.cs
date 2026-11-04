@@ -212,6 +212,24 @@ public sealed class JsonFileActionQueue : IActionQueue, IDisposable
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<PendingAction>> ListOpenAsync(string featureId, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return (await ReadAsync(ct).ConfigureAwait(false))
+                .Where(a => string.Equals(a.FeatureId, featureId, StringComparison.Ordinal)
+                    && a.Status is PendingActionStatus.Approved or PendingActionStatus.Executing)
+                .OrderBy(a => a.RequestedAt)
+                .ToList();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <inheritdoc/>
     public Task<PendingAction> ApproveAsync(string id, string? reason, CancellationToken ct) =>
         DecideAsync(id, PendingActionStatus.Approved, reason, ct);
 

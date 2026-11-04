@@ -123,7 +123,7 @@ internal sealed class LearningLoop(
 
         await ProposeOnLatestAsync(
             projects,
-            $"topic-{Day(London.Of(now)):yyyy-MM-dd}",
+            $"topic-{LondonDay(now):yyyy-MM-dd}",
             "topic",
             "Propose the next video topic for the channel, one proposal of kind \"topic\".",
             mandate,
@@ -137,7 +137,7 @@ internal sealed class LearningLoop(
         var projects = await controlPlane.ListRecentAsync(ProjectLimit, ct).ConfigureAwait(false);
         await ProposeOnLatestAsync(
             projects,
-            $"strategy-{Day(London.Of(time.GetUtcNow())):yyyy-MM-dd}",
+            $"strategy-{LondonDay(time.GetUtcNow()):yyyy-MM-dd}",
             "strategy",
             "Review the channel's week in one proposal of kind \"strategy\": what worked, what did not, and what to do next, in at most 120 words.",
             mandate,
@@ -333,6 +333,8 @@ internal sealed class LearningLoop(
         => DateTimeOffset.TryParse(at, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed) ? parsed : null;
 
     private static DateOnly Day(DateTimeOffset at) => DateOnly.FromDateTime(at.UtcDateTime);
+
+    private static DateOnly LondonDay(DateTimeOffset at) => DateOnly.FromDateTime(London.Of(at).DateTime);
 
     internal static string Describe(OperatorSnapshot s)
     {

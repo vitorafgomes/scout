@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
-using Scout.Plugin.YouTube.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
 using Scout.Operator.Tests.Fakes;
 using Scout.Plugin.YouTube;
+using Scout.Plugin.YouTube.Abstractions;
 
 namespace Scout.Operator.Tests;
 
@@ -172,6 +172,42 @@ public sealed class OperatorSchedulerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Slot_Skipped_For_A_Missing_Sign_In_Runs_Once_When_The_Token_Appears_Within_The_Same_Slot()
+    {
+        Stored(("analytics 09:00", "2026-10-01T00:00:00Z"));
+        var time = new FakeTimeProvider(Given.Now);
+        var (scheduler, _) = Build(time, signedIn: false, jobs: [ScheduledJob.Daily("analytics", 9, true, _ => Run("analytics"))]);
+
+        await scheduler.RunDueAsync(CancellationToken.None);
+        _ran.ShouldBeEmpty();
+
+        File.WriteAllText(Path.Combine(_folder, "youtube-token.json"), "{}");
+        time.Advance(TimeSpan.FromMinutes(2));
+        await scheduler.RunDueAsync(CancellationToken.None);
+        await scheduler.RunDueAsync(CancellationToken.None);
+
+        _ran.ShouldBe(["analytics"]);
+    }
+
+    [Fact]
+    public async Task A_Job_That_Throws_Is_Not_Run_Again_In_The_Same_Slot()
+    {
+        Stored(("analytics 09:00", "2026-10-01T00:00:00Z"));
+        var time = new FakeTimeProvider(Given.Now);
+        var (scheduler, _) = Build(time, jobs: [ScheduledJob.Daily("analytics", 9, true, _ =>
+        {
+            _ran.Add("analytics");
+            throw new InvalidOperationException("Scout could not reach its control plane.");
+        })]);
+
+        await scheduler.RunDueAsync(CancellationToken.None);
+        time.Advance(TimeSpan.FromMinutes(2));
+        await scheduler.RunDueAsync(CancellationToken.None);
+
+        _ran.ShouldBe(["analytics"]);
+    }
+
+    [Fact]
     public async Task A_Job_That_Fails_Is_Logged_And_The_Others_Still_Run()
     {
         StoredLongAgo();
@@ -209,6 +245,40 @@ public sealed class OperatorSchedulerTests : IDisposable
         (job.OnTheClock, job.NeedsYouTube).ShouldBe((false, true));
         job.LatestSlot(Given.Now.AddMinutes(14)).ShouldBe(Given.Now);
         job.LatestSlot(Given.Now.AddMinutes(15)).ShouldBe(Given.Now.AddMinutes(15));
+    }
+
+    [Fact]
+    public async Task Comments_Job_Runs_Every_Four_Hours()
+    {
+        var media = Given.Media();
+        var controlPlane = new RecordingControlPlane { MediaDirectory = Media() };
+        controlPlane.Store(Given.Project());
+        var youtube = Substitute.For<IYouTubeClient>();
+        youtube.GetMyChannelAsync(Arg.Any<CancellationToken>()).Returns(Given.Channel());
+        youtube.ListCommentThreadsAsync("UCowner", null, Arg.Any<CancellationToken>()).Returns(new YouTubeCommentThreadPage([], null));
+        var services = new ServiceCollection().AddLogging();
+        services.AddSingleton<IOperatorControlPlane>(controlPlane);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(youtube);
+        services.AddSingleton(Substitute.For<IYouTubeWriteClient>());
+        services.AddSingleton(Substitute.For<IYouTubeAnalyticsClient>());
+        services.AddSingleton(Substitute.For<IYouTubeReportingClient>());
+        services.AddSingleton(Substitute.For<IWriteGate>());
+        services.AddSingleton(Substitute.For<IChatCompletionService>());
+        services.AddSingleton(Substitute.For<IOriginNotifier>());
+        services.AddYouTubeOperator();
+        services.AddSingleton(new VisualGenerator(media, Given.Capabilities(media), TimeProvider.System));
+        services.AddYouTubePublishing();
+        await using var provider = services.BuildServiceProvider();
+
+        var job = provider.GetServices<ScheduledJob>().Single(j => j.Name == "comments");
+        await job.Run(CancellationToken.None);
+
+        (job.OnTheClock, job.NeedsYouTube).ShouldBe((false, true));
+        job.LatestSlot(Given.Now.AddHours(3).AddMinutes(59)).ShouldBe(Given.Now);
+        job.LatestSlot(Given.Now.AddHours(4)).ShouldBe(Given.Now.AddHours(4));
+        controlPlane.CommentSaves.ShouldHaveSingleItem().SyncedAt.ShouldNotBeNull();
+        await youtube.Received(1).ListCommentThreadsAsync("UCowner", null, Arg.Any<CancellationToken>());
     }
 
     [Fact]

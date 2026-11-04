@@ -1,16 +1,22 @@
 using System.Threading.Channels;
 using Grpc.Core;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using NSubstitute;
 using Scout.ControlPlane.Contracts;
 using Scout.Conversation.Abstractions;
+using Scout.Host.ControlPlane;
+using Scout.Host.ControlPlane.Security;
 using Scout.Operator;
 using Scout.Plugin.YouTube.Abstractions;
 using Shouldly;
 using Xunit;
-using NSubstitute;
 using static Scout.Host.Console.Tests.GrpcWriteGateTests;
 
 namespace Scout.Host.Console.Tests;
@@ -147,19 +153,48 @@ public sealed class GrpcOperatorControlPlaneTests
     {
         var withMedia = new OperatorScene("s1", 1, "Feed it daily.", "A jar of starter", false, "ready", null, "generated", "text_card", "scene-s1.mp3", null, 4000);
         var failed = new OperatorScene("s2", 2, "Bake it.", "An oven", true, "failed", "The AI Source could not make the picture of scene 2.", "owner", "owner", "mine.wav", "mine.png", 900);
+        var stock = new OperatorScene("s3", 3, "Slice it.", "A loaf", false, "ready", null, "none", "stock", null, "scene-s3.jpg", 0)
+        {
+            VisualQuery = "bread loaf knife",
+            VisualCredit = "\"Loaf\" by Ana is licensed under CC BY 2.0.",
+        };
         var service = new FakeWorkerGate();
         await using var server = await WorkerGateServer.StartAsync(service);
         using var gate = new GrpcWriteGate(server.SocketPath, Token);
 
         var saved = await new GrpcOperatorControlPlane(gate).SaveProjectAsync(
-            Ready() with { Status = "producing", Scenes = [withMedia, failed] }, null, CancellationToken.None);
+            Ready() with { Status = "producing", Scenes = [withMedia, failed, stock] }, null, CancellationToken.None);
 
         var wire = service.Saved.ShouldNotBeNull().Project.Scenes;
-        wire.Select(w => w.Id).ShouldBe(["s1", "s2"]);
+        wire.Select(w => w.Id).ShouldBe(["s1", "s2", "s3"]);
+        wire.Select(w => (w.VisualQuery, w.HasVisualCredit, w.VisualCredit)).ShouldBe([
+            (string.Empty, false, string.Empty),
+            (string.Empty, false, string.Empty),
+            ("bread loaf knife", true, "\"Loaf\" by Ana is licensed under CC BY 2.0."),
+        ]);
         (wire[0].HasError, wire[0].HasAudioFile, wire[0].HasVisualFile).ShouldBe((false, true, false));
         (wire[1].Locked, wire[1].Error, wire[1].AudioSource, wire[1].VisualFile).ShouldBe(
             (true, "The AI Source could not make the picture of scene 2.", "owner", "mine.png"));
-        saved.Scenes.ShouldBe([withMedia, failed]);
+        saved.Scenes.ShouldBe([withMedia, failed, stock]);
+    }
+
+    [Fact]
+    public async Task The_Owners_Background_Travels_To_The_Wire_And_Back_And_An_Absent_One_Stays_Absent()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var operatorPlane = new GrpcOperatorControlPlane(gate);
+
+        var withBackground = await operatorPlane.SaveProjectAsync(Ready() with { BackgroundFile = "studio wall.jpg" }, null, CancellationToken.None);
+        var sentWith = service.Saved.ShouldNotBeNull().Project;
+        var without = await operatorPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+        var sentWithout = service.Saved.ShouldNotBeNull().Project;
+
+        (sentWith.HasBackgroundFile, sentWith.BackgroundFile).ShouldBe((true, "studio wall.jpg"));
+        withBackground.BackgroundFile.ShouldBe("studio wall.jpg");
+        sentWithout.HasBackgroundFile.ShouldBeFalse();
+        without.BackgroundFile.ShouldBeNull();
     }
 
     [Fact]
@@ -172,7 +207,11 @@ public sealed class GrpcOperatorControlPlaneTests
 
         var directory = await controlPlane.GetMediaDirectoryAsync("p1", CancellationToken.None);
         await controlPlane.ReportReadinessAsync(
-            new OperatorReadiness(true, false, "AzureOpenAI", false, true, ["AzureOpenAI has no image service in Scout."]),
+            new OperatorReadiness(true, false, "AzureOpenAI", false, true, ["AzureOpenAI has no image service in Scout."])
+            {
+                Voices = [new("AzureOpenAI:nova", "nova (AzureOpenAI)", "AzureOpenAI"), new("piper:en_GB-cori-medium", "Cori (medium)", "piper")],
+                StockPictures = true,
+            },
             CancellationToken.None);
 
         directory.ShouldBe("/data/scout/operator/media/p1");
@@ -181,7 +220,11 @@ public sealed class GrpcOperatorControlPlaneTests
         (reported.SpeechAvailable, reported.ImagesAvailable, reported.Provider, reported.FfmpegAvailable, reported.YoutubeSignedIn)
             .ShouldBe((true, false, "AzureOpenAI", false, true));
         reported.Notes.ShouldBe(["AzureOpenAI has no image service in Scout."]);
+        reported.Voices.Select(v => (v.Id, v.Label, v.Source)).ShouldBe([
+            ("AzureOpenAI:nova", "nova (AzureOpenAI)", "AzureOpenAI"), ("piper:en_GB-cori-medium", "Cori (medium)", "piper"),
+        ]);
         reported.HasReportedAt.ShouldBeFalse();
+        reported.StockPictures.ShouldBeTrue();
         service.Authorizations.ShouldBe(["Bearer worker-session-token", "Bearer worker-session-token"]);
     }
 
@@ -204,10 +247,40 @@ public sealed class GrpcOperatorControlPlaneTests
             () => new GrpcOperatorControlPlane(brokenGate).ReportReadinessAsync(readiness, CancellationToken.None));
         var missing = await Should.ThrowAsync<InvalidOperationException>(
             () => new GrpcOperatorControlPlane(missingGate).GetMediaDirectoryAsync("p1", CancellationToken.None));
+        var samplesRefused = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(refusingGate).GetVoiceSamplesDirectoryAsync(CancellationToken.None));
+        var samplesReset = await Should.ThrowAsync<ControlPlaneUnavailableException>(
+            () => new GrpcOperatorControlPlane(brokenGate).GetVoiceSamplesDirectoryAsync(CancellationToken.None));
 
         refused.Message.ShouldBe("The owner has not granted YouTube writes.");
         reset.Message.ShouldBe("Scout could not reach its control plane.");
         missing.Message.ShouldBe("Scout could not reach its control plane.");
+        samplesRefused.Message.ShouldBe("The owner has not granted YouTube writes.");
+        samplesReset.Message.ShouldBe("Scout could not reach its control plane.");
+    }
+
+    [Fact]
+    public async Task The_Voice_Samples_Directory_Is_Asked_For_With_The_Worker_Token_And_A_Sample_File_Is_Reported_With_Its_Voice()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var directory = await controlPlane.GetVoiceSamplesDirectoryAsync(CancellationToken.None);
+        await controlPlane.ReportReadinessAsync(
+            new OperatorReadiness(true, false, "OpenAI", true, true, [])
+            {
+                Voices = [new("OpenAI:nova", "nova (OpenAI)", "OpenAI"), new("piper:en_GB-cori-medium", "Cori (medium)", "piper", "piper-en_GB-cori-medium.wav")],
+            },
+            CancellationToken.None);
+
+        directory.ShouldBe("/data/scout/operator/voice-samples");
+        service.Reported.ShouldNotBeNull().Voices.Select(v => (v.Id, v.HasSampleFile, v.SampleFile)).ShouldBe([
+            ("OpenAI:nova", false, string.Empty),
+            ("piper:en_GB-cori-medium", true, "piper-en_GB-cori-medium.wav"),
+        ]);
+        service.Authorizations.ShouldBe(["Bearer worker-session-token", "Bearer worker-session-token"]);
     }
 
     [Fact]
@@ -243,14 +316,19 @@ public sealed class GrpcOperatorControlPlaneTests
             await Should.ThrowAsync<InvalidOperationException>(() => closed.NextQueuedAsync(CancellationToken.None)),
             await Should.ThrowAsync<InvalidOperationException>(() => closed.GetProjectAsync("p1", CancellationToken.None)),
             await Should.ThrowAsync<InvalidOperationException>(() => closed.ListRecentAsync(5, CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.GetCommentsAsync(CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(
+                () => closed.SaveCommentsAsync(new OperatorComments([], [], null, null, null), CancellationToken.None)),
         };
         var mediaDirectory = await Should.ThrowAsync<InvalidOperationException>(() => closed.GetMediaDirectoryAsync("p1", CancellationToken.None));
         var readiness = await Should.ThrowAsync<InvalidOperationException>(
             () => closed.ReportReadinessAsync(new OperatorReadiness(false, false, "Gemini", false, false, []), CancellationToken.None));
+        var samples = await Should.ThrowAsync<InvalidOperationException>(() => closed.GetVoiceSamplesDirectoryAsync(CancellationToken.None));
 
         failures.Select(f => f.Message).ShouldAllBe(m => m == "Scout Desktop's control plane is not available, so the video operator is off.");
         mediaDirectory.Message.ShouldBe("Scout Desktop's control plane is not available, so the video operator is off.");
         readiness.Message.ShouldBe("Scout Desktop's control plane is not available, so the video operator is off.");
+        samples.Message.ShouldBe("Scout Desktop's control plane is not available, so the video operator is off.");
     }
 
     [Theory]
@@ -486,6 +564,148 @@ public sealed class GrpcOperatorControlPlaneTests
         unreachable.Message.ShouldBe(GrpcOperatorControlPlane.Unreachable);
     }
 
+    [Fact]
+    public async Task Comments_Travel_Field_By_Field_And_Go_Back_With_Every_Time_Byte_For_Byte_And_Absent_Values_Absent()
+    {
+        var view = new CommentsView
+        {
+            SyncedAt = "2026-11-03T08:00:00.5000000Z",
+            SyncRequestedAt = "2026-11-03T12:00:00.1234567+00:00",
+        };
+        view.Comments.Add(new AudienceComment
+        {
+            Id = "UgComment001",
+            ThreadId = "UgThread001",
+            VideoId = "abcDEF12345",
+            VideoTitle = "Sourdough basics",
+            Author = "@breadfan",
+            Text = "How long do I feed it?",
+            PublishedAt = "2026-11-02T09:30:00+00:00",
+            LikeCount = 3,
+            Kind = "question",
+            Theme = "feeding",
+            Status = "reply_approved",
+            Draft = "Daily.",
+            ApprovedText = "Feed it daily for a week.",
+            DecidedAt = "2026-11-03T11:59:59.9876543+00:00",
+            FetchedAt = "2026-11-02T10:00:00.0000001+00:00",
+        });
+        view.Comments.Add(new AudienceComment
+        {
+            Id = "UgComment002",
+            ThreadId = "UgThread002",
+            VideoId = "abcDEF12345",
+            Author = "Anonymous",
+            Text = "Great tip",
+            PublishedAt = "2026-11-01T18:00:00+00:00",
+            Kind = "praise",
+            Status = "new",
+            FetchedAt = "2026-11-02T10:00:00+00:00",
+        });
+        view.Ideas.Add(new AudienceIdea { Id = "idea-UgComment003", Text = "Rye starters", CommentId = "UgComment003", Status = "used", ProjectId = "p7" });
+        var service = new FakeWorkerGate { CommentsReply = view };
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var read = await controlPlane.GetCommentsAsync(CancellationToken.None);
+        var saved = await controlPlane.SaveCommentsAsync(read, CancellationToken.None);
+
+        read.Comments[0].ShouldBe(new OperatorComment(
+            "UgComment001", "UgThread001", "abcDEF12345", "Sourdough basics", "@breadfan", "How long do I feed it?", "2026-11-02T09:30:00+00:00", 3,
+            "question", "feeding", "reply_approved", "Daily.", "Feed it daily for a week.", null, null, "2026-11-03T11:59:59.9876543+00:00",
+            "2026-11-02T10:00:00.0000001+00:00"));
+        (read.Comments[1].ApprovedText, read.Comments[1].ReplyId, read.Comments[1].Error, read.Comments[1].DecidedAt).ShouldBe((null, null, null, null));
+        read.Ideas.ShouldBe([new OperatorIdea("idea-UgComment003", "Rye starters", "UgComment003", "used", "p7")]);
+        (read.SyncedAt, read.SyncRequestedAt, read.SyncError).ShouldBe(("2026-11-03T08:00:00.5000000Z", "2026-11-03T12:00:00.1234567+00:00", null));
+        service.SavedComments.ShouldBe(view);
+        saved.ShouldBe(read, new OperatorCommentsComparer());
+        service.Authorizations.ShouldBe(["Bearer worker-session-token", "Bearer worker-session-token"]);
+    }
+
+    [Fact]
+    public async Task A_Comment_Read_Or_Save_Keeps_The_Control_Planes_Words_And_An_Unreachable_One_Reads_Unreachable()
+    {
+        await using var refusing = await WorkerGateServer.StartAsync(
+            new FakeWorkerGate { OperatorFailure = new RpcException(new Status(StatusCode.FailedPrecondition, "The worker may not drop comment 'c1'.")) });
+        using var refusingGate = new GrpcWriteGate(refusing.SocketPath, Token);
+        using var missing = new GrpcWriteGate(Path.Combine(Path.GetTempPath(), $"scout-missing-{Guid.NewGuid():N}.sock"), Token);
+        var empty = new OperatorComments([], [], null, null, null);
+
+        var refused = await Should.ThrowAsync<InvalidOperationException>(
+            () => new GrpcOperatorControlPlane(refusingGate).SaveCommentsAsync(empty, CancellationToken.None));
+        var unreachable = await Should.ThrowAsync<ControlPlaneUnavailableException>(
+            () => new GrpcOperatorControlPlane(missing).GetCommentsAsync(CancellationToken.None));
+
+        refused.ShouldNotBeOfType<ControlPlaneUnavailableException>();
+        refused.Message.ShouldBe("The worker may not drop comment 'c1'.");
+        unreachable.Message.ShouldBe(GrpcOperatorControlPlane.Unreachable);
+    }
+
+    [Fact]
+    public async Task A_Comments_View_Over_4_MB_Goes_Both_Ways_Between_The_Worker_And_The_Real_Control_Plane()
+    {
+        var directory = Directory.CreateTempSubdirectory("scout-large-comments-").FullName;
+        var socket = Path.Combine(directory, "controlplane.sock");
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls([]);
+        builder.WebHost.ConfigureKestrel(kestrel => kestrel.ListenUnixSocket(socket, listen => listen.Protocols = HttpProtocols.Http2));
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Features:StateStore:FilePath"] = Path.Combine(directory, "features.json"),
+                ["Scout:LocalRuntime:Config:FilePath"] = Path.Combine(directory, "local-runtimes.json"),
+            })
+            .Build();
+        builder.Services.AddControlPlaneHost(configuration, SessionToken.FromValue("desktop-session-token"), Token);
+        var app = builder.Build();
+        app.MapControlPlaneServices();
+        await app.StartAsync();
+        try
+        {
+            await app.Services.GetRequiredService<Scout.ControlPlane.Features.FeaturesService>()
+                .SetWriteGrantAsync("youtube", granted: true, confirmWrites: true, CancellationToken.None);
+            var text = new string('\u65e5', 2000);
+            await app.Services.GetRequiredService<Scout.ControlPlane.Operator.JsonFileOperatorStore>().UpdateCommentsAsync(
+                _ => new Scout.ControlPlane.Operator.CommentsState(
+                    [.. Enumerable.Range(0, 1000).Select(i => new Scout.ControlPlane.Operator.AudienceComment(
+                        $"c{i:0000}", $"t{i}", "v1", "Rivers", "Viewer", text, new DateTimeOffset(2026, 11, 2, 9, 0, 0, TimeSpan.Zero).AddMinutes(-i), 0,
+                        "praise", "thanks", "new", string.Empty, null, null, null, null, new DateTimeOffset(2026, 11, 3, 9, 0, 0, TimeSpan.Zero)))],
+                    [],
+                    null,
+                    null,
+                    null),
+                CancellationToken.None);
+            using var gate = new GrpcWriteGate(socket, Token);
+            var controlPlane = new GrpcOperatorControlPlane(gate);
+
+            var read = new OperatorComments([], [], null, null, null);
+            var saved = read;
+            await Should.NotThrowAsync(async () => read = await controlPlane.GetCommentsAsync(CancellationToken.None));
+            await Should.NotThrowAsync(async () => saved = await controlPlane.SaveCommentsAsync(read, CancellationToken.None));
+
+            System.Text.Encoding.UTF8.GetByteCount(string.Concat(read.Comments.Select(c => c.Text))).ShouldBeGreaterThan(4 * 1024 * 1024);
+            (read.Comments.Count, saved.Comments.Count).ShouldBe((1000, 1000));
+            saved.Comments.ShouldBe(read.Comments);
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private sealed class OperatorCommentsComparer : IEqualityComparer<OperatorComments>
+    {
+        public bool Equals(OperatorComments? x, OperatorComments? y)
+            => x is not null && y is not null && x.Comments.SequenceEqual(y.Comments) && x.Ideas.SequenceEqual(y.Ideas)
+                && (x.SyncedAt, x.SyncRequestedAt, x.SyncError) == (y.SyncedAt, y.SyncRequestedAt, y.SyncError);
+
+        public int GetHashCode(OperatorComments obj) => obj.Comments.Count;
+    }
+
     [Theory]
     [InlineData("youtube-key", null, false)]
     [InlineData(null, "/nonexistent/youtube-token.json", true)]
@@ -540,7 +760,7 @@ public sealed class GrpcOperatorControlPlaneTests
     {
         public List<string> Programs { get; } = [];
 
-        public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+        public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
         {
             Programs.Add(program);
             var listing = arguments[^1] switch
@@ -562,5 +782,69 @@ public sealed class GrpcOperatorControlPlaneTests
                 && x.Tags.SequenceEqual(y.Tags) && x.Chapters.SequenceEqual(y.Chapters);
 
         public int GetHashCode(OperatorScript? obj) => 0;
+    }
+
+    [Fact]
+    public async Task Delegated_is_read_and_sent_back_to_the_control_plane_as_read()
+    {
+        var list = new ListProjectsResponse();
+        list.Projects.Add(new Project { Id = "p1", Topic = "sourdough", Status = "producing", Origin = "desktop", Delegated = true });
+        list.Projects.Add(new Project { Id = "p2", Topic = "rye", Status = "producing", Origin = "desktop" });
+        var service = new FakeWorkerGate { ListReply = list };
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var delegated = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
+        await controlPlane.SaveProjectAsync(delegated with { Status = "media_ready" }, null, CancellationToken.None);
+        var sentDelegated = service.Saved.ShouldNotBeNull().Project.Delegated;
+        var manual = await controlPlane.GetProjectAsync("p2", CancellationToken.None);
+        await controlPlane.SaveProjectAsync(manual with { Status = "media_ready" }, null, CancellationToken.None);
+
+        (delegated.Delegated, sentDelegated).ShouldBe((true, true));
+        (manual.Delegated, service.Saved.Project.Delegated).ShouldBe((false, false));
+    }
+
+    [Fact]
+    public async Task The_Projects_Narration_Voice_Is_Read_And_Sent_Back_To_The_Control_Plane_As_Read()
+    {
+        var list = new ListProjectsResponse();
+        list.Projects.Add(new Project { Id = "p1", Topic = "sourdough", Status = "producing", Origin = "desktop", NarrationVoice = "piper:en_GB-aru-medium#0" });
+        var service = new FakeWorkerGate { ListReply = list };
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var read = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
+        await controlPlane.SaveProjectAsync(read with { Status = "media_ready" }, null, CancellationToken.None);
+
+        read.NarrationVoice.ShouldBe("piper:en_GB-aru-medium#0");
+        service.Saved.ShouldNotBeNull().Project.NarrationVoice.ShouldBe("piper:en_GB-aru-medium#0");
+    }
+
+    [Fact]
+    public async Task The_Projects_Visual_Brief_And_Motion_Are_Read_And_Sent_Back_To_The_Control_Plane_As_Read()
+    {
+        var list = new ListProjectsResponse();
+        list.Projects.Add(new Project
+        {
+            Id = "p1",
+            Topic = "sourdough",
+            Status = "producing",
+            Origin = "desktop",
+            VisualBrief = "Watercolour, it's: calm.\nSoft light.",
+            Motion = "dynamic",
+        });
+        var service = new FakeWorkerGate { ListReply = list };
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        var read = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
+        await controlPlane.SaveProjectAsync(read with { Status = "media_ready" }, null, CancellationToken.None);
+
+        (read.VisualBrief, read.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "dynamic"));
+        var sent = service.Saved.ShouldNotBeNull().Project;
+        (sent.VisualBrief, sent.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "dynamic"));
     }
 }

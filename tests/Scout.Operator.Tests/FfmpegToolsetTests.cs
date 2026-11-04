@@ -119,6 +119,18 @@ public sealed class FfmpegToolsetTests
         (probe.Tools, probe.Note).ShouldBe((null, "The ffmpeg Scout found has no drawtext filter, so videos cannot be assembled."));
     }
 
+    [Theory]
+    [InlineData("zoompan")]
+    [InlineData("fade")]
+    public async Task A_missing_zoompan_or_fade_filter_makes_assembly_unavailable(string filter)
+    {
+        var without = FakeProcessRunner.Filters(FfmpegToolset.Filters.Where(f => f != filter));
+
+        var probe = await Given.Toolset(new FakeProcessRunner { FilterList = without }).ProbeAsync(CancellationToken.None);
+
+        (probe.Tools, probe.Note).ShouldBe((null, $"The ffmpeg Scout found has no {filter} filter, so videos cannot be assembled."));
+    }
+
     [Fact]
     public async Task An_Ffmpeg_Without_The_Lavfi_Device_Makes_Assembly_Unavailable_With_A_Note_Naming_It()
     {

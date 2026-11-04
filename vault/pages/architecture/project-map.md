@@ -1,9 +1,9 @@
 ---
 title: "Project map"
-version: "1.5"
+version: "1.6"
 date: 2026-10-21
 updated: 2026-11-03
-changes: "Scout.Operator and its test project; Host.Console references Operator"
+changes: "Host.Console.Tests references Host.ControlPlane"
 page_type: longform
 status: active
 description: "Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it."
@@ -34,7 +34,7 @@ Derived from the `ProjectReference` items in each `.csproj`. Package references 
 | [[pages/services/operator]] | library | Llm, Conversation, Plugin.YouTube | `Scout.Operator.Tests` |
 | [[pages/services/control-plane-contracts]] | contracts | none | none of its own (`Scout.ControlPlane.Tests`) |
 | [[pages/services/control-plane]] | library | none | `Scout.ControlPlane.Tests` |
-| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, four adapters, Plugin.GitHub, Plugin.Kubernetes, Plugin.YouTube, Operator, Transcription.Whisper, ControlPlane.Contracts | `Scout.Host.Console.Tests` (also references ControlPlane, for the feature catalog) |
+| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, four adapters, Plugin.GitHub, Plugin.Kubernetes, Plugin.YouTube, Operator, Transcription.Whisper, ControlPlane.Contracts | `Scout.Host.Console.Tests` (also references ControlPlane, for the feature catalog, and Host.ControlPlane, so one test carries a comments view over 4 MB between the worker and the real control-plane host) |
 | [[pages/services/host-control-plane]] | host | Contracts, ControlPlane | none of its own (`Scout.ControlPlane.Tests`) |
 
 `Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.GitHub`, `Scout.Plugin.Kubernetes` and `Scout.Plugin.YouTube` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:43` to `:66`). `Scout.Operator` references `Scout.Llm` only for `AddWriteFunction`, and reaches the control plane through its own `IOperatorControlPlane`, which the host implements over the `WorkerGate` client; it references no Contracts or gRPC package.

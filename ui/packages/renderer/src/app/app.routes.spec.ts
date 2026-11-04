@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { AppComponent } from './app.component';
 import { AssemblyComponent } from './assembly/assembly.component';
+import { CommentsComponent } from './comments/comments.component';
 import { ExperimentsComponent } from './experiments/experiments.component';
 import { ReportsComponent } from './reports/reports.component';
 import { appRoutes } from './app.routes';
@@ -99,6 +100,18 @@ describe('app routes', () => {
       ['/operator/reports', ReportsComponent, OperatorShellComponent],
       ['/operator/experiments', ExperimentsComponent, OperatorShellComponent],
     ]);
+  });
+
+  it('operator/comments resolves to the Comments page inside the operator shell', async () => {
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl('/operator/comments');
+
+    let route = TestBed.inject(ActivatedRoute);
+    while (route.firstChild !== null) route = route.firstChild;
+    expect(router.url).toBe('/operator/comments');
+    expect(route.component).toBe(CommentsComponent);
+    expect(route.parent?.component).toBe(OperatorShellComponent);
   });
 
   it('operator/approvals resolves to the Review screen filtered to youtube', async () => {

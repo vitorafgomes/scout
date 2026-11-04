@@ -67,6 +67,67 @@ public sealed class ProductionTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Project_Is_Planned_In_The_Owners_Visual_Brief_And_Its_Brief_And_Motion_Go_Back_As_Read()
+    {
+        var project = Given.Producing() with { VisualBrief = "Bold comic panels, it's: loud.", Motion = "still" };
+        var controlPlane = Holding(project);
+        var chat = ScriptedChat.Answering(Given.Prompts(3));
+
+        await Run(controlPlane, project, Given.Media(Given.Speech(), Given.Images()), chat: chat);
+
+        chat.Requests.ShouldHaveSingleItem().Single(m => m.Role == Microsoft.SemanticKernel.ChatCompletion.AuthorRole.System).Text
+            .ShouldContain("Visual style the owner asked for: Bold comic panels, it's: loud.", Case.Sensitive);
+        controlPlane.Saves.ShouldNotBeEmpty();
+        controlPlane.Saves.ShouldAllBe(s => s.Project.VisualBrief == "Bold comic panels, it's: loud." && s.Project.Motion == "still");
+    }
+
+    [Fact]
+    public async Task Without_provider_pictures_each_scene_is_saved_with_its_openverse_picture_its_credit_and_its_search_terms()
+    {
+        var project = Given.Producing();
+        var controlPlane = Holding(project);
+        using var openverse = new OpenverseHttp();
+        var chat = ScriptedChat.Answering("{\"prompts\":[\"Picture 1\",\"Picture 2\",\"Picture 3\"],\"search_terms\":[\"starter jar\",\"bread oven\",\"bread loaf\"]}");
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), chat, Notifier(), Given.Media(Given.Speech()), openverse: openverse)
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        var saved = await Stored(controlPlane);
+        saved.Status.ShouldBe("media_ready");
+        saved.Scenes.Select(s => (s.VisualSource, s.VisualFile, s.VisualCredit, s.VisualQuery)).ShouldBe([
+            ("stock", (string?)"scene-s1.jpg", (string?)"\"Mountain lake\" by Thomas Nes Myhre is licensed under CC BY 2.0.", "starter jar"),
+            ("stock", (string?)"scene-s2.jpg", (string?)"\"Mountain lake\" by Thomas Nes Myhre is licensed under CC BY 2.0.", "bread oven"),
+            ("stock", (string?)"scene-s3.jpg", (string?)"\"Mountain lake\" by Thomas Nes Myhre is licensed under CC BY 2.0.", "bread loaf"),
+        ]);
+        saved.Scenes.ShouldAllBe(s => s.Error == "Picture from Openverse, credited in the video's description.");
+        openverse.Requests.Count(r => r.RequestUri!.Host == "api.openverse.org").ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_Resumed_Project_Is_Narrated_In_The_Voice_The_Project_Names()
+    {
+        var (piper, voices) = Given.BundledVoices(Directory.CreateDirectory(Path.Combine(_media, "bundle")).FullName);
+        var project = Given.Producing(Given.Scene("s1", 1)) with { NarrationVoice = "piper:en_GB-aru-medium#0" };
+        var controlPlane = new RecordingControlPlane
+        {
+            MediaDirectory = _media,
+            Mandate = Given.Mandate(),
+        };
+        controlPlane.Store(project);
+        var runner = new FakeProcessRunner();
+        var speech = Given.Speech();
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(speech, Given.Images()), piper: Given.Piper(runner, piper, voices))
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        var scene = (await Stored(controlPlane)).Scenes.ShouldHaveSingleItem();
+        (scene.Status, scene.AudioSource, scene.AudioFile).ShouldBe(("ready", "generated", "scene-s1.wav"));
+        runner.Calls.ShouldHaveSingleItem().Arguments[^1].ShouldBe("0");
+        speech.ReceivedCalls().ShouldBeEmpty();
+        File.Exists(Path.Combine(_media, "scene-s1.wav")).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Without_Speech_Or_Image_Services_Every_Scene_Is_Ready_With_No_Audio_A_Text_Card_An_Estimated_Duration_And_Notes()
     {
         var project = Given.Producing(Given.Scene("s1", 1, "one two three four five six seven eight nine ten"));
@@ -105,6 +166,87 @@ public sealed class ProductionTests : IDisposable
         scenes[0].ShouldBe(project.Scenes[0]);
         File.Exists(Path.Combine(_media, "scene-s2.mp3")).ShouldBeTrue();
         scenes.ShouldAllBe(s => s.Status == "ready");
+    }
+
+    [Fact]
+    public async Task A_Ready_Text_Card_Scene_Without_Audio_Is_Narrated_When_Speech_Becomes_Available()
+    {
+        var (piper, voices) = Given.BundledVoices(Directory.CreateDirectory(Path.Combine(_media, "bundle")).FullName);
+        const string oldNote = "No narration: the connected AI Source has no speech service in Scout; attach your own audio in Scout Desktop, Production.";
+        var project = Given.Producing(
+            Given.Scene("s1", 1, "First.", "ready") with { Error = oldNote },
+            Given.Scene("s2", 2, "Second.", "ready") with { Error = oldNote },
+            Given.Scene("s3", 3, "Third, locked.", "ready", locked: true) with { Error = oldNote });
+        project = project with { NarrationVoice = "piper:en_GB-cori-medium" };
+        var controlPlane = Holding(project);
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(), piper: Given.Piper(new FakeProcessRunner(), piper, voices))
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        var scenes = (await Stored(controlPlane)).Scenes;
+        scenes.Take(2).Select(s => (s.Status, s.AudioSource, s.AudioFile, s.Error)).ShouldBe([
+            ("ready", "generated", "scene-s1.wav", null),
+            ("ready", "generated", "scene-s2.wav", null),
+        ]);
+        scenes[2].ShouldBe(project.Scenes[2]);
+        File.Exists(Path.Combine(_media, "scene-s1.wav")).ShouldBeTrue();
+        File.Exists(Path.Combine(_media, "scene-s2.wav")).ShouldBeTrue();
+        File.Exists(Path.Combine(_media, "scene-s3.wav")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_Ready_Scene_With_Its_Generated_Files_Is_Still_Skipped()
+    {
+        var (piper, voices) = Given.BundledVoices(Directory.CreateDirectory(Path.Combine(_media, "bundle")).FullName);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.mp3"), [1]);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.png"), [1]);
+        var project = Given.Producing(
+            Given.Scene("s1", 1, "Whole.", "ready", audioSource: "generated", visualSource: "generated", audioFile: "scene-s1.mp3", visualFile: "scene-s1.png", durationMs: 900));
+        var controlPlane = Holding(project);
+        var speech = Given.Speech();
+        var images = Given.Images();
+        var runner = new FakeProcessRunner();
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(speech, images), piper: Given.Piper(runner, piper, voices))
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        (await Stored(controlPlane)).Scenes.ShouldBe(project.Scenes);
+        speech.ReceivedCalls().ShouldBeEmpty();
+        images.ReceivedCalls().ShouldBeEmpty();
+        runner.Calls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_ready_stock_scene_with_its_picture_on_disk_is_skipped_without_asking_openverse_again()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.mp3"), [1]);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.jpg"), [1]);
+        var project = Given.Producing(
+            Given.Scene("s1", 1, "Whole.", "ready", audioSource: "generated", visualSource: "stock", audioFile: "scene-s1.mp3", visualFile: "scene-s1.jpg", durationMs: 900) with
+            {
+                VisualCredit = "\"Loaf\" by Ana is licensed under CC BY 2.0.",
+            });
+        var controlPlane = Holding(project);
+        using var openverse = new OpenverseHttp();
+
+        await Given.Pipeline(controlPlane, Given.YouTube(), ScriptedChat.Answering(), Notifier(), Given.Media(Given.Speech()), openverse: openverse)
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        (await Stored(controlPlane)).Scenes.ShouldBe(project.Scenes);
+        openverse.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_Ready_Text_Card_Scene_Stays_Skipped_While_No_Speech_And_No_Images_Are_Available()
+    {
+        const string oldNote = "No narration: the connected AI Source has no speech service in Scout; attach your own audio in Scout Desktop, Production.";
+        var project = Given.Producing(Given.Scene("s1", 1, "First.", "ready") with { Error = oldNote });
+        var controlPlane = Holding(project);
+
+        await Run(controlPlane, project, Given.Media());
+
+        (await Stored(controlPlane)).Scenes.ShouldBe(project.Scenes);
+        (await Stored(controlPlane)).Status.ShouldBe("media_ready");
     }
 
     [Fact]

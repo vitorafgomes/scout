@@ -4,9 +4,10 @@ using Microsoft.Extensions.Options;
 namespace Scout.Operator;
 
 /// <summary>
-/// Where the operator finds <c>ffmpeg</c> and the font it draws captions and text cards with, bound from
-/// <see cref="Section"/>. An empty program path means the name on the system path, then the Homebrew and
-/// <c>/usr/local</c> copies; an empty font path means no font.
+/// Where the operator finds <c>ffmpeg</c>, the font it draws captions and text cards with, and the bundled
+/// <c>piper</c> and its voices, bound from <see cref="Section"/>. An empty ffmpeg path means the name on the system
+/// path, then the Homebrew and <c>/usr/local</c> copies; an empty font path means no font; an empty piper or voices
+/// path means no bundled voices.
 /// </summary>
 public sealed class OperatorMediaOptions
 {
@@ -18,6 +19,12 @@ public sealed class OperatorMediaOptions
 
     /// <summary>The font file captions and text cards are drawn with.</summary>
     public string FontPath { get; set; } = string.Empty;
+
+    /// <summary>The bundled <c>piper</c> program that makes narration offline; no bundled voices when empty.</summary>
+    public string PiperPath { get; set; } = string.Empty;
+
+    /// <summary>The folder of the bundled voices, each a <c>&lt;id&gt;.onnx</c> model beside its <c>&lt;id&gt;.onnx.json</c>.</summary>
+    public string VoicesPath { get; set; } = string.Empty;
 
     /// <summary>The YouTube category an upload is filed under; <c>22</c>, People &amp; Blogs, unless configured.</summary>
     public string CategoryId { get; set; } = "22";
@@ -60,7 +67,7 @@ internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMedi
     internal static readonly string[] Candidates = ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
 
     internal static readonly string[] Filters =
-        ["anullsrc", "apad", "aresample", "color", "crop", "drawtext", "format", "fps", "gblur", "loudnorm", "overlay", "pad", "scale", "setsar", "split"];
+        ["anullsrc", "apad", "aresample", "color", "crop", "drawtext", "fade", "format", "gblur", "loudnorm", "overlay", "pad", "scale", "setsar", "split", "zoompan"];
 
     internal static readonly string[] Demuxers = ["concat", "lavfi"];
 

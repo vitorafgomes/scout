@@ -1,13 +1,24 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
 const uiRoot = join(import.meta.dirname, '..', '..');
 
-/** The pinned downloads: the ffmpeg archive of each bundled platform and the caption fonts with their licence. */
+/** The pinned downloads: the ffmpeg and piper archives of each bundled platform, the caption fonts and the piper voices with their licences. */
 export const TABLE_PATH = join(uiRoot, 'build', 'media-tools.json');
 
 /**
@@ -78,9 +89,98 @@ export function extractWithTar(archive, dir, members) {
   }
 }
 
+function piperNoticeOf(piper, sha256) {
+  return [
+    `piper ${piper.version}, the text-to-speech engine of ${piper.project} (MIT):`,
+    piper.release,
+    `Archive SHA-256: ${sha256}`,
+    `Piper source of this build: ${piper.source}`,
+    'The archive also contains espeak-ng (GPL-3.0, source https://github.com/espeak-ng/espeak-ng),',
+    'onnxruntime (MIT) and piper-phonemize (MIT); Scout runs piper as a separate program.',
+    '',
+  ].join('\n');
+}
+
+function voiceLicensesOf(voices) {
+  return [
+    ...voices.items.flatMap((voice) => [
+      voice.name,
+      `Dataset: ${voice.dataset}`,
+      `Licence: ${voice.license}`,
+      ...(voice.attribution === undefined ? [] : [`Attribution: ${voice.attribution}`]),
+      '',
+    ]),
+    `Models: ${voices.repo} at commit ${voices.commit}`,
+    '',
+  ].join('\n');
+}
+
+async function fetchFfmpeg({ target, table, toolsDir, cacheDir, fetch, extract }) {
+  const archive = archiveFor(table, target);
+  if (archive === null) return false;
+  const notice = noticeOf(table.ffmpeg, archive.sha256);
+  const noticeFile = join(toolsDir, 'NOTICE.txt');
+  const inPlace =
+    existsSync(noticeFile) &&
+    (await readFile(noticeFile, 'utf8')) === notice &&
+    Object.keys(archive.members).every((name) => existsSync(join(toolsDir, name)));
+  if (inPlace) return true;
+  const cached = join(cacheDir, basename(new URL(archive.url).pathname));
+  await fetchPinned(archive, cached, fetch);
+  const scratch = await mkdtemp(join(cacheDir, 'extract-'));
+  try {
+    await extract(cached, scratch, Object.values(archive.members));
+    await mkdir(toolsDir, { recursive: true });
+    for (const name of await readdir(toolsDir)) {
+      if (name !== 'piper') await rm(join(toolsDir, name), { recursive: true, force: true });
+    }
+    for (const [name, member] of Object.entries(archive.members)) {
+      await copyFile(join(scratch, member), join(toolsDir, name));
+      if (name !== 'LICENSE.txt' && !target.startsWith('win32-')) {
+        await chmod(join(toolsDir, name), 0o755);
+      }
+    }
+    await writeFile(noticeFile, notice);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+  return true;
+}
+
+async function fetchPiper({ target, table, toolsDir, cacheDir, fetch, extract }) {
+  const archive = table.piper.archives[target];
+  if (archive === undefined) return false;
+  const piperDir = join(toolsDir, 'piper');
+  const exe = join(piperDir, target.startsWith('win32-') ? 'piper.exe' : 'piper');
+  const notice = piperNoticeOf(table.piper, archive.sha256);
+  const noticeFile = join(piperDir, 'NOTICE.txt');
+  if (
+    existsSync(noticeFile) &&
+    (await readFile(noticeFile, 'utf8')) === notice &&
+    existsSync(exe)
+  ) {
+    return true;
+  }
+  const cached = join(cacheDir, basename(new URL(archive.url).pathname));
+  await fetchPinned(archive, cached, fetch);
+  const scratch = await mkdtemp(join(cacheDir, 'extract-'));
+  try {
+    await extract(cached, scratch, [archive.root]);
+    await rm(piperDir, { recursive: true, force: true });
+    await mkdir(toolsDir, { recursive: true });
+    await cp(join(scratch, archive.root), piperDir, { recursive: true, verbatimSymlinks: true });
+    if (!target.startsWith('win32-')) await chmod(exe, 0o755);
+    await writeFile(noticeFile, notice);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+  return true;
+}
+
 /**
- * Puts the pinned fonts with their licence into `<resourcesDir>/fonts/` on every target, and the pinned ffmpeg
- * and its licence into `<resourcesDir>/media-tools/<target>/` where the table has an archive for the
+ * Puts the pinned fonts with their licence into `<resourcesDir>/fonts/` and the pinned piper voices with their
+ * licences into `<resourcesDir>/voices/` on every target, and the pinned ffmpeg with its licence and the
+ * whole pinned piper folder into `<resourcesDir>/media-tools/<target>/` where the table has an archive for the
  * target; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is downloaded or extracted
  * again when it is already in place.
  */
@@ -103,39 +203,27 @@ export async function fetchMediaTools({
     await copyFile(cached, dest);
   }
 
-  const archive = archiveFor(table, target);
-  if (archive === null) {
-    log(`media tools: none bundled for ${target}; the worker uses ffmpeg from the system path`);
-    return;
+  const voicesDir = join(resourcesDir, 'voices');
+  await mkdir(voicesDir, { recursive: true });
+  for (const { file, url, sha256 } of table.voices.items.flatMap((voice) => voice.files)) {
+    const dest = join(voicesDir, file);
+    if (existsSync(dest) && (await sha256Of(dest)) === sha256) continue;
+    const cached = join(cacheDir, 'voices', file);
+    await fetchPinned({ url, sha256 }, cached, fetch);
+    await copyFile(cached, dest);
   }
+  await writeFile(join(voicesDir, 'LICENSES.txt'), voiceLicensesOf(table.voices));
 
   const toolsDir = join(resourcesDir, 'media-tools', target);
-  const notice = noticeOf(table.ffmpeg, archive.sha256);
-  const noticeFile = join(toolsDir, 'NOTICE.txt');
-  const inPlace =
-    existsSync(noticeFile) &&
-    (await readFile(noticeFile, 'utf8')) === notice &&
-    Object.keys(archive.members).every((name) => existsSync(join(toolsDir, name)));
-  if (!inPlace) {
-    const cached = join(cacheDir, basename(new URL(archive.url).pathname));
-    await fetchPinned(archive, cached, fetch);
-    const scratch = await mkdtemp(join(cacheDir, 'extract-'));
-    try {
-      await extract(cached, scratch, Object.values(archive.members));
-      await rm(toolsDir, { recursive: true, force: true });
-      await mkdir(toolsDir, { recursive: true });
-      for (const [name, member] of Object.entries(archive.members)) {
-        await copyFile(join(scratch, member), join(toolsDir, name));
-        if (name !== 'LICENSE.txt' && !target.startsWith('win32-')) {
-          await chmod(join(toolsDir, name), 0o755);
-        }
-      }
-      await writeFile(noticeFile, notice);
-    } finally {
-      await rm(scratch, { recursive: true, force: true });
-    }
+  const options = { target, table, toolsDir, cacheDir, fetch, extract };
+  if (!(await fetchFfmpeg(options))) {
+    log(
+      `media tools: no ffmpeg bundled for ${target}; the worker uses ffmpeg from the system path`,
+    );
   }
-
+  if (!(await fetchPiper(options))) {
+    log(`media tools: no piper bundled for ${target}; the worker has no voice engine`);
+  }
   log(`media tools: ${target} ready in ${resourcesDir}`);
 }
 

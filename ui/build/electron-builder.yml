@@ -26,6 +26,7 @@ files:
   - package.json
   - "!packages/main/resources/media-tools/**"
   - "!packages/main/resources/fonts/**"
+  - "!packages/main/resources/voices/**"
   - "!**/node_modules/**/{test,__tests__,tests,*.md,*.map}"
   - "!**/*.ts"
 
@@ -55,6 +56,10 @@ extraResources:
     filter:
       - "*.ttf"
       - "OFL.txt"
+  - from: packages/main/resources/voices
+    to: voices
+    filter:
+      - "**/*"
 
 electronLanguages:
   - en-US

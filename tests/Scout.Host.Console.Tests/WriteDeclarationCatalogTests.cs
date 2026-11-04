@@ -35,4 +35,15 @@ public sealed class WriteDeclarationCatalogTests
             .Select(d => $"{d.PluginName}.{d.FunctionName} declares {d.FeatureId} / {d.Scope}")
             .ShouldBeEmpty();
     }
+
+    [Fact]
+    public void The_youtube_feature_declares_the_openverse_read()
+    {
+        var youTube = new FeatureCatalog().Find(FeatureCatalog.YouTubeId).ShouldNotBeNull();
+
+        var row = youTube.ScopeMatrix.ShouldNotBeNull().Where(r => r.Scope.Contains("openverse", StringComparison.OrdinalIgnoreCase)).ShouldHaveSingleItem();
+
+        (row.Scope, row.Access).ShouldBe(("api.openverse.org and the host of the picture it names", ScopeAccess.Read));
+        row.Actions.ShouldBe(["Search Openverse for a CC0, public domain or CC BY picture for a scene without one, and download the picture it names into the project's media folder"]);
+    }
 }

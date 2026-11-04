@@ -15,6 +15,24 @@ export interface MediaToolsTable {
     readonly archives: Readonly<Record<string, PinnedArchive>>;
   };
   readonly fonts: readonly (PinnedFile & { readonly file: string })[];
+  readonly piper: {
+    readonly version: string;
+    readonly project: string;
+    readonly release: string;
+    readonly source: string;
+    readonly archives: Readonly<Record<string, PinnedArchive>>;
+  };
+  readonly voices: {
+    readonly repo: string;
+    readonly commit: string;
+    readonly items: readonly {
+      readonly name: string;
+      readonly dataset: string;
+      readonly license: string;
+      readonly attribution?: string;
+      readonly files: readonly (PinnedFile & { readonly file: string })[];
+    }[];
+  };
 }
 
 export interface FetchMediaToolsOptions {

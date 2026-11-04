@@ -1,10 +1,18 @@
+using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using NSubstitute;
 using Scout.ControlPlane.Actions;
 using Scout.ControlPlane.Features;
 using Scout.ControlPlane.Operator;
 using Scout.ControlPlane.WriteGate;
+using Scout.Conversation.Abstractions;
 using Scout.Operator;
+using Scout.Plugin.YouTube;
+using Scout.Plugin.YouTube.Abstractions;
 using Shouldly;
 using Xunit;
 
@@ -12,7 +20,8 @@ namespace Scout.Host.Console.Tests;
 
 /// <summary>
 /// What Scout.Operator sends, checked against the control plane that validates it: the statuses, the claim
-/// status, the scope of its declared write, and the package metadata both sides count and check the same way.
+/// status, the scope of its declared write, the package metadata both sides count and check the same way, and the comment
+/// saves of a sync, a drafts run, a reply and a hold.
 /// </summary>
 public sealed class OperatorContractTests : IDisposable
 {
@@ -80,6 +89,18 @@ public sealed class OperatorContractTests : IDisposable
                 OperatorPipeline.NoAudio, OperatorPipeline.TextCard, null, null, 1600),
             new("s4", 4, "Subscribe.", "A map", false, OperatorPipeline.Failed, NarrationGenerator.Failed(4),
                 OperatorPipeline.NoAudio, OperatorPipeline.TextCard, null, null, 0),
+            new("s5", 5, "Meanders migrate.", "A river bend", false, OperatorPipeline.Ready, null,
+                OperatorPipeline.Generated, OperatorPipeline.TextCard, "scene-s5.wav", null, 1600),
+            new("s6", 6, "Oxbows form.", "An oxbow lake", false, OperatorPipeline.Failed, PiperSpeech.UnknownVoice("piper:en_GB-alan-medium"),
+                OperatorPipeline.NoAudio, OperatorPipeline.TextCard, null, null, 0),
+            new("s7", 7, "Deltas grow.", "A river delta", false, OperatorPipeline.Ready, OpenversePictures.Found,
+                OperatorPipeline.NoAudio, OperatorPipeline.Stock, null, "scene-s7.jpg", 0)
+            {
+                VisualQuery = "river delta aerial",
+                VisualCredit = "\"Delta\" by Ana is licensed under CC BY 2.0.",
+            },
+            new("s8", 8, "Lakes fill.", "A lake", false, OperatorPipeline.Ready, OpenversePictures.Unreachable,
+                OperatorPipeline.NoAudio, OperatorPipeline.TextCard, null, null, 0) { VisualQuery = "lake" },
         ];
         string[] sent = [OperatorPipeline.Producing, OperatorPipeline.MediaReady];
 
@@ -94,6 +115,49 @@ public sealed class OperatorContractTests : IDisposable
 
         saved.Select(p => p.Status).ShouldBe(sent);
         saved.ShouldAllBe(p => p.Scenes.SequenceEqual(scenes));
+    }
+
+    [Theory]
+    [InlineData("OpenAI:shimmer")]
+    [InlineData("AzureOpenAI:alloy")]
+    [InlineData("piper:en_GB-cori-medium")]
+    [InlineData("piper:en_GB-aru-medium#11")]
+    public async Task Every_Voice_Id_The_Worker_Offers_Is_A_Narration_Voice_The_Control_Planes_Produce_Keeps(string voice)
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var service = new OperatorService(_store, new WriteGateService(new FeatureCatalog(), _states, _actions, _writes), _writes);
+        var created = await service.SaveProjectFromWorkerAsync(
+            new OperatorProject(string.Empty, "Why rivers meander", OperatorPipeline.ScriptReady, string.Empty, default, default, [], null, []),
+            null,
+            CancellationToken.None);
+
+        var produced = await service.ProduceProjectAsync(created.Id, voice, string.Empty, string.Empty, CancellationToken.None);
+
+        produced.NarrationVoice.ShouldBe(voice);
+        (await service.GetProjectForWorkerAsync(created.Id, CancellationToken.None)).NarrationVoice.ShouldBe(voice);
+    }
+
+    [Theory]
+    [InlineData(Assembler.Still)]
+    [InlineData(Assembler.Gentle)]
+    [InlineData(Assembler.Dynamic)]
+    public async Task Every_Motion_Preset_The_Assembler_Applies_Is_One_The_Control_Planes_Produce_Keeps(string motion)
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var service = new OperatorService(_store, new WriteGateService(new FeatureCatalog(), _states, _actions, _writes), _writes);
+        var created = await service.SaveProjectFromWorkerAsync(
+            new OperatorProject(string.Empty, "Why rivers meander", OperatorPipeline.ScriptReady, string.Empty, default, default, [], null, []),
+            null,
+            CancellationToken.None);
+
+        var produced = await service.ProduceProjectAsync(created.Id, string.Empty, string.Empty, motion, CancellationToken.None);
+
+        produced.Motion.ShouldBe(motion);
+        (await service.GetProjectForWorkerAsync(created.Id, CancellationToken.None)).Motion.ShouldBe(motion);
     }
 
     [Fact]
@@ -148,7 +212,7 @@ public sealed class OperatorContractTests : IDisposable
 
         new[] { OperatorServiceCollectionExtensions.DataFolderScope, ReachReports.JobScope }
             .ShouldAllBe(scope => rows.ContainsKey(scope) && rows[scope] == ScopeAccess.Write);
-        new[] { ActionExecutor.Insert, ActionExecutor.Update, ActionExecutor.Thumbnail }
+        new[] { ActionExecutor.Insert, ActionExecutor.Update, ActionExecutor.Thumbnail, ActionExecutor.Reply, ActionExecutor.Hold }
             .ShouldAllBe(scope => rows.ContainsKey(scope) && rows[scope] == ScopeAccess.IrreversibleWrite);
         ActionExecutor.FeatureId.ShouldBe(FeatureCatalog.YouTubeId);
     }
@@ -189,5 +253,152 @@ public sealed class OperatorContractTests : IDisposable
 
         PackageRules.MetadataErrors(PackageChecks.Title(script, "sourdough"), "How to bake.", ["bread"]).ShouldBeEmpty();
         PackageRules.MetadataErrors(PackageChecks.Title(script with { TitleVariants = [] }, topic200), "How to bake.", ["bread"]).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Comment_Kinds_And_Statuses_The_Worker_Sends_Are_Accepted()
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var gate = new WriteGateService(new FeatureCatalog(), _states, _actions, _writes);
+        var service = new OperatorService(_store, gate, _writes);
+        var comments = new CommentService(_store, service);
+        var bridge = new CommentBridge(comments, service, gate);
+        var time = TimeProvider.System;
+        var youtube = Substitute.For<IYouTubeClient>();
+        youtube.GetMyChannelAsync(Arg.Any<CancellationToken>()).Returns(new YouTubeChannel("UCowner", "Rivers", "@rivers", 10, 100, 1, default, "UUowner"));
+        youtube.GetVideosAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns([new YouTubeVideo("v1", "Why rivers bend", "Rivers", default, TimeSpan.FromMinutes(5), 10, 1, 4)]);
+        YouTubeCommentThread Thread(string id, int minutes, string text) =>
+            new($"t-{id}", id, "v1", $"Viewer {id}", $"UC{id}", text, time.GetUtcNow().AddMinutes(-minutes), 1);
+        youtube.ListCommentThreadsAsync("UCowner", null, Arg.Any<CancellationToken>()).Returns(
+            new YouTubeCommentThreadPage([Thread("q1", 1, "How long did this take?"), Thread("r1", 2, "Please do deltas next"), Thread("s1", 3, "Buy followers"), Thread("p1", 4, "Lovely")], null),
+            new YouTubeCommentThreadPage([], null));
+        var chat = new SequenceChat(
+            """{"comments":[{"id":"c1","kind":"question","theme":"effort"},{"id":"c2","kind":"request","theme":"deltas","request":"How deltas form"},{"id":"c3","kind":"spam","theme":"followers"},{"id":"c4","kind":"praise","theme":"thanks"}]}""",
+            """{"replies":[{"id":"c1","reply":"About a week."},{"id":"c2","reply":"Noted, thank you."}]}""",
+            """{"replies":[{"id":"c1","reply":"Thank you!"}]}""");
+        var desk = new CommentDesk(bridge, youtube, chat, time, NullLogger<CommentDesk>.Instance);
+
+        (await desk.RunAsync(sync: true, CancellationToken.None)).ShouldBeTrue();
+        await comments.DecideCommentAsync("p1", "draft", CancellationToken.None);
+        await comments.RequestCommentSyncAsync(CancellationToken.None);
+        (await desk.RunAsync(sync: true, CancellationToken.None)).ShouldBeTrue();
+        var drafted = await comments.ListCommentsAsync(CancellationToken.None);
+
+        drafted.Comments.Select(c => (c.Id, c.Kind, c.Status)).OrderBy(c => c.Id).ShouldBe([
+            ("p1", "praise", "drafted"), ("q1", "question", "drafted"), ("r1", "request", "drafted"), ("s1", "spam", "quarantined")]);
+        drafted.Ideas.ShouldBe([new AudienceIdea("idea-r1", "How deltas form", "r1", "proposed", null)]);
+        (drafted.SyncRequestedAt, drafted.SyncError).ShouldBe((null, null));
+        drafted.Comments.Single(c => c.Id == "p1").DecidedAt.ShouldNotBeNull();
+
+        await comments.ApproveReplyAsync("q1", "About a week of fieldwork.", CancellationToken.None);
+        await comments.DecideCommentAsync("s1", "hold", CancellationToken.None);
+        var write = Substitute.For<IYouTubeWriteClient>();
+        write.ReplyToCommentAsync("q1", "About a week of fieldwork.", Arg.Any<CancellationToken>()).Returns("q1.reply1");
+        var executor = new ActionExecutor(bridge, write, Options.Create(new OperatorMediaOptions()), time, NullLogger<ActionExecutor>.Instance,
+            Substitute.For<IOriginNotifier>(), desk);
+        await executor.RunOnceAsync(CancellationToken.None);
+        await executor.RunOnceAsync(CancellationToken.None);
+        var executed = await comments.ListCommentsAsync(CancellationToken.None);
+
+        (executed.Comments.Single(c => c.Id == "q1").Status, executed.Comments.Single(c => c.Id == "q1").ReplyId).ShouldBe(("replied", "q1.reply1"));
+        executed.Comments.Single(c => c.Id == "s1").Status.ShouldBe("held");
+        (await _writes.ListAsync(50, CancellationToken.None)).Where(w => w.Outcome == "succeeded").Select(w => w.Action).Order()
+            .ShouldBe(["comments.insert", "comments.setModerationStatus"]);
+        await write.Received(1).HoldCommentAsync("s1", Arg.Any<CancellationToken>());
+
+        youtube.ListCommentThreadsAsync("UCowner", null, Arg.Any<CancellationToken>())
+            .Returns<Task<YouTubeCommentThreadPage>>(_ => throw new YouTubeApiException("YouTube is currently unavailable. Try again later.", HttpStatusCode.ServiceUnavailable));
+        (await desk.RunAsync(sync: true, CancellationToken.None)).ShouldBeFalse();
+        var failed = await comments.ListCommentsAsync(CancellationToken.None);
+
+        (failed.SyncError, failed.SyncedAt, failed.Comments.Count).ShouldBe(("YouTube is currently unavailable. Try again later.", executed.SyncedAt, 4));
+    }
+
+    private sealed class SequenceChat(params string[] replies) : IChatCompletionService
+    {
+        private int _next;
+
+        public IReadOnlyDictionary<string, object?> Attributes { get; } = new Dictionary<string, object?>();
+
+        public Task<IReadOnlyList<ChatMessageContent>> GetChatMessageContentsAsync(
+            ChatHistory chatHistory, PromptExecutionSettings? executionSettings = null, Kernel? kernel = null, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<ChatMessageContent>>([new ChatMessageContent(AuthorRole.Assistant, replies[Math.Min(_next++, replies.Length - 1)])]);
+
+        public IAsyncEnumerable<StreamingChatMessageContent> GetStreamingChatMessageContentsAsync(
+            ChatHistory chatHistory, PromptExecutionSettings? executionSettings = null, Kernel? kernel = null, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// The worker's comment calls answered by the real comment service, with the times carried as the host's mapping
+    /// carries them: written in round-trip form and read back as sent, an empty fetch time read as unset.
+    /// </summary>
+    private sealed class CommentBridge(CommentService comments, OperatorService service, WriteGateService gate) : IOperatorControlPlane
+    {
+        public Task<OperatorMandate> GetMandateAsync(CancellationToken ct)
+            => Task.FromResult(new OperatorMandate("Teach geography", "Students", [], "weekly", "English", "calm", ["diets"], "views", "1000"));
+
+        public Task<OperatorComments> GetCommentsAsync(CancellationToken ct)
+            => CallAsync(async () => ToWorker(await comments.GetCommentsForWorkerAsync(ct)));
+
+        public Task<OperatorComments> SaveCommentsAsync(OperatorComments sent, CancellationToken ct)
+            => CallAsync(async () => ToWorker(await comments.SaveCommentsFromWorkerAsync(ToDomain(sent), ct)));
+
+        public async Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct)
+            => await service.NextApprovedActionAsync(ct) is { } a ? new OperatorAction(a.Id, a.FeatureId, a.Action, a.Target, a.Summary) : null;
+
+        public Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct)
+            => gate.RecordAsync(action.FeatureId, action.Action, action.Target, outcome, action.Id, ct);
+
+        public Task<OperatorProjectState> SaveProjectAsync(OperatorProjectState project, string? originReference, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<QueuedProject?> NextQueuedAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> GetProjectAsync(string id, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<OperatorProjectState>> ListRecentAsync(int limit, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task ReportReadinessAsync(OperatorReadiness readiness, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        private static async Task<T> CallAsync<T>(Func<Task<T>> call)
+        {
+            try
+            {
+                return await call();
+            }
+            catch (Exception ex) when (ex is not InvalidOperationException)
+            {
+                throw new InvalidOperationException(ex.Message, ex);
+            }
+        }
+
+        private static string Iso(DateTimeOffset at) => at.ToString("O", CultureInfo.InvariantCulture);
+
+        private static DateTimeOffset Parse(string at) => DateTimeOffset.Parse(at, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+
+        private static OperatorComments ToWorker(CommentsState state) => new(
+            [.. state.Comments.Select(c => new OperatorComment(
+                c.Id, c.ThreadId, c.VideoId, c.VideoTitle, c.Author, c.Text, Iso(c.PublishedAt), c.LikeCount, c.Kind, c.Theme, c.Status, c.Draft,
+                c.ApprovedText, c.ReplyId, c.Error, c.DecidedAt is { } d ? Iso(d) : null, Iso(c.FetchedAt)))],
+            [.. state.Ideas.Select(i => new OperatorIdea(i.Id, i.Text, i.CommentId, i.Status, i.ProjectId))],
+            state.SyncedAt is { } s ? Iso(s) : null,
+            state.SyncRequestedAt is { } r ? Iso(r) : null,
+            state.SyncError);
+
+        private static CommentsState ToDomain(OperatorComments sent) => new(
+            [.. sent.Comments.Select(c => new AudienceComment(
+                c.Id, c.ThreadId, c.VideoId, c.VideoTitle, c.Author, c.Text, Parse(c.PublishedAt), c.LikeCount, c.Kind, c.Theme, c.Status, c.Draft,
+                c.ApprovedText, c.ReplyId, c.Error, c.DecidedAt is { } d ? Parse(d) : null, c.FetchedAt.Length == 0 ? default : Parse(c.FetchedAt)))],
+            [.. sent.Ideas.Select(i => new AudienceIdea(i.Id, i.Text, i.CommentId, i.Status, i.ProjectId))],
+            sent.SyncedAt is { } s ? Parse(s) : null,
+            sent.SyncRequestedAt is { } r ? Parse(r) : null,
+            sent.SyncError);
     }
 }

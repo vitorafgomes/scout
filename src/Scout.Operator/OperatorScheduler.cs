@@ -137,21 +137,23 @@ internal sealed class OperatorScheduler(
                 continue;
             }
 
-            _done[job.Name] = slot;
-            changed = true;
             if (!known)
             {
+                _done[job.Name] = slot;
+                changed = true;
                 continue;
-            }
-
-            if (starting && job.OnTheClock)
-            {
-                late.Add(job.Name);
             }
 
             if (job.NeedsYouTube && !signedIn)
             {
                 continue;
+            }
+
+            _done[job.Name] = slot;
+            changed = true;
+            if (starting && job.OnTheClock)
+            {
+                late.Add(job.Name);
             }
 
             try

@@ -133,6 +133,10 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Actions: new[] { "Read the reach reports with a video's thumbnail impressions and click-through rate" },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
+                Scope: "api.openverse.org and the host of the picture it names",
+                Actions: new[] { "Search Openverse for a CC0, public domain or CC BY picture for a scene without one, and download the picture it names into the project's media folder" },
+                Access: ScopeAccess.Read),
+            new FeatureScopeRow(
                 Scope: "Scout's data folder",
                 Actions: new[] { "Save scripts, narration, images, the scene list, the video and thumbnails" },
                 Access: ScopeAccess.Write),

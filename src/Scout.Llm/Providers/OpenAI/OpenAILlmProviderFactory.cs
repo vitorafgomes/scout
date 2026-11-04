@@ -110,6 +110,8 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
             ? new MediaCapabilities(true, true, Name)
             {
                 SpeechSettings = OpenAIMediaSettings.Speech(),
+                SpeechVoices = OpenAIMediaSettings.Voices,
+                SpeechSettingsFor = OpenAIMediaSettings.Speech,
                 ImageSettings = OpenAIMediaSettings.Image(_imageModel, quality),
             }
             : new MediaCapabilities(false, false, Name);

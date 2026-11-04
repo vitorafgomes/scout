@@ -51,6 +51,9 @@ public interface IActionQueue
     /// </summary>
     Task<IReadOnlyList<PendingAction>> ListPendingAsync(CancellationToken ct);
 
+    /// <summary>The actions of <paramref name="featureId"/> the owner approved that are not recorded yet, approved or executing, oldest first.</summary>
+    Task<IReadOnlyList<PendingAction>> ListOpenAsync(string featureId, CancellationToken ct);
+
     /// <summary>Approve a pending action, with the owner's optional reason.</summary>
     /// <exception cref="PendingActionNotFoundException">The id is unknown.</exception>
     /// <exception cref="PendingActionAlreadyDecidedException">The action was already decided.</exception>

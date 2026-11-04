@@ -12,17 +12,20 @@ namespace Scout.Host.ControlPlane.Services;
 /// <see cref="OperatorService"/>, reachable with the worker token only. A write that cannot be
 /// recorded answers <see cref="StatusCode.FailedPrecondition"/>; the next approved action answers an empty
 /// response when none is due or the owner has not granted YouTube, and carries its project's origin reference,
-/// like the next queued project, only when the project has one.
+/// like the next queued project, only when the project has one. The worker reads and saves the comments through
+/// <see cref="CommentService"/>.
 /// </summary>
 public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
 {
     private readonly WriteGateService _gate;
     private readonly OperatorService _operator;
+    private readonly CommentService _comments;
 
-    public WorkerGateGrpcService(WriteGateService gate, OperatorService @operator)
+    public WorkerGateGrpcService(WriteGateService gate, OperatorService @operator, CommentService comments)
     {
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
+        _comments = comments ?? throw new ArgumentNullException(nameof(comments));
     }
 
     public override async Task<RequestWriteResponse> RequestWrite(
@@ -143,4 +146,19 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
         }
         return response;
     }
+
+    public override Task<CommentsView> GetComments(ListCommentsRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.GetCommentsForWorkerAsync(context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<CommentsView> SaveComments(CommentsView request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.SaveCommentsFromWorkerAsync(CommentMapping.ToDomain(request), context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<MediaDirectory> GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => new MediaDirectory
+        {
+            Path = await _operator.GetVoiceSamplesDirectoryForWorkerAsync(context.CancellationToken).ConfigureAwait(false),
+        });
 }

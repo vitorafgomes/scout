@@ -32,5 +32,84 @@
       "url": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/e408cf09bf2042e9fe0d7d22789c29510e876359/fonts/LICENSE",
       "sha256": "f2095b08bed08b23a6fe26112fcd679a2bee3f002eef077eb05d215ed1051bd8"
     }
-  ]
+  ],
+  "piper": {
+    "version": "2023.11.14-2",
+    "project": "https://github.com/rhasspy/piper",
+    "release": "https://github.com/rhasspy/piper/releases/tag/2023.11.14-2",
+    "source": "https://github.com/rhasspy/piper/tree/2023.11.14-2",
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz",
+        "sha256": "a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992",
+        "root": "piper"
+      },
+      "win32-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+        "sha256": "f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea",
+        "root": "piper"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz",
+        "sha256": "ced85c0a3df13945b1e623b878a48fdc2854d5c485b4b67f62857cf551deaf8b",
+        "root": "piper"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz",
+        "sha256": "6b1eb03b3735946cb35216e063e7eebcc33a6bbf5dd96ec0217959bf1cdcb0cc",
+        "root": "piper"
+      }
+    }
+  },
+  "voices": {
+    "repo": "https://huggingface.co/rhasspy/piper-voices",
+    "commit": "e7229f7d33a10e145e109b886d661984201ac3c4",
+    "items": [
+      {
+        "name": "en_GB-cori-medium",
+        "dataset": "https://librivox.org",
+        "license": "public domain",
+        "files": [
+          {
+            "file": "en_GB-cori-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
+            "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d"
+          },
+          {
+            "file": "en_GB-cori-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
+            "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36"
+          },
+          {
+            "file": "en_GB-cori-medium.MODEL_CARD",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/MODEL_CARD",
+            "sha256": "38d76dfde845837b184668f8bab1c6426ad740b1af0fcebc349037822739e536"
+          }
+        ]
+      },
+      {
+        "name": "en_GB-aru-medium",
+        "dataset": "https://www.liverpool.ac.uk/architecture/research/acoustics-research-unit/speech-corpus/",
+        "license": "CC-BY 4.0 https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "University of Liverpool Acoustics Research Unit speech corpus",
+        "files": [
+          {
+            "file": "en_GB-aru-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/en_GB-aru-medium.onnx",
+            "sha256": "9e74d089a8563f8b2446426d01becb046cd3c3bfbafe1a20fd03a9a79bd82619"
+          },
+          {
+            "file": "en_GB-aru-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/en_GB-aru-medium.onnx.json",
+            "sha256": "00529fabf0e79f29a9cb10fda5b60f9b7cf80671faac2b316e13af20e7816d5e"
+          },
+          {
+            "file": "en_GB-aru-medium.MODEL_CARD",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/MODEL_CARD",
+            "sha256": "b9a880778b6cc58330e78f862ba3554836f4ac9194f613533dbfdf28fce0a7ff"
+          }
+        ]
+      }
+    ]
+  }
 }

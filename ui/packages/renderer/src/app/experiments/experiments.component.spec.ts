@@ -110,6 +110,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     scenes: [],
     package: pkg,
     publication: publication(),
+    narrationVoice: '',
+    backgroundFile: null,
+    delegated: false,
+    visualBrief: '',
+    motion: 'gentle',
     ...overrides,
   };
 }

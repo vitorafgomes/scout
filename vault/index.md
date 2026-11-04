@@ -145,7 +145,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
 - [[pages/roadmap/youtube-creator-assistant|YouTube creator assistant]] - Initiative: claude-youtube surveyed; read-only YouTube plugin with browser sign-in, dated benchmarks.
 - [[pages/roadmap/desktop-auto-update|Desktop update notice and one-click update]] - Initiative: version check against GitHub Releases, what is new, user-approved update.
-- [[pages/roadmap/youtube-channel-operator|YouTube channel operator]] - Initiative: research, script, narration, visuals, video, review, approved publish, learn loop.
+- [[pages/roadmap/youtube-channel-operator|YouTube channel operator]] - Initiative: research, script, narration, visuals, video, review, approved publish, learn loop, engage (comments).
+- [[pages/roadmap/live-assistant|Live assistant: hear, see and translate for the owner]] - Initiative: streaming transcription, screenshot on demand, system audio, translation, OCR and a meeting session, local first and declared as reads.
 
 ## History
 

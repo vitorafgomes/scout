@@ -39,7 +39,7 @@ internal sealed class AssemblyStage(
                     : scene);
             }
 
-            var video = await assembler.AssembleAsync(tools, scenes, directory, ct).ConfigureAwait(false);
+            var video = await assembler.AssembleAsync(tools, scenes, directory, project.BackgroundFile, project.Motion, ct).ConfigureAwait(false);
             var cut = shorts.CutAsync(tools, directory, video, ct);
             var thumbnail = thumbnails.MakeAsync(tools, directory, PackageChecks.Title(project.Script, project.Topic), video, ct);
             var loudness = LoudnessAsync(tools, directory, video, ct);

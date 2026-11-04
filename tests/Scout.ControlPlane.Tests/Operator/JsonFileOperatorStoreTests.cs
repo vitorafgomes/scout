@@ -202,4 +202,65 @@ public sealed class JsonFileOperatorStoreTests : IDisposable
             .ShouldBe((true, false, "openai", true, false, (DateTimeOffset?)DateTimeOffset.UnixEpoch));
         read.Notes.ShouldBe(["No image model is configured."]);
     }
+
+    [Fact]
+    public async Task Comments_Start_Empty_Without_A_File_And_Survive_A_Reopen_In_Comments_Json_Beside_Features_Json()
+    {
+        var comment = new AudienceComment(
+            "c1", "t1", "v1", "Why rivers bend", "Ana", "How long did this take?", DateTimeOffset.UnixEpoch, 3,
+            "question", "effort", "drafted", "About a week.", null, null, null, null, DateTimeOffset.UnixEpoch);
+        var idea = new AudienceIdea("idea-c1", "A video on deltas", "c1", "proposed", null);
+
+        using (var store = Store())
+        {
+            (await store.ReadCommentsAsync(CancellationToken.None)).ShouldBe(CommentsState.Empty);
+            await store.UpdateCommentsAsync(_ => new CommentsState([comment], [idea], DateTimeOffset.UnixEpoch, null, "quota"), CancellationToken.None);
+        }
+
+        using var reopened = Store();
+        var read = await reopened.ReadCommentsAsync(CancellationToken.None);
+
+        reopened.CommentsPath.ShouldBe(Path.Combine(_directory, "comments.json"));
+        read.Comments.ShouldHaveSingleItem().ShouldBe(comment);
+        read.Ideas.ShouldHaveSingleItem().ShouldBe(idea);
+        (read.SyncedAt, read.SyncRequestedAt, read.SyncError).ShouldBe(((DateTimeOffset?)DateTimeOffset.UnixEpoch, (DateTimeOffset?)null, "quota"));
+    }
+
+    [Fact]
+    public async Task A_Comments_File_That_Cannot_Be_Written_Fails_With_A_Readable_Sentence_And_Keeps_The_Earlier_One()
+    {
+        using var store = Store();
+        await store.UpdateCommentsAsync(_ => CommentsState.Empty with { SyncError = "first" }, CancellationToken.None);
+        var before = await File.ReadAllBytesAsync(store.CommentsPath);
+        Directory.CreateDirectory(store.CommentsPath + ".tmp");
+
+        var ex = await Should.ThrowAsync<OperatorStoreException>(() =>
+            store.UpdateCommentsAsync(_ => CommentsState.Empty with { SyncError = "second" }, CancellationToken.None));
+
+        ex.Message.ShouldBe("Scout could not save the comments in its data folder.");
+        (await File.ReadAllBytesAsync(store.CommentsPath)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task Comments_json_stores_non_ascii_text_unescaped()
+    {
+        const string text = "Привет, сколько времени это заняло? 🎉";
+        var comment = new AudienceComment(
+            "c1", "t1", "v1", "Почему реки извиваются", "Аня", text, DateTimeOffset.UnixEpoch, 0,
+            "question", "время", "new", string.Empty, null, null, null, null, DateTimeOffset.UnixEpoch);
+        using var store = Store();
+
+        await store.UpdateCommentsAsync(_ => CommentsState.Empty with { Comments = [comment] }, CancellationToken.None);
+        var raw = await File.ReadAllTextAsync(store.CommentsPath);
+        await File.WriteAllTextAsync(
+            store.CommentsPath,
+            raw.Replace("Привет, сколько времени это заняло?", "\\u041F\\u0440\\u0438\\u0432\\u0435\\u0442", StringComparison.Ordinal));
+        var escaped = (await store.ReadCommentsAsync(CancellationToken.None)).Comments.ShouldHaveSingleItem();
+
+        raw.ShouldContain("Привет, сколько времени это заняло?");
+        raw.ShouldContain("Почему реки извиваются");
+        raw.ShouldContain("\\uD83C\\uDF89");
+        raw.ShouldNotContain("\\u04");
+        escaped.Text.ShouldBe("Привет 🎉");
+    }
 }

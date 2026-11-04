@@ -137,6 +137,22 @@ public sealed class YouTubeWriteClientTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Put_Answered_With_Resume_Incomplete_Is_Followed_By_A_Query_And_A_Continued_Put()
+    {
+        var (client, handler) = Build();
+        handler.Enqueue(_ => SessionStarted());
+        handler.Enqueue(_ => Incomplete(lastByte: 6));
+        handler.Enqueue(_ => Incomplete(lastByte: 6));
+        handler.EnqueueJson(HttpStatusCode.Created, Created);
+
+        var id = await client.UploadVideoAsync(File("video.mp4", Video), Upload(), new UploadSession(), CancellationToken.None);
+
+        id.ShouldBe("newVideo001");
+        handler.Requests.Select(r => r.Method == "PUT" ? r.Headers["Content-Range"] : r.Method)
+            .ShouldBe(["POST", "bytes 0-9/10", "bytes */10", "bytes 7-9/10"]);
+    }
+
+    [Fact]
     public async Task When_YouTube_Kept_No_Byte_The_Upload_Sends_The_Whole_File_Again_On_The_Same_Session()
     {
         var (client, handler) = Build();
@@ -459,6 +475,86 @@ public sealed class YouTubeWriteClientTests : IDisposable
 
         handler.Requests.ShouldHaveSingleItem().Uri.PathAndQuery.ShouldBe("/youtube/v3/videos?part=status&id=newVideo001");
         status.ShouldBe(new YouTubeVideoStatus("processed", "private", new DateTimeOffset(2026, 11, 10, 17, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public async Task A_Reply_Is_Posted_To_Comments_Insert_With_The_Parent_And_The_Text_And_Returns_The_Reply_Id()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, GoogleJson.InsertedReply);
+
+        var replyId = await client.ReplyToCommentAsync("UgComment001", "Feed it daily for a week.", CancellationToken.None);
+
+        var request = handler.Requests.ShouldHaveSingleItem();
+        (request.Method, request.Uri.ToString()).ShouldBe(("POST", "https://www.googleapis.com/youtube/v3/comments?part=snippet"));
+        using var body = JsonDocument.Parse(request.Body!);
+        body.RootElement.GetRawText().ShouldBe("""{"snippet":{"parentId":"UgComment001","textOriginal":"Feed it daily for a week."}}""");
+        replyId.ShouldBe("UgComment001.reply0001");
+    }
+
+    [Fact]
+    public async Task A_Hold_Sets_Held_For_Review_With_No_Body_And_Never_Rejects_Or_Bans()
+    {
+        var (client, handler) = Build();
+        handler.Enqueue(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+
+        await client.HoldCommentAsync("UgComment001", CancellationToken.None);
+
+        var request = handler.Requests.ShouldHaveSingleItem();
+        (request.Method, request.Uri.ToString(), request.Body).ShouldBe(
+            ("POST", "https://www.googleapis.com/youtube/v3/comments/setModerationStatus?id=UgComment001&moderationStatus=heldForReview", null));
+    }
+
+    public static TheoryData<int, string, string, bool> CommentWriteFailures => new()
+    {
+        { 503, "backendError", YouTubeClient.UnavailableMessage, true },
+        { 403, "insufficientPermissions", "YouTube needs Scout's permission to reply to and moderate comments: open the YouTube card in Scout Desktop and allow writes again.", true },
+        { 403, "forbidden", YouTubeWriteClient.CommentForbidden, false },
+        { 403, "quotaExceeded", YouTubeClient.QuotaMessage, true },
+    };
+
+    [Theory]
+    [MemberData(nameof(CommentWriteFailures))]
+    public async Task Reply_And_Hold_5xx_And_403_Fail_With_The_Owners_Sentence_And_Whether_It_Can_Pass(
+        int status, string reason, string message, bool retryable)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson((HttpStatusCode)status, GoogleJson.Error(status, reason));
+        handler.EnqueueJson((HttpStatusCode)status, GoogleJson.Error(status, reason));
+
+        var reply = await Should.ThrowAsync<YouTubeApiException>(
+            () => client.ReplyToCommentAsync("UgComment001", "Thanks!", CancellationToken.None));
+        var hold = await Should.ThrowAsync<YouTubeApiException>(() => client.HoldCommentAsync("UgComment001", CancellationToken.None));
+
+        (reply.Message, reply.Retryable, reply.StatusCode).ShouldBe((message, retryable, (HttpStatusCode)status));
+        (hold.Message, hold.Retryable, hold.StatusCode).ShouldBe((message, retryable, (HttpStatusCode)status));
+    }
+
+    [Fact]
+    public async Task A_Reply_YouTube_Took_With_An_Unreadable_Answer_Fails_With_The_Success_Status()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, "<html>proxy</html>");
+        handler.EnqueueJson(HttpStatusCode.OK, """{"kind":"youtube#comment"}""");
+
+        var unreadable = await Should.ThrowAsync<YouTubeApiException>(() => client.ReplyToCommentAsync("UgComment001", "Thanks!", CancellationToken.None));
+        var noId = await Should.ThrowAsync<YouTubeApiException>(() => client.ReplyToCommentAsync("UgComment001", "Thanks!", CancellationToken.None));
+
+        (unreadable.Message, unreadable.StatusCode, unreadable.Retryable).ShouldBe(("YouTube returned an unexpected response.", HttpStatusCode.OK, false));
+        (noId.Message, noId.StatusCode).ShouldBe((YouTubeWriteClient.NoReplyId, HttpStatusCode.OK));
+    }
+
+    [Fact]
+    public async Task Reply_And_Hold_Timeout_Propagates_As_The_Timeout()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueThrow(new TaskCanceledException("timed out"));
+        handler.EnqueueThrow(new TaskCanceledException("timed out"));
+
+        await Should.ThrowAsync<TaskCanceledException>(() => client.ReplyToCommentAsync("UgComment001", "Thanks!", CancellationToken.None));
+        await Should.ThrowAsync<TaskCanceledException>(() => client.HoldCommentAsync("UgComment001", CancellationToken.None));
+
+        handler.Requests.Count.ShouldBe(2);
     }
 
     private sealed class StallingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler

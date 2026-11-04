@@ -65,8 +65,9 @@ internal static class Given
            "\"callToAction\":\"Subscribe\",\"titleVariants\":[\"A\",\"B\",\"C\"],\"description\":\"How to bake.\"," +
            "\"tags\":[\"bread\"],\"chapters\":[{\"at\":\"0:00\",\"title\":\"Intro\"}],\"claims\":" + claims + "}";
 
-    public static TopicResearcher Researcher(IYouTubeClient youtube, ScriptedChat chat, SearchBudget? budget = null)
-        => new(youtube, chat, budget ?? Budget());
+    public static TopicResearcher Researcher(
+        IYouTubeClient youtube, ScriptedChat chat, SearchBudget? budget = null, IOperatorControlPlane? controlPlane = null)
+        => new(youtube, chat, budget ?? Budget(), controlPlane ?? new RecordingControlPlane());
 
     public static OperatorPipeline Pipeline(
         IOperatorControlPlane controlPlane,
@@ -75,17 +76,20 @@ internal static class Given
         Scout.Conversation.Abstractions.IOriginNotifier notifier,
         Kernel? media = null,
         TimeProvider? time = null,
-        IProcessRunner? runner = null)
+        IProcessRunner? runner = null,
+        PiperSpeech? piper = null,
+        OpenverseHttp? openverse = null)
     {
         var kernel = media ?? Media();
         var capabilities = Capabilities(kernel);
-        var visuals = new VisualGenerator(kernel, capabilities, time ?? new FakeTimeProvider(Now));
+        var clock = time ?? new SteppingTime(Now);
+        var visuals = new VisualGenerator(kernel, capabilities, clock, openverse is null ? null : new OpenversePictures(openverse.Factory(), clock));
         return new(
             controlPlane,
-            Researcher(youtube, chat),
+            Researcher(youtube, chat, controlPlane: controlPlane),
             new ScriptWriter(chat),
             new ScenePlanner(chat),
-            new NarrationGenerator(kernel, capabilities),
+            new NarrationGenerator(kernel, capabilities, piper ?? Piper(new FakeProcessRunner())),
             visuals,
             Assembly(runner ?? new FakeProcessRunner(), visuals),
             notifier,
@@ -163,6 +167,31 @@ internal static class Given
                 []),
             Scenes = scenes,
         };
+
+    /// <summary>The bundled voices at <paramref name="piper"/> and <paramref name="voices"/>; none when both are empty.</summary>
+    public static PiperSpeech Piper(IProcessRunner runner, string piper = "", string voices = "", TimeProvider? time = null)
+        => new(runner, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions { PiperPath = piper, VoicesPath = voices }), time ?? new FakeTimeProvider(Now));
+
+    /// <summary>
+    /// A piper program and a voices folder under <paramref name="root"/>: <c>en_GB-cori-medium</c> with one speaker,
+    /// <c>en_GB-aru-medium</c> with the speakers <c>03</c> and <c>06</c>, and <c>orphan</c>, a model without its JSON.
+    /// </summary>
+    public static (string Piper, string Voices) BundledVoices(string root)
+    {
+        var piper = Path.Combine(root, "piper");
+        var voices = Directory.CreateDirectory(Path.Combine(root, "voices")).FullName;
+        File.WriteAllText(piper, "#!/bin/sh");
+        File.WriteAllBytes(Path.Combine(voices, "en_GB-cori-medium.onnx"), [1]);
+        File.WriteAllText(
+            Path.Combine(voices, "en_GB-cori-medium.onnx.json"),
+            "{\"dataset\":\"cori\",\"audio\":{\"sample_rate\":22050,\"quality\":\"medium\"},\"num_speakers\":1,\"speaker_id_map\":{}}");
+        File.WriteAllBytes(Path.Combine(voices, "en_GB-aru-medium.onnx"), [1]);
+        File.WriteAllText(
+            Path.Combine(voices, "en_GB-aru-medium.onnx.json"),
+            "{\"dataset\":\"aru\",\"audio\":{\"sample_rate\":22050,\"quality\":\"medium\"},\"num_speakers\":2,\"speaker_id_map\":{\"03\":0,\"06\":1}}");
+        File.WriteAllBytes(Path.Combine(voices, "orphan.onnx"), [1]);
+        return (piper, voices);
+    }
 
     /// <summary>The font path the tests configure: a file that exists, so the toolset finds a font.</summary>
     public static readonly string Font = typeof(Given).Assembly.Location;

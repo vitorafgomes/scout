@@ -36,4 +36,13 @@ internal sealed class ClosedOperatorControlPlane : IOperatorControlPlane
 
     public Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct)
         => Task.FromException(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorComments> GetCommentsAsync(CancellationToken ct)
+        => Task.FromException<OperatorComments>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct)
+        => Task.FromException<OperatorComments>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
+        => Task.FromException<string>(new ControlPlaneUnavailableException(Reason));
 }

@@ -7,8 +7,9 @@ using Scout.Plugin.YouTube;
 namespace Scout.Operator;
 
 /// <summary>
-/// Tells the control plane what this worker can produce, when it starts and every <see cref="Interval"/>: speech and
-/// images as the connected provider's media services allow, the provider's name, whether videos can be assembled, with a note naming the encoder or why not, whether the
+/// Tells the control plane what this worker can produce, when it starts and every <see cref="Interval"/>: speech as the
+/// connected provider's speech service or the bundled voices allow, the narration voices of both, each bundled one with its sample file when the voice samples folder holds it, images as the provider's
+/// image service allows, whether pictures come from Openverse without one, the provider's name, whether videos can be assembled, with a note naming the encoder or why not, whether the
 /// YouTube token file the desktop writes at sign-in is on disk, and a note for each thing the owner has to supply.
 /// A control plane that cannot take the report is logged once until it takes one again.
 /// </summary>
@@ -19,7 +20,9 @@ internal sealed class ReadinessReporter(
     TimeProvider time,
     ILogger<ReadinessReporter> logger,
     FfmpegToolset ffmpeg,
-    ScheduleNotes? schedule = null) : BackgroundService
+    PiperSpeech piper,
+    ScheduleNotes? schedule = null,
+    OpenversePictures? stock = null) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
@@ -27,25 +30,48 @@ internal sealed class ReadinessReporter(
 
     internal const string NoProvider = "No AI Source is connected; narration needs your own audio and visuals become text cards.";
 
+    internal const string NoProviderWithBundledVoices = "No AI Source is connected; narration uses the bundled voices and visuals become text cards.";
+
+    internal const string StockPicturesNote =
+        "Pictures without an AI image service come from Openverse (CC0, public domain or CC BY, credited in the description).";
+
+    internal const string BundledVoicesUnusable =
+        "The bundled voices are missing or cannot run, so narration needs the connected AI Source or your own audio.";
+
     /// <summary>What this worker can produce now.</summary>
     internal async Task<OperatorReadiness> CurrentAsync(CancellationToken ct)
     {
+        var bundled = await piper.ProbeAsync(ct).ConfigureAwait(false);
         var notes = new List<string>();
         if (media.Provider == "None")
         {
-            notes.Add(NoProvider);
+            notes.Add(bundled.Count > 0 ? NoProviderWithBundledVoices : NoProvider);
         }
         else if (!media.Speech && !media.Images)
         {
-            notes.Add($"{media.Provider} has no speech or image service in Scout; narration needs your own audio and visuals become text cards.");
+            notes.Add(bundled.Count > 0
+                ? $"{media.Provider} has no speech or image service in Scout; narration uses the bundled voices and visuals become text cards."
+                : $"{media.Provider} has no speech or image service in Scout; narration needs your own audio and visuals become text cards.");
         }
         else if (!media.Speech)
         {
-            notes.Add($"{media.Provider} has no speech service in Scout; narration needs your own audio.");
+            notes.Add(bundled.Count > 0
+                ? $"{media.Provider} has no speech service in Scout; narration uses the bundled voices unless you attach your own audio."
+                : $"{media.Provider} has no speech service in Scout; narration needs your own audio.");
         }
         else if (!media.Images)
         {
             notes.Add($"{media.Provider} has no image service in Scout; visuals become text cards unless you attach your own images.");
+        }
+
+        if (!media.Images && stock is not null)
+        {
+            notes.Add(StockPicturesNote);
+        }
+
+        if (piper.Configured && bundled.Count == 0)
+        {
+            notes.Add(BundledVoicesUnusable);
         }
 
         var tokenFile = youtube.Value.TokenFile;
@@ -62,33 +88,49 @@ internal sealed class ReadinessReporter(
             notes.Add(missed);
         }
 
-        return new OperatorReadiness(media.Speech, media.Images, media.Provider, assembly.Tools is not null, signedIn, notes);
+        var samples = bundled.Count > 0 ? await SamplesDirectoryAsync(ct).ConfigureAwait(false) : null;
+        IReadOnlyList<OperatorVoice> voices =
+        [
+            .. media.Speech ? media.SpeechVoices.Select(v => new OperatorVoice($"{media.Provider}:{v}", $"{v} ({media.Provider})", media.Provider)) : [],
+            .. bundled.Select(v => new OperatorVoice(v.Id, v.Label, PiperSpeech.Source, SampleOf(samples, v.Id))),
+        ];
+        return new OperatorReadiness(media.Speech || bundled.Count > 0, media.Images, media.Provider, assembly.Tools is not null, signedIn, notes)
+        {
+            Voices = voices,
+            StockPictures = stock is not null,
+        };
+    }
+
+    private bool _failureLogged;
+
+    /// <summary>Report the current readiness at once instead of waiting for the next tick.</summary>
+    internal async Task ReportNowAsync(CancellationToken ct)
+    {
+        try
+        {
+            await controlPlane.ReportReadinessAsync(await CurrentAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+            _failureLogged = false;
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            if (!_failureLogged)
+            {
+                logger.LogWarning(
+                    "The worker could not report its readiness: {Reason}",
+                    ex is InvalidOperationException ? ex.Message : ex.GetType().Name);
+                _failureLogged = true;
+            }
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var failureLogged = false;
         using var timer = new PeriodicTimer(Interval, time);
         try
         {
             do
             {
-                try
-                {
-                    await controlPlane.ReportReadinessAsync(await CurrentAsync(stoppingToken).ConfigureAwait(false), stoppingToken).ConfigureAwait(false);
-                    failureLogged = false;
-                }
-                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-                {
-                    if (!failureLogged)
-                    {
-                        logger.LogWarning(
-                            "The worker could not report its readiness: {Reason}",
-                            ex is InvalidOperationException ? ex.Message : ex.GetType().Name);
-                        failureLogged = true;
-                    }
-                }
-
+                await ReportNowAsync(stoppingToken).ConfigureAwait(false);
             }
             while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false));
         }
@@ -96,4 +138,19 @@ internal sealed class ReadinessReporter(
         {
         }
     }
+
+    private async Task<string?> SamplesDirectoryAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await controlPlane.GetVoiceSamplesDirectoryAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    private static string? SampleOf(string? samples, string voiceId)
+        => samples is not null && MediaFiles.Exists(samples, VoiceSamples.FileFor(voiceId)) ? VoiceSamples.FileFor(voiceId) : null;
 }

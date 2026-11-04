@@ -28,6 +28,8 @@ function scene(overrides: Partial<SceneDto> = {}): SceneDto {
     error: null,
     audioSource: 'generated',
     visualSource: 'generated',
+    visualQuery: '',
+    visualCredit: null,
     audioFile: 'scene-s1.mp3',
     visualFile: 'scene-s1.png',
     durationMs: 4200,
@@ -84,6 +86,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     scenes: [scene(), scene({ id: 's2', order: 2 })],
     package: null,
     publication: null,
+    narrationVoice: '',
+    backgroundFile: null,
+    delegated: false,
+    visualBrief: '',
+    motion: 'gentle',
     ...overrides,
   };
 }

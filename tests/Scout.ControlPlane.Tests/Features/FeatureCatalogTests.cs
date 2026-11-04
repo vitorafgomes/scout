@@ -100,6 +100,7 @@ public sealed class FeatureCatalogTests
                 ("commentThreads.list", ScopeAccess.Read),
                 ("youtubeAnalytics reports.query", ScopeAccess.Read),
                 ("youtubeReporting reports.list", ScopeAccess.Read),
+                ("api.openverse.org and the host of the picture it names", ScopeAccess.Read),
                 ("Scout's data folder", ScopeAccess.Write),
                 ("youtubeReporting jobs.create", ScopeAccess.Write),
                 ("videos.insert", ScopeAccess.IrreversibleWrite),

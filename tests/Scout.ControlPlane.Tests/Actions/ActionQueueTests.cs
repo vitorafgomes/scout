@@ -254,4 +254,21 @@ public sealed class ActionQueueTests : IDisposable
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
+
+    [Fact]
+    public async Task The_Open_Actions_Of_A_Feature_Are_Its_Approved_And_Executing_Ones_Oldest_First()
+    {
+        using var queue = Queue();
+        var approved = await queue.EnqueueApprovedAsync(
+            "youtube", [("comments.insert", "comment:c1", "Reply"), ("comments.insert", "comment:c2", "Reply"), ("videos.insert", "p1", "Upload")], CancellationToken.None);
+        await queue.EnqueueApprovedAsync("github", [("issues.create", "repo", "Open")], CancellationToken.None);
+        await queue.EnqueueAsync("youtube", "videos.update", "p2", "Waiting for the owner", CancellationToken.None);
+        var claimed = (await queue.ClaimNextAsync("youtube", TimeSpan.FromMinutes(30), (_, _) => true, CancellationToken.None)).ShouldNotBeNull();
+        await queue.ExecuteAsync(approved[2].Id, _ => Task.CompletedTask, CancellationToken.None);
+
+        var open = await queue.ListOpenAsync("youtube", CancellationToken.None);
+
+        open.Select(a => (a.Target, a.Status)).ShouldBe([("comment:c1", PendingActionStatus.Executing), ("comment:c2", PendingActionStatus.Approved)]);
+        claimed.Target.ShouldBe("comment:c1");
+    }
 }

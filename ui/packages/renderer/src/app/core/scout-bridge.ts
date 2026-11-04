@@ -66,10 +66,17 @@ import {
   type MandateSaveRequest,
   type OperatorProjectDto,
   type OperatorProjectRequest,
+  type OperatorProduceRequest,
+  type OperatorDelegateRequest,
+  type OperatorProjectDeletionResponse,
   type PackageMetadataRequest,
   type PublishPackageRequest,
   type ProposalDecisionRequest,
   type ExperimentStartRequest,
+  type CommentsViewDto,
+  type CommentDecisionRequest,
+  type ReplyApprovalRequest,
+  type IdeaDecisionRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
   type StartProjectRequest,
@@ -231,8 +238,13 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     operatorDecideClaim: (_req: ClaimDecisionRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
-    operatorProduce: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+    operatorProduce: (_req: OperatorProduceRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
+    operatorDelegate: (_req: OperatorDelegateRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDeleteProject: (
+      _req: OperatorProjectRequest,
+    ): Promise<OperatorProjectDeletionResponse> => rejectNotAvailable(),
     operatorReorderScenes: (_req: SceneOrderRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorSetSceneLocked: (_req: SceneLockRequest): Promise<OperatorProjectDto> =>
@@ -258,6 +270,14 @@ function createFakeBridge(): ScoutBridge {
     operatorStartExperiment: (_req: ExperimentStartRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorAdoptExperimentWinner: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorComments: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorRequestCommentSync: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorDecideComment: (_req: CommentDecisionRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorApproveReply: (_req: ReplyApprovalRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorDecideIdea: (_req: IdeaDecisionRequest): Promise<CommentsViewDto> =>
       rejectNotAvailable(),
     githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
     githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
@@ -559,8 +579,18 @@ export class ScoutBridgeService {
     return this.bridge.operatorDecideClaim(req);
   }
 
-  async operatorProduce(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+  async operatorProduce(req: OperatorProduceRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorProduce(req);
+  }
+
+  async operatorDelegate(req: OperatorDelegateRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDelegate(req);
+  }
+
+  async operatorDeleteProject(
+    req: OperatorProjectRequest,
+  ): Promise<OperatorProjectDeletionResponse> {
+    return this.bridge.operatorDeleteProject(req);
   }
 
   async operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto> {
@@ -617,6 +647,26 @@ export class ScoutBridgeService {
 
   async operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorAdoptExperimentWinner(req);
+  }
+
+  async operatorComments(): Promise<CommentsViewDto> {
+    return this.bridge.operatorComments();
+  }
+
+  async operatorRequestCommentSync(): Promise<CommentsViewDto> {
+    return this.bridge.operatorRequestCommentSync();
+  }
+
+  async operatorDecideComment(req: CommentDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideComment(req);
+  }
+
+  async operatorApproveReply(req: ReplyApprovalRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorApproveReply(req);
+  }
+
+  async operatorDecideIdea(req: IdeaDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideIdea(req);
   }
 
   async githubSignIn(): Promise<GitHubPendingSignIn> {

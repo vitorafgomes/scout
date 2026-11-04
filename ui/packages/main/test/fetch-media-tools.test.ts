@@ -16,6 +16,8 @@ const sha = (bytes: string): string => createHash('sha256').update(bytes).digest
 const ARCHIVE = 'archive bytes';
 const FONT = 'font bytes';
 const LICENCE = 'licence bytes';
+const PIPER = 'piper archive bytes';
+const MODEL = 'voice model bytes';
 
 const table = {
   ffmpeg: {
@@ -35,6 +37,61 @@ const table = {
       },
     },
   },
+  piper: {
+    version: '2023.11.14-test',
+    project: 'https://github.com/rhasspy/piper',
+    release: 'https://github.com/rhasspy/piper/releases/tag/test',
+    source: 'https://github.com/rhasspy/piper/tree/test',
+    archives: {
+      'linux-x64': {
+        url: 'https://example.test/piper-linux.tar.gz',
+        sha256: sha(PIPER),
+        root: 'piper',
+      },
+      'win32-x64': { url: 'https://example.test/piper-win.zip', sha256: sha(PIPER), root: 'piper' },
+      'darwin-arm64': {
+        url: 'https://example.test/piper-mac.tar.gz',
+        sha256: sha(PIPER),
+        root: 'piper',
+      },
+    },
+  },
+  voices: {
+    repo: 'https://huggingface.co/rhasspy/piper-voices',
+    commit: 'abc123',
+    items: [
+      {
+        name: 'en_GB-cori-medium',
+        dataset: 'https://librivox.org',
+        license: 'public domain',
+        files: [
+          {
+            file: 'en_GB-cori-medium.onnx',
+            url: 'https://example.test/cori.onnx',
+            sha256: sha(MODEL),
+          },
+          {
+            file: 'en_GB-cori-medium.MODEL_CARD',
+            url: 'https://example.test/cori-card',
+            sha256: sha(LICENCE),
+          },
+        ],
+      },
+      {
+        name: 'en_GB-aru-medium',
+        dataset: 'https://example.test/aru',
+        license: 'CC-BY 4.0 https://creativecommons.org/licenses/by/4.0/',
+        attribution: 'University of Liverpool Acoustics Research Unit speech corpus',
+        files: [
+          {
+            file: 'en_GB-aru-medium.onnx',
+            url: 'https://example.test/aru.onnx',
+            sha256: sha(MODEL),
+          },
+        ],
+      },
+    ],
+  },
   fonts: [
     { file: 'NotoSans-Regular.ttf', url: 'https://example.test/regular.ttf', sha256: sha(FONT) },
     { file: 'OFL.txt', url: 'https://example.test/LICENSE', sha256: sha(LICENCE) },
@@ -46,6 +103,12 @@ const BODIES: Record<string, string> = {
   'https://example.test/ffmpeg-win64.zip': ARCHIVE,
   'https://example.test/regular.ttf': FONT,
   'https://example.test/LICENSE': LICENCE,
+  'https://example.test/piper-linux.tar.gz': PIPER,
+  'https://example.test/piper-win.zip': PIPER,
+  'https://example.test/piper-mac.tar.gz': PIPER,
+  'https://example.test/cori.onnx': MODEL,
+  'https://example.test/cori-card': LICENCE,
+  'https://example.test/aru.onnx': MODEL,
 };
 
 function fakeFetch(bodies: Record<string, string> = BODIES) {
@@ -58,7 +121,17 @@ function fakeFetch(bodies: Record<string, string> = BODIES) {
   return { fetch, urls };
 }
 
-async function fakeExtract(_archive: string, dir: string, members: readonly string[]) {
+async function fakeExtract(archive: string, dir: string, members: readonly string[]) {
+  if (archive.includes('piper')) {
+    for (const member of members) {
+      const exe = archive.includes('win') ? 'piper.exe' : 'piper';
+      await mkdir(join(dir, member, 'espeak-ng-data'), { recursive: true });
+      await writeFile(join(dir, member, exe), 'piper exe', { mode: 0o644 });
+      await writeFile(join(dir, member, 'libonnxruntime.so'), 'lib');
+      await writeFile(join(dir, member, 'espeak-ng-data', 'en_dict'), 'dict');
+    }
+    return;
+  }
   for (const member of members) {
     await mkdir(dirname(join(dir, member)), { recursive: true });
     await writeFile(join(dir, member), `extracted ${member}`, { mode: 0o644 });
@@ -94,6 +167,31 @@ describe('fetch-media-tools', () => {
           !a.url.includes(`/releases/download/${tag}/${a.root}.`) || !a.root.includes('-lgpl-'),
       ),
     ).toEqual([]);
+    const piperEntries = Object.values(pinned.piper.archives);
+    const voiceFiles = pinned.voices.items.flatMap((v) => v.files);
+    expect(Object.keys(pinned.piper.archives).sort()).toEqual([
+      'darwin-arm64',
+      'darwin-x64',
+      'linux-x64',
+      'win32-x64',
+    ]);
+    expect(
+      [...piperEntries, ...voiceFiles].filter(
+        (e) => !/^https:\/\//.test(e.url) || !/^[0-9a-f]{64}$/.test(e.sha256),
+      ),
+    ).toEqual([]);
+    expect(
+      piperEntries.filter(
+        (a) => !a.url.includes(`/releases/download/${pinned.piper.version}/`) || a.root !== 'piper',
+      ),
+    ).toEqual([]);
+    expect(pinned.voices.items.map((v) => v.name).sort()).toEqual([
+      'en_GB-aru-medium',
+      'en_GB-cori-medium',
+    ]);
+    expect(
+      voiceFiles.filter((f) => !f.url.includes(`/resolve/${pinned.voices.commit}/en/en_GB/`)),
+    ).toEqual([]);
     expect(pinned.fonts.map((f) => f.file).sort()).toEqual([
       'NotoSans-Bold.ttf',
       'NotoSans-Regular.ttf',
@@ -127,7 +225,7 @@ describe('fetch-media-tools', () => {
     });
 
     const tools = join(resourcesDir, 'media-tools', 'linux-x64');
-    expect((await readdir(tools)).sort()).toEqual(['LICENSE.txt', 'NOTICE.txt', 'ffmpeg']);
+    expect((await readdir(tools)).sort()).toEqual(['LICENSE.txt', 'NOTICE.txt', 'ffmpeg', 'piper']);
     expect(await readFile(join(tools, 'ffmpeg'), 'utf8')).toBe(
       'extracted ffmpeg-linux64/bin/ffmpeg',
     );
@@ -212,7 +310,7 @@ describe('fetch-media-tools', () => {
     expect(failure?.message).toBe('media tools: https://example.test/regular.ttf answered 404');
   });
 
-  it('macOS gets the fonts and their licence, and no ffmpeg: no archive download and no media-tools folder', async () => {
+  it('a macOS target gets piper and the voices and no ffmpeg', async () => {
     const { resourcesDir, cacheDir } = await folders();
     const { fetch, urls } = fakeFetch();
     const lines: string[] = [];
@@ -227,16 +325,87 @@ describe('fetch-media-tools', () => {
       log: (line: string) => lines.push(line),
     });
 
-    expect(urls).toEqual(['https://example.test/regular.ttf', 'https://example.test/LICENSE']);
+    expect(urls).not.toContain('https://example.test/ffmpeg-linux64.tar.xz');
+    expect(urls).toContain('https://example.test/piper-mac.tar.gz');
     expect((await readdir(join(resourcesDir, 'fonts'))).sort()).toEqual([
       'NotoSans-Regular.ttf',
       'OFL.txt',
     ]);
     expect(await readFile(join(resourcesDir, 'fonts', 'NotoSans-Regular.ttf'), 'utf8')).toBe(FONT);
-    expect(existsSync(join(resourcesDir, 'media-tools'))).toBe(false);
-    expect(lines).toEqual([
-      'media tools: none bundled for darwin-arm64; the worker uses ffmpeg from the system path',
+    expect((await readdir(join(resourcesDir, 'voices'))).sort()).toEqual([
+      'LICENSES.txt',
+      'en_GB-aru-medium.onnx',
+      'en_GB-cori-medium.MODEL_CARD',
+      'en_GB-cori-medium.onnx',
     ]);
+    expect(await readdir(join(resourcesDir, 'media-tools', 'darwin-arm64'))).toEqual(['piper']);
+    expect(lines).toEqual([
+      'media tools: no ffmpeg bundled for darwin-arm64; the worker uses ffmpeg from the system path',
+      `media tools: darwin-arm64 ready in ${resourcesDir}`,
+    ]);
+  });
+
+  it('fetches piper for the target and extracts the whole folder with its notice', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    });
+
+    const piper = join(resourcesDir, 'media-tools', 'linux-x64', 'piper');
+    expect((await readdir(piper)).sort()).toEqual([
+      'NOTICE.txt',
+      'espeak-ng-data',
+      'libonnxruntime.so',
+      'piper',
+    ]);
+    expect(await readFile(join(piper, 'espeak-ng-data', 'en_dict'), 'utf8')).toBe('dict');
+    if (process.platform !== 'win32')
+      expect(statSync(join(piper, 'piper')).mode & 0o777).toBe(0o755);
+    const notice = await readFile(join(piper, 'NOTICE.txt'), 'utf8');
+    expect(notice).toContain('piper 2023.11.14-test');
+    expect(notice).toContain('MIT');
+    expect(notice).toContain(table.piper.source);
+    expect(notice).toContain('espeak-ng (GPL-3.0, source https://github.com/espeak-ng/espeak-ng)');
+    expect(notice).toContain(table.piper.archives['linux-x64'].sha256);
+    const licenses = await readFile(join(resourcesDir, 'voices', 'LICENSES.txt'), 'utf8');
+    expect(licenses).toContain(
+      'en_GB-cori-medium\nDataset: https://librivox.org\nLicence: public domain',
+    );
+    expect(licenses).toContain(
+      'Attribution: University of Liverpool Acoustics Research Unit speech corpus',
+    );
+    expect(licenses).toContain('https://huggingface.co/rhasspy/piper-voices at commit abc123');
+  });
+
+  it('a voice whose hash does not match is not kept', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const { fetch } = fakeFetch({ ...BODIES, 'https://example.test/aru.onnx': 'tampered' });
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: checksum mismatch for https://example.test/aru.onnx: expected ${sha(MODEL)}, got ${sha('tampered')}`,
+    );
+    expect(existsSync(join(cacheDir, 'voices', 'en_GB-aru-medium.onnx'))).toBe(false);
+    expect(existsSync(join(resourcesDir, 'voices', 'en_GB-aru-medium.onnx'))).toBe(false);
   });
 
   it('a second run with everything in place downloads and extracts nothing', async () => {

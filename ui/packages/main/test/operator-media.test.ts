@@ -16,6 +16,7 @@ import { ControlPlaneNotFoundError, ScoutError } from '@scout/shared';
 import {
   MEDIA_SCHEME,
   MEDIA_SCHEME_PRIVILEGES,
+  VOICE_SAMPLES_HOST,
   chooseWithDialog,
   copyOwnerMedia,
   createMediaProtocolHandler,
@@ -285,6 +286,92 @@ describe('the scout-media protocol', () => {
       (await fetchMedia(`${MEDIA_SCHEME}://p9/scene-s1.png`, missing)).status,
       (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, async () => '')).status,
       (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, relative)).status,
+    ];
+
+    expect(statuses).toEqual([404, 404, 404]);
+  });
+});
+
+describe('the voice-samples host of scout-media', () => {
+  const SAMPLE = Buffer.from('RIFF voice sample bytes');
+
+  function samplesAndProject(): { root: string; media: string; samples: string } {
+    const { root, media } = projectWithMedia();
+    const samples = path.join(root, 'voice-samples');
+    mkdirSync(samples);
+    writeFileSync(path.join(samples, 'piper-en_GB-aru-medium-3.wav'), SAMPLE);
+    writeFileSync(path.join(samples, 'banner.png'), PNG);
+    writeFileSync(path.join(media, 'x.wav'), 'a project file, not a sample');
+    writeFileSync(path.join(root, 'x.wav'), 'outside the samples directory');
+    return { root, media, samples };
+  }
+
+  it('voice-samples host serves a sample and refuses an escape', async () => {
+    const { media, samples } = samplesAndProject();
+    const projectsAsked: string[] = [];
+    const handler = createMediaProtocolHandler(
+      async (id) => {
+        projectsAsked.push(id);
+        return media;
+      },
+      Date.now,
+      async () => samples,
+    );
+    const get = (file: string, range?: string): Promise<Response> =>
+      handler(
+        new Request(
+          `${MEDIA_SCHEME}://${VOICE_SAMPLES_HOST}/${file}`,
+          range === undefined ? undefined : { headers: { range } },
+        ),
+      );
+
+    const whole = await read(await get('piper-en_GB-aru-medium-3.wav'));
+    const ranged = await get('piper-en_GB-aru-medium-3.wav', 'bytes=0-3');
+    const rangedHeaders = headers(ranged, 'content-range', 'content-length');
+    const rangedBody = await read(ranged);
+    const refused = await Promise.all(
+      [
+        'missing.wav',
+        '../x.wav',
+        '%2E%2E%2Fx.wav',
+        '..%2Fx.wav',
+        '..%5Cx.wav',
+        'sub%2Fpiper-en_GB-aru-medium-3.wav',
+        'x.wav',
+        'banner.png',
+      ].map(async (file) => (await get(file)).status),
+    );
+    const projectFile = (await handler(new Request(`${MEDIA_SCHEME}://p1/x.wav`))).status;
+
+    expect([whole.status, whole.type, whole.body.equals(SAMPLE)]).toEqual([200, 'audio/wav', true]);
+    expect([rangedBody.status, rangedBody.body.toString(), ...rangedHeaders]).toEqual([
+      206,
+      'RIFF',
+      `bytes 0-3/${SAMPLE.length}`,
+      '4',
+    ]);
+    expect(refused).toEqual([404, 404, 404, 404, 404, 404, 404, 404]);
+    expect(projectFile).toBe(200);
+    expect(projectsAsked).toEqual(['p1']);
+  });
+
+  it('answers 404 to a sample when the control plane names no absolute directory or fails', async () => {
+    const { media } = samplesAndProject();
+    const statusWith = async (samplesDirectory: () => Promise<string>): Promise<number> =>
+      (
+        await createMediaProtocolHandler(
+          async () => media,
+          Date.now,
+          samplesDirectory,
+        )(new Request(`${MEDIA_SCHEME}://${VOICE_SAMPLES_HOST}/piper-en_GB-aru-medium-3.wav`))
+      ).status;
+
+    const statuses = [
+      await statusWith(async () => ''),
+      await statusWith(async () => 'voice-samples'),
+      await statusWith(async () => {
+        throw new Error('nothing listening');
+      }),
     ];
 
     expect(statuses).toEqual([404, 404, 404]);

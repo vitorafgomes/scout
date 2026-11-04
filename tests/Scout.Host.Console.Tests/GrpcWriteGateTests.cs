@@ -310,6 +310,31 @@ public sealed class GrpcWriteGateTests
             Reported = request;
             return OperatorFailure is null ? Task.FromResult(request) : throw OperatorFailure;
         }
+
+        public CommentsView CommentsReply { get; init; } = new();
+
+        public CommentsView? SavedComments { get; private set; }
+
+        public override Task<CommentsView> GetComments(ListCommentsRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(CommentsReply) : throw OperatorFailure;
+        }
+
+        public override Task<CommentsView> SaveComments(CommentsView request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            SavedComments = request;
+            return OperatorFailure is null ? Task.FromResult(request.Clone()) : throw OperatorFailure;
+        }
+
+        public string VoiceSamplesPath { get; init; } = "/data/scout/operator/voice-samples";
+
+        public override Task<MediaDirectory> GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest request, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = VoiceSamplesPath }) : throw OperatorFailure;
+        }
     }
 
     private sealed class RecordingLogger : ILogger<WriteGateFilter>

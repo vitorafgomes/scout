@@ -5,7 +5,7 @@ using Scout.ControlPlane.Operator;
 namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
-/// Clears the topic candidates older than 30 days through <see cref="OperatorService.ClearOldResearchAsync"/> when the
+/// Clears the topic candidates and the comments older than 30 days through <see cref="OperatorService.ClearOldResearchAsync"/> when the
 /// control plane starts and every <see cref="Interval"/> after. A run that cannot read or write Scout's data folder is
 /// logged as a warning, and the next run tries again.
 /// </summary>
@@ -36,7 +36,7 @@ internal sealed class ResearchCleanupService(OperatorService @operator, ILogger<
         {
             await @operator.ClearOldResearchAsync(ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperatorStoreException)
         {
             logger.LogWarning("Old research could not be cleared; the next run tries again: {Reason}", ex.Message);
         }

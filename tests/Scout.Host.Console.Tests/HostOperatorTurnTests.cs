@@ -178,6 +178,12 @@ public sealed class HostOperatorTurnTests
         public Task<OperatorAction?> NextApprovedActionAsync(CancellationToken ct) => Task.FromResult<OperatorAction?>(null);
 
         public Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct) => Task.CompletedTask;
+
+        public Task<OperatorComments> GetCommentsAsync(CancellationToken ct) => Task.FromResult(new OperatorComments([], [], null, null, null));
+
+        public Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FinalTextSink : IResponseSink

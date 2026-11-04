@@ -97,6 +97,42 @@ public sealed class AssemblyTests : IDisposable
     }
 
     [Fact]
+    public async Task The_Projects_Background_Is_Rendered_Under_The_Scenes_Without_A_Picture_And_Goes_Back_As_Read()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "studio.png"), [5, 6]);
+        var project = Assembling() with { BackgroundFile = "studio.png" };
+        var controlPlane = Holding(project);
+        var runner = new FakeProcessRunner { ProbedMs = 12_000 };
+
+        await Run(controlPlane, project, runner);
+
+        var save = controlPlane.Saves.ShouldHaveSingleItem().Project;
+        save.BackgroundFile.ShouldBe("studio.png");
+        save.Scenes.ShouldBe(project.Scenes);
+        runner.Renders.Count(r => r.Contains(Path.Combine(_media, "studio.png"))).ShouldBe(2);
+        runner.Renders.ShouldNotContain(r => r.Contains("color=c=0x14181f:s=1920x1080:r=30"));
+    }
+
+    [Theory]
+    [InlineData("still", "scale=1920:1080:", "zoompan")]
+    [InlineData("gentle", "zoompan=z=1+0.08*", "scale=1920:1080:")]
+    [InlineData("dynamic", "zoompan=z=1+0.16*", "zoompan=z=1+0.08*")]
+    public async Task The_Picture_Scene_Moves_Under_The_Projects_Motion_And_The_Motion_Goes_Back_As_Read(string motion, string present, string absent)
+    {
+        var project = Assembling() with { Motion = motion };
+        var controlPlane = Holding(project);
+        var runner = new FakeProcessRunner { ProbedMs = 12_000 };
+
+        await Run(controlPlane, project, runner);
+
+        var picture = runner.Renders.Single(r => r.Contains(Path.Combine(_media, "scene-s1.png")) && r.Contains("-filter_complex"));
+        var graph = picture.SkipWhile(a => a != "-filter_complex").ElementAt(1);
+        graph.ShouldContain(present, Case.Sensitive);
+        graph.ShouldNotContain(absent, Case.Sensitive);
+        controlPlane.Saves.ShouldHaveSingleItem().Project.Motion.ShouldBe(motion);
+    }
+
+    [Fact]
     public async Task A_120_Character_Title_Variant_Or_A_200_Character_Topic_Still_Saves_The_Package_Assembled_Within_YouTubes_Limits()
     {
         var long120 = string.Join(' ', Enumerable.Repeat("Sourdough", 12)) + " bread";
@@ -205,7 +241,7 @@ public sealed class AssemblyTests : IDisposable
         await Run(controlPlane, project, again);
 
         controlPlane.Saves[^1].Project.Status.ShouldBe("assembled");
-        again.Renders.Count(r => r.Contains("anullsrc=channel_layout=stereo:sample_rate=48000") || r.Contains("-loop")).ShouldBe(0);
+        again.Renders.Count(r => r.Any(a => a.EndsWith("[1:a]aresample=48000,apad[a]", StringComparison.Ordinal))).ShouldBe(0);
         again.Renders.Count(r => r.Contains("concat")).ShouldBe(1);
         Files().Count(f => f.StartsWith("segment-", StringComparison.Ordinal)).ShouldBe(3);
     }

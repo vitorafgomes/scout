@@ -63,9 +63,13 @@ public sealed class ActionExecutorTests : IDisposable
             Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions { CategoryId = "26" }),
             _time,
             _logs,
-            _notifier);
+            _notifier,
+            Desk(controlPlane));
         return (executor, controlPlane, new RecordedActions(controlPlane));
     }
+
+    private CommentDesk Desk(IOperatorControlPlane controlPlane)
+        => new(controlPlane, Substitute.For<IYouTubeClient>(), ScriptedChat.Answering("{}"), _time, new RecordingLogger<CommentDesk>());
 
     private sealed class RecordedActions(RecordingControlPlane controlPlane)
     {
@@ -354,6 +358,8 @@ public sealed class ActionExecutorTests : IDisposable
 
     [Theory]
     [InlineData("comments.insert", "p1")]
+    [InlineData("comments.delete", "comment:c1")]
+    [InlineData("comments.setModerationStatus", "p1:e1:b")]
     [InlineData("videos.insert", "p1:e1:b")]
     public async Task An_Action_Scout_Does_Not_Run_Is_Recorded_Failed_So_It_Does_Not_Hold_The_Queue(string action, string target)
     {
@@ -384,11 +390,11 @@ public sealed class ActionExecutorTests : IDisposable
     {
         var (_, controlPlane, gate) = Build(Approved(Publish()), "videos.insert", "p1");
         controlPlane.RecordFailure = new ControlPlaneUnavailableException("Scout could not reach its control plane.");
-        var first = new ActionExecutor(controlPlane, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier);
+        var first = new ActionExecutor(controlPlane, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier, Desk(controlPlane));
         await first.RunOnceAsync(CancellationToken.None);
         controlPlane.Saves[^1].Project.Publication!.VideoId.ShouldBe(Uploaded);
         controlPlane.RecordFailure = null;
-        var afterRestart = new ActionExecutor(controlPlane, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier);
+        var afterRestart = new ActionExecutor(controlPlane, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier, Desk(controlPlane));
 
         await afterRestart.RunOnceAsync(CancellationToken.None);
 
@@ -444,7 +450,7 @@ public sealed class ActionExecutorTests : IDisposable
         var refusing = new RecordingControlPlane { MediaDirectory = _media, RefuseOnProject = p => p.Publication?.VideoId is not null };
         refusing.Store(Approved(Publish()));
         refusing.Approved.Enqueue(controlPlane.Approved.Peek());
-        var refused = new ActionExecutor(refusing, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier);
+        var refused = new ActionExecutor(refusing, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier, Desk(refusing));
 
         await refused.RunOnceAsync(CancellationToken.None);
 
@@ -459,7 +465,7 @@ public sealed class ActionExecutorTests : IDisposable
         var refusing = new RecordingControlPlane { MediaDirectory = _media, RefuseOnProject = _ => true };
         refusing.Store(Approved(Publish() with { Status = "published", VideoId = Uploaded, Experiment = TitleTest() }));
         refusing.Approved.Enqueue(new OperatorAction("a1", "youtube", "videos.update", "p1:e1:b", "Set title"));
-        var executor = new ActionExecutor(refusing, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier);
+        var executor = new ActionExecutor(refusing, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier, Desk(refusing));
 
         await executor.RunOnceAsync(CancellationToken.None);
 
@@ -639,5 +645,166 @@ public sealed class ActionExecutorTests : IDisposable
 
         await _youtube.Received(1).UpdateTitleAsync(Uploaded, "Bread in ten minutes", Arg.Any<CancellationToken>());
         gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+    }
+
+    private const string ReplyId = "c1.reply0001";
+
+    private static OperatorComment Comment(string status, string? approved = "Feed it daily for a week.", string? replyId = null)
+        => new("c1", "thread-c1", "video000001", "Sourdough basics", "@breadfan", "How long do I feed it?", "2026-11-02T09:30:00.0000000Z", 3,
+            "question", "feeding", status, "Every day, probably.", approved, replyId, null, "2026-11-03T11:59:59.9876543+00:00", "2026-11-02T10:00:00.0000000+00:00");
+
+    private (ActionExecutor Executor, RecordingControlPlane ControlPlane, RecordedActions Gate) BuildComment(OperatorComment comment, string action = "comments.insert")
+    {
+        var (executor, controlPlane, gate) = Build(Approved(Publish()), action, "comment:c1");
+        controlPlane.Comments = new([comment, Comment("new", approved: null) with { Id = "c2" }], [], "2026-11-03T08:00:00.0000000Z", null, null);
+        _youtube.ReplyToCommentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(ReplyId);
+        return (executor, controlPlane, gate);
+    }
+
+    [Fact]
+    public async Task Reply_Posts_The_Approved_Text_Once_And_Saves_Its_Id()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("reply_approved"));
+
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        await _youtube.Received(1).ReplyToCommentAsync("c1", "Feed it daily for a week.", Arg.Any<CancellationToken>());
+        controlPlane.CommentSaves.Select(s => (s.Comments[0].Status, s.Comments[0].ReplyId)).ShouldBe([("replying", null), ("replied", ReplyId)]);
+        controlPlane.Comments.Comments.ShouldBe([Comment("replied", replyId: ReplyId), Comment("new", approved: null) with { Id = "c2" }]);
+        gate.Records.ShouldHaveSingleItem().ShouldBe(("youtube", "comments.insert", "comment:c1", "succeeded", "a1"));
+    }
+
+    [Fact]
+    public async Task Reply_Found_Replying_After_A_Restart_Is_Failed_Not_Posted_Again()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("replying"));
+
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        await _youtube.DidNotReceive().ReplyToCommentAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        controlPlane.Comments.Comments[0].ShouldBe(Comment("failed") with { Error = ActionExecutor.MayAlreadyBeReplied });
+        gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe($"failed: {ActionExecutor.MayAlreadyBeReplied}");
+    }
+
+    [Fact]
+    public async Task Reply_With_A_Saved_Id_Is_Only_Recorded()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("replied", replyId: ReplyId));
+
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        _youtube.ReceivedCalls().Where(c => c.GetMethodInfo().Name != nameof(IYouTubeWriteClient.UploadVideoAsync)).ShouldBeEmpty();
+        controlPlane.CommentSaves.ShouldBeEmpty();
+        gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+    }
+
+    [Fact]
+    public async Task A_Reply_YouTube_Surely_Refused_Is_Posted_Again_Next_Run_But_One_That_May_Have_Landed_Is_Failed()
+    {
+        var (sure, sureControlPlane, sureGate) = BuildComment(Comment("reply_approved"));
+        _youtube.ReplyToCommentAsync("c1", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(
+            _ => throw new YouTubeApiException("YouTube's upload rate limit is reached for now; Scout tries again later.", HttpStatusCode.TooManyRequests) { Retryable = true },
+            _ => Task.FromResult(ReplyId));
+
+        await sure.RunOnceAsync(CancellationToken.None);
+        await sure.RunOnceAsync(CancellationToken.None);
+        var (unsure, unsureControlPlane, unsureGate) = BuildComment(Comment("reply_approved"));
+        _youtube.ReplyToCommentAsync("c1", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(
+            _ => throw new YouTubeApiException("YouTube is currently unavailable. Try again later.", HttpStatusCode.BadGateway) { Retryable = true },
+            _ => Task.FromResult(ReplyId));
+        await unsure.RunOnceAsync(CancellationToken.None);
+        await unsure.RunOnceAsync(CancellationToken.None);
+
+        (sureControlPlane.Comments.Comments[0].Status, sureControlPlane.Comments.Comments[0].ReplyId).ShouldBe(("replied", ReplyId));
+        sureGate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+        (unsureControlPlane.Comments.Comments[0].Status, unsureControlPlane.Comments.Comments[0].Error).ShouldBe(("failed", ActionExecutor.MayAlreadyBeReplied));
+        unsureGate.Records.ShouldHaveSingleItem().Outcome.ShouldBe($"failed: {ActionExecutor.MayAlreadyBeReplied}");
+        await _youtube.Received(3).ReplyToCommentAsync("c1", "Feed it daily for a week.", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task A_Reply_YouTube_Accepted_With_An_Unreadable_Answer_Is_Never_Posted_Again()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("reply_approved"));
+        _youtube.ReplyToCommentAsync("c1", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(
+            _ => throw new YouTubeApiException("YouTube returned an unexpected response.", HttpStatusCode.OK),
+            _ => Task.FromResult(ReplyId));
+
+        await executor.RunOnceAsync(CancellationToken.None);
+        controlPlane.Approved.Enqueue(new OperatorAction("a1", "youtube", "comments.insert", "comment:c1", "comments.insert comment:c1"));
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        await _youtube.Received(1).ReplyToCommentAsync("c1", "Feed it daily for a week.", Arg.Any<CancellationToken>());
+        (controlPlane.Comments.Comments[0].Status, controlPlane.Comments.Comments[0].Error).ShouldBe(("failed", ActionExecutor.MayAlreadyBeReplied));
+        gate.Records.Select(r => r.Outcome).ShouldBe([$"failed: {ActionExecutor.MayAlreadyBeReplied}", $"failed: {ActionExecutor.NotApprovedReply("c1", "failed")}"]);
+    }
+
+    [Fact]
+    public async Task A_Reply_YouTube_Took_Whose_Save_Is_Refused_Is_Still_Recorded_Succeeded()
+    {
+        var (_, controlPlane, _) = BuildComment(Comment("reply_approved"));
+        var refusing = new RecordingControlPlane
+        {
+            CommentSaveFailure = n => n == 2 ? new InvalidOperationException("Only the owner moves comment 'c2' from dismissed to new.") : null,
+        };
+        refusing.Comments = controlPlane.Comments;
+        refusing.Approved.Enqueue(controlPlane.Approved.Peek());
+        var refused = new ActionExecutor(refusing, _youtube, Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions()), _time, _logs, _notifier, Desk(refusing));
+
+        await refused.RunOnceAsync(CancellationToken.None);
+
+        refusing.Recorded.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded: comment c1, not saved");
+        await _youtube.Received(1).ReplyToCommentAsync("c1", "Feed it daily for a week.", Arg.Any<CancellationToken>());
+        refusing.Comments.Comments[0].Status.ShouldBe("replying");
+    }
+
+    [Fact]
+    public async Task A_Reply_The_Owner_Revoked_During_Is_Saved_On_The_State_The_Last_Save_Answered_Then_Recorded_After_Revoke()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("reply_approved"));
+        _youtube.ReplyToCommentAsync("c1", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            controlPlane.Revoked = true;
+            return Task.FromResult(ReplyId);
+        });
+
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        controlPlane.Comments.Comments[0].ShouldBe(Comment("replied", replyId: ReplyId));
+        gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded after revoke");
+    }
+
+    [Fact]
+    public async Task Hold_Sets_Held_For_Review_And_Saves_Held()
+    {
+        var (executor, controlPlane, gate) = BuildComment(Comment("hold_approved", approved: null) with { Kind = "spam" }, "comments.setModerationStatus");
+
+        await executor.RunOnceAsync(CancellationToken.None);
+
+        await _youtube.Received(1).HoldCommentAsync("c1", Arg.Any<CancellationToken>());
+        controlPlane.Comments.Comments[0].ShouldBe(Comment("held", approved: null) with { Kind = "spam" });
+        gate.Records.ShouldHaveSingleItem().ShouldBe(("youtube", "comments.setModerationStatus", "comment:c1", "succeeded", "a1"));
+    }
+
+    [Fact]
+    public async Task A_Hold_On_A_Deleted_Comment_Saves_The_Comment_Failed_And_A_5xx_Leaves_The_Action()
+    {
+        var (gone, goneControlPlane, goneGate) = BuildComment(Comment("hold_approved", approved: null), "comments.setModerationStatus");
+        _youtube.HoldCommentAsync("c1", Arg.Any<CancellationToken>()).Returns(
+            _ => throw new YouTubeApiException("YouTube refused the change to this comment: it may have been deleted, or the sign-in does not allow Scout to change it.", HttpStatusCode.Forbidden));
+        await gone.RunOnceAsync(CancellationToken.None);
+        var (down, downControlPlane, downGate) = BuildComment(Comment("hold_approved", approved: null), "comments.setModerationStatus");
+        _youtube.HoldCommentAsync("c1", Arg.Any<CancellationToken>()).Returns(
+            _ => throw new YouTubeApiException("YouTube is currently unavailable. Try again later.", HttpStatusCode.ServiceUnavailable) { Retryable = true });
+        await down.RunOnceAsync(CancellationToken.None);
+
+        goneControlPlane.Comments.Comments[0].ShouldBe(Comment("failed", approved: null) with
+        {
+            Error = "YouTube refused the change to this comment: it may have been deleted, or the sign-in does not allow Scout to change it.",
+        });
+        goneGate.Records.ShouldHaveSingleItem().Outcome.ShouldStartWith("failed: YouTube refused the change to this comment");
+        downControlPlane.CommentSaves.ShouldBeEmpty();
+        downGate.Records.ShouldBeEmpty();
+        downControlPlane.Approved.Count.ShouldBe(1);
     }
 }

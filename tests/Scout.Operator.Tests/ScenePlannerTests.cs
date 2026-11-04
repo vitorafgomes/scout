@@ -24,7 +24,7 @@ public sealed class ScenePlannerTests
         var chat = ScriptedChat.Answering(Given.Prompts(4));
 
         var scenes = await new ScenePlanner(chat).PlanAsync(
-            Script("Feed the starter daily.", "Bake at 250 degrees."), Given.Mandate(), CancellationToken.None);
+            Script("Feed the starter daily.", "Bake at 250 degrees."), Given.Mandate(), string.Empty, CancellationToken.None);
 
         scenes.Select(s => s.Narration).ShouldBe([
             "Bread in ten minutes?", "Feed the starter daily.", "Bake at 250 degrees.", "Subscribe for the next loaf.",
@@ -42,7 +42,7 @@ public sealed class ScenePlannerTests
         var longSection = Sentences(6, 200);
         var chat = ScriptedChat.Answering(Given.Prompts(4), Given.Prompts(3));
 
-        var scenes = await new ScenePlanner(chat).PlanAsync(Script(longSection), Given.Mandate(), CancellationToken.None);
+        var scenes = await new ScenePlanner(chat).PlanAsync(Script(longSection), Given.Mandate(), string.Empty, CancellationToken.None);
 
         var parts = scenes.Skip(1).SkipLast(1).Select(s => s.Narration).ToList();
         parts.Count.ShouldBe(2);
@@ -57,7 +57,7 @@ public sealed class ScenePlannerTests
     {
         var chat = ScriptedChat.Answering(Given.Prompts(3));
 
-        await new ScenePlanner(chat).PlanAsync(Script("Feed the starter daily."), Given.Mandate(), CancellationToken.None);
+        await new ScenePlanner(chat).PlanAsync(Script("Feed the starter daily."), Given.Mandate(), string.Empty, CancellationToken.None);
 
         chat.Requests.ShouldHaveSingleItem();
         var system = chat.Requests[0].Single(m => m.Role == AuthorRole.System).Text;
@@ -70,14 +70,51 @@ public sealed class ScenePlannerTests
     }
 
     [Fact]
+    public async Task The_planner_asks_for_search_terms_per_scene()
+    {
+        var chat = ScriptedChat.Answering(
+            "{\"prompts\":[\"Picture 1\",\"Picture 2\",\"Picture 3\"],\"search_terms\":[\"fresh \\\"bread\\\" loaf\",\"  \"]}");
+
+        var scenes = await new ScenePlanner(chat).PlanAsync(Script("Feed the starter daily."), Given.Mandate(), string.Empty, CancellationToken.None);
+
+        var system = chat.Requests.ShouldHaveSingleItem().Single(m => m.Role == AuthorRole.System).Text;
+        system.ShouldContain("\"search_terms\"");
+        system.ShouldContain("2 to 4 plain English nouns or adjectives");
+        scenes.Select(s => s.VisualQuery).ShouldBe(["fresh bread loaf", string.Empty, string.Empty]);
+    }
+
+    [Fact]
+    public async Task The_brief_shapes_the_picture_prompts_and_search_terms()
+    {
+        var briefed = ScriptedChat.Answering(Given.Prompts(3));
+        var plain = ScriptedChat.Answering(Given.Prompts(3));
+
+        await new ScenePlanner(briefed).PlanAsync(
+            Script("Feed the starter daily."), Given.Mandate(), "  Hand-drawn watercolour, soft pastel light.\nSlow and calm.  ", CancellationToken.None);
+        await new ScenePlanner(plain).PlanAsync(Script("Feed the starter daily."), Given.Mandate(), "   ", CancellationToken.None);
+
+        var system = briefed.Requests.ShouldHaveSingleItem().Single(m => m.Role == AuthorRole.System).Text!;
+        system.ShouldContain(
+            "Visual style the owner asked for: Hand-drawn watercolour, soft pastel light.\nSlow and calm.\n" +
+            "Write every prompt and every entry of \"search_terms\" in that style.",
+            Case.Sensitive);
+        system.IndexOf("Visual style the owner asked for", StringComparison.Ordinal)
+            .ShouldBeGreaterThan(system.IndexOf("warm and precise", StringComparison.Ordinal));
+        var unbriefed = plain.Requests.ShouldHaveSingleItem().Single(m => m.Role == AuthorRole.System).Text!;
+        unbriefed.ShouldNotContain("Visual style", Case.Sensitive);
+        unbriefed.ShouldNotContain("in that style", Case.Sensitive);
+        unbriefed.ShouldContain("warm and precise");
+    }
+
+    [Fact]
     public async Task A_Prompt_List_Of_The_Wrong_Length_Is_Asked_For_Once_More_And_A_Second_One_Fails_The_Plan()
     {
         var retried = ScriptedChat.Answering(Given.Prompts(4), Given.Prompts(3));
         var twice = ScriptedChat.Answering(Given.Prompts(2), "not json");
 
-        var scenes = await new ScenePlanner(retried).PlanAsync(Script("Feed it."), Given.Mandate(), CancellationToken.None);
+        var scenes = await new ScenePlanner(retried).PlanAsync(Script("Feed it."), Given.Mandate(), string.Empty, CancellationToken.None);
         var ex = await Should.ThrowAsync<InvalidOperationException>(
-            () => new ScenePlanner(twice).PlanAsync(Script("Feed it."), Given.Mandate(), CancellationToken.None));
+            () => new ScenePlanner(twice).PlanAsync(Script("Feed it."), Given.Mandate(), string.Empty, CancellationToken.None));
 
         scenes.Count.ShouldBe(3);
         retried.Requests.Count.ShouldBe(2);

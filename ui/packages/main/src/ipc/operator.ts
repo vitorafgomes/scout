@@ -8,19 +8,27 @@ import {
   serializeError,
   type ClaimDecisionRequest,
   type ClaimStatus,
+  type CommentDecision,
+  type CommentDecisionRequest,
+  type CommentsViewDto,
   type ExperimentStartRequest,
+  type IdeaDecisionRequest,
   type MandateDto,
   type MandateResponse,
   type MandateSaveRequest,
+  type OperatorDelegateRequest,
+  type OperatorProduceRequest,
   type OperatorProjectDto,
   type OperatorProjectRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
   type PackageMetadataRequest,
   type PrivacyStatus,
+  type ProjectMotion,
   type ProposalDecisionRequest,
   type PublishPackageRequest,
   type ReadinessDto,
+  type ReplyApprovalRequest,
   type SceneLockRequest,
   type SceneMediaKind,
   type SceneMediaRequest,
@@ -42,6 +50,8 @@ export type OperatorClient = Pick<
   | 'startProject'
   | 'decideClaim'
   | 'produceProject'
+  | 'delegateProject'
+  | 'deleteProject'
   | 'reorderScenes'
   | 'setSceneLocked'
   | 'regenerateScene'
@@ -56,6 +66,11 @@ export type OperatorClient = Pick<
   | 'decideProposal'
   | 'startExperiment'
   | 'adoptExperimentWinner'
+  | 'listComments'
+  | 'requestCommentSync'
+  | 'decideComment'
+  | 'approveReply'
+  | 'decideIdea'
 >;
 
 const DEFAULT_PROJECTS_LIMIT = 50;
@@ -74,6 +89,12 @@ const PRIVACY_STATUSES: readonly PrivacyStatus[] = ['public', 'private', 'unlist
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?Z$/;
 const MIN_ARM_HOURS = 24;
 const MAX_ARM_HOURS = 168;
+const COMMENT_DECISIONS: readonly CommentDecision[] = ['draft', 'dismiss', 'not_spam', 'hold'];
+const NARRATION_VOICE = /^[A-Za-z0-9_:.#-]{0,80}$/;
+const MAX_VISUAL_BRIEF = 500;
+const MOTIONS: readonly string[] = ['still', 'gentle', 'dynamic'];
+const COMMENT_ID = /^[A-Za-z0-9_.-]{1,100}$/;
+const MAX_REPLY_LENGTH = 1000;
 
 function throwSerialized(err: unknown): never {
   const serialized = serializeError(err);
@@ -108,6 +129,12 @@ function sceneOrder(value: unknown): string[] {
   return ids;
 }
 
+function commentId(value: unknown): string {
+  const id = text(value);
+  if (!COMMENT_ID.test(id)) invalid(`'${id}' is not a comment id.`);
+  return id;
+}
+
 function validMandate(req: MandateSaveRequest | undefined): MandateSaveRequest {
   const mandate: MandateSaveRequest = {
     objective: text(req?.objective),
@@ -127,6 +154,28 @@ function validMandate(req: MandateSaveRequest | undefined): MandateSaveRequest {
     invalid(`Each pillar is at most ${MAX_PILLAR_LENGTH} characters.`);
   }
   return mandate;
+}
+
+function narrationVoice(value: unknown): string {
+  const voice = text(value);
+  if (!NARRATION_VOICE.test(voice)) {
+    invalid('A narration voice is an id of at most 80 letters, digits, _ : . # or -.');
+  }
+  return voice;
+}
+
+function visualBrief(value: unknown): string {
+  const brief = text(value);
+  if (brief.length > MAX_VISUAL_BRIEF) {
+    invalid(`A visual brief is at most ${MAX_VISUAL_BRIEF} characters.`);
+  }
+  return brief;
+}
+
+function motion(value: unknown): ProjectMotion {
+  const preset = text(value) || 'gentle';
+  if (!MOTIONS.includes(preset)) invalid('Motion is still, gentle or dynamic.');
+  return preset as ProjectMotion;
 }
 
 /** How YouTube counts tags: their characters, two more for a tag with a space, and a comma between tags. */
@@ -192,7 +241,7 @@ function validPublication(req: PublishPackageRequest | undefined): PublishPackag
   };
 }
 
-/** Registers the Production and Assembly pages' channels, which reach the control plane's Operator service only. */
+/** Registers the operator pages' channels, which reach the control plane's Operator service only. */
 export function registerOperatorHandlers(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
   getClient: () => Promise<OperatorClient>,
@@ -299,11 +348,53 @@ export function registerOperatorHandlers(
 
   ipcMain.handle(
     CHANNEL.operatorProduction,
-    async (_event, req: OperatorProjectRequest | undefined): Promise<OperatorProjectDto> => {
+    async (_event, req: OperatorProduceRequest | undefined): Promise<OperatorProjectDto> => {
       try {
-        return await (await getClient()).produceProject(requiredId(req?.id, 'The project id'));
+        const id = requiredId(req?.id, 'The project id');
+        return await (
+          await getClient()
+        ).produceProject(
+          id,
+          narrationVoice(req?.narrationVoice),
+          visualBrief(req?.visualBrief),
+          motion(req?.motion),
+        );
       } catch (err: unknown) {
         logger.warn('operator: produce failed', { id: req?.id, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorDelegation,
+    async (_event, req: OperatorDelegateRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const id = requiredId(req?.id, 'The project id');
+        return await (
+          await getClient()
+        ).delegateProject(
+          id,
+          narrationVoice(req?.narrationVoice),
+          visualBrief(req?.visualBrief),
+          motion(req?.motion),
+        );
+      } catch (err: unknown) {
+        logger.warn('operator: delegation failed', { id: req?.id, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorProjectDeletion,
+    async (_event, req: OperatorProjectRequest | undefined): Promise<{ deleted: true }> => {
+      try {
+        const id = requiredId(req?.id, 'The project id');
+        await (await getClient()).deleteProject(id);
+        return { deleted: true };
+      } catch (err: unknown) {
+        logger.warn('operator: project deletion failed', { id: req?.id, err: String(err) });
         throwSerialized(err);
       }
     },
@@ -367,23 +458,34 @@ export function registerOperatorHandlers(
     async (_event, req: SceneMediaRequest | undefined): Promise<SceneMediaResponse> => {
       try {
         const { projectId, sceneId, kind } = req ?? {};
-        if (!isSafeId(projectId) || !isSafeId(sceneId)) {
+        const background = kind === 'background';
+        if (!isSafeId(projectId) || (!background && !isSafeId(sceneId))) {
           invalid('The project and scene ids are letters, digits, - and _ only.');
         }
-        if (!MEDIA_KINDS.includes(kind as SceneMediaKind)) {
-          invalid('Attach audio or a visual.');
+        if (background && sceneId !== '') {
+          invalid('A background is attached to the project, not to a scene.');
         }
+        if (!background && !MEDIA_KINDS.includes(kind as SceneMediaKind)) {
+          invalid('Media is attached as audio, visual or background.');
+        }
+        const fileKind: SceneMediaKind = background ? 'visual' : (kind as SceneMediaKind);
+        const target = background ? '' : (sceneId as string);
         const client = await getClient();
         const directory = await client.getMediaDirectory(projectId);
-        const source = await chooseFile(kind as SceneMediaKind);
+        const source = await chooseFile(fileKind);
         if (source === null) return { project: null };
-        const fileName = await copyOwnerMedia(directory, sceneId, kind as SceneMediaKind, source);
+        const fileName = await copyOwnerMedia(
+          directory,
+          background ? 'background' : target,
+          fileKind,
+          source,
+        );
         try {
           return {
             project: await client.attachSceneMedia(
               projectId,
-              sceneId,
-              kind as SceneMediaKind,
+              target,
+              background ? 'background' : fileKind,
               fileName,
             ),
           };
@@ -395,6 +497,7 @@ export function registerOperatorHandlers(
         logger.warn('operator: scene media failed', {
           projectId: req?.projectId,
           sceneId: req?.sceneId,
+          kind: req?.kind,
           err: String(err),
         });
         throwSerialized(err);
@@ -518,6 +621,46 @@ export function registerOperatorHandlers(
     },
   );
 
+  const comments = (
+    channel: string,
+    name: string,
+    call: (client: OperatorClient, req: unknown) => Promise<CommentsViewDto>,
+  ): void => {
+    ipcMain.handle(channel, async (_event, req: unknown): Promise<CommentsViewDto> => {
+      try {
+        return await call(await getClient(), req);
+      } catch (err: unknown) {
+        logger.warn(`operator: ${name} failed`, { err: String(err) });
+        throwSerialized(err);
+      }
+    });
+  };
+  comments(CHANNEL.operatorComments, 'comments', (client) => client.listComments());
+  comments(CHANNEL.operatorCommentSync, 'comment sync', (client) => client.requestCommentSync());
+  comments(CHANNEL.operatorCommentDecision, 'comment decision', (client, req) => {
+    const { commentId: id, decision } = (req ?? {}) as Partial<CommentDecisionRequest>;
+    const target = commentId(id);
+    if (!COMMENT_DECISIONS.includes(decision as CommentDecision)) {
+      invalid('A comment is decided as draft, dismiss, not_spam or hold.');
+    }
+    return client.decideComment(target, decision as CommentDecision);
+  });
+  comments(CHANNEL.operatorReplyApproval, 'reply approval', (client, req) => {
+    const approval = (req ?? {}) as Partial<ReplyApprovalRequest>;
+    const target = commentId(approval.commentId);
+    const reply = text(approval.text);
+    if (reply.length === 0 || reply.length > MAX_REPLY_LENGTH) {
+      invalid(`A reply is 1 to ${MAX_REPLY_LENGTH} characters.`);
+    }
+    return client.approveReply(target, reply);
+  });
+  comments(CHANNEL.operatorIdeaDecision, 'idea decision', (client, req) => {
+    const decision = (req ?? {}) as Partial<IdeaDecisionRequest>;
+    const ideaId = requiredId(decision.ideaId, 'The idea id');
+    if (typeof decision.use !== 'boolean') invalid('An idea is used or dismissed.');
+    return client.decideIdea(ideaId, decision.use);
+  });
+
   return () => {
     ipcMain.removeHandler(CHANNEL.operatorMandate);
     ipcMain.removeHandler(CHANNEL.operatorSaveMandate);
@@ -526,6 +669,8 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorStartProject);
     ipcMain.removeHandler(CHANNEL.operatorDecideClaim);
     ipcMain.removeHandler(CHANNEL.operatorProduction);
+    ipcMain.removeHandler(CHANNEL.operatorDelegation);
+    ipcMain.removeHandler(CHANNEL.operatorProjectDeletion);
     ipcMain.removeHandler(CHANNEL.operatorSceneOrder);
     ipcMain.removeHandler(CHANNEL.operatorSceneLock);
     ipcMain.removeHandler(CHANNEL.operatorSceneRegeneration);
@@ -539,5 +684,10 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorProposalDecision);
     ipcMain.removeHandler(CHANNEL.operatorExperiment);
     ipcMain.removeHandler(CHANNEL.operatorExperimentAdoption);
+    ipcMain.removeHandler(CHANNEL.operatorComments);
+    ipcMain.removeHandler(CHANNEL.operatorCommentSync);
+    ipcMain.removeHandler(CHANNEL.operatorCommentDecision);
+    ipcMain.removeHandler(CHANNEL.operatorReplyApproval);
+    ipcMain.removeHandler(CHANNEL.operatorIdeaDecision);
   };
 }

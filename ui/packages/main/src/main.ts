@@ -628,7 +628,11 @@ app
     );
     protocol.handle(
       MEDIA_SCHEME,
-      createMediaProtocolHandler(async (id) => (await connection.client).getMediaDirectory(id)),
+      createMediaProtocolHandler(
+        async (id) => (await connection.client).getMediaDirectory(id),
+        Date.now,
+        async () => (await connection.client).getVoiceSamplesDirectory(),
+      ),
     );
 
     unregisterLlm = registerLlmHandlers(ipcMain, globalThis.fetch, logger.child({ module: 'llm' }));

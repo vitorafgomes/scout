@@ -95,6 +95,8 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
         Media = new MediaCapabilities(_speechDeployment.Length > 0, _imageDeployment.Length > 0, Name)
         {
             SpeechSettings = _speechDeployment.Length > 0 ? OpenAIMediaSettings.Speech() : null,
+            SpeechVoices = _speechDeployment.Length > 0 ? OpenAIMediaSettings.Voices : [],
+            SpeechSettingsFor = _speechDeployment.Length > 0 ? OpenAIMediaSettings.Speech : null,
             ImageSettings = _imageDeployment.Length > 0
                 ? OpenAIMediaSettings.Image(string.IsNullOrWhiteSpace(azure.ImageModel) ? "gpt-image-1" : azure.ImageModel.Trim())
                 : null,

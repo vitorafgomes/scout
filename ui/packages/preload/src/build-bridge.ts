@@ -319,6 +319,18 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    operatorDelegate(req) {
+      return ipc.invoke(CHANNEL.operatorDelegation, req) as ReturnType<
+        ScoutBridge['operatorDelegate']
+      >;
+    },
+
+    operatorDeleteProject(req) {
+      return ipc.invoke(CHANNEL.operatorProjectDeletion, req) as ReturnType<
+        ScoutBridge['operatorDeleteProject']
+      >;
+    },
+
     operatorReorderScenes(req) {
       return ipc.invoke(CHANNEL.operatorSceneOrder, req) as ReturnType<
         ScoutBridge['operatorReorderScenes']
@@ -396,6 +408,34 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     operatorAdoptExperimentWinner(req) {
       return ipc.invoke(CHANNEL.operatorExperimentAdoption, req) as ReturnType<
         ScoutBridge['operatorAdoptExperimentWinner']
+      >;
+    },
+
+    operatorComments() {
+      return ipc.invoke(CHANNEL.operatorComments) as ReturnType<ScoutBridge['operatorComments']>;
+    },
+
+    operatorRequestCommentSync() {
+      return ipc.invoke(CHANNEL.operatorCommentSync) as ReturnType<
+        ScoutBridge['operatorRequestCommentSync']
+      >;
+    },
+
+    operatorDecideComment(req) {
+      return ipc.invoke(CHANNEL.operatorCommentDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideComment']
+      >;
+    },
+
+    operatorApproveReply(req) {
+      return ipc.invoke(CHANNEL.operatorReplyApproval, req) as ReturnType<
+        ScoutBridge['operatorApproveReply']
+      >;
+    },
+
+    operatorDecideIdea(req) {
+      return ipc.invoke(CHANNEL.operatorIdeaDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideIdea']
       >;
     },
 

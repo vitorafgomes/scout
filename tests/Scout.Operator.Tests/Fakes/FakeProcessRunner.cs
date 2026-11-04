@@ -4,9 +4,9 @@ namespace Scout.Operator.Tests.Fakes;
 /// An <see cref="IProcessRunner"/> that records every call and its timeout and answers by the shape of the command, as
 /// ffmpeg would: <c>-version</c> succeeds, <c>-encoders</c> lists <see cref="EncoderList"/>, <c>-filters</c>
 /// <see cref="FilterList"/>, <c>-demuxers</c> <see cref="DemuxerList"/>, a command that only reads an input reports a
-/// <c>Duration:</c> of <see cref="ProbedMs"/> and exits 1, a loudness measure ends with <see cref="LoudnessTail"/>, and
-/// any other command writes 1 KB to its last argument, the output file. <see cref="Answer"/> answers, or throws,
-/// before any of that.
+/// <c>Duration:</c> of <see cref="ProbedMs"/> and exits 1, a loudness measure ends with <see cref="LoudnessTail"/>, a
+/// piper command writes 2 KB to the file after <c>--output_file</c>, and any other command writes 1 KB to its last
+/// argument, the output file. <see cref="Answer"/> answers, or throws, before any of that.
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
@@ -63,6 +63,7 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
     private readonly Lock _lock = new();
     private readonly List<TimeSpan> _timeouts = [];
+    private readonly List<string?> _inputs = [];
     private readonly List<(string Program, IReadOnlyList<string> Arguments)> _calls = [];
 
     public string EncoderList { get; init; } = AllEncoders;
@@ -84,6 +85,18 @@ internal sealed class FakeProcessRunner : IProcessRunner
             lock (_lock)
             {
                 return [.. _calls];
+            }
+        }
+    }
+
+    /// <summary>The standard input of every call, in order; null for a call given none.</summary>
+    public IReadOnlyList<string?> Inputs
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return [.. _inputs];
             }
         }
     }
@@ -112,12 +125,13 @@ internal sealed class FakeProcessRunner : IProcessRunner
         => "Filters:\n  T.. = Timeline support\n  .S. = Slice threading\n  A = Audio input/output\n  V = Video input/output\n  | = Source or sink filter\n"
             + string.Concat(names.Select(n => $" T.. {n,-16} V->V       A filter.\n"));
 
-    public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+    public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
     {
         lock (_lock)
         {
             _calls.Add((program, [.. arguments]));
             _timeouts.Add(timeout);
+            _inputs.Add(input);
         }
 
         if (Answer(program, arguments) is { } answered)
@@ -159,7 +173,8 @@ internal sealed class FakeProcessRunner : IProcessRunner
             return Task.FromResult(new ProcessResult(0, string.Empty, LoudnessTail));
         }
 
-        File.WriteAllBytes(arguments[^1], new byte[1024]);
+        var output = arguments.ToList().IndexOf("--output_file");
+        File.WriteAllBytes(output >= 0 ? arguments[output + 1] : arguments[^1], new byte[output >= 0 ? 2048 : 1024]);
         return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
     }
 

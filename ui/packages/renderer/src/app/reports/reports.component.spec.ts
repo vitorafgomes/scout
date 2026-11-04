@@ -27,6 +27,8 @@ function scene(id: string, order: number, durationMs: number): SceneDto {
     error: null,
     audioSource: 'generated',
     visualSource: 'generated',
+    visualQuery: '',
+    visualCredit: null,
     audioFile: null,
     visualFile: null,
     durationMs,
@@ -85,6 +87,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     scenes: [scene('s3', 3, 5000), scene('s1', 1, 2000), scene('s2', 2, 3000)],
     package: null,
     publication: publication(),
+    narrationVoice: '',
+    backgroundFile: null,
+    delegated: false,
+    visualBrief: '',
+    motion: 'gentle',
     ...overrides,
   };
 }

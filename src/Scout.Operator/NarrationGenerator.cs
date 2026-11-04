@@ -10,11 +10,14 @@ namespace Scout.Operator;
 internal sealed record NarrationResult(string AudioSource, string? AudioFile, int DurationMs, string? Note);
 
 /// <summary>
-/// Makes a scene's narration with the connected provider's text-to-audio service, saved as <c>scene-&lt;id&gt;.mp3</c>
-/// in the project's media directory. Without that service the scene has no audio and a note. The duration is
-/// estimated at <see cref="WordsPerMinute"/> words a minute, because neither connector reports the audio's length.
+/// Makes a scene's narration in the voice the mandate names: a bundled <c>piper:</c> voice through
+/// <see cref="PiperSpeech"/>, saved as <c>scene-&lt;id&gt;.wav</c>, or <c>&lt;Provider&gt;:&lt;voice&gt;</c>, one of the
+/// connected provider's <see cref="MediaCapabilities.SpeechVoices"/>, through its text-to-audio service, saved as
+/// <c>scene-&lt;id&gt;.mp3</c> in the project's media directory. With no voice named, the provider's speech service in its
+/// default voice, else the default bundled voice, else no audio and a note. A voice that is neither fails the scene. The
+/// duration is estimated at <see cref="WordsPerMinute"/> words a minute, because no engine reports the audio's length.
 /// </summary>
-internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media)
+internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media, PiperSpeech piper)
 {
     internal const int WordsPerMinute = 150;
 
@@ -27,21 +30,61 @@ internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media)
     internal static int EstimateMs(string narration)
         => narration.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length * 60_000 / WordsPerMinute;
 
-    public async Task<NarrationResult> GenerateAsync(OperatorScene scene, string directory, CancellationToken ct)
+    /// <summary>Whether a scene could be narrated now: the connected provider has speech, or a bundled voice is usable.</summary>
+    public async Task<bool> SpeechAvailableAsync(CancellationToken ct)
+        => media.Speech || (await piper.ProbeAsync(ct).ConfigureAwait(false)).Count > 0;
+
+    public async Task<NarrationResult> GenerateAsync(OperatorScene scene, string? voice, string directory, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(scene);
         var estimate = EstimateMs(scene.Narration);
+        var chosen = voice?.Trim() ?? string.Empty;
         var speech = kernel.Services.GetService<ITextToAudioService>();
-        if (speech is null)
+        if (chosen.StartsWith(PiperSpeech.Prefix, StringComparison.Ordinal))
         {
-            return new NarrationResult(OperatorPipeline.NoAudio, null, estimate, NoSpeech);
+            return await BundledAsync(scene, chosen, directory, estimate, ct).ConfigureAwait(false);
         }
 
+        if (chosen.Length > 0)
+        {
+            var separator = chosen.IndexOf(':', StringComparison.Ordinal);
+            var name = separator > 0 ? chosen[(separator + 1)..] : string.Empty;
+            if (speech is null
+                || media.SpeechSettingsFor is not { } settingsFor
+                || separator <= 0
+                || chosen[..separator] != media.Provider
+                || !media.SpeechVoices.Contains(name, StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(PiperSpeech.UnknownVoice(chosen));
+            }
+
+            return await ProviderAsync(speech, scene, settingsFor(name), directory, estimate, ct).ConfigureAwait(false);
+        }
+
+        if (speech is not null)
+        {
+            return await ProviderAsync(speech, scene, media.SpeechSettings, directory, estimate, ct).ConfigureAwait(false);
+        }
+
+        return PiperSpeech.Default(await piper.ProbeAsync(ct).ConfigureAwait(false)) is { } fallback
+            ? await BundledAsync(scene, fallback.Id, directory, estimate, ct).ConfigureAwait(false)
+            : new NarrationResult(OperatorPipeline.NoAudio, null, estimate, NoSpeech);
+    }
+
+    private async Task<NarrationResult> BundledAsync(OperatorScene scene, string voice, string directory, int estimate, CancellationToken ct)
+    {
+        var file = $"scene-{scene.Id}.wav";
+        await piper.SynthesizeAsync(voice, scene.Narration, scene.Order, directory, file, ct).ConfigureAwait(false);
+        return new NarrationResult(OperatorPipeline.Generated, file, estimate, null);
+    }
+
+    private static async Task<NarrationResult> ProviderAsync(
+        ITextToAudioService speech, OperatorScene scene, PromptExecutionSettings? settings, string directory, int estimate, CancellationToken ct)
+    {
         ReadOnlyMemory<byte>? bytes;
         try
         {
-            var audio = await speech.GetAudioContentsAsync(scene.Narration, media.SpeechSettings, kernel: null, ct)
-                .ConfigureAwait(false);
+            var audio = await speech.GetAudioContentsAsync(scene.Narration, settings, kernel: null, ct).ConfigureAwait(false);
             bytes = audio.Count > 0 ? audio[0].Data : null;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

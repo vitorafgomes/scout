@@ -27,6 +27,27 @@ public sealed class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task The_Given_Input_Reaches_The_Programs_Standard_Input_As_UTF8_Without_A_Byte_Order_Mark_And_Then_Ends()
+    {
+        var result = await new ProcessRunner().RunAsync(
+            "/bin/sh", ["-c", "od -An -tx1 | tr -s ' \n' ' '"], Generous, CancellationToken.None, "Pão;\n$HOME");
+
+        result.ExitCode.ShouldBe(0);
+        result.Output.Trim().ShouldBe("50 c3 a3 6f 3b 0a 24 48 4f 4d 45");
+    }
+
+    [Fact]
+    public async Task A_Program_That_Exits_Without_Reading_Its_Input_Still_Returns_Its_Exit_Code_And_Error_Output()
+    {
+        var input = new string('x', 1_000_000);
+
+        var result = await new ProcessRunner().RunAsync(
+            "/bin/sh", ["-c", "echo 'piper: no model' >&2; exit 3"], Generous, CancellationToken.None, input);
+
+        (result.ExitCode, result.ErrorTail).ShouldBe((3, "piper: no model\n"));
+    }
+
+    [Fact]
     public async Task A_Program_That_Exits_With_An_Error_Returns_Its_Exit_Code_And_The_End_Of_Its_Error_Output()
     {
         var result = await new ProcessRunner().RunAsync(

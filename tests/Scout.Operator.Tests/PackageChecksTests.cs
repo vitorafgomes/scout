@@ -74,6 +74,37 @@ public sealed class PackageChecksTests
     }
 
     [Fact]
+    public async Task Background_satisfies_the_placeholder_check()
+    {
+        var media = Directory.CreateTempSubdirectory("scout-checks-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(media, "studio.png"), [5, 6]);
+            OperatorScene[] scenes =
+            [
+                Given.Scene("s1", 1, "Picture gone.", "ready", visualSource: "generated", visualFile: "scene-s1.png", durationMs: 3000),
+                Given.Scene("s2", 2, "Owner picture gone.", "ready", visualSource: "owner", visualFile: "mine.png", durationMs: 3000),
+                Given.Scene("s3", 3, "Narration gone.", "ready", audioSource: "generated", audioFile: "scene-s3.mp3", durationMs: 3000),
+            ];
+            var assembler = new Assembler(Given.Toolset(new FakeProcessRunner()));
+
+            var over = await assembler.AssembleAsync(Given.Tools(), scenes, media, "studio.png", "gentle", CancellationToken.None);
+            var without = await assembler.AssembleAsync(Given.Tools(), scenes, media, null, "gentle", CancellationToken.None);
+
+            PackageChecks.Placeholders(over.Cuts)
+                .ShouldBe(new OperatorCheck("placeholders", "fail", "Scenes 3 are not ready or miss their picture or narration file."));
+            PackageChecks.Placeholders([.. over.Cuts.Take(2)])
+                .ShouldBe(new OperatorCheck("placeholders", "pass", "Every scene is ready with its own media, the project's background or a text card."));
+            PackageChecks.Placeholders(without.Cuts)
+                .ShouldBe(new OperatorCheck("placeholders", "fail", "Scenes 1, 2, 3 are not ready or miss their picture or narration file."));
+        }
+        finally
+        {
+            Directory.Delete(media, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Metadata_Fails_When_The_Title_Is_Empty_Or_Over_100_The_Description_Over_5000_Or_The_Tags_Over_500()
     {
         PackageChecks.Metadata("Why Rivers Bend", "short", ["rivers"]).Result.ShouldBe("pass");
@@ -135,6 +166,41 @@ public sealed class PackageChecksTests
         longText.ShouldStartWith(kept);
         longText[kept.Length].ShouldBe(' ');
         PackageChecks.Description(Script with { Description = longText }, []).Length.ShouldBeLessThanOrEqualTo(5000);
+    }
+
+    private static List<SceneCut> StockCuts(string longCredit = "")
+    {
+        var cuts = Cuts();
+        SceneCut Stock(int i, string credit) => cuts[i] with { Scene = cuts[i].Scene with { VisualSource = "stock", VisualFile = $"scene-s{i + 1}.jpg", VisualCredit = credit } };
+        cuts[1] = Stock(1, "\"Outer bank\" by Ana is licensed under CC BY 2.0." + longCredit);
+        cuts[3] = Stock(3, "Flood plain by Bo, CC0 1.0, via Openverse");
+        cuts[4] = Stock(4, "\"Outer bank\" by Ana is licensed under CC BY 2.0." + longCredit);
+        cuts[5] = cuts[5] with { Scene = cuts[5].Scene with { VisualSource = "generated", VisualCredit = "not a stock picture" } };
+        return cuts;
+    }
+
+    [Fact]
+    public void The_description_credits_every_stock_picture()
+    {
+        PackageChecks.Description(Script, StockCuts()).ShouldBe(
+            "How rivers carve their shape.\n\n0:00 Erosion\n0:26 Floods\n0:45 Oxbows\n\n" +
+            "Credits\n\"Outer bank\" by Ana is licensed under CC BY 2.0.\nFlood plain by Bo, CC0 1.0, via Openverse");
+        PackageChecks.Description(Script, [.. StockCuts().Take(4)]).ShouldBe(
+            "How rivers carve their shape.\n\nCredits\n\"Outer bank\" by Ana is licensed under CC BY 2.0.\nFlood plain by Bo, CC0 1.0, via Openverse");
+    }
+
+    [Fact]
+    public void A_description_over_5000_characters_cuts_the_scripts_text_and_keeps_the_chapters_and_credits_whole()
+    {
+        var longText = string.Concat(Enumerable.Repeat("Rivers carve. ", 400));
+
+        var description = PackageChecks.Description(Script with { Description = longText }, StockCuts());
+
+        description.Length.ShouldBeLessThanOrEqualTo(5000);
+        description.ShouldStartWith("Rivers carve. Rivers carve.");
+        description.ShouldEndWith(
+            "\n\n0:00 Erosion\n0:26 Floods\n0:45 Oxbows\n\nCredits\n\"Outer bank\" by Ana is licensed under CC BY 2.0.\nFlood plain by Bo, CC0 1.0, via Openverse");
+        PackageChecks.Metadata("Why Rivers Bend", description, ["rivers"]).Result.ShouldBe("pass");
     }
 
     [Fact]

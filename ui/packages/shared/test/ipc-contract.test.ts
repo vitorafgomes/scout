@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { CHANNEL, type ChannelName } from '../src/ipc-contract.js';
+import {
+  CHANNEL,
+  type ChannelName,
+  type MandateDto,
+  type OperatorProjectDto,
+  type ReadinessDto,
+} from '../src/ipc-contract.js';
 
 describe('CHANNEL constant', () => {
   test('all values are unique', () => {
@@ -77,19 +83,26 @@ describe('CHANNEL constant', () => {
         'llmPullOllamaModel',
         'llmPullOllamaProgress',
         'operatorAssembly',
+        'operatorCommentDecision',
+        'operatorCommentSync',
+        'operatorComments',
         'operatorDecideClaim',
+        'operatorDelegation',
         'operatorMandate',
         'operatorMediaRights',
         'operatorPackageApproval',
         'operatorPackageMetadata',
         'operatorProduction',
         'operatorProject',
+        'operatorProjectDeletion',
         'operatorProjects',
         'operatorPublication',
         'operatorProposalDecision',
         'operatorExperiment',
         'operatorExperimentAdoption',
+        'operatorIdeaDecision',
         'operatorReadiness',
+        'operatorReplyApproval',
         'operatorSaveMandate',
         'operatorSceneLock',
         'operatorSceneMedia',
@@ -196,22 +209,53 @@ describe('operator channels', () => {
     ]);
   });
 
-  test('producing media, ordering, locking and regenerating a scene, attaching an owner file and reading readiness each have their own scout:operator channel, named as nouns', () => {
-    expect([
+  test('the project carries its narration voice, its background picture and whether it is delegated, and the mandate has no narration voice', () => {
+    const mandateHasVoice: 'narrationVoice' extends keyof MandateDto ? true : false = false;
+    const project = {
+      narrationVoice: 'piper:en_GB-cori-medium',
+      backgroundFile: 'owner-background-0a1b2c3d4e5f.png',
+      delegated: true,
+    } satisfies Pick<OperatorProjectDto, 'narrationVoice' | 'backgroundFile' | 'delegated'>;
+    const readiness = {
+      voices: [{ id: 'OpenAI:nova', label: 'nova (OpenAI)', source: 'OpenAI', sampleFile: null }],
+    } satisfies Pick<ReadinessDto, 'voices'>;
+
+    expect([mandateHasVoice, project.narrationVoice, readiness.voices[0]?.label]).toEqual([
+      false,
+      'piper:en_GB-cori-medium',
+      'nova (OpenAI)',
+    ]);
+  });
+
+  test('producing media, delegating a project, deleting one, ordering, locking and regenerating a scene, attaching an owner file and reading readiness each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
       CHANNEL.operatorProduction,
+      CHANNEL.operatorDelegation,
+      CHANNEL.operatorProjectDeletion,
       CHANNEL.operatorSceneOrder,
       CHANNEL.operatorSceneLock,
       CHANNEL.operatorSceneRegeneration,
       CHANNEL.operatorSceneMedia,
       CHANNEL.operatorReadiness,
-    ]).toEqual([
+    ];
+
+    expect(channels).toEqual([
       'scout:operator.production',
+      'scout:operator.delegation',
+      'scout:operator.projectDeletion',
       'scout:operator.sceneOrder',
       'scout:operator.sceneLock',
       'scout:operator.sceneRegeneration',
       'scout:operator.sceneMedia',
       'scout:operator.readiness',
     ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
   });
 
   test('assembling a video, confirming its media rights, editing its metadata and approving its package each have their own scout:operator channel, named as nouns', () => {
@@ -241,6 +285,31 @@ describe('operator channels', () => {
       'scout:operator.proposalDecision',
       'scout:operator.experiment',
       'scout:operator.experimentAdoption',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test('reading the comments, asking for a sync, deciding a comment, approving a reply and deciding an idea each have their own scout:operator channel, named as nouns that pass the write-verb scan', () => {
+    const channels = [
+      CHANNEL.operatorComments,
+      CHANNEL.operatorCommentSync,
+      CHANNEL.operatorCommentDecision,
+      CHANNEL.operatorReplyApproval,
+      CHANNEL.operatorIdeaDecision,
+    ];
+
+    expect(channels).toEqual([
+      'scout:operator.comments',
+      'scout:operator.commentSync',
+      'scout:operator.commentDecision',
+      'scout:operator.replyApproval',
+      'scout:operator.ideaDecision',
     ]);
     expect(
       channels.filter((c) =>
@@ -319,6 +388,8 @@ describe('ChannelName type', () => {
       'scout:operator.startProject': true,
       'scout:operator.decideClaim': true,
       'scout:operator.production': true,
+      'scout:operator.delegation': true,
+      'scout:operator.projectDeletion': true,
       'scout:operator.sceneOrder': true,
       'scout:operator.sceneLock': true,
       'scout:operator.sceneRegeneration': true,
@@ -333,6 +404,11 @@ describe('ChannelName type', () => {
       'scout:operator.proposalDecision': true,
       'scout:operator.experiment': true,
       'scout:operator.experimentAdoption': true,
+      'scout:operator.comments': true,
+      'scout:operator.commentSync': true,
+      'scout:operator.commentDecision': true,
+      'scout:operator.replyApproval': true,
+      'scout:operator.ideaDecision': true,
       'scout:github.signIn': true,
       'scout:github.status': true,
       'scout:github.cancel': true,

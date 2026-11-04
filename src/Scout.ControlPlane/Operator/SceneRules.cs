@@ -9,6 +9,7 @@ internal static class SceneRules
     public const string Owner = "owner";
     public const string NoAudio = "none";
     public const string TextCard = "text_card";
+    public const string Stock = "stock";
     public const string Planned = "planned";
     public const string Ready = "ready";
     public const string Audio = "audio";
@@ -20,7 +21,7 @@ internal static class SceneRules
 
     private static readonly string[] Statuses = [Planned, "generating", Ready, "failed"];
     private static readonly string[] AudioSources = ["generated", Owner, NoAudio];
-    private static readonly string[] VisualSources = ["generated", Owner, TextCard];
+    private static readonly string[] VisualSources = ["generated", Owner, TextCard, Stock];
     private static readonly string[] AudioExtensions = [".mp3", ".wav", ".m4a", ".ogg"];
     private static readonly string[] VisualExtensions = [".png", ".jpg", ".jpeg", ".webp"];
     private static readonly string[] VideoExtensions = [".mp4"];
@@ -51,7 +52,7 @@ internal static class SceneRules
         }
     }
 
-    /// <summary>Refuse scenes with a missing or repeated id, a value outside the vocabulary, or an unsafe file name.</summary>
+    /// <summary>Refuse scenes with a missing or repeated id, a value outside the vocabulary, a stock picture without its file or credit, or an unsafe file name.</summary>
     /// <exception cref="OperatorValidationException">The first rule a scene breaks.</exception>
     public static void Validate(IReadOnlyList<Scene> scenes)
     {
@@ -73,6 +74,11 @@ internal static class SceneRules
             {
                 throw new OperatorValidationException(
                     $"Scene '{scene.Id}' has a status, source or duration the operator does not accept.");
+            }
+            if (scene.VisualSource == Stock && (scene.VisualFile is null || string.IsNullOrWhiteSpace(scene.VisualCredit)))
+            {
+                throw new OperatorValidationException(
+                    $"Scene '{scene.Id}' shows a stock picture; it needs the picture's file and its credit.");
             }
             if (scene.AudioFile is not null)
             {
@@ -136,7 +142,7 @@ internal static class SceneRules
             }
             if (before.VisualSource == Owner)
             {
-                merged = merged with { VisualSource = Owner, VisualFile = before.VisualFile };
+                merged = merged with { VisualSource = Owner, VisualFile = before.VisualFile, VisualCredit = null };
             }
             return merged;
         }).ToList();

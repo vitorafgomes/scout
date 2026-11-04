@@ -15,4 +15,5 @@ coverage/
 packages/main/resources/google-client.json
 packages/main/resources/media-tools/
 packages/main/resources/fonts/
+packages/main/resources/voices/
 build/media-cache/

@@ -2,11 +2,13 @@ import { DatePipe, PercentPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   OnDestroy,
   OnInit,
   computed,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 
 import {
@@ -15,7 +17,9 @@ import {
   type ClaimStatus,
   type MandateDto,
   type OperatorProjectDto,
+  type ProjectMotion,
   type ReadinessDto,
+  type VoiceDto,
   type SceneDto,
   type SceneMediaKind,
 } from '@scout/shared';
@@ -26,14 +30,40 @@ const POLL_MS = 10_000;
 const PROJECTS_SHOWN = 50;
 const PILLAR_SLOTS = [0, 1, 2, 3, 4] as const;
 const MIN_TOPIC_LENGTH = 3;
-const PRODUCIBLE = ['script_ready', 'media_ready'];
+const PRODUCIBLE = ['script_ready', 'media_ready', 'assembled', 'approved'];
+const BACKGROUND_ATTACHABLE = [
+  'script_ready',
+  'media_ready',
+  'assembled',
+  'approved',
+  'assembly_queued',
+  'assembling',
+  'failed',
+];
+const DELEGABLE = ['script_ready', 'media_ready'];
+const RUNNING = ['researching', 'scripting', 'producing', 'assembling'];
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   generated: 'generated',
   owner: 'your file',
   none: 'none',
   text_card: 'text card',
+  stock: 'Openverse',
 };
+
+const MOTIONS: readonly { readonly value: ProjectMotion; readonly label: string }[] = [
+  { value: 'still', label: 'Still' },
+  { value: 'gentle', label: 'Gentle (recommended)' },
+  { value: 'dynamic', label: 'Dynamic' },
+];
+
+const MOTION_NAMES: Readonly<Record<ProjectMotion, string>> = {
+  still: 'Still',
+  gentle: 'Gentle',
+  dynamic: 'Dynamic',
+};
+
+const MAX_VISUAL_BRIEF = 500;
 
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'views', label: 'Views' },
@@ -69,9 +99,13 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <li data-test="readiness-images">
               Generated pictures: {{ r.imagesAvailable ? 'available' : 'not available' }}
             </li>
+            <li data-test="readiness-stock">{{ picturesLine(r) }}</li>
             <li data-test="readiness-provider">Provider: {{ r.provider || 'none' }}</li>
             <li data-test="readiness-youtube">
               YouTube: {{ r.youtubeSignedIn ? 'signed in' : 'not signed in' }}
+            </li>
+            <li data-test="readiness-voices">
+              Voices: {{ r.voices.length > 0 ? r.voices.length + ' available' : 'none' }}
             </li>
             @for (note of r.notes; track $index) {
               <li class="meta" data-test="readiness-note">{{ note }}</li>
@@ -140,7 +174,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             >Voice and style
             <input
               type="text"
-              data-test="mandate-voice"
+              data-test="mandate-style"
               [value]="voiceAndStyle()"
               (input)="voiceAndStyle.set($any($event.target).value)"
           /></label>
@@ -258,6 +292,38 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       @if (selected(); as p) {
         <section class="block" data-test="project-detail">
           <h2>{{ p.topic }}</h2>
+          <div class="row">
+            <span class="meta" data-test="project-voice"
+              >Voice: {{ voiceLabel(p.narrationVoice) }}</span
+            >
+            @if (p.delegated) {
+              <span class="badge" data-test="project-delegated">Delegated</span>
+            }
+            @if (delegable(p)) {
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="delegate"
+                (click)="openDelegate(p)"
+              >
+                Delegate
+              </button>
+            }
+            @if (deletable(p)) {
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="delete"
+                (click)="openDelete(p)"
+              >
+                Delete project
+              </button>
+            }
+          </div>
+          <p class="meta" data-test="project-visual">Visual: {{ motionName(p.motion) }} motion</p>
+          @if (p.visualBrief) {
+            <p class="meta" data-test="project-brief">{{ p.visualBrief }}</p>
+          }
           @if (p.error; as failure) {
             <p class="err" data-test="project-failure">{{ failure }}</p>
           }
@@ -388,6 +454,36 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <p class="err" data-test="claim-error">{{ message }}</p>
           }
 
+          <h3>Background</h3>
+          <div data-test="background">
+            @if (p.backgroundFile; as file) {
+              <img
+                class="preview"
+                data-test="background-image"
+                [src]="mediaUrl(p, file)"
+                alt="Background of the video"
+              />
+            } @else {
+              <p class="empty" data-test="background-empty">
+                No background yet: every scene without its own picture is a dark text card.
+              </p>
+            }
+            @if (backgroundAttachable(p)) {
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="background-attach"
+                [disabled]="backgroundBusy()"
+                (click)="attachBackground(p)"
+              >
+                {{ p.backgroundFile ? 'Replace background' : 'Attach background' }}
+              </button>
+            }
+            @if (backgroundError(); as message) {
+              <p class="err" data-test="background-error">{{ message }}</p>
+            }
+          </div>
+
           <h3>Scenes</h3>
           @if (producible(p)) {
             <div class="row">
@@ -396,17 +492,101 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                 class="btn btn--primary"
                 data-test="produce"
                 [disabled]="producing() || pendingClaims(p) > 0"
-                (click)="produce(p)"
+                (click)="openProduce(p)"
               >
                 Produce video media
               </button>
               @if (pendingClaims(p) > 0) {
-                <span class="meta" data-test="produce-blocked">
+                <span class="err" data-test="produce-blocked">
                   {{ pendingClaims(p) }} {{ pendingClaims(p) === 1 ? 'claim is' : 'claims are' }}
                   still pending; decide every claim before producing the video.
                 </span>
               }
             </div>
+            @if (producePanel() === p.id) {
+              <div class="panel" data-test="produce-panel">
+                <label
+                  >Narration voice
+                  <select
+                    data-test="produce-voice"
+                    (change)="produceVoice.set($any($event.target).value)"
+                  >
+                    <option value="" [selected]="produceVoice() === ''">Scout's choice</option>
+                    @if (unavailableVoice(p); as id) {
+                      <option [value]="id" [selected]="produceVoice() === id" disabled>
+                        {{ id }} (not available on this machine)
+                      </option>
+                    }
+                    @for (group of voiceGroups(); track group.source) {
+                      <optgroup [label]="group.source">
+                        @for (v of group.voices; track v.id) {
+                          <option [value]="v.id" [selected]="produceVoice() === v.id">
+                            {{ v.label }}
+                          </option>
+                        }
+                      </optgroup>
+                    }
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="produce-voice-preview"
+                  [disabled]="voiceSample(produceVoice()) === null"
+                  [attr.title]="voiceSample(produceVoice()) === null ? 'No sample yet' : null"
+                  (click)="playSample(produceVoice())"
+                >
+                  Preview
+                </button>
+                <label
+                  >Visual brief
+                  <textarea
+                    rows="3"
+                    data-test="produce-brief"
+                    [value]="produceBrief()"
+                    (input)="produceBrief.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+                <span class="meta" data-test="produce-brief-count"
+                  >{{ produceBrief().trim().length }} / {{ maxVisualBrief }}</span
+                >
+                <label
+                  >Motion
+                  <select
+                    data-test="produce-motion"
+                    (change)="produceMotion.set($any($event.target).value)"
+                  >
+                    @for (m of motions; track m.value) {
+                      <option [value]="m.value" [selected]="produceMotion() === m.value">
+                        {{ m.label }}
+                      </option>
+                    }
+                  </select>
+                </label>
+                @if (mediaWarning(); as warning) {
+                  <p class="meta" data-test="produce-warning">{{ warning }}</p>
+                }
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="produce-confirm"
+                    [disabled]="producing()"
+                    (click)="confirmProduce(p)"
+                  >
+                    Produce
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="produce-cancel"
+                    (click)="producePanel.set(null)"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            }
           }
           @if (produceError(); as message) {
             <p class="err" data-test="produce-error">{{ message }}</p>
@@ -433,6 +613,11 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                       {{ sourceLabel(s.visualSource) }}</span
                     >
                   </p>
+                  @if (s.visualCredit; as credit) {
+                    <p class="meta" [attr.data-test]="'scene-credit-' + s.id">
+                      Credit: {{ credit }}
+                    </p>
+                  }
                   @if (s.error; as note) {
                     @if (s.status === 'failed') {
                       <p class="err" [attr.data-test]="'scene-failure-' + s.id">{{ note }}</p>
@@ -440,13 +625,31 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                       <p class="meta" [attr.data-test]="'scene-note-' + s.id">{{ note }}</p>
                     }
                   }
-                  @if (s.visualFile; as file) {
+                  @if (s.visualSource !== 'text_card' && s.visualFile; as file) {
                     <img
                       class="preview"
                       [attr.data-test]="'scene-image-' + s.id"
                       [src]="mediaUrl(p, file)"
                       [alt]="'Picture of scene ' + s.order"
                     />
+                  } @else {
+                    <div
+                      class="card"
+                      [class.card--background]="p.backgroundFile !== null"
+                      [attr.data-test]="'scene-preview-' + s.id"
+                    >
+                      @if (p.backgroundFile; as background) {
+                        <img
+                          class="card__image"
+                          [attr.data-test]="'scene-preview-background-' + s.id"
+                          [src]="mediaUrl(p, background)"
+                          alt=""
+                        />
+                      }
+                      <p class="card__text" [attr.data-test]="'scene-preview-text-' + s.id">
+                        {{ firstSentence(s.narration) }}
+                      </p>
+                    </div>
                   }
                   @if (s.audioFile; as file) {
                     <audio
@@ -519,7 +722,151 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <p class="err" data-test="scene-error">{{ message }}</p>
           }
         </section>
+
+        @if (deleting() === p.id) {
+          <div
+            class="backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            data-test="delete-dialog"
+          >
+            <div class="dialog">
+              <h2 id="delete-title">Delete {{ p.topic }}</h2>
+              <p>
+                This removes the project, its script, scenes and media files from Scout's data
+                folder. A video already on YouTube stays there.
+              </p>
+              @if (deleteError(); as message) {
+                <p class="err" data-test="delete-error">{{ message }}</p>
+              }
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delete-cancel"
+                  (click)="deleting.set(null)"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-test="delete-confirm"
+                  [disabled]="deletingBusy()"
+                  (click)="confirmDelete(p)"
+                >
+                  Confirm and delete
+                </button>
+              </div>
+            </div>
+          </div>
+        }
+
+        @if (delegating() === p.id) {
+          <div
+            class="backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delegate-title"
+            data-test="delegate-dialog"
+          >
+            <div class="dialog">
+              <h2 id="delegate-title">Delegate {{ p.topic }}</h2>
+              <label
+                >Narration voice
+                <select
+                  data-test="delegate-voice"
+                  (change)="delegateVoice.set($any($event.target).value)"
+                >
+                  <option value="" [selected]="delegateVoice() === ''">Scout's choice</option>
+                  @if (unavailableVoice(p); as id) {
+                    <option [value]="id" [selected]="delegateVoice() === id" disabled>
+                      {{ id }} (not available on this machine)
+                    </option>
+                  }
+                  @for (group of voiceGroups(); track group.source) {
+                    <optgroup [label]="group.source">
+                      @for (v of group.voices; track v.id) {
+                        <option [value]="v.id" [selected]="delegateVoice() === v.id">
+                          {{ v.label }}
+                        </option>
+                      }
+                    </optgroup>
+                  }
+                </select>
+              </label>
+              <button
+                type="button"
+                class="btn btn--secondary"
+                data-test="delegate-voice-preview"
+                [disabled]="voiceSample(delegateVoice()) === null"
+                [attr.title]="voiceSample(delegateVoice()) === null ? 'No sample yet' : null"
+                (click)="playSample(delegateVoice())"
+              >
+                Preview
+              </button>
+              <label
+                >Visual brief
+                <textarea
+                  rows="3"
+                  data-test="delegate-brief"
+                  [value]="delegateBrief()"
+                  (input)="delegateBrief.set($any($event.target).value)"
+                ></textarea>
+              </label>
+              <span class="meta" data-test="delegate-brief-count"
+                >{{ delegateBrief().trim().length }} / {{ maxVisualBrief }}</span
+              >
+              <label
+                >Motion
+                <select
+                  data-test="delegate-motion"
+                  (change)="delegateMotion.set($any($event.target).value)"
+                >
+                  @for (m of motions; track m.value) {
+                    <option [value]="m.value" [selected]="delegateMotion() === m.value">
+                      {{ m.label }}
+                    </option>
+                  }
+                </select>
+              </label>
+              @if (mediaWarning(); as warning) {
+                <p class="meta" data-test="delegate-warning">{{ warning }}</p>
+              }
+              <h3>What will run</h3>
+              <ul data-test="delegate-steps">
+                <li>Produce media</li>
+                <li>Assemble the video</li>
+                <li>Stop at ready to approve: publishing needs your approval</li>
+              </ul>
+              @if (delegateError(); as message) {
+                <p class="err" data-test="delegate-error">{{ message }}</p>
+              }
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delegate-cancel"
+                  (click)="delegating.set(null)"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-test="delegate-confirm"
+                  [disabled]="delegatingBusy()"
+                  (click)="confirmDelegate(p)"
+                >
+                  Confirm and delegate
+                </button>
+              </div>
+            </div>
+          </div>
+        }
       }
+      <audio #samplePlayer data-test="voice-sample-player"></audio>
     </main>
   `,
   styles: [
@@ -590,7 +937,8 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         grid-column: span 2;
       }
       input,
-      select {
+      select,
+      textarea {
         background: #0f1117;
         border: 1px solid #252b3b;
         border-radius: 6px;
@@ -647,6 +995,64 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         max-width: 320px;
         border-radius: 6px;
         margin: 8px 0;
+      }
+      .card {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 320px;
+        aspect-ratio: 16 / 9;
+        margin: 8px 0;
+        border-radius: 6px;
+        overflow: hidden;
+        background: #14181f;
+      }
+      .card--background {
+        align-items: flex-end;
+      }
+      .card__image {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .card p {
+        position: relative;
+        margin: 0;
+        padding: 8px 12px;
+        color: #ffffff;
+        text-align: center;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 12px 16px;
+        background: #171b26;
+        border: 1px solid #252b3b;
+        border-radius: 8px;
+      }
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .dialog {
+        background: #11131a;
+        border: 1px solid #252b3b;
+        border-radius: 8px;
+        padding: 20px;
+        max-width: 560px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
       .source {
         display: flex;
@@ -731,8 +1137,48 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
   readonly readiness = signal<ReadinessDto | null>(null);
   readonly readinessError = signal<string | null>(null);
+  readonly voiceGroups = computed(() => {
+    const groups = new Map<string, VoiceDto[]>();
+    for (const voice of this.readiness()?.voices ?? []) {
+      groups.set(voice.source, [...(groups.get(voice.source) ?? []), voice]);
+    }
+    return Array.from(groups, ([source, voices]) => ({ source, voices }));
+  });
+  readonly mediaWarning = computed(() => {
+    const r = this.readiness();
+    if (r === null || (r.speechAvailable && (r.imagesAvailable || r.stockPictures))) return null;
+    const provider = r.provider || 'The connected AI Source';
+    if (!r.speechAvailable && !r.imagesAvailable && r.stockPictures) {
+      return `${provider} has no speech or image service in Scout: every scene will be silent and pictures come from Openverse, credited. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.`;
+    }
+    if (!r.speechAvailable && !r.imagesAvailable) {
+      return `${provider} has no speech or image service in Scout: every scene will be a silent text card. Attach your own audio and pictures on each scene afterwards, or connect an AI Source with speech and pictures first.`;
+    }
+    if (!r.speechAvailable) {
+      return `${provider} has no speech service in Scout: every scene will be silent. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.`;
+    }
+    return `${provider} has no image service in Scout: every scene will be a text card. Attach your own pictures on each scene afterwards, or connect an AI Source with pictures first.`;
+  });
+  readonly motions = MOTIONS;
+  readonly maxVisualBrief = MAX_VISUAL_BRIEF;
+  private readonly samplePlayer = viewChild<ElementRef<HTMLAudioElement>>('samplePlayer');
   readonly producing = signal(false);
   readonly produceError = signal<string | null>(null);
+  readonly producePanel = signal<string | null>(null);
+  readonly produceVoice = signal('');
+  readonly produceBrief = signal('');
+  readonly produceMotion = signal<ProjectMotion>('gentle');
+  readonly delegating = signal<string | null>(null);
+  readonly delegateVoice = signal('');
+  readonly delegateBrief = signal('');
+  readonly delegateMotion = signal<ProjectMotion>('gentle');
+  readonly delegatingBusy = signal(false);
+  readonly delegateError = signal<string | null>(null);
+  readonly deleting = signal<string | null>(null);
+  readonly deletingBusy = signal(false);
+  readonly deleteError = signal<string | null>(null);
+  readonly backgroundBusy = signal(false);
+  readonly backgroundError = signal<string | null>(null);
   readonly sceneBusy = signal<string | null>(null);
   readonly sceneError = signal<string | null>(null);
 
@@ -794,6 +1240,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.waiving.set(null);
     this.claimError.set(null);
     this.produceError.set(null);
+    this.producePanel.set(null);
+    this.delegating.set(null);
+    this.deleting.set(null);
+    this.backgroundError.set(null);
     this.sceneError.set(null);
     await this.loadSelected();
   }
@@ -841,6 +1291,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return [...project.scenes].sort((a, b) => a.order - b.order);
   }
 
+  picturesLine(r: ReadinessDto): string {
+    if (r.imagesAvailable)
+      return `Pictures: generated by ${r.provider || 'the connected AI Source'}`;
+    if (r.stockPictures) {
+      return 'Pictures: from Openverse (CC0, public domain or CC BY, credited in the description)';
+    }
+    return 'Pictures: text cards unless you attach your own';
+  }
+
   sourceLabel(source: string): string {
     return SOURCE_LABELS[source] ?? source;
   }
@@ -849,15 +1308,159 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return `scout-media://${project.id}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(project.updatedAt)}`;
   }
 
-  async produce(project: OperatorProjectDto): Promise<void> {
+  delegable(project: OperatorProjectDto): boolean {
+    return (
+      DELEGABLE.includes(project.status) || (project.status === 'failed' && project.script !== null)
+    );
+  }
+
+  deletable(project: OperatorProjectDto): boolean {
+    return !RUNNING.includes(project.status) && project.publication?.status !== 'uploading';
+  }
+
+  backgroundAttachable(project: OperatorProjectDto): boolean {
+    return BACKGROUND_ATTACHABLE.includes(project.status);
+  }
+
+  firstSentence(narration: string): string {
+    const text = narration
+      .replace(/\p{Cc}/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const end = /[.!?](?=\s|$)/.exec(text);
+    return end === null ? text : text.slice(0, end.index + 1);
+  }
+
+  voiceLabel(id: string): string {
+    if (id === '') return "Scout's choice";
+    return this.readiness()?.voices.find((v) => v.id === id)?.label ?? id;
+  }
+
+  unavailableVoice(project: OperatorProjectDto): string | null {
+    const id = project.narrationVoice;
+    return id !== '' && this.readiness()?.voices.some((v) => v.id === id) !== true ? id : null;
+  }
+
+  motionName(motion: ProjectMotion): string {
+    return MOTION_NAMES[motion];
+  }
+
+  /**
+   * The sample of a voice. For Scout's choice: none while a provider voice is listed (the video uses the provider's
+   * speech), else Cori on Piper, else the first Piper voice.
+   */
+  voiceSample(voiceId: string): string | null {
+    const voices = this.readiness()?.voices ?? [];
+    if (voiceId !== '') return voices.find((v) => v.id === voiceId)?.sampleFile ?? null;
+    if (voices.some((v) => v.source !== 'piper')) return null;
+    const piper = voices.filter((v) => v.source === 'piper');
+    return (piper.find((v) => v.id.includes('cori')) ?? piper[0])?.sampleFile ?? null;
+  }
+
+  playSample(voiceId: string): void {
+    const file = this.voiceSample(voiceId);
+    const player = this.samplePlayer()?.nativeElement;
+    if (file === null || player === undefined) return;
+    player.src = `scout-media://voice-samples/${encodeURIComponent(file)}`;
+    void player.play().catch(() => undefined);
+  }
+
+  private briefOf(project: OperatorProjectDto): string {
+    return project.visualBrief || (this.mandate()?.voiceAndStyle ?? '');
+  }
+
+  openProduce(project: OperatorProjectDto): void {
+    this.produceVoice.set(project.narrationVoice);
+    this.produceBrief.set(this.briefOf(project));
+    this.produceMotion.set(project.motion);
+    this.produceError.set(null);
+    this.producePanel.set(project.id);
+  }
+
+  async confirmProduce(project: OperatorProjectDto): Promise<void> {
     this.producing.set(true);
     this.produceError.set(null);
     try {
-      this.apply(await this.bridge.operatorProduce({ id: project.id }));
+      this.apply(
+        await this.bridge.operatorProduce({
+          id: project.id,
+          narrationVoice: this.produceVoice(),
+          visualBrief: this.produceBrief().trim(),
+          motion: this.produceMotion(),
+        }),
+      );
+      this.producePanel.set(null);
     } catch (err: unknown) {
       this.produceError.set(readIpcError(err).message);
     } finally {
       this.producing.set(false);
+    }
+  }
+
+  openDelegate(project: OperatorProjectDto): void {
+    this.delegateVoice.set(project.narrationVoice);
+    this.delegateBrief.set(this.briefOf(project));
+    this.delegateMotion.set(project.motion);
+    this.delegateError.set(null);
+    this.delegating.set(project.id);
+  }
+
+  async confirmDelegate(project: OperatorProjectDto): Promise<void> {
+    this.delegatingBusy.set(true);
+    this.delegateError.set(null);
+    try {
+      this.apply(
+        await this.bridge.operatorDelegate({
+          id: project.id,
+          narrationVoice: this.delegateVoice(),
+          visualBrief: this.delegateBrief().trim(),
+          motion: this.delegateMotion(),
+        }),
+      );
+      this.delegating.set(null);
+    } catch (err: unknown) {
+      this.delegateError.set(readIpcError(err).message);
+    } finally {
+      this.delegatingBusy.set(false);
+    }
+  }
+
+  openDelete(project: OperatorProjectDto): void {
+    this.deleteError.set(null);
+    this.deleting.set(project.id);
+  }
+
+  async confirmDelete(project: OperatorProjectDto): Promise<void> {
+    this.deletingBusy.set(true);
+    this.deleteError.set(null);
+    try {
+      await this.bridge.operatorDeleteProject({ id: project.id });
+      this.deleting.set(null);
+      this.selectedId.set(null);
+      this.detail.set(null);
+      this.projects.update((list) => list.filter((p) => p.id !== project.id));
+      await this.refresh();
+    } catch (err: unknown) {
+      this.deleteError.set(readIpcError(err).message);
+    } finally {
+      this.deletingBusy.set(false);
+    }
+  }
+
+  async attachBackground(project: OperatorProjectDto): Promise<void> {
+    this.backgroundBusy.set(true);
+    this.backgroundError.set(null);
+    try {
+      const { project: updated } = await this.bridge.operatorAttachSceneMedia({
+        projectId: project.id,
+        sceneId: '',
+        kind: 'background',
+      });
+      if (updated !== null) this.apply(updated);
+    } catch (err: unknown) {
+      this.backgroundError.set(readIpcError(err).message);
+    } finally {
+      this.backgroundBusy.set(false);
     }
   }
 

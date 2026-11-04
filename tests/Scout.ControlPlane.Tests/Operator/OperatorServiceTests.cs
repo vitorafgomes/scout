@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Scout.ControlPlane.Actions;
@@ -115,6 +116,135 @@ public sealed partial class OperatorServiceTests : IDisposable
 
         ex.Message.ShouldBe(message);
         File.Exists(_store.MandatePath).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task A_Mandate_Saved_With_A_Narration_Voice_Still_Loads_And_Saves_Without_One()
+    {
+        await _operator.SaveMandateAsync(Mandate(), CancellationToken.None);
+        var earlier = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(_store.MandatePath))!.AsObject();
+        earlier["narrationVoice"] = "piper:en_GB-cori-medium";
+        await File.WriteAllTextAsync(_store.MandatePath, earlier.ToJsonString());
+
+        var read = await _operator.GetMandateAsync(CancellationToken.None);
+
+        (read.Objective, read.Language, string.Join("|", read.Pillars)).ShouldBe(("Teach geography", "en", "Rivers"));
+        await _operator.SaveMandateAsync(read, CancellationToken.None);
+        (await File.ReadAllTextAsync(_store.MandatePath)).ShouldNotContain("narrationVoice");
+    }
+
+    [Theory]
+    [InlineData(true, true, "production_queued")]
+    [InlineData(false, false, "assembly_queued")]
+    public async Task Delegate_OnAMediaReadyProject_WithSilentScenes_QueuesProductionWhenSpeechIsAvailable_AndAssemblyWhenNothingIsAvailable(bool speech, bool images, string expected)
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.ReportReadinessAsync(new Readiness(speech, images, "openai", true, true, []), None);
+        await SetStoredAsync(project.Id, p => p with
+        {
+            Status = "media_ready",
+            Scenes = [Scene("s1", 1, audioSource: "none", visualSource: "text_card"), Scene("s2", 2, audioSource: "none", visualSource: "text_card")],
+        });
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, "piper:en_GB-cori-medium", string.Empty, string.Empty, None);
+
+        (delegated.Status, delegated.Delegated, delegated.NarrationVoice).ShouldBe((expected, true, "piper:en_GB-cori-medium"));
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.NarrationVoice).ShouldBe((expected, "piper:en_GB-cori-medium"));
+    }
+
+    [Fact]
+    public async Task Delegate_OnAMediaReadyProject_WithCompleteScenes_QueuesAssembly()
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.ReportReadinessAsync(new Readiness(true, true, "openai", true, true, []), None);
+        await SetStoredAsync(project.Id, p => p with { Status = "media_ready", Scenes = [Scene("s1", 1), Scene("s2", 2)] });
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        (delegated.Status, delegated.Delegated).ShouldBe(("assembly_queued", true));
+    }
+
+    [Theory]
+    [InlineData("  piper:en_GB-cori-medium  ", "piper:en_GB-cori-medium")]
+    [InlineData("piper:en_GB-aru-medium#3", "piper:en_GB-aru-medium#3")]
+    [InlineData("OpenAI:nova", "OpenAI:nova")]
+    public async Task Produce_StoresTheNarrationVoiceOnTheProject(string chosen, string kept)
+    {
+        var project = await ScriptReadyAsync();
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, chosen, string.Empty, string.Empty, CancellationToken.None);
+
+        produced.NarrationVoice.ShouldBe(kept);
+        (await StoredAsync(project.Id)).NarrationVoice.ShouldBe(kept);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Produce_WithAnEmptyVoice_StoresScoutsChoice(string chosen)
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.ProduceProjectAsync(project.Id, "piper:en_GB-cori-medium", string.Empty, string.Empty, CancellationToken.None);
+        var taken = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+        await _operator.SaveProjectFromWorkerAsync(taken with { Status = "media_ready" }, null, CancellationToken.None);
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, chosen, string.Empty, string.Empty, CancellationToken.None);
+
+        produced.NarrationVoice.ShouldBeEmpty();
+        (await StoredAsync(project.Id)).NarrationVoice.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("piper:en GB")]
+    [InlineData("piper:../../etc/passwd")]
+    [InlineData("OpenAI:nova;rm")]
+    [InlineData("piper:voi\nce")]
+    public async Task Produce_RefusesAMalformedNarrationVoice(string chosen)
+    {
+        var project = await ScriptReadyAsync();
+        var tooLong = "piper:" + new string('a', 75);
+
+        var malformed = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.ProduceProjectAsync(project.Id, chosen, string.Empty, string.Empty, CancellationToken.None));
+        var overLimit = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.ProduceProjectAsync(project.Id, tooLong, string.Empty, string.Empty, CancellationToken.None));
+
+        malformed.Message.ShouldBe("A narration voice is an id of at most 80 letters, digits, _ : . # or -.");
+        overLimit.Message.ShouldBe("A narration voice is an id of at most 80 letters, digits, _ : . # or -.");
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.NarrationVoice).ShouldBe(("script_ready", string.Empty));
+    }
+
+    [Fact]
+    public async Task WorkerSave_KeepsTheOwnersNarrationVoice()
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.ProduceProjectAsync(project.Id, "piper:en_GB-cori-medium", string.Empty, string.Empty, CancellationToken.None);
+        var taken = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(
+            taken with { Status = "media_ready", NarrationVoice = "OpenAI:nova" }, null, CancellationToken.None);
+        var created = await _operator.SaveProjectFromWorkerAsync(
+            NewDraft("Glaciers explained", "researching") with { NarrationVoice = "OpenAI:nova" }, "discord:1", CancellationToken.None);
+
+        saved.NarrationVoice.ShouldBe("piper:en_GB-cori-medium");
+        (await StoredAsync(project.Id)).NarrationVoice.ShouldBe("piper:en_GB-cori-medium");
+        (await StoredAsync(created.Id)).NarrationVoice.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Regenerate_KeepsTheNarrationVoice()
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.ProduceProjectAsync(project.Id, "piper:en_GB-aru-medium#3", string.Empty, string.Empty, CancellationToken.None);
+        var taken = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
+        await _operator.SaveProjectFromWorkerAsync(taken with { Status = "media_ready", Scenes = [Scene("s1", 1)] }, null, CancellationToken.None);
+
+        var regenerated = await _operator.RegenerateSceneAsync(project.Id, "s1", CancellationToken.None);
+
+        (regenerated.Status, regenerated.NarrationVoice).ShouldBe(("production_queued", "piper:en_GB-aru-medium#3"));
+        (await StoredAsync(project.Id)).NarrationVoice.ShouldBe("piper:en_GB-aru-medium#3");
     }
 
     [Fact]
@@ -631,7 +761,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     private async Task<OperatorProject> TakenForProductionAsync()
     {
         var project = await ScriptReadyAsync();
-        await _operator.ProduceProjectAsync(project.Id, CancellationToken.None);
+        await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
         var taken = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
         taken.Status.ShouldBe("producing");
         return taken;
@@ -727,7 +857,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var project = await ProducingWithScenesAsync(Scene("s1", 1));
         var read = await _operator.GetProjectForWorkerAsync(project.Id, CancellationToken.None);
         await _operator.SaveProjectFromWorkerAsync(read with { Status = "media_ready" }, null, CancellationToken.None);
-        await _operator.ProduceProjectAsync(project.Id, CancellationToken.None);
+        await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
 
         var ex = await Should.ThrowAsync<OperatorTamperingException>(() =>
             _operator.SaveProjectFromWorkerAsync(read with { Status = sent, Error = "Speech timed out." }, null, CancellationToken.None));
@@ -779,7 +909,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var project = await ScriptReadyAsync(Claim("c1", "pending"), Claim("c2", "unsupported"));
         await _operator.DecideClaimAsync(project.Id, "c1", "supported", null, CancellationToken.None);
 
-        var produced = await _operator.ProduceProjectAsync(project.Id, CancellationToken.None);
+        var produced = await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
 
         produced.Status.ShouldBe("production_queued");
         (await StoredAsync(project.Id)).Status.ShouldBe("production_queued");
@@ -790,7 +920,47 @@ public sealed partial class OperatorServiceTests : IDisposable
     {
         var project = await WithScenesAsync(Scene("s1", 1));
 
-        (await _operator.ProduceProjectAsync(project.Id, CancellationToken.None)).Status.ShouldBe("production_queued");
+        (await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None)).Status.ShouldBe("production_queued");
+    }
+
+    [Fact]
+    public async Task Produce_OnAnAssembledProject_QueuesProductionAndClearsApproval()
+    {
+        var project = await ReadyToApproveAsync();
+        await _operator.ConfirmMediaRightsAsync(project.Id, None);
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        var package = produced.Package.ShouldNotBeNull();
+        (produced.Status, package.RightsConfirmed, package.ApprovedAt, package.VideoFile)
+            .ShouldBe(("production_queued", false, (DateTimeOffset?)null, (string?)"video.mp4"));
+    }
+
+    [Fact]
+    public async Task Produce_OnAnApprovedProject_ClearsApprovalAndRights()
+    {
+        var project = await ReadyToApproveAsync();
+        await _operator.ApprovePackageAsync(project.Id, None);
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        var package = produced.Package.ShouldNotBeNull();
+        (produced.Status, package.RightsConfirmed, package.ApprovedAt).ShouldBe(("production_queued", false, (DateTimeOffset?)null));
+        (await StoredAsync(project.Id)).Package!.ApprovedAt.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("assembly_queued")]
+    [InlineData("assembling")]
+    public async Task Produce_IsRefusedWhileAssembling(string status)
+    {
+        var project = await ReadyToApproveAsync();
+        await SetStoredAsync(project.Id, p => p with { Status = status });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None));
+
+        ex.Message.ShouldBe($"Only a project with its script ready, its media ready, an assembled or approved one, or a failed one with a script goes to production; this one is {status}.");
+        (await StoredAsync(project.Id)).Status.ShouldBe(status);
     }
 
     [Theory]
@@ -810,7 +980,7 @@ public sealed partial class OperatorServiceTests : IDisposable
             null,
             CancellationToken.None);
 
-        var produced = await _operator.ProduceProjectAsync(failed.Id, CancellationToken.None);
+        var produced = await _operator.ProduceProjectAsync(failed.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
 
         (failed.Status, failed.Error).ShouldBe(("failed", "The AI model did not return a picture prompt for every scene in the expected form, twice."));
         failed.Script.ShouldNotBeNull().Hook.ShouldBe("Rivers bend.");
@@ -832,10 +1002,10 @@ public sealed partial class OperatorServiceTests : IDisposable
             null,
             CancellationToken.None);
 
-        var withoutScript = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(noScript.Id, CancellationToken.None));
-        var withPending = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(pending.Id, CancellationToken.None));
+        var withoutScript = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(noScript.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
+        var withPending = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(pending.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
 
-        withoutScript.Message.ShouldBe("Only a project with its script ready, its media ready, or a failed one with a script goes to production; this one is failed.");
+        withoutScript.Message.ShouldBe("Only a project with its script ready, its media ready, an assembled or approved one, or a failed one with a script goes to production; this one is failed.");
         withPending.Message.ShouldBe("1 claim is still pending; decide it before production.");
         ((await StoredAsync(noScript.Id)).Status, (await StoredAsync(pending.Id)).Status).ShouldBe(("failed", "failed"));
     }
@@ -848,7 +1018,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var claims = Enumerable.Range(1, pending).Select(i => Claim($"c{i}", "pending")).Append(Claim("c9", "unsupported")).ToArray();
         var project = await ScriptReadyAsync(claims);
 
-        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(project.Id, CancellationToken.None));
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
 
         ex.Message.ShouldBe(message);
         (await StoredAsync(project.Id)).Status.ShouldBe("script_ready");
@@ -860,9 +1030,9 @@ public sealed partial class OperatorServiceTests : IDisposable
         await GrantYouTubeAsync();
         var queued = await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
 
-        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(queued.Id, CancellationToken.None));
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(queued.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
 
-        ex.Message.ShouldBe("Only a project with its script ready, its media ready, or a failed one with a script goes to production; this one is queued.");
+        ex.Message.ShouldBe("Only a project with its script ready, its media ready, an assembled or approved one, or a failed one with a script goes to production; this one is queued.");
         (await StoredAsync(queued.Id)).Status.ShouldBe("queued");
     }
 
@@ -872,7 +1042,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var project = await ScriptReadyAsync();
         await RevokeYouTubeAsync();
 
-        var ex = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.ProduceProjectAsync(project.Id, CancellationToken.None));
+        var ex = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
 
         ex.Message.ShouldBe(NotAllowed);
         (await StoredAsync(project.Id)).Status.ShouldBe("script_ready");
@@ -1085,14 +1255,158 @@ public sealed partial class OperatorServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Media_Is_Attached_Only_As_Audio_Or_Visual()
+    public async Task Media_Is_Attached_Only_As_Audio_Visual_Or_Background()
     {
         var project = await WithScenesAsync(Scene("s1", 1));
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.AttachSceneMediaAsync(project.Id, "s1", "music", "song.mp3", CancellationToken.None));
 
-        ex.Message.ShouldBe("Media is attached as audio or visual.");
+        ex.Message.ShouldBe("Media is attached as audio, visual or background.");
+    }
+
+    [Theory]
+    [InlineData("script_ready", "script_ready")]
+    [InlineData("media_ready", "media_ready")]
+    [InlineData("failed", "failed")]
+    [InlineData("assembly_queued", "assembly_queued")]
+    [InlineData("assembling", "assembly_queued")]
+    public async Task AttachBackground_StoresTheFileOnTheProject(string status, string expected)
+    {
+        var project = await ScriptReadyAsync();
+        await PutInMediaAsync(project.Id, "studio wall.jpg");
+        await SetStoredAsync(project.Id, p => p with { Status = status, OriginReference = "discord:1" });
+        var before = await StoredAsync(project.Id);
+
+        var attached = await _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio wall.jpg", None);
+
+        (attached.BackgroundFile, attached.Status, attached.OriginReference).ShouldBe(("studio wall.jpg", expected, (string?)null));
+        var stored = await StoredAsync(project.Id);
+        stored.BackgroundFile.ShouldBe("studio wall.jpg");
+        stored.Status.ShouldBe(expected);
+        stored.UpdatedAt.ShouldBeGreaterThan(before.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData("queued")]
+    [InlineData("researching")]
+    [InlineData("scripting")]
+    [InlineData("production_queued")]
+    [InlineData("producing")]
+    public async Task AttachBackground_IsRefusedWhileProducing(string status)
+    {
+        var project = await ScriptReadyAsync();
+        await PutInMediaAsync(project.Id, "studio.png");
+        await SetStoredAsync(project.Id, p => p with { Status = status });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio.png", None));
+
+        ex.Message.ShouldBe(
+            $"A background is attached to a project whose script or media is ready, an assembled or approved one, one queued for assembly or assembling, or a failed one; this one is {status}.");
+        (await StoredAsync(project.Id)).BackgroundFile.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AttachBackground_OnAnAssembledProject_ReturnsItToMediaReadyWithoutApproval()
+    {
+        var project = await AssembledAsync();
+        await PutInMediaAsync(project.Id, "studio.png");
+
+        var attached = await _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio.png", None);
+
+        var package = attached.Package.ShouldNotBeNull();
+        (attached.Status, attached.BackgroundFile, package.Status, package.RightsConfirmed, package.ApprovedAt, package.VideoFile)
+            .ShouldBe(("media_ready", "studio.png", "assembled", false, (DateTimeOffset?)null, (string?)"video.mp4"));
+    }
+
+    [Fact]
+    public async Task AttachBackground_OnAnApprovedProject_ClearsApprovalAndRights()
+    {
+        var project = await ReadyToApproveAsync();
+        await _operator.ApprovePackageAsync(project.Id, None);
+        await PutInMediaAsync(project.Id, "studio.png");
+
+        var attached = await _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio.png", None);
+
+        var package = attached.Package.ShouldNotBeNull();
+        (attached.Status, attached.BackgroundFile, package.Status, package.RightsConfirmed, package.ApprovedAt)
+            .ShouldBe(("media_ready", "studio.png", "assembled", false, (DateTimeOffset?)null));
+    }
+
+    [Fact]
+    public async Task AttachBackground_RefusesAFileNotInTheMediaFolder()
+    {
+        var project = await ScriptReadyAsync();
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "missing.png", None));
+
+        ex.Message.ShouldBe("'missing.png' is not in the project's media folder; copy it there first.");
+        (await StoredAsync(project.Id)).BackgroundFile.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AttachBackground_RefusesASceneId()
+    {
+        var project = await WithScenesAsync(Scene("s1", 1));
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.AttachSceneMediaAsync(project.Id, "s1", "background", "studio.png", None));
+
+        ex.Message.ShouldBe("A background is attached to the project, not to a scene.");
+        var stored = await StoredAsync(project.Id);
+        stored.BackgroundFile.ShouldBeNull();
+        stored.Scenes.ShouldBe(project.Scenes);
+    }
+
+    [Theory]
+    [InlineData("../studio.png")]
+    [InlineData("a/studio.png")]
+    [InlineData(".studio.png")]
+    [InlineData("studio.mp3")]
+    [InlineData("studio.gif")]
+    public async Task AttachBackground_RefusesANameThatIsNotAPlainPicture(string fileName)
+    {
+        var project = await ScriptReadyAsync();
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", fileName, None));
+
+        ex.Message.ShouldBe($"'{fileName}' is not a visual file Scout accepts: a plain file name of at most 120 characters, without a folder or a leading dot, ending in .png, .jpg, .jpeg, .webp.");
+        (await StoredAsync(project.Id)).BackgroundFile.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task AttachBackground_NeedsNoYouTubeWriteGrant()
+    {
+        var project = await ScriptReadyAsync();
+        await PutInMediaAsync(project.Id, "studio.png");
+        await RevokeYouTubeAsync();
+
+        var attached = await _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio.png", None);
+
+        attached.BackgroundFile.ShouldBe("studio.png");
+        (await StoredAsync(project.Id)).BackgroundFile.ShouldBe("studio.png");
+    }
+
+    [Fact]
+    public async Task WorkerSave_KeepsTheOwnersBackground()
+    {
+        var project = await ScriptReadyAsync();
+        await PutInMediaAsync(project.Id, "studio.png");
+        await _operator.AttachSceneMediaAsync(project.Id, string.Empty, "background", "studio.png", None);
+        await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        taken.BackgroundFile.ShouldBe("studio.png");
+
+        var dropped = await _operator.SaveProjectFromWorkerAsync(taken with { BackgroundFile = null, Scenes = [Scene("s1", 1)] }, null, None);
+        var replaced = await _operator.SaveProjectFromWorkerAsync(
+            dropped with { Status = "media_ready", BackgroundFile = "other.png" }, null, None);
+
+        dropped.BackgroundFile.ShouldBe("studio.png");
+        replaced.BackgroundFile.ShouldBe("studio.png");
+        (await StoredAsync(project.Id)).BackgroundFile.ShouldBe("studio.png");
     }
 
     [Fact]
@@ -1362,6 +1676,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         (readiness.SpeechAvailable, readiness.ImagesAvailable, readiness.Provider, readiness.FfmpegAvailable, readiness.YouTubeSignedIn, readiness.ReportedAt)
             .ShouldBe((false, false, string.Empty, false, false, (DateTimeOffset?)null));
         readiness.Notes.ShouldBe(["The Scout worker has not reported yet."]);
+        readiness.Voices.ShouldBeEmpty();
     }
 
     [Fact]
@@ -1379,6 +1694,16 @@ public sealed partial class OperatorServiceTests : IDisposable
         read.Notes.ShouldBe(["Images come from dall-e-3."]);
         read.ReportedAt.ShouldNotBeNull().ShouldBeInRange(before, DateTimeOffset.UtcNow);
         read.ReportedAt.ShouldBe(reported.ReportedAt);
+    }
+
+    [Fact]
+    public async Task The_Readiness_Keeps_The_Voices_The_Worker_Offers()
+    {
+        Voice[] voices = [new("OpenAI:nova", "nova (OpenAI)", "OpenAI"), new("piper:en_GB-cori-medium", "Cori (medium)", "piper")];
+
+        await _operator.ReportReadinessAsync(new Readiness(true, true, "OpenAI", true, true, []) { Voices = voices }, CancellationToken.None);
+
+        (await _operator.GetReadinessAsync(CancellationToken.None)).Voices.ShouldBe(voices);
     }
 
     [Fact]
@@ -1465,6 +1790,12 @@ public sealed partial class OperatorServiceTests : IDisposable
     {
         var project = await AssembledAsync(change);
         return await _operator.ConfirmMediaRightsAsync(project.Id, None);
+    }
+
+    private async Task PutInMediaAsync(string projectId, string fileName)
+    {
+        var media = await _operator.GetMediaDirectoryAsync(projectId, None);
+        await File.WriteAllTextAsync(Path.Combine(media, fileName), "image");
     }
 
     private Task SetStoredAsync(string id, Func<OperatorProject, OperatorProject> change) =>
@@ -2228,5 +2559,344 @@ public sealed partial class OperatorServiceTests : IDisposable
 
         (edited.Status, edited.Package!.Status).ShouldBe(("assembling", "assembling"));
         saved.Status.ShouldBe("assembled");
+    }
+
+    [Fact]
+    public async Task Undelegated_media_ready_project_is_stored_as_media_ready()
+    {
+        var saved = await WithScenesAsync(Scene("s1", 1), Scene("s2", 2));
+
+        saved.Status.ShouldBe("media_ready");
+        (await StoredAsync(saved.Id)).Status.ShouldBe("media_ready");
+        (await _operator.NextQueuedProjectAsync(None)).ShouldBeNull();
+    }
+
+    private async Task<OperatorProject> DelegatedAndAssembledAsync(params Claim[] claims)
+    {
+        var project = await ScriptReadyAsync(claims);
+        await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+        var producing = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        await _operator.SaveProjectFromWorkerAsync(producing with { Status = "media_ready", Scenes = [Scene("s1", 1), Scene("s2", 2)] }, null, None);
+        var assembling = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        foreach (var name in new[] { "video.mp4", "short-1.mp4", "thumb.png" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, name), "media");
+        }
+
+        return await _operator.SaveProjectFromWorkerAsync(
+            assembling with { Status = "assembled", Package = Rendered(assembling.Package.ShouldNotBeNull()) }, null, None);
+    }
+
+    [Fact]
+    public async Task Delegated_project_goes_from_media_ready_to_assembly_queued()
+    {
+        var project = await ScriptReadyAsync();
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+        var producing = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var mediaSaved = await _operator.SaveProjectFromWorkerAsync(
+            producing with { Status = "media_ready", Scenes = [Scene("s1", 1), Scene("s2", 2)] }, null, None);
+        var assembling = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        foreach (var name in new[] { "video.mp4", "short-1.mp4", "thumb.png" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, name), "media");
+        }
+        var assembled = await _operator.SaveProjectFromWorkerAsync(
+            assembling with { Status = "assembled", Package = Rendered(assembling.Package.ShouldNotBeNull()) }, null, None);
+
+        (delegated.Status, delegated.Delegated).ShouldBe(("production_queued", true));
+        (producing.Id, producing.Status).ShouldBe((project.Id, "producing"));
+        (mediaSaved.Status, mediaSaved.Package?.Status).ShouldBe(("assembly_queued", "assembly_queued"));
+        (assembling.Id, assembling.Status).ShouldBe((project.Id, "assembling"));
+        (assembled.Status, assembled.Package!.Status, assembled.Package.ApprovedAt).ShouldBe(("assembled", "assembled", (DateTimeOffset?)null));
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.Delegated, stored.Package!.ApprovedAt).ShouldBe(("assembled", true, (DateTimeOffset?)null));
+        (await _operator.NextQueuedProjectAsync(None)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Delegate_never_creates_publish_action()
+    {
+        var assembled = await DelegatedAndAssembledAsync();
+
+        (await _actions.ListPendingAsync(None)).ShouldBeEmpty();
+        (await _actions.ListOpenAsync(FeatureCatalog.YouTubeId, None)).ShouldBeEmpty();
+        (await _writes.ListAsync(50, None)).Select(e => (e.Outcome, e.ApprovedBy, e.ActionId)).ShouldBe([
+            ("saved assembled", (string?)null, (string?)null),
+            ("saved assembling", null, null),
+            ("saved assembly_queued", null, null),
+            ("saved producing", null, null),
+            ("saved script_ready", null, null),
+            ("saved researching", null, null),
+        ]);
+        var stored = await StoredAsync(assembled.Id);
+        (stored.Status, stored.Package!.Status, stored.Publication).ShouldBe(("assembled", "assembled", (Publication?)null));
+    }
+
+    [Fact]
+    public async Task Delegate_queues_production_with_pending_claims()
+    {
+        var project = await ScriptReadyAsync(Claim("c1", "pending"), Claim("c2", "unsupported"));
+        var manual = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None));
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        manual.Message.ShouldBe("1 claim is still pending; decide it before production.");
+        delegated.Status.ShouldBe("production_queued");
+        (await StoredAsync(project.Id)).Status.ShouldBe("production_queued");
+    }
+
+    [Fact]
+    public async Task A_delegated_project_with_a_pending_claim_is_assembled_and_its_approval_is_still_blocked_by_the_claim()
+    {
+        var assembled = await DelegatedAndAssembledAsync(Claim("c1", "pending"));
+        await _operator.ConfirmMediaRightsAsync(assembled.Id, None);
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ApprovePackageAsync(assembled.Id, None));
+
+        assembled.Status.ShouldBe("assembled");
+        ex.Message.ShouldBe("1 claim is not supported or waived.");
+        var stored = await StoredAsync(assembled.Id);
+        (stored.Status, stored.Package!.ApprovedAt).ShouldBe(("assembled", (DateTimeOffset?)null));
+    }
+
+    [Fact]
+    public async Task Delegate_is_refused_without_the_grant()
+    {
+        var project = await ScriptReadyAsync();
+        await RevokeYouTubeAsync();
+
+        var ex = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None));
+
+        ex.Message.ShouldBe(NotAllowed);
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.Delegated).ShouldBe(("script_ready", false));
+    }
+
+    [Theory]
+    [InlineData("script_ready", "production_queued")]
+    [InlineData("failed", "production_queued")]
+    [InlineData("media_ready", "assembly_queued")]
+    [InlineData("media_ready with a scene not ready", "production_queued")]
+    public async Task Delegating_queues_the_next_reversible_stage_and_clears_the_error(string from, string expected)
+    {
+        var project = await ScriptReadyAsync();
+        var script = new Script("Rivers bend.", [new ScriptSection("Meanders", "Water erodes the outer bank.")], "Subscribe.", [], string.Empty, [], []);
+        await SetStoredAsync(project.Id, p => p with
+        {
+            Status = from.StartsWith("media_ready", StringComparison.Ordinal) ? "media_ready" : from,
+            Script = script,
+            Error = "Speech timed out.",
+            Scenes = from == "script_ready" ? [] : [Scene("s1", 1), Scene("s2", 2, status: from == "media_ready" ? "ready" : "planned")],
+        });
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        var stored = await StoredAsync(project.Id);
+        (delegated.Status, delegated.Delegated, delegated.Error).ShouldBe((expected, true, (string?)null));
+        (stored.Status, stored.Delegated, stored.Error).ShouldBe((expected, true, (string?)null));
+        (stored.Package?.Status).ShouldBe(expected == "assembly_queued" ? "assembly_queued" : null);
+    }
+
+    [Theory]
+    [InlineData("queued")]
+    [InlineData("assembled")]
+    [InlineData("failed without a script")]
+    public async Task Only_a_project_with_its_script_ready_its_media_ready_or_a_failed_one_with_a_script_is_delegated(string status)
+    {
+        var project = await ScriptReadyAsync();
+        var stored = status == "failed without a script" ? "failed" : status;
+        var script = new Script("Rivers bend.", [new ScriptSection("Meanders", "Water erodes the outer bank.")], "Subscribe.", [], string.Empty, [], []);
+        await SetStoredAsync(project.Id, p => p with { Status = stored, Script = status == "assembled" ? script : null });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None));
+
+        ex.Message.ShouldBe($"Only a project with its script ready, its media ready, or a failed one with a script is delegated; this one is {stored}.");
+        var after = await StoredAsync(project.Id);
+        (after.Status, after.Delegated).ShouldBe((stored, false));
+    }
+
+    [Fact]
+    public async Task A_delegated_media_ready_save_with_a_scene_not_ready_is_stored_as_media_ready()
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+        var producing = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(
+            producing with { Status = "media_ready", Scenes = [Scene("s1", 1), Scene("s2", 2, status: "failed")] }, null, None);
+
+        (saved.Status, saved.Package).ShouldBe(("media_ready", (VideoPackage?)null));
+        (await StoredAsync(project.Id)).Status.ShouldBe("media_ready");
+        (await _operator.NextQueuedProjectAsync(None)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Produce_OnADelegatedProject_KeepsItDelegated()
+    {
+        var project = await ScriptReadyAsync();
+        await _operator.DelegateProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        await _operator.SaveProjectFromWorkerAsync(taken with { Status = "media_ready" }, null, None);
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        (produced.Status, produced.Delegated).ShouldBe(("production_queued", true));
+        (await StoredAsync(project.Id)).Delegated.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("  piper:en_GB-cori-medium  ", "piper:en_GB-cori-medium")]
+    [InlineData("OpenAI:nova", "OpenAI:nova")]
+    [InlineData("", "")]
+    public async Task Delegate_StoresTheNarrationVoiceOnTheProject(string chosen, string kept)
+    {
+        var project = await ScriptReadyAsync();
+
+        var delegated = await _operator.DelegateProjectAsync(project.Id, chosen, string.Empty, string.Empty, None);
+
+        (delegated.NarrationVoice, delegated.Delegated).ShouldBe((kept, true));
+        (await StoredAsync(project.Id)).NarrationVoice.ShouldBe(kept);
+    }
+
+    [Theory]
+    [InlineData("piper:en GB")]
+    [InlineData("OpenAI:nova;rm")]
+    public async Task Delegate_RefusesAMalformedNarrationVoice(string chosen)
+    {
+        var project = await ScriptReadyAsync();
+        var tooLong = "piper:" + new string('a', 75);
+
+        var malformed = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.DelegateProjectAsync(project.Id, chosen, string.Empty, string.Empty, None));
+        var overLimit = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.DelegateProjectAsync(project.Id, tooLong, string.Empty, string.Empty, None));
+
+        malformed.Message.ShouldBe("A narration voice is an id of at most 80 letters, digits, _ : . # or -.");
+        overLimit.Message.ShouldBe("A narration voice is an id of at most 80 letters, digits, _ : . # or -.");
+        var stored = await StoredAsync(project.Id);
+        (stored.Status, stored.Delegated, stored.NarrationVoice).ShouldBe(("script_ready", false, string.Empty));
+    }
+
+    [Fact]
+    public async Task The_worker_can_never_delegate_a_project_or_take_a_delegation_back()
+    {
+        var undelegated = await TakenForProductionAsync();
+        var delegatedProject = await ScriptReadyAsync();
+        await _operator.DelegateProjectAsync(delegatedProject.Id, string.Empty, string.Empty, string.Empty, None);
+        var delegatedTaken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+
+        var selfDelegated = await _operator.SaveProjectFromWorkerAsync(
+            undelegated with { Status = "media_ready", Scenes = [Scene("s1", 1)], Delegated = true }, null, None);
+        var undone = await _operator.SaveProjectFromWorkerAsync(
+            delegatedTaken with { Status = "media_ready", Scenes = [Scene("s1", 1)], Delegated = false }, null, None);
+        var created = await _operator.SaveProjectFromWorkerAsync(NewDraft("Glaciers explained", "researching") with { Delegated = true }, "discord:1:2", None);
+
+        (selfDelegated.Status, selfDelegated.Delegated).ShouldBe(("media_ready", false));
+        (undone.Status, undone.Delegated).ShouldBe(("assembly_queued", true));
+        created.Delegated.ShouldBeFalse();
+        ((await StoredAsync(undelegated.Id)).Delegated, (await StoredAsync(delegatedProject.Id)).Delegated, (await StoredAsync(created.Id)).Delegated)
+            .ShouldBe((false, true, false));
+    }
+
+    [Fact]
+    public async Task Delete_RemovesTheProjectAndItsMediaFolder()
+    {
+        var project = await ScriptReadyAsync();
+        var directory = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await File.WriteAllTextAsync(Path.Combine(directory, "a.mp3"), "audio");
+
+        await _operator.DeleteProjectAsync(project.Id, None);
+
+        await Should.ThrowAsync<OperatorNotFoundException>(() => _operator.GetProjectAsync(project.Id, None));
+        Directory.Exists(directory).ShouldBeFalse();
+        Directory.Exists(_store.MediaRoot).ShouldBeTrue();
+        (await _writes.ListAsync(1, None)).Select(e => (e.Target, e.Outcome, e.ApprovedBy)).ShouldBe([
+            (project.Id, "deleted project", (string?)"owner"),
+        ]);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task Delete_ReportsAMediaFolderItCouldNotDelete_AfterRemovingTheProject()
+    {
+        var project = await ScriptReadyAsync();
+        var directory = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await File.WriteAllTextAsync(Path.Combine(directory, "a.mp3"), "audio");
+        var original = File.GetUnixFileMode(_store.MediaRoot);
+        File.SetUnixFileMode(_store.MediaRoot, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var failure = await Should.ThrowAsync<OperatorStoreException>(() => _operator.DeleteProjectAsync(project.Id, None));
+
+            failure.Message.ShouldBe("Scout removed the project but could not delete its media folder.");
+            failure.Message.ShouldNotContain("/");
+            failure.Message.ShouldNotContain("\\");
+            await Should.ThrowAsync<OperatorNotFoundException>(() => _operator.GetProjectAsync(project.Id, None));
+        }
+        finally
+        {
+            File.SetUnixFileMode(_store.MediaRoot, original);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_KeepsOtherProjects()
+    {
+        var doomed = await ScriptReadyAsync();
+        var kept = await _operator.StartProjectAsync("Glaciers explained", None);
+        var keptDirectory = await _operator.GetMediaDirectoryAsync(kept.Id, None);
+        await File.WriteAllTextAsync(Path.Combine(keptDirectory, "b.mp3"), "audio");
+        await _operator.GetMediaDirectoryAsync(doomed.Id, None);
+
+        await _operator.DeleteProjectAsync(doomed.Id, None);
+
+        (await _operator.ListProjectsAsync(0, None)).Select(p => p.Id).ShouldBe([kept.Id]);
+        File.Exists(Path.Combine(keptDirectory, "b.mp3")).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("researching")]
+    [InlineData("scripting")]
+    [InlineData("producing")]
+    [InlineData("assembling")]
+    [InlineData("uploading")]
+    public async Task Delete_IsRefusedWhileRunning(string status)
+    {
+        var project = await ScriptReadyAsync();
+        await SetStoredAsync(project.Id, p => status == "uploading"
+            ? p with { Publication = new Publication("uploading", null, "private", null, false, false, null, null, [], [], null) }
+            : p with { Status = status });
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync(project.Id, None));
+
+        ex.Message.ShouldBe("A project that is researching, scripting, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+        (await StoredAsync(project.Id)).Id.ShouldBe(project.Id);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(":title:a")]
+    public async Task Delete_IsRefusedWithPendingActions(string suffix)
+    {
+        var project = await ScriptReadyAsync();
+        var directory = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await _actions.EnqueueApprovedAsync(FeatureCatalog.YouTubeId, [("videos.update", project.Id + suffix, "Update")], None);
+
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync(project.Id, None));
+
+        ex.Message.ShouldBe("The project has pending YouTube actions; finish or cancel them first.");
+        (await StoredAsync(project.Id)).Id.ShouldBe(project.Id);
+        Directory.Exists(directory).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Delete_UnknownProjectIsNotFound()
+    {
+        await Should.ThrowAsync<OperatorNotFoundException>(() => _operator.DeleteProjectAsync(Guid.NewGuid().ToString("N"), None));
+        await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync("../escape", None));
     }
 }

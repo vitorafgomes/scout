@@ -356,6 +356,57 @@ public sealed class MediaServicesRegistrationTests
         image.ShouldHaveSingleItem().Data!.Value.ToArray().ShouldBe(png);
     }
 
+    [Fact]
+    public async Task Exposes_speech_voices()
+    {
+        var handler = new RecordingHandler(_ => new ByteArrayContent([1, 2, 3]));
+        var factory = new OpenAILlmProviderFactory(
+            Options.Create(new LlmOptions { OpenAI = new OpenAIOptions { ApiKey = "test-key", Chat = new() { Model = "gpt-4o-mini" } } }),
+            new HttpClient(handler));
+        var builder = Kernel.CreateBuilder();
+        factory.AddToKernel(builder);
+
+        await builder.Build().Services.GetRequiredService<ITextToAudioService>()
+            .GetAudioContentsAsync("Feed the starter daily.", factory.Media.SpeechSettingsFor.ShouldNotBeNull()("nova"));
+
+        factory.Media.SpeechVoices.ShouldBe(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
+        var speech = JsonDocument.Parse(handler.Bodies.ShouldHaveSingleItem()).RootElement;
+        (speech.GetProperty("voice").GetString(), speech.GetProperty("response_format").GetString()).ShouldBe(("nova", "mp3"));
+    }
+
+    [Fact]
+    public async Task Every_Offered_OpenAI_Voice_Reaches_The_Speech_Request_As_Named()
+    {
+        var handler = new RecordingHandler(_ => new ByteArrayContent([1, 2, 3]));
+        var factory = new OpenAILlmProviderFactory(
+            Options.Create(new LlmOptions { OpenAI = new OpenAIOptions { ApiKey = "test-key", Chat = new() { Model = "gpt-4o-mini" } } }),
+            new HttpClient(handler));
+        var builder = Kernel.CreateBuilder();
+        factory.AddToKernel(builder);
+        var speech = builder.Build().Services.GetRequiredService<ITextToAudioService>();
+
+        foreach (var voice in factory.Media.SpeechVoices)
+        {
+            await speech.GetAudioContentsAsync("Feed the starter daily.", factory.Media.SpeechSettingsFor!(voice));
+        }
+
+        handler.Bodies.Select(b => JsonDocument.Parse(b).RootElement.GetProperty("voice").GetString()).ShouldBe(factory.Media.SpeechVoices);
+    }
+
+    [Fact]
+    public void Azure_OpenAI_Offers_The_OpenAI_Voices_Only_With_A_Speech_Deployment()
+    {
+        using var speech = Compose(AzureOpenAI(("Scout:Llm:AzureOpenAI:SpeechDeployment", "tts-owner")));
+        using var none = Compose(AzureOpenAI());
+
+        var media = speech.GetRequiredService<MediaCapabilities>();
+        var without = none.GetRequiredService<MediaCapabilities>();
+
+        media.SpeechVoices.ShouldBe(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]);
+        media.SpeechSettingsFor.ShouldNotBeNull();
+        (without.SpeechVoices.Count, without.SpeechSettingsFor).ShouldBe((0, (Func<string, PromptExecutionSettings>?)null));
+    }
+
     private sealed class RecordingHandler(Func<HttpRequestMessage, HttpContent> reply) : HttpMessageHandler
     {
         public List<string> Bodies { get; } = [];

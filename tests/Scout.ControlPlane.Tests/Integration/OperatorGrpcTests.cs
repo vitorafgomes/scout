@@ -59,13 +59,16 @@ public sealed class OperatorGrpcTests
             ["DecideClaim"] = await Denied(() => client.DecideClaimAsync(new DecideClaimRequest { ProjectId = queued.Id, ClaimId = "c1", Status = "supported" }).ResponseAsync),
             ["ListProjects"] = await Denied(() => client.ListProjectsAsync(new ListProjectsRequest()).ResponseAsync),
             ["GetProject"] = await Denied(() => client.GetProjectAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
-            ["ProduceProject"] = await Denied(() => client.ProduceProjectAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
+            ["ProduceProject"] = await Denied(() => client.ProduceProjectAsync(new ProduceProjectRequest { Id = queued.Id }).ResponseAsync),
+            ["DelegateProject"] = await Denied(() => client.DelegateProjectAsync(new DelegateProjectRequest { Id = queued.Id }).ResponseAsync),
             ["ReorderScenes"] = await Denied(() => client.ReorderScenesAsync(new ReorderScenesRequest { ProjectId = queued.Id }).ResponseAsync),
             ["SetSceneLocked"] = await Denied(() => client.SetSceneLockedAsync(new SetSceneLockedRequest { ProjectId = queued.Id, SceneId = "s1", Locked = true }).ResponseAsync),
             ["RegenerateScene"] = await Denied(() => client.RegenerateSceneAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
             ["AttachSceneMedia"] = await Denied(() => client.AttachSceneMediaAsync(new AttachSceneMediaRequest { ProjectId = queued.Id, SceneId = "s1", Kind = "audio", FileName = "a.mp3" }).ResponseAsync),
             ["GetMediaDirectory"] = await Denied(() => client.GetMediaDirectoryAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
+            ["DeleteProject"] = await Denied(() => client.DeleteProjectAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
             ["GetReadiness"] = await Denied(() => client.GetReadinessAsync(new GetReadinessRequest()).ResponseAsync),
+            ["GetVoiceSamplesDirectory"] = await Denied(() => client.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest()).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -98,6 +101,7 @@ public sealed class OperatorGrpcTests
             ["GetOperatorMediaDirectory"] = await Denied(() => gate.GetOperatorMediaDirectoryAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
             ["ReportReadiness"] = await Denied(() => gate.ReportReadinessAsync(new WireReadiness { Provider = "openai" }).ResponseAsync),
             ["NextApprovedAction"] = await Denied(() => gate.NextApprovedActionAsync(new NextApprovedActionRequest()).ResponseAsync),
+            ["GetVoiceSamplesDirectory"] = await Denied(() => gate.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest()).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -296,9 +300,9 @@ public sealed class OperatorGrpcTests
         draft.Claims.Add(new WireClaim { Id = "c1", Text = "Most rivers meander.", Risk = "low", Status = "pending" });
         await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
 
-        var pending = await Denied(() => desktop.ProduceProjectAsync(new GetProjectRequest { Id = started.Id }).ResponseAsync);
+        var pending = await Denied(() => desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id }).ResponseAsync);
         await desktop.DecideClaimAsync(new DecideClaimRequest { ProjectId = started.Id, ClaimId = "c1", Status = "supported" });
-        var produced = await desktop.ProduceProjectAsync(new GetProjectRequest { Id = started.Id });
+        var produced = await desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id });
         var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
         var workerMedia = await gate.GetOperatorMediaDirectoryAsync(new GetProjectRequest { Id = started.Id });
         var first = new WireScene
@@ -324,14 +328,29 @@ public sealed class OperatorGrpcTests
             Error = "No image service.",
             AudioSource = "none",
             VisualSource = "text_card",
+            VisualQuery = "river bank erosion",
+        };
+        var third = new WireScene
+        {
+            Id = "s3",
+            Order = 3,
+            Narration = "Floods move bends.",
+            VisualPrompt = "A flood plain",
+            Status = "ready",
+            Error = "Picture from Openverse, credited in the video's description.",
+            AudioSource = "none",
+            VisualSource = "stock",
+            VisualFile = "scene-s3.jpg",
+            VisualQuery = "flood plain river",
+            VisualCredit = "\"Flood plain\" by Ana is licensed under CC BY 2.0.",
         };
         taken.Status = "media_ready";
-        taken.Scenes.AddRange([first, second]);
+        taken.Scenes.AddRange([first, second, third]);
         await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = taken });
         var shown = await desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id });
         var desktopMedia = await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id });
         await File.WriteAllTextAsync(Path.Combine(desktopMedia.Path, "bank.jpg"), "image");
-        var reordered = await desktop.ReorderScenesAsync(new ReorderScenesRequest { ProjectId = started.Id, SceneIds = { "s2", "s1" } });
+        var reordered = await desktop.ReorderScenesAsync(new ReorderScenesRequest { ProjectId = started.Id, SceneIds = { "s2", "s1", "s3" } });
         var attached = await desktop.AttachSceneMediaAsync(new AttachSceneMediaRequest { ProjectId = started.Id, SceneId = "s2", Kind = "visual", FileName = "bank.jpg" });
         var locked = await desktop.SetSceneLockedAsync(new SetSceneLockedRequest { ProjectId = started.Id, SceneId = "s1", Locked = true });
         var regenerateLocked = await Denied(() => desktop.RegenerateSceneAsync(new SceneRequest { ProjectId = started.Id, SceneId = "s1" }).ResponseAsync);
@@ -347,11 +366,16 @@ public sealed class OperatorGrpcTests
         (produced.Status, taken.Id).ShouldBe(("production_queued", started.Id));
         workerMedia.Path.ShouldBe(desktopMedia.Path);
         Directory.Exists(desktopMedia.Path).ShouldBeTrue();
-        shown.Scenes.ShouldBe([first, second]);
+        shown.Scenes.ShouldBe([first, second, third]);
+        shown.Scenes.Select(s => (s.VisualQuery, s.HasVisualCredit, s.VisualCredit)).ShouldBe([
+            (string.Empty, false, string.Empty),
+            ("river bank erosion", false, string.Empty),
+            ("flood plain river", true, "\"Flood plain\" by Ana is licensed under CC BY 2.0."),
+        ]);
         (shown.Scenes[0].HasError, shown.Scenes[1].HasAudioFile, shown.Scenes[1].HasVisualFile).ShouldBe((false, false, false));
-        reordered.Scenes.Select(s => (s.Id, s.Order)).ShouldBe([("s2", 1), ("s1", 2)]);
+        reordered.Scenes.Select(s => (s.Id, s.Order)).ShouldBe([("s2", 1), ("s1", 2), ("s3", 3)]);
         (attached.Scenes[0].VisualSource, attached.Scenes[0].VisualFile, attached.Scenes[0].Status, attached.Scenes[0].Error).ShouldBe(("owner", "bank.jpg", "failed", "No image service."));
-        locked.Scenes.Select(s => s.Locked).ShouldBe([false, true]);
+        locked.Scenes.Select(s => s.Locked).ShouldBe([false, true, false]);
         (regenerateLocked.StatusCode, regenerateLocked.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "Scene 's1' is locked; unlock it before regenerating it."));
         (regenerated.Status, regenerated.Scenes[0].Status, regenerated.Scenes[0].VisualFile).ShouldBe(("production_queued", "planned", "bank.jpg"));
         (unknownScene.StatusCode, unknownScene.Status.Detail).ShouldBe((StatusCode.NotFound, $"Unknown scene 's9' in project '{started.Id}'."));
@@ -387,8 +411,9 @@ public sealed class OperatorGrpcTests
         using var workerChannel = host.CreateWorkerChannel();
         var desktop = new GrpcOperator.OperatorClient(desktopChannel);
         var gate = new WorkerGate.WorkerGateClient(workerChannel);
-        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
+        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, StockPictures = true, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
         report.Notes.Add("No image model is configured.");
+        report.Voices.Add(new Scout.ControlPlane.Contracts.Voice { Id = "piper:en_GB-cori-medium", Label = "Cori (medium)", Source = "piper" });
 
         var before = await desktop.GetReadinessAsync(new GetReadinessRequest());
         var stored = await gate.ReportReadinessAsync(report);
@@ -398,14 +423,65 @@ public sealed class OperatorGrpcTests
         read.ShouldBe(stored);
         (read.SpeechAvailable, read.ImagesAvailable, read.Provider, read.FfmpegAvailable, read.YoutubeSignedIn, read.Notes.Single())
             .ShouldBe((true, false, "openai", true, true, "No image model is configured."));
+        read.Voices.Select(v => (v.Id, v.Label, v.Source)).ShouldBe([("piper:en_GB-cori-medium", "Cori (medium)", "piper")]);
+        (before.StockPictures, read.StockPictures).ShouldBe((false, true));
         DateTimeOffset.ParseExact(read.ReportedAt, "O", System.Globalization.CultureInfo.InvariantCulture)
             .ShouldBeInRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow);
     }
 
     [Fact]
+    public async Task GetVoiceSamplesDirectory_answers_the_directory_for_the_desktop_and_the_worker()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        var expected = Path.Combine(host.Services.GetRequiredService<JsonFileOperatorStore>().MediaRoot, "voice-samples");
+
+        var forDesktop = await desktop.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest());
+        var forWorker = await gate.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest());
+
+        forDesktop.Path.ShouldBe(expected);
+        Directory.Exists(forDesktop.Path).ShouldBeTrue();
+        forWorker.Path.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task A_Voice_Sample_File_The_Worker_Reports_Travels_To_The_Desktop_In_The_Readiness()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        var report = new WireReadiness { SpeechAvailable = true, Provider = "OpenAI" };
+        report.Voices.Add(new Scout.ControlPlane.Contracts.Voice { Id = "OpenAI:nova", Label = "nova (OpenAI)", Source = "OpenAI" });
+        report.Voices.Add(new Scout.ControlPlane.Contracts.Voice
+        {
+            Id = "piper:en_GB-cori-medium",
+            Label = "Cori (medium)",
+            Source = "piper",
+            SampleFile = "piper-en_GB-cori-medium.wav",
+        });
+
+        await gate.ReportReadinessAsync(report);
+        var read = await desktop.GetReadinessAsync(new GetReadinessRequest());
+
+        read.Voices.Select(v => (v.Id, v.HasSampleFile, v.SampleFile)).ShouldBe([
+            ("OpenAI:nova", false, string.Empty),
+            ("piper:en_GB-cori-medium", true, "piper-en_GB-cori-medium.wav"),
+        ]);
+    }
+
+    [Fact]
     public void Scenes_Map_To_The_Wire_And_Back_Field_For_Field_With_Unset_Optionals_For_Absent_Values()
     {
-        var full = new Scout.ControlPlane.Operator.Scene("s1", 2, "Rivers bend.", "A meander", true, "failed", "Speech timed out.", "owner", "generated", "mine.mp3", "s1.png", 4200);
+        var full = new Scout.ControlPlane.Operator.Scene("s1", 2, "Rivers bend.", "A meander", true, "failed", "Speech timed out.", "owner", "stock", "mine.mp3", "s1.png", 4200)
+        {
+            VisualQuery = "river meander aerial",
+            VisualCredit = "\"Meander\" by Ana is licensed under CC BY 2.0.",
+        };
         var bare = new Scout.ControlPlane.Operator.Scene("s2", 1, "Water erodes.", "A bank", false, "planned", null, "none", "text_card", null, null, 0);
         var project = new Scout.ControlPlane.Operator.OperatorProject("p1", "Why rivers meander", "media_ready", "desktop", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, [], null, [])
         {
@@ -416,17 +492,25 @@ public sealed class OperatorGrpcTests
         var back = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(wire);
 
         wire.Scenes.Select(s => (s.Id, s.Order, s.Locked, s.Status, s.AudioSource, s.VisualSource, s.DurationMs)).ShouldBe([
-            ("s1", 2, true, "failed", "owner", "generated", 4200),
+            ("s1", 2, true, "failed", "owner", "stock", 4200),
             ("s2", 1, false, "planned", "none", "text_card", 0),
         ]);
         wire.Scenes.Select(s => (s.HasError, s.HasAudioFile, s.HasVisualFile)).ShouldBe([(true, true, true), (false, false, false)]);
+        wire.Scenes.Select(s => (s.VisualQuery, s.HasVisualCredit, s.VisualCredit)).ShouldBe([
+            ("river meander aerial", true, "\"Meander\" by Ana is licensed under CC BY 2.0."),
+            (string.Empty, false, string.Empty),
+        ]);
         back.Scenes.ShouldBe([full, bare]);
     }
 
     [Fact]
     public void Readiness_Maps_To_The_Wire_With_Its_Stamp_And_Back_Without_The_Senders_Stamp()
     {
-        var stamped = new Scout.ControlPlane.Operator.Readiness(true, false, "openai", true, false, ["No image model is configured."], DateTimeOffset.UnixEpoch);
+        var stamped = new Scout.ControlPlane.Operator.Readiness(true, false, "openai", true, false, ["No image model is configured."], DateTimeOffset.UnixEpoch)
+        {
+            Voices = [new("OpenAI:nova", "nova (OpenAI)", "OpenAI"), new("piper:en_GB-aru-medium#0", "Aru 03 (medium)", "piper")],
+            StockPictures = true,
+        };
 
         var wire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(stamped);
         var unstamped = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(stamped with { ReportedAt = null });
@@ -439,6 +523,146 @@ public sealed class OperatorGrpcTests
         (back.SpeechAvailable, back.ImagesAvailable, back.Provider, back.FfmpegAvailable, back.YouTubeSignedIn, back.ReportedAt)
             .ShouldBe((true, false, "openai", true, false, (DateTimeOffset?)null));
         back.Notes.ShouldBe(["No image model is configured."]);
+        (wire.StockPictures, back.StockPictures, Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(stamped with { StockPictures = false }).StockPictures)
+            .ShouldBe((true, true, false));
+        wire.Voices.Select(v => (v.Id, v.Label, v.Source)).ShouldBe([("OpenAI:nova", "nova (OpenAI)", "OpenAI"), ("piper:en_GB-aru-medium#0", "Aru 03 (medium)", "piper")]);
+        back.Voices.ShouldBe(stamped.Voices);
+    }
+
+    [Fact]
+    public void A_Projects_Background_Maps_To_The_Wire_And_Back_And_An_Absent_One_Stays_Absent()
+    {
+        var project = new Scout.ControlPlane.Operator.OperatorProject("p1", "Why rivers meander", "media_ready", "desktop", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, [], null, [])
+        {
+            BackgroundFile = "studio wall.jpg",
+        };
+
+        var wire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(project);
+        var bare = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(project with { BackgroundFile = null });
+
+        (wire.HasBackgroundFile, wire.BackgroundFile).ShouldBe((true, "studio wall.jpg"));
+        Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(wire).BackgroundFile.ShouldBe("studio wall.jpg");
+        bare.HasBackgroundFile.ShouldBeFalse();
+        Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(bare).BackgroundFile.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_Owner_Attaches_A_Background_Over_The_Wire_And_The_Worker_Reads_It()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        draft.Status = "script_ready";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+
+        await File.WriteAllTextAsync(Path.Combine((await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id })).Path, "studio.png"), "image");
+        var attached = await desktop.AttachSceneMediaAsync(new AttachSceneMediaRequest { ProjectId = started.Id, Kind = "background", FileName = "studio.png" });
+        var read = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = started.Id });
+        var withScene = await Denied(() => desktop.AttachSceneMediaAsync(
+            new AttachSceneMediaRequest { ProjectId = started.Id, SceneId = "s1", Kind = "background", FileName = "studio.png" }).ResponseAsync);
+
+        (attached.HasBackgroundFile, attached.BackgroundFile, attached.Status).ShouldBe((true, "studio.png", "script_ready"));
+        read.BackgroundFile.ShouldBe("studio.png");
+        (withScene.StatusCode, withScene.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "A background is attached to the project, not to a scene."));
+    }
+
+    [Fact]
+    public void A_Project_Maps_Its_Narration_Voice_To_The_Wire_And_Back()
+    {
+        var project = new Scout.ControlPlane.Operator.OperatorProject("p1", "Why rivers meander", "production_queued", "desktop", default, default, [], null, [])
+        {
+            NarrationVoice = "OpenAI:nova",
+        };
+
+        var wire = Scout.Host.ControlPlane.Services.OperatorMapping.ToWire(project);
+        var back = Scout.Host.ControlPlane.Services.OperatorMapping.ToDomain(wire);
+
+        wire.NarrationVoice.ShouldBe("OpenAI:nova");
+        back.NarrationVoice.ShouldBe("OpenAI:nova");
+    }
+
+    [Fact]
+    public void The_Mandate_No_Longer_Carries_A_Narration_Voice_And_Its_Field_Number_Is_Reserved()
+    {
+        var file = Google.Protobuf.Reflection.FileDescriptorProto.Parser.ParseFrom(WireMandate.Descriptor.File.SerializedData);
+        var mandate = file.MessageType.Single(m => m.Name == "Mandate");
+
+        WireMandate.Descriptor.FindFieldByNumber(11).ShouldBeNull();
+        WireMandate.Descriptor.Fields.InFieldNumberOrder().Select(f => f.Name).ShouldNotContain("narration_voice");
+        mandate.ReservedRange.ShouldContain(r => r.Start <= 11 && 11 < r.End);
+    }
+
+    [Fact]
+    public async Task ProduceProject_StoresTheVoice_AndRefusesAMalformedOne()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        draft.Status = "script_ready";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+
+        var malformed = await Denied(() => desktop.ProduceProjectAsync(
+            new ProduceProjectRequest { Id = started.Id, NarrationVoice = "piper:../../etc/passwd" }).ResponseAsync);
+        var produced = await desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id, NarrationVoice = " piper:en_GB-aru-medium#0 " });
+        var read = await desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id });
+        var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+
+        malformed.StatusCode.ShouldBe(StatusCode.InvalidArgument);
+        malformed.Status.Detail.ShouldBe("A narration voice is an id of at most 80 letters, digits, _ : . # or -.");
+        (produced.Status, produced.NarrationVoice).ShouldBe(("production_queued", "piper:en_GB-aru-medium#0"));
+        read.NarrationVoice.ShouldBe("piper:en_GB-aru-medium#0");
+        taken.NarrationVoice.ShouldBe("piper:en_GB-aru-medium#0");
+    }
+
+    [Fact]
+    public async Task ProduceProject_And_DelegateProject_Carry_The_Brief_And_The_Preset_To_The_Desktop_And_The_Worker()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var produced = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var delegated = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Glaciers explained" });
+        for (var i = 0; i < 2; i++)
+        {
+            var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+            draft.Status = "script_ready";
+            await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+        }
+
+        var unknown = await Denied(() => desktop.ProduceProjectAsync(
+            new ProduceProjectRequest { Id = produced.Id, VisualBrief = "Watercolour.", Motion = "spin" }).ResponseAsync);
+        var afterProduce = await desktop.ProduceProjectAsync(
+            new ProduceProjectRequest { Id = produced.Id, VisualBrief = "Watercolour, it's: calm.\nSoft light.", Motion = "still" });
+        var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        var fromWorker = taken.Clone();
+        fromWorker.VisualBrief = "Neon glitch.";
+        fromWorker.Motion = "gentle";
+        fromWorker.Status = "media_ready";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = fromWorker });
+        var afterDelegate = await desktop.DelegateProjectAsync(
+            new DelegateProjectRequest { Id = delegated.Id, VisualBrief = "Bold comic panels.", Motion = "dynamic" });
+        var shown = await desktop.GetProjectAsync(new GetProjectRequest { Id = produced.Id });
+        var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = delegated.Id });
+
+        (unknown.StatusCode, unknown.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "Motion is still, gentle or dynamic."));
+        (afterProduce.VisualBrief, afterProduce.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "still"));
+        (taken.Id, taken.VisualBrief, taken.Motion).ShouldBe((produced.Id, "Watercolour, it's: calm.\nSoft light.", "still"));
+        (shown.Status, shown.VisualBrief, shown.Motion).ShouldBe(("media_ready", "Watercolour, it's: calm.\nSoft light.", "still"));
+        (afterDelegate.VisualBrief, afterDelegate.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
+        (workerRead.VisualBrief, workerRead.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
     }
 
     [Fact]
@@ -487,7 +711,7 @@ public sealed class OperatorGrpcTests
         var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
         draft.Status = "script_ready";
         await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
-        await desktop.ProduceProjectAsync(id);
+        await desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id });
         var producing = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
         producing.Status = "media_ready";
         producing.Scenes.Add(new WireScene { Id = "s1", Order = 1, Status = "ready", AudioSource = "generated", VisualSource = "generated", AudioFile = "s1.mp3", VisualFile = "s1.png", DurationMs = 4200 });
@@ -829,5 +1053,140 @@ public sealed class OperatorGrpcTests
         (upload.Status, upload.Reason).ShouldBe((Scout.ControlPlane.Actions.PendingActionStatus.Rejected, "The owner revoked YouTube writes before this action ran."));
         writes.Count(e => e.Outcome == "rejected: The owner revoked YouTube writes before this action ran.").ShouldBe(1);
         (await features.ListPendingActionsAsync(new ListPendingActionsRequest())).Actions.ShouldBeEmpty();
+    }
+
+    private static CommentsView OneComment()
+    {
+        var view = new CommentsView();
+        view.Comments.Add(new AudienceComment
+        {
+            Id = "c1",
+            ThreadId = "t1",
+            VideoId = "v1",
+            VideoTitle = "Why rivers bend",
+            Author = "Ana",
+            Text = "How long did this take?",
+            PublishedAt = "2026-11-01T09:00:00Z",
+            LikeCount = 3,
+            Kind = "question",
+            Theme = "effort",
+            Status = "drafted",
+            Draft = "About a week.",
+        });
+        return view;
+    }
+
+    [Fact]
+    public async Task Comment_rpcs_follow_the_token_split()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var worker = new GrpcOperator.OperatorClient(workerChannel);
+        var desktopGate = new WorkerGate.WorkerGateClient(desktopChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel)
+            .SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+
+        var denied = new Dictionary<string, RpcException>(StringComparer.Ordinal)
+        {
+            ["Operator/ListComments"] = await Denied(() => worker.ListCommentsAsync(new ListCommentsRequest()).ResponseAsync),
+            ["Operator/RequestCommentSync"] = await Denied(() => worker.RequestCommentSyncAsync(new ListCommentsRequest()).ResponseAsync),
+            ["Operator/DecideComment"] = await Denied(() => worker.DecideCommentAsync(new DecideCommentRequest { CommentId = "c1", Decision = "dismiss" }).ResponseAsync),
+            ["Operator/ApproveReply"] = await Denied(() => worker.ApproveReplyAsync(new ApproveReplyRequest { CommentId = "c1", Text = "Thanks" }).ResponseAsync),
+            ["Operator/DecideIdea"] = await Denied(() => worker.DecideIdeaAsync(new DecideIdeaRequest { IdeaId = "idea-c1", Use = true }).ResponseAsync),
+            ["WorkerGate/GetComments"] = await Denied(() => desktopGate.GetCommentsAsync(new ListCommentsRequest()).ResponseAsync),
+            ["WorkerGate/SaveComments"] = await Denied(() => desktopGate.SaveCommentsAsync(OneComment()).ResponseAsync),
+        };
+        var desktopList = await new GrpcOperator.OperatorClient(desktopChannel).ListCommentsAsync(new ListCommentsRequest());
+        var workerRead = await new WorkerGate.WorkerGateClient(workerChannel).GetCommentsAsync(new ListCommentsRequest());
+
+        foreach (var (method, ex) in denied)
+        {
+            ex.StatusCode.ShouldBe(StatusCode.PermissionDenied, method);
+            ex.Status.Detail.ShouldBe($"This caller may not call /scout.controlplane.v1.{method}.", method);
+        }
+
+        (desktopList.Comments.Count, workerRead.Comments.Count).ShouldBe((0, 0));
+        (await host.Services.GetRequiredService<JsonFileOperatorStore>().ReadCommentsAsync(CancellationToken.None)).Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_comment_the_worker_saves_crosses_the_wire_field_for_field_and_the_owner_approves_its_reply()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel)
+            .SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+
+        var saved = await gate.SaveCommentsAsync(OneComment());
+        var listed = await desktop.ListCommentsAsync(new ListCommentsRequest());
+        var approved = await desktop.ApproveReplyAsync(new ApproveReplyRequest { CommentId = "c1", Text = "About a week." });
+
+        listed.ShouldBe(saved);
+        var comment = listed.Comments.ShouldHaveSingleItem();
+        (comment.Id, comment.ThreadId, comment.VideoTitle, comment.Author, comment.Text, comment.PublishedAt, comment.LikeCount, comment.Kind, comment.Theme, comment.Status, comment.Draft)
+            .ShouldBe(("c1", "t1", "Why rivers bend", "Ana", "How long did this take?", "2026-11-01T09:00:00.0000000+00:00", 3L, "question", "effort", "drafted", "About a week."));
+        (comment.HasApprovedText, comment.HasReplyId, comment.HasError, comment.HasDecidedAt).ShouldBe((false, false, false, false));
+        DateTimeOffset.ParseExact(comment.FetchedAt, "O", System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldBeInRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow);
+        var reply = approved.Comments.ShouldHaveSingleItem();
+        (reply.Status, reply.ApprovedText, reply.HasDecidedAt).ShouldBe(("reply_approved", "About a week.", true));
+    }
+
+    [Fact]
+    public async Task DeleteProject_removes_the_project_for_the_desktop()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var kept = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Glaciers explained" });
+
+        await desktop.DeleteProjectAsync(new GetProjectRequest { Id = started.Id });
+        var gone = await Denied(() => desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id }).ResponseAsync);
+
+        gone.StatusCode.ShouldBe(StatusCode.NotFound);
+        (await desktop.GetProjectAsync(new GetProjectRequest { Id = kept.Id })).Id.ShouldBe(kept.Id);
+    }
+
+    [Fact]
+    public async Task DelegateProject_returns_the_delegated_project()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why rivers meander" });
+        var queued = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Glaciers explained" });
+        var draft = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        draft.Status = "script_ready";
+        draft.Claims.Add(new WireClaim { Id = "c1", Text = "Most rivers meander.", Risk = "low", Status = "pending" });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+
+        var malformed = await Denied(() => desktop.DelegateProjectAsync(new DelegateProjectRequest { Id = started.Id, NarrationVoice = "piper:en GB" }).ResponseAsync);
+        var delegated = await desktop.DelegateProjectAsync(new DelegateProjectRequest { Id = started.Id, NarrationVoice = "piper:en_GB-cori-medium" });
+        var shown = await desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id });
+        var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = started.Id });
+        var refused = await Denied(() => desktop.DelegateProjectAsync(new DelegateProjectRequest { Id = queued.Id }).ResponseAsync);
+
+        (malformed.StatusCode, malformed.Status.Detail).ShouldBe((
+            StatusCode.InvalidArgument,
+            "A narration voice is an id of at most 80 letters, digits, _ : . # or -."));
+        (delegated.Id, delegated.Status, delegated.Delegated, delegated.NarrationVoice)
+            .ShouldBe((started.Id, "production_queued", true, "piper:en_GB-cori-medium"));
+        shown.NarrationVoice.ShouldBe("piper:en_GB-cori-medium");
+        (shown.Status, shown.Delegated).ShouldBe(("production_queued", true));
+        workerRead.Delegated.ShouldBeTrue();
+        (refused.StatusCode, refused.Status.Detail).ShouldBe((
+            StatusCode.InvalidArgument,
+            "Only a project with its script ready, its media ready, or a failed one with a script is delegated; this one is queued."));
+        var stored = await host.Services.GetRequiredService<OperatorService>().GetProjectAsync(queued.Id, CancellationToken.None);
+        (stored.Status, stored.Delegated).ShouldBe(("queued", false));
     }
 }

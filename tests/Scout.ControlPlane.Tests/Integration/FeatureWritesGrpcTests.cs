@@ -42,7 +42,7 @@ public sealed class FeatureWritesGrpcTests
         listed.Granted.ShouldBeFalse();
         listed.HasGrantedAt.ShouldBeFalse();
         listed.WriteClass.ShouldBe(2);
-        listed.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2]);
+        listed.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2]);
         var github = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
             .Single(f => f.Id == FeatureCatalog.GitHubId);
         github.WriteClass.ShouldBe(0);

@@ -18,6 +18,9 @@ service WorkerGate {
   rpc GetOperatorMediaDirectory(GetProjectRequest) returns (MediaDirectory);
   rpc ReportReadiness(Readiness) returns (Readiness);
   rpc NextApprovedAction(NextApprovedActionRequest) returns (NextApprovedActionResponse);
+  rpc GetComments(ListCommentsRequest) returns (CommentsView);
+  rpc SaveComments(CommentsView) returns (CommentsView);
+  rpc GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest) returns (MediaDirectory);
 }
 
 message RequestWriteRequest {

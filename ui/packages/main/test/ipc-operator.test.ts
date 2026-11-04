@@ -9,6 +9,7 @@ import {
   ControlPlanePermissionDeniedError,
   ControlPlaneUnavailableError,
   readIpcError,
+  type CommentsViewDto,
   type MandateDto,
   type OperatorProjectDto,
   type ReadinessDto,
@@ -78,16 +79,38 @@ const project: OperatorProjectDto = {
   scenes: [],
   package: null,
   publication: null,
+  narrationVoice: '',
+  backgroundFile: null,
+  delegated: false,
+  visualBrief: '',
+  motion: 'gentle',
 };
 
 const readiness: ReadinessDto = {
   speechAvailable: false,
   imagesAvailable: false,
+  stockPictures: false,
   provider: 'google',
   ffmpegAvailable: true,
   youtubeSignedIn: true,
   notes: ['Speech and images need OpenAI or Azure OpenAI.'],
+  voices: [
+    {
+      id: 'piper:en_GB-cori-medium',
+      label: 'Cori (medium)',
+      source: 'piper',
+      sampleFile: 'piper-en_GB-cori-medium.wav',
+    },
+  ],
   reportedAt: '2026-11-03T09:00:00Z',
+};
+
+const view: CommentsViewDto = {
+  comments: [],
+  ideas: [],
+  syncedAt: null,
+  syncRequestedAt: '2026-11-03T09:30:00Z',
+  syncError: null,
 };
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
@@ -114,6 +137,12 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     startProject: mock(async () => project),
     decideClaim: mock(async () => project),
     produceProject: mock(async () => ({ ...project, status: 'production_queued' })),
+    delegateProject: mock(async () => ({
+      ...project,
+      status: 'production_queued',
+      delegated: true,
+    })),
+    deleteProject: mock(async () => undefined),
     reorderScenes: mock(async () => project),
     setSceneLocked: mock(async () => project),
     regenerateScene: mock(async () => project),
@@ -128,6 +157,11 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     decideProposal: mock(async () => project),
     startExperiment: mock(async () => project),
     adoptExperimentWinner: mock(async () => project),
+    listComments: mock(async () => view),
+    requestCommentSync: mock(async () => view),
+    decideComment: mock(async () => view),
+    approveReply: mock(async () => view),
+    decideIdea: mock(async () => view),
     ...overrides,
   };
 }
@@ -181,6 +215,7 @@ describe('registerOperatorHandlers', () => {
       cadence: 'weekly ',
       language: ' en',
       voiceAndStyle: 'calm',
+      narrationVoice: 'piper:en_GB-aru-medium#3',
       blockedTopics: ['politics', '  '],
       targetMetric: 'views',
       targetValue: ' 10000 ',
@@ -362,16 +397,121 @@ describe('registerOperatorHandlers', () => {
     expect(chooseFile).not.toHaveBeenCalled();
   });
 
-  it('produce forwards the project id and refuses a missing one before reaching the control plane', async () => {
-    const produced = await invoke(CHANNEL.operatorProduction, { id: ' p1 ' });
-    const missing = await rejection(invoke(CHANNEL.operatorProduction, {}));
+  it('produce and delegation forward the trimmed project id, narration voice and visual brief with the motion, an empty motion as gentle, and refuse a missing id before reaching the control plane', async () => {
+    const produced = await invoke(CHANNEL.operatorProduction, {
+      id: ' p1 ',
+      narrationVoice: ' piper:en_GB-aru-medium#3 ',
+      visualBrief: '  Chalk on slate  ',
+      motion: ' dynamic ',
+    });
+    const delegated = await invoke(CHANNEL.operatorDelegation, {
+      id: 'p1 ',
+      narrationVoice: '',
+      visualBrief: '',
+      motion: '',
+    });
+    const missing = await Promise.all([
+      rejection(invoke(CHANNEL.operatorProduction, { narrationVoice: '' })),
+      rejection(invoke(CHANNEL.operatorDelegation, { narrationVoice: '' })),
+    ]);
 
     expect((produced as OperatorProjectDto).status).toBe('production_queued');
-    expect(client.produceProject.mock.calls).toEqual([['p1']]);
-    expect(missing).toEqual({
-      code: 'operator/invalid-request',
-      message: 'The project id is required.',
+    expect((delegated as OperatorProjectDto).delegated).toBe(true);
+    expect(client.produceProject.mock.calls).toEqual([
+      ['p1', 'piper:en_GB-aru-medium#3', 'Chalk on slate', 'dynamic'],
+    ]);
+    expect(client.delegateProject.mock.calls).toEqual([['p1', '', '', 'gentle']]);
+    expect(missing).toEqual([
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+    ]);
+  });
+
+  it('deleting a project forwards the trimmed id and answers deleted, refuses a missing id before the control plane, and passes a control plane refusal on', async () => {
+    const answer = await invoke(CHANNEL.operatorProjectDeletion, { id: ' p1 ' });
+    const missing = await Promise.all([
+      rejection(invoke(CHANNEL.operatorProjectDeletion, { id: '  ' })),
+      rejection(invoke(CHANNEL.operatorProjectDeletion, undefined)),
+    ]);
+    const callsBeforeRefusal = client.deleteProject.mock.calls.length;
+    const reason = 'The project has pending YouTube actions; finish or cancel them first.';
+    client.deleteProject = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
     });
+
+    const refused = await rejection(invoke(CHANNEL.operatorProjectDeletion, { id: 'p1' }));
+
+    expect(answer).toEqual({ deleted: true });
+    expect(callsBeforeRefusal).toBe(1);
+    expect(missing).toEqual([
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+    ]);
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
+  });
+
+  it('production and delegation refuse a malformed narration voice before the control plane, with the control plane sentence', async () => {
+    const malformed = ['Cori medium', 'x'.repeat(81), 'piper:en_GB/../cori'];
+
+    const refused = await Promise.all(
+      malformed.flatMap((narrationVoice) => [
+        rejection(invoke(CHANNEL.operatorProduction, { id: 'p1', narrationVoice })),
+        rejection(invoke(CHANNEL.operatorDelegation, { id: 'p1', narrationVoice })),
+      ]),
+    );
+    await invoke(CHANNEL.operatorProduction, { id: 'p1', narrationVoice: 'x'.repeat(80) });
+
+    const sentence = 'A narration voice is an id of at most 80 letters, digits, _ : . # or -.';
+    expect(refused).toEqual(
+      malformed.flatMap(() => [
+        { code: 'operator/invalid-request', message: sentence },
+        { code: 'operator/invalid-request', message: sentence },
+      ]),
+    );
+    expect(client.produceProject.mock.calls).toEqual([['p1', 'x'.repeat(80), '', 'gentle']]);
+    expect(client.delegateProject).not.toHaveBeenCalled();
+  });
+
+  it('a brief over 500 characters or an unknown motion is refused with the sentence', async () => {
+    const tooLong = { id: 'p1', narrationVoice: '', visualBrief: 'b'.repeat(501), motion: 'still' };
+    const unknownMotion = { id: 'p1', narrationVoice: '', visualBrief: 'calm', motion: 'wild' };
+
+    const refused = await Promise.all(
+      [tooLong, unknownMotion].flatMap((req) => [
+        rejection(invoke(CHANNEL.operatorProduction, req)),
+        rejection(invoke(CHANNEL.operatorDelegation, req)),
+      ]),
+    );
+    await invoke(CHANNEL.operatorProduction, {
+      ...tooLong,
+      visualBrief: ` ${'b'.repeat(500)} `,
+    });
+
+    const brief = {
+      code: 'operator/invalid-request',
+      message: 'A visual brief is at most 500 characters.',
+    };
+    const motion = {
+      code: 'operator/invalid-request',
+      message: 'Motion is still, gentle or dynamic.',
+    };
+    expect(refused).toEqual([brief, brief, motion, motion]);
+    expect(client.produceProject.mock.calls).toEqual([['p1', '', 'b'.repeat(500), 'still']]);
+    expect(client.delegateProject).not.toHaveBeenCalled();
+  });
+
+  it('a delegation the owner has not granted reaches the renderer as control-plane/permission-denied with the gate reason', async () => {
+    const reason =
+      'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.';
+    client.delegateProject = mock(async () => {
+      throw new ControlPlanePermissionDeniedError(reason);
+    });
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorDelegation, { id: 'p1', narrationVoice: '' }),
+    );
+
+    expect(refused).toEqual({ code: 'control-plane/permission-denied', message: reason });
   });
 
   it('a produce refused while claims are pending reaches the renderer as control-plane/invalid-argument naming how many', async () => {
@@ -524,6 +664,64 @@ describe('registerOperatorHandlers', () => {
     expect(refused.map((r) => r.code)).toEqual(bad.map(() => 'operator/invalid-request'));
     expect(chooseFile.mock.calls).toEqual([['visual']]);
     expect(client.attachSceneMedia).not.toHaveBeenCalled();
+    expect(readdirSync(media)).toEqual([]);
+  });
+
+  it("a background attach needs no scene id and only a picture: it copies the owner's picture as owner-background-<hex> and records it with the kind background and an empty scene id", async () => {
+    const media = tempDir();
+    const picture = path.join(tempDir(), 'Studio wall.JPG');
+    writeFileSync(picture, PNG);
+    client.getMediaDirectory = mock(async () => media);
+    chosen = picture;
+
+    const response = await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: '',
+      kind: 'background',
+    });
+    const [copied] = readdirSync(media);
+    const withScene = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'background' }),
+    );
+    const audio = path.join(tempDir(), 'voice.mp3');
+    writeFileSync(audio, 'ID3');
+    chosen = audio;
+    const notAPicture = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'background' }),
+    );
+
+    expect(copied).toMatch(/^owner-background-[0-9a-f]{12}\.jpg$/);
+    expect(chooseFile.mock.calls).toEqual([['visual'], ['visual']]);
+    expect(client.attachSceneMedia.mock.calls).toEqual([['p1', '', 'background', copied]]);
+    expect(response).toEqual({ project });
+    expect(withScene).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A background is attached to the project, not to a scene.',
+    });
+    expect(notAPicture).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A picture must be a png, jpg, jpeg or webp file.',
+    });
+    expect(readdirSync(media)).toEqual([copied!]);
+  });
+
+  it('a background the control plane refuses is deleted from the media directory, and the renderer gets the refusal', async () => {
+    const media = tempDir();
+    const picture = path.join(tempDir(), 'wall.png');
+    writeFileSync(picture, PNG);
+    chosen = picture;
+    client.getMediaDirectory = mock(async () => media);
+    const reason =
+      'A background is attached to a project whose script or media is ready, an assembled or approved one, one queued for assembly or assembling, or a failed one; this one is queued.';
+    client.attachSceneMedia = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
+    });
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'background' }),
+    );
+
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
     expect(readdirSync(media)).toEqual([]);
   });
 
@@ -787,7 +985,111 @@ describe('registerOperatorHandlers', () => {
     expect(client.adoptExperimentWinner.mock.calls).toEqual([['p1']]);
   });
 
-  it('the returned unregister removes the twenty operator handlers', () => {
+  it('the comments, a sync request, a comment decision, a reply approval and an idea decision reach the control plane with the trimmed ids and the trimmed reply', async () => {
+    const listed = await invoke(CHANNEL.operatorComments);
+    const requested = await invoke(CHANNEL.operatorCommentSync);
+    for (const decision of ['draft', 'dismiss', 'not_spam', 'hold']) {
+      await invoke(CHANNEL.operatorCommentDecision, { commentId: ' Ugx-1_a.b ', decision });
+    }
+    await invoke(CHANNEL.operatorReplyApproval, {
+      commentId: 'Ugx1',
+      text: '  Thanks!\nNext week.  ',
+    });
+    await invoke(CHANNEL.operatorReplyApproval, { commentId: 'Ugx1', text: 'x'.repeat(1000) });
+    await invoke(CHANNEL.operatorIdeaDecision, { ideaId: ' idea-Ugx1 ', use: true });
+    await invoke(CHANNEL.operatorIdeaDecision, { ideaId: 'idea-Ugx2', use: false });
+
+    expect(listed).toEqual(view);
+    expect(requested).toEqual(view);
+    expect(client.listComments.mock.calls).toEqual([[]]);
+    expect(client.requestCommentSync.mock.calls).toEqual([[]]);
+    expect(client.decideComment.mock.calls).toEqual([
+      ['Ugx-1_a.b', 'draft'],
+      ['Ugx-1_a.b', 'dismiss'],
+      ['Ugx-1_a.b', 'not_spam'],
+      ['Ugx-1_a.b', 'hold'],
+    ]);
+    expect(client.approveReply.mock.calls).toEqual([
+      ['Ugx1', 'Thanks!\nNext week.'],
+      ['Ugx1', 'x'.repeat(1000)],
+    ]);
+    expect(client.decideIdea.mock.calls).toEqual([
+      ['idea-Ugx1', true],
+      ['idea-Ugx2', false],
+    ]);
+  });
+
+  it('comment handlers refusals: a decision outside draft, dismiss, not_spam and hold, an id that is not a comment id, a reply that is not 1 to 1000 characters after trimming and an idea decision that is not a boolean are refused in the control plane words before reaching it', async () => {
+    const refused = [
+      await rejection(
+        invoke(CHANNEL.operatorCommentDecision, { commentId: 'Ugx1', decision: 'rejected' }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorCommentDecision, { commentId: 'Ugx1', decision: 'banAuthor' }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorCommentDecision, { commentId: 'Ugx/1', decision: 'hold' }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorCommentDecision, { commentId: 'c'.repeat(101), decision: 'hold' }),
+      ),
+      await rejection(invoke(CHANNEL.operatorReplyApproval, { commentId: 'Ugx1', text: '   ' })),
+      await rejection(
+        invoke(CHANNEL.operatorReplyApproval, { commentId: 'Ugx1', text: 'x'.repeat(1001) }),
+      ),
+      await rejection(invoke(CHANNEL.operatorReplyApproval, { commentId: '', text: 'Thanks' })),
+      await rejection(invoke(CHANNEL.operatorIdeaDecision, { ideaId: 'idea-Ugx1', use: 'yes' })),
+      await rejection(invoke(CHANNEL.operatorIdeaDecision, { ideaId: ' ', use: true })),
+    ];
+
+    expect(refused.map((r) => r.message)).toEqual([
+      'A comment is decided as draft, dismiss, not_spam or hold.',
+      'A comment is decided as draft, dismiss, not_spam or hold.',
+      "'Ugx/1' is not a comment id.",
+      `'${'c'.repeat(101)}' is not a comment id.`,
+      'A reply is 1 to 1000 characters.',
+      'A reply is 1 to 1000 characters.',
+      "'' is not a comment id.",
+      'An idea is used or dismissed.',
+      'The idea id is required.',
+    ]);
+    expect(refused.every((r) => r.code === 'operator/invalid-request')).toBe(true);
+    expect(client.decideComment).not.toHaveBeenCalled();
+    expect(client.approveReply).not.toHaveBeenCalled();
+    expect(client.decideIdea).not.toHaveBeenCalled();
+  });
+
+  it('a reply the control plane refuses reaches the renderer as control-plane/invalid-argument with its words, and a hold without the grant as control-plane/permission-denied', async () => {
+    client.approveReply.mockImplementation(async () => {
+      throw new ControlPlaneInvalidArgumentError(
+        'A quarantined comment gets no reply; mark it not spam first.',
+      );
+    });
+    client.decideComment.mockImplementation(async () => {
+      throw new ControlPlanePermissionDeniedError(
+        'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.',
+      );
+    });
+
+    const reply = await rejection(
+      invoke(CHANNEL.operatorReplyApproval, { commentId: 'Ugx2', text: 'Thanks' }),
+    );
+    const hold = await rejection(
+      invoke(CHANNEL.operatorCommentDecision, { commentId: 'Ugx2', decision: 'hold' }),
+    );
+
+    expect(reply).toEqual({
+      code: 'control-plane/invalid-argument',
+      message: 'A quarantined comment gets no reply; mark it not spam first.',
+    });
+    expect(hold).toEqual({
+      code: 'control-plane/permission-denied',
+      message:
+        'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.',
+    });
+  });
+
+  it('the returned unregister removes the twenty-seven operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -808,6 +1110,8 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorStartProject,
         CHANNEL.operatorDecideClaim,
         CHANNEL.operatorProduction,
+        CHANNEL.operatorDelegation,
+        CHANNEL.operatorProjectDeletion,
         CHANNEL.operatorSceneOrder,
         CHANNEL.operatorSceneLock,
         CHANNEL.operatorSceneRegeneration,
@@ -821,6 +1125,11 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorProposalDecision,
         CHANNEL.operatorExperiment,
         CHANNEL.operatorExperimentAdoption,
+        CHANNEL.operatorComments,
+        CHANNEL.operatorCommentSync,
+        CHANNEL.operatorCommentDecision,
+        CHANNEL.operatorReplyApproval,
+        CHANNEL.operatorIdeaDecision,
       ].sort(),
     );
     expect(own.handlers.size).toBe(0);

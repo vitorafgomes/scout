@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   ControlPlaneInvalidArgumentError,
+  ControlPlaneNotFoundError,
   ControlPlaneNotImplementedError,
   ControlPlanePermissionDeniedError,
   ControlPlaneUnauthenticatedError,
@@ -72,6 +73,7 @@ const developerStateBefore = snapshotOf(developerFeatureStateFile());
 const developerOperatorBefore = ['mandate.json', 'projects.json'].map((name) =>
   snapshotOf(developerStateFile(name)),
 );
+const developerCommentsBefore = snapshotOf(developerStateFile('comments.json'));
 
 function connect(token: string): ControlPlaneClient {
   if (result.kind !== 'launched') throw new Error('control-plane host was not launched');
@@ -501,18 +503,218 @@ describe('operator production over UDS', () => {
           claims: [{ id: 'c1', text: 'Span<T> is a ref struct.', risk: 'low', status: 'pending' }],
         });
 
-        const refused = await client.produceProject(started.id).then(
+        const refused = await client.produceProject(started.id, '', '', 'gentle').then(
           () => null,
           (err: unknown) => err,
         );
         await client.decideClaim(started.id, 'c1', 'supported');
-        const queued = await client.produceProject(started.id);
+        const queued = await client.produceProject(started.id, '', '', 'gentle');
 
         expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
         expect((refused as Error).message).toBe(
           '1 claim is still pending; decide it before production.',
         );
         expect(queued.status).toBe('production_queued');
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'ProduceProject keeps the narration voice the owner chose for the video, and the host refuses a malformed one with its sentence and keeps the project as it was',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Records in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+        });
+
+        const refused = await client.produceProject(started.id, 'Cori medium', '', 'gentle').then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const untouched = await client.getProject(started.id);
+        const queued = await client.produceProject(
+          started.id,
+          'piper:en_GB-aru-medium#3',
+          '',
+          'gentle',
+        );
+        const reread = await client.getProject(started.id);
+
+        expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((refused as Error).message).toBe(
+          'A narration voice is an id of at most 80 letters, digits, _ : . # or -.',
+        );
+        expect([untouched.status, untouched.narrationVoice]).toEqual(['script_ready', '']);
+        expect([queued.status, queued.narrationVoice]).toEqual([
+          'production_queued',
+          'piper:en_GB-aru-medium#3',
+        ]);
+        expect(reread.narrationVoice).toBe('piper:en_GB-aru-medium#3');
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'ProduceProject keeps the visual brief and the motion, the host refuses a 501-character brief with its sentence, and GetVoiceSamplesDirectory answers an absolute folder under the data folder that scout-media serves',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Pattern matching in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+        });
+
+        const refused = await client.produceProject(started.id, '', 'b'.repeat(501), 'still').then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const queued = await client.produceProject(
+          started.id,
+          '',
+          'Chalk sketches on a dark slate',
+          'dynamic',
+        );
+        const reread = await client.getProject(started.id);
+        const samples = await client.getVoiceSamplesDirectory();
+        writeFileSync(path.join(samples, 'piper-en_GB-aru-medium-3.wav'), 'RIFF sample');
+        const served = await createMediaProtocolHandler(
+          (id) => client.getMediaDirectory(id),
+          Date.now,
+          () => client.getVoiceSamplesDirectory(),
+        )(new Request(`${MEDIA_SCHEME}://voice-samples/piper-en_GB-aru-medium-3.wav`));
+
+        expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((refused as Error).message).toBe('A visual brief is at most 500 characters.');
+        expect([queued.status, queued.visualBrief, queued.motion]).toEqual([
+          'production_queued',
+          'Chalk sketches on a dark slate',
+          'dynamic',
+        ]);
+        expect([reread.visualBrief, reread.motion]).toEqual([
+          'Chalk sketches on a dark slate',
+          'dynamic',
+        ]);
+        expect([path.isAbsolute(samples), samples.startsWith(socketDir)]).toEqual([true, true]);
+        expect([served.status, served.headers.get('content-type')]).toEqual([200, 'audio/wav']);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'DeleteProject removes a script-ready project without a grant, GetProject then answers not-found, and a producing project is refused with the sentence',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const ready = await client.startProject('Span<T> in C#');
+        await saveAsWorker({
+          id: ready.id,
+          topic: ready.topic,
+          origin: ready.origin,
+          status: 'script_ready',
+          claims: [],
+        });
+        const running = await client.startProject('Records in C#');
+        const runningIdentity = { id: running.id, topic: running.topic, origin: running.origin };
+        await saveAsWorker({ ...runningIdentity, status: 'script_ready', claims: [] });
+        await client.produceProject(running.id, '', '', 'gentle');
+        await takeForProductionAsWorker(running.id);
+        await saveAsWorker({ ...runningIdentity, status: 'producing', claims: [] });
+        await client.setWriteGrant('youtube', false, false);
+
+        await client.deleteProject(ready.id);
+        const gone = await client.getProject(ready.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const refused = await client.deleteProject(running.id).then(
+          () => null,
+          (err: unknown) => err,
+        );
+        const listed = (await client.listProjects(50)).map((p) => p.id);
+
+        expect(gone).toBeInstanceOf(ControlPlaneNotFoundError);
+        expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+        expect((refused as Error).message).toBe(
+          'A project that is researching, scripting, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.',
+        );
+        expect(listed).toContain(running.id);
+        expect(listed).not.toContain(ready.id);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'DelegateProject is refused without the YouTube grant, and with it queues the script-ready project for production, delegated, in the voice the owner chose, whatever claims are pending',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Span<T> in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+          claims: [{ id: 'c1', text: 'Span<T> is a ref struct.', risk: 'low', status: 'pending' }],
+        });
+        await client.setWriteGrant('youtube', false, false);
+        const ungranted = await client
+          .delegateProject(started.id, 'OpenAI:nova', '', 'gentle')
+          .then(
+            () => null,
+            (err: unknown) => err,
+          );
+        await client.setWriteGrant('youtube', true, true);
+        const delegated = await client.delegateProject(started.id, 'OpenAI:nova', '', 'gentle');
+
+        expect(ungranted).toBeInstanceOf(ControlPlanePermissionDeniedError);
+        expect((ungranted as Error).message).toBe(
+          'The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.',
+        );
+        expect([delegated.status, delegated.delegated, delegated.narrationVoice]).toEqual([
+          'production_queued',
+          true,
+          'OpenAI:nova',
+        ]);
       } finally {
         await client.setWriteGrant('youtube', false, false);
       }
@@ -534,10 +736,12 @@ describe('operator production over UDS', () => {
       expect(readiness).toEqual({
         speechAvailable: false,
         imagesAvailable: false,
+        stockPictures: false,
         provider: '',
         ffmpegAvailable: false,
         youtubeSignedIn: false,
         notes: ['The Scout worker has not reported yet.'],
+        voices: [],
         reportedAt: null,
       });
     },
@@ -574,7 +778,7 @@ describe('operator production over UDS', () => {
           origin: started.origin,
           status: 'script_ready',
         });
-        await client.produceProject(started.id);
+        await client.produceProject(started.id, '', '', 'gentle');
         await takeForProductionAsWorker(started.id);
         await saveAsWorker({
           id: started.id,
@@ -616,6 +820,59 @@ describe('operator production over UDS', () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it(
+    "an owner background attached through main lands in the host's media directory as owner-background-<hex>, the project records it with no scene, and scout-media serves it",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const handlers = new Map<string, (event: unknown, req: unknown) => Promise<unknown>>();
+      const source = path.join(socketDir, 'Studio wall.jpg');
+      writeFileSync(source, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+      registerOperatorHandlers(
+        {
+          handle: (channel: string, handler: (event: unknown, req: unknown) => Promise<unknown>) =>
+            handlers.set(channel, handler),
+          removeHandler: (channel: string) => handlers.delete(channel),
+        } as never,
+        async () => client,
+        nullLogger,
+        async () => source,
+      );
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject('Records in C#');
+        await saveAsWorker({
+          id: started.id,
+          topic: started.topic,
+          origin: started.origin,
+          status: 'script_ready',
+        });
+
+        const { project } = (await handlers.get('scout:operator.sceneMedia')!(null, {
+          projectId: started.id,
+          sceneId: '',
+          kind: 'background',
+        })) as { project: { backgroundFile: string | null; status: string } };
+        const fileName = project.backgroundFile!;
+        const directory = await client.getMediaDirectory(started.id);
+        const served = await createMediaProtocolHandler((id) => client.getMediaDirectory(id))(
+          new Request(`${MEDIA_SCHEME}://${started.id}/${fileName}`),
+        );
+
+        expect(fileName).toMatch(/^owner-background-[0-9a-f]{12}\.jpg$/);
+        expect(project.status).toBe('script_ready');
+        expect(readdirSync(directory)).toEqual([fileName]);
+        expect([served.status, served.headers.get('content-type')]).toEqual([200, 'image/jpeg']);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
 
 async function mediaReadyAsWorker(client: ControlPlaneClient, topic: string) {
@@ -634,7 +891,7 @@ async function mediaReadyAsWorker(client: ControlPlaneClient, topic: string) {
     },
   ];
   await saveAsWorker({ ...identity, status: 'script_ready' });
-  await client.produceProject(started.id);
+  await client.produceProject(started.id, '', '', 'gentle');
   await takeForProductionAsWorker(started.id);
   await saveAsWorker({ ...identity, status: 'producing', scenes });
   await saveAsWorker({ ...identity, status: 'media_ready', scenes });
@@ -911,6 +1168,53 @@ describe('operator publishing over UDS', () => {
         expect(purged.publication?.snapshots).toEqual([]);
         expect(purged.publication?.videoId).toBe('vid-records-1');
         expect(purged.publication?.proposals.map((p) => p.id)).toEqual(['pr1']);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+describe('operator comments over UDS', () => {
+  it(
+    'real-host comments round trip: the desktop reads no comments before a sync, a sync request is refused without the YouTube grant and stamped with it, and a reply approval for a comment the host does not have is refused as unknown',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+
+      const before = await client.listComments();
+      const ungranted = await client.requestCommentSync().then(
+        () => null,
+        (err: unknown) => err,
+      );
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const requested = await client.requestCommentSync();
+        const listed = await client.listComments();
+        const unknown = await client.approveReply('Ugx-unknown', 'Thanks for watching.').then(
+          () => null,
+          (err: unknown) => err,
+        );
+
+        expect(before).toEqual({
+          comments: [],
+          ideas: [],
+          syncedAt: null,
+          syncRequestedAt: null,
+          syncError: null,
+        });
+        expect(ungranted).toBeInstanceOf(ControlPlanePermissionDeniedError);
+        expect(Number.isNaN(Date.parse(requested.syncRequestedAt ?? ''))).toBe(false);
+        expect(requested.syncError).toBeNull();
+        expect(listed.syncRequestedAt).toBe(requested.syncRequestedAt);
+        expect(unknown).toBeInstanceOf(ControlPlaneNotFoundError);
+        expect((unknown as Error).message).toBe("Unknown comment 'Ugx-unknown'.");
+        expect(existsSync(path.join(socketDir, 'comments.json'))).toBe(true);
+        expect(snapshotOf(developerStateFile('comments.json'))).toBe(developerCommentsBefore);
       } finally {
         await client.setWriteGrant('youtube', false, false);
       }

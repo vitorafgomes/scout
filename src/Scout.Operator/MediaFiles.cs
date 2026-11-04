@@ -105,7 +105,7 @@ internal static class MediaFiles
 
             if (new FileInfo(temp).Length < 1024)
             {
-                throw new InvalidOperationException($"{failure} (ffmpeg wrote an empty file)");
+                throw new InvalidOperationException($"{failure} (the file came out empty)");
             }
 
             File.Move(temp, path, overwrite: true);

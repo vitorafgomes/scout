@@ -43,6 +43,33 @@ public sealed record OperatorProject(
 
     /// <summary>The project's life on YouTube, null until the owner publishes the approved package.</summary>
     public Publication? Publication { get; init; }
+
+    /// <summary>The owner's picture in the media directory that every scene without its own picture is shown over, null until the owner attaches one.</summary>
+    public string? BackgroundFile { get; init; }
+    /// <summary>
+    /// True once the owner delegated the project: the control plane then chains its reversible stages, production and
+    /// assembly, and stops at an assembled package for the owner to approve.
+    /// </summary>
+    public bool Delegated { get; init; }
+
+    /// <summary>
+    /// The voice the narration is made in, chosen by the owner when producing the project: a voice id from the
+    /// readiness, or empty for Scout's choice. Only the owner's produce sets it.
+    /// </summary>
+    public string NarrationVoice { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The visual style the owner asked for when producing or delegating the project, at most 500 characters, empty
+    /// for none; the scene planner writes the picture prompts and search terms in it. Only the owner's produce or
+    /// delegate sets it.
+    /// </summary>
+    public string VisualBrief { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The motion preset the video is assembled with, <c>still</c>, <c>gentle</c> or <c>dynamic</c>, chosen with the
+    /// visual brief. Only the owner's produce or delegate sets it.
+    /// </summary>
+    public string Motion { get; init; } = "gentle";
 }
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
@@ -94,7 +121,14 @@ public sealed record Scene(
     string VisualSource,
     string? AudioFile,
     string? VisualFile,
-    int DurationMs);
+    int DurationMs)
+{
+    /// <summary>The search terms the worker planned for a stock picture of the scene; empty when it planned none.</summary>
+    public string VisualQuery { get; init; } = string.Empty;
+
+    /// <summary>The attribution of a <c>stock</c> picture, which the video's description credits; null for any other visual.</summary>
+    public string? VisualCredit { get; init; }
+}
 
 /// <summary>
 /// The assembled video of a project: the MP4, its Shorts and thumbnail as plain file names inside
@@ -131,7 +165,17 @@ public sealed record Readiness(
     bool FfmpegAvailable,
     bool YouTubeSignedIn,
     IReadOnlyList<string> Notes,
-    DateTimeOffset? ReportedAt = null);
+    DateTimeOffset? ReportedAt = null)
+{
+    /// <summary>The narration voices the worker offers, the connected AI Source's first, then the bundled ones.</summary>
+    public IReadOnlyList<Voice> Voices { get; init; } = [];
+
+    /// <summary>Whether a scene without an AI image service gets a freely licensed, credited picture from Openverse.</summary>
+    public bool StockPictures { get; init; }
+}
+
+/// <summary>A narration voice: the id a mandate names, the label the owner reads, where it comes from and its sample's file name in the voice samples directory, null when it has none.</summary>
+public sealed record Voice(string Id, string Label, string Source, string? SampleFile = null);
 
 /// <summary>
 /// A project's life on YouTube. The owner sets the privacy, the publish time, the made-for-kids and synthetic-media

@@ -8,6 +8,9 @@ import { ScoutError, type SceneMediaKind } from '@scout/shared';
 /** The scheme the renderer previews operator media through: `scout-media://<projectId>/<fileName>`. */
 export const MEDIA_SCHEME = 'scout-media';
 
+/** The reserved host of `scout-media://voice-samples/<fileName>`; a project id is 32 hex characters, never this. */
+export const VOICE_SAMPLES_HOST = 'voice-samples';
+
 /** Registered before the app is ready; deliberately without `bypassCSP`, so the page CSP still decides. */
 export const MEDIA_SCHEME_PRIVILEGES = {
   scheme: MEDIA_SCHEME,
@@ -72,18 +75,23 @@ function isSafeMediaName(name: string): boolean {
   );
 }
 
+function isVoiceSampleName(name: string): boolean {
+  return (
+    isSafeMediaName(name) && MEDIA_TYPES[path.extname(name).toLowerCase()]!.startsWith('audio/')
+  );
+}
+
 const DIRECTORY_TTL_MS = 60_000;
 
 async function confinedMediaFile(
-  projectId: string,
+  directory: string,
   fileName: string,
-  mediaDirectory: (projectId: string) => Promise<string>,
+  acceptable: (name: string) => boolean,
 ): Promise<{ file: string; size: number } | null> {
-  const directory = await mediaDirectory(projectId);
   if (!path.isAbsolute(directory)) return null;
   const root = await realpath(directory);
   const file = await realpath(path.join(root, fileName));
-  if (path.dirname(file) !== root || !isSafeMediaName(path.basename(file))) return null;
+  if (path.dirname(file) !== root || !acceptable(path.basename(file))) return null;
   const info = await stat(file);
   return info.isFile() ? { file, size: info.size } : null;
 }
@@ -114,32 +122,37 @@ function stream(file: string, start: number, end: number): ReadableStream<Uint8A
 }
 
 /**
- * Serves a file of a project's media directory, resolved through the control plane and kept a minute per project
- * (forgotten on any error), streamed whole or as the one byte range asked for; anything else is a 404.
+ * Serves a file of a project's media directory, or an audio file of the voice-samples directory under the host
+ * `voice-samples`, each resolved through the control plane and kept a minute (forgotten on any error), streamed whole
+ * or as the one byte range asked for; anything else is a 404.
  */
 export function createMediaProtocolHandler(
   mediaDirectory: (projectId: string) => Promise<string>,
   now: () => number = Date.now,
+  voiceSamplesDirectory: () => Promise<string> = async () => '',
 ): (request: Request) => Promise<Response> {
   const directories = new Map<string, { directory: string; at: number }>();
-  const directoryOf = async (projectId: string): Promise<string> => {
-    const known = directories.get(projectId);
+  const directoryOf = async (host: string): Promise<string> => {
+    const known = directories.get(host);
     if (known !== undefined && now() - known.at < DIRECTORY_TTL_MS) return known.directory;
-    const directory = await mediaDirectory(projectId);
-    if (path.isAbsolute(directory)) directories.set(projectId, { directory, at: now() });
+    const directory = await (host === VOICE_SAMPLES_HOST
+      ? voiceSamplesDirectory()
+      : mediaDirectory(host));
+    if (path.isAbsolute(directory)) directories.set(host, { directory, at: now() });
     return directory;
   };
   return async (request) => {
-    let projectId: string | null = null;
+    let host: string | null = null;
     try {
       const parsed = new URL(request.url);
       if (parsed.protocol !== `${MEDIA_SCHEME}:`) return new Response(null, { status: 404 });
-      projectId = decodeURIComponent(parsed.hostname);
+      host = decodeURIComponent(parsed.hostname);
       const fileName = decodeURIComponent(parsed.pathname.slice(1));
-      if (!isSafeId(projectId) || !isSafeMediaName(fileName)) {
+      const acceptable = host === VOICE_SAMPLES_HOST ? isVoiceSampleName : isSafeMediaName;
+      if (!isSafeId(host) || !acceptable(fileName)) {
         return new Response(null, { status: 404 });
       }
-      const target = await confinedMediaFile(projectId, fileName, directoryOf);
+      const target = await confinedMediaFile(await directoryOf(host), fileName, acceptable);
       if (target === null) return new Response(null, { status: 404 });
       const type = MEDIA_TYPES[path.extname(target.file).toLowerCase()]!;
       const range = byteRange(request.headers.get('range'), target.size);
@@ -169,7 +182,7 @@ export function createMediaProtocolHandler(
         },
       });
     } catch {
-      if (projectId !== null) directories.delete(projectId);
+      if (host !== null) directories.delete(host);
       return new Response(null, { status: 404 });
     }
   };

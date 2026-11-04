@@ -18,6 +18,7 @@ using DomainScriptSection = Scout.ControlPlane.Operator.ScriptSection;
 using DomainShortClip = Scout.ControlPlane.Operator.ShortClip;
 using DomainSnapshot = Scout.ControlPlane.Operator.Snapshot;
 using DomainTopicCandidate = Scout.ControlPlane.Operator.TopicCandidate;
+using DomainVoice = Scout.ControlPlane.Operator.Voice;
 using WireChapter = Scout.ControlPlane.Contracts.Chapter;
 using WireClaim = Scout.ControlPlane.Contracts.Claim;
 using WireExperiment = Scout.ControlPlane.Contracts.Experiment;
@@ -36,6 +37,7 @@ using WireScriptSection = Scout.ControlPlane.Contracts.ScriptSection;
 using WireShortClip = Scout.ControlPlane.Contracts.ShortClip;
 using WireSnapshot = Scout.ControlPlane.Contracts.Snapshot;
 using WireTopicCandidate = Scout.ControlPlane.Contracts.TopicCandidate;
+using WireVoice = Scout.ControlPlane.Contracts.Voice;
 
 namespace Scout.Host.ControlPlane.Services;
 
@@ -89,6 +91,10 @@ internal static class OperatorMapping
             Origin = project.Origin,
             CreatedAt = Iso(project.CreatedAt),
             UpdatedAt = Iso(project.UpdatedAt),
+            Delegated = project.Delegated,
+            NarrationVoice = project.NarrationVoice,
+            VisualBrief = project.VisualBrief,
+            Motion = project.Motion,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new WireTopicCandidate
         {
@@ -113,6 +119,10 @@ internal static class OperatorMapping
         if (project.Publication is { } publication)
         {
             wire.Publication = ToWire(publication);
+        }
+        if (project.BackgroundFile is not null)
+        {
+            wire.BackgroundFile = project.BackgroundFile;
         }
         return wire;
     }
@@ -147,9 +157,18 @@ internal static class OperatorMapping
             s.VisualSource,
             s.HasAudioFile ? s.AudioFile : null,
             s.HasVisualFile ? s.VisualFile : null,
-            s.DurationMs)).ToList(),
+            s.DurationMs)
+        {
+            VisualQuery = s.VisualQuery,
+            VisualCredit = s.HasVisualCredit ? s.VisualCredit : null,
+        }).ToList(),
         Package = wire.Package is null ? null : ToDomain(wire.Package),
         Publication = wire.Publication is null ? null : ToDomain(wire.Publication),
+        BackgroundFile = wire.HasBackgroundFile ? wire.BackgroundFile : null,
+        Delegated = wire.Delegated,
+        NarrationVoice = wire.NarrationVoice,
+        VisualBrief = wire.VisualBrief,
+        Motion = wire.Motion,
     };
 
     public static DateTimeOffset? ToDomainTime(bool has, string value) => has ? ParseIso(value) : null;
@@ -163,8 +182,10 @@ internal static class OperatorMapping
             Provider = readiness.Provider,
             FfmpegAvailable = readiness.FfmpegAvailable,
             YoutubeSignedIn = readiness.YouTubeSignedIn,
+            StockPictures = readiness.StockPictures,
         };
         wire.Notes.AddRange(readiness.Notes);
+        wire.Voices.AddRange(readiness.Voices.Select(ToWire));
         if (readiness.ReportedAt is { } reportedAt)
         {
             wire.ReportedAt = Iso(reportedAt);
@@ -178,7 +199,11 @@ internal static class OperatorMapping
         wire.Provider,
         wire.FfmpegAvailable,
         wire.YoutubeSignedIn,
-        wire.Notes.ToList());
+        wire.Notes.ToList())
+    {
+        Voices = wire.Voices.Select(v => new DomainVoice(v.Id, v.Label, v.Source, v.HasSampleFile ? v.SampleFile : null)).ToList(),
+        StockPictures = wire.StockPictures,
+    };
 
     public static async Task<T> Guard<T>(Func<Task<T>> action)
     {
@@ -262,6 +287,7 @@ internal static class OperatorMapping
             AudioSource = scene.AudioSource,
             VisualSource = scene.VisualSource,
             DurationMs = scene.DurationMs,
+            VisualQuery = scene.VisualQuery,
         };
         if (scene.Error is not null)
         {
@@ -274,6 +300,10 @@ internal static class OperatorMapping
         if (scene.VisualFile is not null)
         {
             wire.VisualFile = scene.VisualFile;
+        }
+        if (scene.VisualCredit is not null)
+        {
+            wire.VisualCredit = scene.VisualCredit;
         }
         return wire;
     }
@@ -485,10 +515,21 @@ internal static class OperatorMapping
                 wire.Experiment.HasWinnerArmId ? wire.Experiment.WinnerArmId : null,
                 wire.Experiment.HasResult ? wire.Experiment.Result : null));
 
-    private static DateTimeOffset ParseIso(string value) =>
+    public static DateTimeOffset ParseIso(string value) =>
         DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
             ? parsed
             : throw new OperatorValidationException($"'{value}' is not a time Scout accepts.");
 
-    private static string Iso(DateTimeOffset value) => value.ToString("O", CultureInfo.InvariantCulture);
+    public static string Iso(DateTimeOffset value) => value.ToString("O", CultureInfo.InvariantCulture);
+
+    private static WireVoice ToWire(DomainVoice voice)
+    {
+        var wire = new WireVoice { Id = voice.Id, Label = voice.Label, Source = voice.Source };
+        if (voice.SampleFile is not null)
+        {
+            wire.SampleFile = voice.SampleFile;
+        }
+
+        return wire;
+    }
 }

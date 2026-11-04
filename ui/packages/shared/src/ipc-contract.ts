@@ -65,6 +65,8 @@ export const CHANNEL = {
   operatorStartProject: 'scout:operator.startProject',
   operatorDecideClaim: 'scout:operator.decideClaim',
   operatorProduction: 'scout:operator.production',
+  operatorDelegation: 'scout:operator.delegation',
+  operatorProjectDeletion: 'scout:operator.projectDeletion',
   operatorSceneOrder: 'scout:operator.sceneOrder',
   operatorSceneLock: 'scout:operator.sceneLock',
   operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
@@ -79,6 +81,11 @@ export const CHANNEL = {
   operatorProposalDecision: 'scout:operator.proposalDecision',
   operatorExperiment: 'scout:operator.experiment',
   operatorExperimentAdoption: 'scout:operator.experimentAdoption',
+  operatorComments: 'scout:operator.comments',
+  operatorCommentSync: 'scout:operator.commentSync',
+  operatorCommentDecision: 'scout:operator.commentDecision',
+  operatorReplyApproval: 'scout:operator.replyApproval',
+  operatorIdeaDecision: 'scout:operator.ideaDecision',
   githubSignIn: 'scout:github.signIn',
   githubStatus: 'scout:github.status',
   githubCancel: 'scout:github.cancel',
@@ -627,7 +634,19 @@ export interface OperatorProjectDto {
   /** The assembled video and its upload metadata; null until the owner first asks for assembly. */
   readonly package: VideoPackageDto | null;
   readonly publication: PublicationDto | null;
+  /** The voice id the owner produced this video in; empty means Scout's choice. */
+  readonly narrationVoice: string;
+  /** The picture behind every scene without its own, named inside the project's media directory. */
+  readonly backgroundFile: string | null;
+  /** True once the owner delegated the project: Scout produces and assembles it and stops before the approval. */
+  readonly delegated: boolean;
+  /** The owner's words for the pictures and animation of this video, at most 500 characters; empty for none. */
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
 }
+
+/** How much the assembler moves each picture. */
+export type ProjectMotion = 'still' | 'gentle' | 'dynamic';
 
 export type PrivacyStatus = 'public' | 'private' | 'unlisted';
 
@@ -715,6 +734,63 @@ export interface ExperimentStartRequest {
   readonly armHours: number;
 }
 
+/** One top-level comment on the owner's channel, as Scout stored it, with the model's kind and theme and the owner's reply. */
+export interface AudienceCommentDto {
+  readonly id: string;
+  readonly threadId: string;
+  readonly videoId: string;
+  readonly videoTitle: string;
+  readonly author: string;
+  readonly text: string;
+  readonly publishedAt: string;
+  readonly likeCount: number;
+  readonly kind: string;
+  readonly theme: string;
+  readonly status: string;
+  readonly draft: string;
+  readonly approvedText: string | null;
+  readonly replyId: string | null;
+  readonly error: string | null;
+  readonly decidedAt: string | null;
+  readonly fetchedAt: string;
+}
+
+/** A video idea taken from an audience request; `status` is proposed, used or dismissed. */
+export interface AudienceIdeaDto {
+  readonly id: string;
+  readonly text: string;
+  readonly commentId: string;
+  readonly status: string;
+  readonly projectId: string | null;
+}
+
+/** The stored comments, newest first, the audience ideas and the state of the comment sync. */
+export interface CommentsViewDto {
+  readonly comments: readonly AudienceCommentDto[];
+  readonly ideas: readonly AudienceIdeaDto[];
+  readonly syncedAt: string | null;
+  readonly syncRequestedAt: string | null;
+  readonly syncError: string | null;
+}
+
+export type CommentDecision = 'draft' | 'dismiss' | 'not_spam' | 'hold';
+
+export interface CommentDecisionRequest {
+  readonly commentId: string;
+  readonly decision: CommentDecision;
+}
+
+/** The owner's reply to one comment, 1 to 1000 characters after trimming. */
+export interface ReplyApprovalRequest {
+  readonly commentId: string;
+  readonly text: string;
+}
+
+export interface IdeaDecisionRequest {
+  readonly ideaId: string;
+  readonly use: boolean;
+}
+
 /**
  * The assembled video of a project: the MP4, its Shorts and thumbnail named inside the project's media directory,
  * the checks the worker ran, the owner's media-rights confirmation and approval, and the upload metadata.
@@ -769,6 +845,8 @@ export interface SceneDto {
   readonly error: string | null;
   readonly audioSource: string;
   readonly visualSource: string;
+  readonly visualQuery: string;
+  readonly visualCredit: string | null;
   readonly audioFile: string | null;
   readonly visualFile: string | null;
   readonly durationMs: number;
@@ -784,6 +862,27 @@ export interface OperatorProjectsResponse {
 
 export interface OperatorProjectRequest {
   readonly id: string;
+}
+
+/** The answer to deleting a project: it is gone from Scout's data folder. */
+export interface OperatorProjectDeletionResponse {
+  readonly deleted: true;
+}
+
+/** The project to produce and the voice to narrate it in, a readiness voice id or empty for Scout's choice. */
+export interface OperatorProduceRequest {
+  readonly id: string;
+  readonly narrationVoice: string;
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
+}
+
+/** The project the owner delegates and its narration voice; Scout produces and assembles it and stops before the approval. */
+export interface OperatorDelegateRequest {
+  readonly id: string;
+  readonly narrationVoice: string;
+  readonly visualBrief: string;
+  readonly motion: ProjectMotion;
 }
 
 /** The topic of a video the owner asks the operator to make; 3 to 200 characters. */
@@ -820,11 +919,14 @@ export interface SceneRequest {
 
 export type SceneMediaKind = 'audio' | 'visual';
 
-/** Which scene gets an owner's file and of which kind; main asks the owner for the file, the renderer never sends a path. */
+/**
+ * Which scene gets an owner's file and of which kind, or the project's background picture with an empty scene id;
+ * main asks the owner for the file, the renderer never sends a path.
+ */
 export interface SceneMediaRequest {
   readonly projectId: string;
   readonly sceneId: string;
-  readonly kind: SceneMediaKind;
+  readonly kind: SceneMediaKind | 'background';
 }
 
 /** The project after the owner's file was attached, or null when the owner closed the file dialog. */
@@ -832,14 +934,25 @@ export interface SceneMediaResponse {
   readonly project: OperatorProjectDto | null;
 }
 
+/** One narration voice this machine offers; `id` is what a project stores, `source` groups the list. */
+export interface VoiceDto {
+  readonly id: string;
+  readonly label: string;
+  readonly source: string;
+  /** A short sample of the voice, named inside the voice-samples directory; null while none is made. */
+  readonly sampleFile: string | null;
+}
+
 /** What the operator can make on this machine right now, as the worker last reported it. */
 export interface ReadinessDto {
   readonly speechAvailable: boolean;
   readonly imagesAvailable: boolean;
+  readonly stockPictures: boolean;
   readonly provider: string;
   readonly ffmpegAvailable: boolean;
   readonly youtubeSignedIn: boolean;
   readonly notes: readonly string[];
+  readonly voices: readonly VoiceDto[];
   readonly reportedAt: string | null;
 }
 
@@ -1129,7 +1242,9 @@ export interface ScoutBridge {
   operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto>;
   operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto>;
-  operatorProduce(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorProduce(req: OperatorProduceRequest): Promise<OperatorProjectDto>;
+  operatorDelegate(req: OperatorDelegateRequest): Promise<OperatorProjectDto>;
+  operatorDeleteProject(req: OperatorProjectRequest): Promise<OperatorProjectDeletionResponse>;
   operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto>;
   operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto>;
   operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
@@ -1145,6 +1260,11 @@ export interface ScoutBridge {
   operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto>;
   operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto>;
   operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorComments(): Promise<CommentsViewDto>;
+  operatorRequestCommentSync(): Promise<CommentsViewDto>;
+  operatorDecideComment(req: CommentDecisionRequest): Promise<CommentsViewDto>;
+  operatorApproveReply(req: ReplyApprovalRequest): Promise<CommentsViewDto>;
+  operatorDecideIdea(req: IdeaDecisionRequest): Promise<CommentsViewDto>;
   githubSignIn(): Promise<GitHubPendingSignIn>;
   githubStatus(): Promise<GitHubStatus>;
   githubCancel(): Promise<void>;

@@ -57,3 +57,7 @@ The owner's way to ask Scout from anywhere on the desktop, without a chat platfo
   - Holding the microphone button records with the same `WavRecorder` and sends the voice request. Releasing the button, or the window losing focus or the screen closing, ends the recording (`ui/packages/renderer/src/app/chat/chat.component.ts:264`, `:282`).
   - With no running worker the turn's reply is "Scout is not running. Start it from the tray or the app.", and for that `local/not-running` refusal only the turn also shows Start Scout (`:48`), which calls `scout:worker.start` once and then disappears (`:249`); the owner asks again with Send. Any other refusal shows on the error line.
   - Clear empties only the conversation main holds. The worker's conversation memory for the local channel survives until it expires or the worker restarts, so a question after Clear can still draw on earlier turns (followup in [[pages/roadmap/followups]]).
+
+## Roadmap
+
+Screenshots, system audio and a live transcript for this window are planned in [[pages/roadmap/live-assistant]].

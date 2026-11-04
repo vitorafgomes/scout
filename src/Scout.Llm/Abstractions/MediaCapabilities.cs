@@ -16,6 +16,12 @@ public sealed record MediaCapabilities(bool Speech, bool Images, string Provider
     /// <summary>The settings a text-to-audio call passes; null without speech.</summary>
     public PromptExecutionSettings? SpeechSettings { get; init; }
 
+    /// <summary>The voice names the speech service offers, in the provider's own words; empty without speech.</summary>
+    public IReadOnlyList<string> SpeechVoices { get; init; } = [];
+
+    /// <summary>The settings a text-to-audio call passes for one of <see cref="SpeechVoices"/>; null without speech.</summary>
+    public Func<string, PromptExecutionSettings>? SpeechSettingsFor { get; init; }
+
     /// <summary>The settings a text-to-image call passes; null without images.</summary>
     public PromptExecutionSettings? ImageSettings { get; init; }
 }

@@ -43,8 +43,9 @@ public sealed class LearningLoopTests : IDisposable
 
     private (LearningLoop Loop, RecordingControlPlane ControlPlane) Build(
         ScriptedChat chat, IReadOnlyList<OperatorProjectState> projects, OperatorMandate? mandate = null, RecordingGate? gate = null, Microsoft.SemanticKernel.Kernel? media = null,
-        Func<OperatorProjectState, bool>? failOn = null)
+        Func<OperatorProjectState, bool>? failOn = null, FakeTimeProvider? clock = null)
     {
+        var time = clock ?? _time;
         var controlPlane = new RecordingControlPlane { MediaDirectory = _media, Mandate = mandate ?? Given.Mandate(), FailOnProject = failOn ?? (_ => false) };
         foreach (var project in projects)
         {
@@ -57,9 +58,9 @@ public sealed class LearningLoopTests : IDisposable
             _analytics,
             new ReachReports(_reporting, gate ?? new RecordingGate(), NullLogger<ReachReports>.Instance),
             chat,
-            new VisualGenerator(kernel, Given.Capabilities(kernel), _time),
-            new PublishedCheck(controlPlane, _youtubeWrites, _time, NullLogger<PublishedCheck>.Instance),
-            _time,
+            new VisualGenerator(kernel, Given.Capabilities(kernel), time),
+            new PublishedCheck(controlPlane, _youtubeWrites, time, NullLogger<PublishedCheck>.Instance),
+            time,
             NullLogger<LearningLoop>.Instance);
         return (loop, controlPlane);
     }
@@ -225,6 +226,17 @@ public sealed class LearningLoopTests : IDisposable
             controlPlane.Saves.ShouldBeEmpty();
             chat.Requests.ShouldBeEmpty();
         }
+    }
+
+    [Fact]
+    public async Task A_Proposal_Id_Carries_The_London_Date_Not_The_Utc_Date()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 7, 1, 23, 30, 0, TimeSpan.Zero));
+        var (loop, controlPlane) = Build(ScriptedChat.Answering(Proposals(("topic", "Rye starters"))), [Video() with { CreatedAt = "2026-06-01T12:00:00Z" }], clock: clock);
+
+        await loop.ProposeNextTopicAsync(CancellationToken.None);
+
+        controlPlane.Saves.ShouldHaveSingleItem().Project.Publication!.Proposals[^1].Id.ShouldEndWith("2026-07-02");
     }
 
     [Fact]

@@ -10,7 +10,12 @@ namespace Scout.Operator.Tests.Fakes;
 /// owner sent back to production meanwhile, and <see cref="NoLongerAssemblingOn"/> the same for assembly. With
 /// <see cref="Revoked"/> it behaves as the control plane after the owner revoked YouTube writes: only the project of the
 /// claimed action may be read, and saved with nothing but its publication changed, and a record is logged "after revoke",
-/// consumes the action and is refused.
+/// consumes the action and is refused. The comments live in <see cref="Comments"/>; a save is kept in
+/// <see cref="CommentSaves"/> as sent, refused like the control plane when it drops a stored comment, and stored with the
+/// control plane's fetch time on a new comment and the sync request cleared by a sync at or after it or by a failed sync, one
+/// with a non-empty error; a save with no error keeps the stored one unless it carries a newer sync time;
+/// after a revoke the comments cannot be read and a save may change only the comment of the claimed action.
+/// The voice samples directory is <see cref="VoiceSamplesDirectory"/>, or <see cref="VoiceSamplesFailure"/> when set.
 /// </summary>
 internal sealed class RecordingControlPlane : IOperatorControlPlane
 {
@@ -179,6 +184,7 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
 
             var next = Approved.TryPeek(out var head) ? head : null;
             _executing = next?.Target.Split(':')[0];
+            _executingTarget = next?.Target;
             return Task.FromResult(next);
         }
     }
@@ -219,6 +225,69 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
     public const string RevokedRecord = "The owner revoked youtube's write permission before this action ran.";
 
     private string? _executing;
+    private string? _executingTarget;
+
+    public const string FetchedAt = "2026-11-03T12:00:00.0000000+00:00";
+
+    public OperatorComments Comments { get; set; } = new([], [], null, null, null);
+
+    public List<OperatorComments> CommentSaves { get; } = [];
+
+    public Exception? CommentsFailure { get; set; }
+
+    public Func<int, Exception?> CommentSaveFailure { get; init; } = _ => null;
+
+    public int CommentReads { get; private set; }
+
+    public Task<OperatorComments> GetCommentsAsync(CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            CommentReads++;
+            if (Revoked)
+            {
+                return Task.FromException<OperatorComments>(new InvalidOperationException(NotGranted));
+            }
+
+            return CommentsFailure is null ? Task.FromResult(Comments) : Task.FromException<OperatorComments>(CommentsFailure);
+        }
+    }
+
+    public Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct)
+    {
+        lock (_lock)
+        {
+            CommentSaves.Add(comments);
+            if (CommentSaveFailure(CommentSaves.Count) is { } failure)
+            {
+                return Task.FromException<OperatorComments>(failure);
+            }
+
+            var sent = comments.Comments.Select(c => c.Id).ToHashSet(StringComparer.Ordinal);
+            if (Comments.Comments.FirstOrDefault(c => !sent.Contains(c.Id)) is { } dropped)
+            {
+                return Task.FromException<OperatorComments>(new InvalidOperationException($"The worker may not drop comment '{dropped.Id}'."));
+            }
+
+            var stored = Comments.Comments.ToDictionary(c => c.Id, StringComparer.Ordinal);
+            if (Revoked && comments.Comments.Any(c => $"comment:{c.Id}" != _executingTarget && stored[c.Id] != c))
+            {
+                return Task.FromException<OperatorComments>(new InvalidOperationException(NotGranted));
+            }
+
+            var failed = !string.IsNullOrEmpty(comments.SyncError) && (comments.SyncedAt is null || comments.SyncedAt == Comments.SyncedAt);
+            var answered = failed || (Comments.SyncRequestedAt is { } at && comments.SyncedAt is { } synced
+                && DateTimeOffset.Parse(synced, System.Globalization.CultureInfo.InvariantCulture) >= DateTimeOffset.Parse(at, System.Globalization.CultureInfo.InvariantCulture));
+            Comments = comments with
+            {
+                Comments = [.. comments.Comments.Select(c => stored.ContainsKey(c.Id) ? c : c with { FetchedAt = FetchedAt })],
+                SyncedAt = comments.SyncedAt ?? Comments.SyncedAt,
+                SyncRequestedAt = answered ? null : Comments.SyncRequestedAt,
+                SyncError = comments.SyncError ?? (comments.SyncedAt is not null && comments.SyncedAt != Comments.SyncedAt ? null : Comments.SyncError),
+            };
+            return Task.FromResult(Comments);
+        }
+    }
 
     public bool Revoked { get; set; }
 
@@ -228,4 +297,11 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
         => _stored.TryGetValue(project.Id, out var stored) && (project with { Publication = stored.Publication }) == stored;
 
     private static string SceneList(OperatorScene scene) => $"{scene.Id}|{scene.Order}|{scene.Locked}";
+
+    public string VoiceSamplesDirectory { get; set; } = "/nonexistent/scout-voice-samples";
+
+    public Exception? VoiceSamplesFailure { get; set; }
+
+    public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
+        => VoiceSamplesFailure is null ? Task.FromResult(VoiceSamplesDirectory) : Task.FromException<string>(VoiceSamplesFailure);
 }

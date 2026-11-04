@@ -49,7 +49,60 @@ public interface IOperatorControlPlane
     /// <see cref="InvalidOperationException"/>, and an unreachable control plane a <see cref="ControlPlaneUnavailableException"/>.
     /// </summary>
     Task RecordActionAsync(OperatorAction action, string outcome, CancellationToken ct);
+
+    /// <summary>The comments on the owner's channel as the control plane holds them, newest first, with the ideas and the sync's state.</summary>
+    Task<OperatorComments> GetCommentsAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Save the worker's comments: every stored comment, the owner's fields and every time exactly as read, the worker's
+    /// changes on top; the comments as stored are returned.
+    /// </summary>
+    Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct);
+
+    /// <summary>The absolute path of the folder for the bundled voices' samples, the one place the worker writes them.</summary>
+    Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct);
 }
+
+/// <summary>
+/// The comments on the owner's channel, as the control plane's <c>CommentsView</c> message carries them. Every time is the
+/// string the control plane sent and goes back exactly as read; the worker sets <see cref="SyncedAt"/> and
+/// <see cref="SyncError"/> only for its own sync, and <see cref="SyncRequestedAt"/> is the owner's.
+/// </summary>
+public sealed record OperatorComments(
+    IReadOnlyList<OperatorComment> Comments,
+    IReadOnlyList<OperatorIdea> Ideas,
+    string? SyncedAt,
+    string? SyncRequestedAt,
+    string? SyncError);
+
+/// <summary>
+/// One top-level comment a stranger wrote on the owner's channel, as the control plane's <c>AudienceComment</c> message
+/// carries it. The worker sets the kind, the theme, the draft, the status it may move the comment to and, while it runs the
+/// owner's approved reply or hold, the reply id and the error; <see cref="ApprovedText"/>, <see cref="DecidedAt"/> and
+/// <see cref="FetchedAt"/> are the owner's or the control plane's and go back exactly as read, and a new comment leaves
+/// <see cref="FetchedAt"/> empty.
+/// </summary>
+public sealed record OperatorComment(
+    string Id,
+    string ThreadId,
+    string VideoId,
+    string VideoTitle,
+    string Author,
+    string Text,
+    string PublishedAt,
+    long LikeCount,
+    string Kind,
+    string Theme,
+    string Status,
+    string Draft,
+    string? ApprovedText,
+    string? ReplyId,
+    string? Error,
+    string? DecidedAt,
+    string FetchedAt);
+
+/// <summary>A video idea drawn from a viewer's request, <c>proposed</c> when the worker adds it; the owner uses or dismisses it.</summary>
+public sealed record OperatorIdea(string Id, string Text, string CommentId, string Status, string? ProjectId);
 
 /// <summary>
 /// The control plane could not be reached, as opposed to a refusal it worded; the call can succeed later unchanged.
@@ -189,6 +242,29 @@ public sealed record OperatorProjectState(
 
     /// <summary>The video's publication on YouTube, null until the owner publishes the package.</summary>
     public OperatorPublication? Publication { get; init; }
+
+    /// <summary>The owner's picture in the media directory every scene without its own picture is shown over, null until the owner attaches one.</summary>
+    public string? BackgroundFile { get; init; }
+    /// <summary>The owner's delegation of the project, sent back exactly as read; only the owner sets it.</summary>
+    public bool Delegated { get; init; }
+
+    /// <summary>
+    /// The voice id the owner chose for this project's narration, one of the readiness <see cref="OperatorReadiness.Voices"/>,
+    /// or empty for the worker's choice; sent back exactly as read, only the owner sets it.
+    /// </summary>
+    public string NarrationVoice { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The visual style the owner asked for, empty for none, which the scene planner writes the picture prompts and
+    /// search terms in; sent back exactly as read, only the owner sets it.
+    /// </summary>
+    public string VisualBrief { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The motion preset the owner chose, <c>still</c>, <c>gentle</c> or <c>dynamic</c>, which the assembler applies;
+    /// sent back exactly as read, only the owner sets it.
+    /// </summary>
+    public string Motion { get; init; } = "gentle";
 }
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>
@@ -242,7 +318,14 @@ public sealed record OperatorScene(
     string VisualSource,
     string? AudioFile,
     string? VisualFile,
-    int DurationMs);
+    int DurationMs)
+{
+    /// <summary>The search terms the scene planner chose for a stock picture of the scene; empty when it chose none.</summary>
+    public string VisualQuery { get; init; } = string.Empty;
+
+    /// <summary>The attribution of a <c>stock</c> picture, which the video's description credits; null for any other visual.</summary>
+    public string? VisualCredit { get; init; }
+}
 
 /// <summary>What the worker can produce, as the control plane's <c>Readiness</c> message carries it.</summary>
 public sealed record OperatorReadiness(
@@ -251,7 +334,17 @@ public sealed record OperatorReadiness(
     string Provider,
     bool FfmpegAvailable,
     bool YouTubeSignedIn,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes)
+{
+    /// <summary>The narration voices this machine offers, the connected AI Source's first, then the bundled ones.</summary>
+    public IReadOnlyList<OperatorVoice> Voices { get; init; } = [];
+
+    /// <summary>Whether a scene without an AI image service gets a freely licensed, credited picture from Openverse.</summary>
+    public bool StockPictures { get; init; }
+}
+
+/// <summary>A narration voice, as the control plane's <c>Voice</c> message carries it: its id, its label, its source and its sample's file name in the voice samples directory, null when it has none.</summary>
+public sealed record OperatorVoice(string Id, string Label, string Source, string? SampleFile = null);
 
 /// <summary>
 /// The assembled video, as the control plane's <c>VideoPackage</c> message carries it. Files are plain names inside the

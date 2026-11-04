@@ -21,6 +21,61 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### A revoke and re-grant during an upload can let a second upload be queued (2026-11-03)
+
+- **Gap:** `PublishPackageAsync` ignores an executing `videos.insert` whose claim predates the current grant (`!Stale(a, grantedAt)` in [[pages/services/control-plane]]), so after the owner revokes YouTube writes mid-upload and grants again, the publication reads failed and a second Publish queues a second upload while the first may still finish on YouTube (`/code-review medium` of 2026-11-03). Rare: it needs a revoke and a re-grant inside one upload.
+- **Unblocks with:** the executing check counting a stale executing insert as still running, with a test that revokes, re-grants and publishes again.
+
+### A retryable action failure waits for the 30-minute claim lease, not the next tick (2026-11-03)
+
+- **Gap:** `ActionExecutor` returns without recording on a retryable failure, so the action stays executing until `ClaimLease` expires ([[pages/services/operator]], [[pages/services/control-plane]]); a `thumbnails.set` waiting on an upload recorded "succeeded, not saved" is re-handed every 30 minutes with no end, and the project cannot be published again while its publication is `uploading`.
+- **Unblocks with:** a bounded wait (the thumbnail giving up after N attempts with a readable reason) and a shorter re-hand for a retryable failure, with a test on the "not saved" upload path.
+
+### Using an audience idea starts the project before the idea is marked used (2026-11-03)
+
+- **Gap:** `DecideIdeaAsync(use: true)` calls `StartProjectAsync` first and writes `comments.json` after ([[pages/services/control-plane]]); a comments write that fails leaves a queued project and a still-proposed idea, and a retry starts a second project on the same text.
+- **Unblocks with:** marking the idea used with the project id in the same gated write, or starting the project only after the comments write succeeded and tolerating a used idea without a project.
+
+### The write log parses each tail line twice (2026-11-03)
+
+- **Gap:** `JsonLinesWriteLog.ListSinceAsync` deserializes every line in its stop predicate and again in `ListCoreAsync`, on every `RecordAsync` of an approved action ([[pages/services/control-plane]]). Measured nothing; estimated thousands of lines per record on a busy operator.
+- **Unblocks with:** `ReadTailAsync` handing the parsed entry to the stop predicate, with the existing log tests green.
+
+### YouTube metadata limits and the media file-name rule live in three places (2026-11-03)
+
+- **Gap:** `PackageRules` (control plane) re-implements `PackageChecks` (worker) for the title, description, tag and chapter limits, and the media file-name rule exists in `SceneRules.ValidateFileName`, `MediaFiles.PathFor` and the desktop's `isSafeMediaName`; the comment-id regex exists in `CommentRules`, `CommentDesk` and `operator.ts` ([[pages/services/control-plane]], [[pages/services/operator]], [[pages/services/desktop-operator]]). Drift makes the worker and the control plane disagree on a package.
+- **Unblocks with:** one shared static for the limits in `Scout.ControlPlane.Contracts` (the only assembly both sides reference) and contract tests pinning the desktop copy to it.
+
+### `NextQueuedProjectAsync` reads the projects file twice per poll (2026-11-03)
+
+- **Gap:** a pre-check read precedes `UpdateProjectsAsync`, which re-reads under the gate and already skips the write when the callback answers null ([[pages/services/control-plane]]); the worker polls every 30 s.
+- **Unblocks with:** dropping the pre-check, with the queued-project tests green.
+
+
+### `check-diagnostics` reports two SYSLIB1092 in the control-plane host (2026-11-03)
+
+- **Gap:** `scripts/check-diagnostics.sh` fails on `src/Scout.Host.ControlPlane` with two info-level SYSLIB1092 at `NativeUnix.cs:123`, which were already there before phase 6, and so on `tests/Scout.ControlPlane.Tests`, which references the host. It now fails on `tests/Scout.Host.Console.Tests` too, because that test project references the host for the 16 MB round trip ([[pages/services/host-control-plane]]). The build is still at 0 warnings, since info diagnostics never fail it ([[pages/conventions/tooling]]).
+- **Unblocks with:** the change the SYSLIB1092 message names on the `stat` `LibraryImport` declaration in `NativeUnix`, with a test of the native call.
+
+### Some comment fields have no length limit in the control plane (2026-11-03)
+
+- **Gap:** the control plane bounds a comment's text, draft, theme and id, but not its `Author`, `VideoTitle`, `ThreadId`, `VideoId` or `Error` ([[pages/services/control-plane]]). A worker that misbehaves could grow `comments.json` up to the 16 MB message limit. The security review of phase 6 marked this as hardening only: strangers cannot reach it, and the worker already holds the owner's token.
+- **Unblocks with:** limits in `CommentRules` for those five fields (YouTube's own display-name and title lengths), with a test, in the next change that touches the comment rules.
+
+### The comment poll reads the whole comments state every minute (2026-11-03)
+
+- **Gap:** the worker's comment poll needs only the owner's sync request and the comments marked for a draft, but `GetComments` has one full-state shape, so it reads and maps up to 1000 comments every 60 s under the operator store's single gate ([[pages/services/operator]], [[pages/services/control-plane]]). The performance lens measured nothing and estimated about 0.5 MB a minute at 1000 comments, a fraction of a percent of one core.
+- **Unblocks with:** a measured cost on a busy channel; then an optional `pending_only` flag on `ListCommentsRequest` that answers the sync fields and the `draft_requested` comments only.
+
+### The 6-hour clearing can undo an approval made in the same moment (2026-11-03)
+
+- **Gap:** the control plane's clearing reads the live comment actions before it takes the store's gate; in the few milliseconds between `ApproveReply` writing `reply_approved` and queueing its action, the clearing moves the comment back to `drafted`, and the executor records that action failed without posting ([[pages/services/control-plane]]). Nothing is posted wrongly; the owner approves again.
+- **Unblocks with:** reading the live actions inside the same gate as the comments write, which needs the action queue and the operator store to share one lock or a two-phase check.
+
+### YouTube does not say how `order=time` sorts comment threads (2026-11-03)
+
+- **Gap:** Google's `commentThreads.list` reference (read 2026-11-03) does not say whether `order=time` sorts by the top-level comment's publish time or by the thread's latest activity. The sync reads until a whole page is older than its window, at most 5 pages, and keeps threads by the top-level comment's time ([[pages/services/plugin-youtube]]), so a channel with more than 500 threads touched inside one window can miss the oldest of them until the next window.
+- **Unblocks with:** an observation on a real channel with replies on old threads; then either a larger page budget or a per-video read for the videos the scan stopped on.
 
 ### The revoke sentence is not shown on a write recorded after a revoke (2026-11-03)
 
@@ -41,7 +96,7 @@ reliability: medium
 
 ### Desktop builds are unsigned (2026-11-02)
 
-- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:72`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
+- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:77`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
 - **Unblocks with:** an Apple Developer ID certificate plus notarization (an App Store Connect API key, `hardenedRuntime: true`), and a Windows code-signing certificate (an OV or EV certificate, or Azure Trusted Signing), each stored as a GitHub Actions secret and read by electron-builder in the `build` job of `.github/workflows/release.yml:32`.
 
 ### Intel Mac package is built but not released (2026-11-02)
@@ -61,7 +116,7 @@ reliability: medium
 
 ### X11 always-on-top unverified on COSMIC (2026-10-31)
 
-- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:114`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
+- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:119`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
 - **Fix:** none expected; what remains open is the owner confirming on screen that the bubble stays above native Wayland windows. If it does not, record it under ADR 0028.
 - **Measured 2026-10-31 with Electron 45 under `--ozone-platform=x11`:** every window COSMIC's X window manager manages, whatever its type, is placed where COSMIC chooses, ignores `setPosition` and `setBounds` before and after `show`, reports not always-on-top and gets a server-side frame. A window created with `focusable: false`, shown, then made focusable and focused stays unmanaged, keeps its position and always-on-top, and `document.hasFocus()` reported focus to its page, but that was not real X keyboard focus (see the last bullet).
 - **Measured 2026-10-31 on the owner's COSMIC session** (AppImage started with `--ozone-platform=x11`, read with `xwininfo` and `xprop` on `DISPLAY=:1`): the bubble window was 64x64 at +1840+1190, the bottom-right corner of the 1920x1080 laptop display (offset +0+190) minus the 16 px margin, so the corner and the display choice hold. COSMIC's X window manager reports itself as "Smithay X WM" and lists `_NET_WM_STATE_ABOVE` and `_NET_WM_STATE_SKIP_TASKBAR` in `_NET_SUPPORTED`. The bubble carries no `WM_STATE` and is absent from `_NET_CLIENT_LIST_STACKING`: with `focusable: false` Electron creates it as a window the X window manager does not manage, which the compositor draws above managed windows. Whether that holds above native Wayland windows is only visible on screen.
@@ -100,7 +155,7 @@ reliability: medium
 
 ### `electron-builder-squirrel-windows` peer mismatch (2026-10-21)
 
-- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:88` stays `nsis`.
+- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:93` stays `nsis`.
 - **Fix:** add the peer at the matching version only if a Squirrel target is ever configured.
 
 ### Adapter stop has no fault isolation (2026-10-21)
@@ -170,7 +225,7 @@ reliability: medium
 
 ### Raw gRPC text for feature validation errors (2026-10-23)
 
-- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:260`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
+- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:390`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
 - **Fix:** typed errors for those codes and card copy per code, with a client test for each.
 
 ### Kubernetes pod logs: owner decision (2026-10-23)

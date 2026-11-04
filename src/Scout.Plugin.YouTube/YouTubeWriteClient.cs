@@ -42,6 +42,14 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
 
     internal const string WriteForbidden = "The YouTube sign-in does not allow Scout to change this video; sign in again in Scout Desktop.";
 
+    internal const string CommentForbidden =
+        "YouTube refused the change to this comment: it may have been deleted, or the sign-in does not allow Scout to change it.";
+
+    internal const string MissingCommentPermission =
+        "YouTube needs Scout's permission to reply to and moderate comments: open the YouTube card in Scout Desktop and allow writes again.";
+
+    internal const string NoReplyId = "YouTube took the reply but returned no id for it.";
+
     private const string GoogleApisHost = "www.googleapis.com";
     private const string VideoType = "video/mp4";
 
@@ -102,6 +110,11 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
                 if (sent.StatusCode == HttpStatusCode.NotFound)
                 {
                     session.Address = null;
+                    continue;
+                }
+
+                if ((int)sent.StatusCode == 308)
+                {
                     continue;
                 }
 
@@ -198,6 +211,42 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
         return page.Items?.FirstOrDefault()?.Status is { } status
             ? new YouTubeVideoStatus(status.UploadStatus ?? string.Empty, status.PrivacyStatus ?? string.Empty, status.PublishAt)
             : null;
+    }
+
+    public async Task<string> ReplyToCommentAsync(string parentId, string text, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parentId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        using var response = await http.PostAsJsonAsync(
+            "youtube/v3/comments?part=snippet", new ReplyDto(new ReplySnippetDto(parentId, text)), ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await WriteFailureAsync(response, ct, CommentForbidden, MissingCommentPermission).ConfigureAwait(false);
+        }
+
+        VideoIdDto reply;
+        try
+        {
+            reply = await ReadAsync<VideoIdDto>(response, ct).ConfigureAwait(false);
+        }
+        catch (YouTubeApiException unreadable)
+        {
+            throw new YouTubeApiException(unreadable.Message, response.StatusCode);
+        }
+
+        return string.IsNullOrWhiteSpace(reply.Id) ? throw new YouTubeApiException(NoReplyId, response.StatusCode) : reply.Id;
+    }
+
+    public async Task HoldCommentAsync(string commentId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commentId);
+        using var response = await http.PostAsync(
+            $"youtube/v3/comments/setModerationStatus?id={Uri.EscapeDataString(commentId)}&moderationStatus=heldForReview", content: null, ct)
+            .ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw await WriteFailureAsync(response, ct, CommentForbidden, MissingCommentPermission).ConfigureAwait(false);
+        }
     }
 
     private async Task<Uri> OpenSessionAsync(YouTubeUpload upload, long total, CancellationToken ct)
@@ -305,7 +354,7 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
     }
 
     private static async Task<YouTubeApiException> WriteFailureAsync(
-        HttpResponseMessage response, CancellationToken ct, string forbidden = WriteForbidden)
+        HttpResponseMessage response, CancellationToken ct, string forbidden = WriteForbidden, string missingPermission = MissingPermission)
     {
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
         {
@@ -319,7 +368,7 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
 
         return await YouTubeClient.ReadReasonAsync(response, ct).ConfigureAwait(false) switch
         {
-            "insufficientPermissions" => new YouTubeApiException(MissingPermission, response.StatusCode) { Retryable = true },
+            "insufficientPermissions" => new YouTubeApiException(missingPermission, response.StatusCode) { Retryable = true },
             "quotaExceeded" or "dailyLimitExceeded" => new YouTubeApiException(YouTubeClient.QuotaMessage, response.StatusCode) { Retryable = true },
             _ => new YouTubeApiException(forbidden, response.StatusCode),
         };
@@ -348,6 +397,12 @@ internal sealed class YouTubeWriteClient(HttpClient http, TimeProvider time) : I
         [property: JsonPropertyName("publishAt")] string? PublishAt,
         [property: JsonPropertyName("selfDeclaredMadeForKids")] bool SelfDeclaredMadeForKids,
         [property: JsonPropertyName("containsSyntheticMedia")] bool ContainsSyntheticMedia);
+
+    private sealed record ReplyDto([property: JsonPropertyName("snippet")] ReplySnippetDto Snippet);
+
+    private sealed record ReplySnippetDto(
+        [property: JsonPropertyName("parentId")] string ParentId,
+        [property: JsonPropertyName("textOriginal")] string TextOriginal);
 
     private sealed record VideoIdDto([property: JsonPropertyName("id")] string? Id);
 

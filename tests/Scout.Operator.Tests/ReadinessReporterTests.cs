@@ -18,13 +18,83 @@ public sealed class ReadinessReporterTests : IDisposable
         RecordingControlPlane? controlPlane = null,
         string tokenFile = "",
         TimeProvider? time = null,
-        ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null)
+        ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null, PiperSpeech? piper = null,
+        OpenversePictures? stock = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
-            logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()), schedule);
+            logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()),
+            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock);
+
+    private PiperSpeech Bundled()
+    {
+        var (piper, voices) = Given.BundledVoices(_folder);
+        return Given.Piper(new FakeProcessRunner(), piper, voices);
+    }
+
+    [Fact]
+    public async Task Lists_provider_and_piper_voices()
+    {
+        var media = new MediaCapabilities(true, true, "OpenAI") { SpeechVoices = ["alloy", "nova"] };
+
+        var readiness = await Reporter(media, piper: Bundled()).CurrentAsync(CancellationToken.None);
+
+        readiness.Voices.ShouldBe([
+            new OperatorVoice("OpenAI:alloy", "alloy (OpenAI)", "OpenAI"),
+            new OperatorVoice("OpenAI:nova", "nova (OpenAI)", "OpenAI"),
+            new OperatorVoice("piper:en_GB-aru-medium#0", "Aru 03 (medium)", "piper"),
+            new OperatorVoice("piper:en_GB-aru-medium#1", "Aru 06 (medium)", "piper"),
+            new OperatorVoice("piper:en_GB-cori-medium", "Cori (medium)", "piper"),
+        ]);
+        readiness.SpeechAvailable.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("None", false, "No AI Source is connected; narration uses the bundled voices and visuals become text cards.")]
+    [InlineData("Gemini", false, "Gemini has no speech or image service in Scout; narration uses the bundled voices and visuals become text cards.")]
+    [InlineData("AzureOpenAI", true, "AzureOpenAI has no speech service in Scout; narration uses the bundled voices unless you attach your own audio.")]
+    public async Task A_Provider_Without_Speech_Narrates_With_The_Bundled_Voices_And_Says_So(string provider, bool images, string note)
+    {
+        var readiness = await Reporter(new MediaCapabilities(false, images, provider), piper: Bundled()).CurrentAsync(CancellationToken.None);
+
+        readiness.SpeechAvailable.ShouldBeTrue();
+        readiness.Voices.Select(v => v.Source).ShouldBe(["piper", "piper", "piper"]);
+        readiness.Notes.ShouldBe([note, "Scout is not signed in to YouTube; research goes on without the channel's own uploads.", "Videos are assembled with ffmpeg and the libopenh264 encoder."]);
+    }
+
+    [Fact]
+    public async Task Without_an_image_service_the_readiness_says_pictures_come_from_openverse()
+    {
+        using var http = new OpenverseHttp();
+        var stock = new OpenversePictures(http.Factory(), new SteppingTime(Given.Now));
+
+        var withoutImages = await Reporter(new MediaCapabilities(false, false, "Gemini"), stock: stock).CurrentAsync(CancellationToken.None);
+        var withImages = await Reporter(new MediaCapabilities(true, true, "OpenAI"), stock: stock).CurrentAsync(CancellationToken.None);
+        var withoutStock = await Reporter(new MediaCapabilities(false, false, "Gemini")).CurrentAsync(CancellationToken.None);
+
+        (withoutImages.ImagesAvailable, withoutImages.StockPictures).ShouldBe((false, true));
+        withoutImages.Notes[1].ShouldBe("Pictures without an AI image service come from Openverse (CC0, public domain or CC BY, credited in the description).");
+        (withImages.StockPictures, withoutStock.StockPictures).ShouldBe((true, false));
+        withImages.Notes.ShouldNotContain(n => n.Contains("Openverse"));
+        withoutStock.Notes.ShouldNotContain(n => n.Contains("Openverse"));
+        http.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Bundled_Voices_The_Desktop_Named_But_That_Are_Missing_Are_Reported_Unusable()
+    {
+        var missing = Given.Piper(new FakeProcessRunner(), Path.Combine(_folder, "piper"), Path.Combine(_folder, "voices"));
+
+        var readiness = await Reporter(new MediaCapabilities(false, false, "Gemini"), piper: missing).CurrentAsync(CancellationToken.None);
+
+        (readiness.SpeechAvailable, readiness.Voices.Count).ShouldBe((false, 0));
+        readiness.Notes.Take(2).ShouldBe([
+            "Gemini has no speech or image service in Scout; narration needs your own audio and visuals become text cards.",
+            "The bundled voices are missing or cannot run, so narration needs the connected AI Source or your own audio.",
+        ]);
+    }
 
     [Fact]
     public async Task The_Scheduled_Jobs_Scout_Ran_Late_At_Start_Are_Named_In_The_Notes()
@@ -63,6 +133,7 @@ public sealed class ReadinessReporterTests : IDisposable
         (readiness.SpeechAvailable, readiness.ImagesAvailable, readiness.Provider, readiness.FfmpegAvailable, readiness.YouTubeSignedIn)
             .ShouldBe((true, true, "OpenAI", true, true));
         readiness.Notes.ShouldBe(["Videos are assembled with ffmpeg and the libopenh264 encoder."]);
+        readiness.Voices.ShouldBeEmpty();
     }
 
     [Theory]
@@ -133,6 +204,45 @@ public sealed class ReadinessReporterTests : IDisposable
 
         readiness.FfmpegAvailable.ShouldBeFalse();
         readiness.Notes.ShouldBe(["The ffmpeg Scout found has no H.264 or VP9 encoder it can use, so videos cannot be assembled."]);
+    }
+
+    [Fact]
+    public async Task A_voice_with_a_sample_on_disk_names_it()
+    {
+        var samples = Directory.CreateDirectory(Path.Combine(_folder, "voice-samples")).FullName;
+        File.WriteAllBytes(Path.Combine(samples, "piper-en_GB-cori-medium.wav"), new byte[2048]);
+        var controlPlane = new RecordingControlPlane { VoiceSamplesDirectory = samples };
+        var media = new MediaCapabilities(true, true, "OpenAI") { SpeechVoices = ["nova"] };
+
+        var readiness = await Reporter(media, controlPlane, piper: Bundled()).CurrentAsync(CancellationToken.None);
+
+        readiness.Voices.Select(v => (v.Id, v.SampleFile)).ShouldBe([
+            ("OpenAI:nova", (string?)null),
+            ("piper:en_GB-aru-medium#0", null),
+            ("piper:en_GB-aru-medium#1", null),
+            ("piper:en_GB-cori-medium", "piper-en_GB-cori-medium.wav"),
+        ]);
+    }
+
+    [Fact]
+    public async Task A_samples_folder_the_control_plane_refuses_leaves_the_voices_without_samples_and_the_report_still_goes_out()
+    {
+        var samples = Directory.CreateDirectory(Path.Combine(_folder, "voice-samples")).FullName;
+        File.WriteAllBytes(Path.Combine(samples, "piper-en_GB-cori-medium.wav"), new byte[2048]);
+        var controlPlane = new RecordingControlPlane
+        {
+            VoiceSamplesDirectory = samples,
+            VoiceSamplesFailure = new InvalidOperationException(RecordingControlPlane.NotGranted),
+        };
+        using var reporter = Reporter(new MediaCapabilities(false, false, "Gemini"), controlPlane, piper: Bundled());
+
+        await reporter.StartAsync(CancellationToken.None);
+        await WaitFor(() => controlPlane.Reports.Count == 1);
+        await reporter.StopAsync(CancellationToken.None);
+
+        var report = controlPlane.Reports.ShouldHaveSingleItem();
+        report.Voices.Select(v => v.Id).ShouldBe(["piper:en_GB-aru-medium#0", "piper:en_GB-aru-medium#1", "piper:en_GB-cori-medium"]);
+        report.Voices.ShouldAllBe(v => v.SampleFile == null);
     }
 
     private static async Task WaitFor(Func<bool> condition)

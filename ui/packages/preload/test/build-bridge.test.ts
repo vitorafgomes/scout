@@ -83,6 +83,8 @@ describe('buildBridge', () => {
       'operatorStartProject',
       'operatorDecideClaim',
       'operatorProduce',
+      'operatorDelegate',
+      'operatorDeleteProject',
       'operatorReorderScenes',
       'operatorSetSceneLocked',
       'operatorRegenerateScene',
@@ -97,6 +99,11 @@ describe('buildBridge', () => {
       'operatorDecideProposal',
       'operatorStartExperiment',
       'operatorAdoptExperimentWinner',
+      'operatorComments',
+      'operatorRequestCommentSync',
+      'operatorDecideComment',
+      'operatorApproveReply',
+      'operatorDecideIdea',
       'githubSignIn',
       'githubStatus',
       'githubCancel',
@@ -517,23 +524,50 @@ describe('buildBridge', () => {
     ]);
   });
 
-  it('produce, scene order, lock, regeneration, attach and readiness reach main on their own scout:operator channels, and attach carries the ids and the kind only', async () => {
+  it('produce, delegation, project deletion, scene order, lock, regeneration, attach of a scene file and of a background, and readiness reach main on their own scout:operator channels, and attach carries the ids and the kind only', async () => {
     const ipc = makeFakeIpc();
     const bridge = buildBridge(ipc);
 
-    await bridge.operatorProduce({ id: 'p1' });
+    await bridge.operatorProduce({
+      id: 'p1',
+      narrationVoice: 'piper:en_GB-cori-medium',
+      visualBrief: 'Chalk on slate',
+      motion: 'still',
+    });
+    await bridge.operatorDelegate({
+      id: 'p1',
+      narrationVoice: '',
+      visualBrief: '',
+      motion: 'gentle',
+    });
+    await bridge.operatorDeleteProject({ id: 'p1' });
     await bridge.operatorReorderScenes({ projectId: 'p1', sceneIds: ['s2', 's1'] });
     await bridge.operatorSetSceneLocked({ projectId: 'p1', sceneId: 's1', locked: true });
     await bridge.operatorRegenerateScene({ projectId: 'p1', sceneId: 's2' });
     await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: 's1', kind: 'audio' });
+    await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: '', kind: 'background' });
     await bridge.operatorReadiness();
 
     expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
-      [CHANNEL.operatorProduction, { id: 'p1' }],
+      [
+        CHANNEL.operatorProduction,
+        {
+          id: 'p1',
+          narrationVoice: 'piper:en_GB-cori-medium',
+          visualBrief: 'Chalk on slate',
+          motion: 'still',
+        },
+      ],
+      [
+        CHANNEL.operatorDelegation,
+        { id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' },
+      ],
+      [CHANNEL.operatorProjectDeletion, { id: 'p1' }],
       [CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s2', 's1'] }],
       [CHANNEL.operatorSceneLock, { projectId: 'p1', sceneId: 's1', locked: true }],
       [CHANNEL.operatorSceneRegeneration, { projectId: 'p1', sceneId: 's2' }],
       [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'audio' }],
+      [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'background' }],
       [CHANNEL.operatorReadiness],
     ]);
   });
@@ -582,6 +616,25 @@ describe('buildBridge', () => {
       [CHANNEL.operatorProposalDecision, { projectId: 'p1', proposalId: 'pr1', accept: true }],
       [CHANNEL.operatorExperiment, { projectId: 'p1', armHours: 48 }],
       [CHANNEL.operatorExperimentAdoption, { id: 'p1' }],
+    ]);
+  });
+
+  it('reading the comments, asking for a sync, deciding a comment, approving a reply and deciding an idea reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorComments();
+    await bridge.operatorRequestCommentSync();
+    await bridge.operatorDecideComment({ commentId: 'c1', decision: 'hold' });
+    await bridge.operatorApproveReply({ commentId: 'c1', text: 'Thanks for asking.' });
+    await bridge.operatorDecideIdea({ ideaId: 'idea-c1', use: true });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorComments],
+      [CHANNEL.operatorCommentSync],
+      [CHANNEL.operatorCommentDecision, { commentId: 'c1', decision: 'hold' }],
+      [CHANNEL.operatorReplyApproval, { commentId: 'c1', text: 'Thanks for asking.' }],
+      [CHANNEL.operatorIdeaDecision, { ideaId: 'idea-c1', use: true }],
     ]);
   });
 

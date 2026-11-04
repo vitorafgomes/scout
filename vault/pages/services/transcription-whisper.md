@@ -60,3 +60,5 @@ Publishing: Whisper.net loads its native libraries from `runtimes/<rid>/` beside
 ## Related
 
 Direct project references: [[pages/services/conversation]]. Referenced by [[pages/services/host-console]]; its WAV input comes from [[pages/services/adapter-local]]. Map: [[pages/architecture/project-map]].
+
+Streaming transcription of live audio is planned in [[pages/roadmap/live-assistant]].

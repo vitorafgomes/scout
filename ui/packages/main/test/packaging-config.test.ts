@@ -212,7 +212,27 @@ describe('the packaged app finds the control-plane host and its protos', () => {
     expect(resolveMediaTools(packaged, (file) => everyFile.has(file))).toEqual({
       ffmpeg: join(RESOURCES, tools!.to, 'linux-x64', 'ffmpeg'),
       font: join(RESOURCES, fonts!.to, 'NotoSans-Regular.ttf'),
+      piper: '',
+      voices: '',
     });
+  });
+
+  it('ships the voices folder as a resource outside the asar, where resolveMediaTools looks for it, with piper inside media-tools', () => {
+    const voices = config.extraResources.find((r) => r.to === 'voices');
+    const tools = config.extraResources.find((r) => r.to === 'media-tools');
+    const piper = join(RESOURCES, 'media-tools', 'linux-x64', 'piper', 'piper');
+
+    expect(voices?.from).toBe('packages/main/resources/voices');
+    expect(voices!.filter).toEqual(['**/*']);
+    expect(tools!.filter).toEqual(['**/*']);
+    expect(config.files).toContain('!packages/main/resources/voices/**');
+    expect(
+      resolveMediaTools(
+        packaged,
+        (file) => file === piper,
+        (dir) => (dir === join(RESOURCES, 'voices') ? ['en_GB-cori-medium.onnx'] : []),
+      ),
+    ).toMatchObject({ piper, voices: join(RESOURCES, 'voices') });
   });
 
   it.each(['publish-worker.sh', 'publish-worker.ps1'])(

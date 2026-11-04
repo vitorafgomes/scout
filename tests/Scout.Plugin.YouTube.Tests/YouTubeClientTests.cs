@@ -163,6 +163,64 @@ public sealed class YouTubeClientTests
     }
 
     [Fact]
+    public async Task Comment_Threads_Read_The_Whole_Channel_Newest_First_In_Plain_Text_And_Carry_The_Next_Page()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, GoogleJson.CommentThreads);
+        handler.EnqueueJson(HttpStatusCode.OK, GoogleJson.CommentThreadsLastPage);
+
+        var first = await client.ListCommentThreadsAsync("UCowner0000000000000000", null, CancellationToken.None);
+        var last = await client.ListCommentThreadsAsync("UCowner0000000000000000", first.NextPageToken, CancellationToken.None);
+
+        handler.Requests.Select(r => (r.Method, r.Uri.PathAndQuery)).ShouldBe([
+            ("GET", "/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId=UCowner0000000000000000&order=time&maxResults=100&textFormat=plainText"),
+            ("GET", "/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId=UCowner0000000000000000&order=time&maxResults=100&textFormat=plainText&pageToken=page2token"),
+        ]);
+        first.ShouldBe(new YouTubeCommentThreadPage(first.Threads, "page2token"));
+        first.Threads.ShouldBe([
+            new YouTubeCommentThread("UgThread001", "UgComment001", "abcDEF12345", "@breadfan", "UCfan",
+                "How long do I feed the starter?", new DateTimeOffset(2026, 11, 2, 9, 30, 0, TimeSpan.Zero), 3),
+            new YouTubeCommentThread("UgThread002", "UgComment002", "xyz_-987654", "Anonymous", null,
+                "Great tip", new DateTimeOffset(2026, 11, 1, 18, 0, 0, TimeSpan.Zero), 0),
+        ]);
+        (last.Threads.Count, last.NextPageToken).ShouldBe((0, null));
+    }
+
+    [Fact]
+    public async Task Comment_Threads_Without_The_Comment_Scope_Ask_To_Allow_Writes_Again()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.Forbidden, GoogleJson.Error(403, "insufficientPermissions"));
+        handler.EnqueueJson(HttpStatusCode.Forbidden, GoogleJson.Error(403, "forbidden"));
+
+        var scope = await Should.ThrowAsync<YouTubeApiException>(
+            () => client.ListCommentThreadsAsync("UCowner0000000000000000", null, CancellationToken.None));
+        var other = await Should.ThrowAsync<YouTubeApiException>(
+            () => client.ListCommentThreadsAsync("UCowner0000000000000000", null, CancellationToken.None));
+
+        (scope.Message, scope.Retryable, scope.StatusCode).ShouldBe((
+            "Reading comments needs Scout's permission to reply to and moderate comments: open the YouTube card in Scout Desktop and allow writes again.",
+            true,
+            HttpStatusCode.Forbidden));
+        (other.Message, other.Retryable).ShouldBe(("The YouTube credentials cannot read this.", false));
+    }
+
+    [Fact]
+    public async Task Comment_Threads_5xx_And_Timeout_Fail_As_Unavailable_And_As_The_Timeout()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.InternalServerError, GoogleJson.Error(500, "backendError"));
+        handler.EnqueueThrow(new TaskCanceledException("timed out"));
+
+        var unavailable = await Should.ThrowAsync<YouTubeApiException>(
+            () => client.ListCommentThreadsAsync("UCowner0000000000000000", null, CancellationToken.None));
+        await Should.ThrowAsync<TaskCanceledException>(
+            () => client.ListCommentThreadsAsync("UCowner0000000000000000", null, CancellationToken.None));
+
+        (unavailable.Message, unavailable.Retryable).ShouldBe(("YouTube is currently unavailable. Try again later.", true));
+    }
+
+    [Fact]
     public async Task Unauthorized_Throws_Sign_In_Again_Message()
     {
         var (client, handler) = Build();

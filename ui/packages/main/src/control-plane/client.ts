@@ -17,11 +17,14 @@ import {
   type FeatureStatus,
   type FeatureWriteClass,
   type ClaimStatus,
+  type CommentDecision,
+  type CommentsViewDto,
   type MandateDto,
   type MandateSaveRequest,
   type OperatorProjectDto,
   type PendingActionDto,
   type PrivacyStatus,
+  type ProjectMotion,
   type PublicationDto,
   type ReadinessDto,
   type SceneDto,
@@ -79,17 +82,30 @@ export interface ControlPlaneClient {
     status: ClaimStatus,
     note?: string,
   ): Promise<OperatorProjectDto>;
-  produceProject(id: string): Promise<OperatorProjectDto>;
+  produceProject(
+    id: string,
+    narrationVoice: string,
+    visualBrief: string,
+    motion: ProjectMotion,
+  ): Promise<OperatorProjectDto>;
+  delegateProject(
+    id: string,
+    narrationVoice: string,
+    visualBrief: string,
+    motion: ProjectMotion,
+  ): Promise<OperatorProjectDto>;
+  deleteProject(id: string): Promise<void>;
   reorderScenes(projectId: string, sceneIds: readonly string[]): Promise<OperatorProjectDto>;
   setSceneLocked(projectId: string, sceneId: string, locked: boolean): Promise<OperatorProjectDto>;
   regenerateScene(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
   attachSceneMedia(
     projectId: string,
     sceneId: string,
-    kind: SceneMediaKind,
+    kind: SceneMediaKind | 'background',
     fileName: string,
   ): Promise<OperatorProjectDto>;
   getMediaDirectory(projectId: string): Promise<string>;
+  getVoiceSamplesDirectory(): Promise<string>;
   getReadiness(): Promise<ReadinessDto>;
   assembleProject(id: string): Promise<OperatorProjectDto>;
   confirmMediaRights(id: string): Promise<OperatorProjectDto>;
@@ -114,6 +130,11 @@ export interface ControlPlaneClient {
   ): Promise<OperatorProjectDto>;
   startExperiment(projectId: string, armHours: number): Promise<OperatorProjectDto>;
   adoptExperimentWinner(id: string): Promise<OperatorProjectDto>;
+  listComments(): Promise<CommentsViewDto>;
+  requestCommentSync(): Promise<CommentsViewDto>;
+  decideComment(commentId: string, decision: CommentDecision): Promise<CommentsViewDto>;
+  approveReply(commentId: string, text: string): Promise<CommentsViewDto>;
+  decideIdea(ideaId: string, use: boolean): Promise<CommentsViewDto>;
   close(): void;
 }
 
@@ -211,6 +232,11 @@ interface ProjectMessage {
   scenes: SceneMessage[];
   package?: PackageMessage | null;
   publication?: PublicationMessage | null;
+  backgroundFile?: string;
+  delegated: boolean;
+  narrationVoice: string;
+  visualBrief: string;
+  motion: string;
 }
 
 interface PublicationMessage {
@@ -291,18 +317,48 @@ interface SceneMessage {
   error?: string;
   audioSource: string;
   visualSource: string;
+  visualQuery?: string;
+  visualCredit?: string;
   audioFile?: string;
   visualFile?: string;
   durationMs: number;
 }
 
+interface CommentsViewMessage {
+  comments: {
+    id: string;
+    threadId: string;
+    videoId: string;
+    videoTitle: string;
+    author: string;
+    text: string;
+    publishedAt: string;
+    likeCount: number;
+    kind: string;
+    theme: string;
+    status: string;
+    draft: string;
+    approvedText?: string;
+    replyId?: string;
+    error?: string;
+    decidedAt?: string;
+    fetchedAt: string;
+  }[];
+  ideas: { id: string; text: string; commentId: string; status: string; projectId?: string }[];
+  syncedAt?: string;
+  syncRequestedAt?: string;
+  syncError?: string;
+}
+
 interface ReadinessMessage {
   speechAvailable: boolean;
   imagesAvailable: boolean;
+  stockPictures?: boolean;
   provider: string;
   ffmpegAvailable: boolean;
   youtubeSignedIn: boolean;
   notes: string[];
+  voices?: { id: string; label: string; source: string; sampleFile?: string }[];
   reportedAt?: string;
 }
 
@@ -314,6 +370,11 @@ type UnaryMethod = (
 ) => grpc.ClientUnaryCall;
 
 const TOKEN_HEADER = 'x-scout-token';
+const MAX_MESSAGE_BYTES = 16 * 1024 * 1024;
+const CHANNEL_OPTIONS: grpc.ChannelOptions = {
+  'grpc.max_receive_message_length': MAX_MESSAGE_BYTES,
+  'grpc.max_send_message_length': MAX_MESSAGE_BYTES,
+};
 const WRITE_CONFIRMATION = 'Confirm the writes of ';
 
 const STATUS: Readonly<Record<string, FeatureStatus>> = {
@@ -446,6 +507,11 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
     scenes: message.scenes.map(toScene),
     package: message.package == null ? null : toPackage(message.package),
     publication: message.publication == null ? null : toPublication(message.publication),
+    narrationVoice: message.narrationVoice,
+    backgroundFile: message.backgroundFile ?? null,
+    delegated: message.delegated,
+    visualBrief: message.visualBrief,
+    motion: message.motion === 'still' || message.motion === 'dynamic' ? message.motion : 'gentle',
   };
 }
 
@@ -544,6 +610,8 @@ function toScene(message: SceneMessage): SceneDto {
     error: message.error ?? null,
     audioSource: message.audioSource,
     visualSource: message.visualSource,
+    visualQuery: message.visualQuery ?? '',
+    visualCredit: message.visualCredit ?? null,
     audioFile: message.audioFile ?? null,
     visualFile: message.visualFile ?? null,
     durationMs: message.durationMs,
@@ -554,11 +622,52 @@ function toReadiness(message: ReadinessMessage): ReadinessDto {
   return {
     speechAvailable: message.speechAvailable,
     imagesAvailable: message.imagesAvailable,
+    stockPictures: message.stockPictures ?? false,
     provider: message.provider,
     ffmpegAvailable: message.ffmpegAvailable,
     youtubeSignedIn: message.youtubeSignedIn,
     notes: message.notes,
+    voices: (message.voices ?? []).map(({ id, label, source, sampleFile }) => ({
+      id,
+      label,
+      source,
+      sampleFile: sampleFile ?? null,
+    })),
     reportedAt: message.reportedAt ?? null,
+  };
+}
+
+function toComments(message: CommentsViewMessage): CommentsViewDto {
+  return {
+    comments: message.comments.map((comment) => ({
+      id: comment.id,
+      threadId: comment.threadId,
+      videoId: comment.videoId,
+      videoTitle: comment.videoTitle,
+      author: comment.author,
+      text: comment.text,
+      publishedAt: comment.publishedAt,
+      likeCount: comment.likeCount,
+      kind: comment.kind,
+      theme: comment.theme,
+      status: comment.status,
+      draft: comment.draft,
+      approvedText: comment.approvedText ?? null,
+      replyId: comment.replyId ?? null,
+      error: comment.error ?? null,
+      decidedAt: comment.decidedAt ?? null,
+      fetchedAt: comment.fetchedAt,
+    })),
+    ideas: message.ideas.map((idea) => ({
+      id: idea.id,
+      text: idea.text,
+      commentId: idea.commentId,
+      status: idea.status,
+      projectId: idea.projectId ?? null,
+    })),
+    syncedAt: message.syncedAt ?? null,
+    syncRequestedAt: message.syncRequestedAt ?? null,
+    syncError: message.syncError ?? null,
   };
 }
 
@@ -610,14 +719,17 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
   const providers = new loaded.scout.controlplane.v1.Providers(
     target,
     grpc.credentials.createInsecure(),
+    CHANNEL_OPTIONS,
   );
   const features = new loaded.scout.controlplane.v1.Features(
     target,
     grpc.credentials.createInsecure(),
+    CHANNEL_OPTIONS,
   );
   const operator = new loaded.scout.controlplane.v1.Operator(
     target,
     grpc.credentials.createInsecure(),
+    CHANNEL_OPTIONS,
   );
 
   function waitForReady(client: grpc.Client, deadline: number): Promise<void> {
@@ -689,6 +801,8 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
   }
   const project = async (method: string, request: object): Promise<OperatorProjectDto> =>
     toProject(await operatorCall<ProjectMessage>(method, request));
+  const comments = async (method: string, request: object): Promise<CommentsViewDto> =>
+    toComments(await operatorCall<CommentsViewMessage>(method, request));
   const decide = async (method: string, id: string, reason?: string): Promise<PendingActionDto> =>
     toPendingAction(await call<PendingActionMessage>(features, method, { id, reason }));
 
@@ -751,7 +865,13 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     startProject: (topic) => project('StartProject', { topic }),
     decideClaim: (projectId, claimId, status, note) =>
       project('DecideClaim', { projectId, claimId, status, note }),
-    produceProject: (id) => project('ProduceProject', { id }),
+    produceProject: (id, narrationVoice, visualBrief, motion) =>
+      project('ProduceProject', { id, narrationVoice, visualBrief, motion }),
+    delegateProject: (id, narrationVoice, visualBrief, motion) =>
+      project('DelegateProject', { id, narrationVoice, visualBrief, motion }),
+    async deleteProject(id): Promise<void> {
+      await operatorCall<object>('DeleteProject', { id });
+    },
     reorderScenes: (projectId, sceneIds) => project('ReorderScenes', { projectId, sceneIds }),
     setSceneLocked: (projectId, sceneId, locked) =>
       project('SetSceneLocked', { projectId, sceneId, locked }),
@@ -760,6 +880,9 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       project('AttachSceneMedia', { projectId, sceneId, kind, fileName }),
     async getMediaDirectory(projectId): Promise<string> {
       return (await operatorCall<{ path: string }>('GetMediaDirectory', { id: projectId })).path;
+    },
+    async getVoiceSamplesDirectory(): Promise<string> {
+      return (await operatorCall<{ path: string }>('GetVoiceSamplesDirectory', {})).path;
     },
     async getReadiness(): Promise<ReadinessDto> {
       return toReadiness(await operatorCall<ReadinessMessage>('GetReadiness', {}));
@@ -781,6 +904,11 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       project('DecideProposal', { projectId, proposalId, accept }),
     startExperiment: (projectId, armHours) => project('StartExperiment', { projectId, armHours }),
     adoptExperimentWinner: (id) => project('AdoptExperimentWinner', { id }),
+    listComments: () => comments('ListComments', {}),
+    requestCommentSync: () => comments('RequestCommentSync', {}),
+    decideComment: (commentId, decision) => comments('DecideComment', { commentId, decision }),
+    approveReply: (commentId, text) => comments('ApproveReply', { commentId, text }),
+    decideIdea: (ideaId, use) => comments('DecideIdea', { ideaId, use }),
     close(): void {
       closed = true;
       providers.close();

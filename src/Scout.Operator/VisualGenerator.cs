@@ -6,19 +6,23 @@ using Scout.Llm.Abstractions;
 
 namespace Scout.Operator;
 
-/// <summary>The picture of a scene: its visual source, the file in the media directory and a note.</summary>
-internal sealed record VisualResult(string VisualSource, string? VisualFile, string? Note);
+/// <summary>The picture of a scene: its visual source, the file in the media directory, a note and a stock picture's credit.</summary>
+internal sealed record VisualResult(string VisualSource, string? VisualFile, string? Note, string? Credit = null);
 
 /// <summary>
 /// Makes a scene's picture with the connected provider's text-to-image service, saved as <c>scene-&lt;id&gt;.png</c>
 /// in the project's media directory, from the bytes the service returns; a picture returned only as a link is
-/// refused and never fetched. A scene shows a text card instead, with a note, when there is no image service, when
-/// it comes after the <see cref="MaxScenes"/>th scene of the video, or when <see cref="PerDay"/> pictures were
-/// already made since midnight Pacific time in this process. A picture the provider fails to make, or returns without
-/// bytes, gives its place in the day's count back.
+/// refused and never fetched. Without an image service the scene gets a credited stock picture from Openverse, the
+/// search terms the planner chose or the first <see cref="QueryWords"/> words of its prompt. A scene shows a text card
+/// instead, with a note, when there is neither, when Openverse gives no picture, when it comes after the
+/// <see cref="MaxScenes"/>th scene of the video, or when <see cref="PerDay"/> pictures were already made since midnight
+/// Pacific time in this process. A picture the provider fails to make, or returns without bytes, gives its place in the
+/// day's count back.
 /// </summary>
-internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, TimeProvider time)
+internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, TimeProvider time, OpenversePictures? stock = null)
 {
+    internal const int QueryWords = 6;
+
     internal const int PerDay = 40;
 
     internal const int MaxScenes = 30;
@@ -37,12 +41,18 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
     internal static string Failed(int order) =>
         $"The AI Source could not make the picture of scene {order}; regenerate it in Scout Desktop, Production.";
 
+    /// <summary>Whether the connected provider has an image service.</summary>
+    public bool ImagesAvailable => media.Images;
+
+    /// <summary>Whether a scene without an image service gets a stock picture from Openverse.</summary>
+    public bool StockPictures => stock is not null;
+
     /// <summary>Make the picture of <paramref name="scene"/>, the <paramref name="position"/>th scene of the video.</summary>
     public async Task<VisualResult> GenerateAsync(OperatorScene scene, int position, string directory, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(scene);
         var images = kernel.Services.GetService<ITextToImageService>();
-        if (images is null)
+        if (images is null && stock is null)
         {
             return new VisualResult(OperatorPipeline.TextCard, null, NoImages);
         }
@@ -50,6 +60,17 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
         if (position > MaxScenes)
         {
             return new VisualResult(OperatorPipeline.TextCard, null, PastMaxScenes);
+        }
+
+        if (images is null)
+        {
+            var query = string.IsNullOrWhiteSpace(scene.VisualQuery)
+                ? string.Join(' ', scene.VisualPrompt.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(QueryWords))
+                : scene.VisualQuery;
+            var found = await stock!.FindAsync(query, directory, scene.Id, ct).ConfigureAwait(false);
+            return found.File is null
+                ? new VisualResult(OperatorPipeline.TextCard, null, found.Note)
+                : new VisualResult(OperatorPipeline.Stock, found.File, found.Note, found.Credit);
         }
 
         if (!_today.TryTake())

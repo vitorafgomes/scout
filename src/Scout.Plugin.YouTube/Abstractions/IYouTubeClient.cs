@@ -1,7 +1,7 @@
 namespace Scout.Plugin.YouTube.Abstractions;
 
 /// <summary>
-/// Read-only access to the YouTube Data API. Listing only: no upload, edit, comment or
+/// Read-only access to the YouTube Data API. Listing only: no upload, edit, comment write or
 /// playlist operation exists by design.
 /// </summary>
 public interface IYouTubeClient
@@ -26,4 +26,12 @@ public interface IYouTubeClient
     /// 25 (<paramref name="max"/> is clamped to 1..25). Each call spends one of the 100 searches YouTube allows a day.
     /// </summary>
     Task<IReadOnlyList<YouTubeSearchResult>> SearchVideosAsync(string query, int max, CancellationToken ct);
+
+    /// <summary>
+    /// One page of up to 100 comment threads on every video of <paramref name="channelId"/>, newest first, in plain text;
+    /// <paramref name="pageToken"/> null for the first page. YouTube leaves out the threads held for review or likely spam.
+    /// It needs the <c>youtube.force-ssl</c> scope of the write sign-in; a read-only sign-in is refused with a sentence that
+    /// asks the owner to allow writes again.
+    /// </summary>
+    Task<YouTubeCommentThreadPage> ListCommentThreadsAsync(string channelId, string? pageToken, CancellationToken ct);
 }

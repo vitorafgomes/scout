@@ -9,17 +9,20 @@ namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
-/// the projects, the owner's claim decisions, production, the scene edits, the media directory,
+/// the projects, the owner's claim decisions, production, delegation, the scene edits, the media directory, project deletion,
 /// the worker's readiness, assembly, the owner's package metadata, media rights and approval, publication,
-/// proposal decisions and experiments.
+/// proposal decisions and experiments, and the comments: the list, a sync request, the owner's decisions, approved
+/// replies and ideas.
 /// </summary>
 public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
 {
     private readonly OperatorService _operator;
+    private readonly CommentService _comments;
 
-    public OperatorGrpcService(OperatorService @operator)
+    public OperatorGrpcService(OperatorService @operator, CommentService comments)
     {
         _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
+        _comments = comments ?? throw new ArgumentNullException(nameof(comments));
     }
 
     public override Task<WireMandate> GetMandate(GetMandateRequest request, ServerCallContext context) =>
@@ -59,9 +62,13 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
                     context.CancellationToken)
                 .ConfigureAwait(false)));
 
-    public override Task<Project> ProduceProject(GetProjectRequest request, ServerCallContext context) =>
+    public override Task<Project> ProduceProject(ProduceProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
-            await _operator.ProduceProjectAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+            await _operator.ProduceProjectAsync(request.Id, request.NarrationVoice, request.VisualBrief, request.Motion, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> DelegateProject(DelegateProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.DelegateProjectAsync(request.Id, request.NarrationVoice, request.VisualBrief, request.Motion, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<Project> ReorderScenes(ReorderScenesRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
@@ -92,6 +99,13 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
         OperatorMapping.Guard(async () => new MediaDirectory
         {
             Path = await _operator.GetMediaDirectoryAsync(request.Id, context.CancellationToken).ConfigureAwait(false),
+        });
+
+    public override Task<DeleteProjectResponse> DeleteProject(GetProjectRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () =>
+        {
+            await _operator.DeleteProjectAsync(request.Id, context.CancellationToken).ConfigureAwait(false);
+            return new DeleteProjectResponse();
         });
 
     public override Task<WireReadiness> GetReadiness(GetReadinessRequest request, ServerCallContext context) =>
@@ -144,4 +158,32 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<Project> AdoptExperimentWinner(GetProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.AdoptExperimentWinnerAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<CommentsView> ListComments(ListCommentsRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.ListCommentsAsync(context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<CommentsView> RequestCommentSync(ListCommentsRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.RequestCommentSyncAsync(context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<CommentsView> DecideComment(DecideCommentRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.DecideCommentAsync(request.CommentId, request.Decision, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<CommentsView> ApproveReply(ApproveReplyRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.ApproveReplyAsync(request.CommentId, request.Text, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<CommentsView> DecideIdea(DecideIdeaRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => CommentMapping.ToWire(
+            await _comments.DecideIdeaAsync(request.IdeaId, request.Use, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<MediaDirectory> GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => new MediaDirectory
+        {
+            Path = await _operator.GetVoiceSamplesDirectoryAsync(context.CancellationToken).ConfigureAwait(false),
+        });
 }

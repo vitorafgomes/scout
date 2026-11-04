@@ -12,15 +12,17 @@ internal interface IProcessRunner
 {
     /// <summary>
     /// Run <paramref name="program"/> with <paramref name="arguments"/> as separate arguments, never through a shell, and
-    /// return how it ended. A program that cannot be started, or runs past <paramref name="timeout"/>, fails with an
-    /// <see cref="InvalidOperationException"/>; a cancelled run is killed.
+    /// return how it ended. <paramref name="input"/>, when given, is written to its standard input as UTF-8, which is then
+    /// closed; without it standard input is closed at once. A program that cannot be started, or runs past
+    /// <paramref name="timeout"/>, fails with an <see cref="InvalidOperationException"/>; a cancelled run is killed.
     /// </summary>
-    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct);
+    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null);
 }
 
 /// <summary>
-/// <see cref="IProcessRunner"/> over <see cref="Process"/>: the arguments go as an argument list, standard input is closed
-/// at once so the program never reads the worker's own input, standard output and error are read while it runs, the
+/// <see cref="IProcessRunner"/> over <see cref="Process"/>: the arguments go as an argument list, standard input carries
+/// only the given input, or is closed at once, so the program never reads the worker's own input; a program that stops
+/// reading its input early still returns how it ended. Standard output and error are read while it runs, the
 /// last <see cref="TailLength"/> characters of standard error are kept, and a run past its timeout or cancelled is killed
 /// with every process it started.
 /// </summary>
@@ -33,7 +35,8 @@ internal sealed class ProcessRunner : IProcessRunner
     internal static string TimedOut(string program, TimeSpan timeout) =>
         $"{Path.GetFileName(program)} ran longer than {timeout.TotalSeconds:0} seconds and was stopped.";
 
-    public async Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
+    public async Task<ProcessResult> RunAsync(
+        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(program);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -60,9 +63,9 @@ internal sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException(NotStarted(program), ex);
         }
 
-        process.StandardInput.Close();
         var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var error = ReadTailAsync(process.StandardError);
+        var feed = FeedAsync(process.StandardInput, input is null ? [] : Encoding.UTF8.GetBytes(input));
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
         try
@@ -76,6 +79,7 @@ internal sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException(TimedOut(program, timeout));
         }
 
+        await feed.ConfigureAwait(false);
         return new ProcessResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
     }
 
@@ -89,6 +93,30 @@ internal sealed class ProcessRunner : IProcessRunner
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or TimeoutException or IOException or ObjectDisposedException)
         {
+        }
+    }
+
+    private static async Task FeedAsync(StreamWriter writer, byte[] input)
+    {
+        try
+        {
+            if (input.Length > 0)
+            {
+                await writer.BaseStream.WriteAsync(input, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            try
+            {
+                writer.Close();
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+            }
         }
     }
 

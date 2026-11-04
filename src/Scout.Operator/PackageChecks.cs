@@ -6,8 +6,8 @@ namespace Scout.Operator;
 
 /// <summary>
 /// The package's first metadata and its checks. Metadata: the first title variant cut to YouTube's 100 characters at a
-/// word, the script's description followed by chapters timed from the real scene lengths, cut to YouTube's 5000
-/// characters by shortening the script's description first, and the script's tags kept in order while they fit
+/// word, the script's description followed by chapters timed from the real scene lengths and the credits of the stock
+/// pictures, cut to YouTube's 5000 characters by shortening the script's description first, and the script's tags kept in order while they fit
 /// YouTube's 500 characters. Checks, each <c>pass</c>, <c>warn</c> or <c>fail</c>: duration, loudness, captions, placeholders,
 /// metadata and discoverability.
 /// </summary>
@@ -66,7 +66,7 @@ internal static partial class PackageChecks
         var placeholders = cuts.Where(c => c.Placeholder).Select(c => c.Scene.Order).ToList();
         return placeholders.Count > 0
             ? new("placeholders", Fail, $"Scenes {string.Join(", ", placeholders)} are not ready or miss their picture or narration file.")
-            : new("placeholders", Pass, "Every scene is ready with its own media or a text card.");
+            : new("placeholders", Pass, "Every scene is ready with its own media, the project's background or a text card.");
     }
 
     internal static OperatorCheck Metadata(string title, string description, IReadOnlyList<string> tags)
@@ -116,20 +116,32 @@ internal static partial class PackageChecks
         => Cut(script?.TitleVariants.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))?.Trim() ?? topic.Trim(), MaxTitle);
 
     /// <summary>
-    /// The script's description, then the chapters, when the video has at least three of 10 seconds or more; within
-    /// <see cref="MaxDescription"/> characters, the script's description cut at a word to leave the chapters whole, or
-    /// the whole cut when the chapters alone do not fit.
+    /// The script's description, then the chapters, when the video has at least three of 10 seconds or more, then a
+    /// <c>Credits</c> block with one line per distinct credit of the scenes' stock pictures; within
+    /// <see cref="MaxDescription"/> characters, the script's description cut at a word to leave the chapters and credits
+    /// whole, or the whole cut when they alone do not fit.
     /// </summary>
     internal static string Description(OperatorScript? script, IReadOnlyList<SceneCut> cuts)
     {
         var text = script?.Description.Trim() ?? string.Empty;
         var chapters = Chapters(script, cuts);
-        if (chapters.Count == 0)
+        var credits = cuts
+            .Where(c => c.Scene.VisualSource == OperatorPipeline.Stock)
+            .Select(c => FilterText.Clean(c.Scene.VisualCredit ?? string.Empty))
+            .Where(c => c.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        List<string> blocks =
+        [
+            .. chapters.Count > 0 ? [string.Join('\n', chapters.Select(c => $"{Clock(c.StartMs)} {c.Title}"))] : Array.Empty<string>(),
+            .. credits.Count > 0 ? ["Credits\n" + string.Join('\n', credits)] : Array.Empty<string>(),
+        ];
+        if (blocks.Count == 0)
         {
             return Cut(text, MaxDescription);
         }
 
-        var list = string.Join('\n', chapters.Select(c => $"{Clock(c.StartMs)} {c.Title}"));
+        var list = string.Join("\n\n", blocks);
         var room = MaxDescription - list.Length - 2;
         var kept = room > 0 ? Cut(text, room) : string.Empty;
         return Cut((kept.Length > 0 ? kept + "\n\n" : string.Empty) + list, MaxDescription);

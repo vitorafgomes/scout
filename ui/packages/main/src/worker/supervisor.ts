@@ -388,6 +388,8 @@ const RESERVED_WORKER_KEYS = new Set([
   'scout_controlplane_worker_token',
   'scout__operator__ffmpegpath',
   'scout__operator__fontpath',
+  'scout__operator__piperpath',
+  'scout__operator__voicespath',
 ]);
 
 /**

@@ -12,6 +12,7 @@ const NAV_ITEMS: readonly OperatorNavItem[] = Object.freeze([
   { path: '/operator/assembly', label: 'Assembly', testId: 'operator-nav-assembly' },
   { path: '/operator/reports', label: 'Reports', testId: 'operator-nav-reports' },
   { path: '/operator/experiments', label: 'Experiments', testId: 'operator-nav-experiments' },
+  { path: '/operator/comments', label: 'Comments', testId: 'operator-nav-comments' },
   { path: '/operator/approvals', label: 'Approvals', testId: 'operator-nav-approvals' },
 ]);
 

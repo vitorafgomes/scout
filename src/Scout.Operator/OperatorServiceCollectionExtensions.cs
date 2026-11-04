@@ -13,11 +13,13 @@ public static class OperatorServiceCollectionExtensions
     public const string DataFolderScope = "Scout's data folder";
 
     /// <summary>
-    /// Register the operator: the research, script, scene, narration, visual, assembly and pipeline stages, the background
-    /// worker, the readiness reporter, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
+    /// Register the operator: the research, script, scene, narration, visual, assembly and pipeline stages, the Openverse
+    /// stock pictures on the named HTTP client <c>openverse</c>, the background
+    /// worker, the readiness reporter, the samples of the bundled voices, the comment desk with the answer to the owner's comment sync and draft requests, which
+    /// a key-only setup answers too, with the sign-in sentence as the sync's error, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
     /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
     /// client and an origin notifier registered by the caller, and the kernel and media capabilities of
-    /// <c>AddScoutLlm</c>. The ffmpeg and font paths come from <see cref="OperatorMediaOptions"/>, which the
+    /// <c>AddScoutLlm</c>. The ffmpeg, font, piper and voices paths come from <see cref="OperatorMediaOptions"/>, which the
     /// caller binds.
     /// </summary>
     public static IServiceCollection AddYouTubeOperator(this IServiceCollection services)
@@ -30,11 +32,21 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton<ScriptWriter>();
         services.AddSingleton<ScenePlanner>();
         services.AddSingleton<NarrationGenerator>();
+        services.AddHttpClient(OpenversePictures.ClientName, client =>
+        {
+            client.Timeout = OpenversePictures.Timeout;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(OpenversePictures.UserAgent);
+        }).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddSingleton<OpenversePictures>();
         services.AddSingleton<VisualGenerator>();
         services.AddSingleton<OperatorPipeline>();
         services.AddSingleton(Channel.CreateUnbounded<QueuedProject>());
         services.AddHostedService<OperatorWorker>();
-        services.AddHostedService<ReadinessReporter>();
+        services.AddSingleton<ReadinessReporter>();
+        services.AddHostedService(sp => sp.GetRequiredService<ReadinessReporter>());
+        services.AddHostedService<VoiceSamples>();
+        services.AddSingleton<CommentDesk>();
+        services.AddHostedService<CommentRequests>();
         services.TryAddSingleton<ScheduleNotes>();
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new YouTubeOperatorPlugin(
@@ -50,6 +62,7 @@ public static class OperatorServiceCollectionExtensions
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.AddOptions<OperatorMediaOptions>();
         services.AddSingleton<FfmpegToolset>();
+        services.AddSingleton<PiperSpeech>();
         services.AddSingleton<MediaProbe>();
         services.AddSingleton<Assembler>();
         services.AddSingleton<ShortsCutter>();
@@ -59,8 +72,9 @@ public static class OperatorServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Register what publishes and learns from the owner's videos: the executor of the actions the owner approved, and the
-    /// scheduler of the analytics, experiment, proposal and published-check jobs. Needs <see cref="AddYouTubeOperator"/>, an
+    /// Register what publishes and learns from the owner's videos: the executor of the actions the owner approved, its comment
+    /// replies and holds included, and the scheduler of the analytics, experiment, proposal, published-check and comments jobs.
+    /// Needs <see cref="AddYouTubeOperator"/>, an
     /// <see cref="Scout.Llm.Abstractions.IWriteGate"/>, and the write, Analytics and Reporting clients the YouTube plugin
     /// registers only with the owner's sign-in.
     /// </summary>
@@ -79,6 +93,7 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton(sp => ScheduledJob.Daily("optimisation", 22, true, sp.GetRequiredService<LearningLoop>().ProposeAsync));
         services.AddSingleton(sp => ScheduledJob.Every("experiments", TimeSpan.FromHours(4), true, sp.GetRequiredService<ExperimentRunner>().RunAsync));
         services.AddSingleton(sp => ScheduledJob.Every("published check", PublishedCheck.Every, true, sp.GetRequiredService<PublishedCheck>().RunAsync));
+        services.AddSingleton(sp => ScheduledJob.Every("comments", TimeSpan.FromHours(4), true, ct => sp.GetRequiredService<CommentDesk>().RunAsync(sync: true, ct)));
         services.AddHostedService<OperatorScheduler>();
         return services;
     }

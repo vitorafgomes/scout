@@ -12,8 +12,76 @@ public sealed class VisualGeneratorTests : IDisposable
 
     public void Dispose() => Directory.Delete(_media, recursive: true);
 
-    private static VisualGenerator Generator(Kernel kernel, TimeProvider? time = null)
-        => new(kernel, Given.Capabilities(kernel), time ?? new FakeTimeProvider(Given.Now));
+    private static VisualGenerator Generator(Kernel kernel, TimeProvider? time = null, OpenverseHttp? openverse = null)
+        => new(
+            kernel,
+            Given.Capabilities(kernel),
+            time ?? new FakeTimeProvider(Given.Now),
+            openverse is null ? null : new OpenversePictures(openverse.Factory(), time ?? new SteppingTime(Given.Now)));
+
+    [Fact]
+    public async Task A_scene_without_provider_pictures_gets_an_openverse_picture_with_its_credit()
+    {
+        using var openverse = new OpenverseHttp();
+        var scene = Given.Scene("s4", 4) with { VisualQuery = "mountain lake dawn" };
+
+        var result = await Generator(Given.Media(), openverse: openverse).GenerateAsync(scene, 4, _media, CancellationToken.None);
+
+        result.ShouldBe(new VisualResult(
+            "stock",
+            "scene-s4.jpg",
+            "Picture from Openverse, credited in the video's description.",
+            "\"Mountain lake\" by Thomas Nes Myhre is licensed under CC BY 2.0."));
+        openverse.Requests[0].RequestUri!.Query.ShouldStartWith("?q=mountain%20lake%20dawn&");
+        File.ReadAllBytes(Path.Combine(_media, "scene-s4.jpg")).ShouldBe(OpenverseHttp.PictureBytes);
+    }
+
+    [Fact]
+    public async Task A_scene_planned_without_search_terms_searches_the_first_six_words_of_its_prompt()
+    {
+        using var openverse = new OpenverseHttp();
+        var scene = Given.Scene("s1", 1) with { VisualPrompt = "A warm kitchen at dawn, flour on the table, soft light" };
+
+        await Generator(Given.Media(), openverse: openverse).GenerateAsync(scene, 1, _media, CancellationToken.None);
+
+        openverse.Requests[0].RequestUri!.Query.ShouldStartWith("?q=A%20warm%20kitchen%20at%20dawn%2C%20flour&");
+    }
+
+    [Fact]
+    public async Task An_openverse_failure_leaves_a_text_card()
+    {
+        using var openverse = new OpenverseHttp { Search = _ => new HttpResponseMessage(System.Net.HttpStatusCode.BadGateway) };
+
+        var result = await Generator(Given.Media(), openverse: openverse).GenerateAsync(Given.Scene("s2", 2), 2, _media, CancellationToken.None);
+
+        result.ShouldBe(new VisualResult(
+            "text_card",
+            null,
+            "No picture: Scout could not reach Openverse. The scene shows a text card; attach your own image in Scout Desktop, Production."));
+        Directory.GetFiles(_media).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task With_an_image_service_the_provider_makes_the_picture_and_openverse_is_never_asked()
+    {
+        using var openverse = new OpenverseHttp();
+
+        var result = await Generator(Given.Media(images: Given.Images()), openverse: openverse).GenerateAsync(Given.Scene("s1", 1), 1, _media, CancellationToken.None);
+
+        result.ShouldBe(new VisualResult("generated", "scene-s1.png", null));
+        openverse.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Past_the_30th_scene_openverse_is_not_asked_and_the_scene_shows_a_text_card()
+    {
+        using var openverse = new OpenverseHttp();
+
+        var result = await Generator(Given.Media(), openverse: openverse).GenerateAsync(Given.Scene("s31", 31), 31, _media, CancellationToken.None);
+
+        result.ShouldBe(new VisualResult("text_card", null, "Scout makes pictures for at most 30 scenes of a video; this scene shows a text card."));
+        openverse.Requests.ShouldBeEmpty();
+    }
 
     [Fact]
     public async Task With_An_Image_Service_The_Picture_Is_Saved_As_Scene_Id_Png_From_The_Scenes_Prompt_With_The_Image_Settings()

@@ -39,6 +39,7 @@ public sealed class OperatorService
     private const string Producing = "producing";
     private const string MediaReady = "media_ready";
     private const string Failed = "failed";
+    private const string Background = "background";
     private const string NotReported = "The Scout worker has not reported yet.";
     private const string NoLongerProducing = "The project is no longer producing.";
     private const string NoLongerAssembling = "The project is no longer assembling.";
@@ -55,6 +56,14 @@ public sealed class OperatorService
     private const string ArmNotRun = "The experiment ended before this arm ran.";
     private const int MaxPillars = 5;
     private const int MaxPillarLength = 80;
+    private const int MaxNarrationVoiceLength = 80;
+    private const string NarrationVoiceMarks = "_:.#-";
+    private const string MalformedNarrationVoice = "A narration voice is an id of at most 80 letters, digits, _ : . # or -.";
+    private const int MaxVisualBriefLength = 500;
+    private const string LongVisualBrief = "A visual brief is at most 500 characters.";
+    private const string GentleMotion = "gentle";
+    private const string UnknownMotion = "Motion is still, gentle or dynamic.";
+    private static readonly string[] Motions = ["still", GentleMotion, "dynamic"];
     private const int MinTopicLength = 3;
     private const int MaxTopicLength = 200;
     private const int DefaultArmHours = 48;
@@ -212,7 +221,8 @@ public sealed class OperatorService
     /// <summary>
     /// Save the worker's draft of a project under the owner's write grant. An empty id creates a
     /// project of origin chat that keeps <paramref name="originReference"/>; an existing project
-    /// keeps its topic, origin, creation time and reference.
+    /// keeps its topic, origin, creation time and reference. A media-ready save of a delegated project whose every scene
+    /// is ready is stored queued for assembly, its package started again, so the worker's next take assembles it.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
     /// <exception cref="OperatorValidationException">A status, claim id or topic the operator does not accept.</exception>
@@ -346,7 +356,13 @@ public sealed class OperatorService
                         ended = running.Id;
                     }
 
-                    projects[index] = next with { UpdatedAt = DateTimeOffset.UtcNow };
+                    var handOn = stored.Delegated && next.Status == MediaReady && EverySceneReady(next.Scenes);
+                    projects[index] = next with
+                    {
+                        Status = handOn ? AssemblyQueued : next.Status,
+                        Package = handOn ? PackageRules.Queue(next.Package) : next.Package,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
                     return projects[index];
                 },
                 ct)
@@ -445,24 +461,30 @@ public sealed class OperatorService
     }
 
     /// <summary>
-    /// Queue a script-ready, media-ready, or failed project that has a script, for production under
-    /// the owner's write grant, once the owner decided every claim; the project's error is cleared.
+    /// Queue a script-ready, media-ready, assembled, approved, or failed project that has a script, for production under
+    /// the owner's write grant, once the owner decided every claim; the project's error is cleared, its narration
+    /// voice becomes <paramref name="narrationVoice"/>, trimmed, empty meaning Scout's choice, its visual brief
+    /// <paramref name="visualBrief"/>, trimmed with every control character but a newline made a space, and its motion
+    /// <paramref name="motion"/>, empty meaning gentle.
     /// </summary>
     /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
-    /// <exception cref="OperatorValidationException">The project has no script to produce, or claims still pending.</exception>
+    /// <exception cref="OperatorValidationException">The narration voice is not an id, the visual brief is over 500 characters, the motion is not a preset, the project has no script to produce, or claims still pending.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
-    public async Task<OperatorProject> ProduceProjectAsync(string id, CancellationToken ct)
+    public async Task<OperatorProject> ProduceProjectAsync(string id, string narrationVoice, string visualBrief, string motion, CancellationToken ct)
     {
+        var voice = NarrationVoiceOf(narrationVoice);
+        var brief = VisualBriefOf(visualBrief);
+        var preset = MotionOf(motion);
         await RequireGrantAsync(id, ct).ConfigureAwait(false);
         var produced = await _store.UpdateProjectsAsync(
                 projects =>
                 {
                     var index = IndexOf(projects, id);
                     var project = projects[index];
-                    if (project.Status is not (ScriptReady or MediaReady) && !(project.Status == Failed && project.Script is not null))
+                    if (project.Status is not (ScriptReady or MediaReady or Assembled or Approved) && !(project.Status == Failed && project.Script is not null))
                     {
                         throw new OperatorValidationException(
-                            $"Only a project with its script ready, its media ready, or a failed one with a script goes to production; this one is {project.Status}.");
+                            $"Only a project with its script ready, its media ready, an assembled or approved one, or a failed one with a script goes to production; this one is {project.Status}.");
                     }
 
                     var pending = project.Claims.Count(c => c.Status == "pending");
@@ -473,13 +495,105 @@ public sealed class OperatorService
                             : $"{pending} claims are still pending; decide them before production.");
                     }
 
-                    projects[index] = project with { Status = ProductionQueued, Error = null, UpdatedAt = DateTimeOffset.UtcNow };
+                    projects[index] = project with
+                    {
+                        Status = ProductionQueued,
+                        Error = null,
+                        Package = project.Status is Assembled or Approved ? PackageRules.AfterSceneEdit(project.Package) : project.Package,
+                        NarrationVoice = voice,
+                        VisualBrief = brief,
+                        Motion = preset,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
                     return projects[index];
                 },
                 ct)
             .ConfigureAwait(false);
         return ForDesktop(produced);
     }
+
+    /// <summary>
+    /// Delegate a script-ready, media-ready, or failed project that has a script, under the owner's write grant: the
+    /// project is marked delegated and queued for its next reversible stage, assembly when its media is ready and every
+    /// scene of it is ready and none lacks a narration or picture the worker could still make, else production, whatever claims are still pending; the project's error is cleared and its
+    /// narration voice, visual brief and motion become <paramref name="narrationVoice"/>, <paramref name="visualBrief"/>
+    /// and <paramref name="motion"/> under the rules of <see cref="ProduceProjectAsync"/>.
+    /// Delegation never approves or publishes anything.
+    /// </summary>
+    /// <exception cref="OperatorWriteRefusedException">The owner has not granted the YouTube writes.</exception>
+    /// <exception cref="OperatorValidationException">The narration voice is not an id, the visual brief is over 500 characters, the motion is not a preset, the project's status, or a failed project without a script.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public async Task<OperatorProject> DelegateProjectAsync(string id, string narrationVoice, string visualBrief, string motion, CancellationToken ct)
+    {
+        var voice = NarrationVoiceOf(narrationVoice);
+        var brief = VisualBriefOf(visualBrief);
+        var preset = MotionOf(motion);
+        await RequireGrantAsync(id, ct).ConfigureAwait(false);
+        var readiness = await GetReadinessAsync(ct).ConfigureAwait(false);
+        var delegated = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, id);
+                    var project = projects[index];
+                    if (project.Status is not (ScriptReady or MediaReady) && !(project.Status == Failed && project.Script is not null))
+                    {
+                        throw new OperatorValidationException(
+                            $"Only a project with its script ready, its media ready, or a failed one with a script is delegated; this one is {project.Status}.");
+                    }
+
+                    var assemble = project.Status == MediaReady && EverySceneReady(project.Scenes)
+                        && !project.Scenes.Any(s =>
+                            (s.AudioSource == SceneRules.NoAudio && readiness.SpeechAvailable)
+                            || (s.VisualSource == SceneRules.TextCard && readiness.ImagesAvailable));
+                    projects[index] = project with
+                    {
+                        Status = assemble ? AssemblyQueued : ProductionQueued,
+                        Package = assemble ? PackageRules.Queue(project.Package) : project.Package,
+                        Delegated = true,
+                        NarrationVoice = voice,
+                        VisualBrief = brief,
+                        Motion = preset,
+                        Error = null,
+                        UpdatedAt = DateTimeOffset.UtcNow,
+                    };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        return ForDesktop(delegated);
+    }
+
+    private static string NarrationVoiceOf(string narrationVoice)
+    {
+        var voice = (narrationVoice ?? string.Empty).Trim();
+        if (voice.Length > MaxNarrationVoiceLength
+            || !voice.All(c => char.IsAsciiLetterOrDigit(c) || NarrationVoiceMarks.Contains(c, StringComparison.Ordinal)))
+        {
+            throw new OperatorValidationException(MalformedNarrationVoice);
+        }
+
+        return voice;
+    }
+
+    private static string VisualBriefOf(string visualBrief)
+    {
+        var brief = new string([.. (visualBrief ?? string.Empty).Select(c => c != '\n' && char.IsControl(c) ? ' ' : c)]).Trim();
+        return brief.Length > MaxVisualBriefLength ? throw new OperatorValidationException(LongVisualBrief) : brief;
+    }
+
+    private static string MotionOf(string motion)
+    {
+        var preset = (motion ?? string.Empty).Trim();
+        if (preset.Length == 0)
+        {
+            return GentleMotion;
+        }
+
+        return Motions.Contains(preset, StringComparer.Ordinal) ? preset : throw new OperatorValidationException(UnknownMotion);
+    }
+
+    private static bool EverySceneReady(IReadOnlyList<Scene> scenes) =>
+        scenes.Count > 0 && scenes.All(s => s.Status == SceneRules.Ready);
 
     /// <summary>
     /// Put the project's scenes in the owner's order; <paramref name="sceneIds"/> names every scene once,
@@ -526,7 +640,8 @@ public sealed class OperatorService
 
     /// <summary>
     /// Send one unlocked scene back to planned and the project to production: the scene keeps the
-    /// owner's media and loses its generated files and error. The package goes back to assembled
+    /// owner's media and loses its generated files and error, and a stock picture becomes a text card
+    /// without its credit. The package goes back to assembled
     /// without its rights and approval, or to queued for assembly when it was queued or assembling.
     /// </summary>
     /// <exception cref="OperatorValidationException">The scene is locked.</exception>
@@ -549,7 +664,9 @@ public sealed class OperatorService
                     Status = SceneRules.Planned,
                     Error = null,
                     AudioFile = ownAudio ? scene.AudioFile : null,
+                    VisualSource = scene.VisualSource == SceneRules.Stock ? SceneRules.TextCard : scene.VisualSource,
                     VisualFile = ownVisual ? scene.VisualFile : null,
+                    VisualCredit = null,
                     DurationMs = ownAudio ? scene.DurationMs : 0,
                 };
             },
@@ -564,8 +681,11 @@ public sealed class OperatorService
     /// files. The owner's audio leaves the duration unknown, 0. An assembled or approved project goes
     /// back to media ready without its rights and approval, and one queued for assembly or assembling
     /// back to queued for assembly, so a running assembly stops and the next one uses the new media.
+    /// The kind <c>background</c>, with no scene id and a picture already in the media directory, sets the
+    /// project's background picture on a project whose script or media is ready, an assembled, approved or
+    /// failed one, or one queued for assembly or assembling; it needs no grant and changes the status like a scene edit.
     /// </summary>
-    /// <exception cref="OperatorValidationException">The kind, the file name or the file is not acceptable.</exception>
+    /// <exception cref="OperatorValidationException">The kind, the file name, the file, a background's scene id or the project's status is not acceptable.</exception>
     /// <exception cref="OperatorNotFoundException">The project or the scene does not exist.</exception>
     public Task<OperatorProject> AttachSceneMediaAsync(
         string projectId,
@@ -574,9 +694,14 @@ public sealed class OperatorService
         string fileName,
         CancellationToken ct)
     {
+        if (kind == Background)
+        {
+            return AttachBackgroundAsync(projectId, sceneId, fileName, ct);
+        }
+
         if (kind is not (SceneRules.Audio or SceneRules.Visual))
         {
-            throw new OperatorValidationException("Media is attached as audio or visual.");
+            throw new OperatorValidationException("Media is attached as audio, visual or background.");
         }
 
         SceneRules.ValidateFileName(fileName, kind);
@@ -595,7 +720,7 @@ public sealed class OperatorService
                 var produced = scene.Status == SceneRules.Ready;
                 var attached = kind == SceneRules.Audio
                     ? scene with { AudioSource = SceneRules.Owner, AudioFile = fileName, DurationMs = 0 }
-                    : scene with { VisualSource = SceneRules.Owner, VisualFile = fileName };
+                    : scene with { VisualSource = SceneRules.Owner, VisualFile = fileName, VisualCredit = null };
                 var ready = (attached.VisualFile is not null || (produced && attached.VisualSource == SceneRules.TextCard))
                     && (attached.AudioFile is not null || (produced && attached.AudioSource == SceneRules.NoAudio));
                 return ready ? attached with { Status = SceneRules.Ready, Error = null } : attached;
@@ -603,6 +728,40 @@ public sealed class OperatorService
             projectStatus: null,
             changesVideo: true,
             ct);
+    }
+
+    private async Task<OperatorProject> AttachBackgroundAsync(string projectId, string sceneId, string fileName, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(sceneId))
+        {
+            throw new OperatorValidationException("A background is attached to the project, not to a scene.");
+        }
+
+        SceneRules.ValidateFileName(fileName, SceneRules.Visual);
+        var directory = MediaDirectoryOf(projectId);
+        var attached = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, projectId);
+                    var project = projects[index];
+                    if (project.Status is not (ScriptReady or MediaReady or Assembled or Approved or AssemblyQueued or Assembling or Failed))
+                    {
+                        throw new OperatorValidationException(
+                            $"A background is attached to a project whose script or media is ready, an assembled or approved one, one queued for assembly or assembling, or a failed one; this one is {project.Status}.");
+                    }
+
+                    if (!File.Exists(Path.Combine(directory, fileName)))
+                    {
+                        throw new OperatorValidationException(
+                            $"'{fileName}' is not in the project's media folder; copy it there first.");
+                    }
+
+                    projects[index] = AfterSceneEdit(project, null) with { BackgroundFile = fileName, UpdatedAt = DateTimeOffset.UtcNow };
+                    return projects[index];
+                },
+                ct)
+            .ConfigureAwait(false);
+        return ForDesktop(attached);
     }
 
     /// <summary>The absolute path of the project's media directory, created when missing.</summary>
@@ -614,6 +773,55 @@ public sealed class OperatorService
         await GetProjectAsync(projectId, ct).ConfigureAwait(false);
         Directory.CreateDirectory(directory);
         return directory;
+    }
+
+    /// <summary>
+    /// Delete a project the owner no longer wants: it leaves the store and its media directory inside the operator
+    /// media root is deleted. Nothing leaves the process, so a video already on YouTube stays there. Refused while the
+    /// project is researching, scripting, producing, assembling or uploading, or while an approved or executing
+    /// YouTube action targets it.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The project is running or has pending YouTube actions.</exception>
+    /// <exception cref="OperatorStoreException">The project was removed but its media folder could not be deleted.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
+    public async Task DeleteProjectAsync(string id, CancellationToken ct)
+    {
+        var directory = MediaDirectoryOf(id);
+        if ((await _actions.ListOpenAsync(FeatureCatalog.YouTubeId, ct).ConfigureAwait(false)).Any(a => ProjectOf(a) == id))
+        {
+            throw new OperatorValidationException("The project has pending YouTube actions; finish or cancel them first.");
+        }
+
+        await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var index = IndexOf(projects, id);
+                    var project = projects[index];
+                    if (project.Status is Researching or Scripting or Producing or Assembling
+                        || project.Publication?.Status == PublicationRules.Uploading)
+                    {
+                        throw new OperatorValidationException(
+                            "A project that is researching, scripting, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+                    }
+
+                    projects.RemoveAt(index);
+                    return true;
+                },
+                ct)
+            .ConfigureAwait(false);
+        await LogAsync(id, "deleted project", "owner", ct).ConfigureAwait(false);
+
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new OperatorStoreException("Scout removed the project but could not delete its media folder.", ex);
+        }
     }
 
     /// <summary>The project's media directory for the worker under the owner's write grant.</summary>
@@ -1077,7 +1285,7 @@ public sealed class OperatorService
                 FeatureCatalog.YouTubeId,
                 ClaimLease,
                 (action, open) => !Stale(action, grantedAt)
-                    && ReferenceEquals(open.First(o => !Stale(o, grantedAt) && ProjectOf(o) == ProjectOf(action)), action)
+                    && ReferenceEquals(open.First(o => !Stale(o, grantedAt) && QueueOf(o) == QueueOf(action)), action)
                     && Due(action, projects, now),
                 ct)
             .ConfigureAwait(false);
@@ -1085,24 +1293,33 @@ public sealed class OperatorService
 
     /// <summary>
     /// For the worker: the origin reference of the project an approved action acts on, the first part of its target;
-    /// null when the project has none or no longer exists.
+    /// null when the project has none or no longer exists, and for an action on a comment.
     /// </summary>
     public async Task<string?> OriginReferenceForWorkerAsync(PendingAction action, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(action);
 
+        if (ProjectOf(action) is not { } projectId)
+        {
+            return null;
+        }
+
         var projects = await _store.ReadProjectsAsync(ct).ConfigureAwait(false);
-        return projects.FirstOrDefault(p => string.Equals(p.Id, ProjectOf(action), StringComparison.Ordinal))?.OriginReference;
+        return projects.FirstOrDefault(p => string.Equals(p.Id, projectId, StringComparison.Ordinal))?.OriginReference;
     }
 
     /// <summary>
     /// Once the owner revokes YouTube writes or disconnects YouTube: reject every approved YouTube action with
     /// <see cref="RevokedReason"/>, each logged, so no stale approval runs under a later grant, and end every running
-    /// experiment <c>inconclusive</c> with that reason. An action a worker is executing is left to its record.
+    /// experiment <c>inconclusive</c> with that reason. An action a worker is executing is left to its record. Every
+    /// comment waiting on a YouTube action without a live one is reconciled, so a revoke retried after a failed comments
+    /// write still repairs them.
     /// </summary>
     public async Task CancelApprovedYouTubeActionsAsync(CancellationToken ct)
     {
         await CancelAsync((_, _) => true, RevokedReason, ct).ConfigureAwait(false);
+        var live = TargetsOf(await LiveCommentActionsAsync(ct).ConfigureAwait(false));
+        await _store.UpdateCommentsAsync(state => CommentRules.Reconcile(state, live), ct).ConfigureAwait(false);
         await _store.UpdateProjectsAsync<object?>(
                 projects =>
                 {
@@ -1130,36 +1347,54 @@ public sealed class OperatorService
 
     /// <summary>
     /// Clear the topic candidates, drawn from other channels' videos, of every project created more than 30 days ago,
-    /// as YouTube's developer policies require; it needs no grant, so it runs with writes off or only an API key set.
-    /// The projects file is written only when a project had candidates to clear.
+    /// as YouTube's developer policies require, reconciles every comment waiting on a YouTube action without a live one,
+    /// and clears every comment fetched more than 30 days ago unless its action is live, with the ideas whose comment is
+    /// gone; it needs no grant, so it runs with writes off or only an
+    /// API key set. A file is written only when it had something to clear.
     /// </summary>
-    public Task ClearOldResearchAsync(CancellationToken ct) =>
-        _store.UpdateProjectsAsync<object?>(
-            projects =>
-            {
-                var cutoff = DateTimeOffset.UtcNow - ResearchKeptFor;
-                var cleared = 0;
-                for (var i = 0; i < projects.Count; i++)
+    /// <exception cref="OperatorStoreException">The comments file could not be written.</exception>
+    public async Task ClearOldResearchAsync(CancellationToken ct)
+    {
+        var cutoff = DateTimeOffset.UtcNow - ResearchKeptFor;
+        await _store.UpdateProjectsAsync<object?>(
+                projects =>
                 {
-                    if (projects[i].CreatedAt < cutoff && projects[i].Candidates.Count > 0)
+                    var cleared = 0;
+                    for (var i = 0; i < projects.Count; i++)
                     {
-                        projects[i] = projects[i] with { Candidates = [] };
-                        cleared++;
+                        if (projects[i].CreatedAt < cutoff && projects[i].Candidates.Count > 0)
+                        {
+                            projects[i] = projects[i] with { Candidates = [] };
+                            cleared++;
+                        }
                     }
-                }
 
-                return cleared > 0 ? cleared : null;
-            },
-            ct);
+                    return cleared > 0 ? cleared : null;
+                },
+                ct)
+            .ConfigureAwait(false);
+        var live = TargetsOf(await LiveCommentActionsAsync(ct).ConfigureAwait(false));
+        await _store.UpdateCommentsAsync(
+                state =>
+                {
+                    var reconciled = CommentRules.Reconcile(state, live);
+                    return CommentRules.Cleared(reconciled ?? state, cutoff, live) ?? reconciled;
+                },
+                ct)
+            .ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Remove what Scout read from YouTube once the owner disconnects it: every publication's snapshots, every
     /// experiment arm's impressions, clicks and average view percentage, and every project's topic candidates and
     /// claim sources. The owner's content stays: scripts, scenes, media, packages, video ids, and the experiments'
-    /// arms, times, winners and results. It needs no grant, which the disconnect takes away.
+    /// arms, times, winners and results. Every comment, the sync's time and error, and every idea not used goes too; a
+    /// used idea keeps only its id, status and project. It needs no grant, which the disconnect takes away.
     /// </summary>
-    public Task PurgeYouTubeDataAsync(CancellationToken ct) =>
-        _store.UpdateProjectsAsync(
+    /// <exception cref="OperatorStoreException">The comments file could not be written.</exception>
+    public async Task PurgeYouTubeDataAsync(CancellationToken ct)
+    {
+        await _store.UpdateProjectsAsync(
             projects =>
             {
                 for (var i = 0; i < projects.Count; i++)
@@ -1185,13 +1420,23 @@ public sealed class OperatorService
 
                 return projects.Count;
             },
-            ct);
+            ct).ConfigureAwait(false);
+        await _store.UpdateCommentsAsync(CommentRules.Purged, ct).ConfigureAwait(false);
+    }
 
     /// <summary>Keep the worker's latest readiness report, stamped with the time it arrived.</summary>
     /// <exception cref="OperatorStoreException">The report could not be saved; the earlier one stays.</exception>
     public async Task<Readiness> ReportReadinessAsync(Readiness readiness, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(readiness);
+
+        foreach (var voice in readiness.Voices)
+        {
+            if (voice.SampleFile is not null)
+            {
+                ValidateSampleFileName(voice.SampleFile);
+            }
+        }
 
         var stamped = readiness with { ReportedAt = DateTimeOffset.UtcNow };
         try
@@ -1205,6 +1450,25 @@ public sealed class OperatorService
 
         return stamped;
     }
+
+    private static void ValidateSampleFileName(string name)
+    {
+        try
+        {
+            SceneRules.ValidateFileName(name, SceneRules.Audio);
+        }
+        catch (OperatorValidationException)
+        {
+            throw new OperatorValidationException(VoiceSampleNotPlain);
+        }
+
+        if (!name.EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new OperatorValidationException(VoiceSampleNotPlain);
+        }
+    }
+
+    private const string VoiceSampleNotPlain = "A voice sample is a plain .wav file name.";
 
     /// <summary>The worker's latest readiness report, or an empty one saying the worker has not reported.</summary>
     public async Task<Readiness> GetReadinessAsync(CancellationToken ct) =>
@@ -1251,9 +1515,12 @@ public sealed class OperatorService
     private static OperatorValidationException NotAWorkerStatus(string status) =>
         new($"Status '{status}' is not one the worker may set: {string.Join(", ", WorkerStatuses)}.");
 
-    private static string ProjectOf(PendingAction action) => action.Target.Split(':')[0];
+    private static string? ProjectOf(PendingAction action) =>
+        action.Target.StartsWith(CommentRules.TargetPrefix, StringComparison.Ordinal) ? null : action.Target.Split(':')[0];
 
-    private static bool Stale(PendingAction action, DateTimeOffset? grantedAt) =>
+    private static string QueueOf(PendingAction action) => ProjectOf(action) ?? action.Target;
+
+    internal static bool Stale(PendingAction action, DateTimeOffset? grantedAt) =>
         grantedAt is { } since
         && (action.Status == PendingActionStatus.Executing ? action.ClaimedAt : action.DecidedAt) < since;
 
@@ -1289,18 +1556,37 @@ public sealed class OperatorService
             == JsonSerializer.Serialize(next with { Publication = null });
     }
 
-    private async Task CancelAsync(Func<PendingAction, IReadOnlyList<PendingAction>, bool> match, string reason, CancellationToken ct)
+    /// <summary>
+    /// The approved or executing YouTube actions on a comment that are not stale against the owner's current grant.
+    /// </summary>
+    internal async Task<IReadOnlyList<PendingAction>> LiveCommentActionsAsync(CancellationToken ct)
     {
-        foreach (var action in await _actions.RejectApprovedAsync(FeatureCatalog.YouTubeId, match, reason, ct).ConfigureAwait(false))
+        var grantedAt = await _gate.GrantedAtAsync(FeatureCatalog.YouTubeId, ct).ConfigureAwait(false);
+        return [.. (await _actions.ListOpenAsync(FeatureCatalog.YouTubeId, ct).ConfigureAwait(false))
+            .Where(a => a.Target.StartsWith(CommentRules.TargetPrefix, StringComparison.Ordinal) && !Stale(a, grantedAt))];
+    }
+
+    internal static HashSet<string> TargetsOf(IEnumerable<PendingAction> actions) =>
+        actions.Select(a => a.Target).ToHashSet(StringComparer.Ordinal);
+
+    internal async Task<IReadOnlyList<PendingAction>> CancelAsync(
+        Func<PendingAction, IReadOnlyList<PendingAction>, bool> match,
+        string reason,
+        CancellationToken ct)
+    {
+        var rejected = await _actions.RejectApprovedAsync(FeatureCatalog.YouTubeId, match, reason, ct).ConfigureAwait(false);
+        foreach (var action in rejected)
         {
             await _writes.AppendAsync(
                     new WriteLogEntry(DateTimeOffset.UtcNow, action.FeatureId, action.Action, action.Target, $"rejected: {reason}", "owner", action.Id),
                     ct)
                 .ConfigureAwait(false);
         }
+
+        return rejected;
     }
 
-    private async Task ApproveAsync(IReadOnlyList<(string Action, string Target, string Summary)> actions, CancellationToken ct)
+    internal async Task ApproveAsync(IReadOnlyList<(string Action, string Target, string Summary)> actions, CancellationToken ct)
     {
         foreach (var action in await _actions.EnqueueApprovedAsync(FeatureCatalog.YouTubeId, actions, ct).ConfigureAwait(false))
         {
@@ -1485,19 +1771,19 @@ public sealed class OperatorService
         return ForDesktop(changed);
     }
 
-    private Task LogAsync(string projectId, string outcome, string? approvedBy, CancellationToken ct) =>
+    internal Task LogAsync(string target, string outcome, string? approvedBy, CancellationToken ct) =>
         _writes.AppendAsync(
             new WriteLogEntry(
                 DateTimeOffset.UtcNow,
                 FeatureCatalog.YouTubeId,
                 DataFolderScope,
-                projectId,
+                target,
                 outcome,
                 approvedBy,
                 ActionId: null),
             ct);
 
-    private async Task RequireGrantAsync(string target, CancellationToken ct)
+    internal async Task RequireGrantAsync(string target, CancellationToken ct)
     {
         if (await GrantRefusalAsync(target, ct).ConfigureAwait(false) is { } refusal)
         {
@@ -1505,7 +1791,7 @@ public sealed class OperatorService
         }
     }
 
-    private async Task<string?> GrantRefusalAsync(string target, CancellationToken ct)
+    internal async Task<string?> GrantRefusalAsync(string target, CancellationToken ct)
     {
         var decision = await _gate.RequestAsync(
                 FeatureCatalog.YouTubeId,
@@ -1540,4 +1826,21 @@ public sealed class OperatorService
         };
         return JsonSerializer.Serialize(stored with { Publication = expected }) == JsonSerializer.Serialize(next);
     }
+
+    /// <summary>
+    /// The absolute path of the folder that holds one sample per bundled narration voice, <c>voice-samples</c> inside the
+    /// operator media root beside the project media directories, created when missing.
+    /// </summary>
+    public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var directory = Path.Combine(_store.MediaRoot, VoiceSamplesFolder);
+        Directory.CreateDirectory(directory);
+        return Task.FromResult(directory);
+    }
+
+    /// <summary>The voice samples directory for the worker, which needs no grant because the samples are Scout's own data.</summary>
+    public Task<string> GetVoiceSamplesDirectoryForWorkerAsync(CancellationToken ct) => GetVoiceSamplesDirectoryAsync(ct);
+
+    internal const string VoiceSamplesFolder = "voice-samples";
 }

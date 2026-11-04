@@ -43,6 +43,27 @@ internal static class GoogleJson
           "snippet":{"publishedAt":"2026-08-15T08:30:00Z","channelId":"UCother2","title":"Why bread rises","channelTitle":"Kitchen Science"}}]}
         """;
 
+    public const string CommentThreads = """
+        {"kind":"youtube#commentThreadListResponse","nextPageToken":"page2token","items":[
+         {"kind":"youtube#commentThread","id":"UgThread001","snippet":{"channelId":"UCowner0000000000000000","videoId":"abcDEF12345",
+          "topLevelComment":{"kind":"youtube#comment","id":"UgComment001","snippet":{"videoId":"abcDEF12345",
+           "textDisplay":"How long do I feed the starter?","textOriginal":"How long do I feed the starter?",
+           "authorDisplayName":"@breadfan","authorChannelId":{"value":"UCfan"},"likeCount":3,
+           "publishedAt":"2026-11-02T09:30:00Z","updatedAt":"2026-11-02T09:30:00Z"}},
+          "canReply":true,"totalReplyCount":2,"isPublic":true}},
+         {"kind":"youtube#commentThread","id":"UgThread002","snippet":{"channelId":"UCowner0000000000000000","videoId":"xyz_-987654",
+          "topLevelComment":{"kind":"youtube#comment","id":"UgComment002","snippet":{"videoId":"xyz_-987654",
+           "textDisplay":"Great tip","authorDisplayName":"Anonymous","likeCount":0,"publishedAt":"2026-11-01T18:00:00Z"}},
+          "canReply":false,"totalReplyCount":0,"isPublic":true}}]}
+        """;
+
+    public const string CommentThreadsLastPage = """{"kind":"youtube#commentThreadListResponse","items":[]}""";
+
+    public const string InsertedReply = """
+        {"kind":"youtube#comment","id":"UgComment001.reply0001","snippet":{"parentId":"UgComment001",
+         "textOriginal":"Feed it daily for a week.","authorDisplayName":"Owner Channel"}}
+        """;
+
     public static string Error(int code, string reason) => $$$"""
         {"error":{"code":{{{code}}},"message":"The request cannot be completed.","errors":[{"message":"The request cannot be completed.","domain":"youtube.quota","reason":"{{{reason}}}"}]}}
         """;

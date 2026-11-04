@@ -67,4 +67,25 @@ public sealed class ResearchCleanupServiceTests : IDisposable
             e => e.Message.ShouldStartWith("Old research could not be cleared; the next run tries again"));
         (await _store.ReadProjectsAsync(CancellationToken.None)).Single().Candidates.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task A_Run_That_Cannot_Write_The_Comments_Is_Logged_And_The_Next_Run_Clears_The_Old_Comments()
+    {
+        var old = new AudienceComment(
+            "c1", "t1", "v1", "Why rivers bend", "Ana", "Nice video", DateTimeOffset.UtcNow.AddDays(-40), 0,
+            "praise", "thanks", "new", string.Empty, null, null, null, null, DateTimeOffset.UtcNow.AddDays(-40));
+        await _store.UpdateCommentsAsync(state => state with { Comments = [old] }, CancellationToken.None);
+        Directory.CreateDirectory(_store.CommentsPath + ".tmp");
+
+        await _cleanup.RunOnceAsync(CancellationToken.None);
+        var afterFailure = (await _store.ReadCommentsAsync(CancellationToken.None)).Comments.Count;
+        Directory.Delete(_store.CommentsPath + ".tmp");
+        await _cleanup.RunOnceAsync(CancellationToken.None);
+
+        afterFailure.ShouldBe(1);
+        _logger.Entries.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            e => e.Level.ShouldBe(LogLevel.Warning),
+            e => e.Message.ShouldBe("Old research could not be cleared; the next run tries again: Scout could not save the comments in its data folder."));
+        (await _store.ReadCommentsAsync(CancellationToken.None)).Comments.ShouldBeEmpty();
+    }
 }

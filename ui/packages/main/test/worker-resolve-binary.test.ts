@@ -114,14 +114,38 @@ describe('resolveMediaTools', () => {
       path.join('/opt/Scout/resources', 'fonts', 'NotoSans-Regular.ttf'),
     ]);
 
-    const tools = resolveMediaTools({ ...packaged, platform: 'win32', arch: 'x64' }, (file) =>
-      present.has(file),
+    const tools = resolveMediaTools(
+      { ...packaged, platform: 'win32', arch: 'x64' },
+      (file) => present.has(file),
+      () => [],
     );
 
-    expect(tools).toEqual({
+    expect(tools).toMatchObject({
       ffmpeg: path.join('/opt/Scout/resources', 'media-tools', 'win32-x64', 'ffmpeg.exe'),
       font: path.join('/opt/Scout/resources', 'fonts', 'NotoSans-Regular.ttf'),
     });
+  });
+
+  it('finds the piper executable of its platform and the voices folder only when it holds a voice model, and answers empty paths otherwise', () => {
+    const piperExe = (exe: string) =>
+      path.join('/opt/Scout/resources', 'media-tools', 'linux-x64', 'piper', exe);
+    const voices = path.join('/opt/Scout/resources', 'voices');
+
+    const linux = resolveMediaTools(
+      { ...packaged, platform: 'linux', arch: 'x64' },
+      (file) => file === piperExe('piper'),
+      () => ['LICENSES.txt', 'en_GB-cori-medium.onnx'],
+    );
+    const windows = resolveMediaTools(
+      { ...packaged, platform: 'win32', arch: 'x64' },
+      (file) =>
+        file ===
+        path.join('/opt/Scout/resources', 'media-tools', 'win32-x64', 'piper', 'piper.exe'),
+      () => [],
+    );
+
+    expect([linux.piper, linux.voices]).toEqual([piperExe('piper'), voices]);
+    expect([windows.piper.endsWith('piper.exe'), windows.voices]).toEqual([true, '']);
   });
 
   it('answers an empty path for every tool the build did not bundle, as on macOS', () => {
@@ -130,7 +154,7 @@ describe('resolveMediaTools', () => {
       () => false,
     );
 
-    expect(tools).toEqual({ ffmpeg: '', font: '' });
+    expect(tools).toEqual({ ffmpeg: '', font: '', piper: '', voices: '' });
   });
 
   it('in development reads ui/packages/main/resources of the repo', () => {
@@ -143,11 +167,13 @@ describe('resolveMediaTools', () => {
         seen.push(file);
         return false;
       },
+      () => [],
     );
 
     expect(seen.map(posix)).toEqual([
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/ffmpeg')),
       posix(path.join(repo, 'ui/packages/main/resources/fonts/NotoSans-Regular.ttf')),
+      posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/piper/piper')),
     ]);
   });
 });
