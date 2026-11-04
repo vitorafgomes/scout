@@ -116,7 +116,9 @@ internal static partial class PackageChecks
         => Cut(script?.TitleVariants.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t))?.Trim() ?? topic.Trim(), MaxTitle);
 
     /// <summary>
-    /// The script's description, then the chapters, when the video has at least three of 10 seconds or more, then a
+    /// The script's description, then the chapters, when the video has at least three of 10 seconds or more, each at the
+    /// first scene whose narration its section holds, or for a scene of the recording the one whose clip starts where the
+    /// section starts, so the owner's caption edits keep the chapters, then a
     /// <c>Credits</c> block with one line per distinct credit of the scenes' stock pictures; within
     /// <see cref="MaxDescription"/> characters, the script's description cut at a word to leave the chapters and credits
     /// whole, or the whole cut when they alone do not fit.
@@ -235,8 +237,9 @@ internal static partial class PackageChecks
         foreach (var section in script?.Sections ?? [])
         {
             var narration = FilterText.Clean(section.Narration);
-            var first = cuts.FirstOrDefault(c => FilterText.Clean(c.Scene.Narration) is { Length: > 0 } scene
-                && narration.Contains(scene, StringComparison.Ordinal));
+            var first = cuts.FirstOrDefault(c => c.Scene.VisualSource == OperatorPipeline.Recording
+                ? c.Scene.ClipStartMs == section.StartMs
+                : FilterText.Clean(c.Scene.Narration) is { Length: > 0 } scene && narration.Contains(scene, StringComparison.Ordinal));
             var heading = FilterText.Clean(section.Heading);
             if (first is null || heading.Length == 0)
             {

@@ -1,5 +1,8 @@
 using System.Net;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -86,11 +89,34 @@ public sealed class HostOperatorTurnTests
         host.Services.GetRequiredService<System.Threading.Channels.Channel<QueuedProject>>().Reader.TryRead(out _).ShouldBeFalse();
     }
 
-    private sealed class ToolCallingModel : HttpMessageHandler
+    [Fact]
+    public async Task A_Non_Owner_Edit_Is_Recorded_Failed_By_The_Write_Gate()
     {
-        private static readonly string[] ToolCall =
+        var model = new ToolCallingModel(
+            YouTubeOperatorPlugin.EditSceneText, """{"project_id":"p1","scene_id":"s2","text":"Shape the loaf gently."}""");
+        var gate = new AllowingGate();
+        var controlPlane = new RecordingControlPlane();
+        using var host = OperatorHost(model, gate, controlPlane);
+
+        await host.Services.GetRequiredService<ConversationConductor>().HandleAsync(
+            new ChatMessage("U1", "C1", "change the text of scene s2", DateTimeOffset.UtcNow) { OriginReference = "discord:3333:42" },
+            new FinalTextSink(),
+            CancellationToken.None);
+
+        gate.Requests.ShouldBe(["youtube | Scout's data folder | youtube_edit_scene_text(project_id=p1, scene_id=s2, text)"]);
+        gate.Outcomes.ShouldBe(["failed: InvalidOperationException"]);
+        Unescaped(model.Bodies[1]).ShouldContain(YouTubeOperatorPlugin.NotOwner);
+        controlPlane.Saves.ShouldBeEmpty();
+    }
+
+    private static string Unescaped(string body)
+        => JsonNode.Parse(body)!.ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
+    private sealed class ToolCallingModel(string function = "youtube_make_video", string arguments = """{"topic":"sourdough"}""") : HttpMessageHandler
+    {
+        private string[] ToolCall =>
         [
-            """{"id":"c1","object":"chat.completion.chunk","created":1,"model":"llama3.1","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"YouTubeOperator-youtube_make_video","arguments":"{\"topic\":\"sourdough\"}"}}]},"finish_reason":null}]}""",
+            $$$"""{"id":"c1","object":"chat.completion.chunk","created":1,"model":"llama3.1","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"YouTubeOperator-{{{function}}}","arguments":{{{JsonSerializer.Serialize(arguments)}}}}}]},"finish_reason":null}]}""",
             """{"id":"c1","object":"chat.completion.chunk","created":1,"model":"llama3.1","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}""",
         ];
 
@@ -184,6 +210,20 @@ public sealed class HostOperatorTurnTests
         public Task<OperatorComments> SaveCommentsAsync(OperatorComments comments, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FinalTextSink : IResponseSink

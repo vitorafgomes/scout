@@ -44,7 +44,9 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     candidates: [{ title: 'Span<T> without fear', reason: 'Fits Performance', fit: 0.82 }],
     script: {
       hook: 'Your allocations are lying to you.',
-      sections: [{ heading: 'Why Span', narration: 'Span is a view over memory.' }],
+      sections: [
+        { heading: 'Why Span', narration: 'Span is a view over memory.', startMs: 0, endMs: 0 },
+      ],
       callToAction: 'Subscribe for more.',
       titleVariants: ['Span<T> explained', 'Stop allocating'],
       description: 'A tour of Span<T>.',
@@ -68,8 +70,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     narrationVoice: '',
     backgroundFile: null,
     delegated: false,
-    visualBrief: '',
+    direction: '',
     motion: 'gentle',
+    format: 'generated_pictures',
+    recordingFile: null,
+    recordingMs: 0,
     ...overrides,
   };
 }
@@ -90,6 +95,8 @@ function scene(overrides: Partial<SceneDto> = {}): SceneDto {
     audioFile: 'scene-s1.mp3',
     visualFile: 'owner-s1-0a1b2c3d4e5f.png',
     durationMs: 4200,
+    clipStartMs: 0,
+    clipEndMs: 0,
     ...overrides,
   };
 }
@@ -118,6 +125,7 @@ const readiness: ReadinessDto = {
     { id: 'OpenAI:nova', label: 'nova (OpenAI)', source: 'OpenAI', sampleFile: null },
   ],
   reportedAt: '2026-11-03T09:00:00Z',
+  transcriptionAvailable: false,
 };
 
 const fullReadiness: ReadinessDto = {
@@ -159,6 +167,8 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
     operatorReorderScenes: vi.fn(async () => project()),
     operatorSetSceneLocked: vi.fn(async () => project()),
     operatorRegenerateScene: vi.fn(async () => project()),
+    operatorEditSceneText: vi.fn(async () => project()),
+    operatorRegenerateNarration: vi.fn(async () => project()),
     operatorAttachSceneMedia: vi.fn(async () => ({
       project: project() as OperatorProjectDto | null,
     })),
@@ -353,7 +363,9 @@ describe('ProductionComponent', () => {
     await settle(fixture);
     await click(fixture, 'start-project');
 
-    expect(bridge.operatorStartProject.mock.calls).toEqual([[{ topic: 'Records in C#' }]]);
+    expect(bridge.operatorStartProject.mock.calls).toEqual([
+      [{ topic: 'Records in C#', format: 'generated_pictures', direction: '' }],
+    ]);
     expect(text(fixture, 'queued')).toBe('Records in C# queued');
     expect(text(fixture, 'project-p9')).toContain('queued');
     expect(el<HTMLInputElement>(fixture, 'topic')!.value).toBe('');
@@ -395,6 +407,181 @@ describe('ProductionComponent', () => {
       true,
       false,
     ]);
+  });
+
+  it('Make a video sends the topic, the chosen format and the trimmed direction', async () => {
+    const bridge = makeBridge();
+    const fixture = await mount(bridge);
+    const checkedAtFirst = [
+      el<HTMLInputElement>(fixture, 'format-generated_pictures')!.checked,
+      el<HTMLInputElement>(fixture, 'format-own_pictures')!.checked,
+    ];
+
+    type(fixture, 'topic', 'Records in C#');
+    el<HTMLInputElement>(fixture, 'format-own_pictures')!.click();
+    type(fixture, 'start-direction', '  Explain it to a junior developer, no jargon  ');
+    await settle(fixture);
+    await click(fixture, 'start-project');
+
+    expect(checkedAtFirst).toEqual([true, false]);
+    expect(bridge.operatorStartProject.mock.calls).toEqual([
+      [
+        {
+          topic: 'Records in C#',
+          format: 'own_pictures',
+          direction: 'Explain it to a junior developer, no jargon',
+        },
+      ],
+    ]);
+    expect([
+      el<HTMLInputElement>(fixture, 'format-generated_pictures')!.checked,
+      el<HTMLTextAreaElement>(fixture, 'start-direction')!.value,
+    ]).toEqual([true, '']);
+  });
+
+  it("the AI presenter is shown disabled with 'The connected AI Source has no video model.'", async () => {
+    const fixture = await mount(
+      makeBridge({
+        operatorReadiness: vi.fn(async () => ({ ...readiness, transcriptionAvailable: true })),
+      }),
+    );
+
+    const radios = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        'input[name="start-format"]',
+      ) as NodeListOf<HTMLInputElement>,
+    ).map((r) => [r.dataset['test'], r.disabled]);
+
+    expect(radios).toEqual([
+      ['format-generated_pictures', false],
+      ['format-own_pictures', false],
+      ['format-ai_presenter', true],
+      ['format-own_video', false],
+    ]);
+    expect(text(fixture, 'format-ai_presenter-reason')).toBe(
+      'The connected AI Source has no video model.',
+    );
+  });
+
+  it('Your own video is offered when Scout can transcribe and greyed out with the Local Models reason when it cannot', async () => {
+    const without = await mount(makeBridge());
+    const greyed = [
+      el<HTMLInputElement>(without, 'format-own_video')!.disabled,
+      text(without, 'format-own_video-reason'),
+    ];
+    TestBed.resetTestingModule();
+    const bridge = makeBridge({
+      operatorReadiness: vi.fn(async () => ({ ...readiness, transcriptionAvailable: true })),
+    });
+    const fixture = await mount(bridge);
+    const radio = el<HTMLInputElement>(fixture, 'format-own_video')!;
+    const offered = [
+      radio.disabled,
+      radio.closest('label')!.textContent!.trim(),
+      el(fixture, 'format-own_video-reason'),
+    ];
+
+    type(fixture, 'topic', 'My talk at the meetup');
+    radio.click();
+    await settle(fixture);
+    await click(fixture, 'start-project');
+
+    expect(greyed).toEqual([
+      true,
+      'Scout has no speech-to-text model on this machine; download one in AI Sources, Local Models.',
+    ]);
+    expect(offered).toEqual([false, 'Your own video', null]);
+    expect(bridge.operatorStartProject.mock.calls).toEqual([
+      [{ topic: 'My talk at the meetup', format: 'own_video', direction: '' }],
+    ]);
+  });
+
+  it('a project waiting for its recording offers Attach recording, and a transcribing one shows how much is transcribed', async () => {
+    const waiting = project({
+      format: 'own_video',
+      status: 'recording_waiting',
+      candidates: [],
+      script: null,
+      claims: [],
+    });
+    const transcribing = project({
+      id: 'p2',
+      format: 'own_video',
+      status: 'transcribing',
+      candidates: [],
+      claims: [],
+      recordingFile: 'owner-recording-0a1b2c3d4e5f.mp4',
+      recordingMs: 605_000,
+      script: {
+        ...project().script!,
+        hook: '',
+        sections: [
+          { heading: '', narration: 'Hello everyone.', startMs: 0, endMs: 62_000 },
+          { heading: '', narration: 'Today we look at Span.', startMs: 62_000, endMs: 125_500 },
+        ],
+      },
+    });
+    const bridge = makeBridge({
+      ...listing(waiting, transcribing),
+      operatorAttachSceneMedia: vi.fn(async () => ({
+        project: {
+          ...waiting,
+          status: 'queued',
+          recordingFile: 'owner-recording-0a1b2c3d4e5f.mp4',
+        } as OperatorProjectDto | null,
+      })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const before = [
+      text(fixture, 'project-format'),
+      text(fixture, 'recording-empty'),
+      text(fixture, 'recording-attach'),
+      el(fixture, 'background'),
+    ];
+
+    await click(fixture, 'recording-attach');
+    const after = [el(fixture, 'recording-empty'), text(fixture, 'recording-attach')];
+    await click(fixture, 'project-p2');
+
+    expect(before).toEqual([
+      'Format: Your own video',
+      'No recording yet: attach the video you recorded; Scout transcribes it on this machine.',
+      'Attach recording',
+      null,
+    ]);
+    expect(bridge.operatorAttachSceneMedia.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: '', kind: 'recording' }],
+    ]);
+    expect(after).toEqual([null, 'Replace recording']);
+    expect(text(fixture, 'transcription-progress')).toBe('Transcribed 2:05 of 10:05');
+    expect(
+      Array.from(
+        fixture.nativeElement.querySelectorAll('[data-test="script-section-time"]'),
+        (e: Element) => e.textContent!.trim(),
+      ),
+    ).toEqual(['0:00 to 1:02', '1:02 to 2:05']);
+    expect([el(fixture, 'recording-attach'), el(fixture, 'delete')]).toEqual([null, null]);
+  });
+
+  it('the direction counter shows n / 1000 and Make a video is disabled past it', async () => {
+    const fixture = await mount(makeBridge());
+    type(fixture, 'topic', 'Records in C#');
+
+    type(fixture, 'start-direction', ` ${'d'.repeat(1000)} `);
+    await settle(fixture);
+    const atLimit = [
+      text(fixture, 'start-direction-count'),
+      el<HTMLButtonElement>(fixture, 'start-project')!.disabled,
+    ];
+    type(fixture, 'start-direction', 'd'.repeat(1001));
+    await settle(fixture);
+
+    expect(atLimit).toEqual(['1000 / 1000', false]);
+    expect([
+      text(fixture, 'start-direction-count'),
+      el<HTMLButtonElement>(fixture, 'start-project')!.disabled,
+    ]).toEqual(['1001 / 1000', true]);
   });
 
   it('lists projects newest first with topic, status and updated time, and a selection shows candidates, script and claims', async () => {
@@ -714,7 +901,7 @@ describe('ProductionComponent', () => {
     expect(sentOnOpen).toBe(0);
     expect(el(fixture, 'produce-blocked')).toBeNull();
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
     ]);
     expect(text(fixture, 'project-p1')).toContain('production_queued');
     expect(el(fixture, 'produce-panel')).toBeNull();
@@ -734,7 +921,7 @@ describe('ProductionComponent', () => {
 
     expect(disabled).toBe(false);
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p3', narrationVoice: '', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p3', narrationVoice: '', direction: '', motion: 'gentle' }],
     ]);
   });
 
@@ -775,7 +962,7 @@ describe('ProductionComponent', () => {
     expect(bridge.operatorProjects).toHaveBeenCalledTimes(2);
     expect(afterRefresh).toBe('OpenAI:nova');
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'OpenAI:nova', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle' }],
     ]);
   });
 
@@ -827,8 +1014,8 @@ describe('ProductionComponent', () => {
     ]);
     expect(voicedValue).toBe('piper:en_GB-aru-medium#3');
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p3', narrationVoice: 'piper:en_US-gone-high', visualBrief: '', motion: 'gentle' }],
-      [{ id: 'p1', narrationVoice: 'piper:en_GB-aru-medium#3', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p3', narrationVoice: 'piper:en_US-gone-high', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'piper:en_GB-aru-medium#3', direction: '', motion: 'gentle' }],
     ]);
   });
 
@@ -837,9 +1024,11 @@ describe('ProductionComponent', () => {
     images: boolean,
     provider = 'ChatGptPlan',
     stock = false,
+    format: OperatorProjectDto['format'] = 'generated_pictures',
   ) {
     const decided = project({
       claims: [{ ...project().claims[0]!, status: 'supported' }],
+      format,
     });
     const bridge = makeBridge({
       ...listing(decided),
@@ -863,7 +1052,7 @@ describe('ProductionComponent', () => {
 
     expect(bridge.operatorProduce).not.toHaveBeenCalled();
     expect(text(fixture, 'produce-warning')).toBe(
-      'ChatGptPlan has no speech or image service in Scout: every scene will be a silent text card. Attach your own audio and pictures on each scene afterwards, or connect an AI Source with speech and pictures first.',
+      'ChatGptPlan has no speech or image service in Scout: every scene will be a silent text card. Replace the narration on each scene and attach a background afterwards, or connect an AI Source with speech and pictures first.',
     );
     expect(text(fixture, 'produce-confirm')).toBe('Produce');
     expect(text(fixture, 'produce-cancel')).toBe('Cancel');
@@ -871,7 +1060,7 @@ describe('ProductionComponent', () => {
     await click(fixture, 'produce-confirm');
 
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
     ]);
     expect(el(fixture, 'produce-panel')).toBeNull();
   });
@@ -883,7 +1072,7 @@ describe('ProductionComponent', () => {
 
     expect(bridge.operatorProduce).not.toHaveBeenCalled();
     expect(text(fixture, 'produce-warning')).toBe(
-      'openai has no speech service in Scout: every scene will be silent. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.',
+      'openai has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.',
     );
   });
 
@@ -894,7 +1083,7 @@ describe('ProductionComponent', () => {
 
     expect(bridge.operatorProduce).not.toHaveBeenCalled();
     expect(text(fixture, 'produce-warning')).toBe(
-      'The connected AI Source has no image service in Scout: every scene will be a text card. Attach your own pictures on each scene afterwards, or connect an AI Source with pictures first.',
+      'The connected AI Source has no image service in Scout: every scene will be a text card. Attach a background afterwards, or connect an AI Source with pictures first.',
     );
   });
 
@@ -904,7 +1093,7 @@ describe('ProductionComponent', () => {
     await click(fixture, 'produce');
 
     expect(text(fixture, 'produce-warning')).toBe(
-      'ChatGptPlan has no speech or image service in Scout: every scene will be silent and pictures come from Openverse, credited. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.',
+      'ChatGptPlan has no speech or image service in Scout: every scene will be silent and pictures come from Openverse, credited. Replace the narration on each scene afterwards, or connect an AI Source with speech first.',
     );
   });
 
@@ -914,6 +1103,43 @@ describe('ProductionComponent', () => {
     await click(fixture, 'produce');
 
     expect(el(fixture, 'produce-warning')).toBeNull();
+  });
+
+  it('the Produce panel warning of an own pictures project speaks of narration only', async () => {
+    const noSpeech = await mountDecided(false, false, 'ChatGptPlan', true, 'own_pictures');
+    await click(noSpeech.fixture, 'produce');
+    const silent = text(noSpeech.fixture, 'produce-warning');
+    await click(noSpeech.fixture, 'delegate');
+    const delegated = text(noSpeech.fixture, 'delegate-warning');
+    TestBed.resetTestingModule();
+    const noPictures = await mountDecided(true, false, 'openai', false, 'own_pictures');
+    await click(noPictures.fixture, 'produce');
+
+    const sentence =
+      'ChatGptPlan has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.';
+    expect([silent, delegated]).toEqual([sentence, sentence]);
+    expect(el(noPictures.fixture, 'produce-warning')).toBeNull();
+  });
+
+  it('the Produce panel of an own video project asks for no voice or motion and the Background block is hidden', async () => {
+    const { bridge, fixture } = await mountDecided(false, false, 'ChatGptPlan', false, 'own_video');
+    await click(fixture, 'produce');
+    const panel = [
+      el(fixture, 'produce-voice'),
+      el(fixture, 'produce-voice-preview'),
+      el(fixture, 'produce-motion'),
+      el(fixture, 'produce-warning'),
+      el(fixture, 'produce-brief') !== null,
+      el(fixture, 'background'),
+      el(fixture, 'background-attach'),
+    ];
+
+    await click(fixture, 'produce-confirm');
+
+    expect(panel).toEqual([null, null, null, null, true, null, null]);
+    expect(bridge.operatorProduce.mock.calls).toEqual([
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+    ]);
   });
 
   it('Cancel on the Produce panel closes it and produces nothing', async () => {
@@ -954,7 +1180,7 @@ describe('ProductionComponent', () => {
 
     expect(withoutScript).toBeNull();
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
     ]);
   });
 
@@ -1188,13 +1414,13 @@ describe('ProductionComponent', () => {
       'Stop at ready to approve: publishing needs your approval',
     ]);
     expect(warning).toBe(
-      'openai has no speech service in Scout: every scene will be silent. Attach your own audio on each scene afterwards, or connect an AI Source with speech first.',
+      'openai has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.',
     );
     expect(keptOpen).toEqual([true, 'OpenAI:nova']);
     expect(sentBeforeConfirm).toBe(0);
     expect(buttons).toEqual(['Confirm and delegate', 'Cancel']);
     expect(bridge.operatorDelegate.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'OpenAI:nova', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle' }],
     ]);
     expect(el(fixture, 'delegate-dialog')).toBeNull();
     expect(text(fixture, 'project-delegated')).toBe('Delegated');
@@ -1225,7 +1451,7 @@ describe('ProductionComponent', () => {
       true,
     ]);
     expect(bridge.operatorDelegate.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'piper:en_US-gone-high', visualBrief: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'piper:en_US-gone-high', direction: '', motion: 'gentle' }],
     ]);
   });
 
@@ -1518,19 +1744,19 @@ describe('ProductionComponent', () => {
     ]);
   });
 
-  it('Attach audio and Attach image send the project, the scene and the kind, and show the attached file', async () => {
+  it('Replace narration and Attach image send the project, the scene and the kind, and show the attached file', async () => {
     const before = [scene({ audioFile: null, visualFile: null, audioSource: 'none' })];
     const after = [scene({ audioFile: 'owner-s1-aaaaaaaaaaaa.mp3', audioSource: 'owner' })];
     const bridge = makeBridge({
-      ...listing(project({ scenes: before })),
+      ...listing(project({ scenes: before, format: 'own_pictures' })),
       operatorAttachSceneMedia: vi.fn(async () => ({
-        project: project({ scenes: after }) as OperatorProjectDto | null,
+        project: project({ scenes: after, format: 'own_pictures' }) as OperatorProjectDto | null,
       })),
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
 
-    await click(fixture, 'scene-attach-audio-s1');
+    await click(fixture, 'scene-narration-replace-s1');
     await click(fixture, 'scene-attach-visual-s1');
 
     expect(bridge.operatorAttachSceneMedia.mock.calls).toEqual([
@@ -1540,6 +1766,259 @@ describe('ProductionComponent', () => {
     expect(el(fixture, 'scene-audio-s1')!.getAttribute('src')).toBe(
       'scout-media://p1/owner-s1-aaaaaaaaaaaa.mp3?v=2026-11-03T09%3A05%3A00Z',
     );
+  });
+
+  it('a generated pictures project shows no Attach image and offers Regenerate scene; an own pictures project shows Attach image and no Regenerate scene', async () => {
+    const generated = project({ scenes: [scene()] });
+    const own = project({ id: 'p2', scenes: [scene()], format: 'own_pictures' });
+    const fixture = await mount(makeBridge(listing(generated, own)));
+
+    await click(fixture, 'project-p1');
+    const generatedControls = [
+      el(fixture, 'scene-attach-visual-s1'),
+      text(fixture, 'scene-regenerate-s1'),
+      text(fixture, 'project-format'),
+    ];
+    await click(fixture, 'project-p2');
+
+    expect(generatedControls).toEqual([null, 'Regenerate scene', 'Format: Generated pictures']);
+    expect([
+      text(fixture, 'scene-attach-visual-s1'),
+      el(fixture, 'scene-regenerate-s1'),
+      text(fixture, 'project-format'),
+    ]).toEqual(['Attach image', null, 'Format: Your own pictures']);
+  });
+
+  it('a clip past the first hour of an own video reads as h:mm:ss, the way the chapters do', async () => {
+    const late = scene({
+      audioSource: 'recording',
+      visualSource: 'recording',
+      audioFile: null,
+      visualFile: null,
+      clipStartMs: 3_599_000,
+      clipEndMs: 3_725_400,
+    });
+    const fixture = await mount(
+      makeBridge(listing(project({ format: 'own_video', scenes: [late] }))),
+    );
+    await click(fixture, 'project-p1');
+
+    expect(text(fixture, 'scene-clip-s1')).toBe('Clip: 59:59 to 1:02:05');
+  });
+
+  it('an own video scene shows its clip and offers Edit text, with no narration row, Regenerate scene or Attach image', async () => {
+    const recorded = scene({
+      narration: 'Today we look at Span.',
+      audioSource: 'recording',
+      visualSource: 'recording',
+      audioFile: null,
+      visualFile: null,
+      clipStartMs: 62_000,
+      clipEndMs: 125_500,
+    });
+    const own = project({ format: 'own_video', scenes: [recorded] });
+    const generated = project({ id: 'p2', scenes: [scene()] });
+    const bridge = makeBridge(listing(own, generated));
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const generatedClip = el(fixture, 'scene-clip-s1');
+    await click(fixture, 'project-p1');
+    const controls = [
+      text(fixture, 'scene-clip-s1'),
+      text(fixture, 'scene-sources-s1'),
+      el(fixture, 'scene-audio-row-s1'),
+      el(fixture, 'scene-narration-regenerate-s1'),
+      el(fixture, 'scene-regenerate-s1'),
+      el(fixture, 'scene-attach-visual-s1'),
+      text(fixture, 'scene-edit-s1'),
+    ];
+    const pictureLines = (el(fixture, 'scene-s1')!.textContent ?? '').includes('Picture prompt');
+
+    await click(fixture, 'scene-edit-s1');
+    const hint = text(fixture, 'scene-text-hint-s1');
+    type(fixture, 'scene-text-s1', ' Today we look at Span<T>. ');
+    await settle(fixture);
+    await click(fixture, 'scene-text-save-s1');
+
+    expect(generatedClip).toBeNull();
+    expect(controls).toEqual([
+      'Clip: 1:02 to 2:05',
+      'Audio: your recording · Picture: your recording',
+      null,
+      null,
+      null,
+      null,
+      'Edit text',
+    ]);
+    expect(pictureLines).toBe(false);
+    expect(hint).toBe("The new text replaces this scene's captions; the recording is not changed.");
+    expect(bridge.operatorEditSceneText.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', text: 'Today we look at Span<T>.' }],
+    ]);
+  });
+
+  it('the narration row plays the audio, regenerates the narration and replaces it with a file, and no Attach audio is left', async () => {
+    const scenes = [scene(), scene({ id: 's2', order: 2, locked: true })];
+    const renarrated = project({
+      status: 'production_queued',
+      scenes: [scene({ status: 'planned', audioSource: 'none', audioFile: null }), scenes[1]!],
+    });
+    const bridge = makeBridge({
+      ...listing(project({ scenes }), project({ id: 'p2', scenes, format: 'own_pictures' })),
+      operatorRegenerateNarration: vi.fn(async () => renarrated),
+      operatorAttachSceneMedia: vi.fn(async () => ({ project: null as OperatorProjectDto | null })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const ownAttachAudio = el(fixture, 'scene-attach-audio-s1');
+    await click(fixture, 'project-p1');
+    const row = el(fixture, 'scene-audio-row-s1')!;
+    const inRow = [
+      row.querySelector('[data-test="scene-audio-s1"]')?.getAttribute('src'),
+      row.querySelector('[data-test="scene-narration-regenerate-s1"]')?.textContent?.trim(),
+      row.querySelector('[data-test="scene-narration-replace-s1"]')?.textContent?.trim(),
+    ];
+    const lockedRegenerate = el<HTMLButtonElement>(fixture, 'scene-narration-regenerate-s2')!;
+
+    await click(fixture, 'scene-narration-replace-s1');
+    await click(fixture, 'scene-narration-regenerate-s1');
+
+    expect(inRow).toEqual([
+      'scout-media://p1/scene-s1.mp3?v=2026-11-03T09%3A05%3A00Z',
+      'Regenerate narration',
+      'Replace narration',
+    ]);
+    expect([ownAttachAudio, el(fixture, 'scene-attach-audio-s1')]).toEqual([null, null]);
+    expect(fixture.nativeElement.textContent).not.toContain('Attach audio');
+    expect(lockedRegenerate.disabled).toBe(true);
+    expect(bridge.operatorAttachSceneMedia.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', kind: 'audio' }],
+    ]);
+    expect(bridge.operatorRegenerateNarration.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1' }],
+    ]);
+    expect([text(fixture, 'scene-status-s1'), el(fixture, 'scene-audio-s1')]).toEqual([
+      'planned',
+      null,
+    ]);
+  });
+
+  it("Regenerate narration on a scene with the owner's audio asks first and Cancel sends nothing", async () => {
+    const bridge = makeBridge({
+      ...listing(project({ scenes: [scene({ audioSource: 'owner' })] })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'scene-narration-regenerate-s1');
+    const dialog = [
+      text(fixture, 'narration-replace-dialog'),
+      text(fixture, 'narration-replace-confirm'),
+      text(fixture, 'narration-replace-cancel'),
+    ];
+    const sentWhileAsking = bridge.operatorRegenerateNarration.mock.calls.length;
+    await click(fixture, 'narration-replace-cancel');
+
+    expect(dialog[0]).toContain(
+      "Replace your own narration on this scene with Scout's voice? Your file stays on disk but the video will use the generated narration.",
+    );
+    expect(dialog.slice(1)).toEqual(['Confirm', 'Cancel']);
+    expect(sentWhileAsking).toBe(0);
+    expect(el(fixture, 'narration-replace-dialog')).toBeNull();
+    expect(bridge.operatorRegenerateNarration).not.toHaveBeenCalled();
+  });
+
+  it("confirming the replacement of the owner's narration sends the regeneration once", async () => {
+    const bridge = makeBridge({
+      ...listing(project({ scenes: [scene({ audioSource: 'owner' })] })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+
+    await click(fixture, 'scene-narration-regenerate-s1');
+    await click(fixture, 'narration-replace-confirm');
+
+    expect(bridge.operatorRegenerateNarration.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1' }],
+    ]);
+    expect(el(fixture, 'narration-replace-dialog')).toBeNull();
+  });
+
+  it('Edit text saves the trimmed text, Cancel sends nothing, and an empty or over-700 text shows the sentence and disables Save', async () => {
+    const edited = project({
+      status: 'production_queued',
+      scenes: [scene({ narration: 'Span is a window over memory.', status: 'planned' })],
+    });
+    const bridge = makeBridge({
+      ...listing(project({ scenes: [scene()] })),
+      operatorEditSceneText: vi.fn(async () => edited),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const save = () => el<HTMLButtonElement>(fixture, 'scene-text-save-s1')!;
+
+    await click(fixture, 'scene-edit-s1');
+    const opened = [
+      el<HTMLTextAreaElement>(fixture, 'scene-text-s1')!.value,
+      text(fixture, 'scene-text-count-s1'),
+      save().disabled,
+      el(fixture, 'scene-text-invalid-s1'),
+    ];
+    type(fixture, 'scene-text-s1', '   ');
+    await settle(fixture);
+    const empty = [text(fixture, 'scene-text-invalid-s1'), save().disabled];
+    type(fixture, 'scene-text-s1', 't'.repeat(701));
+    await settle(fixture);
+    const tooLong = [
+      text(fixture, 'scene-text-count-s1'),
+      text(fixture, 'scene-text-invalid-s1'),
+      save().disabled,
+    ];
+    await click(fixture, 'scene-text-cancel-s1');
+    const cancelled = [
+      el(fixture, 'scene-text-s1'),
+      bridge.operatorEditSceneText.mock.calls.length,
+    ];
+    await click(fixture, 'scene-edit-s1');
+    type(fixture, 'scene-text-s1', '  Span is a window over memory.  ');
+    await settle(fixture);
+    const valid = [text(fixture, 'scene-text-count-s1'), save().disabled];
+    await click(fixture, 'scene-text-save-s1');
+
+    expect(opened).toEqual(['Span is a view over memory.', '27 / 700', true, null]);
+    expect(empty).toEqual(["A scene's text is 1 to 700 characters.", true]);
+    expect(tooLong).toEqual(['701 / 700', "A scene's text is 1 to 700 characters.", true]);
+    expect(cancelled).toEqual([null, 0]);
+    expect(valid).toEqual(['29 / 700', false]);
+    expect(bridge.operatorEditSceneText.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', text: 'Span is a window over memory.' }],
+    ]);
+    expect(el(fixture, 'scene-text-s1')).toBeNull();
+    expect(text(fixture, 'scene-s1')).toContain('Span is a window over memory.');
+    expect(text(fixture, 'scene-status-s1')).toBe('planned');
+  });
+
+  it('Edit text is disabled on a locked scene and a refusal shows its reason', async () => {
+    const reason = "Scene 's1' is locked; unlock it before editing its text.";
+    const scenes = [scene(), scene({ id: 's2', order: 2, locked: true })];
+    const bridge = makeBridge({
+      ...listing(project({ scenes })),
+      operatorEditSceneText: vi.fn(async () => {
+        throw refusedWith('scout:operator.sceneText', reason);
+      }),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const lockedEdit = el<HTMLButtonElement>(fixture, 'scene-edit-s2')!.disabled;
+
+    await click(fixture, 'scene-edit-s1');
+    type(fixture, 'scene-text-s1', 'New text.');
+    await settle(fixture);
+    await click(fixture, 'scene-text-save-s1');
+
+    expect(lockedEdit).toBe(true);
+    expect(text(fixture, 'scene-error')).toBe(reason);
+    expect(el<HTMLTextAreaElement>(fixture, 'scene-text-s1')!.value).toBe('New text.');
   });
 
   it('a refused attach shows the reason, and a closed file dialog changes nothing', async () => {
@@ -1556,10 +2035,10 @@ describe('ProductionComponent', () => {
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
 
-    await click(fixture, 'scene-attach-audio-s1');
+    await click(fixture, 'scene-narration-replace-s1');
     const refused = text(fixture, 'scene-error');
     refuse = false;
-    await click(fixture, 'scene-attach-audio-s1');
+    await click(fixture, 'scene-narration-replace-s1');
 
     expect(refused).toBe('Narration files are at most 100 MB.');
     expect(el(fixture, 'scene-error')).toBeNull();
@@ -1761,14 +2240,14 @@ describe('ProductionComponent', () => {
       ['gentle', 'Gentle (recommended)'],
       ['dynamic', 'Dynamic'],
     ]);
-    expect(opened).toEqual(['calm', '4 / 500', 'gentle']);
-    expect(afterRefresh).toEqual(['  Chalk sketches on a dark slate  ', '30 / 500', 'dynamic']);
+    expect(opened).toEqual(['calm', '4 / 1000', 'gentle']);
+    expect(afterRefresh).toEqual(['  Chalk sketches on a dark slate  ', '30 / 1000', 'dynamic']);
     expect(bridge.operatorProduce.mock.calls).toEqual([
       [
         {
           id: 'p1',
           narrationVoice: 'piper:en_GB-aru-medium#3',
-          visualBrief: 'Chalk sketches on a dark slate',
+          direction: 'Chalk sketches on a dark slate',
           motion: 'dynamic',
         },
       ],
@@ -1776,7 +2255,7 @@ describe('ProductionComponent', () => {
   });
 
   it('Delegate sends the brief and the motion with the voice', async () => {
-    const briefed = project({ visualBrief: 'Watercolour diagrams', motion: 'still' });
+    const briefed = project({ direction: 'Watercolour diagrams', motion: 'still' });
     const bridge = makeBridge({
       ...listing(briefed),
       operatorMandate: vi.fn(async () => ({ mandate })),
@@ -1797,22 +2276,22 @@ describe('ProductionComponent', () => {
     const counted = text(fixture, 'delegate-brief-count');
     await click(fixture, 'delegate-confirm');
 
-    expect(opened).toEqual(['Watercolour diagrams', '20 / 500', 'still']);
-    expect(counted).toBe('31 / 500');
+    expect(opened).toEqual(['Watercolour diagrams', '20 / 1000', 'still']);
+    expect(counted).toBe('31 / 1000');
     expect(bridge.operatorDelegate.mock.calls).toEqual([
       [
         {
           id: 'p1',
           narrationVoice: 'OpenAI:nova',
-          visualBrief: 'Watercolour diagrams, slow pans',
+          direction: 'Watercolour diagrams, slow pans',
           motion: 'dynamic',
         },
       ],
     ]);
   });
 
-  it("the brief is prefilled from the project, else from the mandate's voice and style", async () => {
-    const briefed = project({ claims: [], visualBrief: 'Neon terminal glyphs', motion: 'dynamic' });
+  it("the direction is prefilled from the project, else from the mandate's voice and style", async () => {
+    const briefed = project({ claims: [], direction: 'Neon terminal glyphs', motion: 'dynamic' });
     const unbriefed = project({ id: 'p2', claims: [] });
     const bridge = makeBridge({
       ...listing(briefed, unbriefed),
@@ -1844,17 +2323,36 @@ describe('ProductionComponent', () => {
     ]);
   });
 
-  it('the detail shows the motion and the brief', async () => {
-    const briefed = project({ visualBrief: 'Chalk on slate', motion: 'still' });
+  it('the detail shows the motion and the direction', async () => {
+    const briefed = project({ direction: 'Chalk on slate', motion: 'still' });
     const unbriefed = project({ id: 'p2' });
     const fixture = await mount(makeBridge(listing(briefed, unbriefed)));
 
     await click(fixture, 'project-p1');
-    const shown = [text(fixture, 'project-visual'), text(fixture, 'project-brief')];
+    const shown = [text(fixture, 'project-visual'), text(fixture, 'project-direction')];
     await click(fixture, 'project-p2');
 
     expect(shown).toEqual(['Visual: Still motion', 'Chalk on slate']);
     expect(text(fixture, 'project-visual')).toBe('Visual: Gentle motion');
-    expect(el(fixture, 'project-brief')).toBeNull();
+    expect(el(fixture, 'project-direction')).toBeNull();
+  });
+
+  it('the Delegate dialog of an own video project asks for no voice or motion', async () => {
+    const { bridge, fixture } = await mountDecided(false, false, 'ChatGptPlan', false, 'own_video');
+    await click(fixture, 'delegate');
+    const dialog = [
+      el(fixture, 'delegate-voice'),
+      el(fixture, 'delegate-voice-preview'),
+      el(fixture, 'delegate-motion'),
+      el(fixture, 'delegate-warning'),
+      el(fixture, 'delegate-brief') !== null,
+    ];
+
+    await click(fixture, 'delegate-confirm');
+
+    expect(dialog).toEqual([null, null, null, null, true]);
+    expect(bridge.operatorDelegate.mock.calls).toEqual([
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+    ]);
   });
 });

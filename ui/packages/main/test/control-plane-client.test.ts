@@ -739,6 +739,10 @@ const queuedWire = {
 
 const projectDto: OperatorProjectDto = {
   ...projectWire,
+  script: {
+    ...projectWire.script,
+    sections: [{ ...projectWire.script.sections[0]!, startMs: 0, endMs: 0 }],
+  },
   claims: [{ ...projectWire.claims[0]!, note: null }],
   error: null,
   scenes: [],
@@ -747,8 +751,11 @@ const projectDto: OperatorProjectDto = {
   narrationVoice: '',
   backgroundFile: null,
   delegated: false,
-  visualBrief: '',
+  direction: '',
   motion: 'gentle',
+  format: 'generated_pictures',
+  recordingFile: null,
+  recordingMs: 0,
 };
 
 const readyScene = {
@@ -788,8 +795,25 @@ const delegatedWire = {
   narrationVoice: 'OpenAI:nova',
   backgroundFile: 'owner-background-0a1b2c3d4e5f.png',
   delegated: true,
-  visualBrief: 'Watercolour diagrams',
+  direction: 'Watercolour diagrams',
   motion: 'still',
+};
+
+const editedWire = {
+  ...projectWire,
+  status: 'production_queued',
+  direction: 'Explain it to a junior developer, no jargon',
+  format: 'own_pictures',
+  scenes: [
+    {
+      ...readyScene,
+      narration: 'Span is a window over memory you already have.',
+      status: 'planned',
+      audioSource: 'none',
+      audioFile: undefined,
+      durationMs: 0,
+    },
+  ],
 };
 
 const packageWire = {
@@ -975,6 +999,60 @@ const readinessWire = {
   ],
 };
 
+const ownVideoWire = {
+  id: 'p3',
+  topic: 'My talk at the meetup',
+  status: 'script_ready',
+  origin: 'desktop',
+  createdAt: '2026-11-04T09:00:00Z',
+  updatedAt: '2026-11-04T09:20:00Z',
+  candidates: [],
+  claims: [],
+  script: {
+    hook: '',
+    sections: [
+      { heading: '', narration: 'Hello everyone.', startMs: 0, endMs: 2400 },
+      { heading: '', narration: 'Today we look at Span.', startMs: 2400, endMs: 5100 },
+    ],
+    callToAction: '',
+    titleVariants: [],
+    description: '',
+    tags: [],
+    chapters: [],
+  },
+  scenes: [
+    {
+      id: 's1',
+      order: 0,
+      narration: 'Hello everyone.',
+      visualPrompt: '',
+      locked: false,
+      status: 'ready',
+      audioSource: 'recording',
+      visualSource: 'recording',
+      durationMs: 2400,
+      clipStartMs: 0,
+      clipEndMs: 2400,
+    },
+    {
+      id: 's2',
+      order: 1,
+      narration: 'Today we look at Span.',
+      visualPrompt: '',
+      locked: false,
+      status: 'ready',
+      audioSource: 'recording',
+      visualSource: 'recording',
+      durationMs: 2700,
+      clipStartMs: 2400,
+      clipEndMs: 5100,
+    },
+  ],
+  format: 'own_video',
+  recordingFile: 'owner-recording-0a1b2c3d4e5f.mp4',
+  recordingMs: 5100,
+};
+
 async function startOperatorServer(
   socketPath: string,
   calls: OperatorCall[],
@@ -982,6 +1060,8 @@ async function startOperatorServer(
     mandate?: object;
     failWith?: { code: grpc.status; details: string };
     comments?: object;
+    project?: object;
+    readiness?: object;
   } = {},
 ): Promise<grpc.Server> {
   const definition = protoLoader.loadSync(path.join(PROTO_DIR, 'operator.proto'), {
@@ -1003,7 +1083,7 @@ async function startOperatorServer(
     GetMandate: handler('GetMandate', () => options.mandate ?? mandateWire),
     SaveMandate: handler('SaveMandate', () => mandateWire),
     ListProjects: handler('ListProjects', () => ({ projects: [projectWire, queuedWire] })),
-    GetProject: handler('GetProject', () => projectWire),
+    GetProject: handler('GetProject', () => options.project ?? projectWire),
     StartProject: handler('StartProject', () => queuedWire),
     DecideClaim: handler('DecideClaim', () => ({
       ...projectWire,
@@ -1013,7 +1093,7 @@ async function startOperatorServer(
       ...projectWire,
       status: 'production_queued',
       narrationVoice: 'piper:en_GB-aru-medium#3',
-      visualBrief: 'Chalk on slate',
+      direction: 'Chalk on slate',
       motion: 'dynamic',
     })),
     DelegateProject: handler('DelegateProject', () => delegatedWire),
@@ -1028,7 +1108,7 @@ async function startOperatorServer(
     GetVoiceSamplesDirectory: handler('GetVoiceSamplesDirectory', () => ({
       path: '/home/owner/.local/share/Scout/voice-samples',
     })),
-    GetReadiness: handler('GetReadiness', () => readinessWire),
+    GetReadiness: handler('GetReadiness', () => options.readiness ?? readinessWire),
     AssembleProject: handler('AssembleProject', () => ({
       ...projectWire,
       status: 'assembly_queued',
@@ -1043,6 +1123,8 @@ async function startOperatorServer(
     StartExperiment: handler('StartExperiment', () => publishedWire),
     AdoptExperimentWinner: handler('AdoptExperimentWinner', () => publishedWire),
     EditPackageMetadata: handler('EditPackageMetadata', () => assembledWire),
+    EditSceneText: handler('EditSceneText', () => editedWire),
+    RegenerateNarration: handler('RegenerateNarration', () => editedWire),
     ListComments: handler('ListComments', () => options.comments ?? commentsWire),
     RequestCommentSync: handler('RequestCommentSync', () => ({ comments: [], ideas: [] })),
     DecideComment: handler('DecideComment', () => commentsWire),
@@ -1079,7 +1161,7 @@ describe('createControlPlaneClient operator', () => {
     const saved = await client.saveMandate(fields);
     const projects = await client.listProjects(50);
     const one = await client.getProject('p1');
-    const started = await client.startProject('Records in C#');
+    const started = await client.startProject('Records in C#', 'generated_pictures', '');
     const decided = await client.decideClaim('p1', 'c1', 'waived', 'Common knowledge');
     await client.decideClaim('p1', 'c1', 'supported');
 
@@ -1097,8 +1179,11 @@ describe('createControlPlaneClient operator', () => {
         narrationVoice: '',
         backgroundFile: null,
         delegated: false,
-        visualBrief: '',
+        direction: '',
         motion: 'gentle',
+        format: 'generated_pictures',
+        recordingFile: null,
+        recordingMs: 0,
       },
     ]);
     expect(one).toEqual(projectDto);
@@ -1112,7 +1197,10 @@ describe('createControlPlaneClient operator', () => {
       { method: 'SaveMandate', request: fields },
       { method: 'ListProjects', request: { limit: 50 } },
       { method: 'GetProject', request: { id: 'p1' } },
-      { method: 'StartProject', request: { topic: 'Records in C#' } },
+      {
+        method: 'StartProject',
+        request: { topic: 'Records in C#', format: 'generated_pictures', direction: '' },
+      },
       {
         method: 'DecideClaim',
         request: { projectId: 'p1', claimId: 'c1', status: 'waived', note: 'Common knowledge' },
@@ -1184,7 +1272,7 @@ describe('createControlPlaneClient operator', () => {
     });
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const error = await client.startProject('Records in C#').then(
+    const error = await client.startProject('Records in C#', 'generated_pictures', '').then(
       () => null,
       (err: unknown) => err,
     );
@@ -1214,7 +1302,7 @@ describe('createControlPlaneClient operator', () => {
     expect((error as Error).message).toBe('Project p9 not found');
   });
 
-  it("maps the scenes with their sources, files and errors, the project voice, background, delegation, visual brief and motion, and the readiness with each voice's sample or null, and sends produce and delegate with the voice, the brief and the motion, reorder, lock, regenerate, attach of a scene file and of a background, media directory, voice samples directory and readiness with the token", async () => {
+  it("maps the scenes with their sources, files and errors, the project voice, background, delegation, direction and motion, and the readiness with each voice's sample or null, and sends produce and delegate with the voice, the direction and the motion, reorder, lock, regenerate, attach of a scene file and of a background, media directory, voice samples directory and readiness with the token", async () => {
     if (process.platform === 'win32') {
       expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
       return;
@@ -1253,7 +1341,7 @@ describe('createControlPlaneClient operator', () => {
       produced.narrationVoice,
       produced.backgroundFile,
       produced.delegated,
-      produced.visualBrief,
+      produced.direction,
       produced.motion,
     ]).toEqual([
       'p1',
@@ -1271,12 +1359,20 @@ describe('createControlPlaneClient operator', () => {
       narrationVoice: 'OpenAI:nova',
       backgroundFile: 'owner-background-0a1b2c3d4e5f.png',
       delegated: true,
-      visualBrief: 'Watercolour diagrams',
+      direction: 'Watercolour diagrams',
       motion: 'still',
     });
     expect(reordered.scenes).toEqual([
-      { ...readyScene, error: null },
-      { ...failedScene, visualQuery: '', visualCredit: null, audioFile: null, visualFile: null },
+      { ...readyScene, error: null, clipStartMs: 0, clipEndMs: 0 },
+      {
+        ...failedScene,
+        visualQuery: '',
+        visualCredit: null,
+        audioFile: null,
+        visualFile: null,
+        clipStartMs: 0,
+        clipEndMs: 0,
+      },
     ]);
     expect(directory).toBe('/home/owner/.local/share/Scout/operator/p1/media');
     expect(samples).toBe('/home/owner/.local/share/Scout/voice-samples');
@@ -1292,6 +1388,7 @@ describe('createControlPlaneClient operator', () => {
         { id: 'OpenAI:nova', label: 'nova (OpenAI)', source: 'OpenAI', sampleFile: null },
       ],
       reportedAt: null,
+      transcriptionAvailable: false,
     });
     expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
       {
@@ -1299,7 +1396,7 @@ describe('createControlPlaneClient operator', () => {
         request: {
           id: 'p1',
           narrationVoice: 'piper:en_GB-aru-medium#3',
-          visualBrief: 'Chalk on slate',
+          direction: 'Chalk on slate',
           motion: 'dynamic',
         },
       },
@@ -1308,7 +1405,7 @@ describe('createControlPlaneClient operator', () => {
         request: {
           id: 'p1',
           narrationVoice: 'OpenAI:nova',
-          visualBrief: 'Watercolour diagrams',
+          direction: 'Watercolour diagrams',
           motion: 'still',
         },
       },
@@ -1338,6 +1435,171 @@ describe('createControlPlaneClient operator', () => {
       { method: 'GetReadiness', request: {} },
     ]);
     expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('start, scene text and narration regeneration send the wire keys and the project maps format and direction', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const started = await client.startProject(
+      'Span<T> in C#',
+      'own_pictures',
+      'Explain it to a junior developer, no jargon',
+    );
+    const edited = await client.editSceneText(
+      'p1',
+      's1',
+      'Span is a window over memory you already have.',
+    );
+    const renarrated = await client.regenerateNarration('p1', 's1');
+
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      {
+        method: 'StartProject',
+        request: {
+          topic: 'Span<T> in C#',
+          format: 'own_pictures',
+          direction: 'Explain it to a junior developer, no jargon',
+        },
+      },
+      {
+        method: 'EditSceneText',
+        request: {
+          projectId: 'p1',
+          sceneId: 's1',
+          text: 'Span is a window over memory you already have.',
+        },
+      },
+      { method: 'RegenerateNarration', request: { projectId: 'p1', sceneId: 's1' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+    expect([started.format, started.direction]).toEqual(['generated_pictures', '']);
+    expect([edited.status, edited.format, edited.direction]).toEqual([
+      'production_queued',
+      'own_pictures',
+      'Explain it to a junior developer, no jargon',
+    ]);
+    expect(edited.scenes).toEqual([
+      {
+        ...readyScene,
+        narration: 'Span is a window over memory you already have.',
+        status: 'planned',
+        audioSource: 'none',
+        audioFile: null,
+        durationMs: 0,
+        error: null,
+        clipStartMs: 0,
+        clipEndMs: 0,
+      },
+    ]);
+    expect(renarrated).toEqual(edited);
+  });
+
+  it('reads the recording, the clips, the transcript times and whether Scout can transcribe', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls, {
+      project: ownVideoWire,
+      readiness: { ...readinessWire, transcriptionAvailable: true },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const plainSocket = tempSocketPath();
+    const plain = await startOperatorServer(plainSocket, []);
+    const plainClient = createControlPlaneClient({
+      socketPath: plainSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+
+    const read = await client.getProject('p3');
+    const readiness = await client.getReadiness();
+    await client.attachSceneMedia('p3', '', 'recording', 'owner-recording-0a1b2c3d4e5f.mp4');
+    const without = await plainClient.getReadiness();
+    plainClient.close();
+    plain.forceShutdown();
+
+    expect([read.format, read.recordingFile, read.recordingMs]).toEqual([
+      'own_video',
+      'owner-recording-0a1b2c3d4e5f.mp4',
+      5100,
+    ]);
+    expect(read.script?.sections).toEqual([
+      { heading: '', narration: 'Hello everyone.', startMs: 0, endMs: 2400 },
+      { heading: '', narration: 'Today we look at Span.', startMs: 2400, endMs: 5100 },
+    ]);
+    expect(read.scenes.map((s) => [s.id, s.clipStartMs, s.clipEndMs, s.visualSource])).toEqual([
+      ['s1', 0, 2400, 'recording'],
+      ['s2', 2400, 5100, 'recording'],
+    ]);
+    expect([readiness.transcriptionAvailable, without.transcriptionAvailable]).toEqual([
+      true,
+      false,
+    ]);
+    expect(calls.find((c) => c.method === 'AttachSceneMedia')?.request).toEqual({
+      projectId: 'p3',
+      sceneId: '',
+      kind: 'recording',
+      fileName: 'owner-recording-0a1b2c3d4e5f.mp4',
+    });
+  });
+
+  it('a scene text the control plane refuses or cannot answer reaches the caller as invalid-argument or unavailable', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const reason = "Scene 's1' is locked; unlock it before editing its text.";
+    const refusingSocket = tempSocketPath();
+    server = await startOperatorServer(refusingSocket, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: reason },
+    });
+    client = createControlPlaneClient({
+      socketPath: refusingSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const unreachableClient = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const refused = await client.editSceneText('p1', 's1', 'New text.').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const startedAt = Date.now();
+    const unreachable = await unreachableClient.editSceneText('p1', 's1', 'New text.').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const elapsed = Date.now() - startedAt;
+    const narrationUnreachable = await unreachableClient.regenerateNarration('p1', 's1').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    unreachableClient.close();
+
+    expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((refused as Error).message).toBe(reason);
+    expect(unreachable).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(narrationUnreachable).toBeInstanceOf(ControlPlaneUnavailableError);
+    expect(elapsed).toBeLessThan(5_000);
   });
 
   it('a produce refused while claims are pending rejects with ControlPlaneInvalidArgumentError carrying how many are pending', async () => {

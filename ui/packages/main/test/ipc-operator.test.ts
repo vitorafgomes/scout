@@ -82,8 +82,11 @@ const project: OperatorProjectDto = {
   narrationVoice: '',
   backgroundFile: null,
   delegated: false,
-  visualBrief: '',
+  direction: '',
   motion: 'gentle',
+  format: 'generated_pictures',
+  recordingFile: null,
+  recordingMs: 0,
 };
 
 const readiness: ReadinessDto = {
@@ -103,6 +106,7 @@ const readiness: ReadinessDto = {
     },
   ],
   reportedAt: '2026-11-03T09:00:00Z',
+  transcriptionAvailable: false,
 };
 
 const view: CommentsViewDto = {
@@ -146,6 +150,8 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     reorderScenes: mock(async () => project),
     setSceneLocked: mock(async () => project),
     regenerateScene: mock(async () => project),
+    editSceneText: mock(async () => ({ ...project, status: 'production_queued' })),
+    regenerateNarration: mock(async () => ({ ...project, status: 'production_queued' })),
     attachSceneMedia: mock(async () => project),
     getMediaDirectory: mock(async () => '/nowhere'),
     getReadiness: mock(async () => readiness),
@@ -262,11 +268,67 @@ describe('registerOperatorHandlers', () => {
     await invoke(CHANNEL.operatorStartProject, { topic: 'x'.repeat(200) });
 
     expect(started).toEqual(project);
-    expect(client.startProject.mock.calls).toEqual([['Span<T> in C#'], ['x'.repeat(200)]]);
+    expect(client.startProject.mock.calls).toEqual([
+      ['Span<T> in C#', 'generated_pictures', ''],
+      ['x'.repeat(200), 'generated_pictures', ''],
+    ]);
     expect([short, long]).toEqual([
       { code: 'operator/invalid-request', message: 'The topic must be 3 to 200 characters.' },
       { code: 'operator/invalid-request', message: 'The topic must be 3 to 200 characters.' },
     ]);
+  });
+
+  it('starting a project forwards the topic, the format and the trimmed direction, and refuses an unknown format or a direction over 1000 characters with the control plane sentence', async () => {
+    await invoke(CHANNEL.operatorStartProject, {
+      topic: 'Span<T> in C#',
+      format: ' own_pictures ',
+      direction: '  Explain it to a junior developer  ',
+    });
+    await invoke(CHANNEL.operatorStartProject, {
+      topic: 'Records in C#',
+      format: 'generated_pictures',
+      direction: ` ${'d'.repeat(1000)} `,
+    });
+    await invoke(CHANNEL.operatorStartProject, { topic: 'Pattern matching', format: '' });
+    const refused = await Promise.all(
+      [
+        { format: 'ai_presenter' },
+        { format: 'Own_Pictures' },
+        { format: 'own_pictures', direction: 'd'.repeat(1001) },
+      ].map((req) => rejection(invoke(CHANNEL.operatorStartProject, { topic: 'Span', ...req }))),
+    );
+
+    expect(client.startProject.mock.calls).toEqual([
+      ['Span<T> in C#', 'own_pictures', 'Explain it to a junior developer'],
+      ['Records in C#', 'generated_pictures', 'd'.repeat(1000)],
+      ['Pattern matching', 'generated_pictures', ''],
+    ]);
+    const format = {
+      code: 'operator/invalid-request',
+      message: 'The format is generated_pictures, own_pictures or own_video.',
+    };
+    expect(refused).toEqual([
+      format,
+      format,
+      { code: 'operator/invalid-request', message: 'A direction is at most 1000 characters.' },
+    ]);
+  });
+
+  it('starts a project in own_video and refuses ai_presenter with the new sentence', async () => {
+    await invoke(CHANNEL.operatorStartProject, {
+      topic: 'My talk at the meetup',
+      format: ' own_video ',
+      direction: '',
+    });
+    const refused = await rejection(
+      invoke(CHANNEL.operatorStartProject, { topic: 'Span', format: 'ai_presenter' }),
+    );
+
+    expect(client.startProject.mock.calls).toEqual([['My talk at the meetup', 'own_video', '']]);
+    expect(refused).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The format is generated_pictures, own_pictures or own_video.',
+    });
   });
 
   it('a claim decision forwards supported and unsupported without a note, and waived with its trimmed note', async () => {
@@ -397,17 +459,17 @@ describe('registerOperatorHandlers', () => {
     expect(chooseFile).not.toHaveBeenCalled();
   });
 
-  it('produce and delegation forward the trimmed project id, narration voice and visual brief with the motion, an empty motion as gentle, and refuse a missing id before reaching the control plane', async () => {
+  it('produce and delegation forward the trimmed project id, narration voice and direction with the motion, an empty motion as gentle, and refuse a missing id before reaching the control plane', async () => {
     const produced = await invoke(CHANNEL.operatorProduction, {
       id: ' p1 ',
       narrationVoice: ' piper:en_GB-aru-medium#3 ',
-      visualBrief: '  Chalk on slate  ',
+      direction: '  Chalk on slate  ',
       motion: ' dynamic ',
     });
     const delegated = await invoke(CHANNEL.operatorDelegation, {
       id: 'p1 ',
       narrationVoice: '',
-      visualBrief: '',
+      direction: '',
       motion: '',
     });
     const missing = await Promise.all([
@@ -472,9 +534,9 @@ describe('registerOperatorHandlers', () => {
     expect(client.delegateProject).not.toHaveBeenCalled();
   });
 
-  it('a brief over 500 characters or an unknown motion is refused with the sentence', async () => {
-    const tooLong = { id: 'p1', narrationVoice: '', visualBrief: 'b'.repeat(501), motion: 'still' };
-    const unknownMotion = { id: 'p1', narrationVoice: '', visualBrief: 'calm', motion: 'wild' };
+  it('a direction over 1000 characters or an unknown motion is refused with the sentence', async () => {
+    const tooLong = { id: 'p1', narrationVoice: '', direction: 'b'.repeat(1001), motion: 'still' };
+    const unknownMotion = { id: 'p1', narrationVoice: '', direction: 'calm', motion: 'wild' };
 
     const refused = await Promise.all(
       [tooLong, unknownMotion].flatMap((req) => [
@@ -484,19 +546,19 @@ describe('registerOperatorHandlers', () => {
     );
     await invoke(CHANNEL.operatorProduction, {
       ...tooLong,
-      visualBrief: ` ${'b'.repeat(500)} `,
+      direction: ` ${'b'.repeat(1000)} `,
     });
 
     const brief = {
       code: 'operator/invalid-request',
-      message: 'A visual brief is at most 500 characters.',
+      message: 'A direction is at most 1000 characters.',
     };
     const motion = {
       code: 'operator/invalid-request',
       message: 'Motion is still, gentle or dynamic.',
     };
     expect(refused).toEqual([brief, brief, motion, motion]);
-    expect(client.produceProject.mock.calls).toEqual([['p1', '', 'b'.repeat(500), 'still']]);
+    expect(client.produceProject.mock.calls).toEqual([['p1', '', 'b'.repeat(1000), 'still']]);
     expect(client.delegateProject).not.toHaveBeenCalled();
   });
 
@@ -572,6 +634,58 @@ describe('registerOperatorHandlers', () => {
       code: 'control-plane/invalid-argument',
       message: 'Scene s1 is locked; unlock it to regenerate.',
     });
+  });
+
+  it('scene text forwards the trimmed text and refuses one empty or over 700 characters before the control plane; narration regeneration forwards the scene', async () => {
+    const edited = await invoke(CHANNEL.operatorSceneText, {
+      projectId: ' p1 ',
+      sceneId: ' s1 ',
+      text: '  Span is a window over memory.  ',
+    });
+    await invoke(CHANNEL.operatorSceneText, {
+      projectId: 'p1',
+      sceneId: 's2',
+      text: ` ${'t'.repeat(700)} `,
+    });
+    const refused = await Promise.all(
+      ['', '   ', 't'.repeat(701), undefined].map((sceneText) =>
+        rejection(
+          invoke(CHANNEL.operatorSceneText, { projectId: 'p1', sceneId: 's1', text: sceneText }),
+        ),
+      ),
+    );
+    const noScene = await rejection(
+      invoke(CHANNEL.operatorSceneText, { projectId: 'p1', text: 'New text.' }),
+    );
+    const renarrated = await invoke(CHANNEL.operatorNarrationRegeneration, {
+      projectId: ' p1',
+      sceneId: 's2 ',
+    });
+    const narrationRefused = await Promise.all([
+      rejection(invoke(CHANNEL.operatorNarrationRegeneration, { projectId: 'p1' })),
+      rejection(invoke(CHANNEL.operatorNarrationRegeneration, { sceneId: 's1' })),
+    ]);
+
+    expect((edited as OperatorProjectDto).status).toBe('production_queued');
+    expect(client.editSceneText.mock.calls).toEqual([
+      ['p1', 's1', 'Span is a window over memory.'],
+      ['p1', 's2', 't'.repeat(700)],
+    ]);
+    const sentence = {
+      code: 'operator/invalid-request',
+      message: "A scene's text is 1 to 700 characters.",
+    };
+    expect(refused).toEqual([sentence, sentence, sentence, sentence]);
+    expect(noScene).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The scene id is required.',
+    });
+    expect((renarrated as OperatorProjectDto).status).toBe('production_queued');
+    expect(client.regenerateNarration.mock.calls).toEqual([['p1', 's2']]);
+    expect(narrationRefused).toEqual([
+      { code: 'operator/invalid-request', message: 'The scene id is required.' },
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+    ]);
   });
 
   it('readiness answers what the worker last reported', async () => {
@@ -723,6 +837,50 @@ describe('registerOperatorHandlers', () => {
 
     expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
     expect(readdirSync(media)).toEqual([]);
+  });
+
+  it('attaches a recording to the project with an empty scene id and removes the copy when the control plane refuses', async () => {
+    const media = tempDir();
+    const recording = path.join(tempDir(), 'Meetup talk.MP4');
+    writeFileSync(recording, 'ftyp recording bytes');
+    client.getMediaDirectory = mock(async () => media);
+    chosen = recording;
+    const recorded = client.attachSceneMedia;
+
+    const response = await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: '',
+      kind: 'recording',
+    });
+    const [copied] = readdirSync(media);
+    const withScene = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'recording' }),
+    );
+    const unknownKind = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'video' }),
+    );
+    const reason = 'Only a project of your own video takes a recording.';
+    client.attachSceneMedia = mock(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
+    });
+    const refused = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'recording' }),
+    );
+
+    expect(copied).toMatch(/^owner-recording-[0-9a-f]{12}\.mp4$/);
+    expect(chooseFile.mock.calls).toEqual([['recording'], ['recording']]);
+    expect(recorded.mock.calls).toEqual([['p1', '', 'recording', copied]]);
+    expect(response).toEqual({ project });
+    expect(withScene).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A recording is attached to the project, not to a scene.',
+    });
+    expect(unknownKind).toEqual({
+      code: 'operator/invalid-request',
+      message: 'Media is attached as audio, visual, background or recording.',
+    });
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
+    expect(readdirSync(media)).toEqual([copied!]);
   });
 
   it('attach refuses a file of the wrong type or over the cap without a path in the message, and records nothing', async () => {
@@ -1089,7 +1247,7 @@ describe('registerOperatorHandlers', () => {
     });
   });
 
-  it('the returned unregister removes the twenty-seven operator handlers', () => {
+  it('the returned unregister removes the twenty-nine operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -1115,6 +1273,8 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorSceneOrder,
         CHANNEL.operatorSceneLock,
         CHANNEL.operatorSceneRegeneration,
+        CHANNEL.operatorSceneText,
+        CHANNEL.operatorNarrationRegeneration,
         CHANNEL.operatorSceneMedia,
         CHANNEL.operatorReadiness,
         CHANNEL.operatorAssembly,

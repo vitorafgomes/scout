@@ -7,7 +7,7 @@ namespace Scout.Operator.Tests;
 
 public sealed class OpenversePicturesTests : IDisposable
 {
-    private const string NoPictureCard = " The scene shows a text card; attach your own image in Scout Desktop, Production.";
+    private const string NoPictureCard = " The scene shows a text card; attach a background to the project in Scout Desktop, Production, or connect an AI Source with pictures.";
 
     private readonly string _media = Directory.CreateTempSubdirectory("scout-openverse-").FullName;
     private readonly OpenverseHttp _http = new();

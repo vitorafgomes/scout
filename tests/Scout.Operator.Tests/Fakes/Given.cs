@@ -78,11 +78,13 @@ internal static class Given
         TimeProvider? time = null,
         IProcessRunner? runner = null,
         PiperSpeech? piper = null,
-        OpenverseHttp? openverse = null)
+        OpenverseHttp? openverse = null,
+        Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null)
     {
         var kernel = media ?? Media();
         var capabilities = Capabilities(kernel);
         var clock = time ?? new SteppingTime(Now);
+        var processes = runner ?? new FakeProcessRunner();
         var visuals = new VisualGenerator(kernel, capabilities, clock, openverse is null ? null : new OpenversePictures(openverse.Factory(), clock));
         return new(
             controlPlane,
@@ -91,7 +93,8 @@ internal static class Given
             new ScenePlanner(chat),
             new NarrationGenerator(kernel, capabilities, piper ?? Piper(new FakeProcessRunner())),
             visuals,
-            Assembly(runner ?? new FakeProcessRunner(), visuals),
+            Assembly(processes, visuals),
+            new TranscriptionStage(Toolset(processes), new MediaProbe(processes), clock, transcriber),
             notifier,
             NullLogger<OperatorPipeline>.Instance);
     }

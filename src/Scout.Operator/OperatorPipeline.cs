@@ -20,7 +20,12 @@ namespace Scout.Operator;
 /// plane, the run stops without saving. A project taken as <c>assembling</c> runs the assembly stage: the video, its
 /// Shorts, its thumbnail and its checks rendered in the media directory and saved as the package, ending
 /// <c>assembled</c> with the segments of that video kept and older ones removed, or <c>failed</c> with the reason and
-/// the partial files removed; it stops the same way once the project is no longer <c>assembling</c>.
+/// the partial files removed; it stops the same way once the project is no longer <c>assembling</c>. A project taken as
+/// <c>transcribing</c> has the owner's recording transcribed on this machine into a script of timed sections, saved at most
+/// once a minute, ending <c>script_ready</c>, or <c>failed</c> with no partial transcript, and it stops the same way once
+/// the project is no longer <c>transcribing</c>; production of such a project plans its scenes as clips of the recording
+/// and makes no narration or picture, and once it has scenes names their chapters again under the owner's direction,
+/// leaving the clips as they are.
 /// </summary>
 internal sealed class OperatorPipeline(
     IOperatorControlPlane controlPlane,
@@ -30,6 +35,7 @@ internal sealed class OperatorPipeline(
     NarrationGenerator narration,
     VisualGenerator visuals,
     AssemblyStage assembly,
+    TranscriptionStage transcription,
     IOriginNotifier notifier,
     ILogger<OperatorPipeline> logger)
 {
@@ -47,10 +53,15 @@ internal sealed class OperatorPipeline(
     internal const string NoAudio = "none";
     internal const string TextCard = "text_card";
     internal const string Stock = "stock";
+    internal const string OwnPictures = "own_pictures";
     internal const string NoScript = "The project has no script to produce; write the script first.";
     internal const string NoLongerProducing = "The project is no longer producing.";
     internal const string Assembling = "assembling";
     internal const string NoLongerAssembling = "The project is no longer assembling.";
+    internal const string Transcribing = "transcribing";
+    internal const string NoLongerTranscribing = "The project is no longer transcribing; the worker's transcript was not saved.";
+    internal const string OwnVideo = "own_video";
+    internal const string Recording = "recording";
 
     internal static string ResearchingNotice(string topic) => $"Researching {topic}...";
 
@@ -81,9 +92,10 @@ internal sealed class OperatorPipeline(
         var status = queued.Project.Status;
         var producing = status == Producing;
         var assembling = status == Assembling;
+        var transcribing = status == Transcribing;
         await NotifyAsync(
             queued.OriginReference,
-            assembling ? AssemblingNotice(topic) : producing ? ProducingNotice(topic) : ResearchingNotice(topic),
+            assembling ? AssemblingNotice(topic) : producing ? ProducingNotice(topic) : transcribing ? null : ResearchingNotice(topic),
             ct).ConfigureAwait(false);
 
         var finished = true;
@@ -97,9 +109,13 @@ internal sealed class OperatorPipeline(
             {
                 finished = await ProduceAsync(id, ct).ConfigureAwait(false);
             }
+            else if (transcribing)
+            {
+                finished = await TranscribeAsync(id, ct).ConfigureAwait(false);
+            }
             else
             {
-                await WriteScriptAsync(id, topic, ct).ConfigureAwait(false);
+                await WriteScriptAsync(queued.Project, ct).ConfigureAwait(false);
             }
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -109,13 +125,9 @@ internal sealed class OperatorPipeline(
             var left = false;
             try
             {
-                if (producing || assembling)
+                if (producing || assembling || transcribing)
                 {
-                    left = await SaveStageAsync(
-                        id,
-                        status,
-                        current => assembling ? AssemblyStage.Failed(current, reason) : current with { Status = Failed, Error = reason },
-                        ct).ConfigureAwait(false) is null;
+                    left = await SaveStageAsync(id, status, current => Failing(current, reason), ct).ConfigureAwait(false) is null;
                 }
                 else
                 {
@@ -149,8 +161,10 @@ internal sealed class OperatorPipeline(
             ct).ConfigureAwait(false);
     }
 
-    private async Task WriteScriptAsync(string id, string topic, CancellationToken ct)
+    private async Task WriteScriptAsync(OperatorProjectState project, CancellationToken ct)
     {
+        var id = project.Id;
+        var topic = project.Topic;
         var mandate = await controlPlane.GetMandateAsync(ct).ConfigureAwait(false);
         if (TopicResearcher.BlockedTopic(mandate, topic) is { } blocked)
         {
@@ -160,7 +174,7 @@ internal sealed class OperatorPipeline(
         var research = await researcher.ResearchAsync(topic, mandate, ct).ConfigureAwait(false);
         await SaveAsync(id, current => current with { Status = Scripting, Candidates = research.Candidates, Error = null }, ct)
             .ConfigureAwait(false);
-        var draft = await writer.WriteAsync(topic, mandate, research, ct).ConfigureAwait(false);
+        var draft = await writer.WriteAsync(topic, mandate, research, project.Format, project.Direction, ct).ConfigureAwait(false);
         await SaveAsync(
             id,
             current => current with
@@ -183,20 +197,48 @@ internal sealed class OperatorPipeline(
         }
 
         var mandate = await controlPlane.GetMandateAsync(ct).ConfigureAwait(false);
+        var ownVideo = project.Format == OwnVideo;
         if (project.Scenes.Count == 0)
         {
             var script = project.Script ?? throw new InvalidOperationException(NoScript);
-            var planned = await planner.PlanAsync(script, mandate, project.VisualBrief, ct).ConfigureAwait(false);
-            project = await SaveProductionAsync(id, current => current.Scenes.Count == 0 ? current with { Scenes = planned } : current, ct)
-                .ConfigureAwait(false);
+            if (ownVideo)
+            {
+                var plan = await planner.PlanRecordingAsync(script, project.RecordingMs, mandate, project.Direction, ct).ConfigureAwait(false);
+                project = await SaveProductionAsync(
+                    id, current => current.Scenes.Count == 0 ? current with { Scenes = plan.Scenes, Script = plan.Script } : current, ct)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                var planned = await planner.PlanAsync(script, mandate, project.Direction, ct).ConfigureAwait(false);
+                project = await SaveProductionAsync(id, current => current.Scenes.Count == 0 ? current with { Scenes = planned } : current, ct)
+                    .ConfigureAwait(false);
+            }
+
             if (project is null)
             {
                 return false;
             }
         }
+        else if (ownVideo)
+        {
+            var named = await planner.NameChaptersAsync([.. project.Scenes.OrderBy(s => s.Order)], mandate, project.Direction, ct)
+                .ConfigureAwait(false);
+            if (await SaveProductionAsync(id, current => current with { Script = named }, ct).ConfigureAwait(false) is null)
+            {
+                return false;
+            }
+        }
+
+        if (ownVideo)
+        {
+            return await SaveProductionAsync(id, current => current with { Status = MediaReady, Error = null }, ct)
+                .ConfigureAwait(false) is not null;
+        }
 
         var speechNow = await narration.SpeechAvailableAsync(ct).ConfigureAwait(false);
-        var imagesNow = visuals.ImagesAvailable;
+        var ownPictures = project.Format == OwnPictures;
+        var imagesNow = visuals.ImagesAvailable && !ownPictures;
         foreach (var sceneId in project.Scenes.OrderBy(s => s.Order).Select(s => s.Id).ToList())
         {
             var current = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
@@ -223,7 +265,11 @@ internal sealed class OperatorPipeline(
             try
             {
                 audio = scene.AudioSource == Owner || (scene.Status == Ready && AudioDone(scene, directory, speechNow)) ? null : await narration.GenerateAsync(scene, current.NarrationVoice, directory, ct).ConfigureAwait(false);
-                visual = scene.VisualSource == Owner || (scene.Status == Ready && VisualDone(scene, directory, imagesNow)) ? null : await visuals.GenerateAsync(scene, position, directory, ct).ConfigureAwait(false);
+                visual = PictureKept(scene, directory) || (scene.Status == Ready && scene.VisualSource == TextCard && !imagesNow)
+                    ? null
+                    : ownPictures
+                        ? new VisualResult(TextCard, null, VisualGenerator.NoOwnPicture)
+                        : await visuals.GenerateAsync(scene, position, directory, ct).ConfigureAwait(false);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -282,10 +328,36 @@ internal sealed class OperatorPipeline(
         {
             return await controlPlane.SaveProjectAsync(change(current), null, ct).ConfigureAwait(false);
         }
-        catch (InvalidOperationException ex) when (ex.Message == (stage == Assembling ? NoLongerAssembling : NoLongerProducing))
+        catch (InvalidOperationException ex) when (ex.Message == stage switch
+        {
+            Assembling => NoLongerAssembling,
+            Transcribing => NoLongerTranscribing,
+            _ => NoLongerProducing,
+        })
         {
             return null;
         }
+    }
+
+    private async Task<bool> TranscribeAsync(string id, CancellationToken ct)
+    {
+        var directory = await controlPlane.GetMediaDirectoryAsync(id, ct).ConfigureAwait(false);
+        var project = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
+        if (project.Status != Transcribing)
+        {
+            return false;
+        }
+
+        var transcript = await transcription.TranscribeAsync(
+            project,
+            directory,
+            async (recordingMs, soFar) => await SaveStageAsync(
+                id, Transcribing, current => current with { RecordingMs = recordingMs, Script = soFar, Error = null }, ct)
+                .ConfigureAwait(false) is not null,
+            ct).ConfigureAwait(false);
+        return transcript is not null
+            && await SaveStageAsync(id, Transcribing, current => current with { Status = ScriptReady, Script = transcript, Error = null }, ct)
+                .ConfigureAwait(false) is not null;
     }
 
     private async Task<bool> AssembleAsync(string id, CancellationToken ct)
@@ -332,9 +404,11 @@ internal sealed class OperatorPipeline(
             || (scene.AudioSource == NoAudio && !speechNow);
 
     private static bool VisualDone(OperatorScene scene, string directory, bool imagesNow)
+        => PictureKept(scene, directory) || (scene.VisualSource == TextCard && !imagesNow);
+
+    private static bool PictureKept(OperatorScene scene, string directory)
         => scene.VisualSource == Owner
-            || (scene.VisualSource is Generated or Stock && scene.VisualFile is not null && MediaFiles.Exists(directory, scene.VisualFile))
-            || (scene.VisualSource == TextCard && !imagesNow);
+            || (scene.VisualSource is Generated or Stock && scene.VisualFile is not null && MediaFiles.Exists(directory, scene.VisualFile));
 
     private static OperatorScene WithMedia(OperatorScene current, NarrationResult? audio, VisualResult? visual)
     {
@@ -361,10 +435,17 @@ internal sealed class OperatorPipeline(
 
     /// <summary>
     /// Save the project as failed with <paramref name="error"/>, starting from the control plane's copy; an assembling
-    /// project's package fails with it, keeping the owner's fields.
+    /// project's package fails with it, keeping the owner's fields, and a transcribing project keeps no partial transcript.
     /// </summary>
     public Task SaveFailedAsync(string id, string error, CancellationToken ct)
-        => SaveAsync(id, current => current.Status == Assembling ? AssemblyStage.Failed(current, error) : current with { Status = Failed, Error = error }, ct);
+        => SaveAsync(id, current => Failing(current, error), ct);
+
+    private static OperatorProjectState Failing(OperatorProjectState current, string reason) => current.Status switch
+    {
+        Assembling => AssemblyStage.Failed(current, reason),
+        Transcribing => current with { Status = Failed, Error = reason, Script = null },
+        _ => current with { Status = Failed, Error = reason },
+    };
 
     private async Task SaveAsync(string id, Func<OperatorProjectState, OperatorProjectState> change, CancellationToken ct)
     {
@@ -393,9 +474,9 @@ internal sealed class OperatorPipeline(
         return [.. decided, .. fresh];
     }
 
-    private async Task NotifyAsync(string? originReference, string text, CancellationToken ct)
+    private async Task NotifyAsync(string? originReference, string? text, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(originReference))
+        if (string.IsNullOrWhiteSpace(originReference) || text is null)
         {
             return;
         }

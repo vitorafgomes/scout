@@ -113,8 +113,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     narrationVoice: '',
     backgroundFile: null,
     delegated: false,
-    visualBrief: '',
+    direction: '',
     motion: 'gentle',
+    format: 'generated_pictures',
+    recordingFile: null,
+    recordingMs: 0,
     ...overrides,
   };
 }

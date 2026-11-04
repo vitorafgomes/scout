@@ -70,6 +70,8 @@ export const CHANNEL = {
   operatorSceneOrder: 'scout:operator.sceneOrder',
   operatorSceneLock: 'scout:operator.sceneLock',
   operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
+  operatorSceneText: 'scout:operator.sceneText',
+  operatorNarrationRegeneration: 'scout:operator.narrationRegeneration',
   operatorSceneMedia: 'scout:operator.sceneMedia',
   operatorReadiness: 'scout:operator.readiness',
   operatorWindow: 'scout:operator.window',
@@ -590,6 +592,9 @@ export interface TopicCandidateDto {
 export interface ScriptSectionDto {
   readonly heading: string;
   readonly narration: string;
+  /** Where the section starts and ends in the owner's recording; 0 outside a project of the owner's own video. */
+  readonly startMs: number;
+  readonly endMs: number;
 }
 
 export interface ChapterDto {
@@ -640,10 +645,19 @@ export interface OperatorProjectDto {
   readonly backgroundFile: string | null;
   /** True once the owner delegated the project: Scout produces and assembles it and stops before the approval. */
   readonly delegated: boolean;
-  /** The owner's words for the pictures and animation of this video, at most 500 characters; empty for none. */
-  readonly visualBrief: string;
+  /** The owner's direction for the script, the scene plan and the pictures of this video, at most 1000 characters; empty for none. */
+  readonly direction: string;
   readonly motion: ProjectMotion;
+  /** How the video is made, chosen when the project is created and never changed. */
+  readonly format: ProjectFormat;
+  /** The owner's recording of a project of their own video, named inside the project's media directory. */
+  readonly recordingFile: string | null;
+  /** The recording's length as the worker measured it; 0 until then. */
+  readonly recordingMs: number;
 }
+
+/** How a video is made: narration over pictures Scout makes or over the owner's own pictures, or the owner's own recording. */
+export type ProjectFormat = 'generated_pictures' | 'own_pictures' | 'own_video';
 
 /** How much the assembler moves each picture. */
 export type ProjectMotion = 'still' | 'gentle' | 'dynamic';
@@ -850,6 +864,9 @@ export interface SceneDto {
   readonly audioFile: string | null;
   readonly visualFile: string | null;
   readonly durationMs: number;
+  /** The part of the owner's recording a scene of their own video shows; 0 otherwise. */
+  readonly clipStartMs: number;
+  readonly clipEndMs: number;
 }
 
 export interface OperatorProjectsRequest {
@@ -873,7 +890,7 @@ export interface OperatorProjectDeletionResponse {
 export interface OperatorProduceRequest {
   readonly id: string;
   readonly narrationVoice: string;
-  readonly visualBrief: string;
+  readonly direction: string;
   readonly motion: ProjectMotion;
 }
 
@@ -881,13 +898,15 @@ export interface OperatorProduceRequest {
 export interface OperatorDelegateRequest {
   readonly id: string;
   readonly narrationVoice: string;
-  readonly visualBrief: string;
+  readonly direction: string;
   readonly motion: ProjectMotion;
 }
 
-/** The topic of a video the owner asks the operator to make; 3 to 200 characters. */
+/** The topic of a video the owner asks the operator to make, 3 to 200 characters, its format and the owner's direction. */
 export interface StartProjectRequest {
   readonly topic: string;
+  readonly format: ProjectFormat;
+  readonly direction: string;
 }
 
 export type ClaimStatus = 'supported' | 'unsupported' | 'waived';
@@ -917,16 +936,23 @@ export interface SceneRequest {
   readonly sceneId: string;
 }
 
+/** The owner's new text for one scene, 1 to 700 characters after trimming; its narration is made again. */
+export interface SceneTextRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly text: string;
+}
+
 export type SceneMediaKind = 'audio' | 'visual';
 
 /**
- * Which scene gets an owner's file and of which kind, or the project's background picture with an empty scene id;
- * main asks the owner for the file, the renderer never sends a path.
+ * Which scene gets an owner's file and of which kind, or the project's background picture or recording with an empty
+ * scene id; main asks the owner for the file, the renderer never sends a path.
  */
 export interface SceneMediaRequest {
   readonly projectId: string;
   readonly sceneId: string;
-  readonly kind: SceneMediaKind | 'background';
+  readonly kind: SceneMediaKind | 'background' | 'recording';
 }
 
 /** The project after the owner's file was attached, or null when the owner closed the file dialog. */
@@ -954,6 +980,8 @@ export interface ReadinessDto {
   readonly notes: readonly string[];
   readonly voices: readonly VoiceDto[];
   readonly reportedAt: string | null;
+  /** True when the worker has a speech-to-text model, so a project of the owner's own video can be transcribed. */
+  readonly transcriptionAvailable: boolean;
 }
 
 export interface FeatureSetCredentialsRequest {
@@ -1248,6 +1276,8 @@ export interface ScoutBridge {
   operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto>;
   operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto>;
   operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
+  operatorEditSceneText(req: SceneTextRequest): Promise<OperatorProjectDto>;
+  operatorRegenerateNarration(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
   operatorReadiness(): Promise<ReadinessDto>;
   /** Opens the YouTube operator window, or brings it to the front when it is already open. */

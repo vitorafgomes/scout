@@ -75,7 +75,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     private async Task<OperatorProject> ScriptReadyAsync(params Claim[] claims)
     {
         await GrantYouTubeAsync();
-        await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
+        await _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None);
         var taken = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
         return await _operator.SaveProjectFromWorkerAsync(Draft(taken, "script_ready", claims), null, CancellationToken.None);
     }
@@ -263,7 +263,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     [InlineData("")]
     public async Task A_Topic_Shorter_Than_Three_Characters_After_Trimming_Is_Refused(string topic)
     {
-        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.StartProjectAsync(topic, CancellationToken.None));
+        var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.StartProjectAsync(topic, string.Empty, string.Empty, CancellationToken.None));
 
         ex.Message.ShouldBe("The topic must be 3 to 200 characters.");
         (await _operator.ListProjectsAsync(0, CancellationToken.None)).ShouldBeEmpty();
@@ -273,7 +273,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task A_Topic_Longer_Than_Two_Hundred_Characters_Is_Refused()
     {
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
-            _operator.StartProjectAsync(new string('x', 201), CancellationToken.None));
+            _operator.StartProjectAsync(new string('x', 201), string.Empty, string.Empty, CancellationToken.None));
 
         ex.Message.ShouldBe("The topic must be 3 to 200 characters.");
     }
@@ -282,7 +282,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Without_The_Owners_Grant_The_Desktop_Cannot_Start_A_Project()
     {
         var ex = await Should.ThrowAsync<OperatorWriteRefusedException>(() =>
-            _operator.StartProjectAsync("Why rivers meander", CancellationToken.None));
+            _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None));
 
         ex.Message.ShouldBe(NotAllowed);
         (await _operator.ListProjectsAsync(0, CancellationToken.None)).ShouldBeEmpty();
@@ -292,7 +292,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task A_Project_Started_On_The_Desktop_Is_Queued_With_Its_Trimmed_Topic()
     {
         await GrantYouTubeAsync();
-        var started = await _operator.StartProjectAsync("  Why rivers meander ", CancellationToken.None);
+        var started = await _operator.StartProjectAsync("  Why rivers meander ", string.Empty, string.Empty, CancellationToken.None);
         var read = await _operator.GetProjectAsync(started.Id, CancellationToken.None);
 
         (read.Topic, read.Status, read.Origin, read.Script, read.Claims.Count).ShouldBe(("Why rivers meander", "queued", "desktop", (Script?)null, 0));
@@ -304,7 +304,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         await GrantYouTubeAsync();
         foreach (var topic in new[] { "First topic", "Second topic", "Third topic" })
         {
-            await _operator.StartProjectAsync(topic, CancellationToken.None);
+            await _operator.StartProjectAsync(topic, string.Empty, string.Empty, CancellationToken.None);
         }
 
         (await _operator.ListProjectsAsync(2, CancellationToken.None)).Select(p => p.Topic).ShouldBe(["Third topic", "Second topic"]);
@@ -393,7 +393,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Without_The_Owners_Grant_The_Worker_Cannot_Save_A_Project_Or_Take_A_Queued_One()
     {
         await GrantYouTubeAsync();
-        var queued = await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
+        var queued = await _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None);
         await RevokeYouTubeAsync();
 
         var save = await Should.ThrowAsync<OperatorWriteRefusedException>(() =>
@@ -530,7 +530,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.SaveProjectFromWorkerAsync(project with { Status = status }, null, CancellationToken.None));
 
-        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed.");
+        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, transcribing, script_ready, producing, media_ready, assembling, assembled, failed.");
         (await _operator.GetProjectAsync(project.Id, CancellationToken.None)).Status.ShouldBe("script_ready");
     }
 
@@ -592,8 +592,8 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task The_Oldest_Queued_Project_Is_Taken_First_And_Moves_To_Researching()
     {
         await GrantYouTubeAsync();
-        var first = await _operator.StartProjectAsync("First topic", CancellationToken.None);
-        var second = await _operator.StartProjectAsync("Second topic", CancellationToken.None);
+        var first = await _operator.StartProjectAsync("First topic", string.Empty, string.Empty, CancellationToken.None);
+        var second = await _operator.StartProjectAsync("Second topic", string.Empty, string.Empty, CancellationToken.None);
 
         var a = await _operator.NextQueuedProjectAsync(CancellationToken.None);
         var b = await _operator.NextQueuedProjectAsync(CancellationToken.None);
@@ -668,7 +668,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Two_Concurrent_Workers_Never_Take_The_Same_Queued_Project()
     {
         await GrantYouTubeAsync();
-        await _operator.StartProjectAsync("The only topic", CancellationToken.None);
+        await _operator.StartProjectAsync("The only topic", string.Empty, string.Empty, CancellationToken.None);
 
         var taken = await Task.WhenAll(Enumerable.Range(0, 32)
             .Select(_ => Task.Run(() => _operator.NextQueuedProjectAsync(CancellationToken.None))));
@@ -681,7 +681,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     {
         var older = await ScriptReadyAsync(Claim("c1", "pending"), Claim("c2", "pending"));
         await _operator.DecideClaimAsync(older.Id, "c1", "waived", "Common knowledge", CancellationToken.None);
-        var newer = await _operator.StartProjectAsync("Glaciers explained", CancellationToken.None);
+        var newer = await _operator.StartProjectAsync("Glaciers explained", string.Empty, string.Empty, CancellationToken.None);
 
         var read = await _operator.GetProjectForWorkerAsync(older.Id, CancellationToken.None);
         var listed = await _operator.ListProjectsForWorkerAsync(0, CancellationToken.None);
@@ -698,7 +698,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Without_The_Owners_Grant_The_Worker_Cannot_Read_Projects()
     {
         await GrantYouTubeAsync();
-        var queued = await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
+        var queued = await _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None);
         await RevokeYouTubeAsync();
 
         var get = await Should.ThrowAsync<OperatorWriteRefusedException>(() => _operator.GetProjectForWorkerAsync(queued.Id, CancellationToken.None));
@@ -993,7 +993,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task A_Failed_Project_Without_A_Script_Or_With_A_Pending_Claim_Is_Not_Produced()
     {
         await GrantYouTubeAsync();
-        await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
+        await _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None);
         var researching = (await _operator.NextQueuedProjectAsync(CancellationToken.None)).ShouldNotBeNull();
         var noScript = await _operator.SaveProjectFromWorkerAsync(researching with { Status = "failed", Error = "No search." }, null, CancellationToken.None);
         var pending = await ScriptReadyAsync(Claim("c1", "pending"));
@@ -1028,7 +1028,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Only_A_Script_Ready_Or_Media_Ready_Project_Is_Produced()
     {
         await GrantYouTubeAsync();
-        var queued = await _operator.StartProjectAsync("Why rivers meander", CancellationToken.None);
+        var queued = await _operator.StartProjectAsync("Why rivers meander", string.Empty, string.Empty, CancellationToken.None);
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ProduceProjectAsync(queued.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None));
 
@@ -1255,14 +1255,14 @@ public sealed partial class OperatorServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Media_Is_Attached_Only_As_Audio_Visual_Or_Background()
+    public async Task Media_Is_Attached_Only_As_Audio_Visual_Background_Or_Recording()
     {
         var project = await WithScenesAsync(Scene("s1", 1));
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.AttachSceneMediaAsync(project.Id, "s1", "music", "song.mp3", CancellationToken.None));
 
-        ex.Message.ShouldBe("Media is attached as audio, visual or background.");
+        ex.Message.ShouldBe("Media is attached as audio, visual, background or recording.");
     }
 
     [Theory]
@@ -1410,6 +1410,20 @@ public sealed partial class OperatorServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Worker_Save_Keeps_The_Owners_Scene_Text()
+    {
+        var project = await ProducingWithScenesAsync(Scene("s1", 1), Scene("s2", 2));
+        await _operator.EditSceneTextAsync(project.Id, "s1", "The owner's words.", None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(
+            taken with { Scenes = [.. taken.Scenes.Select(s => s with { Narration = $"The worker's words for {s.Id}.", Status = "ready" })] }, null, None);
+
+        saved.Scenes.Select(s => (s.Id, s.Narration, s.Status)).ShouldBe([("s1", "The owner's words.", "ready"), ("s2", "Narration s2", "ready")]);
+        (await StoredAsync(project.Id)).Scenes.Select(s => s.Narration).ShouldBe(["The owner's words.", "Narration s2"]);
+    }
+
+    [Fact]
     public async Task The_Media_Directory_Is_The_Projects_Folder_Under_Operator_Beside_Features_Json_Created_On_Demand()
     {
         var project = await ScriptReadyAsync();
@@ -1474,7 +1488,6 @@ public sealed partial class OperatorServiceTests : IDisposable
         var generated = project.Scenes[0] with
         {
             Status = "ready",
-            Narration = "Rivers bend, always.",
             VisualPrompt = "A meander from above",
             AudioFile = "s1-v2.wav",
             VisualFile = "s1-v2.jpg",
@@ -1558,9 +1571,9 @@ public sealed partial class OperatorServiceTests : IDisposable
         var changed = change == "order" ? project.Scenes[1] with { Order = 1 } : project.Scenes[1] with { Locked = true };
 
         var saved = await _operator.SaveProjectFromWorkerAsync(
-            project with { Scenes = [project.Scenes[0], changed with { Narration = "New narration." }] }, null, CancellationToken.None);
+            project with { Scenes = [project.Scenes[0], changed with { VisualPrompt = "A new prompt." }] }, null, CancellationToken.None);
 
-        saved.Scenes.ShouldBe([project.Scenes[0], project.Scenes[1] with { Narration = "New narration." }]);
+        saved.Scenes.ShouldBe([project.Scenes[0], project.Scenes[1] with { VisualPrompt = "A new prompt." }]);
         (await StoredAsync(project.Id)).Scenes.ShouldBe(saved.Scenes);
     }
 
@@ -1592,7 +1605,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     {
         var project = await ProducingWithScenesAsync(Scene("s1", 1), Scene("s2", 2));
         var locked = (await _operator.SetSceneLockedAsync(project.Id, "s1", true, CancellationToken.None)).Scenes[0];
-        var regenerated = project.Scenes[1] with { Narration = "New narration." };
+        var regenerated = project.Scenes[1] with { VisualPrompt = "A new prompt." };
 
         var saved = await _operator.SaveProjectFromWorkerAsync(project with { Scenes = [locked, regenerated] }, null, CancellationToken.None);
 
@@ -2359,7 +2372,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.SaveProjectFromWorkerAsync(project with { Status = status }, null, None));
 
-        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed.");
+        ex.Message.ShouldBe($"Status '{status}' is not one the worker may set: researching, scripting, transcribing, script_ready, producing, media_ready, assembling, assembled, failed.");
     }
 
     [Fact]
@@ -2847,7 +2860,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Delete_KeepsOtherProjects()
     {
         var doomed = await ScriptReadyAsync();
-        var kept = await _operator.StartProjectAsync("Glaciers explained", None);
+        var kept = await _operator.StartProjectAsync("Glaciers explained", string.Empty, string.Empty, None);
         var keptDirectory = await _operator.GetMediaDirectoryAsync(kept.Id, None);
         await File.WriteAllTextAsync(Path.Combine(keptDirectory, "b.mp3"), "audio");
         await _operator.GetMediaDirectoryAsync(doomed.Id, None);
@@ -2873,7 +2886,7 @@ public sealed partial class OperatorServiceTests : IDisposable
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync(project.Id, None));
 
-        ex.Message.ShouldBe("A project that is researching, scripting, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+        ex.Message.ShouldBe("A project that is researching, scripting, transcribing, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
         (await StoredAsync(project.Id)).Id.ShouldBe(project.Id);
     }
 

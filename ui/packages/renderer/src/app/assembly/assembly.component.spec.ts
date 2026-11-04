@@ -33,6 +33,8 @@ function scene(overrides: Partial<SceneDto> = {}): SceneDto {
     audioFile: 'scene-s1.mp3',
     visualFile: 'scene-s1.png',
     durationMs: 4200,
+    clipStartMs: 0,
+    clipEndMs: 0,
     ...overrides,
   };
 }
@@ -89,8 +91,11 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     narrationVoice: '',
     backgroundFile: null,
     delegated: false,
-    visualBrief: '',
+    direction: '',
     motion: 'gentle',
+    format: 'generated_pictures',
+    recordingFile: null,
+    recordingMs: 0,
     ...overrides,
   };
 }

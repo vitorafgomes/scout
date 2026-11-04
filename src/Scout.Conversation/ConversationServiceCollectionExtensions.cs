@@ -57,7 +57,8 @@ public static class ConversationServiceCollectionExtensions
             sp.GetRequiredService<AccessPolicy>(),
             sp.GetService<IAudioTranscriber>(),
             sp.GetService<IPairingSignal>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IConversationKeyProvider>()));
 
         return services;
     }

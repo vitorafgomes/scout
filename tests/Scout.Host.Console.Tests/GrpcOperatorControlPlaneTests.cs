@@ -319,6 +319,13 @@ public sealed class GrpcOperatorControlPlaneTests
             await Should.ThrowAsync<InvalidOperationException>(() => closed.GetCommentsAsync(CancellationToken.None)),
             await Should.ThrowAsync<InvalidOperationException>(
                 () => closed.SaveCommentsAsync(new OperatorComments([], [], null, null, null), CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.EditSceneTextAsync("p1", "s2", "Shape it.", CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.RegenerateNarrationAsync("p1", "s2", CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.RegenerateSceneAsync("p1", "s2", CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.SetSceneLockedAsync("p1", "s2", true, CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.ReorderScenesAsync("p1", ["s2", "s1"], CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.ProduceProjectAsync("p1", "", "", "", CancellationToken.None)),
+            await Should.ThrowAsync<InvalidOperationException>(() => closed.DelegateProjectAsync("p1", "", "", "", CancellationToken.None)),
         };
         var mediaDirectory = await Should.ThrowAsync<InvalidOperationException>(() => closed.GetMediaDirectoryAsync("p1", CancellationToken.None));
         var readiness = await Should.ThrowAsync<InvalidOperationException>(
@@ -823,7 +830,7 @@ public sealed class GrpcOperatorControlPlaneTests
     }
 
     [Fact]
-    public async Task The_Projects_Visual_Brief_And_Motion_Are_Read_And_Sent_Back_To_The_Control_Plane_As_Read()
+    public async Task The_Projects_Format_Direction_And_Motion_Are_Read_And_Sent_Back_As_Read()
     {
         var list = new ListProjectsResponse();
         list.Projects.Add(new Project
@@ -832,8 +839,9 @@ public sealed class GrpcOperatorControlPlaneTests
             Topic = "sourdough",
             Status = "producing",
             Origin = "desktop",
-            VisualBrief = "Watercolour, it's: calm.\nSoft light.",
+            Direction = "Watercolour, it's: calm.\nSoft light.",
             Motion = "dynamic",
+            Format = "own_pictures",
         });
         var service = new FakeWorkerGate { ListReply = list };
         await using var server = await WorkerGateServer.StartAsync(service);
@@ -843,8 +851,132 @@ public sealed class GrpcOperatorControlPlaneTests
         var read = await controlPlane.GetProjectAsync("p1", CancellationToken.None);
         await controlPlane.SaveProjectAsync(read with { Status = "media_ready" }, null, CancellationToken.None);
 
-        (read.VisualBrief, read.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "dynamic"));
+        (read.Format, read.Direction, read.Motion).ShouldBe(("own_pictures", "Watercolour, it's: calm.\nSoft light.", "dynamic"));
         var sent = service.Saved.ShouldNotBeNull().Project;
-        (sent.VisualBrief, sent.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "dynamic"));
+        (sent.Format, sent.Direction, sent.Motion).ShouldBe(("own_pictures", "Watercolour, it's: calm.\nSoft light.", "dynamic"));
+    }
+
+    private static Task<OperatorProjectState> ChatEdit(GrpcOperatorControlPlane controlPlane, string rpc) => rpc switch
+    {
+        nameof(WorkerGate.WorkerGateBase.ChatEditSceneText) => controlPlane.EditSceneTextAsync("p1", "s2", "Shape the loaf gently.", CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatRegenerateNarration) => controlPlane.RegenerateNarrationAsync("p1", "s2", CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatRegenerateScene) => controlPlane.RegenerateSceneAsync("p1", "s2", CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatSetSceneLocked) => controlPlane.SetSceneLockedAsync("p1", "s2", true, CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatReorderScenes) => controlPlane.ReorderScenesAsync("p1", ["s2", "s1", "s3"], CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatProduceProject) => controlPlane.ProduceProjectAsync("p1", "piper:en_GB-aru-medium", string.Empty, "still", CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatDelegateProject) => controlPlane.DelegateProjectAsync("p1", string.Empty, "Calm, close-up shots.", string.Empty, CancellationToken.None),
+        _ => throw new ArgumentOutOfRangeException(nameof(rpc)),
+    };
+
+    [Theory]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatEditSceneText), "{ \"projectId\": \"p1\", \"sceneId\": \"s2\", \"text\": \"Shape the loaf gently.\" }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRegenerateNarration), "{ \"projectId\": \"p1\", \"sceneId\": \"s2\" }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRegenerateScene), "{ \"projectId\": \"p1\", \"sceneId\": \"s2\" }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatSetSceneLocked), "{ \"projectId\": \"p1\", \"sceneId\": \"s2\", \"locked\": true }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatReorderScenes), "{ \"projectId\": \"p1\", \"sceneIds\": [ \"s2\", \"s1\", \"s3\" ] }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatProduceProject), "{ \"id\": \"p1\", \"narrationVoice\": \"piper:en_GB-aru-medium\", \"motion\": \"still\" }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatDelegateProject), "{ \"id\": \"p1\", \"direction\": \"Calm, close-up shots.\" }")]
+    public async Task A_Chat_Edit_Travels_On_Its_Own_Rpc_With_The_Worker_Token_And_Reads_The_Project_Back(string rpc, string request)
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+
+        var project = await ChatEdit(new GrpcOperatorControlPlane(gate), rpc);
+
+        var (sentOn, sent) = service.ChatRequests.ShouldHaveSingleItem();
+        (sentOn, sent.ToString()).ShouldBe((rpc, request));
+        service.Authorizations.ShouldBe(["Bearer worker-session-token"]);
+        (project.Id, project.Topic, project.Status, project.Format).ShouldBe(("p1", "sourdough", "production_queued", "own_pictures"));
+    }
+
+    [Theory]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatEditSceneText))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRegenerateNarration))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRegenerateScene))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatSetSceneLocked))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatReorderScenes))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatProduceProject))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatDelegateProject))]
+    public async Task A_Chat_Edit_That_Fails_Reads_As_The_Control_Planes_Words_Or_Unreachable(string rpc)
+    {
+        async Task<InvalidOperationException> FailingWith(StatusCode code, string detail)
+        {
+            await using var server = await WorkerGateServer.StartAsync(new FakeWorkerGate { OperatorFailure = new RpcException(new Status(code, detail)) });
+            using var gate = new GrpcWriteGate(server.SocketPath, Token);
+            return await Should.ThrowAsync<InvalidOperationException>(() => ChatEdit(new GrpcOperatorControlPlane(gate), rpc));
+        }
+
+        var unavailable = await FailingWith(StatusCode.Unavailable, "the control plane is restarting");
+        var reset = await FailingWith(StatusCode.Internal, "Connection reset by peer");
+        var notFound = await FailingWith(StatusCode.NotFound, "Unknown project 'p1'.");
+        var unimplemented = await FailingWith(StatusCode.Unimplemented, "Method is unimplemented.");
+        using var missingGate = new GrpcWriteGate(Path.Combine(Path.GetTempPath(), $"scout-no-gate-{Guid.NewGuid():N}.sock"), Token);
+        var missing = await Should.ThrowAsync<InvalidOperationException>(() => ChatEdit(new GrpcOperatorControlPlane(missingGate), rpc));
+
+        notFound.Message.ShouldBe("Unknown project 'p1'.");
+        notFound.ShouldNotBeOfType<ControlPlaneUnavailableException>();
+        new[] { unavailable, reset, unimplemented, missing }.ShouldAllBe(
+            ex => ex is ControlPlaneUnavailableException && ex.Message == "Scout could not reach its control plane.");
+    }
+
+    [Fact]
+    public async Task The_Workers_Transcript_Times_And_Clips_Reach_The_Control_Plane_And_Come_Back()
+    {
+        var clip = new OperatorScene("s2", 2, "First the starter.", string.Empty, false, "ready", null, "recording", "recording", null, null, 52_200)
+        {
+            ClipStartMs = 23_000,
+            ClipEndMs = 75_200,
+        };
+        var project = Ready() with
+        {
+            Status = "producing",
+            Format = "own_video",
+            RecordingFile = "owner-recording-1a.mp4",
+            RecordingMs = 110_000,
+            Script = new OperatorScript(
+                string.Empty,
+                [new OperatorScriptSection("Getting started", "Today we bake. First the starter.") { StartMs = 0, EndMs = 75_200 }],
+                string.Empty,
+                [],
+                string.Empty,
+                [],
+                []),
+            Scenes = [clip],
+        };
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var operatorPlane = new GrpcOperatorControlPlane(gate);
+
+        var saved = await operatorPlane.SaveProjectAsync(project, null, CancellationToken.None);
+        var sentWith = service.Saved.ShouldNotBeNull().Project;
+        var without = await operatorPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+        var sentWithout = service.Saved.ShouldNotBeNull().Project;
+
+        (sentWith.HasRecordingFile, sentWith.RecordingFile, sentWith.RecordingMs).ShouldBe((true, "owner-recording-1a.mp4", 110_000));
+        sentWith.Script.Sections.Select(s => (s.Heading, s.StartMs, s.EndMs)).ShouldBe([("Getting started", 0, 75_200)]);
+        sentWith.Scenes.Select(s => (s.ClipStartMs, s.ClipEndMs, s.AudioSource, s.VisualSource)).ShouldBe([(23_000, 75_200, "recording", "recording")]);
+        (saved.RecordingFile, saved.RecordingMs).ShouldBe(("owner-recording-1a.mp4", 110_000));
+        saved.Script.ShouldBe(project.Script, new ScriptComparer());
+        saved.Scenes.ShouldBe([clip]);
+        (sentWithout.HasRecordingFile, sentWithout.RecordingMs).ShouldBe((false, 0));
+        (without.RecordingFile, without.RecordingMs).ShouldBe(((string?)null, 0));
+    }
+
+    [Fact]
+    public async Task Whether_This_Machine_Can_Transcribe_Is_Reported_To_The_Control_Plane()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        await controlPlane.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []) { TranscriptionAvailable = true }, CancellationToken.None);
+        var can = service.Reported.ShouldNotBeNull().TranscriptionAvailable;
+        await controlPlane.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []), CancellationToken.None);
+        var cannot = service.Reported.ShouldNotBeNull().TranscriptionAvailable;
+
+        (can, cannot).ShouldBe((true, false));
     }
 }

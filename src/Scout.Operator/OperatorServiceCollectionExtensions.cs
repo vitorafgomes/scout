@@ -16,7 +16,7 @@ public static class OperatorServiceCollectionExtensions
     /// Register the operator: the research, script, scene, narration, visual, assembly and pipeline stages, the Openverse
     /// stock pictures on the named HTTP client <c>openverse</c>, the background
     /// worker, the readiness reporter, the samples of the bundled voices, the comment desk with the answer to the owner's comment sync and draft requests, which
-    /// a key-only setup answers too, with the sign-in sentence as the sync's error, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> is declared a write of the
+    /// a key-only setup answers too, with the sign-in sentence as the sync's error, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> and owner-only scene, produce and delegate functions are declared writes of the
     /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
     /// client and an origin notifier registered by the caller, and the kernel and media capabilities of
     /// <c>AddScoutLlm</c>. The ffmpeg, font, piper and voices paths come from <see cref="OperatorMediaOptions"/>, which the
@@ -51,14 +51,20 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new YouTubeOperatorPlugin(
                 sp.GetRequiredService<IOperatorControlPlane>(),
-                sp.GetRequiredService<Channel<QueuedProject>>()),
+                sp.GetRequiredService<Channel<QueuedProject>>(),
+                ct => sp.GetRequiredService<ReadinessReporter>().CurrentAsync(ct)),
             YouTubeOperatorPlugin.PluginName));
         services.AddWriteFunction(
             YouTubeOperatorPlugin.PluginName,
             YouTubeOperatorPlugin.MakeVideo,
             "youtube",
             DataFolderScope,
-            summaryArguments: ["topic"]);
+            summaryArguments: ["topic", "format"]);
+        foreach (var (function, shown) in ChatWrites)
+        {
+            services.AddWriteFunction(YouTubeOperatorPlugin.PluginName, function, "youtube", DataFolderScope, summaryArguments: shown);
+        }
+
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.AddOptions<OperatorMediaOptions>();
         services.AddSingleton<FfmpegToolset>();
@@ -68,6 +74,7 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton<ShortsCutter>();
         services.AddSingleton<ThumbnailMaker>();
         services.AddSingleton<AssemblyStage>();
+        services.AddSingleton<TranscriptionStage>();
         return services;
     }
 
@@ -97,4 +104,15 @@ public static class OperatorServiceCollectionExtensions
         services.AddHostedService<OperatorScheduler>();
         return services;
     }
+
+    private static readonly (string Function, string[] Shown)[] ChatWrites =
+    [
+        (YouTubeOperatorPlugin.EditSceneText, ["project_id", "scene_id"]),
+        (YouTubeOperatorPlugin.RegenerateNarration, ["project_id", "scene_id"]),
+        (YouTubeOperatorPlugin.RegenerateScene, ["project_id", "scene_id"]),
+        (YouTubeOperatorPlugin.LockScene, ["project_id", "scene_id"]),
+        (YouTubeOperatorPlugin.ReorderScenes, ["project_id", "scene_ids"]),
+        (YouTubeOperatorPlugin.ProduceProject, ["project_id"]),
+        (YouTubeOperatorPlugin.DelegateProject, ["project_id"]),
+    ];
 }

@@ -26,4 +26,10 @@ public sealed class AccessOptions
 
     /// <summary>When <see cref="PairingCode"/> stops being accepted.</summary>
     public DateTimeOffset? PairingExpiresAt { get; set; }
+
+    /// <summary>
+    /// Platform user ids of Scout's owner, who may run the owner-only operator functions from chat when also allowed.
+    /// Empty means no chat sender is the owner; the local quick-ask user always is.
+    /// </summary>
+    public string[] OwnerUserIds { get; set; } = [];
 }

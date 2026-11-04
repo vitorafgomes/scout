@@ -93,8 +93,10 @@ internal static class OperatorMapping
             UpdatedAt = Iso(project.UpdatedAt),
             Delegated = project.Delegated,
             NarrationVoice = project.NarrationVoice,
-            VisualBrief = project.VisualBrief,
+            Direction = project.Direction,
             Motion = project.Motion,
+            Format = project.Format,
+            RecordingMs = project.RecordingMs,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new WireTopicCandidate
         {
@@ -123,6 +125,10 @@ internal static class OperatorMapping
         if (project.BackgroundFile is not null)
         {
             wire.BackgroundFile = project.BackgroundFile;
+        }
+        if (project.RecordingFile is not null)
+        {
+            wire.RecordingFile = project.RecordingFile;
         }
         return wire;
     }
@@ -161,14 +167,19 @@ internal static class OperatorMapping
         {
             VisualQuery = s.VisualQuery,
             VisualCredit = s.HasVisualCredit ? s.VisualCredit : null,
+            ClipStartMs = s.ClipStartMs,
+            ClipEndMs = s.ClipEndMs,
         }).ToList(),
         Package = wire.Package is null ? null : ToDomain(wire.Package),
         Publication = wire.Publication is null ? null : ToDomain(wire.Publication),
         BackgroundFile = wire.HasBackgroundFile ? wire.BackgroundFile : null,
         Delegated = wire.Delegated,
         NarrationVoice = wire.NarrationVoice,
-        VisualBrief = wire.VisualBrief,
+        Direction = wire.Direction,
         Motion = wire.Motion,
+        Format = wire.Format,
+        RecordingFile = wire.HasRecordingFile ? wire.RecordingFile : null,
+        RecordingMs = wire.RecordingMs,
     };
 
     public static DateTimeOffset? ToDomainTime(bool has, string value) => has ? ParseIso(value) : null;
@@ -183,6 +194,7 @@ internal static class OperatorMapping
             FfmpegAvailable = readiness.FfmpegAvailable,
             YoutubeSignedIn = readiness.YouTubeSignedIn,
             StockPictures = readiness.StockPictures,
+            TranscriptionAvailable = readiness.TranscriptionAvailable,
         };
         wire.Notes.AddRange(readiness.Notes);
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));
@@ -203,6 +215,7 @@ internal static class OperatorMapping
     {
         Voices = wire.Voices.Select(v => new DomainVoice(v.Id, v.Label, v.Source, v.HasSampleFile ? v.SampleFile : null)).ToList(),
         StockPictures = wire.StockPictures,
+        TranscriptionAvailable = wire.TranscriptionAvailable,
     };
 
     public static async Task<T> Guard<T>(Func<Task<T>> action)
@@ -241,7 +254,7 @@ internal static class OperatorMapping
             CallToAction = script.CallToAction,
             Description = script.Description,
         };
-        wire.Sections.AddRange(script.Sections.Select(s => new WireScriptSection { Heading = s.Heading, Narration = s.Narration }));
+        wire.Sections.AddRange(script.Sections.Select(s => new WireScriptSection { Heading = s.Heading, Narration = s.Narration, StartMs = s.StartMs, EndMs = s.EndMs }));
         wire.TitleVariants.AddRange(script.TitleVariants);
         wire.Tags.AddRange(script.Tags);
         wire.Chapters.AddRange(script.Chapters.Select(c => new WireChapter { At = c.At, Title = c.Title }));
@@ -250,7 +263,7 @@ internal static class OperatorMapping
 
     private static DomainScript ToDomain(WireScript wire) => new(
         wire.Hook,
-        wire.Sections.Select(s => new DomainScriptSection(s.Heading, s.Narration)).ToList(),
+        wire.Sections.Select(s => new DomainScriptSection(s.Heading, s.Narration) { StartMs = s.StartMs, EndMs = s.EndMs }).ToList(),
         wire.CallToAction,
         wire.TitleVariants.ToList(),
         wire.Description,
@@ -288,6 +301,8 @@ internal static class OperatorMapping
             VisualSource = scene.VisualSource,
             DurationMs = scene.DurationMs,
             VisualQuery = scene.VisualQuery,
+            ClipStartMs = scene.ClipStartMs,
+            ClipEndMs = scene.ClipEndMs,
         };
         if (scene.Error is not null)
         {

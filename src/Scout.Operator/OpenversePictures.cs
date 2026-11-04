@@ -47,7 +47,7 @@ internal sealed class OpenversePictures(IHttpClientFactory http, TimeProvider ti
 
     internal const string Found = "Picture from Openverse, credited in the video's description.";
 
-    private const string Fallback = " The scene shows a text card; attach your own image in Scout Desktop, Production.";
+    private const string Fallback = " The scene shows a text card; attach a background to the project in Scout Desktop, Production, or connect an AI Source with pictures.";
 
     internal const string NoMatch = "No picture: Openverse has no CC0, public domain or CC BY picture for this scene." + Fallback;
 

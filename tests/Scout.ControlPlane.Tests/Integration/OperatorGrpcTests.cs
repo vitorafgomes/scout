@@ -31,7 +31,7 @@ public sealed class OperatorGrpcTests
         using var desktopChannel = host.CreateChannel();
         var features = new GrpcFeatures.FeaturesClient(desktopChannel);
         await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
-        var queued = await host.Services.GetRequiredService<OperatorService>().StartProjectAsync(topic, CancellationToken.None);
+        var queued = await host.Services.GetRequiredService<OperatorService>().StartProjectAsync(topic, string.Empty, string.Empty, CancellationToken.None);
         await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = false });
         return queued;
     }
@@ -69,6 +69,8 @@ public sealed class OperatorGrpcTests
             ["DeleteProject"] = await Denied(() => client.DeleteProjectAsync(new GetProjectRequest { Id = queued.Id }).ResponseAsync),
             ["GetReadiness"] = await Denied(() => client.GetReadinessAsync(new GetReadinessRequest()).ResponseAsync),
             ["GetVoiceSamplesDirectory"] = await Denied(() => client.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest()).ResponseAsync),
+            ["EditSceneText"] = await Denied(() => client.EditSceneTextAsync(new EditSceneTextRequest { ProjectId = queued.Id, SceneId = "s1", Text = "The worker's words." }).ResponseAsync),
+            ["RegenerateNarration"] = await Denied(() => client.RegenerateNarrationAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -102,6 +104,13 @@ public sealed class OperatorGrpcTests
             ["ReportReadiness"] = await Denied(() => gate.ReportReadinessAsync(new WireReadiness { Provider = "openai" }).ResponseAsync),
             ["NextApprovedAction"] = await Denied(() => gate.NextApprovedActionAsync(new NextApprovedActionRequest()).ResponseAsync),
             ["GetVoiceSamplesDirectory"] = await Denied(() => gate.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest()).ResponseAsync),
+            ["ChatEditSceneText"] = await Denied(() => gate.ChatEditSceneTextAsync(new EditSceneTextRequest { ProjectId = queued.Id, SceneId = "s1", Text = "The desktop's words." }).ResponseAsync),
+            ["ChatRegenerateNarration"] = await Denied(() => gate.ChatRegenerateNarrationAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
+            ["ChatRegenerateScene"] = await Denied(() => gate.ChatRegenerateSceneAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
+            ["ChatSetSceneLocked"] = await Denied(() => gate.ChatSetSceneLockedAsync(new SetSceneLockedRequest { ProjectId = queued.Id, SceneId = "s1", Locked = true }).ResponseAsync),
+            ["ChatReorderScenes"] = await Denied(() => gate.ChatReorderScenesAsync(new ReorderScenesRequest { ProjectId = queued.Id }).ResponseAsync),
+            ["ChatProduceProject"] = await Denied(() => gate.ChatProduceProjectAsync(new ProduceProjectRequest { Id = queued.Id }).ResponseAsync),
+            ["ChatDelegateProject"] = await Denied(() => gate.ChatDelegateProjectAsync(new DelegateProjectRequest { Id = queued.Id }).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -227,7 +236,7 @@ public sealed class OperatorGrpcTests
         }).ResponseAsync);
 
         (ex.StatusCode, ex.Status.Detail).ShouldBe((StatusCode.InvalidArgument,
-            "Status 'published' is not one the worker may set: researching, scripting, script_ready, producing, media_ready, assembling, assembled, failed."));
+            "Status 'published' is not one the worker may set: researching, scripting, transcribing, script_ready, producing, media_ready, assembling, assembled, failed."));
         (await host.Services.GetRequiredService<OperatorService>().ListProjectsAsync(0, CancellationToken.None)).ShouldBeEmpty();
     }
 
@@ -643,26 +652,75 @@ public sealed class OperatorGrpcTests
         }
 
         var unknown = await Denied(() => desktop.ProduceProjectAsync(
-            new ProduceProjectRequest { Id = produced.Id, VisualBrief = "Watercolour.", Motion = "spin" }).ResponseAsync);
+            new ProduceProjectRequest { Id = produced.Id, Direction = "Watercolour.", Motion = "spin" }).ResponseAsync);
         var afterProduce = await desktop.ProduceProjectAsync(
-            new ProduceProjectRequest { Id = produced.Id, VisualBrief = "Watercolour, it's: calm.\nSoft light.", Motion = "still" });
+            new ProduceProjectRequest { Id = produced.Id, Direction = "Watercolour, it's: calm.\nSoft light.", Motion = "still" });
         var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
         var fromWorker = taken.Clone();
-        fromWorker.VisualBrief = "Neon glitch.";
+        fromWorker.Direction = "Neon glitch.";
         fromWorker.Motion = "gentle";
         fromWorker.Status = "media_ready";
         await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = fromWorker });
         var afterDelegate = await desktop.DelegateProjectAsync(
-            new DelegateProjectRequest { Id = delegated.Id, VisualBrief = "Bold comic panels.", Motion = "dynamic" });
+            new DelegateProjectRequest { Id = delegated.Id, Direction = "Bold comic panels.", Motion = "dynamic" });
         var shown = await desktop.GetProjectAsync(new GetProjectRequest { Id = produced.Id });
         var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = delegated.Id });
 
         (unknown.StatusCode, unknown.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "Motion is still, gentle or dynamic."));
-        (afterProduce.VisualBrief, afterProduce.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "still"));
-        (taken.Id, taken.VisualBrief, taken.Motion).ShouldBe((produced.Id, "Watercolour, it's: calm.\nSoft light.", "still"));
-        (shown.Status, shown.VisualBrief, shown.Motion).ShouldBe(("media_ready", "Watercolour, it's: calm.\nSoft light.", "still"));
-        (afterDelegate.VisualBrief, afterDelegate.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
-        (workerRead.VisualBrief, workerRead.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
+        (afterProduce.Direction, afterProduce.Motion).ShouldBe(("Watercolour, it's: calm.\nSoft light.", "still"));
+        (taken.Id, taken.Direction, taken.Motion).ShouldBe((produced.Id, "Watercolour, it's: calm.\nSoft light.", "still"));
+        (shown.Status, shown.Direction, shown.Motion).ShouldBe(("media_ready", "Watercolour, it's: calm.\nSoft light.", "still"));
+        (afterDelegate.Direction, afterDelegate.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
+        (workerRead.Direction, workerRead.Motion).ShouldBe(("Bold comic panels.", "dynamic"));
+    }
+
+    [Fact]
+    public async Task Format_Direction_Scene_Text_And_Narration_Regenerate_Round_Trip_Over_Uds()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+
+        var unknownFormat = await Denied(() => desktop.StartProjectAsync(
+            new StartProjectRequest { Topic = "Why rivers meander", Format = "ai_presenter" }).ResponseAsync);
+        var started = await desktop.StartProjectAsync(
+            new StartProjectRequest { Topic = "Why rivers meander", Format = "own_pictures", Direction = "A walk along the Thames.\nShow the bends." });
+        var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        var draft = taken.Clone();
+        draft.Status = "script_ready";
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+        await desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id, Direction = started.Direction });
+        var producing = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        producing.Status = "media_ready";
+        producing.Scenes.Add(new WireScene { Id = "s1", Order = 1, Narration = "Rivers bend.", Status = "ready", AudioSource = "generated", VisualSource = "text_card", AudioFile = "scene-s1.mp3", DurationMs = 4200 });
+        producing.Scenes.Add(new WireScene { Id = "s2", Order = 2, Narration = "Then they loop.", Status = "ready", AudioSource = "generated", VisualSource = "text_card", AudioFile = "scene-s2.mp3", DurationMs = 4200 });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = producing });
+        var tooLong = await Denied(() => desktop.EditSceneTextAsync(
+            new EditSceneTextRequest { ProjectId = started.Id, SceneId = "s1", Text = new string('a', 701) }).ResponseAsync);
+        var edited = await desktop.EditSceneTextAsync(new EditSceneTextRequest { ProjectId = started.Id, SceneId = "s1", Text = " The owner's words. " });
+        var regenerated = await desktop.RegenerateNarrationAsync(new SceneRequest { ProjectId = started.Id, SceneId = "s2" });
+        var unknownScene = await Denied(() => desktop.RegenerateNarrationAsync(new SceneRequest { ProjectId = started.Id, SceneId = "s9" }).ResponseAsync);
+        var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = started.Id });
+        var defaulted = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Glaciers explained" });
+
+        (unknownFormat.StatusCode, unknownFormat.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The format is generated_pictures, own_pictures or own_video."));
+        (started.Format, started.Direction).ShouldBe(("own_pictures", "A walk along the Thames.\nShow the bends."));
+        (defaulted.Format, defaulted.Direction).ShouldBe(("generated_pictures", string.Empty));
+        (taken.Id, taken.Format, taken.Direction).ShouldBe((started.Id, "own_pictures", "A walk along the Thames.\nShow the bends."));
+        (tooLong.StatusCode, tooLong.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "A scene's text is 1 to 700 characters."));
+        (unknownScene.StatusCode, unknownScene.Status.Detail).ShouldBe((StatusCode.NotFound, $"Unknown scene 's9' in project '{started.Id}'."));
+        edited.Status.ShouldBe("production_queued");
+        var editedScene = edited.Scenes.Single(s => s.Id == "s1");
+        (editedScene.Narration, editedScene.Status, editedScene.AudioSource, editedScene.HasAudioFile, editedScene.DurationMs)
+            .ShouldBe(("The owner's words.", "planned", "none", false, 0));
+        regenerated.Status.ShouldBe("production_queued");
+        var regeneratedScene = regenerated.Scenes.Single(s => s.Id == "s2");
+        (regeneratedScene.Narration, regeneratedScene.Status, regeneratedScene.AudioSource, regeneratedScene.HasAudioFile)
+            .ShouldBe(("Then they loop.", "planned", "none", false));
+        (workerRead.Status, workerRead.Format, workerRead.Scenes[0].Narration).ShouldBe(("production_queued", "own_pictures", "The owner's words."));
     }
 
     [Fact]
@@ -1188,5 +1246,141 @@ public sealed class OperatorGrpcTests
             "Only a project with its script ready, its media ready, or a failed one with a script is delegated; this one is queued."));
         var stored = await host.Services.GetRequiredService<OperatorService>().GetProjectAsync(queued.Id, CancellationToken.None);
         (stored.Status, stored.Delegated).ShouldBe(("queued", false));
+    }
+
+    private static async Task<string> MediaReadyWithScenesAsync(ControlPlaneTestHost host, string topic)
+    {
+        var started = await host.Services.GetRequiredService<OperatorService>().StartProjectAsync(topic, string.Empty, string.Empty, CancellationToken.None);
+        await host.Services.GetRequiredService<JsonFileOperatorStore>().UpdateProjectsAsync(
+            projects =>
+            {
+                var index = projects.FindIndex(p => p.Id == started.Id);
+                projects[index] = projects[index] with
+                {
+                    Status = "media_ready",
+                    NarrationVoice = "piper:en_GB-cori-medium",
+                    Motion = "still",
+                    Scenes =
+                    [
+                        new Scout.ControlPlane.Operator.Scene("s1", 1, "Rivers bend.", "A river", false, "ready", null, "generated", "text_card", "scene-s1.mp3", null, 4200),
+                        new Scout.ControlPlane.Operator.Scene("s2", 2, "Then they loop.", "A loop", false, "ready", null, "generated", "text_card", "scene-s2.mp3", null, 4200),
+                    ],
+                };
+                return 0;
+            },
+            CancellationToken.None);
+        return started.Id;
+    }
+
+    [Fact]
+    public async Task A_Chat_Edit_Round_Trips_Over_The_Socket_And_Lands_In_The_Write_Log()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var edited = await MediaReadyWithScenesAsync(host, "Why rivers meander");
+        var produced = await MediaReadyWithScenesAsync(host, "Glaciers explained");
+        var delegated = await MediaReadyWithScenesAsync(host, "Where deltas form");
+        var before = (await features.ListWritesAsync(new ListWritesRequest())).Entries.Count;
+
+        var text = await gate.ChatEditSceneTextAsync(new EditSceneTextRequest { ProjectId = edited, SceneId = "s1", Text = " The owner's words. " });
+        await gate.ChatRegenerateSceneAsync(new SceneRequest { ProjectId = edited, SceneId = "s2" });
+        await gate.ChatRegenerateNarrationAsync(new SceneRequest { ProjectId = edited, SceneId = "s2" });
+        await gate.ChatSetSceneLockedAsync(new SetSceneLockedRequest { ProjectId = edited, SceneId = "s2", Locked = true });
+        var reorder = new ReorderScenesRequest { ProjectId = edited };
+        reorder.SceneIds.AddRange(["s2", "s1"]);
+        var reordered = await gate.ChatReorderScenesAsync(reorder);
+        var locked = await Denied(() => gate.ChatEditSceneTextAsync(new EditSceneTextRequest { ProjectId = edited, SceneId = "s2", Text = "Locked words." }).ResponseAsync);
+        var afterProduce = await gate.ChatProduceProjectAsync(new ProduceProjectRequest { Id = produced });
+        var afterDelegate = await gate.ChatDelegateProjectAsync(new DelegateProjectRequest { Id = delegated, Motion = "dynamic" });
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = false });
+        var refused = await Denied(() => gate.ChatEditSceneTextAsync(new EditSceneTextRequest { ProjectId = edited, SceneId = "s1", Text = "Without the grant." }).ResponseAsync);
+        var logged = (await features.ListWritesAsync(new ListWritesRequest())).Entries;
+
+        (text.Status, text.Scenes.Single(s => s.Id == "s1").Narration).ShouldBe(("production_queued", "The owner's words."));
+        reordered.Scenes.OrderBy(s => s.Order).Select(s => (s.Id, s.Locked)).ShouldBe([("s2", true), ("s1", false)]);
+        (locked.StatusCode, locked.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "Scene 's2' is locked; unlock it before editing its text."));
+        (afterProduce.Status, afterProduce.NarrationVoice, afterProduce.Motion).ShouldBe(("production_queued", "piper:en_GB-cori-medium", "still"));
+        (afterDelegate.Status, afterDelegate.Delegated, afterDelegate.NarrationVoice, afterDelegate.Motion).ShouldBe(("assembly_queued", true, "piper:en_GB-cori-medium", "dynamic"));
+        (refused.StatusCode, refused.Status.Detail).ShouldBe((StatusCode.PermissionDenied,
+            "The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop."));
+        logged.Count.ShouldBe(before + 7);
+        logged.Take(7).Select(e => (e.FeatureId, e.Action, e.Target, e.Outcome, e.HasApprovedBy, e.HasActionId)).ShouldBe([
+            ("youtube", "Scout's data folder", delegated, "delegated via chat", false, false),
+            ("youtube", "Scout's data folder", produced, "queued production via chat", false, false),
+            ("youtube", "Scout's data folder", edited, "reordered the scenes via chat", false, false),
+            ("youtube", "Scout's data folder", edited, "locked scene s2 via chat", false, false),
+            ("youtube", "Scout's data folder", edited, "asked for the narration of scene s2 again via chat", false, false),
+            ("youtube", "Scout's data folder", edited, "asked for scene s2 again via chat", false, false),
+            ("youtube", "Scout's data folder", edited, "edited the text of scene s1 via chat", false, false),
+        ]);
+        (await new GrpcFeatures.FeaturesClient(desktopChannel).ListPendingActionsAsync(new ListPendingActionsRequest())).Actions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void The_WorkerGate_Offers_Exactly_These_Methods()
+    {
+        string[] forbidden = ["Attach", "Approve", "Publish", "Confirm", "Delete", "Grant", "Decide", "Enable", "Reject"];
+
+        var methods = WorkerGate.Descriptor.Methods.Select(m => m.Name).ToList();
+
+        methods.ShouldBe([
+            "RequestWrite", "RecordWrite", "GetOperatorMandate", "SaveOperatorProject", "NextQueuedProject",
+            "GetOperatorProject", "ListOperatorProjects", "GetOperatorMediaDirectory", "ReportReadiness",
+            "NextApprovedAction", "GetComments", "SaveComments", "GetVoiceSamplesDirectory",
+            "ChatEditSceneText", "ChatRegenerateNarration", "ChatRegenerateScene", "ChatSetSceneLocked",
+            "ChatReorderScenes", "ChatProduceProject", "ChatDelegateProject",
+        ]);
+        methods.ShouldAllBe(m => !forbidden.Any(f => m.StartsWith(f, StringComparison.Ordinal) || m.StartsWith("Chat" + f, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task An_Own_Video_Project_Is_Started_Given_Its_Recording_And_Read_Back_Over_The_Socket()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "A walk by the Thames", Format = "own_video" });
+        var nothingYet = await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest());
+        await File.WriteAllTextAsync(Path.Combine((await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id })).Path, "owner-recording-1a2b.mp4"), "video");
+        var onAScene = await Denied(() => desktop.AttachSceneMediaAsync(
+            new AttachSceneMediaRequest { ProjectId = started.Id, SceneId = "s1", Kind = "recording", FileName = "owner-recording-1a2b.mp4" }).ResponseAsync);
+        var attached = await desktop.AttachSceneMediaAsync(
+            new AttachSceneMediaRequest { ProjectId = started.Id, Kind = "recording", FileName = "owner-recording-1a2b.mp4" });
+        var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        var transcript = taken.Clone();
+        transcript.Status = "script_ready";
+        transcript.RecordingMs = 9000;
+        transcript.Script = new WireScript();
+        transcript.Script.Sections.Add(new ScriptSection { Heading = string.Empty, Narration = "Hello from the river.", StartMs = 0, EndMs = 4200 });
+        transcript.Script.Sections.Add(new ScriptSection { Heading = string.Empty, Narration = "Now the bend.", StartMs = 4200, EndMs = 9000 });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = transcript });
+        await desktop.ProduceProjectAsync(new ProduceProjectRequest { Id = started.Id });
+        var producing = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        producing.Status = "media_ready";
+        producing.Scenes.Add(new WireScene { Id = "s1", Order = 1, Narration = "Hello from the river.", Status = "ready", AudioSource = "recording", VisualSource = "recording", DurationMs = 4200, ClipStartMs = 0, ClipEndMs = 4200 });
+        producing.Scenes.Add(new WireScene { Id = "s2", Order = 2, Narration = "Now the bend.", Status = "ready", AudioSource = "recording", VisualSource = "recording", DurationMs = 4800, ClipStartMs = 4200, ClipEndMs = 9000 });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = producing });
+        await gate.ReportReadinessAsync(new WireReadiness { Provider = "ollama", FfmpegAvailable = true, TranscriptionAvailable = true });
+        var read = await desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id });
+        var readiness = await desktop.GetReadinessAsync(new GetReadinessRequest());
+
+        (started.Status, started.Format, started.HasRecordingFile, started.RecordingMs).ShouldBe(("recording_waiting", "own_video", false, 0));
+        nothingYet.Project.ShouldBeNull();
+        (onAScene.StatusCode, onAScene.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "A recording is attached to the project, not to a scene."));
+        (attached.Status, attached.RecordingFile).ShouldBe(("queued", "owner-recording-1a2b.mp4"));
+        (taken.Id, taken.Status, taken.RecordingFile).ShouldBe((started.Id, "transcribing", "owner-recording-1a2b.mp4"));
+        (read.Status, read.Format, read.RecordingFile, read.RecordingMs).ShouldBe(("media_ready", "own_video", "owner-recording-1a2b.mp4", 9000));
+        read.Script.Sections.Select(s => (s.Narration, s.StartMs, s.EndMs)).ShouldBe([("Hello from the river.", 0, 4200), ("Now the bend.", 4200, 9000)]);
+        read.Scenes.Select(s => (s.Id, s.AudioSource, s.VisualSource, s.ClipStartMs, s.ClipEndMs))
+            .ShouldBe([("s1", "recording", "recording", 0, 4200), ("s2", "recording", "recording", 4200, 9000)]);
+        readiness.TranscriptionAvailable.ShouldBeTrue();
     }
 }

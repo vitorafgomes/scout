@@ -112,7 +112,7 @@ public sealed class FeatureCatalogTests
             ]);
         youTube.ScopeMatrix!.Where(r => r.Access == ScopeAccess.Write).Select(r => r.Actions.Single())
             .ShouldBe([
-                "Save scripts, narration, images, the scene list, the video and thumbnails",
+                "Save scripts, narration, images, the scene list, the video and thumbnails, and keep the recording you attach and its transcript",
                 "Create the channel's reach reporting job once, so YouTube prepares the reach reports",
             ]);
         youTube.ScopeMatrix!.Single(r => r.Scope == "videos.insert").Actions

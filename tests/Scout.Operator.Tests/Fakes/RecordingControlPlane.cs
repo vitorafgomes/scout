@@ -7,7 +7,8 @@ namespace Scout.Operator.Tests.Fakes;
 /// <see cref="RefuseStaleScenes"/> it refuses a save whose scene ids, order and locks are not the stored ones, stricter
 /// than the control plane, which keeps the stored order and locks; <see cref="OwnerActs"/> changes the stored project after the given save, as the owner would;
 /// <see cref="NoLongerProducingOn"/> refuses the given save the way the control plane refuses a save on a project the
-/// owner sent back to production meanwhile, and <see cref="NoLongerAssemblingOn"/> the same for assembly. With
+/// owner sent back to production meanwhile, <see cref="NoLongerAssemblingOn"/> the same for assembly and
+/// <see cref="NoLongerTranscribingOn"/> for a transcription. With
 /// <see cref="Revoked"/> it behaves as the control plane after the owner revoked YouTube writes: only the project of the
 /// claimed action may be read, and saved with nothing but its publication changed, and a record is logged "after revoke",
 /// consumes the action and is refused. The comments live in <see cref="Comments"/>; a save is kept in
@@ -16,6 +17,8 @@ namespace Scout.Operator.Tests.Fakes;
 /// with a non-empty error; a save with no error keeps the stored one unless it carries a newer sync time;
 /// after a revoke the comments cannot be read and a save may change only the comment of the claimed action.
 /// The voice samples directory is <see cref="VoiceSamplesDirectory"/>, or <see cref="VoiceSamplesFailure"/> when set.
+/// A chat call is kept in <see cref="ChatCalls"/>, refused with <see cref="NotGranted"/> under <see cref="ChatNotGranted"/>,
+/// and otherwise answers the stored project changed as the control plane would.
 /// </summary>
 internal sealed class RecordingControlPlane : IOperatorControlPlane
 {
@@ -47,6 +50,8 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
     public Func<int, bool> NoLongerProducingOn { get; init; } = _ => false;
 
     public Func<int, bool> NoLongerAssemblingOn { get; init; } = _ => false;
+
+    public Func<int, bool> NoLongerTranscribingOn { get; init; } = _ => false;
 
     public Func<int, OperatorProjectState, OperatorProjectState?> OwnerActs { get; init; } = (_, _) => null;
 
@@ -103,6 +108,12 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
             if (NoLongerAssemblingOn(_saves.Count))
             {
                 return Task.FromException<OperatorProjectState>(new InvalidOperationException("The project is no longer assembling."));
+            }
+
+            if (NoLongerTranscribingOn(_saves.Count))
+            {
+                return Task.FromException<OperatorProjectState>(
+                    new InvalidOperationException("The project is no longer transcribing; the worker's transcript was not saved."));
             }
 
             if (RefuseStaleScenes
@@ -304,4 +315,58 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
 
     public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
         => VoiceSamplesFailure is null ? Task.FromResult(VoiceSamplesDirectory) : Task.FromException<string>(VoiceSamplesFailure);
+
+    /// <summary>Every chat call, its name and its arguments as sent.</summary>
+    public List<(string Name, string Arguments)> ChatCalls { get; } = [];
+
+    /// <summary>When true, every chat call is refused with <see cref="NotGranted"/> and changes nothing.</summary>
+    public bool ChatNotGranted { get; set; }
+
+    public Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct)
+        => ChatAsync("EditSceneText", $"{projectId}|{sceneId}|{text}", projectId,
+            p => Queued(p) with { Scenes = [.. p.Scenes.Select(s => s.Id == sceneId ? s with { Narration = text, Status = OperatorPipeline.Planned } : s)] });
+
+    public Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct)
+        => ChatAsync("RegenerateNarration", $"{projectId}|{sceneId}", projectId, Queued);
+
+    public Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct)
+        => ChatAsync("RegenerateScene", $"{projectId}|{sceneId}", projectId, Queued);
+
+    public Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct)
+        => ChatAsync("SetSceneLocked", $"{projectId}|{sceneId}|{locked}", projectId,
+            p => p with { Scenes = [.. p.Scenes.Select(s => s.Id == sceneId ? s with { Locked = locked } : s)] });
+
+    public Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct)
+        => ChatAsync("ReorderScenes", $"{projectId}|{string.Join(",", sceneIds)}", projectId,
+            p => p with { Scenes = [.. p.Scenes.Select(s => s with { Order = sceneIds.ToList().IndexOf(s.Id) + 1 }).OrderBy(s => s.Order)] });
+
+    public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => ChatAsync("ProduceProject", $"{projectId}|{narrationVoice}|{direction}|{motion}", projectId, Queued);
+
+    public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => ChatAsync("DelegateProject", $"{projectId}|{narrationVoice}|{direction}|{motion}", projectId, p => Queued(p) with { Delegated = true });
+
+    private static OperatorProjectState Queued(OperatorProjectState project) => project with { Status = "production_queued" };
+
+    private Task<OperatorProjectState> ChatAsync(
+        string name, string arguments, string projectId, Func<OperatorProjectState, OperatorProjectState> change)
+    {
+        lock (_lock)
+        {
+            ChatCalls.Add((name, arguments));
+            if (ChatNotGranted)
+            {
+                return Task.FromException<OperatorProjectState>(new InvalidOperationException(NotGranted));
+            }
+
+            if (!_stored.TryGetValue(projectId, out var project))
+            {
+                return Task.FromException<OperatorProjectState>(new InvalidOperationException($"Unknown project '{projectId}'."));
+            }
+
+            var changed = change(project);
+            _stored[projectId] = changed;
+            return Task.FromResult(changed);
+        }
+    }
 }

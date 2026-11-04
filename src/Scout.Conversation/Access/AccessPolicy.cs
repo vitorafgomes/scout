@@ -10,6 +10,7 @@ public sealed class AccessPolicy
 {
     private readonly string[] _allowed;
     private readonly bool _requireAllowList;
+    private readonly string[] _owners;
 
     /// <summary>Builds the policy from the bound options.</summary>
     public AccessPolicy(AccessOptions options)
@@ -20,6 +21,10 @@ public sealed class AccessPolicy
             .Select(id => id.Trim())
             .ToArray();
         _requireAllowList = options.RequireAllowList;
+        _owners = options.OwnerUserIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .ToArray();
         PairingCode = options.PairingCode;
         PairingExpiresAt = options.PairingExpiresAt;
     }
@@ -38,4 +43,8 @@ public sealed class AccessPolicy
         => HasAllowList
             ? _allowed.Contains(userId.Trim(), StringComparer.Ordinal)
             : !_requireAllowList;
+
+    /// <summary>True when <paramref name="userId"/> may use Scout and is listed in <see cref="AccessOptions.OwnerUserIds"/>.</summary>
+    public bool IsOwner(string userId)
+        => IsAllowed(userId) && _owners.Contains(userId.Trim(), StringComparer.Ordinal);
 }

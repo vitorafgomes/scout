@@ -133,4 +133,15 @@ public sealed class ConversationConductorAccessTests
         info.Message.ShouldContain("chan-42");
         logger.Entries.ShouldAllBe(e => !e.Message.Contains("zq-7731") && !e.Message.Contains("222"));
     }
+
+    [Theory]
+    [InlineData(" 111 ", "111", true)]
+    [InlineData("111", "111\t", true)]
+    [InlineData("111", "222", false)]
+    [InlineData("333", "333", false)]
+    public void An_Owner_Is_An_Allowed_User_Listed_In_OwnerUserIds_Compared_Ordinally_After_Trimming(
+        string ownerId, string senderId, bool expected)
+        => new AccessPolicy(new AccessOptions { AllowedUserIds = ["111", "222"], OwnerUserIds = [ownerId] })
+            .IsOwner(senderId)
+            .ShouldBe(expected);
 }

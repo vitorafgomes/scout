@@ -185,6 +185,59 @@ public sealed class JsonFileOperatorStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Projects_File_From_Before_Formats_Reads_As_Generated_Pictures_With_Its_Visual_Brief_As_The_Direction()
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(_directory, "projects.json"),
+            """[{"id":"p1","topic":"Why rivers meander","status":"media_ready","origin":"desktop","createdAt":"2026-11-01T00:00:00+00:00","updatedAt":"2026-11-01T00:00:00+00:00","candidates":[],"claims":[],"visualBrief":"Hand-drawn watercolour.","motion":"still"}]""");
+
+        using (var store = Store())
+        {
+            var read = (await store.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem();
+            (read.Format, read.Direction, read.Motion).ShouldBe(("generated_pictures", "Hand-drawn watercolour.", "still"));
+            await store.UpdateProjectsAsync(projects => { projects[0] = projects[0] with { Direction = "Calm and slow." }; return 0; }, CancellationToken.None);
+        }
+
+        var written = await File.ReadAllTextAsync(Path.Combine(_directory, "projects.json"));
+        written.ShouldContain("\"visualBrief\": \"Calm and slow.\"");
+        written.ShouldContain("\"format\": \"generated_pictures\"");
+        written.ShouldNotContain("\"direction\"");
+        using var reopened = Store();
+        (await reopened.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem().Direction.ShouldBe("Calm and slow.");
+    }
+
+    [Fact]
+    public async Task The_Recording_Clips_Transcript_Times_And_Transcription_Readiness_Survive_A_Restart()
+    {
+        var scene = new Scene("s1", 1, "Hello from the river.", string.Empty, false, "ready", null, "recording", "recording", null, null, 4200)
+        {
+            ClipStartMs = 1500,
+            ClipEndMs = 5700,
+        };
+        var project = Project("p1", "media_ready") with
+        {
+            Format = "own_video",
+            RecordingFile = "owner-recording-1a2b3c4d.mp4",
+            RecordingMs = 600_000,
+            Script = new Script(string.Empty, [new ScriptSection("Intro", "Hello from the river.") { StartMs = 1500, EndMs = 5700 }], string.Empty, [], string.Empty, [], []),
+            Scenes = [scene],
+        };
+
+        using (var store = Store())
+        {
+            await store.UpdateProjectsAsync(projects => { projects.Add(project); return 0; }, CancellationToken.None);
+            await store.WriteReadinessAsync(new Readiness(false, false, "ollama", true, false, []) { TranscriptionAvailable = true }, CancellationToken.None);
+        }
+
+        using var reopened = Store();
+        var read = (await reopened.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem();
+        (read.Format, read.RecordingFile, read.RecordingMs).ShouldBe(("own_video", (string?)"owner-recording-1a2b3c4d.mp4", 600_000));
+        read.Script.ShouldNotBeNull().Sections.ShouldHaveSingleItem().ShouldBe(new ScriptSection("Intro", "Hello from the river.") { StartMs = 1500, EndMs = 5700 });
+        read.Scenes.ShouldHaveSingleItem().ShouldBe(scene);
+        (await reopened.ReadReadinessAsync(CancellationToken.None)).ShouldNotBeNull().TranscriptionAvailable.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task The_Readiness_Report_Survives_A_Reopen_In_Readiness_Json_Beside_Features_Json()
     {
         var report = new Readiness(true, false, "openai", true, false, ["No image model is configured."], DateTimeOffset.UnixEpoch);

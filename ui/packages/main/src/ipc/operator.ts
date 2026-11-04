@@ -24,6 +24,7 @@ import {
   type OperatorProjectsResponse,
   type PackageMetadataRequest,
   type PrivacyStatus,
+  type ProjectFormat,
   type ProjectMotion,
   type ProposalDecisionRequest,
   type PublishPackageRequest,
@@ -35,10 +36,16 @@ import {
   type SceneMediaResponse,
   type SceneOrderRequest,
   type SceneRequest,
+  type SceneTextRequest,
   type StartProjectRequest,
 } from '@scout/shared';
 import type { ControlPlaneClient } from '../control-plane/client.js';
-import { copyOwnerMedia, isSafeId, type ChooseOwnerFile } from '../operator/media.js';
+import {
+  copyOwnerMedia,
+  isSafeId,
+  type ChooseOwnerFile,
+  type OwnerMediaKind,
+} from '../operator/media.js';
 import type { Logger } from '../util/logger.js';
 
 export type OperatorClient = Pick<
@@ -55,6 +62,8 @@ export type OperatorClient = Pick<
   | 'reorderScenes'
   | 'setSceneLocked'
   | 'regenerateScene'
+  | 'editSceneText'
+  | 'regenerateNarration'
   | 'attachSceneMedia'
   | 'getMediaDirectory'
   | 'getReadiness'
@@ -91,7 +100,9 @@ const MIN_ARM_HOURS = 24;
 const MAX_ARM_HOURS = 168;
 const COMMENT_DECISIONS: readonly CommentDecision[] = ['draft', 'dismiss', 'not_spam', 'hold'];
 const NARRATION_VOICE = /^[A-Za-z0-9_:.#-]{0,80}$/;
-const MAX_VISUAL_BRIEF = 500;
+const MAX_DIRECTION = 1000;
+const FORMATS: readonly string[] = ['generated_pictures', 'own_pictures', 'own_video'];
+const MAX_SCENE_TEXT = 700;
 const MOTIONS: readonly string[] = ['still', 'gentle', 'dynamic'];
 const COMMENT_ID = /^[A-Za-z0-9_.-]{1,100}$/;
 const MAX_REPLY_LENGTH = 1000;
@@ -164,12 +175,18 @@ function narrationVoice(value: unknown): string {
   return voice;
 }
 
-function visualBrief(value: unknown): string {
-  const brief = text(value);
-  if (brief.length > MAX_VISUAL_BRIEF) {
-    invalid(`A visual brief is at most ${MAX_VISUAL_BRIEF} characters.`);
+function direction(value: unknown): string {
+  const words = text(value);
+  if (words.length > MAX_DIRECTION) invalid(`A direction is at most ${MAX_DIRECTION} characters.`);
+  return words;
+}
+
+function format(value: unknown): ProjectFormat {
+  const chosen = text(value) || 'generated_pictures';
+  if (!FORMATS.includes(chosen)) {
+    invalid('The format is generated_pictures, own_pictures or own_video.');
   }
-  return brief;
+  return chosen as ProjectFormat;
 }
 
 function motion(value: unknown): ProjectMotion {
@@ -306,7 +323,9 @@ export function registerOperatorHandlers(
         if (topic.length < MIN_TOPIC_LENGTH || topic.length > MAX_TOPIC_LENGTH) {
           invalid(`The topic must be ${MIN_TOPIC_LENGTH} to ${MAX_TOPIC_LENGTH} characters.`);
         }
-        return await (await getClient()).startProject(topic);
+        const chosen = format(req?.format);
+        const words = direction(req?.direction);
+        return await (await getClient()).startProject(topic, chosen, words);
       } catch (err: unknown) {
         logger.warn('operator: startProject failed', { err: String(err) });
         throwSerialized(err);
@@ -356,7 +375,7 @@ export function registerOperatorHandlers(
         ).produceProject(
           id,
           narrationVoice(req?.narrationVoice),
-          visualBrief(req?.visualBrief),
+          direction(req?.direction),
           motion(req?.motion),
         );
       } catch (err: unknown) {
@@ -376,7 +395,7 @@ export function registerOperatorHandlers(
         ).delegateProject(
           id,
           narrationVoice(req?.narrationVoice),
-          visualBrief(req?.visualBrief),
+          direction(req?.direction),
           motion(req?.motion),
         );
       } catch (err: unknown) {
@@ -454,40 +473,76 @@ export function registerOperatorHandlers(
   );
 
   ipcMain.handle(
+    CHANNEL.operatorSceneText,
+    async (_event, req: SceneTextRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const sceneId = requiredId(req?.sceneId, 'The scene id');
+        const sceneText = text(req?.text);
+        if (sceneText.length === 0 || sceneText.length > MAX_SCENE_TEXT) {
+          invalid(`A scene's text is 1 to ${MAX_SCENE_TEXT} characters.`);
+        }
+        return await (await getClient()).editSceneText(projectId, sceneId, sceneText);
+      } catch (err: unknown) {
+        logger.warn('operator: scene text failed', {
+          projectId: req?.projectId,
+          sceneId: req?.sceneId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorNarrationRegeneration,
+    async (_event, req: SceneRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const sceneId = requiredId(req?.sceneId, 'The scene id');
+        return await (await getClient()).regenerateNarration(projectId, sceneId);
+      } catch (err: unknown) {
+        logger.warn('operator: narration regeneration failed', {
+          projectId: req?.projectId,
+          sceneId: req?.sceneId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
     CHANNEL.operatorSceneMedia,
     async (_event, req: SceneMediaRequest | undefined): Promise<SceneMediaResponse> => {
       try {
         const { projectId, sceneId, kind } = req ?? {};
-        const background = kind === 'background';
-        if (!isSafeId(projectId) || (!background && !isSafeId(sceneId))) {
+        const ofProject = kind === 'background' || kind === 'recording';
+        if (!isSafeId(projectId) || (!ofProject && !isSafeId(sceneId))) {
           invalid('The project and scene ids are letters, digits, - and _ only.');
         }
-        if (background && sceneId !== '') {
-          invalid('A background is attached to the project, not to a scene.');
+        if (ofProject && sceneId !== '') {
+          invalid(`A ${kind} is attached to the project, not to a scene.`);
         }
-        if (!background && !MEDIA_KINDS.includes(kind as SceneMediaKind)) {
-          invalid('Media is attached as audio, visual or background.');
+        if (!ofProject && !MEDIA_KINDS.includes(kind as SceneMediaKind)) {
+          invalid('Media is attached as audio, visual, background or recording.');
         }
-        const fileKind: SceneMediaKind = background ? 'visual' : (kind as SceneMediaKind);
-        const target = background ? '' : (sceneId as string);
+        const media = kind as SceneMediaRequest['kind'];
+        const fileKind: OwnerMediaKind = media === 'background' ? 'visual' : media;
+        const target = ofProject ? '' : (sceneId as string);
         const client = await getClient();
         const directory = await client.getMediaDirectory(projectId);
         const source = await chooseFile(fileKind);
         if (source === null) return { project: null };
         const fileName = await copyOwnerMedia(
           directory,
-          background ? 'background' : target,
+          ofProject ? media : target,
           fileKind,
           source,
         );
         try {
           return {
-            project: await client.attachSceneMedia(
-              projectId,
-              target,
-              background ? 'background' : fileKind,
-              fileName,
-            ),
+            project: await client.attachSceneMedia(projectId, target, media, fileName),
           };
         } catch (err: unknown) {
           await unlink(path.join(directory, fileName)).catch(() => undefined);
@@ -674,6 +729,8 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorSceneOrder);
     ipcMain.removeHandler(CHANNEL.operatorSceneLock);
     ipcMain.removeHandler(CHANNEL.operatorSceneRegeneration);
+    ipcMain.removeHandler(CHANNEL.operatorSceneText);
+    ipcMain.removeHandler(CHANNEL.operatorNarrationRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneMedia);
     ipcMain.removeHandler(CHANNEL.operatorReadiness);
     ipcMain.removeHandler(CHANNEL.operatorAssembly);

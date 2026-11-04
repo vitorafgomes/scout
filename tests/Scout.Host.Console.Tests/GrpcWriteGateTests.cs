@@ -335,6 +335,38 @@ public sealed class GrpcWriteGateTests
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
             return OperatorFailure is null ? Task.FromResult(new MediaDirectory { Path = VoiceSamplesPath }) : throw OperatorFailure;
         }
+
+        public List<(string Rpc, Google.Protobuf.IMessage Request)> ChatRequests { get; } = [];
+
+        public override Task<Project> ChatEditSceneText(EditSceneTextRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatEditSceneText), request, request.ProjectId, context);
+
+        public override Task<Project> ChatRegenerateNarration(SceneRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatRegenerateNarration), request, request.ProjectId, context);
+
+        public override Task<Project> ChatRegenerateScene(SceneRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatRegenerateScene), request, request.ProjectId, context);
+
+        public override Task<Project> ChatSetSceneLocked(SetSceneLockedRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatSetSceneLocked), request, request.ProjectId, context);
+
+        public override Task<Project> ChatReorderScenes(ReorderScenesRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatReorderScenes), request, request.ProjectId, context);
+
+        public override Task<Project> ChatProduceProject(ProduceProjectRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatProduceProject), request, request.Id, context);
+
+        public override Task<Project> ChatDelegateProject(DelegateProjectRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatDelegateProject), request, request.Id, context);
+
+        private Task<Project> ChatAsync(string rpc, Google.Protobuf.IMessage request, string projectId, ServerCallContext context)
+        {
+            Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            ChatRequests.Add((rpc, request));
+            return OperatorFailure is null
+                ? Task.FromResult(new Project { Id = projectId, Topic = "sourdough", Status = "production_queued", Origin = "desktop", Format = "own_pictures" })
+                : throw OperatorFailure;
+        }
     }
 
     private sealed class RecordingLogger : ILogger<WriteGateFilter>

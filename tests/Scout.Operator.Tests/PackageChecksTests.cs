@@ -88,8 +88,8 @@ public sealed class PackageChecksTests
             ];
             var assembler = new Assembler(Given.Toolset(new FakeProcessRunner()));
 
-            var over = await assembler.AssembleAsync(Given.Tools(), scenes, media, "studio.png", "gentle", CancellationToken.None);
-            var without = await assembler.AssembleAsync(Given.Tools(), scenes, media, null, "gentle", CancellationToken.None);
+            var over = await assembler.AssembleAsync(Given.Tools(), scenes, media, "studio.png", null, "gentle", CancellationToken.None);
+            var without = await assembler.AssembleAsync(Given.Tools(), scenes, media, null, null, "gentle", CancellationToken.None);
 
             PackageChecks.Placeholders(over.Cuts)
                 .ShouldBe(new OperatorCheck("placeholders", "fail", "Scenes 3 are not ready or miss their picture or narration file."));

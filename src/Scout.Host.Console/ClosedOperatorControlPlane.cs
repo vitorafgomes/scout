@@ -45,4 +45,25 @@ internal sealed class ClosedOperatorControlPlane : IOperatorControlPlane
 
     public Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
         => Task.FromException<string>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
 }

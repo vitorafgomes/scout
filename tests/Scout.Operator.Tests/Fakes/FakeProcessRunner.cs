@@ -4,7 +4,8 @@ namespace Scout.Operator.Tests.Fakes;
 /// An <see cref="IProcessRunner"/> that records every call and its timeout and answers by the shape of the command, as
 /// ffmpeg would: <c>-version</c> succeeds, <c>-encoders</c> lists <see cref="EncoderList"/>, <c>-filters</c>
 /// <see cref="FilterList"/>, <c>-demuxers</c> <see cref="DemuxerList"/>, a command that only reads an input reports a
-/// <c>Duration:</c> of <see cref="ProbedMs"/> and exits 1, a loudness measure ends with <see cref="LoudnessTail"/>, a
+/// <c>Duration:</c> of <see cref="ProbedMs"/>, a picture stream when <see cref="ReportsPicture"/> and a sound stream
+/// when <see cref="ReportsSound"/>, and exits 1, a loudness measure ends with <see cref="LoudnessTail"/>, a
 /// piper command writes 2 KB to the file after <c>--output_file</c>, and any other command writes 1 KB to its last
 /// argument, the output file. <see cref="Answer"/> answers, or throws, before any of that.
 /// </summary>
@@ -73,6 +74,10 @@ internal sealed class FakeProcessRunner : IProcessRunner
     public string DemuxerList { get; init; } = AllDemuxers;
 
     public int ProbedMs { get; init; } = 3500;
+
+    public bool ReportsPicture { get; init; }
+
+    public bool ReportsSound { get; init; } = true;
 
     public string LoudnessTail { get; init; } = Loudnorm;
 
@@ -162,10 +167,12 @@ internal sealed class FakeProcessRunner : IProcessRunner
         if (ReadsOnly(arguments))
         {
             var length = TimeSpan.FromMilliseconds(ProbedMs);
+            var picture = ReportsPicture ? "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709), 1920x1080, 4500 kb/s, 30 fps\n" : string.Empty;
+            var sound = ReportsSound ? "  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 128 kb/s\n" : string.Empty;
             return Task.FromResult(new ProcessResult(
                 1,
                 string.Empty,
-                $"Input #0, mp3, from '{arguments[^1]}':\n  Duration: {(int)length.TotalHours:00}:{length.Minutes:00}:{length.Seconds:00}.{length.Milliseconds / 10:00}, start: 0.025057, bitrate: 128 kb/s\nAt least one output file must be specified\n"));
+                $"Input #0, mp3, from '{arguments[^1]}':\n  Duration: {(int)length.TotalHours:00}:{length.Minutes:00}:{length.Seconds:00}.{length.Milliseconds / 10:00}, start: 0.025057, bitrate: 128 kb/s\n{picture}{sound}At least one output file must be specified\n"));
         }
 
         if (arguments.Contains("loudnorm=print_format=json"))

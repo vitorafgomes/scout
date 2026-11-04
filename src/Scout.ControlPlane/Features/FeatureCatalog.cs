@@ -138,7 +138,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Scout's data folder",
-                Actions: new[] { "Save scripts, narration, images, the scene list, the video and thumbnails" },
+                Actions: new[] { "Save scripts, narration, images, the scene list, the video and thumbnails, and keep the recording you attach and its transcript" },
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "youtubeReporting jobs.create",

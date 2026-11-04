@@ -108,14 +108,16 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             UpdatedAt = project.UpdatedAt,
             Delegated = project.Delegated,
             NarrationVoice = project.NarrationVoice,
-            VisualBrief = project.VisualBrief,
+            Direction = project.Direction,
             Motion = project.Motion,
+            Format = project.Format,
+            RecordingMs = project.RecordingMs,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new TopicCandidate { Title = c.Title, Reason = c.Reason, Fit = c.Fit }));
         if (project.Script is { } script)
         {
             var wireScript = new Script { Hook = script.Hook, CallToAction = script.CallToAction, Description = script.Description };
-            wireScript.Sections.AddRange(script.Sections.Select(s => new ScriptSection { Heading = s.Heading, Narration = s.Narration }));
+            wireScript.Sections.AddRange(script.Sections.Select(s => new ScriptSection { Heading = s.Heading, Narration = s.Narration, StartMs = s.StartMs, EndMs = s.EndMs }));
             wireScript.TitleVariants.AddRange(script.TitleVariants);
             wireScript.Tags.AddRange(script.Tags);
             wireScript.Chapters.AddRange(script.Chapters.Select(c => new Chapter { At = c.At, Title = c.Title }));
@@ -154,6 +156,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             wire.BackgroundFile = project.BackgroundFile;
         }
 
+        if (project.RecordingFile is not null)
+        {
+            wire.RecordingFile = project.RecordingFile;
+        }
+
         return wire;
     }
 
@@ -171,6 +178,8 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             VisualSource = scene.VisualSource,
             DurationMs = scene.DurationMs,
             VisualQuery = scene.VisualQuery,
+            ClipStartMs = scene.ClipStartMs,
+            ClipEndMs = scene.ClipEndMs,
         };
         if (scene.Error is not null)
         {
@@ -208,7 +217,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
                 ? null
                 : new OperatorScript(
                     wire.Script.Hook,
-                    [.. wire.Script.Sections.Select(s => new OperatorScriptSection(s.Heading, s.Narration))],
+                    [.. wire.Script.Sections.Select(s => new OperatorScriptSection(s.Heading, s.Narration) { StartMs = s.StartMs, EndMs = s.EndMs })],
                     wire.Script.CallToAction,
                     [.. wire.Script.TitleVariants],
                     wire.Script.Description,
@@ -233,14 +242,19 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             {
                 VisualQuery = s.VisualQuery,
                 VisualCredit = s.HasVisualCredit ? s.VisualCredit : null,
+                ClipStartMs = s.ClipStartMs,
+                ClipEndMs = s.ClipEndMs,
             })],
             Package = wire.Package is null ? null : FromWire(wire.Package),
             Publication = wire.Publication is null ? null : FromWire(wire.Publication),
             BackgroundFile = wire.HasBackgroundFile ? wire.BackgroundFile : null,
             Delegated = wire.Delegated,
             NarrationVoice = wire.NarrationVoice,
-            VisualBrief = wire.VisualBrief,
+            Direction = wire.Direction,
             Motion = wire.Motion,
+            Format = wire.Format,
+            RecordingFile = wire.HasRecordingFile ? wire.RecordingFile : null,
+            RecordingMs = wire.RecordingMs,
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -263,6 +277,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             FfmpegAvailable = readiness.FfmpegAvailable,
             YoutubeSignedIn = readiness.YouTubeSignedIn,
             StockPictures = readiness.StockPictures,
+            TranscriptionAvailable = readiness.TranscriptionAvailable,
         };
         wire.Notes.AddRange(readiness.Notes);
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));
@@ -638,6 +653,42 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             .ConfigureAwait(false);
         return directory.Path;
     }
+
+    public Task<OperatorProjectState> EditSceneTextAsync(string projectId, string sceneId, string text, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatEditSceneTextAsync(
+            new EditSceneTextRequest { ProjectId = projectId, SceneId = sceneId, Text = text }, gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> RegenerateNarrationAsync(string projectId, string sceneId, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatRegenerateNarrationAsync(
+            new SceneRequest { ProjectId = projectId, SceneId = sceneId }, gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> RegenerateSceneAsync(string projectId, string sceneId, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatRegenerateSceneAsync(
+            new SceneRequest { ProjectId = projectId, SceneId = sceneId }, gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> SetSceneLockedAsync(string projectId, string sceneId, bool locked, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatSetSceneLockedAsync(
+            new SetSceneLockedRequest { ProjectId = projectId, SceneId = sceneId, Locked = locked }, gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> ReorderScenesAsync(string projectId, IReadOnlyList<string> sceneIds, CancellationToken ct)
+    {
+        var request = new ReorderScenesRequest { ProjectId = projectId };
+        request.SceneIds.AddRange(sceneIds);
+        return ChatAsync(() => gate.Client.ChatReorderScenesAsync(request, gate.CallOptions(ct)).ResponseAsync, ct);
+    }
+
+    public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatProduceProjectAsync(
+            new ProduceProjectRequest { Id = projectId, NarrationVoice = narrationVoice, Direction = direction, Motion = motion },
+            gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatDelegateProjectAsync(
+            new DelegateProjectRequest { Id = projectId, NarrationVoice = narrationVoice, Direction = direction, Motion = motion },
+            gate.CallOptions(ct)).ResponseAsync, ct);
+
+    private static async Task<OperatorProjectState> ChatAsync(Func<Task<Project>> call, CancellationToken ct)
+        => FromWire(await CallAsync(call, ct).ConfigureAwait(false));
 
     private static Voice ToWire(OperatorVoice voice)
     {
