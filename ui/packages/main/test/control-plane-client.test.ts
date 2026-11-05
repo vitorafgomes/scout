@@ -756,6 +756,9 @@ const projectDto: OperatorProjectDto = {
   format: 'generated_pictures',
   recordingFile: null,
   recordingMs: 0,
+  presenter: '',
+  presenterFile: null,
+  mouthBox: null,
 };
 
 const readyScene = {
@@ -1053,6 +1056,16 @@ const ownVideoWire = {
   recordingMs: 5100,
 };
 
+const characterWire = {
+  ...projectWire,
+  status: 'script_ready',
+  format: 'animated_character',
+  presenter: 'A friendly robot in a workshop',
+  presenterFile: 'owner-presenter-0a1b2c3d4e5f.png',
+  mouthBox: { x: 0.4, y: 0.6, width: 0.2, height: 0.1 },
+  scenes: [{ ...readyScene, visualSource: 'presenter', visualFile: undefined }],
+};
+
 async function startOperatorServer(
   socketPath: string,
   calls: OperatorCall[],
@@ -1125,6 +1138,11 @@ async function startOperatorServer(
     EditPackageMetadata: handler('EditPackageMetadata', () => assembledWire),
     EditSceneText: handler('EditSceneText', () => editedWire),
     RegenerateNarration: handler('RegenerateNarration', () => editedWire),
+    SetMouthBox: handler('SetMouthBox', () => characterWire),
+    RegeneratePresenter: handler('RegeneratePresenter', () => ({
+      ...characterWire,
+      presenterFile: undefined,
+    })),
     ListComments: handler('ListComments', () => options.comments ?? commentsWire),
     RequestCommentSync: handler('RequestCommentSync', () => ({ comments: [], ideas: [] })),
     DecideComment: handler('DecideComment', () => commentsWire),
@@ -1161,7 +1179,7 @@ describe('createControlPlaneClient operator', () => {
     const saved = await client.saveMandate(fields);
     const projects = await client.listProjects(50);
     const one = await client.getProject('p1');
-    const started = await client.startProject('Records in C#', 'generated_pictures', '');
+    const started = await client.startProject('Records in C#', 'generated_pictures', '', '');
     const decided = await client.decideClaim('p1', 'c1', 'waived', 'Common knowledge');
     await client.decideClaim('p1', 'c1', 'supported');
 
@@ -1184,6 +1202,9 @@ describe('createControlPlaneClient operator', () => {
         format: 'generated_pictures',
         recordingFile: null,
         recordingMs: 0,
+        presenter: '',
+        presenterFile: null,
+        mouthBox: null,
       },
     ]);
     expect(one).toEqual(projectDto);
@@ -1199,7 +1220,12 @@ describe('createControlPlaneClient operator', () => {
       { method: 'GetProject', request: { id: 'p1' } },
       {
         method: 'StartProject',
-        request: { topic: 'Records in C#', format: 'generated_pictures', direction: '' },
+        request: {
+          topic: 'Records in C#',
+          format: 'generated_pictures',
+          direction: '',
+          presenter: '',
+        },
       },
       {
         method: 'DecideClaim',
@@ -1272,7 +1298,7 @@ describe('createControlPlaneClient operator', () => {
     });
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const error = await client.startProject('Records in C#', 'generated_pictures', '').then(
+    const error = await client.startProject('Records in C#', 'generated_pictures', '', '').then(
       () => null,
       (err: unknown) => err,
     );
@@ -1318,12 +1344,14 @@ describe('createControlPlaneClient operator', () => {
       'piper:en_GB-aru-medium#3',
       'Chalk on slate',
       'dynamic',
+      '',
     );
     const delegated = await client.delegateProject(
       'p1',
       'OpenAI:nova',
       'Watercolour diagrams',
       'still',
+      '',
     );
     const reordered = await client.reorderScenes('p1', ['s2', 's1']);
     await client.setSceneLocked('p1', 's2', true);
@@ -1389,6 +1417,7 @@ describe('createControlPlaneClient operator', () => {
       ],
       reportedAt: null,
       transcriptionAvailable: false,
+      lipSyncAvailable: false,
     });
     expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
       {
@@ -1398,6 +1427,7 @@ describe('createControlPlaneClient operator', () => {
           narrationVoice: 'piper:en_GB-aru-medium#3',
           direction: 'Chalk on slate',
           motion: 'dynamic',
+          presenter: '',
         },
       },
       {
@@ -1407,6 +1437,7 @@ describe('createControlPlaneClient operator', () => {
           narrationVoice: 'OpenAI:nova',
           direction: 'Watercolour diagrams',
           motion: 'still',
+          presenter: '',
         },
       },
       { method: 'ReorderScenes', request: { projectId: 'p1', sceneIds: ['s2', 's1'] } },
@@ -1452,6 +1483,7 @@ describe('createControlPlaneClient operator', () => {
       'Span<T> in C#',
       'own_pictures',
       'Explain it to a junior developer, no jargon',
+      '',
     );
     const edited = await client.editSceneText(
       'p1',
@@ -1467,6 +1499,7 @@ describe('createControlPlaneClient operator', () => {
           topic: 'Span<T> in C#',
           format: 'own_pictures',
           direction: 'Explain it to a junior developer, no jargon',
+          presenter: '',
         },
       },
       {
@@ -1556,6 +1589,154 @@ describe('createControlPlaneClient operator', () => {
     });
   });
 
+  it('maps an animated character project with its presenter, presenter picture and mouth box, lip sync in the readiness, a format it does not know as generated pictures, and sends the presenter, SetMouthBox and RegeneratePresenter with their wire keys', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls, {
+      project: characterWire,
+      readiness: { ...readinessWire, lipSyncAvailable: true },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+    const unknownSocket = tempSocketPath();
+    const unknown = await startOperatorServer(unknownSocket, [], {
+      project: { ...projectWire, format: 'talking_head' },
+    });
+    const unknownClient = createControlPlaneClient({
+      socketPath: unknownSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+
+    const read = await client.getProject('p1');
+    const readiness = await client.getReadiness();
+    await client.startProject('Span<T> in C#', 'animated_character', '', 'A friendly robot');
+    await client.produceProject('p1', '', '', 'gentle', 'A friendly robot');
+    await client.delegateProject('p1', '', '', 'gentle', 'A cartoon owl');
+    const marked = await client.setMouthBox('p1', { x: 0.4, y: 0.6, width: 0.2, height: 0.1 });
+    const regenerated = await client.regeneratePresenter('p1');
+    const otherFormat = await unknownClient.getProject('p1');
+    unknownClient.close();
+    unknown.forceShutdown();
+
+    expect([read.format, read.presenter, read.presenterFile, read.mouthBox]).toEqual([
+      'animated_character',
+      'A friendly robot in a workshop',
+      'owner-presenter-0a1b2c3d4e5f.png',
+      { x: 0.4, y: 0.6, width: 0.2, height: 0.1 },
+    ]);
+    expect(read.scenes.map((scene) => [scene.visualSource, scene.visualFile])).toEqual([
+      ['presenter', null],
+    ]);
+    expect(readiness.lipSyncAvailable).toBe(true);
+    expect(marked.mouthBox).toEqual({ x: 0.4, y: 0.6, width: 0.2, height: 0.1 });
+    expect([regenerated.presenterFile, regenerated.presenter]).toEqual([
+      null,
+      'A friendly robot in a workshop',
+    ]);
+    expect([otherFormat.format, otherFormat.presenter, otherFormat.mouthBox]).toEqual([
+      'generated_pictures',
+      '',
+      null,
+    ]);
+    expect(
+      calls
+        .filter(({ method }) => method !== 'GetProject' && method !== 'GetReadiness')
+        .map(({ method, request }) => ({ method, request })),
+    ).toEqual([
+      {
+        method: 'StartProject',
+        request: {
+          topic: 'Span<T> in C#',
+          format: 'animated_character',
+          direction: '',
+          presenter: 'A friendly robot',
+        },
+      },
+      {
+        method: 'ProduceProject',
+        request: {
+          id: 'p1',
+          narrationVoice: '',
+          direction: '',
+          motion: 'gentle',
+          presenter: 'A friendly robot',
+        },
+      },
+      {
+        method: 'DelegateProject',
+        request: {
+          id: 'p1',
+          narrationVoice: '',
+          direction: '',
+          motion: 'gentle',
+          presenter: 'A cartoon owl',
+        },
+      },
+      {
+        method: 'SetMouthBox',
+        request: { projectId: 'p1', mouthBox: { x: 0.4, y: 0.6, width: 0.2, height: 0.1 } },
+      },
+      { method: 'RegeneratePresenter', request: { id: 'p1' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('a mouth box the control plane refuses reaches the caller as invalid-argument, and the mouth box and the presenter regeneration with nothing listening as unavailable within the deadline', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const reason = 'The project has no presenter picture to mark.';
+    const refusingSocket = tempSocketPath();
+    server = await startOperatorServer(refusingSocket, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: reason },
+    });
+    client = createControlPlaneClient({
+      socketPath: refusingSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const unreachableClient = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+    const box = { x: 0.4, y: 0.6, width: 0.2, height: 0.1 };
+
+    const refused = await client.setMouthBox('p1', box).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const startedAt = Date.now();
+    const unreachable = await Promise.all([
+      unreachableClient.setMouthBox('p1', box).then(
+        () => null,
+        (err: unknown) => err,
+      ),
+      unreachableClient.regeneratePresenter('p1').then(
+        () => null,
+        (err: unknown) => err,
+      ),
+    ]);
+    const elapsed = Date.now() - startedAt;
+    unreachableClient.close();
+
+    expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((refused as Error).message).toBe(reason);
+    expect(unreachable.map((err) => err instanceof ControlPlaneUnavailableError)).toEqual([
+      true,
+      true,
+    ]);
+    expect(elapsed).toBeLessThan(5_000);
+  });
+
   it('a scene text the control plane refuses or cannot answer reaches the caller as invalid-argument or unavailable', async () => {
     if (process.platform === 'win32') {
       expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
@@ -1615,7 +1796,7 @@ describe('createControlPlaneClient operator', () => {
     });
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const error = await client.produceProject('p1', '', '', 'gentle').then(
+    const error = await client.produceProject('p1', '', '', 'gentle', '').then(
       () => null,
       (err: unknown) => err,
     );
@@ -1645,7 +1826,7 @@ describe('createControlPlaneClient operator', () => {
     });
     client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
 
-    const refused = await deniedClient.produceProject('p1', '', '', 'gentle').then(
+    const refused = await deniedClient.produceProject('p1', '', '', 'gentle', '').then(
       () => null,
       (err: unknown) => err,
     );
@@ -1902,12 +2083,12 @@ describe('createControlPlaneClient operator', () => {
     });
 
     const startedAt = Date.now();
-    const unreachable = await client.delegateProject('p1', '', '', 'gentle').then(
+    const unreachable = await client.delegateProject('p1', '', '', 'gentle', '').then(
       () => null,
       (err: unknown) => err,
     );
     const elapsed = Date.now() - startedAt;
-    const refused = await deniedClient.delegateProject('p1', '', '', 'gentle').then(
+    const refused = await deniedClient.delegateProject('p1', '', '', 'gentle', '').then(
       () => null,
       (err: unknown) => err,
     );

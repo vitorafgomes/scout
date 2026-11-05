@@ -383,14 +383,19 @@ describe('operator over UDS', () => {
       }
       const client = connect((result as LaunchedControlPlane).token);
 
-      const refused = await client.startProject('Records in C#', 'generated_pictures', '').then(
+      const refused = await client.startProject('Records in C#', 'generated_pictures', '', '').then(
         () => null,
         (err: unknown) => err,
       );
       await client.setWriteGrant('youtube', true, true);
       const { started, listed } = await (async () => {
         try {
-          const project = await client.startProject('  Span<T> in C# ', 'generated_pictures', '');
+          const project = await client.startProject(
+            '  Span<T> in C# ',
+            'generated_pictures',
+            '',
+            '',
+          );
           return { started: project, listed: await client.listProjects(50) };
         } finally {
           await client.setWriteGrant('youtube', false, false);
@@ -422,7 +427,7 @@ describe('operator over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        await client.startProject('Records in C#', 'generated_pictures', '');
+        await client.startProject('Records in C#', 'generated_pictures', '', '');
       } finally {
         await client.setWriteGrant('youtube', false, false);
       }
@@ -494,7 +499,7 @@ describe('operator production over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Span<T> in C#', 'generated_pictures', '');
+        const started = await client.startProject('Span<T> in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: started.id,
           topic: started.topic,
@@ -503,12 +508,12 @@ describe('operator production over UDS', () => {
           claims: [{ id: 'c1', text: 'Span<T> is a ref struct.', risk: 'low', status: 'pending' }],
         });
 
-        const refused = await client.produceProject(started.id, '', '', 'gentle').then(
+        const refused = await client.produceProject(started.id, '', '', 'gentle', '').then(
           () => null,
           (err: unknown) => err,
         );
         await client.decideClaim(started.id, 'c1', 'supported');
-        const queued = await client.produceProject(started.id, '', '', 'gentle');
+        const queued = await client.produceProject(started.id, '', '', 'gentle', '');
 
         expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
         expect((refused as Error).message).toBe(
@@ -532,7 +537,7 @@ describe('operator production over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Records in C#', 'generated_pictures', '');
+        const started = await client.startProject('Records in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: started.id,
           topic: started.topic,
@@ -540,16 +545,19 @@ describe('operator production over UDS', () => {
           status: 'script_ready',
         });
 
-        const refused = await client.produceProject(started.id, 'Cori medium', '', 'gentle').then(
-          () => null,
-          (err: unknown) => err,
-        );
+        const refused = await client
+          .produceProject(started.id, 'Cori medium', '', 'gentle', '')
+          .then(
+            () => null,
+            (err: unknown) => err,
+          );
         const untouched = await client.getProject(started.id);
         const queued = await client.produceProject(
           started.id,
           'piper:en_GB-aru-medium#3',
           '',
           'gentle',
+          '',
         );
         const reread = await client.getProject(started.id);
 
@@ -584,6 +592,7 @@ describe('operator production over UDS', () => {
           'Pattern matching in C#',
           'generated_pictures',
           '',
+          '',
         );
         await saveAsWorker({
           id: started.id,
@@ -592,12 +601,14 @@ describe('operator production over UDS', () => {
           status: 'script_ready',
         });
 
-        const refused = await client.produceProject(started.id, '', 'b'.repeat(1001), 'still').then(
-          () => null,
-          (err: unknown) => err,
-        );
+        const refused = await client
+          .produceProject(started.id, '', 'b'.repeat(1001), 'still', '')
+          .then(
+            () => null,
+            (err: unknown) => err,
+          );
         const direction = 'c'.repeat(1000);
-        const queued = await client.produceProject(started.id, '', direction, 'dynamic');
+        const queued = await client.produceProject(started.id, '', direction, 'dynamic', '');
         const reread = await client.getProject(started.id);
         const samples = await client.getVoiceSamplesDirectory();
         writeFileSync(path.join(samples, 'piper-en_GB-aru-medium-3.wav'), 'RIFF sample');
@@ -634,7 +645,7 @@ describe('operator production over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        const ready = await client.startProject('Span<T> in C#', 'generated_pictures', '');
+        const ready = await client.startProject('Span<T> in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: ready.id,
           topic: ready.topic,
@@ -642,10 +653,10 @@ describe('operator production over UDS', () => {
           status: 'script_ready',
           claims: [],
         });
-        const running = await client.startProject('Records in C#', 'generated_pictures', '');
+        const running = await client.startProject('Records in C#', 'generated_pictures', '', '');
         const runningIdentity = { id: running.id, topic: running.topic, origin: running.origin };
         await saveAsWorker({ ...runningIdentity, status: 'script_ready', claims: [] });
-        await client.produceProject(running.id, '', '', 'gentle');
+        await client.produceProject(running.id, '', '', 'gentle', '');
         await takeForProductionAsWorker(running.id);
         await saveAsWorker({ ...runningIdentity, status: 'producing', claims: [] });
         await client.setWriteGrant('youtube', false, false);
@@ -685,7 +696,7 @@ describe('operator production over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Span<T> in C#', 'generated_pictures', '');
+        const started = await client.startProject('Span<T> in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: started.id,
           topic: started.topic,
@@ -695,13 +706,13 @@ describe('operator production over UDS', () => {
         });
         await client.setWriteGrant('youtube', false, false);
         const ungranted = await client
-          .delegateProject(started.id, 'OpenAI:nova', '', 'gentle')
+          .delegateProject(started.id, 'OpenAI:nova', '', 'gentle', '')
           .then(
             () => null,
             (err: unknown) => err,
           );
         await client.setWriteGrant('youtube', true, true);
-        const delegated = await client.delegateProject(started.id, 'OpenAI:nova', '', 'gentle');
+        const delegated = await client.delegateProject(started.id, 'OpenAI:nova', '', 'gentle', '');
 
         expect(ungranted).toBeInstanceOf(ControlPlanePermissionDeniedError);
         expect((ungranted as Error).message).toBe(
@@ -741,6 +752,7 @@ describe('operator production over UDS', () => {
         voices: [],
         reportedAt: null,
         transcriptionAvailable: false,
+        lipSyncAvailable: false,
       });
     },
     TEST_TIMEOUT_MS,
@@ -769,14 +781,14 @@ describe('operator production over UDS', () => {
       );
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Records in C#', 'generated_pictures', '');
+        const started = await client.startProject('Records in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: started.id,
           topic: started.topic,
           origin: started.origin,
           status: 'script_ready',
         });
-        await client.produceProject(started.id, '', '', 'gentle');
+        await client.produceProject(started.id, '', '', 'gentle', '');
         await takeForProductionAsWorker(started.id);
         await saveAsWorker({
           id: started.id,
@@ -842,7 +854,7 @@ describe('operator production over UDS', () => {
       );
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Records in C#', 'generated_pictures', '');
+        const started = await client.startProject('Records in C#', 'generated_pictures', '', '');
         await saveAsWorker({
           id: started.id,
           topic: started.topic,
@@ -886,6 +898,7 @@ describe('operator production over UDS', () => {
           'Records in C#',
           'own_pictures',
           'Photos of my desk, calm tone',
+          '',
         );
         const read = await client.getProject(started.id);
         const identity = { id: started.id, topic: started.topic, origin: started.origin };
@@ -904,7 +917,7 @@ describe('operator production over UDS', () => {
           scene('s2', 1, 'They print their members.'),
         ];
         await saveAsWorker({ ...identity, status: 'script_ready' });
-        await client.produceProject(started.id, '', 'Photos of my desk, calm tone', 'gentle');
+        await client.produceProject(started.id, '', 'Photos of my desk, calm tone', 'gentle', '');
         await takeForProductionAsWorker(started.id);
         await saveAsWorker({ ...identity, status: 'producing', scenes });
         await saveAsWorker({ ...identity, status: 'media_ready', scenes });
@@ -926,7 +939,7 @@ describe('operator production over UDS', () => {
           (err: unknown) => err,
         );
         const unknownFormat = await client
-          .startProject('Records in C#', 'ai_presenter' as never, '')
+          .startProject('Records in C#', 'ai_presenter' as never, '', '')
           .then(
             () => null,
             (err: unknown) => err,
@@ -951,7 +964,7 @@ describe('operator production over UDS', () => {
         expect((tooLong as Error).message).toBe("A scene's text is 1 to 700 characters.");
         expect(unknownFormat).toBeInstanceOf(ControlPlaneInvalidArgumentError);
         expect((unknownFormat as Error).message).toBe(
-          'The format is generated_pictures, own_pictures or own_video.',
+          'The format is generated_pictures, own_pictures, own_video or animated_character.',
         );
       } finally {
         await client.setWriteGrant('youtube', false, false);
@@ -983,7 +996,7 @@ describe('operator production over UDS', () => {
       );
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('A walk by the river', 'own_video', '');
+        const started = await client.startProject('A walk by the river', 'own_video', '', '');
         const { project } = (await handlers.get('scout:operator.sceneMedia')!(null, {
           projectId: started.id,
           sceneId: '',
@@ -1041,7 +1054,7 @@ describe('operator production over UDS', () => {
 });
 
 async function mediaReadyAsWorker(client: ControlPlaneClient, topic: string) {
-  const started = await client.startProject(topic, 'generated_pictures', '');
+  const started = await client.startProject(topic, 'generated_pictures', '', '');
   const identity = { id: started.id, topic: started.topic, origin: started.origin };
   const scenes = [
     {
@@ -1056,7 +1069,7 @@ async function mediaReadyAsWorker(client: ControlPlaneClient, topic: string) {
     },
   ];
   await saveAsWorker({ ...identity, status: 'script_ready' });
-  await client.produceProject(started.id, '', '', 'gentle');
+  await client.produceProject(started.id, '', '', 'gentle', '');
   await takeForProductionAsWorker(started.id);
   await saveAsWorker({ ...identity, status: 'producing', scenes });
   await saveAsWorker({ ...identity, status: 'media_ready', scenes });
@@ -1074,7 +1087,7 @@ describe('operator assembly over UDS', () => {
       const client = connect((result as LaunchedControlPlane).token);
       await client.setWriteGrant('youtube', true, true);
       try {
-        const started = await client.startProject('Records in C#', 'generated_pictures', '');
+        const started = await client.startProject('Records in C#', 'generated_pictures', '', '');
 
         const refused = await client.assembleProject(started.id).then(
           () => null,

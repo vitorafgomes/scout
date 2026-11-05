@@ -73,7 +73,7 @@ What Slack offers, per docs.slack.dev on 2026-10-28:
 
 - `ui/packages/main/test/slack-setup.test.ts:45` (the manifest link decodes to exactly the expected JSON), `:71` to `:116` (auth.test success, rejection, network failure, 502, wrong prefix), `:128` to `:169` (apps.connections.open success with the URL dropped, rejection, `missing_scope`, network failure, wrong prefix).
 - `ui/packages/main/test/ipc-slack.test.ts:107` (save stores both in one entry and restarts), `:132` (no token or socket URL in a log line or an answer), `:148` (a rejected app-level token stores nothing and restarts nothing), `:218` (a vault that fails on a re-save keeps the previous connection, gives `vault/unavailable` and restarts nothing), `:235` (a vault that stops after 0, 1 or 2 writes never leaves a mixed pair), `:257` (disconnect clears both).
-- `ui/packages/main/test/worker-build-env.test.ts:44`, `:66`, `:602` (Slack only; Slack absent; Slack does not require the allow list). Amended 2026-10-30: with neither platform the worker no longer refuses to start; it runs only the local adapter (`ui/packages/main/test/worker-build-env.test.ts:37`, [[pages/decisions/0028-local-quick-ask-assistant]]).
+- `ui/packages/main/test/worker-build-env.test.ts:44`, `:66`, `:638` (Slack only; Slack absent; Slack does not require the allow list). Amended 2026-10-30: with neither platform the worker no longer refuses to start; it runs only the local adapter (`ui/packages/main/test/worker-build-env.test.ts:37`, [[pages/decisions/0028-local-quick-ask-assistant]]).
 - Invariants: [[pages/invariants/secrets-never-in-source]], [[pages/invariants/no-executive-writes]], [[pages/invariants/pluggable-boundaries]].
 
 ## Related

@@ -69,6 +69,7 @@ public static class OperatorServiceCollectionExtensions
         services.AddOptions<OperatorMediaOptions>();
         services.AddSingleton<FfmpegToolset>();
         services.AddSingleton<PiperSpeech>();
+        services.AddSingleton<RhubarbLipSync>();
         services.AddSingleton<MediaProbe>();
         services.AddSingleton<Assembler>();
         services.AddSingleton<ShortsCutter>();

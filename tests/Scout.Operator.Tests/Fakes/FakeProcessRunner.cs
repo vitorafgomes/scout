@@ -6,7 +6,8 @@ namespace Scout.Operator.Tests.Fakes;
 /// <see cref="FilterList"/>, <c>-demuxers</c> <see cref="DemuxerList"/>, a command that only reads an input reports a
 /// <c>Duration:</c> of <see cref="ProbedMs"/>, a picture stream when <see cref="ReportsPicture"/> and a sound stream
 /// when <see cref="ReportsSound"/>, and exits 1, a loudness measure ends with <see cref="LoudnessTail"/>, a
-/// piper command writes 2 KB to the file after <c>--output_file</c>, and any other command writes 1 KB to its last
+/// piper command writes 2 KB to the file after <c>--output_file</c>, <c>--version</c> answers as rhubarb, a rhubarb
+/// command writes <see cref="MouthCues"/> to the file after <c>-o</c>, and any other command writes 1 KB to its last
 /// argument, the output file. <see cref="Answer"/> answers, or throws, before any of that.
 /// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
@@ -81,6 +82,12 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
     public string LoudnessTail { get; init; } = Loudnorm;
 
+    public const string Cues =
+        "{\"metadata\":{\"duration\":0.62},\"mouthCues\":[{\"start\":0.00,\"end\":0.12,\"value\":\"X\"}," +
+        "{\"start\":0.12,\"end\":0.30,\"value\":\"B\"},{\"start\":0.30,\"end\":0.62,\"value\":\"X\"}]}";
+
+    public string MouthCues { get; init; } = Cues;
+
     public Func<string, IReadOnlyList<string>, ProcessResult?> Answer { get; init; } = (_, _) => null;
 
     public IReadOnlyList<(string Program, IReadOnlyList<string> Arguments)> Calls
@@ -142,6 +149,17 @@ internal sealed class FakeProcessRunner : IProcessRunner
         if (Answer(program, arguments) is { } answered)
         {
             return Task.FromResult(answered);
+        }
+
+        if (arguments.Contains("--version"))
+        {
+            return Task.FromResult(new ProcessResult(0, "Rhubarb Lip Sync version 1.14.0", string.Empty));
+        }
+
+        if (arguments.Contains("--extendedShapes"))
+        {
+            File.WriteAllText(arguments[arguments.ToList().IndexOf("-o") + 1], MouthCues);
+            return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty));
         }
 
         if (arguments.Contains("-version"))

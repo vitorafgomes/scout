@@ -18,7 +18,10 @@ import { pipeline } from 'node:stream/promises';
 
 const uiRoot = join(import.meta.dirname, '..', '..');
 
-/** The pinned downloads: the ffmpeg and piper archives of each bundled platform, the caption fonts and the piper voices with their licences. */
+/**
+ * The pinned downloads: the ffmpeg, piper and rhubarb archives of each bundled platform, the caption fonts and the
+ * piper voices with their licences.
+ */
 export const TABLE_PATH = join(uiRoot, 'build', 'media-tools.json');
 
 /**
@@ -45,14 +48,19 @@ async function sha256Of(file) {
 }
 
 /**
- * Downloads `entry.url` into `file` unless the file is there with the pinned SHA-256; a download with another hash
- * is never kept and fails.
+ * Downloads `entry.url` into `file` unless the file is there with the pinned SHA-256; a download of another length
+ * than the pinned `size`, where the entry has one, or with another hash is never kept and fails.
  */
 async function fetchPinned(entry, file, fetch) {
   if (existsSync(file) && (await sha256Of(file)) === entry.sha256) return;
   const response = await fetch(entry.url);
   if (!response.ok) throw new Error(`media tools: ${entry.url} answered ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
+  if (entry.size !== undefined && bytes.length !== entry.size) {
+    throw new Error(
+      `media tools: size mismatch for ${entry.url}: expected ${entry.size}, got ${bytes.length}`,
+    );
+  }
   const actual = createHash('sha256').update(bytes).digest('hex');
   if (actual !== entry.sha256) {
     throw new Error(
@@ -87,6 +95,34 @@ export function extractWithTar(archive, dir, members) {
   if (result.status !== 0) {
     throw new Error(`media tools: tar could not extract ${members.join(', ')} from ${archive}`);
   }
+}
+
+/**
+ * Extracts `members` of `archive` into `dir`: a zip outside Windows with the system unzip, which takes the whole
+ * archive into `dir` since GNU tar reads no zip, so the caller copies only the members; anything else with
+ * `extractWithTar`.
+ */
+export function extractArchive(archive, dir, members) {
+  if (!archive.endsWith('.zip') || process.platform === 'win32') {
+    extractWithTar(archive, dir, members);
+    return;
+  }
+  const result = spawnSync('unzip', ['-q', '-o', archive, '-d', dir], { stdio: 'inherit' });
+  if (result.status !== 0) {
+    throw new Error(`media tools: unzip could not extract ${members.join(', ')} from ${archive}`);
+  }
+}
+
+function rhubarbNoticeOf(rhubarb, sha256) {
+  return [
+    `rhubarb ${rhubarb.version}, Rhubarb Lip Sync (${rhubarb.license}):`,
+    rhubarb.source,
+    `Archive SHA-256: ${sha256}`,
+    'Scout runs rhubarb as a separate program. Its archive bundles PocketSphinx under its BSD licence',
+    '(https://github.com/cmusphinx/pocketsphinx); res/ holds its acoustic model.',
+    'Licence: LICENSE.md beside this file.',
+    '',
+  ].join('\n');
 }
 
 function piperNoticeOf(piper, sha256) {
@@ -132,7 +168,9 @@ async function fetchFfmpeg({ target, table, toolsDir, cacheDir, fetch, extract }
     await extract(cached, scratch, Object.values(archive.members));
     await mkdir(toolsDir, { recursive: true });
     for (const name of await readdir(toolsDir)) {
-      if (name !== 'piper') await rm(join(toolsDir, name), { recursive: true, force: true });
+      if (name !== 'piper' && name !== 'rhubarb') {
+        await rm(join(toolsDir, name), { recursive: true, force: true });
+      }
     }
     for (const [name, member] of Object.entries(archive.members)) {
       await copyFile(join(scratch, member), join(toolsDir, name));
@@ -178,11 +216,55 @@ async function fetchPiper({ target, table, toolsDir, cacheDir, fetch, extract })
 }
 
 /**
+ * Takes the rhubarb executable, its `res/` folder, which it finds beside itself, and its licence from the archive
+ * into `<toolsDir>/rhubarb/` with a notice; the editor plugins and test fixtures in the archive stay out.
+ */
+async function fetchRhubarb({ target, table, toolsDir, cacheDir, fetch, extract }) {
+  const archive = table.rhubarb.archives[target];
+  if (archive === undefined) return false;
+  const rhubarbDir = join(toolsDir, 'rhubarb');
+  const exeName = target.startsWith('win32-') ? 'rhubarb.exe' : 'rhubarb';
+  const taken = [exeName, 'res', 'LICENSE.md'];
+  const notice = rhubarbNoticeOf(table.rhubarb, archive.sha256);
+  const noticeFile = join(rhubarbDir, 'NOTICE.txt');
+  if (
+    existsSync(noticeFile) &&
+    (await readFile(noticeFile, 'utf8')) === notice &&
+    taken.every((name) => existsSync(join(rhubarbDir, name)))
+  ) {
+    return true;
+  }
+  const cached = join(cacheDir, basename(new URL(archive.url).pathname));
+  await fetchPinned(archive, cached, fetch);
+  const scratch = await mkdtemp(join(cacheDir, 'extract-'));
+  try {
+    await extract(
+      cached,
+      scratch,
+      taken.map((name) => `${archive.root}/${name}`),
+    );
+    await rm(rhubarbDir, { recursive: true, force: true });
+    await mkdir(rhubarbDir, { recursive: true });
+    for (const name of taken) {
+      await cp(join(scratch, archive.root, name), join(rhubarbDir, name), {
+        recursive: true,
+        verbatimSymlinks: true,
+      });
+    }
+    if (!target.startsWith('win32-')) await chmod(join(rhubarbDir, exeName), 0o755);
+    await writeFile(noticeFile, notice);
+  } finally {
+    await rm(scratch, { recursive: true, force: true });
+  }
+  return true;
+}
+
+/**
  * Puts the pinned fonts with their licence into `<resourcesDir>/fonts/` and the pinned piper voices with their
  * licences into `<resourcesDir>/voices/` on every target, and the pinned ffmpeg with its licence and the
- * whole pinned piper folder into `<resourcesDir>/media-tools/<target>/` where the table has an archive for the
- * target; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is downloaded or extracted
- * again when it is already in place.
+ * whole pinned piper and rhubarb folders into `<resourcesDir>/media-tools/<target>/` where the table has an
+ * archive for the target; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is downloaded
+ * or extracted again when it is already in place.
  */
 export async function fetchMediaTools({
   target,
@@ -224,6 +306,9 @@ export async function fetchMediaTools({
   if (!(await fetchPiper(options))) {
     log(`media tools: no piper bundled for ${target}; the worker has no voice engine`);
   }
+  if (!(await fetchRhubarb(options))) {
+    log(`media tools: no rhubarb bundled for ${target}; the worker has no lip sync`);
+  }
   log(`media tools: ${target} ready in ${resourcesDir}`);
 }
 
@@ -234,7 +319,7 @@ if (import.meta.main) {
     resourcesDir: join(uiRoot, 'packages', 'main', 'resources'),
     cacheDir: join(uiRoot, 'build', 'media-cache'),
     fetch: (url) => globalThis.fetch(url),
-    extract: extractWithTar,
+    extract: extractArchive,
     log: (line) => console.log(line),
   });
 }

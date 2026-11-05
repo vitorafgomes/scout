@@ -26,6 +26,12 @@ public sealed class OperatorMediaOptions
     /// <summary>The folder of the bundled voices, each a <c>&lt;id&gt;.onnx</c> model beside its <c>&lt;id&gt;.onnx.json</c>.</summary>
     public string VoicesPath { get; set; } = string.Empty;
 
+    /// <summary>The bundled <c>rhubarb</c> program that times an animated character's mouth to its narration; no lip sync when empty.</summary>
+    public string RhubarbPath { get; set; } = string.Empty;
+
+    /// <summary>The folder of the nine mouth shapes, <c>A.png</c> to <c>H.png</c> and <c>X.png</c>; no lip sync when empty.</summary>
+    public string MouthsPath { get; set; } = string.Empty;
+
     /// <summary>The YouTube category an upload is filed under; <c>22</c>, People &amp; Blogs, unless configured.</summary>
     public string CategoryId { get; set; } = "22";
 }

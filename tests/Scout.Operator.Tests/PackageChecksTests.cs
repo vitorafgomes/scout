@@ -86,7 +86,7 @@ public sealed class PackageChecksTests
                 Given.Scene("s2", 2, "Owner picture gone.", "ready", visualSource: "owner", visualFile: "mine.png", durationMs: 3000),
                 Given.Scene("s3", 3, "Narration gone.", "ready", audioSource: "generated", audioFile: "scene-s3.mp3", durationMs: 3000),
             ];
-            var assembler = new Assembler(Given.Toolset(new FakeProcessRunner()));
+            var assembler = Given.Assembler(new FakeProcessRunner());
 
             var over = await assembler.AssembleAsync(Given.Tools(), scenes, media, "studio.png", null, "gentle", CancellationToken.None);
             var without = await assembler.AssembleAsync(Given.Tools(), scenes, media, null, null, "gentle", CancellationToken.None);
@@ -102,6 +102,59 @@ public sealed class PackageChecksTests
         {
             Directory.Delete(media, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task A_Presenter_Scene_Counts_As_Pictured_With_The_Presenter_Picture_And_As_A_Text_Card_Without_It()
+    {
+        var media = Directory.CreateTempSubdirectory("scout-checks-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(media, "presenter-0a1b2c3d4e5f.png"), [1, 2]);
+            OperatorScene[] scenes =
+            [
+                Given.Scene("s1", 1, "Hello there.", "ready", visualSource: "presenter", durationMs: 3000),
+                Given.Scene("s2", 2, "Feed it daily.", "ready", visualSource: "presenter", durationMs: 3000),
+            ];
+            var runner = new FakeProcessRunner { ReportsPicture = true };
+            var assembler = Given.Assembler(runner);
+
+            var pictured = await assembler.AssembleAsync(
+                Given.Tools(), scenes, media, null, null, "gentle", new PresenterInput("presenter-0a1b2c3d4e5f.png", null), CancellationToken.None);
+            var cards = await assembler.AssembleAsync(
+                Given.Tools(), scenes, media, null, null, "gentle", new PresenterInput(null, null), CancellationToken.None);
+
+            runner.Renders[0].ShouldContain(Path.Combine(media, "presenter-0a1b2c3d4e5f.png"));
+            PackageChecks.Placeholders(pictured.Cuts)
+                .ShouldBe(new OperatorCheck("placeholders", "pass", "Every scene is ready with its own media, the project's background or a text card."));
+            PackageChecks.Placeholders(cards.Cuts)
+                .ShouldBe(new OperatorCheck("placeholders", "pass", "Every scene is ready with its own media, the project's background or a text card."));
+            PackageChecks.Placeholders([.. cards.Cuts, Cut("s3", 3, "Planned.", 6000, 3000, placeholder: true)]).Result.ShouldBe("fail");
+        }
+        finally
+        {
+            Directory.Delete(media, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void The_Notes_Of_A_Character_That_Could_Not_Speak_Are_A_Warning_Naming_Their_Scenes_And_No_Check_Without_A_Character()
+    {
+        SceneCut Spoken(string id, int order, string? note)
+            => new(Given.Scene(id, order, "Hello.", "ready", visualSource: "presenter"), (order - 1) * 3000, 3000, 1, false, note);
+
+        PackageChecks.Presenter([Spoken("s1", 1, null), Spoken("s2", 2, "Lip sync failed: Unsupported audio format"), Spoken("s3", 3, Assembler.NoMouthBox), Spoken("s4", 4, Assembler.NoMouthBox)])
+            .ShouldBe(new OperatorCheck(
+                "presenter",
+                "warn",
+                "Scenes 2: Lip sync failed: Unsupported audio format; Scenes 3, 4: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
+        PackageChecks.Presenter([Spoken("s1", 1, null)])
+            .ShouldBe(new OperatorCheck("presenter", "pass", "The character's mouth moves with the narration in every scene."));
+        PackageChecks.Presenter(Cuts()).ShouldBeNull();
+        PackageChecks.Run(new AssembledVideo("video.mp4", 90_000, Cuts(), []), -14, "Why Rivers Bend", "0:00 Intro", ["rivers"], "rivers", Given.Mandate())
+            .Select(c => c.Name).ShouldBe(["duration", "loudness", "captions", "placeholders", "metadata", "discoverability"]);
+        PackageChecks.Run(new AssembledVideo("video.mp4", 3000, [Spoken("s1", 1, Assembler.NoMouthBox)], []), -14, "Hello", "Hi", [], "hello", Given.Mandate())
+            .Last().ShouldBe(new OperatorCheck("presenter", "warn", "Scenes 1: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
     }
 
     [Fact]

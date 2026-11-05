@@ -37,6 +37,20 @@ internal sealed partial class MediaProbe(IProcessRunner runner)
         return new MediaStreams(ms, PictureStream().IsMatch(report), SoundStream().IsMatch(report));
     }
 
+    /// <summary>The width and height of the picture <paramref name="file"/>, from the first picture stream ffmpeg reports; null when it reports none.</summary>
+    public async Task<(int Width, int Height)?> PictureSizeAsync(FfmpegTools tools, string directory, string file, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        var path = MediaFiles.PathFor(directory, file);
+        var result = await runner.RunAsync(tools.Ffmpeg, ["-hide_banner", "-nostdin", "-i", path], Timeout, ct).ConfigureAwait(false);
+        var match = PictureSize().Match(result.ErrorTail);
+        return match.Success
+            && int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture) is > 0 and var width
+            && int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) is > 0 and var height
+                ? (width, height)
+                : null;
+    }
+
     /// <summary>The <c>Duration: HH:MM:SS.xx</c> of ffmpeg's report on its input in milliseconds, or null when it has none.</summary>
     internal static int? ParseDurationMs(string report)
     {
@@ -57,6 +71,9 @@ internal sealed partial class MediaProbe(IProcessRunner runner)
 
     [GeneratedRegex(@"^\s*Stream #\d+:\d+\S*: Video: (?!.*\(attached pic\)).*$", RegexOptions.Multiline)]
     private static partial Regex PictureStream();
+
+    [GeneratedRegex(@"^\s*Stream #\d+:\d+\S*: Video: .*?, (\d{1,5})x(\d{1,5})(?=[,\s\[]|$)", RegexOptions.Multiline)]
+    private static partial Regex PictureSize();
 
     [GeneratedRegex(@"^\s*Stream #\d+:\d+\S*: Audio: ", RegexOptions.Multiline)]
     private static partial Regex SoundStream();

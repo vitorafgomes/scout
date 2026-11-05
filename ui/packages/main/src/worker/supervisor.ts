@@ -390,6 +390,8 @@ const RESERVED_WORKER_KEYS = new Set([
   'scout__operator__fontpath',
   'scout__operator__piperpath',
   'scout__operator__voicespath',
+  'scout__operator__rhubarbpath',
+  'scout__operator__mouthspath',
 ]);
 
 /**

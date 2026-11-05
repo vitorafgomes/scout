@@ -110,6 +110,8 @@ describe('CHANNEL constant', () => {
         'operatorSceneRegeneration',
         'operatorSceneText',
         'operatorNarrationRegeneration',
+        'operatorMouthBox',
+        'operatorPresenterRegeneration',
         'operatorStartProject',
         'operatorWindow',
         'providerRestart',
@@ -260,6 +262,31 @@ describe('operator channels', () => {
     ).toEqual([]);
   });
 
+  test('marking the mouth of the presenter and regenerating the presenter picture each have their own scout:operator channel, named as nouns that pass the write-verb scan, and the project carries the presenter, its picture and its mouth box', () => {
+    const channels = [CHANNEL.operatorMouthBox, CHANNEL.operatorPresenterRegeneration];
+    const project = {
+      format: 'animated_character',
+      presenter: 'A friendly robot in a workshop',
+      presenterFile: 'owner-presenter-0a1b2c3d4e5f.png',
+      mouthBox: { x: 0.4, y: 0.6, width: 0.2, height: 0.1 },
+    } satisfies Pick<OperatorProjectDto, 'format' | 'presenter' | 'presenterFile' | 'mouthBox'>;
+    const readiness = { lipSyncAvailable: true } satisfies Pick<ReadinessDto, 'lipSyncAvailable'>;
+
+    expect(channels).toEqual(['scout:operator.mouthBox', 'scout:operator.presenterRegeneration']);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+    expect([project.format, project.mouthBox.width, readiness.lipSyncAvailable]).toEqual([
+      'animated_character',
+      0.2,
+      true,
+    ]);
+  });
+
   test('assembling a video, confirming its media rights, editing its metadata and approving its package each have their own scout:operator channel, named as nouns', () => {
     expect([
       CHANNEL.operatorAssembly,
@@ -397,6 +424,8 @@ describe('ChannelName type', () => {
       'scout:operator.sceneRegeneration': true,
       'scout:operator.sceneText': true,
       'scout:operator.narrationRegeneration': true,
+      'scout:operator.mouthBox': true,
+      'scout:operator.presenterRegeneration': true,
       'scout:operator.sceneMedia': true,
       'scout:operator.readiness': true,
       'scout:operator.window': true,

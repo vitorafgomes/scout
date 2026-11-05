@@ -90,6 +90,8 @@ describe('buildBridge', () => {
       'operatorRegenerateScene',
       'operatorEditSceneText',
       'operatorRegenerateNarration',
+      'operatorSetMouthBox',
+      'operatorRegeneratePresenter',
       'operatorAttachSceneMedia',
       'operatorReadiness',
       'operatorOpenWindow',
@@ -517,6 +519,7 @@ describe('buildBridge', () => {
       topic: 'Span<T> in C#',
       format: 'own_pictures',
       direction: 'Explain it to a junior developer',
+      presenter: '',
     });
     await bridge.operatorDecideClaim(decision);
 
@@ -531,6 +534,7 @@ describe('buildBridge', () => {
           topic: 'Span<T> in C#',
           format: 'own_pictures',
           direction: 'Explain it to a junior developer',
+          presenter: '',
         },
       ],
       [CHANNEL.operatorDecideClaim, decision],
@@ -546,12 +550,14 @@ describe('buildBridge', () => {
       narrationVoice: 'piper:en_GB-cori-medium',
       direction: 'Chalk on slate',
       motion: 'still',
+      presenter: '',
     });
     await bridge.operatorDelegate({
       id: 'p1',
       narrationVoice: '',
       direction: '',
       motion: 'gentle',
+      presenter: 'A friendly robot in a workshop',
     });
     await bridge.operatorDeleteProject({ id: 'p1' });
     await bridge.operatorReorderScenes({ projectId: 'p1', sceneIds: ['s2', 's1'] });
@@ -569,11 +575,18 @@ describe('buildBridge', () => {
           narrationVoice: 'piper:en_GB-cori-medium',
           direction: 'Chalk on slate',
           motion: 'still',
+          presenter: '',
         },
       ],
       [
         CHANNEL.operatorDelegation,
-        { id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' },
+        {
+          id: 'p1',
+          narrationVoice: '',
+          direction: '',
+          motion: 'gentle',
+          presenter: 'A friendly robot in a workshop',
+        },
       ],
       [CHANNEL.operatorProjectDeletion, { id: 'p1' }],
       [CHANNEL.operatorSceneOrder, { projectId: 'p1', sceneIds: ['s2', 's1'] }],
@@ -595,6 +608,22 @@ describe('buildBridge', () => {
     expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
       [CHANNEL.operatorSceneText, { projectId: 'p1', sceneId: 's1', text: 'New text.' }],
       [CHANNEL.operatorNarrationRegeneration, { projectId: 'p1', sceneId: 's2' }],
+    ]);
+  });
+
+  it('the mouth box, the presenter regeneration and a presenter attach reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const mouthBox = { x: 0.4, y: 0.6, width: 0.2, height: 0.1 };
+
+    await bridge.operatorSetMouthBox({ projectId: 'p1', mouthBox });
+    await bridge.operatorRegeneratePresenter({ id: 'p1' });
+    await bridge.operatorAttachSceneMedia({ projectId: 'p1', sceneId: '', kind: 'presenter' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorMouthBox, { projectId: 'p1', mouthBox }],
+      [CHANNEL.operatorPresenterRegeneration, { id: 'p1' }],
+      [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'presenter' }],
     ]);
   });
 

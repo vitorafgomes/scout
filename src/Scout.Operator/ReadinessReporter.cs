@@ -12,7 +12,8 @@ namespace Scout.Operator;
 /// connected provider's speech service or the bundled voices allow, the narration voices of both, each bundled one with its sample file when the voice samples folder holds it, images as the provider's
 /// image service allows, whether pictures come from Openverse without one, the provider's name, whether videos can be assembled, with a note naming the encoder or why not, whether the
 /// YouTube token file the desktop writes at sign-in is on disk, whether a speech-to-text model can transcribe the owner's
-/// recording, and a note for each thing the owner has to supply.
+/// recording, whether an animated character's mouth can move with its narration, and a note for each thing the owner has to
+/// supply, the missing rhubarb program or mouth shapes only when the desktop named either.
 /// A control plane that cannot take the report is logged once until it takes one again.
 /// </summary>
 internal sealed class ReadinessReporter(
@@ -25,7 +26,8 @@ internal sealed class ReadinessReporter(
     PiperSpeech piper,
     ScheduleNotes? schedule = null,
     OpenversePictures? stock = null,
-    IAudioTranscriber? transcriber = null) : BackgroundService
+    IAudioTranscriber? transcriber = null,
+    RhubarbLipSync? lipSync = null) : BackgroundService
 {
     internal static readonly TimeSpan Interval = TimeSpan.FromMinutes(10);
 
@@ -91,6 +93,12 @@ internal sealed class ReadinessReporter(
             notes.Add(missed);
         }
 
+        var lips = lipSync is null ? null : await lipSync.ProbeAsync(ct).ConfigureAwait(false);
+        if (lipSync is { Configured: true })
+        {
+            notes.AddRange(lips!.Notes);
+        }
+
         var samples = bundled.Count > 0 ? await SamplesDirectoryAsync(ct).ConfigureAwait(false) : null;
         IReadOnlyList<OperatorVoice> voices =
         [
@@ -102,6 +110,7 @@ internal sealed class ReadinessReporter(
             Voices = voices,
             StockPictures = stock is not null,
             TranscriptionAvailable = transcriber is not null,
+            LipSyncAvailable = lips?.Available == true,
         };
     }
 

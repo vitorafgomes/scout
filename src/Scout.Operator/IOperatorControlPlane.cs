@@ -288,9 +288,9 @@ public sealed record OperatorProjectState(
     public string Motion { get; init; } = "gentle";
 
     /// <summary>
-    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c> or <c>own_video</c>, as the owner chose it
-    /// when starting the project; sent back exactly as read, only the owner sets it, and anything but <c>own_pictures</c>
-    /// or <c>own_video</c> reads as generated pictures.
+    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c>, <c>own_video</c> or <c>animated_character</c>,
+    /// as the owner chose it when starting the project; sent back exactly as read, only the owner sets it, and anything else
+    /// reads as generated pictures.
     /// </summary>
     public string Format { get; init; } = "generated_pictures";
 
@@ -299,7 +299,25 @@ public sealed record OperatorProjectState(
 
     /// <summary>How long the owner's recording plays, in milliseconds, which the worker measures when it transcribes it; 0 until then.</summary>
     public int RecordingMs { get; init; }
+
+    /// <summary>
+    /// Who the animated character is and where they are, the owner's words, empty for none; sent back exactly as read, only
+    /// the owner sets it.
+    /// </summary>
+    public string Presenter { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The animated character's picture in the media directory, made once by the worker when empty or attached by the owner;
+    /// null until then.
+    /// </summary>
+    public string? PresenterFile { get; init; }
+
+    /// <summary>Where the mouth is on the presenter picture, which the owner marks; null until then, and the character is shown still.</summary>
+    public OperatorMouthBox? MouthBox { get; init; }
 }
+
+/// <summary>The mouth on the presenter picture, as the control plane's <c>MouthBox</c> message carries it: its left, top, width and height as fractions of the picture.</summary>
+public sealed record OperatorMouthBox(double X, double Y, double Width, double Height);
 
 /// <summary>A topic the research proposes, with why it fits the mandate and a fit from 0 to 1.</summary>
 public sealed record OperatorTopicCandidate(string Title, string Reason, double Fit);
@@ -391,6 +409,9 @@ public sealed record OperatorReadiness(
 
     /// <summary>Whether this machine has a speech-to-text model, so a project of the owner's own video can be transcribed.</summary>
     public bool TranscriptionAvailable { get; init; }
+
+    /// <summary>Whether the rhubarb program answers and the nine mouth shapes are on disk, so an animated character's mouth moves with its narration.</summary>
+    public bool LipSyncAvailable { get; init; }
 }
 
 /// <summary>A narration voice, as the control plane's <c>Voice</c> message carries it: its id, its label, its source and its sample's file name in the voice samples directory, null when it has none.</summary>

@@ -72,6 +72,8 @@ export const CHANNEL = {
   operatorSceneRegeneration: 'scout:operator.sceneRegeneration',
   operatorSceneText: 'scout:operator.sceneText',
   operatorNarrationRegeneration: 'scout:operator.narrationRegeneration',
+  operatorMouthBox: 'scout:operator.mouthBox',
+  operatorPresenterRegeneration: 'scout:operator.presenterRegeneration',
   operatorSceneMedia: 'scout:operator.sceneMedia',
   operatorReadiness: 'scout:operator.readiness',
   operatorWindow: 'scout:operator.window',
@@ -654,10 +656,28 @@ export interface OperatorProjectDto {
   readonly recordingFile: string | null;
   /** The recording's length as the worker measured it; 0 until then. */
   readonly recordingMs: number;
+  /** Who the animated character is and where they are, at most 300 characters; empty for none. */
+  readonly presenter: string;
+  /** The animated character's picture, named inside the project's media directory. */
+  readonly presenterFile: string | null;
+  /** Where the character's mouth is on its picture; null until the owner marks it. */
+  readonly mouthBox: MouthBoxDto | null;
 }
 
-/** How a video is made: narration over pictures Scout makes or over the owner's own pictures, or the owner's own recording. */
-export type ProjectFormat = 'generated_pictures' | 'own_pictures' | 'own_video';
+/**
+ * How a video is made: narration over pictures Scout makes or over the owner's own pictures, the owner's own
+ * recording, or an animated character whose mouth moves with the narration.
+ */
+export type ProjectFormat =
+  'generated_pictures' | 'own_pictures' | 'own_video' | 'animated_character';
+
+/** A box on the presenter picture as fractions of its width and height, each from 0 to 1. */
+export interface MouthBoxDto {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 /** How much the assembler moves each picture. */
 export type ProjectMotion = 'still' | 'gentle' | 'dynamic';
@@ -892,6 +912,7 @@ export interface OperatorProduceRequest {
   readonly narrationVoice: string;
   readonly direction: string;
   readonly motion: ProjectMotion;
+  readonly presenter: string;
 }
 
 /** The project the owner delegates and its narration voice; Scout produces and assembles it and stops before the approval. */
@@ -900,13 +921,24 @@ export interface OperatorDelegateRequest {
   readonly narrationVoice: string;
   readonly direction: string;
   readonly motion: ProjectMotion;
+  readonly presenter: string;
 }
 
-/** The topic of a video the owner asks the operator to make, 3 to 200 characters, its format and the owner's direction. */
+/**
+ * The topic of a video the owner asks the operator to make, 3 to 200 characters, its format, the owner's direction
+ * and, for an animated character, who the character is.
+ */
 export interface StartProjectRequest {
   readonly topic: string;
   readonly format: ProjectFormat;
   readonly direction: string;
+  readonly presenter: string;
+}
+
+/** The owner's mark of the mouth on a project's presenter picture. */
+export interface MouthBoxRequest {
+  readonly projectId: string;
+  readonly mouthBox: MouthBoxDto;
 }
 
 export type ClaimStatus = 'supported' | 'unsupported' | 'waived';
@@ -946,13 +978,13 @@ export interface SceneTextRequest {
 export type SceneMediaKind = 'audio' | 'visual';
 
 /**
- * Which scene gets an owner's file and of which kind, or the project's background picture or recording with an empty
- * scene id; main asks the owner for the file, the renderer never sends a path.
+ * Which scene gets an owner's file and of which kind, or the project's background picture, recording or presenter
+ * picture with an empty scene id; main asks the owner for the file, the renderer never sends a path.
  */
 export interface SceneMediaRequest {
   readonly projectId: string;
   readonly sceneId: string;
-  readonly kind: SceneMediaKind | 'background' | 'recording';
+  readonly kind: SceneMediaKind | 'background' | 'recording' | 'presenter';
 }
 
 /** The project after the owner's file was attached, or null when the owner closed the file dialog. */
@@ -982,6 +1014,8 @@ export interface ReadinessDto {
   readonly reportedAt: string | null;
   /** True when the worker has a speech-to-text model, so a project of the owner's own video can be transcribed. */
   readonly transcriptionAvailable: boolean;
+  /** True when the worker has the lip-sync program and the mouth shapes, so an animated character can speak. */
+  readonly lipSyncAvailable: boolean;
 }
 
 export interface FeatureSetCredentialsRequest {
@@ -1278,6 +1312,8 @@ export interface ScoutBridge {
   operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorEditSceneText(req: SceneTextRequest): Promise<OperatorProjectDto>;
   operatorRegenerateNarration(req: SceneRequest): Promise<OperatorProjectDto>;
+  operatorSetMouthBox(req: MouthBoxRequest): Promise<OperatorProjectDto>;
+  operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
   operatorReadiness(): Promise<ReadinessDto>;
   /** Opens the YouTube operator window, or brings it to the front when it is already open. */

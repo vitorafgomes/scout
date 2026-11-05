@@ -75,6 +75,9 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     format: 'generated_pictures',
     recordingFile: null,
     recordingMs: 0,
+    presenter: '',
+    presenterFile: null,
+    mouthBox: null,
     ...overrides,
   };
 }
@@ -126,6 +129,7 @@ const readiness: ReadinessDto = {
   ],
   reportedAt: '2026-11-03T09:00:00Z',
   transcriptionAvailable: false,
+  lipSyncAvailable: false,
 };
 
 const fullReadiness: ReadinessDto = {
@@ -169,6 +173,8 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
     operatorRegenerateScene: vi.fn(async () => project()),
     operatorEditSceneText: vi.fn(async () => project()),
     operatorRegenerateNarration: vi.fn(async () => project()),
+    operatorSetMouthBox: vi.fn(async () => project()),
+    operatorRegeneratePresenter: vi.fn(async () => project()),
     operatorAttachSceneMedia: vi.fn(async () => ({
       project: project() as OperatorProjectDto | null,
     })),
@@ -230,9 +236,34 @@ async function click(
   await settle(fixture);
 }
 
+let captured: Element | null = null;
+
+function pointer(
+  fixture: ComponentFixture<ProductionComponent>,
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+  clientX: number,
+  clientY: number,
+  target: Element = el(fixture, 'presenter-image')!,
+): void {
+  const area = el(fixture, 'mouth-area')!;
+  area.setPointerCapture = (pointerId: number) => {
+    if (pointerId === 1) captured = area;
+  };
+  (captured ?? target).dispatchEvent(
+    new PointerEvent(type, { pointerId: 1, clientX, clientY, bubbles: true }),
+  );
+  if (type === 'pointerup' || type === 'pointercancel') captured = null;
+}
+
+function boxStyle(fixture: ComponentFixture<ProductionComponent>, testId: string): string[] {
+  const box = el(fixture, testId)!.style;
+  return [box.left, box.top, box.width, box.height];
+}
+
 describe('ProductionComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
+    captured = null;
   });
 
   afterEach(() => {
@@ -364,7 +395,7 @@ describe('ProductionComponent', () => {
     await click(fixture, 'start-project');
 
     expect(bridge.operatorStartProject.mock.calls).toEqual([
-      [{ topic: 'Records in C#', format: 'generated_pictures', direction: '' }],
+      [{ topic: 'Records in C#', format: 'generated_pictures', direction: '', presenter: '' }],
     ]);
     expect(text(fixture, 'queued')).toBe('Records in C# queued');
     expect(text(fixture, 'project-p9')).toContain('queued');
@@ -430,6 +461,7 @@ describe('ProductionComponent', () => {
           topic: 'Records in C#',
           format: 'own_pictures',
           direction: 'Explain it to a junior developer, no jargon',
+          presenter: '',
         },
       ],
     ]);
@@ -455,12 +487,69 @@ describe('ProductionComponent', () => {
     expect(radios).toEqual([
       ['format-generated_pictures', false],
       ['format-own_pictures', false],
+      ['format-animated_character', true],
       ['format-ai_presenter', true],
       ['format-own_video', false],
     ]);
     expect(text(fixture, 'format-ai_presenter-reason')).toBe(
       'The connected AI Source has no video model.',
     );
+  });
+
+  it('the Animated character format is offered while lip sync is available and sends the presenter description with the start', async () => {
+    const without = await mount(makeBridge());
+    const greyed = [
+      el<HTMLInputElement>(without, 'format-animated_character')!.disabled,
+      text(without, 'format-animated_character-reason'),
+    ];
+    TestBed.resetTestingModule();
+    const bridge = makeBridge({
+      operatorReadiness: vi.fn(async () => ({ ...readiness, lipSyncAvailable: true })),
+    });
+    const fixture = await mount(bridge);
+    const radio = el<HTMLInputElement>(fixture, 'format-animated_character')!;
+    const offered = [
+      radio.disabled,
+      radio.closest('label')!.textContent!.trim(),
+      el(fixture, 'format-animated_character-reason'),
+      el(fixture, 'start-presenter'),
+    ];
+
+    type(fixture, 'topic', 'Span<T> in C#');
+    radio.click();
+    await settle(fixture);
+    type(fixture, 'start-presenter', 'r'.repeat(301));
+    await settle(fixture);
+    const overLimit = [
+      text(fixture, 'start-presenter-count'),
+      el<HTMLButtonElement>(fixture, 'start-project')!.disabled,
+    ];
+    type(fixture, 'start-presenter', '  A friendly robot in a workshop  ');
+    await settle(fixture);
+    const count = text(fixture, 'start-presenter-count');
+    await click(fixture, 'start-project');
+
+    expect(greyed).toEqual([
+      true,
+      'Scout has no lip-sync tool on this machine; it ships with Scout Desktop.',
+    ]);
+    expect(offered).toEqual([false, 'Animated character', null, null]);
+    expect(overLimit).toEqual(['301 / 300', true]);
+    expect(count).toBe('30 / 300');
+    expect(bridge.operatorStartProject.mock.calls).toEqual([
+      [
+        {
+          topic: 'Span<T> in C#',
+          format: 'animated_character',
+          direction: '',
+          presenter: 'A friendly robot in a workshop',
+        },
+      ],
+    ]);
+    expect([
+      el<HTMLInputElement>(fixture, 'format-generated_pictures')!.checked,
+      el(fixture, 'start-presenter'),
+    ]).toEqual([true, null]);
   });
 
   it('Your own video is offered when Scout can transcribe and greyed out with the Local Models reason when it cannot', async () => {
@@ -492,7 +581,7 @@ describe('ProductionComponent', () => {
     ]);
     expect(offered).toEqual([false, 'Your own video', null]);
     expect(bridge.operatorStartProject.mock.calls).toEqual([
-      [{ topic: 'My talk at the meetup', format: 'own_video', direction: '' }],
+      [{ topic: 'My talk at the meetup', format: 'own_video', direction: '', presenter: '' }],
     ]);
   });
 
@@ -901,7 +990,7 @@ describe('ProductionComponent', () => {
     expect(sentOnOpen).toBe(0);
     expect(el(fixture, 'produce-blocked')).toBeNull();
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
     expect(text(fixture, 'project-p1')).toContain('production_queued');
     expect(el(fixture, 'produce-panel')).toBeNull();
@@ -921,7 +1010,7 @@ describe('ProductionComponent', () => {
 
     expect(disabled).toBe(false);
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p3', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p3', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
   });
 
@@ -962,7 +1051,7 @@ describe('ProductionComponent', () => {
     expect(bridge.operatorProjects).toHaveBeenCalledTimes(2);
     expect(afterRefresh).toBe('OpenAI:nova');
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle', presenter: '' }],
     ]);
   });
 
@@ -1014,8 +1103,24 @@ describe('ProductionComponent', () => {
     ]);
     expect(voicedValue).toBe('piper:en_GB-aru-medium#3');
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p3', narrationVoice: 'piper:en_US-gone-high', direction: '', motion: 'gentle' }],
-      [{ id: 'p1', narrationVoice: 'piper:en_GB-aru-medium#3', direction: '', motion: 'gentle' }],
+      [
+        {
+          id: 'p3',
+          narrationVoice: 'piper:en_US-gone-high',
+          direction: '',
+          motion: 'gentle',
+          presenter: '',
+        },
+      ],
+      [
+        {
+          id: 'p1',
+          narrationVoice: 'piper:en_GB-aru-medium#3',
+          direction: '',
+          motion: 'gentle',
+          presenter: '',
+        },
+      ],
     ]);
   });
 
@@ -1060,7 +1165,7 @@ describe('ProductionComponent', () => {
     await click(fixture, 'produce-confirm');
 
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
     expect(el(fixture, 'produce-panel')).toBeNull();
   });
@@ -1138,7 +1243,7 @@ describe('ProductionComponent', () => {
 
     expect(panel).toEqual([null, null, null, null, true, null, null]);
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
   });
 
@@ -1180,7 +1285,7 @@ describe('ProductionComponent', () => {
 
     expect(withoutScript).toBeNull();
     expect(bridge.operatorProduce.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
   });
 
@@ -1420,7 +1525,7 @@ describe('ProductionComponent', () => {
     expect(sentBeforeConfirm).toBe(0);
     expect(buttons).toEqual(['Confirm and delegate', 'Cancel']);
     expect(bridge.operatorDelegate.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: 'OpenAI:nova', direction: '', motion: 'gentle', presenter: '' }],
     ]);
     expect(el(fixture, 'delegate-dialog')).toBeNull();
     expect(text(fixture, 'project-delegated')).toBe('Delegated');
@@ -1451,7 +1556,15 @@ describe('ProductionComponent', () => {
       true,
     ]);
     expect(bridge.operatorDelegate.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: 'piper:en_US-gone-high', direction: '', motion: 'gentle' }],
+      [
+        {
+          id: 'p1',
+          narrationVoice: 'piper:en_US-gone-high',
+          direction: '',
+          motion: 'gentle',
+          presenter: '',
+        },
+      ],
     ]);
   });
 
@@ -2249,6 +2362,7 @@ describe('ProductionComponent', () => {
           narrationVoice: 'piper:en_GB-aru-medium#3',
           direction: 'Chalk sketches on a dark slate',
           motion: 'dynamic',
+          presenter: '',
         },
       ],
     ]);
@@ -2285,6 +2399,7 @@ describe('ProductionComponent', () => {
           narrationVoice: 'OpenAI:nova',
           direction: 'Watercolour diagrams, slow pans',
           motion: 'dynamic',
+          presenter: '',
         },
       ],
     ]);
@@ -2352,7 +2467,382 @@ describe('ProductionComponent', () => {
 
     expect(dialog).toEqual([null, null, null, null, true]);
     expect(bridge.operatorDelegate.mock.calls).toEqual([
-      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle' }],
+      [{ id: 'p1', narrationVoice: '', direction: '', motion: 'gentle', presenter: '' }],
     ]);
+  });
+  function character(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDto {
+    return project({
+      format: 'animated_character',
+      presenter: 'A friendly robot in a workshop',
+      claims: [{ ...project().claims[0]!, status: 'supported' }],
+      ...overrides,
+    });
+  }
+
+  it('the Produce panel and the Delegate dialog carry the presenter description of an animated character project', async () => {
+    const animated = character();
+    const generated = project({
+      id: 'p2',
+      claims: [{ ...project().claims[0]!, status: 'supported' }],
+    });
+    const bridge = makeBridge({
+      ...listing(animated, generated),
+      operatorReadiness: vi.fn(async () => fullReadiness),
+      operatorProduce: vi.fn(async () => animated),
+      operatorDelegate: vi.fn(async () => animated),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const generatedPanel = await (async () => {
+      await click(fixture, 'produce');
+      return el(fixture, 'produce-presenter');
+    })();
+    await click(fixture, 'project-p1');
+    const detail = [text(fixture, 'project-format'), text(fixture, 'project-presenter')];
+
+    await click(fixture, 'produce');
+    const prefilled = el<HTMLTextAreaElement>(fixture, 'produce-presenter')!.value;
+    type(fixture, 'produce-presenter', ' A cartoon owl on a bookshelf ');
+    await settle(fixture);
+    const count = text(fixture, 'produce-presenter-count');
+    await click(fixture, 'produce-confirm');
+    await click(fixture, 'delegate');
+    const delegatePrefilled = el<HTMLTextAreaElement>(fixture, 'delegate-presenter')!.value;
+    type(fixture, 'delegate-presenter', '  A paper fox in a forest  ');
+    await settle(fixture);
+    await click(fixture, 'delegate-confirm');
+
+    expect(generatedPanel).toBeNull();
+    expect(detail).toEqual([
+      'Format: Animated character',
+      'Presenter: A friendly robot in a workshop',
+    ]);
+    expect([prefilled, count, delegatePrefilled]).toEqual([
+      'A friendly robot in a workshop',
+      '28 / 300',
+      'A friendly robot in a workshop',
+    ]);
+    expect(bridge.operatorProduce.mock.calls).toEqual([
+      [
+        {
+          id: 'p1',
+          narrationVoice: '',
+          direction: '',
+          motion: 'gentle',
+          presenter: 'A cartoon owl on a bookshelf',
+        },
+      ],
+    ]);
+    expect(bridge.operatorDelegate.mock.calls).toEqual([
+      [
+        {
+          id: 'p1',
+          narrationVoice: '',
+          direction: '',
+          motion: 'gentle',
+          presenter: 'A paper fox in a forest',
+        },
+      ],
+    ]);
+  });
+
+  it('the Presenter block attaches, replaces and regenerates the presenter picture', async () => {
+    const attached = character({ presenterFile: 'owner-presenter-0a1b2c3d4e5f.png' });
+    let refuse = false;
+    const bridge = makeBridge({
+      ...listing(character(), character({ id: 'p2', status: 'queued', script: null })),
+      operatorReadiness: vi.fn(async () => fullReadiness),
+      operatorAttachSceneMedia: vi.fn(async () => {
+        if (refuse) throw refusedWith('scout:operator.sceneMedia', 'Pictures are at most 20 MB.');
+        return { project: attached as OperatorProjectDto | null };
+      }),
+      operatorRegeneratePresenter: vi.fn(async () => character()),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const queued = [text(fixture, 'presenter-empty'), el(fixture, 'presenter-attach')];
+    await click(fixture, 'project-p1');
+    const before = [
+      text(fixture, 'presenter-empty'),
+      text(fixture, 'presenter-attach'),
+      el(fixture, 'presenter-image'),
+      el(fixture, 'background') !== null,
+    ];
+
+    await click(fixture, 'presenter-attach');
+    const image = el<HTMLImageElement>(fixture, 'presenter-image')!;
+    const after = [
+      image.getAttribute('src'),
+      image.getAttribute('alt'),
+      text(fixture, 'presenter-attach'),
+      el(fixture, 'presenter-empty'),
+    ];
+    refuse = true;
+    await click(fixture, 'presenter-attach');
+    const refused = [text(fixture, 'presenter-error'), el(fixture, 'background-error')];
+    await click(fixture, 'presenter-regenerate');
+
+    expect(queued).toEqual([
+      'No presenter picture yet: Scout makes one when it produces the video if the connected AI Source makes pictures; or attach your own.',
+      null,
+    ]);
+    expect(before).toEqual([
+      'No presenter picture yet: Scout makes one when it produces the video if the connected AI Source makes pictures; or attach your own.',
+      'Attach picture',
+      null,
+      true,
+    ]);
+    expect(after).toEqual([
+      'scout-media://p1/owner-presenter-0a1b2c3d4e5f.png?v=2026-11-03T09%3A05%3A00Z',
+      'Presenter of the video',
+      'Replace picture',
+      null,
+    ]);
+    expect(refused).toEqual(['Pictures are at most 20 MB.', null]);
+    expect(bridge.operatorAttachSceneMedia.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: '', kind: 'presenter' }],
+      [{ projectId: 'p1', sceneId: '', kind: 'presenter' }],
+    ]);
+    expect(bridge.operatorRegeneratePresenter.mock.calls).toEqual([[{ id: 'p1' }]]);
+    expect([el(fixture, 'presenter-image'), text(fixture, 'presenter-attach')]).toEqual([
+      null,
+      'Attach picture',
+    ]);
+  });
+
+  it('Regenerate picture is disabled with its reason while the connected AI Source makes no pictures', async () => {
+    const bridge = makeBridge({
+      ...listing(character()),
+      operatorReadiness: vi.fn(async () => ({ ...fullReadiness, imagesAvailable: false })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const button = el<HTMLButtonElement>(fixture, 'presenter-regenerate')!;
+
+    await click(fixture, 'presenter-regenerate');
+
+    expect([button.disabled, button.getAttribute('title')]).toEqual([
+      true,
+      'The connected AI Source makes no pictures',
+    ]);
+    expect(bridge.operatorRegeneratePresenter).not.toHaveBeenCalled();
+  });
+
+  it('dragging a box over the presenter picture and saving sends it as fractions of the picture', async () => {
+    const marked = character({
+      presenterFile: 'owner-presenter-0a1b2c3d4e5f.png',
+      mouthBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+    });
+    const saved = { ...marked, mouthBox: { x: 0.4, y: 0.6, width: 0.2, height: 0.1 } };
+    const bridge = makeBridge({
+      ...listing(marked),
+      operatorSetMouthBox: vi.fn(async () => saved),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    vi.spyOn(el(fixture, 'presenter-image')!, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(100, 50, 320, 160),
+    );
+    const current = boxStyle(fixture, 'mouth-current');
+    const hint = text(fixture, 'mouth-hint');
+    const saveBeforeDrawing = el<HTMLButtonElement>(fixture, 'mouth-save')!.disabled;
+
+    pointer(fixture, 'pointerdown', 228, 146);
+    pointer(fixture, 'pointermove', 236, 148);
+    await settle(fixture);
+    const tooSmall = el<HTMLButtonElement>(fixture, 'mouth-save')!.disabled;
+    await click(fixture, 'mouth-clear');
+    const cleared = el(fixture, 'mouth-drawn');
+    pointer(fixture, 'pointerdown', 490, 260);
+    pointer(fixture, 'pointerup', 260, 180);
+    await settle(fixture);
+    const clamped = boxStyle(fixture, 'mouth-drawn');
+    pointer(fixture, 'pointerdown', 228, 146);
+    pointer(fixture, 'pointermove', 280, 154);
+    pointer(fixture, 'pointerup', 292, 162);
+    pointer(fixture, 'pointermove', 400, 200);
+    await settle(fixture);
+    const drawn = boxStyle(fixture, 'mouth-drawn');
+    await click(fixture, 'mouth-save');
+
+    expect(current).toEqual(['10%', '20%', '30%', '5%']);
+    expect(hint).toBe('Drag a box around the mouth so the character speaks.');
+    expect([saveBeforeDrawing, tooSmall, cleared]).toEqual([true, true, null]);
+    expect(clamped).toEqual(['50%', '81.3%', '50%', '18.7%']);
+    expect(drawn).toEqual(['40%', '60%', '20%', '10%']);
+    expect(bridge.operatorSetMouthBox.mock.calls).toEqual([
+      [{ projectId: 'p1', mouthBox: { x: 0.4, y: 0.6, width: 0.2, height: 0.1 } }],
+    ]);
+    expect([el(fixture, 'mouth-drawn'), boxStyle(fixture, 'mouth-current')]).toEqual([
+      null,
+      ['40%', '60%', '20%', '10%'],
+    ]);
+  });
+
+  it('a mouth drag released outside the picture ends there, clamped to the picture, and a pointercancel ends it with the box of the last move, so a later move without a button changes nothing', async () => {
+    const fixture = await mount(
+      makeBridge(listing(character({ presenterFile: 'owner-presenter-0a1b2c3d4e5f.png' }))),
+    );
+    await click(fixture, 'project-p1');
+    vi.spyOn(el(fixture, 'presenter-image')!, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(100, 50, 320, 160),
+    );
+    const outside = fixture.nativeElement.ownerDocument.body as HTMLElement;
+
+    pointer(fixture, 'pointerdown', 228, 146);
+    pointer(fixture, 'pointermove', 292, 162);
+    pointer(fixture, 'pointerup', 600, 400, outside);
+    pointer(fixture, 'pointermove', 260, 180);
+    await settle(fixture);
+    const released = boxStyle(fixture, 'mouth-drawn');
+    pointer(fixture, 'pointerdown', 228, 146);
+    pointer(fixture, 'pointermove', 292, 162);
+    await settle(fixture);
+    const lastMove = boxStyle(fixture, 'mouth-drawn');
+    pointer(fixture, 'pointercancel', 0, 0, outside);
+    await settle(fixture);
+    const cancelled = boxStyle(fixture, 'mouth-drawn');
+    pointer(fixture, 'pointermove', 400, 200);
+    await settle(fixture);
+    const afterCancel = boxStyle(fixture, 'mouth-drawn');
+
+    expect(released).toEqual(['40%', '60%', '60%', '40%']);
+    expect(lastMove).toEqual(['40%', '60%', '20%', '10%']);
+    expect([cancelled, afterCancel]).toEqual([lastMove, lastMove]);
+  });
+
+  it('an animated character scene has the narration row and Edit text and no picture controls', async () => {
+    const spoken = scene({
+      narration: 'Span is a view over memory. It never allocates.',
+      visualSource: 'presenter',
+      visualFile: null,
+    });
+    const withPicture = character({
+      presenterFile: 'owner-presenter-0a1b2c3d4e5f.png',
+      backgroundFile: 'owner-background-0a1b2c3d4e5f.jpg',
+      scenes: [spoken],
+    });
+    const withoutPicture = character({ id: 'p2', scenes: [spoken] });
+    const bridge = makeBridge({
+      ...listing(withPicture, withoutPicture),
+      operatorEditSceneText: vi.fn(async () => withPicture),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const controls = [
+      el(fixture, 'scene-audio-row-s1') !== null,
+      el(fixture, 'scene-audio-s1')!.getAttribute('src'),
+      text(fixture, 'scene-narration-regenerate-s1'),
+      text(fixture, 'scene-narration-replace-s1'),
+      text(fixture, 'scene-lock-s1'),
+      text(fixture, 'scene-up-s1'),
+      text(fixture, 'scene-edit-s1'),
+      el(fixture, 'scene-regenerate-s1'),
+      el(fixture, 'scene-attach-visual-s1'),
+      text(fixture, 'scene-sources-s1'),
+      (el(fixture, 'scene-s1')!.textContent ?? '').includes('Picture prompt'),
+    ];
+    const preview = [
+      el(fixture, 'scene-preview-presenter-s1')!.getAttribute('src'),
+      el(fixture, 'scene-preview-background-s1')!.getAttribute('src'),
+      el(fixture, 'scene-preview-text-s1'),
+    ];
+    await click(fixture, 'scene-edit-s1');
+    type(fixture, 'scene-text-s1', ' Span is a window over memory. ');
+    await settle(fixture);
+    await click(fixture, 'scene-text-save-s1');
+    await click(fixture, 'project-p2');
+
+    expect(controls).toEqual([
+      true,
+      'scout-media://p1/scene-s1.mp3?v=2026-11-03T09%3A05%3A00Z',
+      'Regenerate narration',
+      'Replace narration',
+      'Lock',
+      'Move up',
+      'Edit text',
+      null,
+      null,
+      'Audio: generated · Picture: presenter',
+      false,
+    ]);
+    expect(preview).toEqual([
+      'scout-media://p1/owner-presenter-0a1b2c3d4e5f.png?v=2026-11-03T09%3A05%3A00Z',
+      'scout-media://p1/owner-background-0a1b2c3d4e5f.jpg?v=2026-11-03T09%3A05%3A00Z',
+      null,
+    ]);
+    expect(bridge.operatorEditSceneText.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', text: 'Span is a window over memory.' }],
+    ]);
+    expect([
+      el(fixture, 'scene-preview-presenter-s1'),
+      text(fixture, 'scene-preview-text-s1'),
+    ]).toEqual([null, 'Span is a view over memory.']);
+  });
+
+  it('the Produce warning of an animated character project names a silent character or a missing picture', async () => {
+    const warningOf = async (
+      speech: boolean,
+      images: boolean,
+      presenterFile: string | null,
+    ): Promise<string | null> => {
+      TestBed.resetTestingModule();
+      const fixture = await mount(
+        makeBridge({
+          ...listing(character({ presenterFile })),
+          operatorReadiness: vi.fn(async () => ({
+            ...readiness,
+            provider: 'openai',
+            speechAvailable: speech,
+            imagesAvailable: images,
+          })),
+        }),
+      );
+      await click(fixture, 'project-p1');
+      await click(fixture, 'produce');
+      const produce = el(fixture, 'produce-warning')?.textContent?.trim() ?? null;
+      await click(fixture, 'delegate');
+      const delegate = el(fixture, 'delegate-warning')?.textContent?.trim() ?? null;
+      return produce === delegate ? produce : `${produce} | ${delegate}`;
+    };
+
+    const warnings = [
+      await warningOf(false, true, null),
+      await warningOf(false, false, 'owner-presenter-0a1b2c3d4e5f.png'),
+      await warningOf(true, false, null),
+      await warningOf(true, false, 'owner-presenter-0a1b2c3d4e5f.png'),
+      await warningOf(true, true, null),
+    ];
+
+    const silent =
+      'openai has no speech service in Scout: the character will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.';
+    expect(warnings).toEqual([
+      silent,
+      silent,
+      'openai has no image service in Scout: attach a presenter picture, or every scene will be a text card.',
+      null,
+      null,
+    ]);
+  });
+
+  it("the project's error reads as a failure only on a failed project, and as a plain note on any other status", async () => {
+    const note =
+      'The project has no presenter picture; attach one in Scout Desktop, Production, or connect an AI Source with pictures.';
+    const fixture = await mount(
+      makeBridge(
+        listing(
+          character({ status: 'media_ready', error: note }),
+          character({ id: 'p2', status: 'failed', error: 'The AI model did not answer.' }),
+        ),
+      ),
+    );
+
+    await click(fixture, 'project-p1');
+    const mediaReady = [text(fixture, 'project-note'), el(fixture, 'project-failure')];
+    await click(fixture, 'project-p2');
+    const failed = [el(fixture, 'project-note'), text(fixture, 'project-failure')];
+
+    expect(mediaReady).toEqual([note, null]);
+    expect(failed).toEqual([null, 'The AI model did not answer.']);
   });
 });

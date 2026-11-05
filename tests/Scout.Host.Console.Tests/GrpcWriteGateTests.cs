@@ -399,7 +399,8 @@ public sealed class GrpcWriteGateTests
 
         public string SocketPath => Path.Combine(_directory, "gate.sock");
 
-        public static async Task<WorkerGateServer> StartAsync(FakeWorkerGate service)
+        public static async Task<WorkerGateServer> StartAsync<TService>(TService service)
+            where TService : WorkerGate.WorkerGateBase
         {
             var directory = Directory.CreateTempSubdirectory("scout-gate-").FullName;
             var builder = WebApplication.CreateSlimBuilder();
@@ -410,7 +411,7 @@ public sealed class GrpcWriteGateTests
             builder.Services.AddGrpc();
             builder.Services.AddSingleton(service);
             var app = builder.Build();
-            app.MapGrpcService<FakeWorkerGate>();
+            app.MapGrpcService<TService>();
             await app.StartAsync();
             return new WorkerGateServer(app, directory);
         }

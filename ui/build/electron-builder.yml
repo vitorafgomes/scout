@@ -27,6 +27,7 @@ files:
   - "!packages/main/resources/media-tools/**"
   - "!packages/main/resources/fonts/**"
   - "!packages/main/resources/voices/**"
+  - "!packages/main/resources/mouths/**"
   - "!**/node_modules/**/{test,__tests__,tests,*.md,*.map}"
   - "!**/*.ts"
 
@@ -58,6 +59,10 @@ extraResources:
       - "OFL.txt"
   - from: packages/main/resources/voices
     to: voices
+    filter:
+      - "**/*"
+  - from: packages/main/resources/mouths
+    to: mouths
     filter:
       - "**/*"
 

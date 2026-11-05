@@ -75,8 +75,9 @@ public sealed record OperatorProject(
     public string Motion { get; init; } = "gentle";
 
     /// <summary>
-    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c> or <c>own_video</c>, chosen when the owner
-    /// starts the project and never changed after; a project stored before formats existed is generated pictures.
+    /// How the video is made, <c>generated_pictures</c>, <c>own_pictures</c>, <c>own_video</c> or
+    /// <c>animated_character</c>, chosen when the owner starts the project and never changed after; a project stored
+    /// before formats existed is generated pictures.
     /// </summary>
     public string Format { get; init; } = "generated_pictures";
 
@@ -88,7 +89,25 @@ public sealed record OperatorProject(
 
     /// <summary>The length of the recording in milliseconds, 0 until the worker measures it while transcribing.</summary>
     public int RecordingMs { get; init; }
+
+    /// <summary>
+    /// Who the animated character is and where they are, at most 300 characters, empty for none, given when the project
+    /// is started, produced or delegated. Only the owner sets it.
+    /// </summary>
+    public string Presenter { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The presenter picture in the media directory of a project of an animated character, null until the owner attaches
+    /// one or the worker records the one it made while none is set; the worker never replaces or clears it.
+    /// </summary>
+    public string? PresenterFile { get; init; }
+
+    /// <summary>Where the character's mouth is on the presenter picture, marked by the owner; null until marked.</summary>
+    public MouthBox? MouthBox { get; init; }
 }
+
+/// <summary>A rectangle on the presenter picture, each value a fraction of the picture's width or height.</summary>
+public sealed record MouthBox(double X, double Y, double Width, double Height);
 
 /// <summary>A topic the research stage proposes, with why it fits the mandate.</summary>
 public sealed record TopicCandidate(string Title, string Reason, double Fit);
@@ -206,6 +225,9 @@ public sealed record Readiness(
 
     /// <summary>Whether the worker has a speech-to-text model, so a project of the owner's own video can be transcribed.</summary>
     public bool TranscriptionAvailable { get; init; }
+
+    /// <summary>Whether the worker has the lip sync program and the mouth shapes, so an animated character speaks.</summary>
+    public bool LipSyncAvailable { get; init; }
 }
 
 /// <summary>A narration voice: the id a mandate names, the label the owner reads, where it comes from and its sample's file name in the voice samples directory, null when it has none.</summary>

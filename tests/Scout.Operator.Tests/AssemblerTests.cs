@@ -15,7 +15,7 @@ public sealed class AssemblerTests : IDisposable
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private static Assembler Assembler(FakeProcessRunner runner) => new(Given.Toolset(runner));
+    private static Assembler Assembler(FakeProcessRunner runner) => Given.Assembler(runner);
 
     private string Media(string file) => Path.Combine(_media, file);
 
@@ -389,6 +389,17 @@ public sealed class AssemblerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_text_card_scene_keeps_its_segment_name()
+    {
+        var tools = new FfmpegTools("/opt/scout/ffmpeg", "NotoSans-Regular.ttf", "libopenh264");
+        OperatorScene[] scenes = [Given.Scene("s1", 1, "Why do rivers bend?", "ready", durationMs: 3000)];
+
+        var video = await Assembler(new FakeProcessRunner()).AssembleAsync(tools, scenes, _media, null, null, "gentle", CancellationToken.None);
+
+        video.Segments.ShouldBe(["segment-4233e4625c9d8d14.mp4"]);
+    }
+
+    [Fact]
     public async Task A_changed_motion_changes_the_segment_name()
     {
         OperatorScene[] scenes = [WithFiles("s1", 1, "Feed it daily.", 3000)];
@@ -542,5 +553,279 @@ public sealed class AssemblerTests : IDisposable
         ex.Message.ShouldBe("Scout could not find the recording in the project's media folder.");
         runner.Calls.ShouldBeEmpty();
         Directory.GetFiles(_media).ShouldBeEmpty();
+    }
+
+    private const string Face = "presenter-0a1b2c3d4e5f.png";
+
+    private static readonly OperatorMouthBox Mouth = new(0.4, 0.6, 0.2, 0.1);
+
+    private OperatorScene Speaking(string id = "s1", int order = 1, string audio = "scene-s1.wav")
+    {
+        File.WriteAllBytes(Media(audio), [3, 4]);
+        return Given.Scene(id, order, "Feed it daily.", "ready", audioSource: "generated", visualSource: "presenter", audioFile: audio, durationMs: 3500);
+    }
+
+    private FakeProcessRunner Presenting(Func<string, IReadOnlyList<string>, ProcessResult?>? answer = null, string? cues = null)
+    {
+        File.WriteAllBytes(Media(Face), [1, 2, 3]);
+        return new FakeProcessRunner
+        {
+            MouthCues = cues ?? FakeProcessRunner.Cues,
+            Answer = (program, arguments) => arguments.Count >= 2 && arguments[^2] == "-i" && arguments[^1] == Media(Face)
+                ? new ProcessResult(1, string.Empty, $"Input #0, png_pipe, from '{Media(Face)}':\n  Duration: N/A, bitrate: N/A\n  Stream #0:0: Video: png, rgba(pc, gbr/unknown/unknown), 1024x1024, 25 tbr, 25 tbn\n")
+                : answer?.Invoke(program, arguments),
+        };
+    }
+
+    private Assembler Speaker(FakeProcessRunner runner, bool lipSync = true)
+    {
+        var (rhubarb, mouths) = Given.MouthShapes(_root);
+        return Given.Assembler(runner, lipSync ? Given.LipSync(runner, rhubarb, mouths) : null);
+    }
+
+    [Fact]
+    public async Task A_Presenter_Scene_Overlays_The_Mouth_Track_At_The_Mouth_Box_Over_The_Fitted_Picture()
+    {
+        string? track = null;
+        var runner = Presenting((_, arguments) =>
+        {
+            var list = arguments.ToList().IndexOf("concat");
+            track = list > 0 && arguments[list - 1] == "-f" && arguments[list + 1] == "-safe" ? File.ReadAllText(arguments[list + 4]) : track;
+            return null;
+        });
+
+        var video = await Speaker(runner).AssembleAsync(
+            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+
+        runner.Renders[0].SkipLast(1).ShouldBe([
+            "-hide_banner", "-nostdin", "-y",
+            "-f", "lavfi", "-t", "3.500", "-i", "color=c=0x14181f:s=3840x2160:r=30",
+            "-i", Media(Face),
+            "-f", "concat", "-safe", "0", "-i", Media("mouth-track-s1.txt"),
+            "-i", Media("scene-s1.wav"),
+            "-filter_complex",
+            "[0:v]setsar=1[bg];[1:v]scale=2160:2160,setsar=1[face];[bg][face]overlay=840:0[body];" +
+            "[2:v]scale=432:216[mouth];[body][mouth]overlay=1704:1296," +
+            "zoompan=z=1+0.08*on/104:x=(iw-iw/zoom)*(0.25+0.25*on/104):y=(ih-ih/zoom)*(0.25+0.25*on/104):d=1:s=1920x1080:fps=30," +
+            "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed it daily.:fontsize=44:fontcolor=white:" +
+            @"x=(w-text_w)/2:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
+            "fade=t=in:st=0:d=0.4,fade=t=out:st=3.100:d=0.4,format=yuv420p[v];[3:a]aresample=48000,apad[a]",
+            "-map", "[v]", "-map", "[a]", "-t", "3.500",
+            "-c:v", "libopenh264", "-b:v", "6M", "-pix_fmt", "yuv420p", "-r", "30",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+        ]);
+        var mouths = Path.Combine(_root, "mouths");
+        track.ShouldBe(
+            "ffconcat version 1.0\n" +
+            $"file '{mouths}/X.png'\nduration 0.120\nfile '{mouths}/B.png'\nduration 0.180\nfile '{mouths}/X.png'\nduration 0.320\nfile '{mouths}/X.png'\n");
+        var cut = video.Cuts.ShouldHaveSingleItem();
+        (cut.Placeholder, cut.Note).ShouldBe((false, (string?)null));
+        File.Exists(Media("mouth-track-s1.txt")).ShouldBeFalse();
+        File.Exists(Media("mouth-cues-s1.json")).ShouldBeTrue();
+
+        var still = global::Scout.Operator.Assembler.PresenterArguments(
+            Given.Tools(), Speaking(), 0, 3500, Media("studio.png"), Media(Face), (1024, 1024), (Mouth, Media("mouth-track-s1.txt")),
+            Media("scene-s1.wav"), ["Feed it daily."], "still", "/media/p1/out.mp4");
+        still.Take(11).ShouldBe(["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", "1", "-t", "3.500", "-i", Media("studio.png")]);
+        Graph(still).ShouldStartWith(
+            "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[bg];" +
+            "[1:v]scale=1080:1080,setsar=1[face];[bg][face]overlay=420:0[body];[2:v]scale=216:108[mouth];[body][mouth]overlay=852:648," +
+            "drawtext=", Case.Sensitive);
+        Graph(still).ShouldNotContain("zoompan", Case.Sensitive);
+    }
+
+    [Theory]
+    [InlineData("no mouth box", "Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks.")]
+    [InlineData("rhubarb fails", "Lip sync failed: Unsupported audio format")]
+    [InlineData("no rhubarb", "Lip sync: the rhubarb program was not found.")]
+    public async Task A_Presenter_Scene_Without_A_Mouth_Box_Or_With_Failed_Lip_Sync_Renders_Still_With_The_Note(string why, string note)
+    {
+        var runner = Presenting((program, arguments) => program.EndsWith("rhubarb", StringComparison.Ordinal) && !arguments.Contains("--version")
+            ? new ProcessResult(1, string.Empty, "Error processing file\nUnsupported audio format\n")
+            : null);
+
+        var video = await Speaker(runner, lipSync: why != "no rhubarb").AssembleAsync(
+            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(Face, why == "no mouth box" ? null : Mouth), CancellationToken.None);
+
+        var cut = video.Cuts.ShouldHaveSingleItem();
+        (cut.Note, cut.Placeholder).ShouldBe((note, false));
+        var render = runner.Renders[0];
+        render.ShouldNotContain("concat");
+        Graph(render).ShouldBe(
+            "[0:v]setsar=1[bg];[1:v]scale=2160:2160,setsar=1[face];[bg][face]overlay=840:0," +
+            "zoompan=z=1+0.08*on/104:x=(iw-iw/zoom)*(0.25+0.25*on/104):y=(ih-ih/zoom)*(0.25+0.25*on/104):d=1:s=1920x1080:fps=30," +
+            "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed it daily.:fontsize=44:fontcolor=white:" +
+            @"x=(w-text_w)/2:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
+            "fade=t=in:st=0:d=0.4,fade=t=out:st=3.100:d=0.4,format=yuv420p[v];[2:a]aresample=48000,apad[a]");
+        render.ShouldContain(Media("scene-s1.wav"));
+        Directory.GetFiles(_media, "mouth-*").ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("presenter-ffffffffffff.png")]
+    public async Task A_Presenter_Scene_Without_A_Presenter_Picture_Is_A_Text_Card_With_The_Note(string? file)
+    {
+        var runner = new FakeProcessRunner();
+
+        var video = await Speaker(runner).AssembleAsync(
+            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(file, Mouth), CancellationToken.None);
+
+        var cut = video.Cuts.ShouldHaveSingleItem();
+        (cut.Note, cut.Placeholder).ShouldBe((
+            "The project has no presenter picture; attach one in Scout Desktop, Production, or connect an AI Source with pictures.", false));
+        runner.Renders[0].ShouldContain("color=c=0x14181f:s=1920x1080:r=30");
+        Graph(runner.Renders[0]).ShouldContain("fontsize=64");
+        runner.Calls.ShouldNotContain(c => c.Program.EndsWith("rhubarb", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_Changed_Mouth_Box_Presenter_File_Or_Cues_Renders_The_Segment_Again()
+    {
+        var scene = Speaking();
+        var runner = Presenting();
+        var assembler = Speaker(runner);
+        async Task<string> Segment(OperatorMouthBox mouth)
+            => (await assembler.AssembleAsync(Given.Tools(), [scene], _media, null, null, "gentle", new PresenterInput(Face, mouth), CancellationToken.None))
+                .Segments.ShouldHaveSingleItem();
+
+        var first = await Segment(Mouth);
+        var unchanged = await Segment(Mouth);
+        var renders = runner.Renders.Count;
+        var otherBox = await Segment(Mouth with { Width = 0.2000001 });
+        File.WriteAllBytes(Media(Face), [9, 9, 9, 9]);
+        File.SetLastWriteTimeUtc(Media(Face), new DateTime(2030, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        var otherFace = await Segment(Mouth);
+        File.WriteAllText(Media("mouth-cues-s1.json"), "{\"mouthCues\":[{\"start\":0.0,\"end\":0.62,\"value\":\"D\"}]}");
+        var otherCues = await Segment(Mouth);
+        File.WriteAllText(Path.Combine(_root, "mouths", "VERSION"), "2");
+        var otherMouths = await Segment(Mouth);
+
+        unchanged.ShouldBe(first);
+        renders.ShouldBe(3);
+        new[] { first, otherBox, otherFace, otherCues, otherMouths }.Distinct(StringComparer.Ordinal).Count().ShouldBe(5);
+    }
+
+    [Theory]
+    [InlineData("timeout")]
+    [InlineData("no size")]
+    public async Task A_Presenter_Picture_Scout_Cannot_Read_Makes_The_Scene_A_Text_Card_With_The_Note_Instead_Of_Failing_The_Assembly(string how)
+    {
+        File.WriteAllBytes(Media(Face), [1, 2, 3]);
+        var runner = new FakeProcessRunner
+        {
+            Answer = (program, arguments) => arguments.Count >= 2 && arguments[^2] == "-i" && arguments[^1] == Media(Face)
+                ? how == "timeout"
+                    ? throw new InvalidOperationException(ProcessRunner.TimedOut(program, MediaProbe.Timeout))
+                    : new ProcessResult(1, string.Empty, $"Input #0, png_pipe, from '{Media(Face)}':\n  Duration: N/A, bitrate: N/A\n")
+                : null,
+        };
+
+        var video = await Speaker(runner).AssembleAsync(
+            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+
+        var cut = video.Cuts.ShouldHaveSingleItem();
+        (cut.Note, cut.Placeholder).ShouldBe(("Scout could not read the presenter picture; attach another one in Scout Desktop, Production.", false));
+        runner.Renders[0].ShouldContain("color=c=0x14181f:s=1920x1080:r=30");
+        runner.Renders[0].ShouldNotContain(Media(Face));
+        Graph(runner.Renders[0]).ShouldContain("fontsize=64");
+        runner.Calls.ShouldNotContain(c => c.Program.EndsWith("rhubarb", StringComparison.Ordinal));
+        File.Exists(Media("video.mp4")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task The_Presenter_Picture_Is_Measured_Once_On_The_First_Presenter_Scene_And_Not_At_All_Without_One()
+    {
+        var runner = Presenting();
+        var withoutCharacter = new FakeProcessRunner();
+        File.WriteAllBytes(Media("scene-s3.wav"), [5]);
+
+        await Speaker(runner).AssembleAsync(
+            Given.Tools(), [Speaking(), Speaking("s2", 2, "scene-s2.wav")], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+        await Speaker(withoutCharacter).AssembleAsync(
+            Given.Tools(), [Given.Scene("s3", 3, "A card.", "ready", audioSource: "generated", audioFile: "scene-s3.wav", durationMs: 3000)],
+            _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+
+        runner.Measured.ShouldBe([Media(Face)]);
+        withoutCharacter.Measured.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_Presenter_Scene_With_A_Mouth_Box_And_No_Narration_Is_Shown_Still_With_The_Note_And_The_Presenter_Check_Warns()
+    {
+        var runner = Presenting();
+        var silent = Given.Scene("s1", 1, "Feed it daily.", "ready", audioSource: "generated", visualSource: "presenter", audioFile: "scene-s1.wav", durationMs: 3500);
+
+        var video = await Speaker(runner).AssembleAsync(
+            Given.Tools(), [silent], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+
+        var cut = video.Cuts.ShouldHaveSingleItem();
+        cut.Note.ShouldBe("The scene has no narration, so the character is shown still.");
+        runner.Renders[0].ShouldNotContain("concat");
+        runner.Renders[0].ShouldContain("anullsrc=channel_layout=stereo:sample_rate=48000");
+        runner.Calls.ShouldNotContain(c => c.Program.EndsWith("rhubarb", StringComparison.Ordinal));
+        PackageChecks.Presenter(video.Cuts).ShouldBe(new OperatorCheck("presenter", "warn", "Scenes 1: The scene has no narration, so the character is shown still."));
+    }
+
+    [Fact]
+    public async Task A_Presenter_Segment_Keeps_Its_Name_When_The_Mouths_Folder_Moves()
+    {
+        var scene = Speaking();
+        var (rhubarb, mouths) = Given.MouthShapes(_root);
+        var moved = Path.Combine(_root, "elsewhere", "mouths");
+        Directory.CreateDirectory(moved);
+        foreach (var shape in RhubarbLipSync.Shapes)
+        {
+            File.WriteAllBytes(Path.Combine(moved, $"{shape}.png"), []);
+        }
+
+        File.WriteAllText(Path.Combine(mouths, "VERSION"), "1");
+        File.WriteAllText(Path.Combine(moved, "VERSION"), "1");
+        var runner = Presenting();
+        async Task<string> Segment(string folder)
+        {
+            return (await Given.Assembler(runner, Given.LipSync(runner, rhubarb, folder)).AssembleAsync(
+                Given.Tools(), [scene], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None)).Segments.ShouldHaveSingleItem();
+        }
+
+        var first = await Segment(mouths);
+        var again = await Segment(moved);
+
+        again.ShouldBe(first);
+    }
+
+    [Fact]
+    public async Task A_Segment_Keeps_Its_Name_When_The_Font_Folder_Moves_And_Ffmpeg_Still_Gets_The_Whole_Font_Path()
+    {
+        OperatorScene[] scenes = [WithFiles("s1", 1, "Feed it daily.", 3000), Given.Scene("s2", 2, "A card.", "ready", durationMs: 3000)];
+        var here = new FfmpegTools("/opt/scout/ffmpeg", "/fonts/NotoSans-Regular.ttf", "libopenh264");
+        var moved = new FfmpegTools("/opt/scout/ffmpeg", "/opt/It's a:mount/fonts/NotoSans-Regular.ttf", "libopenh264");
+        var otherFont = new FfmpegTools("/opt/scout/ffmpeg", "/fonts/NotoSerif-Regular.ttf", "libopenh264");
+        async Task<IReadOnlyList<string>> Segments(FfmpegTools tools, FakeProcessRunner runner)
+            => (await Assembler(runner).AssembleAsync(tools, scenes, _media, null, null, "gentle", CancellationToken.None)).Segments;
+
+        var movedRunner = new FakeProcessRunner();
+        var first = await Segments(moved, movedRunner);
+        var again = await Segments(here, new FakeProcessRunner());
+        var other = await Segments(otherFont, new FakeProcessRunner());
+
+        again.ShouldBe(first);
+        other.ShouldNotContain(first[0]);
+        other.ShouldNotContain(first[1]);
+        Graph(movedRunner.Renders[0]).ShouldContain(@"fontfile=/opt/It\\\'s a\\:mount/fonts/NotoSans-Regular.ttf:", Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task A_Mouth_Track_Scout_Cannot_Write_Fails_The_Assembly_With_The_File_And_Leaves_No_Temporary_File()
+    {
+        var runner = Presenting();
+        Directory.CreateDirectory(Media("mouth-track-s1.txt"));
+
+        var ex = await Should.ThrowAsync<InvalidOperationException>(() => Speaker(runner).AssembleAsync(
+            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None));
+
+        ex.Message.ShouldBe("Scout could not save mouth-track-s1.txt in the project's media folder.");
+        runner.Renders.ShouldBeEmpty();
+        Directory.GetFiles(_media).Select(Path.GetFileName).Order(StringComparer.Ordinal).ShouldBe(["mouth-cues-s1.json", Face, "scene-s1.wav"]);
     }
 }
