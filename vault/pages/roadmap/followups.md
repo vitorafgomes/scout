@@ -312,3 +312,8 @@ reliability: medium
 
 - **Blocker:** none; the desktop app runs Discord only. An id listed for one platform also admits the same string on another (`src/Scout.Conversation/ConversationConductor.cs:342`).
 - **Fix:** store and compare `Adapter:UserId`, as [[pages/decisions/0014-per-request-identity-gating]] anticipates, when a second adapter ships in the desktop app.
+
+### The script writer is not told how the bundled voice reads capitals (2026-11-04)
+
+- **Blocker:** none. `PiperSpeech.Spelled` (`src/Scout.Operator/PiperSpeech.cs:125`) writes every run of 2 to 4 capital letters as dotted letters, so the bundled voice spells it; a word-like acronym ("Nasa", "Pib") is read as a word only when it arrives capitalised, and nothing in the script prompt says so.
+- **Fix:** tell the script writer to write word-like acronyms capitalised ("Nasa", "Pib") and spelled ones in capitals ("ETF", "IPO").

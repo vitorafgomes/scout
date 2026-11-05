@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
 namespace Scout.Operator;
@@ -16,7 +17,7 @@ internal sealed record PiperVoice(string Id, string Label, string Model, int? Sp
 /// and the text on its standard input, writing one file in the media directory through <see cref="MediaFiles"/>; nothing
 /// else is run and nothing goes over the network.
 /// </summary>
-internal sealed class PiperSpeech(IProcessRunner runner, IOptions<OperatorMediaOptions> options, TimeProvider time)
+internal sealed partial class PiperSpeech(IProcessRunner runner, IOptions<OperatorMediaOptions> options, TimeProvider time)
 {
     internal const string Prefix = "piper:";
 
@@ -84,7 +85,7 @@ internal sealed class PiperSpeech(IProcessRunner runner, IOptions<OperatorMediaO
                     arguments.AddRange(["--speaker", speaker.ToString(CultureInfo.InvariantCulture)]);
                 }
 
-                var result = await runner.RunAsync(options.Value.PiperPath.Trim(), arguments, timeout, ct, text.ReplaceLineEndings(" "))
+                var result = await runner.RunAsync(options.Value.PiperPath.Trim(), arguments, timeout, ct, Spelled(text).ReplaceLineEndings(" "))
                     .ConfigureAwait(false);
                 if (result.ExitCode != 0)
                 {
@@ -115,6 +116,22 @@ internal sealed class PiperSpeech(IProcessRunner runner, IOptions<OperatorMediaO
             return [];
         }
     }
+
+    /// <summary>
+    /// Writes a run of two to four capital ASCII letters that touches no other letter or digit, with an optional lowercase
+    /// plural s, as dotted letters, which the bundled voice spells in every position; a Roman numeral of I, V and X is left
+    /// as it is, and so is any word written with lowercase or accented letters or with a digit.
+    /// </summary>
+    internal static string Spelled(string text)
+        => Acronym().Replace(text, m => Numeral().IsMatch(m.Groups[1].Value)
+            ? m.Value
+            : string.Concat(m.Groups[1].Value.Select(letter => letter + ".")) + m.Groups[2].Value);
+
+    [GeneratedRegex(@"(?<![\p{L}\p{N}])([A-Z]{2,4})(s?)(?![\p{L}\p{N}])")]
+    private static partial Regex Acronym();
+
+    [GeneratedRegex("^(X{0,3})(IX|IV|V?I{0,3})$")]
+    private static partial Regex Numeral();
 
     private static List<PiperVoice> Read(string model, string config)
     {

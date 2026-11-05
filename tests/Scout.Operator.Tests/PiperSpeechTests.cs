@@ -110,6 +110,24 @@ public sealed class PiperSpeechTests : IDisposable
     }
 
     [Fact]
+    public async Task An_Acronym_Reaches_Piper_Dotted_So_It_Is_Spelled_In_Every_Position()
+    {
+        var runner = new FakeProcessRunner();
+
+        await Piper(runner).SynthesizeAsync(
+            "piper:en_GB-cori-medium",
+            "ETF: o que é (ETF). Os ETFs e o IPO. Pib, H2O, I, A, SELIC, NASA.\nETF2 e eTF. ATENÇÃO, AÇÕES, isso NÃO é ÉPOCA. "
+            + "Século XXI, Dom Pedro II, capítulo IV. CDI e CDB.",
+            1,
+            _media,
+            "scene-s1.wav",
+            CancellationToken.None);
+
+        runner.Inputs.ShouldBe(["E.T.F.: o que é (E.T.F.). Os E.T.F.s e o I.P.O.. Pib, H2O, I, A, SELIC, N.A.S.A.. ETF2 e eTF. ATENÇÃO, AÇÕES, isso NÃO é ÉPOCA. "
+            + "Século XXI, Dom Pedro II, capítulo IV. C.D.I. e C.D.B.."]);
+    }
+
+    [Fact]
     public async Task A_Single_Speaker_Voice_Runs_Without_A_Speaker_Argument()
     {
         var runner = new FakeProcessRunner();
