@@ -1,3 +1,6 @@
+## [2026-11-05] crystallize | Windows ui CI red since 2026-11-04: LF checkout rule and a relative fixture
+Three ui tests failed only on the Windows runner: two read main.ts as text and the checkout had CRLF, one built a "relative" directory with path.relative across drives. Fix at the root: `.gitattributes` `* text=auto eol=lf` (no file renormalised), and the fixture `path.basename`; recorded on pages/conventions/testing.md.
+
 ## [2026-11-05] lint | Scoped pass over the phase 8c-B pages
 Summary: 0 broken links, 0 orphans, 0 stale entries, 0 missing connections, 0 date-field errors, 0 stale pages, 1 pre-existing schema note (ADR status enum), 5 pre-existing over-length index entries, 0 over-length pages, 2863 file:line citations resolve.
 Report: archive/lint-2026-11-05.md

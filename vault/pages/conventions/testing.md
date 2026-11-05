@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.10"
+version: "1.11"
 date: 2026-10-21
-updated: 2026-11-02
-changes: "UI tests: catch a rejection before triggering it"
+updated: 2026-11-05
+changes: "Line endings: LF on every checkout for the source-text ui tests, and a relative fixture that stays relative on Windows"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -100,6 +100,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 - The project site under `docs/` has one test file, `docs/site.test.js`, run with `bun test ./docs` from the repository root. It covers the one HTTP call (`fetchLatestRelease`, with an injected `fetch`: 403, 404 and a network failure yield `null`) and the pure functions in `docs/site.js`: detecting the visitor's platform, sorting a release's assets per platform and ignoring blockmaps, `latest*.yml` and checksums, the size label, and the model with and without a release. The `Test (site)` step runs it right after `Setup Node` on all three legs, before `bun install` (`.github/workflows/ui-ci.yml:64`); it needs no install, because the module imports nothing. The DOM part of `docs/site.js` has no test. [[pages/decisions/0029-project-site-and-releases]]
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
 - The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:19` to `:22`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow; `docs/**` (`:14`, `:25`) triggers it for the project site.
+- `.gitattributes` checks every text file out with LF on every OS (`* text=auto eol=lf`, `.gitattributes:2`), because five tests in `ui/packages/main/test/` read a source file as text and compare exact strings (`quick-ask.test.ts` on `main.ts` among them); on the Windows runner of `ui-ci.yml` the default checkout turned LF into CRLF and those tests went red with nothing else wrong (the log entry of 2026-11-05 has the dates). A fixture that must be a relative path to a real directory is `path.relative(root, dir)` under a `process.chdir(root)` restored in `finally`, never `path.relative(process.cwd(), dir)` from a temp folder: the Windows runner keeps the temp folder on another drive, so `path.relative` answers an absolute path there, and a relative name that does not exist would pass for the wrong reason (`ui/packages/main/test/operator-media.test.ts:285`).
 - The `Build control-plane host` step (`.github/workflows/ui-ci.yml:107`) builds `Scout.Host.ControlPlane` in Release before `Test (UI)`, because `ui/packages/main/test/control-plane-integration.test.ts` launches the real binary and fails, never skips, when it is missing.
 
 - **Catch a rejection before triggering it.** In `bun:test`, a promise that rejects while the test awaits something else is reported as an unhandled rejection and fails the test, even when `expect(...).rejects` is awaited right after; the OAuth loopback tests awaited a `fetch` first and failed on macOS only, where the server rejects before `fetch` resolves. An unawaited `expect(...).rejects` does not help: Bun evaluates it at once and blocks the test until the promise settles. Attach `const settled = promise.catch((err: unknown) => err)` before the call that triggers the rejection, then assert `expect(await settled).toBeInstanceOf(...)` (`ui/packages/main/test/oauth-loopback.test.ts:106`).
