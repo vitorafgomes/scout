@@ -1,4 +1,9 @@
+#pragma warning disable SKEXP0001
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Services;
+using Microsoft.SemanticKernel.TextToImage;
 using Scout.Llm.Configuration;
 using Scout.Llm.Providers.OpenAI;
 
@@ -122,5 +127,23 @@ public sealed class OpenAILlmProviderFactoryValidationTests
     public void Name_Is_OpenAI()
     {
         Create(ValidOptions()).Name.ShouldBe("OpenAI");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(" ")]
+    public void The_Default_Image_Model_Is_Gpt_Image_2_5_Sunburst(string? imageModel)
+    {
+        var opts = ValidOptions();
+        if (imageModel is not null)
+        {
+            opts.OpenAI!.ImageModel = imageModel;
+        }
+
+        var builder = Kernel.CreateBuilder();
+        Create(opts).AddToKernel(builder);
+
+        builder.Build().Services.GetRequiredService<ITextToImageService>().Attributes[AIServiceExtensions.ModelIdKey]
+            .ShouldBe("gpt-image-2.5-sunburst");
     }
 }
