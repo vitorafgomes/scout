@@ -47,6 +47,9 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
     /// <summary>Whether the connected provider has an image service.</summary>
     public bool ImagesAvailable => media.Images;
 
+    /// <summary>How many of the day's <see cref="PerDay"/> pictures from the AI Source are left in this process.</summary>
+    public int PicturesLeft => _today.Left;
+
     /// <summary>Whether a scene without an image service gets a stock picture from Openverse.</summary>
     public bool StockPictures => stock is not null;
 

@@ -2876,6 +2876,7 @@ public sealed partial class OperatorServiceTests : IDisposable
     [InlineData("scripting")]
     [InlineData("producing")]
     [InlineData("assembling")]
+    [InlineData("presenting")]
     [InlineData("uploading")]
     public async Task Delete_IsRefusedWhileRunning(string status)
     {
@@ -2886,7 +2887,7 @@ public sealed partial class OperatorServiceTests : IDisposable
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync(project.Id, None));
 
-        ex.Message.ShouldBe("A project that is researching, scripting, transcribing, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+        ex.Message.ShouldBe("A project that is researching, scripting, transcribing, producing, assembling, presenting or uploading cannot be deleted; wait for it to finish or fail.");
         (await StoredAsync(project.Id)).Id.ShouldBe(project.Id);
     }
 

@@ -195,7 +195,7 @@ async function fetchFfmpeg({ target, table, toolsDir, cacheDir, fetch, extract }
     await extract(cached, scratch, Object.values(archive.members));
     await mkdir(toolsDir, { recursive: true });
     for (const name of await readdir(toolsDir)) {
-      if (name !== 'piper' && name !== 'rhubarb' && name !== 'tesseract') {
+      if (!['piper', 'rhubarb', 'tesseract', 'face'].includes(name)) {
         await rm(join(toolsDir, name), { recursive: true, force: true });
       }
     }
@@ -286,6 +286,38 @@ async function fetchRhubarb({ target, table, toolsDir, cacheDir, fetch, extract 
   return true;
 }
 
+function faceNoticeOf(face) {
+  return [
+    'Face models Scout runs in-process to find the mouth on a presenter picture:',
+    '',
+    ...face.files.flatMap((model) => [
+      `${model.file}: ${model.model}`,
+      `Source: ${model.repo} at commit ${model.commit}`,
+      `SHA-256: ${model.sha256}`,
+      `Licence: ${model.license}`,
+      ...(model.outOfScope === undefined ? [] : [model.outOfScope]),
+      '',
+    ]),
+  ].join('\n');
+}
+
+/**
+ * Puts the pinned face models into `<toolsDir>/face/` under their fixed names, each checked against its size and
+ * SHA-256, with a notice naming their sources, commits, digests and licences.
+ */
+async function fetchFace({ table, toolsDir, cacheDir, fetch }) {
+  const faceDir = join(toolsDir, 'face');
+  await mkdir(faceDir, { recursive: true });
+  for (const model of table.face.files) {
+    const dest = join(faceDir, model.file);
+    if (existsSync(dest) && (await sha256Of(dest)) === model.sha256) continue;
+    const cached = join(cacheDir, 'face', model.file);
+    await fetchPinned(model, cached, fetch);
+    await copyFile(cached, dest);
+  }
+  await writeFile(join(faceDir, 'NOTICE.txt'), faceNoticeOf(table.face));
+}
+
 async function fetchTesseract({ target, table, toolsDir, cacheDir, fetch, extractAppImage }) {
   const archive = table.tesseract.archives[target];
   if (archive === undefined) return false;
@@ -342,7 +374,7 @@ async function fetchTesseract({ target, table, toolsDir, cacheDir, fetch, extrac
  * Puts the pinned fonts with their licence into `<resourcesDir>/fonts/` and the pinned piper voices with their
  * licences into `<resourcesDir>/voices/` on every target, and the pinned ffmpeg with its licence and the
  * whole pinned piper and rhubarb folders into `<resourcesDir>/media-tools/<target>/` where the table has an
- * archive for the target, and the whole pinned tesseract AppImage with its language data in `tesseract/tessdata/`
+ * archive for the target, the pinned face models into `face/` there on every target, and the whole pinned tesseract AppImage with its language data in `tesseract/tessdata/`
  * there too where the table has one; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is
  * downloaded or extracted again when it is already in place.
  */
@@ -390,6 +422,7 @@ export async function fetchMediaTools({
   if (!(await fetchRhubarb(options))) {
     log(`media tools: no rhubarb bundled for ${target}; the worker has no lip sync`);
   }
+  await fetchFace(options);
   if (!(await fetchTesseract(options))) {
     log(
       `media tools: no tesseract bundled for ${target}; the worker cannot read text on a screenshot`,

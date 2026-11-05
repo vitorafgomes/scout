@@ -32,6 +32,12 @@ public sealed class OperatorMediaOptions
     /// <summary>The folder of the nine mouth shapes, <c>A.png</c> to <c>H.png</c> and <c>X.png</c>; no lip sync when empty.</summary>
     public string MouthsPath { get; set; } = string.Empty;
 
+    /// <summary>The folder of the built-in presenters, <c>presenters.json</c> beside their pictures; no built-in presenters when empty.</summary>
+    public string PresentersPath { get; set; } = string.Empty;
+
+    /// <summary>The folder of the two face models, <c>blazeface-short-range.onnx</c> and <c>face-landmarker.onnx</c>; no face detection when empty.</summary>
+    public string FaceModelsPath { get; set; } = string.Empty;
+
     /// <summary>The YouTube category an upload is filed under; <c>22</c>, People &amp; Blogs, unless configured.</summary>
     public string CategoryId { get; set; } = "22";
 }
@@ -73,7 +79,7 @@ internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMedi
     internal static readonly string[] Candidates = ["ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"];
 
     internal static readonly string[] Filters =
-        ["anullsrc", "apad", "aresample", "color", "crop", "drawtext", "fade", "format", "gblur", "loudnorm", "overlay", "pad", "scale", "setsar", "split", "zoompan"];
+        ["anullsrc", "apad", "aresample", "chromakey", "color", "crop", "drawtext", "fade", "format", "gblur", "loudnorm", "overlay", "pad", "scale", "setsar", "split", "zoompan"];
 
     internal static readonly string[] Demuxers = ["concat", "lavfi"];
 
@@ -119,10 +125,10 @@ internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMedi
     /// last line ffmpeg wrote to its error output.
     /// </summary>
     public async Task<ProcessResult> RunAsync(
-        FfmpegTools tools, IReadOnlyList<string> arguments, int mediaMs, string failure, CancellationToken ct)
+        FfmpegTools tools, IReadOnlyList<string> arguments, int mediaMs, string failure, CancellationToken ct, bool rawOutput = false)
     {
         ArgumentNullException.ThrowIfNull(tools);
-        var result = await runner.RunAsync(tools.Ffmpeg, arguments, TimeoutFor(tools, mediaMs), ct).ConfigureAwait(false);
+        var result = await runner.RunAsync(tools.Ffmpeg, arguments, TimeoutFor(tools, mediaMs), ct, rawOutput: rawOutput).ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException($"{failure} (ffmpeg: {LastLine(result.ErrorTail)})");

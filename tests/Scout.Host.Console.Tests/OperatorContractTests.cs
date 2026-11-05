@@ -381,6 +381,8 @@ public sealed class OperatorContractTests : IDisposable
 
         public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
 
+        public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct) => throw new NotSupportedException();
+
         private static async Task<T> CallAsync<T>(Func<Task<T>> call)
         {
             try
@@ -629,6 +631,8 @@ public sealed class OperatorContractTests : IDisposable
             null,
             CancellationToken.None);
         await service.ProduceProjectAsync(started.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
+        var presenterJob = (await worker.NextQueuedAsync(CancellationToken.None)).ShouldNotBeNull().Project;
+        var afterPresenterJob = await worker.SaveProjectAsync(presenterJob with { PresenterRequest = string.Empty }, null, CancellationToken.None);
         var producing = (await worker.NextQueuedAsync(CancellationToken.None)).ShouldNotBeNull().Project;
 
         var scenes = await worker.SaveProjectAsync(producing with { Scenes = [Spoken("s1", 1), Spoken("s2", 2)] }, null, CancellationToken.None);
@@ -641,6 +645,7 @@ public sealed class OperatorContractTests : IDisposable
         await worker.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []), CancellationToken.None);
         var cannotMoveTheMouth = (await service.GetReadinessAsync(CancellationToken.None)).LipSyncAvailable;
 
+        (presenterJob.Status, afterPresenterJob.Status, producing.Status).ShouldBe(("presenting", "production_queued", OperatorPipeline.Producing));
         (producing.Format, producing.Presenter, producing.PresenterFile).ShouldBe((OperatorPipeline.AnimatedCharacter, "A friendly fox.", (string?)null));
         scenes.Scenes.Select(s => (s.Id, s.VisualSource, s.VisualFile)).ShouldBe([
             ("s1", OperatorPipeline.Presenter, (string?)null), ("s2", OperatorPipeline.Presenter, (string?)null),
@@ -679,6 +684,8 @@ public sealed class OperatorContractTests : IDisposable
 
         public async Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
             => ToWorker(await service.DelegateProjectFromChatAsync(projectId, narrationVoice, direction, motion, ct));
+
+        public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<OperatorMandate> GetMandateAsync(CancellationToken ct) => throw new NotSupportedException();
 

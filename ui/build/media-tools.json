@@ -188,5 +188,30 @@
         "root": "Rhubarb-Lip-Sync-1.14.0-Windows"
       }
     }
+  },
+  "face": {
+    "files": [
+      {
+        "file": "blazeface-short-range.onnx",
+        "url": "https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx/resolve/50f2c66ffbdf84beae8c267df2b49e5c5a5162e9/face_detector.onnx",
+        "size": 418437,
+        "sha256": "02a04d5d37c3558dc4d5274f7f8f0f0f01ac94e46c5ffb2cee82395d47e23181",
+        "repo": "https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx",
+        "commit": "50f2c66ffbdf84beae8c267df2b49e5c5a5162e9",
+        "license": "Apache-2.0",
+        "model": "Google's MediaPipe BlazeFace short-range face detector, converted to ONNX"
+      },
+      {
+        "file": "face-landmarker.onnx",
+        "url": "https://huggingface.co/naklitechie/face-landmarks-onnx/resolve/575c33816c840c5b156398adb485e4f8d138adc2/face_landmarks.onnx",
+        "size": 4920995,
+        "sha256": "f38c3321ceffbc9e95103480ad38cc3f52e7e1bde2bcee7cd9355d0b9138ac0c",
+        "repo": "https://huggingface.co/naklitechie/face-landmarks-onnx",
+        "commit": "575c33816c840c5b156398adb485e4f8d138adc2",
+        "license": "Apache-2.0",
+        "model": "Google's MediaPipe Face Mesh V2 weights, converted to ONNX (format conversion only)",
+        "outOfScope": "Its model card places identification and life-critical decisions outside its intended use."
+      }
+    ]
   }
 }

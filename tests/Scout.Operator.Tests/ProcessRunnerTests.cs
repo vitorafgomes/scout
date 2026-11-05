@@ -23,6 +23,7 @@ public sealed class ProcessRunnerTests
         var result = await new ProcessRunner().RunAsync("/bin/sh", ["-c", "cat; echo done"], TimeSpan.FromSeconds(5), CancellationToken.None);
 
         (result.ExitCode, result.Output).ShouldBe((0, "done\n"));
+        result.OutputBytes.ShouldBeEmpty();
         watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(4));
     }
 
@@ -108,5 +109,17 @@ public sealed class ProcessRunnerTests
 
         result.ExitCode.ShouldBe(0);
         result.Output.Trim().ShouldBe("ff d8 ff e0 00 0a 80 ff d9");
+    }
+
+    [Fact]
+    public async Task Raw_Output_Bytes_Come_Back_Byte_For_Byte_Instead_Of_The_Text()
+    {
+        byte[] raw = [0x00, 0xFF, 0x80, 0xC3, 0x28, 0x0A, 0x7F];
+
+        var result = await new ProcessRunner().RunAsync(
+            "/bin/sh", ["-c", "cat"], Generous, CancellationToken.None, inputBytes: raw, rawOutput: true);
+
+        result.OutputBytes.ShouldBe(raw);
+        result.Output.ShouldBeEmpty();
     }
 }

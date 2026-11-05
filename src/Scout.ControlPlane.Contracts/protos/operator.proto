@@ -38,6 +38,11 @@ service Operator {
   rpc RegenerateNarration(SceneRequest) returns (Project);
   rpc SetMouthBox(SetMouthBoxRequest) returns (Project);
   rpc RegeneratePresenter(GetProjectRequest) returns (Project);
+  rpc RequestPresenter(RequestPresenterRequest) returns (Project);
+  rpc UsePresenterVersion(UsePresenterVersionRequest) returns (Project);
+  rpc ListBuiltInPresenters(ListBuiltInPresentersRequest) returns (BuiltInPresenters);
+  rpc EditScenePicturePrompt(EditScenePicturePromptRequest) returns (Project);
+  rpc RegenerateScenePicture(SceneRequest) returns (Project);
 }
 
 message GetMandateRequest {}
@@ -54,6 +59,7 @@ message Mandate {
   string target_value = 9;
   optional string updated_at = 10;
   reserved 11;
+  string default_format = 12;
 }
 
 message ListProjectsRequest {
@@ -125,6 +131,22 @@ message Project {
   string presenter = 22;
   optional string presenter_file = 23;
   optional MouthBox mouth_box = 24;
+  repeated PresenterVersion presenter_versions = 25;
+  optional string presenter_preview_file = 26;
+  string presenter_request = 27;
+  string presenter_source = 28;
+  string presenter_return_status = 29;
+  string presenter_request_prompt = 30;
+}
+
+message PresenterVersion {
+  string file = 1;
+  string prompt = 2;
+  string feedback = 3;
+  optional string preview_file = 4;
+  optional MouthBox mouth_box = 5;
+  string made_at = 6;
+  string source = 7;
 }
 
 message MouthBox {
@@ -211,6 +233,34 @@ message SetMouthBoxRequest {
   MouthBox mouth_box = 2;
 }
 
+message RequestPresenterRequest {
+  string project_id = 1;
+  string feedback = 2;
+  string prompt = 3;
+}
+
+message UsePresenterVersionRequest {
+  string project_id = 1;
+  int32 index = 2;
+}
+
+message ListBuiltInPresentersRequest {}
+
+message BuiltInPresenters {
+  repeated BuiltInPresenter presenters = 1;
+}
+
+message BuiltInPresenter {
+  string id = 1;
+  string label = 2;
+}
+
+message EditScenePicturePromptRequest {
+  string project_id = 1;
+  string scene_id = 2;
+  string prompt = 3;
+}
+
 message EditSceneTextRequest {
   string project_id = 1;
   string scene_id = 2;
@@ -242,6 +292,9 @@ message Readiness {
   bool stock_pictures = 9;
   bool transcription_available = 10;
   bool lip_sync_available = 11;
+  bool face_detection_available = 12;
+  int32 pictures_left_today = 13;
+  repeated BuiltInPresenter builtin_presenters = 14;
 }
 
 message Voice {

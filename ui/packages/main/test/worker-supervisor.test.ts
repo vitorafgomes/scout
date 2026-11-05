@@ -378,6 +378,10 @@ describe('createSupervisor', () => {
         'Scout:Operator:MouthsPath': '/tmp/other/mouths',
         DOTNET_Scout__Operator__RhubarbPath: '/tmp/other/rhubarb',
         'ASPNETCORE_SCOUT:OPERATOR:MOUTHSPATH': '/tmp/other/mouths',
+        scout__operator__presenterspath: '/tmp/other/presenters',
+        'Scout:Operator:FaceModelsPath': '/tmp/other/face',
+        DOTNET_Scout__Operator__PresentersPath: '/tmp/other/presenters',
+        'ASPNETCORE_SCOUT:OPERATOR:FACEMODELSPATH': '/tmp/other/face',
         scout__tools__tesseractpath: '/tmp/other/tesseract',
         'Scout:Tools:TessdataPath': '/tmp/other/tessdata',
         DOTNET_SCOUT__TOOLS__LOCALE: 'xx',
@@ -398,6 +402,8 @@ describe('createSupervisor', () => {
           SCOUT__OPERATOR__RHUBARBPATH:
             '/opt/Scout/resources/media-tools/linux-x64/rhubarb/rhubarb',
           SCOUT__OPERATOR__MOUTHSPATH: '',
+          SCOUT__OPERATOR__PRESENTERSPATH: '/opt/Scout/resources/presenters',
+          SCOUT__OPERATOR__FACEMODELSPATH: '',
         };
         const { child, ...deps } = makeDeps({ buildEnv: async () => ({ ...fromBuildEnv }) });
         const supervisor = createSupervisor(deps);

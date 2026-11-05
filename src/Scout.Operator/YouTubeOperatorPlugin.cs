@@ -11,9 +11,9 @@ namespace Scout.Operator;
 /// that the write gate checks against the owner's YouTube grant, and read the status of the latest projects. For
 /// Scout's owner only, as <see cref="ChatOrigin.IsOwner"/> says, never a parameter: list the projects, read one
 /// project's state and what it lacks, read one scene's whole text, start a project with a format or a direction, and
-/// change a project's scenes, produce it or delegate it through the control plane's chat calls, each a write into
-/// Scout's own data folder that runs only after a state read of that project in the same conversation within 10
-/// minutes. Deleting and publishing only point to Scout Desktop.
+/// change a project's scenes, produce it, delegate it or ask for a new presenter through the control plane's chat calls,
+/// each a write into Scout's own data folder that runs only after a state read of that project in the same conversation
+/// within 10 minutes, and read the current presenter. Deleting and publishing only point to Scout Desktop.
 /// </summary>
 internal sealed class YouTubeOperatorPlugin(
     IOperatorControlPlane controlPlane,
@@ -58,10 +58,10 @@ internal sealed class YouTubeOperatorPlugin(
     /// the write as failed and the model reads the reason.
     /// </exception>
     [KernelFunction(MakeVideo)]
-    [Description("Start a YouTube video project on a topic: Scout researches the topic and writes a script the owner reviews in Scout Desktop. Uploads nothing. Needs the owner's write permission for YouTube. Only Scout's owner may choose a format other than generated_pictures or give a direction.")]
+    [Description("Start a YouTube video project on a topic: Scout researches the topic and writes a script the owner reviews in Scout Desktop. Uploads nothing. Needs the owner's write permission for YouTube. Only Scout's owner may choose a format or give a direction; with no format the video takes the format the owner set as the mandate's default.")]
     public async Task<string> MakeVideoAsync(
         [Description("What the video is about, 3 to 200 characters.")] string topic,
-        [Description("How the video is made: generated_pictures, the default; own_pictures, where the owner attaches a picture per scene; or animated_character, a cartoon presenter made once whose mouth moves with the narration. Only the owner may choose other than the default; empty for the default.")] string format = "",
+        [Description("How the video is made: generated_pictures; own_pictures, where the owner attaches a picture per scene; or animated_character, a cartoon presenter made by Scout and improved by the owner in Scout Desktop, whose mouth moves with the narration. Only the owner may choose a format; empty for the format the owner set as the mandate's default.")] string format = "",
         [Description("The owner's direction for the script and the pictures, at most 1000 characters; empty for none. Owner only.")] string direction = "",
         CancellationToken ct = default)
     {
@@ -92,14 +92,12 @@ internal sealed class YouTubeOperatorPlugin(
         var draft = new OperatorProjectState(string.Empty, trimmed, OperatorPipeline.Researching, "chat", string.Empty, string.Empty, [], null, [])
         {
             Direction = chosenDirection,
+            Format = chosenFormat,
         };
         OperatorProjectState project;
         try
         {
-            project = await controlPlane.SaveProjectAsync(
-                chosenFormat.Length == 0 ? draft : draft with { Format = chosenFormat },
-                origin,
-                ct).ConfigureAwait(false);
+            project = await controlPlane.SaveProjectAsync(draft, origin, ct).ConfigureAwait(false);
         }
         catch (InvalidOperationException ex)
         {
@@ -201,6 +199,10 @@ internal sealed class YouTubeOperatorPlugin(
     internal const string DelegateProject = "youtube_delegate_project";
     internal const string DeleteProject = "youtube_delete_project";
     internal const string SceneText = "youtube_scene_text";
+    internal const string PresenterPreview = "youtube_presenter_preview";
+    internal const string ChangePresenter = "youtube_change_presenter";
+    internal const string PromptPrefix = "prompt:";
+    internal const string MakingPresenter = "Making a new presenter; see Scout Desktop, Production, Presenter.";
 
     internal const int ListCount = 20;
 
@@ -546,6 +548,70 @@ internal sealed class YouTubeOperatorPlugin(
     public static Task<string> DeleteProjectAsync(
         [Description("The project's id or topic.")] string project_id)
         => Task.FromResult(DeleteOnDesktop(Trim(project_id)));
+
+    /// <summary>The current presenter of a project: its source, its prompt and how many versions it has; for the owner only.</summary>
+    /// <param name="project_id">The project's id.</param>
+    /// <param name="ct">Cancels the request to the control plane.</param>
+    /// <returns>The data marker, then the current presenter and where its preview plays, or a sentence when the project cannot be read.</returns>
+    /// <exception cref="InvalidOperationException">The sender is not Scout's owner.</exception>
+    [KernelFunction(PresenterPreview)]
+    [Description("For Scout's owner only: the current presenter of an animated character project, the prompt it was made from, where it came from and how many versions there are; the preview plays in Scout Desktop.")]
+    public async Task<string> PresenterPreviewAsync(
+        [Description(ProjectIdHelp)] string project_id,
+        CancellationToken ct = default)
+    {
+        RequireOwner();
+        var id = Trim(project_id);
+        OperatorProjectState project;
+        try
+        {
+            project = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NoStatus(ex.Message);
+        }
+
+        var making = project.Status == PresenterStage.Presenting || project.PresenterRequest.Length > 0;
+        if (project.PresenterVersions.Count == 0)
+        {
+            return making ? $"Project {id} has no presenter yet; {MakingPresenter}" : $"Project {id} has no presenter yet.";
+        }
+
+        var current = project.PresenterVersions.LastOrDefault(v => v.File == project.PresenterFile) ?? project.PresenterVersions[^1];
+        var lines = new List<string>
+        {
+            $"Project {id}: presenter {project.PresenterVersions.Count} versions; the current one is {(current.Source.Length == 0 ? "unknown" : current.Source)}, {(project.PresenterPreviewFile is null ? "without a preview" : "its preview in Scout Desktop, Production, Presenter")}.",
+        };
+        if (making)
+        {
+            lines.Add(MakingPresenter);
+        }
+
+        lines.Add(DataMarker);
+        lines.Add($"Prompt: {current.Prompt}");
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>Ask for a new presenter, for the owner only.</summary>
+    /// <param name="project_id">The project's id.</param>
+    /// <param name="feedback_or_prompt">What to change, or a whole new prompt after <c>prompt:</c>, or empty for another one.</param>
+    /// <param name="ct">Cancels the request to the control plane.</param>
+    /// <returns>That the presenter is being made, in a sentence for the user.</returns>
+    /// <exception cref="InvalidOperationException">The sender is not the owner, or the control plane refused; nothing changed.</exception>
+    [KernelFunction(ChangePresenter)]
+    [Description("For Scout's owner only: make a new presenter for an animated character project from the owner's words.")]
+    public async Task<string> ChangePresenterAsync(
+        [Description(ProjectIdHelp)] string project_id,
+        [Description("What to change, at most 300 characters, added to the last prompt; or prompt: followed by a whole new prompt, at most 1500 characters; or empty for another one.")] string feedback_or_prompt = "",
+        CancellationToken ct = default)
+    {
+        var words = Trim(feedback_or_prompt);
+        var prompt = words.StartsWith(PromptPrefix, StringComparison.OrdinalIgnoreCase) ? words[PromptPrefix.Length..].Trim() : string.Empty;
+        var feedback = prompt.Length > 0 || words.StartsWith(PromptPrefix, StringComparison.OrdinalIgnoreCase) ? string.Empty : words;
+        await ChangeAsync(project_id, c => controlPlane.RequestPresenterAsync(Trim(project_id), feedback, prompt, c), string.Empty, ct).ConfigureAwait(false);
+        return MakingPresenter;
+    }
 
     private static string Trim(string? value) => (value ?? string.Empty).Trim();
 

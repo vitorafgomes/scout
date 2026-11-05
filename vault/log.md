@@ -1,3 +1,10 @@
+## [2026-11-05] lint | Scoped pass over the phase 8c-B pages
+Summary: 0 broken links, 0 orphans, 0 stale entries, 0 missing connections, 0 date-field errors, 0 stale pages, 1 pre-existing schema note (ADR status enum), 5 pre-existing over-length index entries, 0 over-length pages, 2863 file:line citations resolve.
+Report: archive/lint-2026-11-05.md
+
+## [2026-11-05] crystallize | Phase 8c-B of the YouTube channel operator, the automatic presenter
+The presenter of an animated character is made by itself when the script is ready, previewed, and improved by the owner's feedback or an editable prompt through versions (at most 10); every scene gets its own picture with the presenter composited over it by chroma key; the mouth is found by two local ONNX face models (BlazeFace short-range and the 478-point face mesh, pinned by digest) with four built-in presenters as the fallback; the mandate gains a default format. Pages: control-plane, control-plane-contracts, host-control-plane, host-console, operator (+ history page with the FaceMouth acceptance run), desktop-operator, desktop-ui, no-executive-writes, ADR 0033 amendment, roadmap, followups.
+
 ## [2026-11-05] research | Teams and live voice spikes (done 2026-10-28, filed today)
 Owner asked for Teams and for live voice conversation. Teams delivers only by HTTPS POST to a public endpoint, so ADR 0025 (proposed) recommends a loopback route behind an owner-created tunnel with a fail-closed token check; live voice needs Discord's DAVE encryption, broken in the pinned Discord.Net until a pending fix ships, so ADR 0026 (proposed) starts listen-only with local transcription and drops non-allowed audio on arrival. Pages: roadmap/teams-adapter-spike, roadmap/live-voice-spike, decisions/0025, decisions/0026, index.
 

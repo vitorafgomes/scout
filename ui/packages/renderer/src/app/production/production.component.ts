@@ -18,6 +18,7 @@ import {
   type MandateDto,
   type MouthBoxDto,
   type OperatorProjectDto,
+  type PresenterVersionDto,
   type ProjectFormat,
   type ProjectMotion,
   type ReadinessDto,
@@ -43,8 +44,22 @@ const BACKGROUND_ATTACHABLE = [
   'failed',
 ];
 const DELEGABLE = ['script_ready', 'media_ready'];
-const RUNNING = ['researching', 'scripting', 'transcribing', 'producing', 'assembling'];
+const RUNNING = [
+  'researching',
+  'scripting',
+  'transcribing',
+  'producing',
+  'assembling',
+  'presenting',
+];
 const RECORDING_ATTACHABLE = ['recording_waiting', 'queued'];
+const PRESENTER_REQUESTABLE = [
+  'script_ready',
+  'media_ready',
+  'assembled',
+  'approved',
+  'assembly_queued',
+];
 
 const SOURCE_LABELS: Readonly<Record<string, string>> = {
   generated: 'generated',
@@ -78,6 +93,29 @@ const MAX_DIRECTION = 1000;
 const MAX_PRESENTER = 300;
 const MIN_MOUTH_SIZE = 0.02;
 const MAX_SCENE_TEXT = 700;
+const MAX_PRESENTER_PROMPT = 1500;
+const MAX_PRESENTER_FEEDBACK = 300;
+const MAX_PICTURE_PROMPT = 700;
+const DAILY_PICTURES = 40;
+const VERSION_SUMMARY = 60;
+
+const PRESENTER_STYLE =
+  'flat 2D cartoon illustration, front-facing, looking at the viewer, mouth closed, neutral expression, head and shoulders, on a solid bright green background (#00FF00)';
+const PRESENTER_SAFETY =
+  "no text, no letters, no logos, no trademarks, no real person's likeness and no public figure.";
+
+const PRESENTER_SOURCES: Readonly<Record<string, string>> = {
+  generated: 'Generated',
+  builtin: "Scout's presenter",
+  owner: 'Your picture',
+};
+
+const DEFAULT_FORMATS: readonly ProjectFormat[] = [
+  'generated_pictures',
+  'own_pictures',
+  'animated_character',
+  'own_video',
+];
 
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'views', label: 'Views' },
@@ -222,6 +260,19 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               [value]="targetValue()"
               (input)="targetValue.set($any($event.target).value)"
           /></label>
+          <label
+            >Default format
+            <select
+              data-test="mandate-default-format"
+              (change)="defaultFormat.set($any($event.target).value)"
+            >
+              @for (f of defaultFormats; track f) {
+                <option [value]="f" [selected]="defaultFormat() === f">
+                  {{ formatName(f) }}
+                </option>
+              }
+            </select>
+          </label>
         </div>
         <div class="row">
           <button
@@ -280,7 +331,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               name="start-format"
               data-test="format-generated_pictures"
               [checked]="startFormat() === 'generated_pictures'"
-              (change)="startFormat.set('generated_pictures')"
+              (change)="startChoice.set('generated_pictures')"
             />
             Generated pictures</label
           >
@@ -290,7 +341,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               name="start-format"
               data-test="format-own_pictures"
               [checked]="startFormat() === 'own_pictures'"
-              (change)="startFormat.set('own_pictures')"
+              (change)="startChoice.set('own_pictures')"
             />
             Your own pictures</label
           >
@@ -301,7 +352,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               data-test="format-animated_character"
               [disabled]="!lipSyncable()"
               [checked]="startFormat() === 'animated_character'"
-              (change)="startFormat.set('animated_character')"
+              (change)="startChoice.set('animated_character')"
             />
             Animated character</label
           >
@@ -324,7 +375,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               data-test="format-own_video"
               [disabled]="!transcribable()"
               [checked]="startFormat() === 'own_video'"
-              (change)="startFormat.set('own_video')"
+              (change)="startChoice.set('own_video')"
             />
             Your own video</label
           >
@@ -579,6 +630,20 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
           @if (p.format === 'animated_character') {
             <h3>Presenter</h3>
             <div data-test="presenter">
+              @if (p.status === 'presenting') {
+                <p class="meta" data-test="presenter-making">Scout is making the presenter.</p>
+              } @else if (p.presenterPreviewFile; as preview) {
+                <video
+                  controls
+                  class="preview"
+                  data-test="presenter-preview"
+                  [src]="mediaUrl(p, preview, presenterStamp(p))"
+                ></video>
+              } @else if (p.presenterVersions.length === 0) {
+                <p class="meta" data-test="presenter-pending">
+                  The presenter is made as soon as the script is ready.
+                </p>
+              }
               @if (p.presenterFile; as file) {
                 <div
                   class="mouth-area"
@@ -644,6 +709,135 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   connected AI Source makes pictures; or attach your own.
                 </p>
               }
+              @if (presenterRequestable(p)) {
+                <label
+                  >Prompt
+                  <textarea
+                    rows="4"
+                    data-test="presenter-prompt"
+                    [value]="presenterPromptText(p)"
+                    (input)="presenterPrompt.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+                <span class="meta" data-test="presenter-prompt-count"
+                  >{{ presenterPromptText(p).trim().length }} / {{ maxPresenterPrompt }}</span
+                >
+                <p class="meta safety" data-test="presenter-safety">{{ presenterSafety }}</p>
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="presenter-generate"
+                    [disabled]="
+                      projectMediaBusy() ||
+                      noPictures() ||
+                      presenterPromptText(p).trim().length > maxPresenterPrompt
+                    "
+                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
+                    (click)="generatePresenter(p)"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <label
+                  >What would you change?
+                  <textarea
+                    rows="2"
+                    data-test="presenter-feedback"
+                    [value]="presenterFeedback()"
+                    (input)="presenterFeedback.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+                <span class="meta" data-test="presenter-feedback-count"
+                  >{{ presenterFeedback().trim().length }} / {{ maxPresenterFeedback }}</span
+                >
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="presenter-change"
+                    [disabled]="
+                      projectMediaBusy() ||
+                      noPictures() ||
+                      presenterFeedback().trim().length === 0 ||
+                      presenterFeedback().trim().length > maxPresenterFeedback
+                    "
+                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
+                    (click)="askPresenterChange(p)"
+                  >
+                    Ask for a change
+                  </button>
+                </div>
+                @if (builtinPresenters().length > 0) {
+                  <div class="row">
+                    <label
+                      >Scout's presenters
+                      <select
+                        data-test="presenter-builtin"
+                        (change)="builtinChoice.set($any($event.target).value)"
+                      >
+                        @for (b of builtinPresenters(); track b.id) {
+                          <option [value]="b.id" [selected]="builtinChosen() === b.id">
+                            {{ b.label }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      data-test="presenter-builtin-use"
+                      [disabled]="projectMediaBusy()"
+                      (click)="useBuiltinPresenter(p)"
+                    >
+                      Use this one
+                    </button>
+                  </div>
+                }
+              }
+              @if (p.presenterVersions.length > 0) {
+                <ol class="versions" data-test="presenter-versions">
+                  @for (v of p.presenterVersions; track v.file; let i = $index) {
+                    <li
+                      class="version"
+                      [class.version--current]="v.file === p.presenterFile"
+                      [attr.data-test]="'presenter-version-' + i"
+                    >
+                      <img
+                        class="version__thumb"
+                        [src]="mediaUrl(p, v.file, v.madeAt)"
+                        [alt]="'Presenter version ' + (i + 1)"
+                      />
+                      <span [attr.data-test]="'presenter-version-label-' + i"
+                        >{{ i + 1 }} · {{ presenterSourceName(v.source) }}</span
+                      >
+                      <span class="meta" [attr.data-test]="'presenter-version-summary-' + i">{{
+                        versionSummary(v)
+                      }}</span>
+                      @if (v.file === p.presenterFile) {
+                        <span class="badge" [attr.data-test]="'presenter-current-' + i"
+                          >Current</span
+                        >
+                      } @else if (presenterRequestable(p)) {
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          [attr.data-test]="'presenter-use-' + i"
+                          [disabled]="projectMediaBusy()"
+                          (click)="usePresenterVersion(p, i)"
+                        >
+                          Use this one
+                        </button>
+                      }
+                    </li>
+                  }
+                </ol>
+              }
+              @if (readiness(); as r) {
+                <p class="meta" data-test="presenter-budget">
+                  {{ r.picturesLeftToday }} of {{ dailyPictures }} pictures left today
+                </p>
+              }
               @if (backgroundAttachable(p)) {
                 <div class="row">
                   <button
@@ -654,16 +848,6 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     (click)="attachProjectMedia(p, 'presenter')"
                   >
                     {{ p.presenterFile ? 'Replace picture' : 'Attach picture' }}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    data-test="presenter-regenerate"
-                    [disabled]="projectMediaBusy() || noPictures()"
-                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
-                    (click)="regeneratePresenter(p)"
-                  >
-                    Regenerate picture
                   </button>
                 </div>
               }
@@ -853,6 +1037,9 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
           @if (produceError(); as message) {
             <p class="err" data-test="produce-error">{{ message }}</p>
           }
+          @if (p.status === 'presenting') {
+            <p class="meta" data-test="presenting-progress">Making the presenter.</p>
+          }
           @if (p.status === 'producing') {
             <p class="meta" data-test="production-progress">
               {{ readyScenes(p) }} of {{ p.scenes.length }} scenes ready
@@ -874,8 +1061,47 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     <p class="meta" [attr.data-test]="'scene-clip-' + s.id">
                       Clip: {{ clock(s.clipStartMs) }} to {{ clock(s.clipEndMs) }}
                     </p>
-                  } @else if (p.format !== 'animated_character') {
+                  } @else if (p.format === 'own_pictures') {
                     <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
+                  } @else {
+                    <label class="meta"
+                      >Picture prompt
+                      <textarea
+                        rows="2"
+                        [attr.data-test]="'scene-picture-prompt-' + s.id"
+                        [value]="picturePromptOf(s)"
+                        (input)="setPicturePrompt(s, $any($event.target).value)"
+                      ></textarea>
+                    </label>
+                    @if (picturePromptInvalid(s)) {
+                      <p class="err" [attr.data-test]="'scene-picture-prompt-invalid-' + s.id">
+                        A picture prompt is 1 to 700 characters.
+                      </p>
+                    }
+                    <div class="row">
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-picture-prompt-save-' + s.id"
+                        [disabled]="
+                          picturePromptInvalid(s) ||
+                          picturePromptOf(s).trim() === s.visualPrompt ||
+                          s.locked ||
+                          sceneBusy() !== null
+                        "
+                        (click)="savePicturePrompt(p, s)"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-picture-prompt-cancel-' + s.id"
+                        (click)="cancelPicturePrompt(s)"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   }
                   <p class="meta">
                     <span class="badge" [attr.data-test]="'scene-status-' + s.id">{{
@@ -898,7 +1124,29 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                       <p class="meta" [attr.data-test]="'scene-note-' + s.id">{{ note }}</p>
                     }
                   }
-                  @if (s.visualSource !== 'text_card' && s.visualFile; as file) {
+                  @if (
+                    s.visualSource !== 'text_card' &&
+                      p.format === 'animated_character' &&
+                      s.visualFile;
+                    as file
+                  ) {
+                    <div class="card" [attr.data-test]="'scene-preview-' + s.id">
+                      <img
+                        class="card__image"
+                        [attr.data-test]="'scene-image-' + s.id"
+                        [src]="mediaUrl(p, file)"
+                        [alt]="'Picture of scene ' + s.order"
+                      />
+                      @if (p.presenterFile; as presenter) {
+                        <img
+                          class="card__badge"
+                          [attr.data-test]="'scene-presenter-badge-' + s.id"
+                          [src]="mediaUrl(p, presenter)"
+                          alt=""
+                        />
+                      }
+                    </div>
+                  } @else if (s.visualSource !== 'text_card' && s.visualFile; as file) {
                     <img
                       class="preview"
                       [attr.data-test]="'scene-image-' + s.id"
@@ -990,7 +1238,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     >
                       Move down
                     </button>
-                    @if (p.format === 'generated_pictures') {
+                    @if (p.format === 'generated_pictures' || p.format === 'animated_character') {
                       <button
                         type="button"
                         class="btn btn--secondary"
@@ -999,6 +1247,15 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                         (click)="regenerate(p, s)"
                       >
                         Regenerate scene
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        [attr.data-test]="'scene-picture-regenerate-' + s.id"
+                        [disabled]="s.locked || sceneBusy() !== null"
+                        (click)="regeneratePicture(p, s)"
+                      >
+                        Regenerate picture
                       </button>
                     }
                     <button
@@ -1010,7 +1267,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     >
                       Edit text
                     </button>
-                    @if (p.format === 'own_pictures') {
+                    @if (p.format === 'own_pictures' || p.format === 'animated_character') {
                       <button
                         type="button"
                         class="btn btn--secondary"
@@ -1429,6 +1686,39 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       .card__image--presenter {
         object-fit: contain;
       }
+      .card__badge {
+        position: absolute;
+        right: 3%;
+        bottom: 3%;
+        height: 45%;
+        object-fit: contain;
+      }
+      .safety {
+        opacity: 0.6;
+      }
+      .versions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        list-style: none;
+        padding: 0;
+      }
+      .version {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        width: 140px;
+        padding: 6px;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+      }
+      .version--current {
+        border-color: #22c55e;
+      }
+      .version__thumb {
+        width: 100%;
+        border-radius: 4px;
+      }
       .mouth-area {
         position: relative;
         display: inline-block;
@@ -1550,9 +1840,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly blockedTopics = signal('');
   readonly targetMetric = signal('');
   readonly targetValue = signal('');
+  readonly defaultFormat = signal<ProjectFormat>('generated_pictures');
+  readonly defaultFormats = DEFAULT_FORMATS;
 
   readonly topic = signal('');
-  readonly startFormat = signal<ProjectFormat>('generated_pictures');
+  readonly startChoice = signal<ProjectFormat | null>(null);
   readonly startDirection = signal('');
   readonly startPresenter = signal('');
   readonly starting = signal(false);
@@ -1577,6 +1869,18 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly transcribable = computed(() => this.readiness()?.transcriptionAvailable === true);
   readonly lipSyncable = computed(() => this.readiness()?.lipSyncAvailable === true);
   readonly noPictures = computed(() => this.readiness()?.imagesAvailable === false);
+  readonly preferredFormat = computed((): ProjectFormat => {
+    const chosen = this.mandate()?.defaultFormat || 'generated_pictures';
+    if (chosen === 'animated_character' && !this.lipSyncable()) return 'generated_pictures';
+    if (chosen === 'own_video' && !this.transcribable()) return 'generated_pictures';
+    return chosen;
+  });
+  readonly startFormat = computed(() => this.startChoice() ?? this.preferredFormat());
+  readonly builtinPresenters = computed(() => this.readiness()?.builtinPresenters ?? []);
+  readonly builtinChoice = signal<string | null>(null);
+  readonly builtinChosen = computed(
+    () => this.builtinChoice() ?? this.builtinPresenters()[0]?.id ?? null,
+  );
   readonly voiceGroups = computed(() => {
     const groups = new Map<string, VoiceDto[]>();
     for (const voice of this.readiness()?.voices ?? []) {
@@ -1615,6 +1919,13 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly maxDirection = MAX_DIRECTION;
   readonly maxPresenter = MAX_PRESENTER;
   readonly maxSceneText = MAX_SCENE_TEXT;
+  readonly maxPresenterPrompt = MAX_PRESENTER_PROMPT;
+  readonly maxPresenterFeedback = MAX_PRESENTER_FEEDBACK;
+  readonly dailyPictures = DAILY_PICTURES;
+  readonly presenterSafety = PRESENTER_SAFETY;
+  readonly presenterPrompt = signal<string | null>(null);
+  readonly presenterFeedback = signal('');
+  readonly picturePromptDrafts = signal<Readonly<Record<string, string>>>({});
   private readonly samplePlayer = viewChild<ElementRef<HTMLAudioElement>>('samplePlayer');
   readonly producing = signal(false);
   readonly produceError = signal<string | null>(null);
@@ -1681,6 +1992,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
         blockedTopics: trimmedList(this.blockedTopics().split(',')),
         targetMetric: this.targetMetric(),
         targetValue: this.targetValue().trim(),
+        defaultFormat: this.defaultFormat(),
       });
       this.mandate.set(saved);
     } catch (err: unknown) {
@@ -1702,7 +2014,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
       });
       this.queued.set(project);
       this.topic.set('');
-      this.startFormat.set('generated_pictures');
+      this.startChoice.set(null);
       this.startDirection.set('');
       this.startPresenter.set('');
       await this.refresh();
@@ -1726,6 +2038,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.presenterError.set(null);
     this.mouthDraft.set(null);
     this.mouthStart = null;
+    this.presenterPrompt.set(null);
+    this.presenterFeedback.set('');
+    this.builtinChoice.set(null);
+    this.picturePromptDrafts.set({});
     this.sceneError.set(null);
     this.editingScene.set(null);
     await this.loadSelected();
@@ -1787,8 +2103,19 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return SOURCE_LABELS[source] ?? source;
   }
 
-  mediaUrl(project: OperatorProjectDto, fileName: string): string {
-    return `scout-media://${project.id}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(project.updatedAt)}`;
+  mediaUrl(
+    project: OperatorProjectDto,
+    fileName: string,
+    stamp: string = project.updatedAt,
+  ): string {
+    return `scout-media://${project.id}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(stamp)}`;
+  }
+
+  presenterStamp(project: OperatorProjectDto): string {
+    return (
+      project.presenterVersions.find((v) => v.file === project.presenterFile)?.madeAt ??
+      project.updatedAt
+    );
   }
 
   delegable(project: OperatorProjectDto): boolean {
@@ -1973,9 +2300,79 @@ export class ProductionComponent implements OnInit, OnDestroy {
     );
   }
 
-  regeneratePresenter(project: OperatorProjectDto): Promise<void> {
+  presenterRequestable(project: OperatorProjectDto): boolean {
+    return (
+      PRESENTER_REQUESTABLE.includes(project.status) ||
+      (project.status === 'failed' && project.script !== null)
+    );
+  }
+
+  /**
+   * The prompt of the current presenter version, else the one the worker composes: the direction, the presenter
+   * description or the topic, and the style; the safety tail is never part of it.
+   */
+  presenterPromptOf(project: OperatorProjectDto): string {
+    const current = project.presenterVersions.find((v) => v.file === project.presenterFile);
+    if (current !== undefined && current.prompt !== '') return current.prompt;
+    const parts = [project.direction, project.presenter || project.topic, PRESENTER_STYLE]
+      .map((part) => part.trim().replace(/\.+$/, ''))
+      .filter((part) => part.length > 0);
+    return `${parts.join('. ')}.`;
+  }
+
+  presenterPromptText(project: OperatorProjectDto): string {
+    return this.presenterPrompt() ?? this.presenterPromptOf(project);
+  }
+
+  presenterSourceName(source: string): string {
+    return PRESENTER_SOURCES[source] ?? source;
+  }
+
+  versionSummary(version: PresenterVersionDto): string {
+    return (version.feedback || version.prompt).slice(0, VERSION_SUMMARY);
+  }
+
+  generatePresenter(project: OperatorProjectDto): Promise<void> {
+    const prompt = this.presenterPromptText(project).trim();
+    return this.projectMediaAction(this.presenterError, async () => {
+      const updated = await this.bridge.operatorRequestPresenter({
+        projectId: project.id,
+        feedback: '',
+        prompt,
+      });
+      this.presenterPrompt.set(null);
+      return updated;
+    });
+  }
+
+  askPresenterChange(project: OperatorProjectDto): Promise<void> {
+    const feedback = this.presenterFeedback().trim();
+    return this.projectMediaAction(this.presenterError, async () => {
+      const updated = await this.bridge.operatorRequestPresenter({
+        projectId: project.id,
+        feedback,
+        prompt: '',
+      });
+      this.presenterFeedback.set('');
+      return updated;
+    });
+  }
+
+  useBuiltinPresenter(project: OperatorProjectDto): Promise<void> {
+    const id = this.builtinChosen();
+    if (id === null) return Promise.resolve();
     return this.projectMediaAction(this.presenterError, () =>
-      this.bridge.operatorRegeneratePresenter({ id: project.id }),
+      this.bridge.operatorRequestPresenter({
+        projectId: project.id,
+        feedback: `builtin:${id}`,
+        prompt: '',
+      }),
+    );
+  }
+
+  usePresenterVersion(project: OperatorProjectDto, index: number): Promise<void> {
+    return this.projectMediaAction(this.presenterError, () =>
+      this.bridge.operatorUsePresenterVersion({ projectId: project.id, index }),
     );
   }
 
@@ -2076,6 +2473,42 @@ export class ProductionComponent implements OnInit, OnDestroy {
     );
   }
 
+  regeneratePicture(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    return this.sceneAction(scene.id, () =>
+      this.bridge.operatorRegenerateScenePicture({ projectId: project.id, sceneId: scene.id }),
+    );
+  }
+
+  picturePromptOf(scene: SceneDto): string {
+    return this.picturePromptDrafts()[scene.id] ?? scene.visualPrompt;
+  }
+
+  picturePromptInvalid(scene: SceneDto): boolean {
+    const length = this.picturePromptOf(scene).trim().length;
+    return length === 0 || length > MAX_PICTURE_PROMPT;
+  }
+
+  setPicturePrompt(scene: SceneDto, value: string): void {
+    this.picturePromptDrafts.update((drafts) => ({ ...drafts, [scene.id]: value }));
+  }
+
+  cancelPicturePrompt(scene: SceneDto): void {
+    this.picturePromptDrafts.update(({ [scene.id]: _dropped, ...rest }) => rest);
+  }
+
+  savePicturePrompt(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
+    const prompt = this.picturePromptOf(scene).trim();
+    return this.sceneAction(scene.id, async () => {
+      const updated = await this.bridge.operatorEditScenePicturePrompt({
+        projectId: project.id,
+        sceneId: scene.id,
+        prompt,
+      });
+      this.cancelPicturePrompt(scene);
+      return updated;
+    });
+  }
+
   askRegenerateNarration(project: OperatorProjectDto, scene: SceneDto): Promise<void> {
     if (scene.audioSource !== 'owner') return this.regenerateNarration(project, scene);
     this.replacingNarration.set(scene);
@@ -2166,6 +2599,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.blockedTopics.set(mandate.blockedTopics.join(', '));
     this.targetMetric.set(mandate.targetMetric);
     this.targetValue.set(mandate.targetValue);
+    this.defaultFormat.set(mandate.defaultFormat || 'generated_pictures');
   }
 
   private async loadMandate(): Promise<void> {

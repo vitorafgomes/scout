@@ -5,7 +5,11 @@ using System.Text;
 namespace Scout.Operator;
 
 /// <summary>What a finished program left: its exit code, its whole standard output and the end of its standard error.</summary>
-internal sealed record ProcessResult(int ExitCode, string Output, string ErrorTail);
+internal sealed record ProcessResult(int ExitCode, string Output, string ErrorTail)
+{
+    /// <summary>The standard output as the program wrote it, byte for byte, when the run asked for raw output; empty otherwise.</summary>
+    public byte[] OutputBytes { get; init; } = [];
+}
 
 /// <summary>Runs one external program to completion.</summary>
 internal interface IProcessRunner
@@ -13,10 +17,11 @@ internal interface IProcessRunner
     /// <summary>
     /// Run <paramref name="program"/> with <paramref name="arguments"/> as separate arguments, never through a shell, and
     /// return how it ended. <paramref name="input"/> as UTF-8, else <paramref name="inputBytes"/> as they are, is written to its
-    /// standard input, which is then closed; without either it is closed at once. A program that cannot be started, or runs past
+    /// standard input, which is then closed; without either it is closed at once. With <paramref name="rawOutput"/> the
+    /// standard output comes back only as bytes and <see cref="ProcessResult.Output"/> is empty. A program that cannot be started, or runs past
     /// <paramref name="timeout"/>, fails with an <see cref="InvalidOperationException"/>; a cancelled run is killed.
     /// </summary>
-    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null);
+    Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null, bool rawOutput = false);
 }
 
 /// <summary>
@@ -36,7 +41,7 @@ internal sealed class ProcessRunner : IProcessRunner
         $"{Path.GetFileName(program)} ran longer than {timeout.TotalSeconds:0} seconds and was stopped.";
 
     public async Task<ProcessResult> RunAsync(
-        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
+        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null, bool rawOutput = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(program);
         ArgumentNullException.ThrowIfNull(arguments);
@@ -63,7 +68,7 @@ internal sealed class ProcessRunner : IProcessRunner
             throw new InvalidOperationException(NotStarted(program), ex);
         }
 
-        var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var output = ReadAllAsync(process.StandardOutput);
         var error = ReadTailAsync(process.StandardError);
         var feed = FeedAsync(process.StandardInput, input is null ? inputBytes ?? [] : Encoding.UTF8.GetBytes(input));
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -80,10 +85,24 @@ internal sealed class ProcessRunner : IProcessRunner
         }
 
         await feed.ConfigureAwait(false);
-        return new ProcessResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
+        var bytes = await output.ConfigureAwait(false);
+        if (rawOutput)
+        {
+            return new ProcessResult(process.ExitCode, string.Empty, await error.ConfigureAwait(false)) { OutputBytes = bytes };
+        }
+
+        using var text = new StreamReader(new MemoryStream(bytes), process.StandardOutput.CurrentEncoding, detectEncodingFromByteOrderMarks: true);
+        return new ProcessResult(process.ExitCode, await text.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false), await error.ConfigureAwait(false));
     }
 
-    private static async Task StopAsync(Process process, Task<string> output, Task<string> error)
+    private static async Task<byte[]> ReadAllAsync(StreamReader reader)
+    {
+        using var buffer = new MemoryStream();
+        await reader.BaseStream.CopyToAsync(buffer, CancellationToken.None).ConfigureAwait(false);
+        return buffer.ToArray();
+    }
+
+    private static async Task StopAsync(Process process, Task<byte[]> output, Task<string> error)
     {
         try
         {

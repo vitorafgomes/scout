@@ -224,6 +224,8 @@ public sealed class HostOperatorTurnTests
         public Task<OperatorProjectState> ProduceProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FinalTextSink : IResponseSink

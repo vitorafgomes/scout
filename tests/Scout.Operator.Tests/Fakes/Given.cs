@@ -79,22 +79,26 @@ internal static class Given
         IProcessRunner? runner = null,
         PiperSpeech? piper = null,
         OpenverseHttp? openverse = null,
-        Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null)
+        Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null,
+        IFaceMouth? faces = null,
+        string presenters = "")
     {
         var kernel = media ?? Media();
         var capabilities = Capabilities(kernel);
         var clock = time ?? new SteppingTime(Now);
         var processes = runner ?? new FakeProcessRunner();
         var visuals = new VisualGenerator(kernel, capabilities, clock, openverse is null ? null : new OpenversePictures(openverse.Factory(), clock));
+        var narration = new NarrationGenerator(kernel, capabilities, piper ?? Piper(new FakeProcessRunner()));
         return new(
             controlPlane,
             Researcher(youtube, chat, controlPlane: controlPlane),
             new ScriptWriter(chat),
             new ScenePlanner(chat),
-            new NarrationGenerator(kernel, capabilities, piper ?? Piper(new FakeProcessRunner())),
+            narration,
             visuals,
             Assembly(processes, visuals),
             new TranscriptionStage(Toolset(processes), new MediaProbe(processes), clock, transcriber),
+            Presenter(controlPlane, processes, visuals, narration, faces, presenters, clock),
             notifier,
             NullLogger<OperatorPipeline>.Instance);
     }
@@ -239,6 +243,29 @@ internal static class Given
         var toolset = Toolset(runner);
         return new(toolset, new MediaProbe(runner), lipSync ?? LipSync(runner));
     }
+
+    /// <summary>The presenter job over <paramref name="runner"/>, finding mouths with <paramref name="faces"/> and the built-in presenters in <paramref name="presenters"/>.</summary>
+    public static PresenterStage Presenter(
+        IOperatorControlPlane controlPlane,
+        IProcessRunner runner,
+        VisualGenerator visuals,
+        NarrationGenerator narration,
+        IFaceMouth? faces = null,
+        string presenters = "",
+        TimeProvider? time = null,
+        RhubarbLipSync? lipSync = null,
+        Microsoft.Extensions.Logging.ILogger<PresenterStage>? logger = null)
+        => new(
+            controlPlane,
+            visuals,
+            narration,
+            new BuiltInPresenters(Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions { PresentersPath = presenters })),
+            faces ?? new FoundMouth(),
+            Assembler(runner, lipSync),
+            Toolset(runner),
+            new MediaProbe(runner),
+            time ?? new FakeTimeProvider(Now),
+            logger ?? NullLogger<PresenterStage>.Instance);
 
     public static string Prompts(int count)
         => "{\"prompts\":[" + string.Join(",", Enumerable.Range(1, count).Select(i => $"\"Picture {i}\"")) + "]}";

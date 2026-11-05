@@ -7,6 +7,7 @@ namespace Scout.ControlPlane.Operator;
 internal static class SceneRules
 {
     public const string Owner = "owner";
+    public const string Generated = "generated";
     public const string NoAudio = "none";
     public const string TextCard = "text_card";
     public const string Stock = "stock";
@@ -22,8 +23,8 @@ internal static class SceneRules
     private const int MaxFileNameLength = 120;
 
     private static readonly string[] Statuses = [Planned, "generating", Ready, "failed"];
-    private static readonly string[] AudioSources = ["generated", Owner, NoAudio, Recording];
-    private static readonly string[] VisualSources = ["generated", Owner, TextCard, Stock, Recording, Presenter];
+    private static readonly string[] AudioSources = [Generated, Owner, NoAudio, Recording];
+    private static readonly string[] VisualSources = [Generated, Owner, TextCard, Stock, Recording, Presenter];
     private static readonly string[] AudioExtensions = [".mp3", ".wav", ".m4a", ".ogg"];
     private static readonly string[] VisualExtensions = [".png", ".jpg", ".jpeg", ".webp"];
     private static readonly string[] VideoExtensions = [".mp4"];

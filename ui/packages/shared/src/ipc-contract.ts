@@ -74,6 +74,10 @@ export const CHANNEL = {
   operatorNarrationRegeneration: 'scout:operator.narrationRegeneration',
   operatorMouthBox: 'scout:operator.mouthBox',
   operatorPresenterRegeneration: 'scout:operator.presenterRegeneration',
+  operatorPresenterRequest: 'scout:operator.presenterRequest',
+  operatorPresenterVersion: 'scout:operator.presenterVersion',
+  operatorScenePicturePrompt: 'scout:operator.scenePicturePrompt',
+  operatorScenePictureRegeneration: 'scout:operator.scenePictureRegeneration',
   operatorSceneMedia: 'scout:operator.sceneMedia',
   operatorReadiness: 'scout:operator.readiness',
   operatorWindow: 'scout:operator.window',
@@ -589,6 +593,8 @@ export interface MandateDto {
   readonly blockedTopics: readonly string[];
   readonly targetMetric: string;
   readonly targetValue: string;
+  /** The format a new video starts in; empty for Generated pictures. */
+  readonly defaultFormat: ProjectFormat | '';
   readonly updatedAt: string | null;
 }
 
@@ -678,6 +684,25 @@ export interface OperatorProjectDto {
   readonly presenterFile: string | null;
   /** Where the character's mouth is on its picture; null until the owner marks it. */
   readonly mouthBox: MouthBoxDto | null;
+  /** Every presenter Scout made or the owner chose for this project, oldest first, at most 10. */
+  readonly presenterVersions: readonly PresenterVersionDto[];
+  /** The short clip of the current presenter speaking, named inside the project's media directory. */
+  readonly presenterPreviewFile: string | null;
+  /** The presenter job waiting for the worker: empty for none, `first` for Scout's own, else the owner's feedback. */
+  readonly presenterRequest: string;
+  /** Where the current presenter came from: `generated`, `builtin`, `owner`, or empty before any. */
+  readonly presenterSource: string;
+}
+
+/** One presenter of a project, with the prompt it was made from and its preview clip. */
+export interface PresenterVersionDto {
+  readonly file: string;
+  readonly prompt: string;
+  readonly feedback: string;
+  readonly previewFile: string | null;
+  readonly mouthBox: MouthBoxDto | null;
+  readonly madeAt: string;
+  readonly source: string;
 }
 
 /**
@@ -957,6 +982,29 @@ export interface MouthBoxRequest {
   readonly mouthBox: MouthBoxDto;
 }
 
+/**
+ * The owner's request for a new presenter: a prompt of at most 1500 characters used verbatim, empty to compose it,
+ * and feedback of at most 300 appended as a change, `builtin:<id>` for one of Scout's own presenters.
+ */
+export interface PresenterRequest {
+  readonly projectId: string;
+  readonly feedback: string;
+  readonly prompt: string;
+}
+
+/** The older presenter version, by its 0-based index, the owner makes current again. */
+export interface PresenterVersionRequest {
+  readonly projectId: string;
+  readonly index: number;
+}
+
+/** The owner's picture prompt for one scene, 1 to 700 characters after trimming. */
+export interface ScenePicturePromptRequest {
+  readonly projectId: string;
+  readonly sceneId: string;
+  readonly prompt: string;
+}
+
 export type ClaimStatus = 'supported' | 'unsupported' | 'waived';
 
 /** The owner's verdict on one claim; a waived claim needs the note saying why. */
@@ -1032,6 +1080,17 @@ export interface ReadinessDto {
   readonly transcriptionAvailable: boolean;
   /** True when the worker has the lip-sync program and the mouth shapes, so an animated character can speak. */
   readonly lipSyncAvailable: boolean;
+  /** True when the worker has the face models, so it finds the mouth on a presenter picture itself. */
+  readonly faceDetectionAvailable: boolean;
+  /** How many of the day's 40 picture requests are left. */
+  readonly picturesLeftToday: number;
+  /** Scout's own presenters the owner can choose by id. */
+  readonly builtinPresenters: readonly BuiltinPresenterDto[];
+}
+
+export interface BuiltinPresenterDto {
+  readonly id: string;
+  readonly label: string;
 }
 
 export interface FeatureSetCredentialsRequest {
@@ -1507,6 +1566,10 @@ export interface ScoutBridge {
   operatorRegenerateNarration(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorSetMouthBox(req: MouthBoxRequest): Promise<OperatorProjectDto>;
   operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
+  operatorRequestPresenter(req: PresenterRequest): Promise<OperatorProjectDto>;
+  operatorUsePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto>;
+  operatorEditScenePicturePrompt(req: ScenePicturePromptRequest): Promise<OperatorProjectDto>;
+  operatorRegenerateScenePicture(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
   operatorReadiness(): Promise<ReadinessDto>;
   /** Opens the YouTube operator window, or brings it to the front when it is already open. */

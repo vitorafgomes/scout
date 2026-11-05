@@ -26,6 +26,8 @@ const APPIMAGE = 'tesseract appimage bytes';
 const ENG = 'eng traineddata bytes';
 const POR = 'por traineddata bytes';
 const LEPTONICA_LICENCE = 'leptonica licence bytes';
+const DETECTOR = 'face detector bytes';
+const LANDMARKER = 'face landmarker bytes';
 
 const table = {
   ffmpeg: {
@@ -172,6 +174,31 @@ const table = {
       },
     ],
   },
+  face: {
+    files: [
+      {
+        file: 'blazeface-short-range.onnx',
+        url: 'https://example.test/face_detector.onnx',
+        size: DETECTOR.length,
+        sha256: sha(DETECTOR),
+        repo: 'https://example.test/blazeface-onnx',
+        commit: 'aaa111',
+        license: 'Apache-2.0',
+        model: 'A face detector, converted to ONNX',
+      },
+      {
+        file: 'face-landmarker.onnx',
+        url: 'https://example.test/face_landmarks.onnx',
+        size: LANDMARKER.length,
+        sha256: sha(LANDMARKER),
+        repo: 'https://example.test/face-landmarks-onnx',
+        commit: 'bbb222',
+        license: 'Apache-2.0',
+        model: 'A face mesh, converted to ONNX',
+        outOfScope: 'Its model card places identification outside its intended use.',
+      },
+    ],
+  },
 };
 
 const BODIES: Record<string, string> = {
@@ -193,6 +220,8 @@ const BODIES: Record<string, string> = {
   'https://example.test/por.traineddata': POR,
   'https://example.test/tessdata-LICENSE': LICENCE,
   'https://example.test/leptonica-license.txt': LEPTONICA_LICENCE,
+  'https://example.test/face_detector.onnx': DETECTOR,
+  'https://example.test/face_landmarks.onnx': LANDMARKER,
 };
 
 function fakeFetch(bodies: Record<string, string> = BODIES) {
@@ -402,7 +431,7 @@ describe('fetch-media-tools', () => {
     expect(existsSync(join(resourcesDir, 'media-tools', 'linux-x64', 'rhubarb'))).toBe(false);
   });
 
-  it('a new ffmpeg build replaces only its own files and leaves the piper and rhubarb folders in place', async () => {
+  it('a new ffmpeg build replaces only its own files and leaves the piper, rhubarb and face folders in place, so the face models are not downloaded again', async () => {
     const { resourcesDir, cacheDir } = await folders();
     await fetchMediaTools({
       target: 'linux-x64',
@@ -414,14 +443,16 @@ describe('fetch-media-tools', () => {
       extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
+    await rm(join(cacheDir, 'face'), { recursive: true, force: true });
     const extracted: string[] = [];
+    const second = fakeFetch();
 
     await fetchMediaTools({
       target: 'linux-x64',
       table: { ...table, ffmpeg: { ...table.ffmpeg, version: 'n9.0.3-test' } },
       resourcesDir,
       cacheDir,
-      fetch: fakeFetch().fetch,
+      fetch: second.fetch,
       extract: async (archive: string, dir: string, members: readonly string[]) => {
         extracted.push(archive);
         await fakeExtract(archive, dir, members);
@@ -434,7 +465,157 @@ describe('fetch-media-tools', () => {
     expect(extracted).toEqual([join(cacheDir, 'ffmpeg-linux64.tar.xz')]);
     expect(existsSync(join(tools, 'rhubarb', 'rhubarb'))).toBe(true);
     expect(existsSync(join(tools, 'piper', 'piper'))).toBe(true);
+    expect(existsSync(join(tools, 'face', 'face-landmarker.onnx'))).toBe(true);
+    expect(second.urls.filter((url) => url.includes('face'))).toEqual([]);
     expect(await readFile(join(tools, 'NOTICE.txt'), 'utf8')).toContain('n9.0.3-test');
+  });
+
+  it('the pinned table names the two face models under their fixed names, each from its Hugging Face repository at a pinned commit with its size, SHA-256 and Apache-2.0 licence', () => {
+    const pinned = JSON.parse(readFileSync(TABLE_PATH, 'utf8')) as typeof table;
+
+    expect(
+      pinned.face.files.map(({ file, url, size, sha256, repo, commit, license }) => ({
+        file,
+        url,
+        size,
+        sha256,
+        repo,
+        commit,
+        license,
+      })),
+    ).toEqual([
+      {
+        file: 'blazeface-short-range.onnx',
+        url: 'https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx/resolve/50f2c66ffbdf84beae8c267df2b49e5c5a5162e9/face_detector.onnx',
+        size: 418437,
+        sha256: '02a04d5d37c3558dc4d5274f7f8f0f0f01ac94e46c5ffb2cee82395d47e23181',
+        repo: 'https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx',
+        commit: '50f2c66ffbdf84beae8c267df2b49e5c5a5162e9',
+        license: 'Apache-2.0',
+      },
+      {
+        file: 'face-landmarker.onnx',
+        url: 'https://huggingface.co/naklitechie/face-landmarks-onnx/resolve/575c33816c840c5b156398adb485e4f8d138adc2/face_landmarks.onnx',
+        size: 4920995,
+        sha256: 'f38c3321ceffbc9e95103480ad38cc3f52e7e1bde2bcee7cd9355d0b9138ac0c',
+        repo: 'https://huggingface.co/naklitechie/face-landmarks-onnx',
+        commit: '575c33816c840c5b156398adb485e4f8d138adc2',
+        license: 'Apache-2.0',
+      },
+    ]);
+    expect(
+      pinned.face.files.filter((f) => !f.url.startsWith(`${f.repo}/resolve/${f.commit}/`)),
+    ).toEqual([]);
+    expect(pinned.face.files[1]!.outOfScope).toBe(
+      'Its model card places identification and life-critical decisions outside its intended use.',
+    );
+  });
+
+  it('fetches the face models into media-tools/<target>/face under their fixed names on every target, with a notice naming their sources, commits, digests, licences and the out-of-scope use', async () => {
+    const folded = await Promise.all(
+      ['linux-x64', 'darwin-arm64'].map(async (target) => {
+        const { resourcesDir, cacheDir } = await folders();
+        await fetchMediaTools({
+          target,
+          table,
+          resourcesDir,
+          cacheDir,
+          fetch: fakeFetch().fetch,
+          extract: fakeExtract,
+          extractAppImage: fakeExtractAppImage,
+          log: () => undefined,
+        });
+        const face = join(resourcesDir, 'media-tools', target, 'face');
+        return {
+          files: (await readdir(face)).sort(),
+          detector: await readFile(join(face, 'blazeface-short-range.onnx'), 'utf8'),
+          landmarker: await readFile(join(face, 'face-landmarker.onnx'), 'utf8'),
+          notice: await readFile(join(face, 'NOTICE.txt'), 'utf8'),
+        };
+      }),
+    );
+
+    for (const { files, detector, landmarker, notice } of folded) {
+      expect(files).toEqual(['NOTICE.txt', 'blazeface-short-range.onnx', 'face-landmarker.onnx']);
+      expect([detector, landmarker]).toEqual([DETECTOR, LANDMARKER]);
+      expect(notice).toContain('Source: https://example.test/blazeface-onnx at commit aaa111');
+      expect(notice).toContain('Source: https://example.test/face-landmarks-onnx at commit bbb222');
+      expect(notice).toContain(`SHA-256: ${sha(DETECTOR)}`);
+      expect(notice).toContain(`SHA-256: ${sha(LANDMARKER)}`);
+      expect(notice).toContain('Licence: Apache-2.0');
+      expect(notice).toContain('Its model card places identification outside its intended use.');
+    }
+  });
+
+  it('a face model whose digest or size is not the pinned one is refused and nothing of it is kept', async () => {
+    const tampered = async (body: string) => {
+      const { resourcesDir, cacheDir } = await folders();
+      const failure = await fetchMediaTools({
+        target: 'linux-x64',
+        table,
+        resourcesDir,
+        cacheDir,
+        fetch: fakeFetch({ ...BODIES, 'https://example.test/face_landmarks.onnx': body }).fetch,
+        extract: fakeExtract,
+        extractAppImage: fakeExtractAppImage,
+        log: () => undefined,
+      }).then(
+        () => null,
+        (err: unknown) => err as Error,
+      );
+      return {
+        message: failure?.message,
+        cached: existsSync(join(cacheDir, 'face', 'face-landmarker.onnx')),
+        kept: existsSync(
+          join(resourcesDir, 'media-tools', 'linux-x64', 'face', 'face-landmarker.onnx'),
+        ),
+      };
+    };
+    const sameLength = 'x'.repeat(LANDMARKER.length);
+
+    expect(await tampered(sameLength)).toEqual({
+      message: `media tools: checksum mismatch for https://example.test/face_landmarks.onnx: expected ${sha(LANDMARKER)}, got ${sha(sameLength)}`,
+      cached: false,
+      kept: false,
+    });
+    expect(await tampered('short')).toEqual({
+      message: `media tools: size mismatch for https://example.test/face_landmarks.onnx: expected ${LANDMARKER.length}, got 5`,
+      cached: false,
+      kept: false,
+    });
+  });
+
+  it('a face model download the server answers with a 503 fails the fetch with its status and keeps nothing of it', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const landmarker = 'https://example.test/face_landmarks.onnx';
+    const failing = async (url: string): Promise<Response> =>
+      url === landmarker ? new Response('', { status: 503 }) : fakeFetch().fetch(url);
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch: failing,
+      extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect({
+      message: failure?.message,
+      cached: existsSync(join(cacheDir, 'face', 'face-landmarker.onnx')),
+      kept: existsSync(
+        join(resourcesDir, 'media-tools', 'linux-x64', 'face', 'face-landmarker.onnx'),
+      ),
+    }).toEqual({
+      message: `media tools: ${landmarker} answered 503`,
+      cached: false,
+      kept: false,
+    });
   });
 
   it('the pinned table names the tesseract AppImage for linux-x64 only and the eng and por data with their licence from one tessdata_fast commit, each with an https URL, a size and a 64-hex SHA-256', () => {
@@ -515,6 +696,7 @@ describe('fetch-media-tools', () => {
     expect((await readdir(tools)).sort()).toEqual([
       'LICENSE.txt',
       'NOTICE.txt',
+      'face',
       'ffmpeg',
       'piper',
       'rhubarb',
@@ -637,6 +819,7 @@ describe('fetch-media-tools', () => {
       'en_GB-cori-medium.onnx',
     ]);
     expect((await readdir(join(resourcesDir, 'media-tools', 'darwin-arm64'))).sort()).toEqual([
+      'face',
       'piper',
       'rhubarb',
     ]);

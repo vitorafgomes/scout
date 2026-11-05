@@ -62,6 +62,7 @@ const mandate: MandateDto = {
   blockedTopics: ['politics'],
   targetMetric: 'views',
   targetValue: '10000',
+  defaultFormat: '',
   updatedAt: '2026-11-03T09:00:00Z',
 };
 
@@ -90,6 +91,10 @@ const project: OperatorProjectDto = {
   presenter: '',
   presenterFile: null,
   mouthBox: null,
+  presenterVersions: [],
+  presenterPreviewFile: null,
+  presenterRequest: '',
+  presenterSource: '',
 };
 
 const readiness: ReadinessDto = {
@@ -111,6 +116,9 @@ const readiness: ReadinessDto = {
   reportedAt: '2026-11-03T09:00:00Z',
   transcriptionAvailable: false,
   lipSyncAvailable: false,
+  faceDetectionAvailable: false,
+  picturesLeftToday: 40,
+  builtinPresenters: [{ id: 'ada', label: 'Ada' }],
 };
 
 const view: CommentsViewDto = {
@@ -158,6 +166,10 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     regenerateNarration: mock(async () => ({ ...project, status: 'production_queued' })),
     setMouthBox: mock(async () => project),
     regeneratePresenter: mock(async () => project),
+    requestPresenter: mock(async () => ({ ...project, presenterRequest: 'first' })),
+    usePresenterVersion: mock(async () => project),
+    editScenePicturePrompt: mock(async () => ({ ...project, status: 'production_queued' })),
+    regenerateScenePicture: mock(async () => ({ ...project, status: 'production_queued' })),
     attachSceneMedia: mock(async () => project),
     getMediaDirectory: mock(async () => '/nowhere'),
     getReadiness: mock(async () => readiness),
@@ -796,6 +808,148 @@ describe('registerOperatorHandlers', () => {
     });
   });
 
+  it('a mandate default format is one of the four formats or empty, saved trimmed, and any other is refused with the sentence before the control plane', async () => {
+    const { updatedAt: _stamp, ...fields } = mandate;
+
+    await invoke(CHANNEL.operatorSaveMandate, { ...fields, defaultFormat: ' animated_character ' });
+    await invoke(CHANNEL.operatorSaveMandate, { ...fields, defaultFormat: '' });
+    const refused = await Promise.all(
+      ['ai_presenter', 'talking_head'].map((defaultFormat) =>
+        rejection(invoke(CHANNEL.operatorSaveMandate, { ...fields, defaultFormat })),
+      ),
+    );
+
+    expect(client.saveMandate.mock.calls).toEqual([
+      [{ ...fields, defaultFormat: 'animated_character' }],
+      [{ ...fields, defaultFormat: '' }],
+    ]);
+    expect(refused).toEqual(
+      ['ai_presenter', 'talking_head'].map(() => ({
+        code: 'operator/invalid-request',
+        message:
+          'The default format is generated_pictures, own_pictures, own_video or animated_character.',
+      })),
+    );
+  });
+
+  it('a presenter request forwards the trimmed id, feedback and prompt, a built-in choice as feedback, and refuses feedback over 300 or a prompt over 1500 characters with the sentences before the control plane', async () => {
+    const asked = await invoke(CHANNEL.operatorPresenterRequest, {
+      projectId: ' p1 ',
+      feedback: ' Older, with glasses ',
+      prompt: ' A robot in a lab ',
+    });
+    await invoke(CHANNEL.operatorPresenterRequest, { projectId: 'p1', feedback: 'builtin:ada' });
+    await invoke(CHANNEL.operatorPresenterRequest, {
+      projectId: 'p1',
+      feedback: 'x'.repeat(300),
+      prompt: 'y'.repeat(1500),
+    });
+    const refused = [
+      await rejection(
+        invoke(CHANNEL.operatorPresenterRequest, { projectId: 'p1', feedback: 'x'.repeat(301) }),
+      ),
+      await rejection(
+        invoke(CHANNEL.operatorPresenterRequest, { projectId: 'p1', prompt: 'y'.repeat(1501) }),
+      ),
+      await rejection(invoke(CHANNEL.operatorPresenterRequest, { feedback: 'Older' })),
+    ];
+
+    expect(asked).toEqual({ ...project, presenterRequest: 'first' });
+    expect(client.requestPresenter.mock.calls).toEqual([
+      ['p1', 'Older, with glasses', 'A robot in a lab'],
+      ['p1', 'builtin:ada', ''],
+      ['p1', 'x'.repeat(300), 'y'.repeat(1500)],
+    ]);
+    expect(refused).toEqual([
+      {
+        code: 'operator/invalid-request',
+        message: 'Presenter feedback is at most 300 characters.',
+      },
+      {
+        code: 'operator/invalid-request',
+        message: 'A presenter prompt is at most 1500 characters.',
+      },
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+    ]);
+  });
+
+  it('a presenter version forwards a non-negative whole index and refuses any other with the sentence before the control plane', async () => {
+    await invoke(CHANNEL.operatorPresenterVersion, { projectId: ' p1 ', index: 0 });
+    await invoke(CHANNEL.operatorPresenterVersion, { projectId: 'p1', index: 9 });
+    const refused = await Promise.all(
+      [-1, 1.5, '2', Number.NaN].map((index) =>
+        rejection(invoke(CHANNEL.operatorPresenterVersion, { projectId: 'p1', index })),
+      ),
+    );
+
+    expect(client.usePresenterVersion.mock.calls).toEqual([
+      ['p1', 0],
+      ['p1', 9],
+    ]);
+    expect(refused.map((r) => r.message)).toEqual([
+      'The project has no presenter version -1.',
+      'The project has no presenter version 1.5.',
+      'The project has no presenter version 2.',
+      'The project has no presenter version NaN.',
+    ]);
+  });
+
+  it('a scene picture prompt forwards the trimmed text of 1 to 700 characters and refuses an empty or longer one with the sentence, and a picture regeneration forwards both ids', async () => {
+    await invoke(CHANNEL.operatorScenePicturePrompt, {
+      projectId: ' p1 ',
+      sceneId: ' s1 ',
+      prompt: ' A river seen from above ',
+    });
+    await invoke(CHANNEL.operatorScenePicturePrompt, {
+      projectId: 'p1',
+      sceneId: 's1',
+      prompt: 'z'.repeat(700),
+    });
+    const refused = await Promise.all(
+      ['   ', 'z'.repeat(701)].map((prompt) =>
+        rejection(
+          invoke(CHANNEL.operatorScenePicturePrompt, { projectId: 'p1', sceneId: 's1', prompt }),
+        ),
+      ),
+    );
+    const regenerated = await invoke(CHANNEL.operatorScenePictureRegeneration, {
+      projectId: ' p1 ',
+      sceneId: ' s2 ',
+    });
+    const noScene = await rejection(
+      invoke(CHANNEL.operatorScenePictureRegeneration, { projectId: 'p1', sceneId: '' }),
+    );
+
+    expect(client.editScenePicturePrompt.mock.calls).toEqual([
+      ['p1', 's1', 'A river seen from above'],
+      ['p1', 's1', 'z'.repeat(700)],
+    ]);
+    expect(refused).toEqual([
+      { code: 'operator/invalid-request', message: 'A picture prompt is 1 to 700 characters.' },
+      { code: 'operator/invalid-request', message: 'A picture prompt is 1 to 700 characters.' },
+    ]);
+    expect(regenerated).toEqual({ ...project, status: 'production_queued' });
+    expect(client.regenerateScenePicture.mock.calls).toEqual([['p1', 's2']]);
+    expect(noScene).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The scene id is required.',
+    });
+  });
+
+  it('a presenter request the control plane refuses reaches the renderer with its sentence unchanged', async () => {
+    const reason =
+      'A presenter can be asked for on a project whose script or media is ready, an assembled or approved one, one queued for assembly, or a failed one with a script; this one is producing.';
+    client.requestPresenter.mockImplementation(async () => {
+      throw new ControlPlaneInvalidArgumentError(reason);
+    });
+
+    const refused = await rejection(
+      invoke(CHANNEL.operatorPresenterRequest, { projectId: 'p1', feedback: '' }),
+    );
+
+    expect(refused).toEqual({ code: 'control-plane/invalid-argument', message: reason });
+  });
+
   it('readiness answers what the worker last reported', async () => {
     expect(await invoke(CHANNEL.operatorReadiness)).toEqual(readiness);
   });
@@ -1393,7 +1547,7 @@ describe('registerOperatorHandlers', () => {
     });
   });
 
-  it('the returned unregister removes the thirty-one operator handlers', () => {
+  it('the returned unregister removes the thirty-five operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -1423,6 +1577,10 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorNarrationRegeneration,
         CHANNEL.operatorMouthBox,
         CHANNEL.operatorPresenterRegeneration,
+        CHANNEL.operatorPresenterRequest,
+        CHANNEL.operatorPresenterVersion,
+        CHANNEL.operatorScenePicturePrompt,
+        CHANNEL.operatorScenePictureRegeneration,
         CHANNEL.operatorSceneMedia,
         CHANNEL.operatorReadiness,
         CHANNEL.operatorAssembly,

@@ -151,7 +151,7 @@ internal sealed class FakeProcessRunner : IProcessRunner
             + string.Concat(names.Select(n => $" T.. {n,-16} V->V       A filter.\n"));
 
     public Task<ProcessResult> RunAsync(
-        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
+        string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null, bool rawOutput = false)
     {
         lock (_lock)
         {
@@ -163,7 +163,7 @@ internal sealed class FakeProcessRunner : IProcessRunner
 
         if (Answer(program, arguments) is { } answered)
         {
-            return Task.FromResult(answered);
+            return Task.FromResult(rawOutput ? answered : answered with { OutputBytes = [] });
         }
 
         if (arguments.Contains("--version"))

@@ -44,7 +44,7 @@ internal static partial class PackageChecks
     /// </summary>
     internal static OperatorCheck? Presenter(IReadOnlyList<SceneCut> cuts)
     {
-        if (!cuts.Any(c => c.Scene.VisualSource == OperatorPipeline.Presenter))
+        if (!cuts.Any(c => c.Presented || c.Scene.VisualSource == OperatorPipeline.Presenter))
         {
             return null;
         }

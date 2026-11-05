@@ -92,6 +92,10 @@ describe('buildBridge', () => {
       'operatorRegenerateNarration',
       'operatorSetMouthBox',
       'operatorRegeneratePresenter',
+      'operatorRequestPresenter',
+      'operatorUsePresenterVersion',
+      'operatorEditScenePicturePrompt',
+      'operatorRegenerateScenePicture',
       'operatorAttachSceneMedia',
       'operatorReadiness',
       'operatorOpenWindow',
@@ -512,6 +516,7 @@ describe('buildBridge', () => {
       blockedTopics: [],
       targetMetric: 'views',
       targetValue: '10000',
+      defaultFormat: 'animated_character' as const,
     };
     const decision = {
       projectId: 'p1',
@@ -633,6 +638,31 @@ describe('buildBridge', () => {
       [CHANNEL.operatorMouthBox, { projectId: 'p1', mouthBox }],
       [CHANNEL.operatorPresenterRegeneration, { id: 'p1' }],
       [CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'presenter' }],
+    ]);
+  });
+
+  it('a presenter request, a presenter version, a scene picture prompt and a scene picture regeneration reach main on their own scout:operator channels with their requests', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+
+    await bridge.operatorRequestPresenter({
+      projectId: 'p1',
+      feedback: 'Older',
+      prompt: 'A robot',
+    });
+    await bridge.operatorUsePresenterVersion({ projectId: 'p1', index: 2 });
+    await bridge.operatorEditScenePicturePrompt({
+      projectId: 'p1',
+      sceneId: 's1',
+      prompt: 'A river',
+    });
+    await bridge.operatorRegenerateScenePicture({ projectId: 'p1', sceneId: 's1' });
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.operatorPresenterRequest, { projectId: 'p1', feedback: 'Older', prompt: 'A robot' }],
+      [CHANNEL.operatorPresenterVersion, { projectId: 'p1', index: 2 }],
+      [CHANNEL.operatorScenePicturePrompt, { projectId: 'p1', sceneId: 's1', prompt: 'A river' }],
+      [CHANNEL.operatorScenePictureRegeneration, { projectId: 'p1', sceneId: 's1' }],
     ]);
   });
 

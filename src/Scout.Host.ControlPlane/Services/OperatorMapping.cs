@@ -1,6 +1,7 @@
 using System.Globalization;
 using Grpc.Core;
 using Scout.ControlPlane.Operator;
+using DomainBuiltInPresenter = Scout.ControlPlane.Operator.BuiltInPresenter;
 using DomainChapter = Scout.ControlPlane.Operator.Chapter;
 using DomainClaim = Scout.ControlPlane.Operator.Claim;
 using DomainExperiment = Scout.ControlPlane.Operator.Experiment;
@@ -9,6 +10,7 @@ using DomainMandate = Scout.ControlPlane.Operator.Mandate;
 using DomainMouthBox = Scout.ControlPlane.Operator.MouthBox;
 using DomainPackage = Scout.ControlPlane.Operator.VideoPackage;
 using DomainPackageCheck = Scout.ControlPlane.Operator.PackageCheck;
+using DomainPresenterVersion = Scout.ControlPlane.Operator.PresenterVersion;
 using DomainProposal = Scout.ControlPlane.Operator.Proposal;
 using DomainPublication = Scout.ControlPlane.Operator.Publication;
 using DomainReadiness = Scout.ControlPlane.Operator.Readiness;
@@ -20,6 +22,7 @@ using DomainShortClip = Scout.ControlPlane.Operator.ShortClip;
 using DomainSnapshot = Scout.ControlPlane.Operator.Snapshot;
 using DomainTopicCandidate = Scout.ControlPlane.Operator.TopicCandidate;
 using DomainVoice = Scout.ControlPlane.Operator.Voice;
+using WireBuiltInPresenter = Scout.ControlPlane.Contracts.BuiltInPresenter;
 using WireChapter = Scout.ControlPlane.Contracts.Chapter;
 using WireClaim = Scout.ControlPlane.Contracts.Claim;
 using WireExperiment = Scout.ControlPlane.Contracts.Experiment;
@@ -28,6 +31,7 @@ using WireMandate = Scout.ControlPlane.Contracts.Mandate;
 using WireMouthBox = Scout.ControlPlane.Contracts.MouthBox;
 using WirePackage = Scout.ControlPlane.Contracts.VideoPackage;
 using WirePackageCheck = Scout.ControlPlane.Contracts.PackageCheck;
+using WirePresenterVersion = Scout.ControlPlane.Contracts.PresenterVersion;
 using WireProject = Scout.ControlPlane.Contracts.Project;
 using WireProposal = Scout.ControlPlane.Contracts.Proposal;
 using WirePublication = Scout.ControlPlane.Contracts.Publication;
@@ -62,6 +66,7 @@ internal static class OperatorMapping
             VoiceAndStyle = mandate.VoiceAndStyle,
             TargetMetric = mandate.TargetMetric,
             TargetValue = mandate.TargetValue,
+            DefaultFormat = mandate.DefaultFormat,
         };
         wire.Pillars.AddRange(mandate.Pillars);
         wire.BlockedTopics.AddRange(mandate.BlockedTopics);
@@ -81,7 +86,10 @@ internal static class OperatorMapping
         wire.VoiceAndStyle,
         wire.BlockedTopics.ToList(),
         wire.TargetMetric,
-        wire.TargetValue);
+        wire.TargetValue)
+    {
+        DefaultFormat = wire.DefaultFormat,
+    };
 
     public static WireProject ToWire(OperatorProject project)
     {
@@ -100,6 +108,10 @@ internal static class OperatorMapping
             Format = project.Format,
             RecordingMs = project.RecordingMs,
             Presenter = project.Presenter,
+            PresenterRequest = project.PresenterRequest,
+            PresenterSource = project.PresenterSource,
+            PresenterReturnStatus = project.PresenterReturnStatus,
+            PresenterRequestPrompt = project.PresenterRequestPrompt,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new WireTopicCandidate
         {
@@ -139,10 +151,31 @@ internal static class OperatorMapping
         }
         if (project.MouthBox is { } box)
         {
-            wire.MouthBox = new WireMouthBox { X = box.X, Y = box.Y, Width = box.Width, Height = box.Height };
+            wire.MouthBox = ToWire(box);
         }
+        if (project.PresenterPreviewFile is not null)
+        {
+            wire.PresenterPreviewFile = project.PresenterPreviewFile;
+        }
+        wire.PresenterVersions.AddRange(project.PresenterVersions.Select(v =>
+        {
+            var version = new WirePresenterVersion { File = v.File, Prompt = v.Prompt, Feedback = v.Feedback, MadeAt = Iso(v.MadeAt), Source = v.Source };
+            if (v.PreviewFile is not null)
+            {
+                version.PreviewFile = v.PreviewFile;
+            }
+            if (v.MouthBox is { } mouth)
+            {
+                version.MouthBox = ToWire(mouth);
+            }
+            return version;
+        }));
         return wire;
     }
+
+    private static WireMouthBox ToWire(DomainMouthBox box) => new() { X = box.X, Y = box.Y, Width = box.Width, Height = box.Height };
+
+    public static WireBuiltInPresenter ToWire(DomainBuiltInPresenter presenter) => new() { Id = presenter.Id, Label = presenter.Label };
 
     public static OperatorProject ToDomain(WireProject wire) => new(
         wire.Id,
@@ -194,6 +227,19 @@ internal static class OperatorMapping
         Presenter = wire.Presenter,
         PresenterFile = wire.HasPresenterFile ? wire.PresenterFile : null,
         MouthBox = ToDomain(wire.MouthBox),
+        PresenterVersions = wire.PresenterVersions.Select(v => new DomainPresenterVersion(
+            v.File,
+            v.Prompt,
+            v.Feedback,
+            v.HasPreviewFile ? v.PreviewFile : null,
+            ToDomain(v.MouthBox),
+            v.MadeAt.Length == 0 ? default : ParseIso(v.MadeAt),
+            v.Source)).ToList(),
+        PresenterPreviewFile = wire.HasPresenterPreviewFile ? wire.PresenterPreviewFile : null,
+        PresenterRequest = wire.PresenterRequest,
+        PresenterSource = wire.PresenterSource,
+        PresenterReturnStatus = wire.PresenterReturnStatus,
+        PresenterRequestPrompt = wire.PresenterRequestPrompt,
     };
 
     public static DomainMouthBox? ToDomain(WireMouthBox? wire) =>
@@ -213,8 +259,11 @@ internal static class OperatorMapping
             StockPictures = readiness.StockPictures,
             TranscriptionAvailable = readiness.TranscriptionAvailable,
             LipSyncAvailable = readiness.LipSyncAvailable,
+            FaceDetectionAvailable = readiness.FaceDetectionAvailable,
+            PicturesLeftToday = readiness.PicturesLeftToday,
         };
         wire.Notes.AddRange(readiness.Notes);
+        wire.BuiltinPresenters.AddRange(readiness.BuiltInPresenters.Select(ToWire));
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));
         if (readiness.ReportedAt is { } reportedAt)
         {
@@ -235,6 +284,9 @@ internal static class OperatorMapping
         StockPictures = wire.StockPictures,
         TranscriptionAvailable = wire.TranscriptionAvailable,
         LipSyncAvailable = wire.LipSyncAvailable,
+        FaceDetectionAvailable = wire.FaceDetectionAvailable,
+        PicturesLeftToday = wire.PicturesLeftToday,
+        BuiltInPresenters = wire.BuiltinPresenters.Select(p => new DomainBuiltInPresenter(p.Id, p.Label)).ToList(),
     };
 
     public static async Task<T> Guard<T>(Func<Task<T>> action)

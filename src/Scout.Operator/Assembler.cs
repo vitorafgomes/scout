@@ -6,12 +6,15 @@ namespace Scout.Operator;
 
 /// <summary>
 /// One scene as it plays in the video: where it starts, how long it lasts, how many caption lines it shows, whether it is a
-/// placeholder, and a note on how an animated character was shown when it could not speak.
+/// placeholder, a note on how an animated character was shown when it could not speak, and whether the scene belongs to one.
 /// </summary>
-internal sealed record SceneCut(OperatorScene Scene, int StartMs, int DurationMs, int Captions, bool Placeholder, string? Note = null);
+internal sealed record SceneCut(OperatorScene Scene, int StartMs, int DurationMs, int Captions, bool Placeholder, string? Note = null, bool Presented = false);
 
-/// <summary>The animated character of a project: its picture in the media directory and the mouth on it, either null until there is one.</summary>
-internal sealed record PresenterInput(string? File, OperatorMouthBox? MouthBox);
+/// <summary>
+/// The animated character of a project: its picture in the media directory and the mouth on it, either null until there is
+/// one, and where the picture came from, <c>generated</c> on a green background Scout keys out.
+/// </summary>
+internal sealed record PresenterInput(string? File, OperatorMouthBox? MouthBox, string Source = "");
 
 /// <summary>The assembled video file, its length, its scenes as they play and the segment files it was joined from.</summary>
 internal sealed record AssembledVideo(string File, int DurationMs, IReadOnlyList<SceneCut> Cuts, IReadOnlyList<string> Segments);
@@ -30,11 +33,13 @@ internal sealed record AssembledVideo(string File, int DurationMs, IReadOnlyList
 /// project's media directory; a segment is named after its exact command and its inputs, so a segment already rendered
 /// for the same inputs is used again. A scene that shows the owner's recording is its clip of the recording, with the
 /// recording's own sound, scaled and padded to the frame at 30 frames a second, for exactly the clip's length, its text
-/// burned in as captions the same way; only the video's first scene fades in and only its last fades out. A scene of an
-/// animated character shows the presenter picture fitted to the frame's height and centred over the background or the dark
-/// card, with the mouth shape of each moment of its narration, timed by rhubarb, scaled into the mouth box and laid over it,
-/// then moved and faded as a picture; without a mouth box, narration or lip sync the character is shown still, and without
-/// the picture, or with one ffmpeg cannot measure, the scene is a text card, each with a note on its cut.
+/// burned in as captions the same way; only the video's first scene fades in and only its last fades out. Every scene of an
+/// animated character shows its own picture, or the background, or the dark card, moved as a picture, with the presenter
+/// picture standing still over it in the lower right at <see cref="PresenterHeight"/> of the frame's height and
+/// <see cref="PresenterMargin"/> from the edges, its green background keyed out when Scout generated it, the mouth shape of
+/// each moment of its narration, timed by rhubarb, scaled into the mouth box and laid over it, and the captions on the lower
+/// left; without a mouth box, narration or lip sync the character is shown still, and without the picture, or with one ffmpeg
+/// cannot measure, the scene shows only its backdrop, each with a note on its cut.
 /// </summary>
 internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbLipSync lipSync)
 {
@@ -61,6 +66,14 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
     internal const string UnreadablePresenter = "Scout could not read the presenter picture; attach another one in Scout Desktop, Production.";
 
     internal const string NoNarration = "The scene has no narration, so the character is shown still.";
+
+    internal const double PresenterHeight = 0.45;
+
+    internal const double PresenterMargin = 0.03;
+
+    internal const string ChromaKey = "chromakey=0x00FF00:0.1:0.2";
+
+    internal static readonly (int Width, int Height) Frame = (1920, 1080);
 
     internal static string RenderFailed(int order) => $"Scout could not render scene {order}";
 
@@ -105,9 +118,9 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
             var clip = scene.VisualSource == OperatorPipeline.Recording
                 ? footage ?? throw new InvalidOperationException(TranscriptionStage.NotFound)
                 : null;
-            var character = presenter is not null && scene.VisualSource == OperatorPipeline.Presenter;
+            var character = presenter is not null && clip is null;
             var duration = clip is not null ? scene.ClipEndMs - scene.ClipStartMs : Math.Max(scene.DurationMs, MinSceneMs);
-            var image = clip ?? (character ? null : Usable(directory, scene.VisualFile) ?? backdrop);
+            var image = clip ?? Usable(directory, scene.VisualFile) ?? backdrop;
             var audio = clip is not null ? null : Usable(directory, scene.AudioFile);
             var captions = FilterText.Wrap(scene.Narration, CaptionWidth);
             string? note = null;
@@ -129,14 +142,13 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
                 if (face is null || size is null)
                 {
                     note = face is null ? OperatorPipeline.NoPresenterPicture : UnreadablePresenter;
-                    arguments = SegmentArguments(tools, scene, position, duration, null, audio, captions, motion, string.Empty);
+                    arguments = SegmentArguments(tools, scene, position, duration, image, audio, captions, motion, string.Empty);
                 }
                 else
                 {
                     (arguments, identity, cues, note) = await PresenterSceneAsync(
-                        tools, scene, position, duration, directory, backdrop, face, size.Value, presenter!.MouthBox, audio, captions, motion, () => lips ??= lipSync.ProbeAsync(ct), ct)
+                        tools, scene, position, duration, directory, image, face, size.Value, presenter!, audio, captions, motion, Frame, () => lips ??= lipSync.ProbeAsync(ct), ct)
                         .ConfigureAwait(false);
-                    image = backdrop;
                 }
             }
             else
@@ -167,7 +179,7 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
             }
 
             segments.Add(segment);
-            cuts.Add(new SceneCut(scene, start, duration, captions.Count, IsPlaceholder(scene, image, audio), note));
+            cuts.Add(new SceneCut(scene, start, duration, captions.Count, IsPlaceholder(scene, image, audio), note, character));
             start += duration;
         }
 
@@ -224,13 +236,23 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
     /// <paramref name="output"/>.
     /// </summary>
     private static List<string> Encoded(
-        FfmpegTools tools, List<string> arguments, string? audio, string video, int audioInput, List<string> filters, IReadOnlyList<string> captions, bool fadeIn, int durationMs, string output)
+        FfmpegTools tools,
+        List<string> arguments,
+        string? audio,
+        string video,
+        int audioInput,
+        List<string> filters,
+        IReadOnlyList<string> captions,
+        bool fadeIn,
+        int durationMs,
+        string output,
+        (int Size, int Y, int? Left)? captionStyle = null)
     {
         var seconds = FfmpegToolset.Seconds(durationMs);
         arguments.AddRange(audio is not null
             ? ["-i", audio]
             : ["-f", "lavfi", "-t", seconds, "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]);
-        filters.AddRange(Captions(tools, captions, durationMs));
+        filters.AddRange(Captions(tools, captions, durationMs, captionStyle ?? (44, 940, null)));
         if (fadeIn)
         {
             filters.Add("fade=t=in:st=0:d=0.4");
@@ -263,7 +285,7 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         var durationMs = scene.ClipEndMs - scene.ClipStartMs;
         var seconds = FfmpegToolset.Seconds(durationMs);
         List<string> filters = ["scale=1920:1080:force_original_aspect_ratio=decrease", "pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black", "setsar=1", "fps=30"];
-        filters.AddRange(Captions(tools, captions, durationMs));
+        filters.AddRange(Captions(tools, captions, durationMs, (44, 940, null)));
         if (first)
         {
             filters.Add("fade=t=in:st=0:d=0.4");
@@ -287,12 +309,13 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
     }
 
     /// <summary>
-    /// A scene of the animated character: <paramref name="backdrop"/> scaled and padded to the canvas, else the dark card,
-    /// at 30 frames a second; the presenter picture, <paramref name="size"/> in pixels, fitted to the canvas's height and
-    /// centred; when <paramref name="mouth"/> is given, the mouth shapes of the ffconcat list at its track scaled to its box
-    /// in the fitted picture's pixels and laid over it; then, unless the motion is <see cref="Still"/>, the slow move of the
-    /// canvas, twice the frame, down to the frame, one output frame per input frame, and the captions and fades of a
-    /// picture scene.
+    /// A scene of the animated character at <paramref name="frame"/>, 1920x1080 unless given: <paramref name="backdrop"/>
+    /// moved as a picture under the <paramref name="motion"/> preset, else the dark card; the presenter picture,
+    /// <paramref name="size"/> in pixels, scaled to <see cref="PresenterHeight"/> of the frame's height, both sides even, its
+    /// green keyed out when <paramref name="chromaKey"/>, and laid still in the lower right <see cref="PresenterMargin"/> of
+    /// the frame's width and height from the edges; when <paramref name="mouth"/> is given, the mouth shapes of the ffconcat
+    /// list at its track scaled to its box in the placed picture's pixels and laid over it; then the captions on the lower
+    /// left, scaled to the frame, and the fades of a picture scene.
     /// </summary>
     internal static List<string> PresenterArguments(
         FfmpegTools tools,
@@ -302,47 +325,65 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         string? backdrop,
         string face,
         (int Width, int Height) size,
+        bool chromaKey,
         (OperatorMouthBox Box, string Track)? mouth,
         string? audio,
         IReadOnlyList<string> captions,
         string motion,
-        string output)
+        string output,
+        (int Width, int Height)? frame = null)
     {
+        var (width, height) = frame ?? Frame;
         var seconds = FfmpegToolset.Seconds(durationMs);
-        var still = motion == Still;
-        var (width, height) = still ? (1920, 1080) : (3840, 2160);
-        var scale = Math.Min((double)width / size.Width, (double)height / size.Height);
-        var fitted = (Width: Even(size.Width * scale), Height: Even(size.Height * scale));
-        var (left, top) = ((width - fitted.Width) / 2, (height - fitted.Height) / 2);
         List<string> arguments = ["-hide_banner", "-nostdin", "-y"];
-        arguments.AddRange(backdrop is not null
-            ? ["-loop", "1", "-framerate", "1", "-t", seconds, "-i", backdrop]
-            : ["-f", "lavfi", "-t", seconds, "-i", $"color=c=0x14181f:s={width}x{height}:r=30"]);
+        string background;
+        if (backdrop is not null && motion == Still)
+        {
+            arguments.AddRange(["-loop", "1", "-framerate", "1", "-t", seconds, "-i", backdrop]);
+            background = $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30";
+        }
+        else if (backdrop is not null)
+        {
+            arguments.AddRange(["-i", backdrop]);
+            background = string.Create(
+                CultureInfo.InvariantCulture,
+                $"scale={width * 2}:{height * 2}:force_original_aspect_ratio=decrease,pad={width * 2}:{height * 2}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,{ZoomPan(position, durationMs, motion == Dynamic, (width, height))}");
+        }
+        else
+        {
+            arguments.AddRange(["-f", "lavfi", "-t", seconds, "-i", $"color=c=0x14181f:s={width}x{height}:r=30"]);
+            background = "setsar=1";
+        }
+
         arguments.AddRange(["-i", face]);
-        var background = backdrop is not null
-            ? $"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30"
-            : "setsar=1";
-        var graph = new StringBuilder(string.Create(CultureInfo.InvariantCulture, $"[0:v]{background}[bg];[1:v]scale={fitted.Width}:{fitted.Height},setsar=1[face];[bg][face]overlay={left}:{top}"));
+        var placedHeight = Even(height * PresenterHeight);
+        var placedWidth = Even((double)size.Width * placedHeight / size.Height);
+        var (marginX, marginY) = ((int)Math.Round(width * PresenterMargin), (int)Math.Round(height * PresenterMargin));
+        var (left, top) = (width - marginX - placedWidth, height - marginY - placedHeight);
+        var graph = new StringBuilder(string.Create(
+            CultureInfo.InvariantCulture,
+            $"[0:v]{background}[bg];[1:v]{(chromaKey ? ChromaKey + "," : string.Empty)}scale={placedWidth}:{placedHeight},setsar=1[face];[bg][face]overlay={left}:{top}"));
         if (mouth is (var box, var track))
         {
             arguments.AddRange(["-f", "concat", "-safe", "0", "-i", track]);
             var placed = (
-                X: left + (int)Math.Round(box.X * fitted.Width),
-                Y: top + (int)Math.Round(box.Y * fitted.Height),
-                Width: Math.Max(2, (int)Math.Round(box.Width * fitted.Width)),
-                Height: Math.Max(2, (int)Math.Round(box.Height * fitted.Height)));
+                X: left + (int)Math.Round(box.X * placedWidth),
+                Y: top + (int)Math.Round(box.Y * placedHeight),
+                Width: Math.Max(2, (int)Math.Round(box.Width * placedWidth)),
+                Height: Math.Max(2, (int)Math.Round(box.Height * placedHeight)));
             graph.Append(CultureInfo.InvariantCulture, $"[body];[2:v]scale={placed.Width}:{placed.Height}[mouth];[body][mouth]overlay={placed.X}:{placed.Y}");
         }
 
-        List<string> filters = still ? [] : [ZoomPan(position, durationMs, motion == Dynamic, frames: 1)];
-        return Encoded(tools, arguments, audio, graph.Append(',').ToString(), mouth is null ? 2 : 3, filters, captions, true, durationMs, output);
+        var captionStyle = ((int)Math.Round(44.0 * height / Frame.Height), (int)Math.Round(940.0 * height / Frame.Height), (int?)marginX);
+        return Encoded(tools, arguments, audio, graph.Append(',').ToString(), mouth is null ? 2 : 3, [], captions, true, durationMs, output, captionStyle);
     }
 
     /// <summary>
-    /// A scene of the animated character with its picture <paramref name="face"/> of <paramref name="size"/>: its command,
-    /// what its segment depends on beyond the command and its input files, the mouth cues of its narration when the
-    /// character speaks, and the note on its cut when it is shown still: without a mouth box, without lip sync on this
-    /// machine, which <paramref name="lips"/> answers once per assembly, or when rhubarb fails.
+    /// A scene of the animated character with its picture <paramref name="face"/> of <paramref name="size"/> over
+    /// <paramref name="backdrop"/> at <paramref name="frame"/>: its command, what its segment depends on beyond the command and
+    /// its input files, the mouth cues of its narration when the character speaks, and the note on its cut when it is shown
+    /// still: without a mouth box, without lip sync on this machine, which <paramref name="lips"/> answers once per assembly,
+    /// or when rhubarb fails.
     /// </summary>
     private async Task<(List<string> Arguments, string Identity, IReadOnlyList<MouthCue>? Cues, string? Note)> PresenterSceneAsync(
         FfmpegTools tools,
@@ -353,15 +394,17 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         string? backdrop,
         string face,
         (int Width, int Height) size,
-        OperatorMouthBox? mouthBox,
+        PresenterInput presenter,
         string? audio,
         IReadOnlyList<string> captions,
         string motion,
+        (int Width, int Height) frame,
         Func<Task<LipSyncProbe>> lips,
         CancellationToken ct)
     {
         string? note = null;
         IReadOnlyList<MouthCue>? cues = null;
+        var mouthBox = presenter.MouthBox;
         if (mouthBox is null)
         {
             note = NoMouthBox;
@@ -386,9 +429,61 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         }
 
         (OperatorMouthBox, string)? mouth = cues is null ? null : (mouthBox!, MediaFiles.PathFor(directory, MouthTrack.FileName(scene.Id)));
-        var arguments = PresenterArguments(tools, scene, position, durationMs, backdrop, face, size, mouth, audio, captions, motion, string.Empty);
+        var arguments = PresenterArguments(
+            tools, scene, position, durationMs, backdrop, face, size, presenter.Source == OperatorPipeline.Generated, mouth, audio, captions, motion, string.Empty, frame);
         return (arguments, PresenterIdentity(mouthBox, cues, lipSync.MouthsPath), cues, note);
     }
+
+    /// <summary>
+    /// Render the presenter preview of <paramref name="scene"/>, a narrated sentence with no picture of its own, into
+    /// <paramref name="output"/> at <paramref name="frame"/> over <paramref name="backdrop"/> or the dark card, with the
+    /// presenter segment's command; the note of a character shown still, or null. A picture ffmpeg cannot measure or a render
+    /// that fails throws.
+    /// </summary>
+    public async Task<string?> PreviewAsync(
+        FfmpegTools tools,
+        OperatorScene scene,
+        string directory,
+        string? backdrop,
+        PresenterInput presenter,
+        string motion,
+        (int Width, int Height) frame,
+        string output,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(presenter);
+        var face = Usable(directory, presenter.File) ?? throw new InvalidOperationException(OperatorPipeline.NoPresenterPicture);
+        var size = await PictureSizeAsync(tools, directory, presenter.File!, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException(UnreadablePresenter);
+        var duration = Math.Max(scene.DurationMs, MinSceneMs);
+        string? mouthTrack = null;
+        try
+        {
+            var (arguments, _, cues, note) = await PresenterSceneAsync(
+                tools, scene, 0, duration, directory, Usable(directory, backdrop), face, size, presenter, Usable(directory, scene.AudioFile),
+                FilterText.Wrap(scene.Narration, CaptionWidth), motion, frame, () => lipSync.ProbeAsync(ct), ct).ConfigureAwait(false);
+            mouthTrack = cues is null ? null : await MouthTrack.WriteAsync(directory, scene.Id, cues, lipSync.MouthsPath, ct).ConfigureAwait(false);
+            await MediaFiles.RenderAsync(
+                directory,
+                output,
+                PreviewFailed,
+                temp => ffmpeg.RunAsync(tools, [.. arguments.SkipLast(1), temp], duration, PreviewFailed, ct),
+                ct).ConfigureAwait(false);
+            return note;
+        }
+        finally
+        {
+            if (mouthTrack is not null)
+            {
+                MediaFiles.Delete(directory, MouthTrack.FileName(scene.Id));
+            }
+
+            MediaFiles.Delete(directory, RhubarbLipSync.CuesFile(scene.Id));
+        }
+    }
+
+    internal const string PreviewFailed = "Scout could not render the presenter preview";
 
     /// <summary>The size of the presenter picture <paramref name="file"/>; null when ffmpeg reports none, cannot start or runs past its timeout.</summary>
     private async Task<(int Width, int Height)?> PictureSizeAsync(FfmpegTools tools, string directory, string file, CancellationToken ct)
@@ -415,15 +510,16 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
 
     private static int Even(double pixels) => Math.Max(2, (int)Math.Round(pixels / 2) * 2);
 
-    private static IEnumerable<string> Captions(FfmpegTools tools, IReadOnlyList<string> captions, int durationMs)
+    private static IEnumerable<string> Captions(FfmpegTools tools, IReadOnlyList<string> captions, int durationMs, (int Size, int Y, int? Left) style)
         => captions.Select((line, i) => FilterText.Draw(
             tools.FontPath,
             line,
-            44,
-            940,
+            style.Size,
+            style.Y,
             boxed: true,
             (int)((long)durationMs * i / captions.Count),
-            (int)((long)durationMs * (i + 1) / captions.Count)));
+            (int)((long)durationMs * (i + 1) / captions.Count),
+            style.Left));
 
     internal static List<string> ConcatArguments(FfmpegTools tools, string list, string output)
         => ["-hide_banner", "-nostdin", "-y", "-f", "concat", "-i", list, "-c:v", "copy", .. tools.AudioArguments, "-movflags", "+faststart", output];
@@ -432,21 +528,21 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         => "ffconcat version 1.0\n" + string.Concat(segments.Select(s => $"file '{s}'\n"));
 
     /// <summary>
-    /// The slow move over a still scaled to 3840x2160: one input frame becomes every frame of the scene at 30 fps, the
-    /// zoom a function of the frame index alone, from 1 to 1.08 drifting toward the centre at an even
+    /// The slow move over a still scaled to twice the output frame, 1920x1080 unless <paramref name="frame"/> is given: one
+    /// input frame becomes every frame of the scene at 30 fps, the zoom a function of the frame index alone, from 1 to 1.08 drifting toward the centre at an even
     /// <paramref name="position"/>, from 1.08 back to 1 around the centre at an odd one; when
-    /// <paramref name="dynamic"/>, to 1.16 with the drift twice as wide; with <paramref name="frames"/>, that many output
-    /// frames per input frame, one over a moving input at 30 fps.
+    /// <paramref name="dynamic"/>, to 1.16 with the drift twice as wide.
     /// </summary>
-    internal static string ZoomPan(int position, int durationMs, bool dynamic, int? frames = null)
+    internal static string ZoomPan(int position, int durationMs, bool dynamic, (int Width, int Height)? frame = null)
     {
+        var (width, height) = frame ?? Frame;
         var total = (int)((((long)durationMs * 30) + 999) / 1000);
         var progress = string.Create(CultureInfo.InvariantCulture, $"on/{Math.Max(total - 1, 1)}");
         var (peak, rise, drift) = dynamic ? ("1.16", "0.16", "0.5") : ("1.08", "0.08", "0.25");
         var move = position % 2 == 0
             ? $"z=1+{rise}*{progress}:x=(iw-iw/zoom)*(0.25+{drift}*{progress}):y=(ih-ih/zoom)*(0.25+{drift}*{progress})"
             : $"z={peak}-{rise}*{progress}:x=(iw-iw/zoom)/2:y=(ih-ih/zoom)/2";
-        return string.Create(CultureInfo.InvariantCulture, $"zoompan={move}:d={frames ?? total}:s=1920x1080:fps=30");
+        return string.Create(CultureInfo.InvariantCulture, $"zoompan={move}:d={total}:s={width}x{height}:fps=30");
     }
 
     /// <summary>One line of a text card in white at 64 px, fading in over 0.6 s while it rises <paramref name="slide"/> px to <paramref name="y"/>.</summary>

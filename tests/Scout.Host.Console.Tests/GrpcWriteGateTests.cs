@@ -359,6 +359,9 @@ public sealed class GrpcWriteGateTests
         public override Task<Project> ChatDelegateProject(DelegateProjectRequest request, ServerCallContext context)
             => ChatAsync(nameof(ChatDelegateProject), request, request.Id, context);
 
+        public override Task<Project> ChatRequestPresenter(RequestPresenterRequest request, ServerCallContext context)
+            => ChatAsync(nameof(ChatRequestPresenter), request, request.ProjectId, context);
+
         private Task<Project> ChatAsync(string rpc, Google.Protobuf.IMessage request, string projectId, ServerCallContext context)
         {
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));

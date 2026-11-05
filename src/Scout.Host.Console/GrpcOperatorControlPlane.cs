@@ -113,6 +113,10 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             Format = project.Format,
             RecordingMs = project.RecordingMs,
             Presenter = project.Presenter,
+            PresenterRequest = project.PresenterRequest,
+            PresenterSource = project.PresenterSource,
+            PresenterReturnStatus = project.PresenterReturnStatus,
+            PresenterRequestPrompt = project.PresenterRequestPrompt,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new TopicCandidate { Title = c.Title, Reason = c.Reason, Fit = c.Fit }));
         if (project.Script is { } script)
@@ -169,7 +173,42 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
 
         if (project.MouthBox is { } mouth)
         {
-            wire.MouthBox = new MouthBox { X = mouth.X, Y = mouth.Y, Width = mouth.Width, Height = mouth.Height };
+            wire.MouthBox = ToWire(mouth);
+        }
+
+        if (project.PresenterPreviewFile is not null)
+        {
+            wire.PresenterPreviewFile = project.PresenterPreviewFile;
+        }
+
+        wire.PresenterVersions.AddRange(project.PresenterVersions.Select(ToWire));
+        return wire;
+    }
+
+    private static MouthBox ToWire(OperatorMouthBox mouth)
+        => new() { X = mouth.X, Y = mouth.Y, Width = mouth.Width, Height = mouth.Height };
+
+    private static OperatorMouthBox? FromWire(MouthBox? mouth)
+        => mouth is null ? null : new OperatorMouthBox(mouth.X, mouth.Y, mouth.Width, mouth.Height);
+
+    private static PresenterVersion ToWire(OperatorPresenterVersion version)
+    {
+        var wire = new PresenterVersion
+        {
+            File = version.File,
+            Prompt = version.Prompt,
+            Feedback = version.Feedback,
+            MadeAt = version.MadeAt,
+            Source = version.Source,
+        };
+        if (version.PreviewFile is not null)
+        {
+            wire.PreviewFile = version.PreviewFile;
+        }
+
+        if (version.MouthBox is { } mouth)
+        {
+            wire.MouthBox = ToWire(mouth);
         }
 
         return wire;
@@ -268,7 +307,14 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             RecordingMs = wire.RecordingMs,
             Presenter = wire.Presenter,
             PresenterFile = wire.HasPresenterFile ? wire.PresenterFile : null,
-            MouthBox = wire.MouthBox is { } mouth ? new OperatorMouthBox(mouth.X, mouth.Y, mouth.Width, mouth.Height) : null,
+            MouthBox = FromWire(wire.MouthBox),
+            PresenterVersions = [.. wire.PresenterVersions.Select(v => new OperatorPresenterVersion(
+                v.File, v.Prompt, v.Feedback, v.HasPreviewFile ? v.PreviewFile : null, FromWire(v.MouthBox), v.MadeAt, v.Source))],
+            PresenterPreviewFile = wire.HasPresenterPreviewFile ? wire.PresenterPreviewFile : null,
+            PresenterRequest = wire.PresenterRequest,
+            PresenterSource = wire.PresenterSource,
+            PresenterReturnStatus = wire.PresenterReturnStatus,
+            PresenterRequestPrompt = wire.PresenterRequestPrompt,
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -293,8 +339,11 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             StockPictures = readiness.StockPictures,
             TranscriptionAvailable = readiness.TranscriptionAvailable,
             LipSyncAvailable = readiness.LipSyncAvailable,
+            FaceDetectionAvailable = readiness.FaceDetectionAvailable,
+            PicturesLeftToday = readiness.PicturesLeftToday,
         };
         wire.Notes.AddRange(readiness.Notes);
+        wire.BuiltinPresenters.AddRange(readiness.BuiltInPresenters.Select(p => new BuiltInPresenter { Id = p.Id, Label = p.Label }));
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));
         await CallAsync(() => gate.Client.ReportReadinessAsync(wire, gate.CallOptions(ct)).ResponseAsync, ct).ConfigureAwait(false);
     }
@@ -701,6 +750,10 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         => ChatAsync(() => gate.Client.ChatDelegateProjectAsync(
             new DelegateProjectRequest { Id = projectId, NarrationVoice = narrationVoice, Direction = direction, Motion = motion },
             gate.CallOptions(ct)).ResponseAsync, ct);
+
+    public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct)
+        => ChatAsync(() => gate.Client.ChatRequestPresenterAsync(
+            new RequestPresenterRequest { ProjectId = projectId, Feedback = feedback, Prompt = prompt }, gate.CallOptions(ct)).ResponseAsync, ct);
 
     private static async Task<OperatorProjectState> ChatAsync(Func<Task<Project>> call, CancellationToken ct)
         => FromWire(await CallAsync(call, ct).ConfigureAwait(false));

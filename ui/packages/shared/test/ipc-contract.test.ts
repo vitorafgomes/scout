@@ -125,6 +125,10 @@ describe('CHANNEL constant', () => {
         'operatorNarrationRegeneration',
         'operatorMouthBox',
         'operatorPresenterRegeneration',
+        'operatorPresenterRequest',
+        'operatorPresenterVersion',
+        'operatorScenePicturePrompt',
+        'operatorScenePictureRegeneration',
         'operatorStartProject',
         'operatorWindow',
         'providerRestart',
@@ -380,6 +384,67 @@ describe('operator channels', () => {
     ]);
   });
 
+  test('asking for a presenter, making an older version current, editing a scene picture prompt and regenerating a scene picture each have their own scout:operator channel, named as nouns that pass the write-verb scan, and the project, mandate and readiness carry the presenter versions, the default format and the built-in presenters', () => {
+    const channels = [
+      CHANNEL.operatorPresenterRequest,
+      CHANNEL.operatorPresenterVersion,
+      CHANNEL.operatorScenePicturePrompt,
+      CHANNEL.operatorScenePictureRegeneration,
+    ];
+    const project = {
+      presenterVersions: [
+        {
+          file: 'presenter-1.png',
+          prompt: 'A friendly robot',
+          feedback: '',
+          previewFile: 'presenter-preview-1.mp4',
+          mouthBox: null,
+          madeAt: '2026-11-05T10:00:00Z',
+          source: 'generated',
+        },
+      ],
+      presenterPreviewFile: 'presenter-preview-1.mp4',
+      presenterRequest: 'first',
+      presenterSource: 'generated',
+    } satisfies Pick<
+      OperatorProjectDto,
+      'presenterVersions' | 'presenterPreviewFile' | 'presenterRequest' | 'presenterSource'
+    >;
+    const mandate = { defaultFormat: 'animated_character' } satisfies Pick<
+      MandateDto,
+      'defaultFormat'
+    >;
+    const readiness = {
+      faceDetectionAvailable: true,
+      picturesLeftToday: 38,
+      builtinPresenters: [{ id: 'ada', label: 'Ada' }],
+    } satisfies Pick<
+      ReadinessDto,
+      'faceDetectionAvailable' | 'picturesLeftToday' | 'builtinPresenters'
+    >;
+
+    expect(channels).toEqual([
+      'scout:operator.presenterRequest',
+      'scout:operator.presenterVersion',
+      'scout:operator.scenePicturePrompt',
+      'scout:operator.scenePictureRegeneration',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+    expect([
+      project.presenterVersions[0]?.source,
+      project.presenterRequest,
+      mandate.defaultFormat,
+      readiness.picturesLeftToday,
+      readiness.builtinPresenters[0]?.id,
+    ]).toEqual(['generated', 'first', 'animated_character', 38, 'ada']);
+  });
+
   test('assembling a video, confirming its media rights, editing its metadata and approving its package each have their own scout:operator channel, named as nouns', () => {
     expect([
       CHANNEL.operatorAssembly,
@@ -519,6 +584,10 @@ describe('ChannelName type', () => {
       'scout:operator.narrationRegeneration': true,
       'scout:operator.mouthBox': true,
       'scout:operator.presenterRegeneration': true,
+      'scout:operator.presenterRequest': true,
+      'scout:operator.presenterVersion': true,
+      'scout:operator.scenePicturePrompt': true,
+      'scout:operator.scenePictureRegeneration': true,
       'scout:operator.sceneMedia': true,
       'scout:operator.readiness': true,
       'scout:operator.window': true,

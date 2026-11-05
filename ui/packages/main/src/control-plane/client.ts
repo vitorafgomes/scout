@@ -111,6 +111,18 @@ export interface ControlPlaneClient {
   regenerateNarration(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
   setMouthBox(projectId: string, mouthBox: MouthBoxDto): Promise<OperatorProjectDto>;
   regeneratePresenter(id: string): Promise<OperatorProjectDto>;
+  requestPresenter(
+    projectId: string,
+    feedback: string,
+    prompt: string,
+  ): Promise<OperatorProjectDto>;
+  usePresenterVersion(projectId: string, index: number): Promise<OperatorProjectDto>;
+  editScenePicturePrompt(
+    projectId: string,
+    sceneId: string,
+    prompt: string,
+  ): Promise<OperatorProjectDto>;
+  regenerateScenePicture(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
   attachSceneMedia(
     projectId: string,
     sceneId: string,
@@ -213,6 +225,7 @@ interface MandateMessage {
   blockedTopics: string[];
   targetMetric: string;
   targetValue: string;
+  defaultFormat?: string;
   updatedAt?: string;
 }
 
@@ -256,6 +269,20 @@ interface ProjectMessage {
   presenter?: string;
   presenterFile?: string;
   mouthBox?: MouthBoxDto | null;
+  presenterVersions?: PresenterVersionMessage[];
+  presenterPreviewFile?: string;
+  presenterRequest?: string;
+  presenterSource?: string;
+}
+
+interface PresenterVersionMessage {
+  file: string;
+  prompt: string;
+  feedback: string;
+  previewFile?: string;
+  mouthBox?: MouthBoxDto | null;
+  madeAt: string;
+  source: string;
 }
 
 interface PublicationMessage {
@@ -383,6 +410,9 @@ interface ReadinessMessage {
   reportedAt?: string;
   transcriptionAvailable?: boolean;
   lipSyncAvailable?: boolean;
+  faceDetectionAvailable?: boolean;
+  picturesLeftToday?: number;
+  builtinPresenters?: { id: string; label: string }[];
 }
 
 type UnaryMethod = (
@@ -499,6 +529,9 @@ function toMandate(message: MandateMessage): MandateDto {
     blockedTopics: message.blockedTopics,
     targetMetric: message.targetMetric,
     targetValue: message.targetValue,
+    defaultFormat: FORMATS.includes(message.defaultFormat as ProjectFormat)
+      ? (message.defaultFormat as ProjectFormat)
+      : '',
     updatedAt: message.updatedAt ?? null,
   };
 }
@@ -554,16 +587,24 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
     recordingMs: message.recordingMs ?? 0,
     presenter: message.presenter ?? '',
     presenterFile: message.presenterFile ?? null,
-    mouthBox:
-      message.mouthBox == null
-        ? null
-        : {
-            x: message.mouthBox.x,
-            y: message.mouthBox.y,
-            width: message.mouthBox.width,
-            height: message.mouthBox.height,
-          },
+    mouthBox: toMouthBox(message.mouthBox),
+    presenterVersions: (message.presenterVersions ?? []).map((version) => ({
+      file: version.file,
+      prompt: version.prompt,
+      feedback: version.feedback,
+      previewFile: version.previewFile ?? null,
+      mouthBox: toMouthBox(version.mouthBox),
+      madeAt: version.madeAt,
+      source: version.source,
+    })),
+    presenterPreviewFile: message.presenterPreviewFile ?? null,
+    presenterRequest: message.presenterRequest ?? '',
+    presenterSource: message.presenterSource ?? '',
   };
+}
+
+function toMouthBox(box: MouthBoxDto | null | undefined): MouthBoxDto | null {
+  return box == null ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
 }
 
 function toPublication(message: PublicationMessage): PublicationDto {
@@ -689,6 +730,9 @@ function toReadiness(message: ReadinessMessage): ReadinessDto {
     reportedAt: message.reportedAt ?? null,
     transcriptionAvailable: message.transcriptionAvailable ?? false,
     lipSyncAvailable: message.lipSyncAvailable ?? false,
+    faceDetectionAvailable: message.faceDetectionAvailable ?? false,
+    picturesLeftToday: message.picturesLeftToday ?? 0,
+    builtinPresenters: (message.builtinPresenters ?? []).map(({ id, label }) => ({ id, label })),
   };
 }
 
@@ -938,6 +982,13 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       project('RegenerateNarration', { projectId, sceneId }),
     setMouthBox: (projectId, mouthBox) => project('SetMouthBox', { projectId, mouthBox }),
     regeneratePresenter: (id) => project('RegeneratePresenter', { id }),
+    requestPresenter: (projectId, feedback, prompt) =>
+      project('RequestPresenter', { projectId, feedback, prompt }),
+    usePresenterVersion: (projectId, index) => project('UsePresenterVersion', { projectId, index }),
+    editScenePicturePrompt: (projectId, sceneId, prompt) =>
+      project('EditScenePicturePrompt', { projectId, sceneId, prompt }),
+    regenerateScenePicture: (projectId, sceneId) =>
+      project('RegenerateScenePicture', { projectId, sceneId }),
     attachSceneMedia: (projectId, sceneId, kind, fileName) =>
       project('AttachSceneMedia', { projectId, sceneId, kind, fileName }),
     async getMediaDirectory(projectId): Promise<string> {

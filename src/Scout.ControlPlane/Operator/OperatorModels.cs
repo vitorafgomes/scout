@@ -18,6 +18,12 @@ public sealed record Mandate(
     /// <summary>The mandate before the owner wrote one.</summary>
     public static Mandate Empty { get; } = new(
         string.Empty, string.Empty, [], string.Empty, string.Empty, string.Empty, [], string.Empty, string.Empty);
+
+    /// <summary>
+    /// The format a project started without one is made in, <c>generated_pictures</c>, <c>own_pictures</c>,
+    /// <c>own_video</c> or <c>animated_character</c>; <c>generated_pictures</c> until the owner chooses.
+    /// </summary>
+    public string DefaultFormat { get; init; } = "generated_pictures";
 }
 
 /// <summary>
@@ -104,7 +110,41 @@ public sealed record OperatorProject(
 
     /// <summary>Where the character's mouth is on the presenter picture, marked by the owner; null until marked.</summary>
     public MouthBox? MouthBox { get; init; }
+
+    /// <summary>The presenters the worker made for the project, oldest first, at most 10; the worker appends one per presenter job.</summary>
+    public IReadOnlyList<PresenterVersion> PresenterVersions { get; init; } = [];
+
+    /// <summary>The short preview clip of the current presenter in the media directory, null when it has none.</summary>
+    public string? PresenterPreviewFile { get; init; }
+
+    /// <summary>
+    /// The presenter job waiting for the worker: empty for none, <c>first</c> for the one the control plane asks for when
+    /// the script is ready, else the owner's request.
+    /// </summary>
+    public string PresenterRequest { get; init; } = string.Empty;
+
+    /// <summary>Where the current presenter came from, <c>generated</c>, <c>builtin</c> or <c>owner</c>; empty before any.</summary>
+    public string PresenterSource { get; init; } = string.Empty;
+
+    /// <summary>The status a project taken for its presenter job goes back to when the worker saves the job; empty otherwise.</summary>
+    public string PresenterReturnStatus { get; init; } = string.Empty;
+
+    /// <summary>The owner's presenter prompt the waiting job uses verbatim, empty to compose it from the direction and the description.</summary>
+    public string PresenterRequestPrompt { get; init; } = string.Empty;
 }
+
+/// <summary>
+/// One presenter the worker made: the picture and its preview clip in the media directory, the prompt it was made from,
+/// the owner's feedback that asked for it, where the mouth is, when it was made and whether it was generated or built in.
+/// </summary>
+public sealed record PresenterVersion(
+    string File,
+    string Prompt,
+    string Feedback,
+    string? PreviewFile,
+    MouthBox? MouthBox,
+    DateTimeOffset MadeAt,
+    string Source);
 
 /// <summary>A rectangle on the presenter picture, each value a fraction of the picture's width or height.</summary>
 public sealed record MouthBox(double X, double Y, double Width, double Height);
@@ -228,7 +268,19 @@ public sealed record Readiness(
 
     /// <summary>Whether the worker has the lip sync program and the mouth shapes, so an animated character speaks.</summary>
     public bool LipSyncAvailable { get; init; }
+
+    /// <summary>Whether the worker has the face models, so it finds the mouth on a presenter picture by itself.</summary>
+    public bool FaceDetectionAvailable { get; init; }
+
+    /// <summary>How many of the day's pictures the worker may still ask the image service for.</summary>
+    public int PicturesLeftToday { get; init; }
+
+    /// <summary>Scout's own presenters the worker has, which the owner may pick for a project.</summary>
+    public IReadOnlyList<BuiltInPresenter> BuiltInPresenters { get; init; } = [];
 }
+
+/// <summary>One of Scout's own presenters: the id a presenter request names and the label the owner reads.</summary>
+public sealed record BuiltInPresenter(string Id, string Label);
 
 /// <summary>A narration voice: the id a mandate names, the label the owner reads, where it comes from and its sample's file name in the voice samples directory, null when it has none.</summary>
 public sealed record Voice(string Id, string Label, string Source, string? SampleFile = null);

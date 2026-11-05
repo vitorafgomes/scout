@@ -374,6 +374,30 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    operatorRequestPresenter(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterRequest, req) as ReturnType<
+        ScoutBridge['operatorRequestPresenter']
+      >;
+    },
+
+    operatorUsePresenterVersion(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterVersion, req) as ReturnType<
+        ScoutBridge['operatorUsePresenterVersion']
+      >;
+    },
+
+    operatorEditScenePicturePrompt(req) {
+      return ipc.invoke(CHANNEL.operatorScenePicturePrompt, req) as ReturnType<
+        ScoutBridge['operatorEditScenePicturePrompt']
+      >;
+    },
+
+    operatorRegenerateScenePicture(req) {
+      return ipc.invoke(CHANNEL.operatorScenePictureRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateScenePicture']
+      >;
+    },
+
     operatorAttachSceneMedia(req) {
       return ipc.invoke(CHANNEL.operatorSceneMedia, req) as ReturnType<
         ScoutBridge['operatorAttachSceneMedia']

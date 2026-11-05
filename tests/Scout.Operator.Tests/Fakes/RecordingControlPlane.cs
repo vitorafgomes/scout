@@ -55,6 +55,9 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
 
     public Func<int, OperatorProjectState, OperatorProjectState?> OwnerActs { get; init; } = (_, _) => null;
 
+    /// <summary>What the control plane makes of a save before it stores and answers it, as its pruning of presenter versions would.</summary>
+    public Func<OperatorProjectState, OperatorProjectState> Keeps { get; init; } = p => p;
+
     public IReadOnlyList<(OperatorProjectState Project, string? Origin)> Saves
     {
         get
@@ -125,7 +128,7 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
                     new InvalidOperationException("The scenes changed since the worker read them; read the project again."));
             }
 
-            var saved = string.IsNullOrEmpty(project.Id) ? project with { Id = "new-1" } : project;
+            var saved = Keeps(string.IsNullOrEmpty(project.Id) ? project with { Id = "new-1" } : project);
             _stored[saved.Id] = OwnerActs(_saves.Count, saved) ?? saved;
             return Task.FromResult(saved);
         }
@@ -345,6 +348,10 @@ internal sealed class RecordingControlPlane : IOperatorControlPlane
 
     public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
         => ChatAsync("DelegateProject", $"{projectId}|{narrationVoice}|{direction}|{motion}", projectId, p => Queued(p) with { Delegated = true });
+
+    public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct)
+        => ChatAsync("RequestPresenter", $"{projectId}|{feedback}|{prompt}", projectId,
+            p => p with { PresenterRequest = feedback.Length > 0 ? feedback : "first", PresenterRequestPrompt = prompt });
 
     private static OperatorProjectState Queued(OperatorProjectState project) => project with { Status = "production_queued" };
 

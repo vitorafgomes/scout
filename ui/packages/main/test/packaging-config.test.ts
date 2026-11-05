@@ -218,6 +218,8 @@ describe('the packaged app finds the control-plane host and its protos', () => {
       mouths: '',
       tesseract: '',
       tessdata: '',
+      presenters: '',
+      faceModels: '',
     });
   });
 
@@ -267,6 +269,65 @@ describe('the packaged app finds the control-plane host and its protos', () => {
         (dir) => (dir === join(RESOURCES, 'mouths') ? committed : []),
       ),
     ).toMatchObject({ rhubarb, mouths: join(RESOURCES, 'mouths') });
+  });
+
+  it("ships Scout's committed presenters as a resource outside the asar, where resolveMediaTools finds them through presenters.json, and the face models inside media-tools", () => {
+    const presenters = config.extraResources.find((r) => r.to === 'presenters');
+    const tools = config.extraResources.find((r) => r.to === 'media-tools');
+    const folder = join(UI_ROOT, 'packages/main/resources/presenters');
+    const committed = readdirSync(folder).sort();
+    const listed = JSON.parse(readFileSync(join(folder, 'presenters.json'), 'utf8')) as {
+      id: string;
+      label: string;
+      file: string;
+      mouthBox: { x: number; y: number; width: number; height: number };
+    }[];
+    const face = join(RESOURCES, 'media-tools', 'linux-x64', 'face');
+    const shipped = new Set([
+      join(RESOURCES, 'presenters', 'presenters.json'),
+      ...committed.map((name) => join(RESOURCES, 'presenters', name)),
+      join(face, 'blazeface-short-range.onnx'),
+      join(face, 'face-landmarker.onnx'),
+    ]);
+
+    expect(presenters?.from).toBe('packages/main/resources/presenters');
+    expect(presenters!.filter).toEqual(['**/*']);
+    expect(tools!.filter).toEqual(['**/*']);
+    expect(config.files).toContain('!packages/main/resources/presenters/**');
+    expect(committed).toEqual([
+      'LICENSE.txt',
+      'ada.png',
+      'kofi.png',
+      'mei.png',
+      'presenters.json',
+      'rafa.png',
+    ]);
+    expect(listed.map(({ id, label, file }) => [id, label, file])).toEqual([
+      ['ada', 'Ada', 'ada.png'],
+      ['kofi', 'Kofi', 'kofi.png'],
+      ['mei', 'Mei', 'mei.png'],
+      ['rafa', 'Rafa', 'rafa.png'],
+    ]);
+    expect(
+      listed.filter(
+        ({ mouthBox: b }) =>
+          b.width < 0.02 ||
+          b.height < 0.02 ||
+          b.x < 0 ||
+          b.y < 0 ||
+          b.x + b.width > 1 ||
+          b.y + b.height > 1,
+      ),
+    ).toEqual([]);
+    expect(
+      resolveMediaTools(
+        packaged,
+        (file) => shipped.has(file),
+        () => [],
+        (file) =>
+          readFileSync(join(folder, file.slice(join(RESOURCES, 'presenters').length + 1)), 'utf8'),
+      ),
+    ).toMatchObject({ presenters: join(RESOURCES, 'presenters'), faceModels: face });
   });
 
   it.each(['publish-worker.sh', 'publish-worker.ps1'])(

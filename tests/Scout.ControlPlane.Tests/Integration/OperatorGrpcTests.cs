@@ -71,6 +71,11 @@ public sealed class OperatorGrpcTests
             ["GetVoiceSamplesDirectory"] = await Denied(() => client.GetVoiceSamplesDirectoryAsync(new GetVoiceSamplesDirectoryRequest()).ResponseAsync),
             ["EditSceneText"] = await Denied(() => client.EditSceneTextAsync(new EditSceneTextRequest { ProjectId = queued.Id, SceneId = "s1", Text = "The worker's words." }).ResponseAsync),
             ["RegenerateNarration"] = await Denied(() => client.RegenerateNarrationAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
+            ["RequestPresenter"] = await Denied(() => client.RequestPresenterAsync(new RequestPresenterRequest { ProjectId = queued.Id, Feedback = "Smile." }).ResponseAsync),
+            ["UsePresenterVersion"] = await Denied(() => client.UsePresenterVersionAsync(new UsePresenterVersionRequest { ProjectId = queued.Id }).ResponseAsync),
+            ["ListBuiltInPresenters"] = await Denied(() => client.ListBuiltInPresentersAsync(new ListBuiltInPresentersRequest()).ResponseAsync),
+            ["EditScenePicturePrompt"] = await Denied(() => client.EditScenePicturePromptAsync(new EditScenePicturePromptRequest { ProjectId = queued.Id, SceneId = "s1", Prompt = "A river." }).ResponseAsync),
+            ["RegenerateScenePicture"] = await Denied(() => client.RegenerateScenePictureAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -111,6 +116,9 @@ public sealed class OperatorGrpcTests
             ["ChatReorderScenes"] = await Denied(() => gate.ChatReorderScenesAsync(new ReorderScenesRequest { ProjectId = queued.Id }).ResponseAsync),
             ["ChatProduceProject"] = await Denied(() => gate.ChatProduceProjectAsync(new ProduceProjectRequest { Id = queued.Id }).ResponseAsync),
             ["ChatDelegateProject"] = await Denied(() => gate.ChatDelegateProjectAsync(new DelegateProjectRequest { Id = queued.Id }).ResponseAsync),
+            ["ChatRequestPresenter"] = await Denied(() => gate.ChatRequestPresenterAsync(new RequestPresenterRequest { ProjectId = queued.Id, Feedback = "Smile." }).ResponseAsync),
+            ["ChatEditScenePicturePrompt"] = await Denied(() => gate.ChatEditScenePicturePromptAsync(new EditScenePicturePromptRequest { ProjectId = queued.Id, SceneId = "s1", Prompt = "A river." }).ResponseAsync),
+            ["ChatRegenerateScenePicture"] = await Denied(() => gate.ChatRegenerateScenePictureAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
         };
 
         foreach (var (method, ex) in denied)
@@ -420,13 +428,17 @@ public sealed class OperatorGrpcTests
         using var workerChannel = host.CreateWorkerChannel();
         var desktop = new GrpcOperator.OperatorClient(desktopChannel);
         var gate = new WorkerGate.WorkerGateClient(workerChannel);
-        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, StockPictures = true, LipSyncAvailable = true, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
+        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, StockPictures = true, LipSyncAvailable = true, FaceDetectionAvailable = true, PicturesLeftToday = 37, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
         report.Notes.Add("No image model is configured.");
+        report.BuiltinPresenters.Add(new BuiltInPresenter { Id = "fox", Label = "Fox" });
+        report.BuiltinPresenters.Add(new BuiltInPresenter { Id = "owl-2", Label = "Owl" });
         report.Voices.Add(new Scout.ControlPlane.Contracts.Voice { Id = "piper:en_GB-cori-medium", Label = "Cori (medium)", Source = "piper" });
 
         var before = await desktop.GetReadinessAsync(new GetReadinessRequest());
+        var noPresentersYet = await desktop.ListBuiltInPresentersAsync(new ListBuiltInPresentersRequest());
         var stored = await gate.ReportReadinessAsync(report);
         var read = await desktop.GetReadinessAsync(new GetReadinessRequest());
+        var presenters = await desktop.ListBuiltInPresentersAsync(new ListBuiltInPresentersRequest());
 
         (before.Provider, before.HasReportedAt, before.Notes.Single()).ShouldBe((string.Empty, false, "The Scout worker has not reported yet."));
         read.ShouldBe(stored);
@@ -435,6 +447,10 @@ public sealed class OperatorGrpcTests
         read.Voices.Select(v => (v.Id, v.Label, v.Source)).ShouldBe([("piper:en_GB-cori-medium", "Cori (medium)", "piper")]);
         (before.StockPictures, read.StockPictures).ShouldBe((false, true));
         (before.LipSyncAvailable, read.LipSyncAvailable).ShouldBe((false, true));
+        (before.FaceDetectionAvailable, read.FaceDetectionAvailable, before.PicturesLeftToday, read.PicturesLeftToday).ShouldBe((false, true, 0, 37));
+        read.BuiltinPresenters.Select(p => (p.Id, p.Label)).ShouldBe([("fox", "Fox"), ("owl-2", "Owl")]);
+        noPresentersYet.Presenters.ShouldBeEmpty();
+        presenters.Presenters.Select(p => (p.Id, p.Label)).ShouldBe([("fox", "Fox"), ("owl-2", "Owl")]);
         DateTimeOffset.ParseExact(read.ReportedAt, "O", System.Globalization.CultureInfo.InvariantCulture)
             .ShouldBeInRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow);
     }
@@ -1334,6 +1350,7 @@ public sealed class OperatorGrpcTests
             "NextApprovedAction", "GetComments", "SaveComments", "GetVoiceSamplesDirectory",
             "ChatEditSceneText", "ChatRegenerateNarration", "ChatRegenerateScene", "ChatSetSceneLocked",
             "ChatReorderScenes", "ChatProduceProject", "ChatDelegateProject",
+            "ChatRequestPresenter", "ChatEditScenePicturePrompt", "ChatRegenerateScenePicture",
         ]);
         methods.ShouldAllBe(m => !forbidden.Any(f => m.StartsWith(f, StringComparison.Ordinal) || m.StartsWith("Chat" + f, StringComparison.Ordinal)));
     }
@@ -1419,6 +1436,79 @@ public sealed class OperatorGrpcTests
         (started.Format, started.Presenter, started.HasPresenterFile, started.MouthBox).ShouldBe(("animated_character", "A friendly fox.", false, (MouthBox?)null));
         (marked.PresenterFile, marked.MouthBox).ShouldBe(("presenter-1a2b.png", box));
         (workerRead.Presenter, workerRead.PresenterFile, workerRead.MouthBox).ShouldBe(("A friendly fox.", "presenter-1a2b.png", box));
-        (regenerated.Status, regenerated.HasPresenterFile, regenerated.MouthBox).ShouldBe(("script_ready", false, (MouthBox?)null));
+        (regenerated.Status, regenerated.HasPresenterFile, regenerated.MouthBox).ShouldBe(("script_ready", true, box));
+    }
+
+    [Fact]
+    public async Task The_Automatic_Presenter_Round_Trips_Over_The_Socket_From_The_Mandates_Default_To_The_Owners_Versions()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        await features.SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var mandate = Mandate();
+        mandate.DefaultFormat = "animated_character";
+
+        var savedMandate = await desktop.SaveMandateAsync(mandate);
+        var workerMandate = await gate.GetOperatorMandateAsync(new GetMandateRequest());
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why the fox crossed", Presenter = "A friendly fox." });
+        var researching = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project.ShouldNotBeNull();
+        var script = researching.Clone();
+        script.Status = "script_ready";
+        var scripted = await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = script });
+        var media = (await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id })).Path;
+        foreach (var file in new[] { "presenter-1a2b.png", "presenter-preview-1.mp4", "presenter-3c4d.png" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, file), "media");
+        }
+
+        var presenting = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project.ShouldNotBeNull();
+        var made = presenting.Clone();
+        made.PresenterRequest = string.Empty;
+        made.PresenterVersions.Add(new PresenterVersion { File = "presenter-1a2b.png", Prompt = "A friendly fox, flat cartoon.", PreviewFile = "presenter-preview-1.mp4", MouthBox = new MouthBox { X = 0.4, Y = 0.6, Width = 0.2, Height = 0.1 }, Source = "generated" });
+        var first = await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = made });
+        var asked = await desktop.RequestPresenterAsync(new RequestPresenterRequest { ProjectId = started.Id, Feedback = "Make the fox smile.", Prompt = "A fox in a library." });
+        var again = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project.ShouldNotBeNull();
+        var second = again.Clone();
+        second.PresenterRequest = string.Empty;
+        second.PresenterVersions.Add(new PresenterVersion { File = "presenter-3c4d.png", Prompt = "A fox in a library.", Feedback = "Make the fox smile.", Source = "generated" });
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = second });
+        await host.Services.GetRequiredService<JsonFileOperatorStore>().UpdateProjectsAsync(
+            projects =>
+            {
+                var index = projects.FindIndex(p => p.Id == started.Id);
+                projects[index] = projects[index] with
+                {
+                    Scenes = [new Scout.ControlPlane.Operator.Scene("s1", 1, "Rivers bend.", "A river", false, "ready", null, "generated", "generated", "s1.mp3", "s1.png", 3000)],
+                };
+                return 0;
+            },
+            CancellationToken.None);
+        var used = await desktop.UsePresenterVersionAsync(new UsePresenterVersionRequest { ProjectId = started.Id, Index = 0 });
+        var missing = await Denied(() => desktop.UsePresenterVersionAsync(new UsePresenterVersionRequest { ProjectId = started.Id, Index = 5 }).ResponseAsync);
+        var prompted = await desktop.EditScenePicturePromptAsync(new EditScenePicturePromptRequest { ProjectId = started.Id, SceneId = "s1", Prompt = " A river at dawn. " });
+        var regenerated = await desktop.RegenerateScenePictureAsync(new SceneRequest { ProjectId = started.Id, SceneId = "s1" });
+        var fromChat = await gate.ChatRequestPresenterAsync(new RequestPresenterRequest { ProjectId = started.Id, Feedback = "builtin:fox" });
+        var logged = (await features.ListWritesAsync(new ListWritesRequest())).Entries;
+
+        (savedMandate.DefaultFormat, workerMandate.DefaultFormat, started.Format).ShouldBe(("animated_character", "animated_character", "animated_character"));
+        (scripted.Status, scripted.PresenterRequest).ShouldBe(("script_ready", "first"));
+        (presenting.Status, presenting.PresenterReturnStatus).ShouldBe(("presenting", "script_ready"));
+        (first.Status, first.PresenterRequest, first.PresenterFile, first.PresenterPreviewFile, first.PresenterSource).ShouldBe(("script_ready", string.Empty, "presenter-1a2b.png", "presenter-preview-1.mp4", "generated"));
+        first.MouthBox.ShouldBe(new MouthBox { X = 0.4, Y = 0.6, Width = 0.2, Height = 0.1 });
+        var version = first.PresenterVersions.ShouldHaveSingleItem();
+        (version.File, version.Prompt, version.PreviewFile, version.Source).ShouldBe(("presenter-1a2b.png", "A friendly fox, flat cartoon.", "presenter-preview-1.mp4", "generated"));
+        DateTimeOffset.ParseExact(version.MadeAt, "O", System.Globalization.CultureInfo.InvariantCulture).ShouldBeInRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow);
+        (asked.PresenterRequest, asked.PresenterRequestPrompt).ShouldBe(("Make the fox smile.", "A fox in a library."));
+        (again.Status, again.PresenterRequestPrompt).ShouldBe(("presenting", "A fox in a library."));
+        (used.PresenterFile, used.HasPresenterPreviewFile, used.PresenterVersions.Count).ShouldBe(("presenter-1a2b.png", true, 2));
+        (missing.StatusCode, missing.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The project has no presenter version 5."));
+        prompted.Scenes.Single().VisualPrompt.ShouldBe("A river at dawn.");
+        (regenerated.Status, regenerated.Scenes.Single().HasVisualFile, regenerated.Scenes.Single().Narration).ShouldBe(("production_queued", false, "Rivers bend."));
+        fromChat.PresenterRequest.ShouldBe("builtin:fox");
+        logged[0].Outcome.ShouldBe("asked for a new presenter via chat");
     }
 }

@@ -169,6 +169,48 @@ describe('resolveMediaTools', () => {
     expect([windows.rhubarb, windows.mouths]).toEqual([rhubarbExe('win32-x64', 'rhubarb.exe'), '']);
   });
 
+  it("finds Scout's presenters folder only when every picture its presenters.json names is there, and the face models folder only with both models", () => {
+    const presenters = path.join('/opt/Scout/resources', 'presenters');
+    const manifest = path.join(presenters, 'presenters.json');
+    const face = path.join('/opt/Scout/resources', 'media-tools', 'linux-x64', 'face');
+    const listed = JSON.stringify([
+      { id: 'ada', label: 'Ada', file: 'ada.png' },
+      { id: 'kofi', label: 'Kofi', file: 'kofi.png' },
+    ]);
+    const resolve = (present: readonly string[], body = listed) =>
+      resolveMediaTools(
+        { ...packaged, platform: 'linux', arch: 'x64' },
+        (file) => present.includes(file),
+        () => [],
+        () => body,
+      );
+    const everything = [
+      manifest,
+      path.join(presenters, 'ada.png'),
+      path.join(presenters, 'kofi.png'),
+      path.join(face, 'blazeface-short-range.onnx'),
+      path.join(face, 'face-landmarker.onnx'),
+    ];
+
+    const complete = resolve(everything);
+    const missingPicture = resolve(everything.filter((f) => !f.endsWith('kofi.png')));
+    const noManifest = resolve(everything.filter((f) => f !== manifest));
+    const unreadable = resolve(everything, '{ not json');
+    const escaping = resolve(everything, JSON.stringify([{ id: 'x', file: '../x.png' }]));
+    const empty = resolve(everything, '[]');
+    const oneModel = resolve(everything.filter((f) => !f.endsWith('face-landmarker.onnx')));
+
+    expect([complete.presenters, complete.faceModels]).toEqual([presenters, face]);
+    expect([
+      missingPicture.presenters,
+      noManifest.presenters,
+      unreadable.presenters,
+      escaping.presenters,
+      empty.presenters,
+    ]).toEqual(['', '', '', '', '']);
+    expect([oneModel.faceModels, oneModel.presenters]).toEqual(['', presenters]);
+  });
+
   it('answers an empty path for every tool the build did not bundle, as on macOS', () => {
     const tools = resolveMediaTools(
       { ...packaged, platform: 'darwin', arch: 'arm64' },
@@ -184,6 +226,8 @@ describe('resolveMediaTools', () => {
       mouths: '',
       tesseract: '',
       tessdata: '',
+      presenters: '',
+      faceModels: '',
     });
   });
 
@@ -207,6 +251,13 @@ describe('resolveMediaTools', () => {
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/rhubarb/rhubarb')),
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/tesseract/AppRun')),
       posix(path.join(repo, 'ui/packages/main/resources/media-tools/linux-x64/tesseract/tessdata')),
+      posix(path.join(repo, 'ui/packages/main/resources/presenters/presenters.json')),
+      posix(
+        path.join(
+          repo,
+          'ui/packages/main/resources/media-tools/linux-x64/face/blazeface-short-range.onnx',
+        ),
+      ),
     ]);
   });
 });

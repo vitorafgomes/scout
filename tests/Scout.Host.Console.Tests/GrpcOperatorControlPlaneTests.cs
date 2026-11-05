@@ -804,7 +804,7 @@ public sealed class GrpcOperatorControlPlaneTests
         public List<string> Programs { get; } = [];
 
         public Task<ProcessResult> RunAsync(
-            string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
+            string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null, bool rawOutput = false)
         {
             Programs.Add(program);
             var listing = arguments[^1] switch
@@ -902,6 +902,7 @@ public sealed class GrpcOperatorControlPlaneTests
         nameof(WorkerGate.WorkerGateBase.ChatReorderScenes) => controlPlane.ReorderScenesAsync("p1", ["s2", "s1", "s3"], CancellationToken.None),
         nameof(WorkerGate.WorkerGateBase.ChatProduceProject) => controlPlane.ProduceProjectAsync("p1", "piper:en_GB-aru-medium", string.Empty, "still", CancellationToken.None),
         nameof(WorkerGate.WorkerGateBase.ChatDelegateProject) => controlPlane.DelegateProjectAsync("p1", string.Empty, "Calm, close-up shots.", string.Empty, CancellationToken.None),
+        nameof(WorkerGate.WorkerGateBase.ChatRequestPresenter) => controlPlane.RequestPresenterAsync("p1", "Make the apron blue.", "A baker in a red cap", CancellationToken.None),
         _ => throw new ArgumentOutOfRangeException(nameof(rpc)),
     };
 
@@ -913,6 +914,7 @@ public sealed class GrpcOperatorControlPlaneTests
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatReorderScenes), "{ \"projectId\": \"p1\", \"sceneIds\": [ \"s2\", \"s1\", \"s3\" ] }")]
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatProduceProject), "{ \"id\": \"p1\", \"narrationVoice\": \"piper:en_GB-aru-medium\", \"motion\": \"still\" }")]
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatDelegateProject), "{ \"id\": \"p1\", \"direction\": \"Calm, close-up shots.\" }")]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRequestPresenter), "{ \"projectId\": \"p1\", \"feedback\": \"Make the apron blue.\", \"prompt\": \"A baker in a red cap\" }")]
     public async Task A_Chat_Edit_Travels_On_Its_Own_Rpc_With_The_Worker_Token_And_Reads_The_Project_Back(string rpc, string request)
     {
         var service = new FakeWorkerGate();
@@ -935,6 +937,7 @@ public sealed class GrpcOperatorControlPlaneTests
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatReorderScenes))]
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatProduceProject))]
     [InlineData(nameof(WorkerGate.WorkerGateBase.ChatDelegateProject))]
+    [InlineData(nameof(WorkerGate.WorkerGateBase.ChatRequestPresenter))]
     public async Task A_Chat_Edit_That_Fails_Reads_As_The_Control_Planes_Words_Or_Unreachable(string rpc)
     {
         async Task<InvalidOperationException> FailingWith(StatusCode code, string detail)
@@ -1063,5 +1066,85 @@ public sealed class GrpcOperatorControlPlaneTests
         var cannot = service.Reported.ShouldNotBeNull().LipSyncAvailable;
 
         (can, cannot).ShouldBe((true, false));
+    }
+
+    [Fact]
+    public async Task The_Presenter_Versions_Request_And_Source_Travel_To_The_Wire_And_Back_And_Absent_Ones_Stay_Absent()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var operatorPlane = new GrpcOperatorControlPlane(gate);
+        var generated = new OperatorPresenterVersion(
+            "presenter-0a1b2c3d4e5f.png", "A cheerful baker.", string.Empty, "presenter-preview-1.mp4", new OperatorMouthBox(0.41, 0.62, 0.18, 0.07), "2026-11-05T10:00:00Z", "generated");
+        var builtIn = new OperatorPresenterVersion("presenter-builtin-ada.png", string.Empty, "builtin:ada", null, null, "2026-11-05T10:05:00Z", "builtin");
+        var project = Ready() with
+        {
+            Status = "presenting",
+            Format = "animated_character",
+            PresenterVersions = [generated, builtIn],
+            PresenterPreviewFile = "presenter-preview-1.mp4",
+            PresenterRequest = "Make the apron blue.",
+            PresenterRequestPrompt = "A baker in a red cap",
+            PresenterSource = "generated",
+            PresenterReturnStatus = "script_ready",
+        };
+
+        var saved = await operatorPlane.SaveProjectAsync(project, null, CancellationToken.None);
+        var sent = service.Saved.ShouldNotBeNull().Project;
+        var without = await operatorPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+        var sentWithout = service.Saved.ShouldNotBeNull().Project;
+
+        (sent.PresenterRequest, sent.PresenterRequestPrompt, sent.PresenterSource, sent.PresenterReturnStatus, sent.PresenterPreviewFile).ShouldBe(
+            ("Make the apron blue.", "A baker in a red cap", "generated", "script_ready", "presenter-preview-1.mp4"));
+        sent.PresenterVersions.Count.ShouldBe(2);
+        (sent.PresenterVersions[0].PreviewFile, sent.PresenterVersions[0].MouthBox.Height, sent.PresenterVersions[1].HasPreviewFile, sent.PresenterVersions[1].MouthBox)
+            .ShouldBe(("presenter-preview-1.mp4", 0.07, false, (MouthBox?)null));
+        saved.PresenterVersions.ShouldBe([generated, builtIn]);
+        (saved.PresenterRequest, saved.PresenterRequestPrompt, saved.PresenterSource, saved.PresenterReturnStatus, saved.PresenterPreviewFile).ShouldBe(
+            (project.PresenterRequest, project.PresenterRequestPrompt, project.PresenterSource, project.PresenterReturnStatus, project.PresenterPreviewFile));
+        (sentWithout.PresenterVersions.Count, sentWithout.HasPresenterPreviewFile, sentWithout.PresenterRequest, sentWithout.PresenterSource).ShouldBe((0, false, string.Empty, string.Empty));
+        (without.PresenterVersions.Count, without.PresenterPreviewFile, without.PresenterRequest, without.PresenterReturnStatus).ShouldBe((0, (string?)null, string.Empty, string.Empty));
+    }
+
+    [Fact]
+    public async Task Face_Detection_The_Pictures_Left_Today_And_The_Built_In_Presenters_Are_Reported_To_The_Control_Plane()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        await controlPlane.ReportReadinessAsync(
+            new OperatorReadiness(true, true, "OpenAI", true, true, [])
+            {
+                FaceDetectionAvailable = true,
+                PicturesLeftToday = 37,
+                BuiltInPresenters = [new OperatorBuiltInPresenter("ada", "Ada, the baker"), new OperatorBuiltInPresenter("bo", "Bo, the gardener")],
+            },
+            CancellationToken.None);
+
+        var reported = service.Reported.ShouldNotBeNull();
+        (reported.FaceDetectionAvailable, reported.PicturesLeftToday).ShouldBe((true, 37));
+        reported.BuiltinPresenters.Select(p => (p.Id, p.Label)).ShouldBe([("ada", "Ada, the baker"), ("bo", "Bo, the gardener")]);
+    }
+
+    [Fact]
+    public async Task The_Presenters_And_Face_Models_Paths_Bind_From_Scout_Operator()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Scout:Plugins:YouTube:ApiKey"] = "youtube-key",
+                ["Scout:Operator:PresentersPath"] = "/opt/scout/presenters",
+                ["Scout:Operator:FaceModelsPath"] = "/opt/scout/face",
+            })
+            .Build();
+        var services = new ServiceCollection().AddLogging().AddScoutHost(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OperatorMediaOptions>>().Value;
+
+        (options.PresentersPath, options.FaceModelsPath).ShouldBe(("/opt/scout/presenters", "/opt/scout/face"));
     }
 }

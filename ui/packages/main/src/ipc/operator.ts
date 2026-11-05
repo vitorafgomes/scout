@@ -24,6 +24,9 @@ import {
   type OperatorProjectRequest,
   type OperatorProjectsRequest,
   type OperatorProjectsResponse,
+  type PresenterRequest,
+  type PresenterVersionRequest,
+  type ScenePicturePromptRequest,
   type PackageMetadataRequest,
   type PrivacyStatus,
   type ProjectFormat,
@@ -68,6 +71,10 @@ export type OperatorClient = Pick<
   | 'regenerateNarration'
   | 'setMouthBox'
   | 'regeneratePresenter'
+  | 'requestPresenter'
+  | 'usePresenterVersion'
+  | 'editScenePicturePrompt'
+  | 'regenerateScenePicture'
   | 'attachSceneMedia'
   | 'getMediaDirectory'
   | 'getReadiness'
@@ -112,6 +119,9 @@ const FORMATS: readonly string[] = [
   'animated_character',
 ];
 const MAX_PRESENTER = 300;
+const MAX_PRESENTER_FEEDBACK = 300;
+const MAX_PRESENTER_PROMPT = 1500;
+const MAX_PICTURE_PROMPT = 700;
 const MIN_MOUTH_SIZE = 0.02;
 const MAX_SCENE_TEXT = 700;
 const MOTIONS: readonly string[] = ['still', 'gentle', 'dynamic'];
@@ -168,7 +178,13 @@ function validMandate(req: MandateSaveRequest | undefined): MandateSaveRequest {
     blockedTopics: list(req?.blockedTopics),
     targetMetric: text(req?.targetMetric),
     targetValue: text(req?.targetValue),
+    defaultFormat: text(req?.defaultFormat) as ProjectFormat | '',
   };
+  if (mandate.defaultFormat !== '' && !FORMATS.includes(mandate.defaultFormat)) {
+    invalid(
+      'The default format is generated_pictures, own_pictures, own_video or animated_character.',
+    );
+  }
   if (mandate.objective.length === 0) invalid('The objective is required.');
   if (mandate.language.length === 0) invalid('The language is required.');
   if (mandate.pillars.length > MAX_PILLARS) invalid(`At most ${MAX_PILLARS} pillars.`);
@@ -583,6 +599,90 @@ export function registerOperatorHandlers(
   );
 
   ipcMain.handle(
+    CHANNEL.operatorPresenterRequest,
+    async (_event, req: PresenterRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const feedback = text(req?.feedback);
+        if (feedback.length > MAX_PRESENTER_FEEDBACK) {
+          invalid(`Presenter feedback is at most ${MAX_PRESENTER_FEEDBACK} characters.`);
+        }
+        const prompt = text(req?.prompt);
+        if (prompt.length > MAX_PRESENTER_PROMPT) {
+          invalid(`A presenter prompt is at most ${MAX_PRESENTER_PROMPT} characters.`);
+        }
+        return await (await getClient()).requestPresenter(projectId, feedback, prompt);
+      } catch (err: unknown) {
+        logger.warn('operator: presenter request failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorPresenterVersion,
+    async (_event, req: PresenterVersionRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const index = req?.index;
+        if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+          invalid(`The project has no presenter version ${String(index)}.`);
+        }
+        return await (await getClient()).usePresenterVersion(projectId, index);
+      } catch (err: unknown) {
+        logger.warn('operator: presenter version failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorScenePicturePrompt,
+    async (_event, req: ScenePicturePromptRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const sceneId = requiredId(req?.sceneId, 'The scene id');
+        const prompt = text(req?.prompt);
+        if (prompt.length === 0 || prompt.length > MAX_PICTURE_PROMPT) {
+          invalid(`A picture prompt is 1 to ${MAX_PICTURE_PROMPT} characters.`);
+        }
+        return await (await getClient()).editScenePicturePrompt(projectId, sceneId, prompt);
+      } catch (err: unknown) {
+        logger.warn('operator: scene picture prompt failed', {
+          projectId: req?.projectId,
+          sceneId: req?.sceneId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorScenePictureRegeneration,
+    async (_event, req: SceneRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const sceneId = requiredId(req?.sceneId, 'The scene id');
+        return await (await getClient()).regenerateScenePicture(projectId, sceneId);
+      } catch (err: unknown) {
+        logger.warn('operator: scene picture regeneration failed', {
+          projectId: req?.projectId,
+          sceneId: req?.sceneId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
     CHANNEL.operatorSceneMedia,
     async (_event, req: SceneMediaRequest | undefined): Promise<SceneMediaResponse> => {
       try {
@@ -806,6 +906,10 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorNarrationRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorMouthBox);
     ipcMain.removeHandler(CHANNEL.operatorPresenterRegeneration);
+    ipcMain.removeHandler(CHANNEL.operatorPresenterRequest);
+    ipcMain.removeHandler(CHANNEL.operatorPresenterVersion);
+    ipcMain.removeHandler(CHANNEL.operatorScenePicturePrompt);
+    ipcMain.removeHandler(CHANNEL.operatorScenePictureRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneMedia);
     ipcMain.removeHandler(CHANNEL.operatorReadiness);
     ipcMain.removeHandler(CHANNEL.operatorAssembly);

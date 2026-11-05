@@ -392,6 +392,8 @@ const RESERVED_WORKER_KEYS = new Set([
   'scout__operator__voicespath',
   'scout__operator__rhubarbpath',
   'scout__operator__mouthspath',
+  'scout__operator__presenterspath',
+  'scout__operator__facemodelspath',
   'scout__tools__tesseractpath',
   'scout__tools__tessdatapath',
   'scout__tools__locale',

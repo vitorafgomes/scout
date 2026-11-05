@@ -89,6 +89,9 @@ import {
   type SceneRequest,
   type SceneTextRequest,
   type MouthBoxRequest,
+  type PresenterRequest,
+  type PresenterVersionRequest,
+  type ScenePicturePromptRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -275,6 +278,15 @@ function createFakeBridge(): ScoutBridge {
     operatorSetMouthBox: (_req: MouthBoxRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorRegeneratePresenter: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRequestPresenter: (_req: PresenterRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorUsePresenterVersion: (_req: PresenterVersionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditScenePicturePrompt: (
+      _req: ScenePicturePromptRequest,
+    ): Promise<OperatorProjectDto> => rejectNotAvailable(),
+    operatorRegenerateScenePicture: (_req: SceneRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
       rejectNotAvailable(),
@@ -661,6 +673,24 @@ export class ScoutBridgeService {
 
   async operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorRegeneratePresenter(req);
+  }
+
+  async operatorRequestPresenter(req: PresenterRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRequestPresenter(req);
+  }
+
+  async operatorUsePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorUsePresenterVersion(req);
+  }
+
+  async operatorEditScenePicturePrompt(
+    req: ScenePicturePromptRequest,
+  ): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditScenePicturePrompt(req);
+  }
+
+  async operatorRegenerateScenePicture(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateScenePicture(req);
   }
 
   async operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse> {
