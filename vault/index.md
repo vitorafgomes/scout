@@ -164,3 +164,4 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/history/adapter-slack|Adapter Slack history]] - Dated changes to the Slack adapter: the SlackNet 0.19 move to an awaited, token-bounded DisconnectAsync.
 - [[pages/history/skills|Skills - history]] - What changed in the skills selector and when.
 - [[pages/history/llm|Llm - history]] - What changed in the LLM gateway and when.
+- [[pages/history/operator|Operator - history]] - What changed in the channel operator worker and when, and the FaceMouth acceptance run of phase 8c-B.

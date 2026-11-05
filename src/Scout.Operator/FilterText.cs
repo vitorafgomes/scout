@@ -61,17 +61,17 @@ internal static partial class FilterText
     }
 
     /// <summary>
-    /// One <c>drawtext</c> filter: <paramref name="text"/> in white at <paramref name="size"/>, centred across, at
-    /// <paramref name="y"/>, on a dark box when <paramref name="boxed"/>, shown from <paramref name="fromMs"/> to
-    /// <paramref name="toMs"/> when both are given.
+    /// One <c>drawtext</c> filter: <paramref name="text"/> in white at <paramref name="size"/>, centred across, or from
+    /// <paramref name="left"/> pixels when given, at <paramref name="y"/>, on a dark box when <paramref name="boxed"/>, shown
+    /// from <paramref name="fromMs"/> to <paramref name="toMs"/> when both are given.
     /// </summary>
-    internal static string Draw(string fontPath, string text, int size, int y, bool boxed, int? fromMs = null, int? toMs = null)
+    internal static string Draw(string fontPath, string text, int size, int y, bool boxed, int? fromMs = null, int? toMs = null, int? left = null)
     {
         var filter = new StringBuilder("drawtext=fontfile=")
             .Append(Escape(fontPath))
             .Append(":expansion=none:text=")
             .Append(Escape(text))
-            .Append(CultureInfo.InvariantCulture, $":fontsize={size}:fontcolor=white:x=(w-text_w)/2:y={y}");
+            .Append(CultureInfo.InvariantCulture, $":fontsize={size}:fontcolor=white:x={(left is { } x ? x.ToString(CultureInfo.InvariantCulture) : "(w-text_w)/2")}:y={y}");
         if (boxed)
         {
             filter.Append(":box=1:boxcolor=black@0.6:boxborderw=16");

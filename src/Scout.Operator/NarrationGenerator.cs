@@ -34,7 +34,11 @@ internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media,
     public async Task<bool> SpeechAvailableAsync(CancellationToken ct)
         => media.Speech || (await piper.ProbeAsync(ct).ConfigureAwait(false)).Count > 0;
 
-    public async Task<NarrationResult> GenerateAsync(OperatorScene scene, string? voice, string directory, CancellationToken ct)
+    public Task<NarrationResult> GenerateAsync(OperatorScene scene, string? voice, string directory, CancellationToken ct)
+        => GenerateAsync(scene, voice, directory, $"scene-{scene?.Id}", ct);
+
+    /// <summary>Make the narration of <paramref name="scene"/> as above, saved as <paramref name="stem"/> with the engine's extension.</summary>
+    public async Task<NarrationResult> GenerateAsync(OperatorScene scene, string? voice, string directory, string stem, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(scene);
         var estimate = EstimateMs(scene.Narration);
@@ -42,7 +46,7 @@ internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media,
         var speech = kernel.Services.GetService<ITextToAudioService>();
         if (chosen.StartsWith(PiperSpeech.Prefix, StringComparison.Ordinal))
         {
-            return await BundledAsync(scene, chosen, directory, estimate, ct).ConfigureAwait(false);
+            return await BundledAsync(scene, chosen, directory, stem, estimate, ct).ConfigureAwait(false);
         }
 
         if (chosen.Length > 0)
@@ -58,28 +62,28 @@ internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media,
                 throw new InvalidOperationException(PiperSpeech.UnknownVoice(chosen));
             }
 
-            return await ProviderAsync(speech, scene, settingsFor(name), directory, estimate, ct).ConfigureAwait(false);
+            return await ProviderAsync(speech, scene, settingsFor(name), directory, stem, estimate, ct).ConfigureAwait(false);
         }
 
         if (speech is not null)
         {
-            return await ProviderAsync(speech, scene, media.SpeechSettings, directory, estimate, ct).ConfigureAwait(false);
+            return await ProviderAsync(speech, scene, media.SpeechSettings, directory, stem, estimate, ct).ConfigureAwait(false);
         }
 
         return PiperSpeech.Default(await piper.ProbeAsync(ct).ConfigureAwait(false)) is { } fallback
-            ? await BundledAsync(scene, fallback.Id, directory, estimate, ct).ConfigureAwait(false)
+            ? await BundledAsync(scene, fallback.Id, directory, stem, estimate, ct).ConfigureAwait(false)
             : new NarrationResult(OperatorPipeline.NoAudio, null, estimate, NoSpeech);
     }
 
-    private async Task<NarrationResult> BundledAsync(OperatorScene scene, string voice, string directory, int estimate, CancellationToken ct)
+    private async Task<NarrationResult> BundledAsync(OperatorScene scene, string voice, string directory, string stem, int estimate, CancellationToken ct)
     {
-        var file = $"scene-{scene.Id}.wav";
+        var file = $"{stem}.wav";
         await piper.SynthesizeAsync(voice, scene.Narration, scene.Order, directory, file, ct).ConfigureAwait(false);
         return new NarrationResult(OperatorPipeline.Generated, file, estimate, null);
     }
 
     private static async Task<NarrationResult> ProviderAsync(
-        ITextToAudioService speech, OperatorScene scene, PromptExecutionSettings? settings, string directory, int estimate, CancellationToken ct)
+        ITextToAudioService speech, OperatorScene scene, PromptExecutionSettings? settings, string directory, string stem, int estimate, CancellationToken ct)
     {
         ReadOnlyMemory<byte>? bytes;
         try
@@ -97,7 +101,7 @@ internal sealed class NarrationGenerator(Kernel kernel, MediaCapabilities media,
             throw new InvalidOperationException(Failed(scene.Order));
         }
 
-        var file = $"scene-{scene.Id}.mp3";
+        var file = $"{stem}.mp3";
         await MediaFiles.WriteAsync(directory, file, data, ct).ConfigureAwait(false);
         return new NarrationResult(OperatorPipeline.Generated, file, estimate, null);
     }

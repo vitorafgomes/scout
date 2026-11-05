@@ -14,7 +14,7 @@ namespace Scout.Host.ControlPlane.Services;
 /// response when none is due or the owner has not granted YouTube, and carries its project's origin reference,
 /// like the next queued project, only when the project has one. The worker reads and saves the comments through
 /// <see cref="CommentService"/>, and carries the owner's chat edits of a project (scene text, narration, scene,
-/// lock, order, production, delegation) to the chat methods of <see cref="OperatorService"/>, each under the
+/// lock, order, production, delegation, a new presenter, a scene's picture prompt and picture) to the chat methods of <see cref="OperatorService"/>, each under the
 /// owner's YouTube grant and logged as done via chat.
 /// </summary>
 public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
@@ -197,5 +197,20 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
     public override Task<Project> ChatDelegateProject(DelegateProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.DelegateProjectFromChatAsync(request.Id, request.NarrationVoice, request.Direction, request.Motion, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatRequestPresenter(RequestPresenterRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RequestPresenterFromChatAsync(request.ProjectId, request.Feedback, request.Prompt, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatEditScenePicturePrompt(EditScenePicturePromptRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.EditScenePicturePromptFromChatAsync(request.ProjectId, request.SceneId, request.Prompt, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> ChatRegenerateScenePicture(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateScenePictureFromChatAsync(request.ProjectId, request.SceneId, context.CancellationToken)
                 .ConfigureAwait(false)));
 }

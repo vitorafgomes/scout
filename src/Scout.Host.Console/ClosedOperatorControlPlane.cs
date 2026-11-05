@@ -66,4 +66,7 @@ internal sealed class ClosedOperatorControlPlane : IOperatorControlPlane
 
     public Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct)
         => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
+
+    public Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct)
+        => Task.FromException<OperatorProjectState>(new ControlPlaneUnavailableException(Reason));
 }

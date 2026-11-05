@@ -28,8 +28,8 @@ export interface BuildEnvDeps {
   /** The control plane's write gate for the worker; null while the control plane is not launched. */
   workerGate?: WorkerGateAccess | null;
   /**
-   * The bundled ffmpeg, font, piper, voices folder, rhubarb and mouths folder, which the worker always gets, empty
-   * when not bundled; and tesseract and its language data folder, set only when bundled.
+   * The bundled ffmpeg, font, piper, voices folder, rhubarb, mouths folder, presenters folder and face models
+   * folder, which the worker always gets, empty when not bundled; and tesseract and its language data folder, set only when bundled.
    */
   mediaTools?: MediaToolPaths;
   /** The app's locale, such as `pt-BR`; the worker picks the languages it reads text from a screenshot in. */
@@ -106,6 +106,8 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   env['SCOUT__OPERATOR__VOICESPATH'] = deps.mediaTools?.voices ?? '';
   env['SCOUT__OPERATOR__RHUBARBPATH'] = deps.mediaTools?.rhubarb ?? '';
   env['SCOUT__OPERATOR__MOUTHSPATH'] = deps.mediaTools?.mouths ?? '';
+  env['SCOUT__OPERATOR__PRESENTERSPATH'] = deps.mediaTools?.presenters ?? '';
+  env['SCOUT__OPERATOR__FACEMODELSPATH'] = deps.mediaTools?.faceModels ?? '';
   const { tesseract = '', tessdata = '' } = deps.mediaTools ?? {};
   if (tesseract !== '') env['SCOUT__TOOLS__TESSERACTPATH'] = tesseract;
   if (tessdata !== '') env['SCOUT__TOOLS__TESSDATAPATH'] = tessdata;

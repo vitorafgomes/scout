@@ -19,14 +19,15 @@ public sealed class ReadinessReporterTests : IDisposable
         string tokenFile = "",
         TimeProvider? time = null,
         ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null, PiperSpeech? piper = null,
-        OpenversePictures? stock = null, Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null, RhubarbLipSync? lipSync = null)
+        OpenversePictures? stock = null, Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null, RhubarbLipSync? lipSync = null,
+        IFaceMouth? faces = null, BuiltInPresenters? presenters = null, VisualGenerator? visuals = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
             logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()),
-            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock, transcriber, lipSync);
+            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock, transcriber, lipSync, faces, presenters, visuals);
 
     private PiperSpeech Bundled()
     {
@@ -307,6 +308,56 @@ public sealed class ReadinessReporterTests : IDisposable
 
         (first.Available, soon.Available, later.Available, kept.Available).ShouldBe((false, false, true, true));
         runner.Calls.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Face_Detection_Pictures_Left_And_Built_In_Presenters_Are_Reported_With_A_Note_For_What_Is_Missing()
+    {
+        var media = new MediaCapabilities(true, true, "OpenAI");
+        var kernel = Given.Media(images: Given.Images());
+        var visuals = new VisualGenerator(kernel, Given.Capabilities(kernel), new FakeTimeProvider(Given.Now));
+        await visuals.PictureAsync("one", _folder, "one.png", CancellationToken.None);
+        await visuals.PictureAsync("two", _folder, "two.png", CancellationToken.None);
+        var folder = BuiltInPresentersTests.Folder(_folder);
+        var models = Directory.CreateDirectory(Path.Combine(_folder, "face")).FullName;
+        File.WriteAllBytes(Path.Combine(models, FaceMouth.DetectorFile), [1]);
+        File.WriteAllBytes(Path.Combine(models, FaceMouth.MeshFile), [1]);
+        FaceMouth Faces(string path, IOnnxRunner onnx)
+            => new(Given.Toolset(new FakeProcessRunner()), new MediaProbe(new FakeProcessRunner()), onnx,
+                Options.Create(new OperatorMediaOptions { FaceModelsPath = path }), new RecordingLogger<FaceMouth>());
+        var loads = new FaceMouthTests.FakeOnnx { Answer = _ => new Dictionary<string, float[]>() };
+
+        var ready = await Reporter(media, faces: Faces(models, loads), presenters: BuiltInPresentersTests.Presenters(folder), visuals: visuals).CurrentAsync(CancellationToken.None);
+        var missing = await Reporter(media, faces: Faces(Path.Combine(_folder, "nowhere"), loads), presenters: BuiltInPresentersTests.Presenters(Path.Combine(_folder, "nowhere")))
+            .CurrentAsync(CancellationToken.None);
+        var unbundled = await Reporter(media, faces: Faces(string.Empty, loads), presenters: BuiltInPresentersTests.Presenters(string.Empty)).CurrentAsync(CancellationToken.None);
+
+        (ready.FaceDetectionAvailable, ready.PicturesLeftToday).ShouldBe((true, 38));
+        ready.BuiltInPresenters.ShouldBe([
+            new OperatorBuiltInPresenter("ada", "Ada, the baker"), new OperatorBuiltInPresenter("bo", "Bo, the gardener"),
+            new OperatorBuiltInPresenter("cy", "Cy, the engineer"), new OperatorBuiltInPresenter("di", "Di, the teacher"),
+        ]);
+        ready.Notes.ShouldNotContain(n => n.StartsWith("Face detection", StringComparison.Ordinal) || n.StartsWith("Presenters", StringComparison.Ordinal));
+        (missing.FaceDetectionAvailable, missing.BuiltInPresenters.Count).ShouldBe((false, 0));
+        missing.Notes.ShouldContain("Face detection: the models were not found.");
+        missing.Notes.ShouldContain("Presenters: the built-in presenters were not found.");
+        unbundled.Notes.ShouldNotContain(n => n.StartsWith("Face detection", StringComparison.Ordinal) || n.StartsWith("Presenters", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Face_Detection_Is_Not_Available_Without_A_Usable_Ffmpeg_Even_With_The_Models()
+    {
+        var models = Directory.CreateDirectory(Path.Combine(_folder, "face")).FullName;
+        File.WriteAllBytes(Path.Combine(models, FaceMouth.DetectorFile), [1]);
+        File.WriteAllBytes(Path.Combine(models, FaceMouth.MeshFile), [1]);
+        var faces = new FaceMouth(Given.Toolset(new FakeProcessRunner()), new MediaProbe(new FakeProcessRunner()), new FaceMouthTests.FakeOnnx { Answer = _ => new Dictionary<string, float[]>() },
+            Options.Create(new OperatorMediaOptions { FaceModelsPath = models }), new RecordingLogger<FaceMouth>());
+        var runner = new FakeProcessRunner { EncoderList = " ------\n V....D libx264  H.264\n A....D aac  AAC\n" };
+
+        var readiness = await Reporter(new MediaCapabilities(true, true, "OpenAI"), runner: runner, faces: faces).CurrentAsync(CancellationToken.None);
+
+        (readiness.FfmpegAvailable, readiness.FaceDetectionAvailable).ShouldBe((false, false));
+        readiness.Notes.ShouldNotContain("Face detection: the models were not found.");
     }
 
     private static async Task WaitFor(Func<bool> condition)

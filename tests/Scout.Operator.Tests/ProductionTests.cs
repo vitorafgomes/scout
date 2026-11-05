@@ -602,77 +602,40 @@ public sealed class ProductionTests : IDisposable
     };
 
     [Fact]
-    public async Task An_Animated_Character_Project_Makes_Its_Presenter_Picture_Once_Then_Only_Narration()
+    public async Task An_Animated_Character_Scene_Gets_Its_Own_Picture_Like_Generated_Pictures()
     {
         var project = AnimatedProducing();
         var controlPlane = Holding(project);
         var images = Given.Images();
-        var media = Given.Media(Given.Speech(), images);
 
-        await Run(controlPlane, project, media);
-        var first = await Stored(controlPlane);
-        controlPlane.Store(first with
-        {
-            Status = "producing",
-            Scenes = [.. first.Scenes.Select(s => s with { Status = "planned", AudioSource = "none", AudioFile = null })],
-        });
-        await Run(controlPlane, first with { Status = "producing" }, media);
+        await Run(controlPlane, project, Given.Media(Given.Speech(), images));
 
-        var prompt = images.ReceivedCalls().ShouldHaveSingleItem().GetArguments()[0].ShouldBeOfType<TextContent>().Text;
-        prompt.ShouldBe(
-            "Warm kitchen light. A cheerful baker in a flour-dusted apron. flat 2D cartoon illustration, front-facing, looking at the viewer, " +
-            "mouth closed, neutral expression, plain background, head and shoulders, no text, no letters, no logos, no trademarks, " +
-            "no real person's likeness and no public figure.");
-        var presenter = first.PresenterFile.ShouldNotBeNull();
-        presenter.ShouldMatch("^presenter-[0-9a-f]{12}\\.png$");
-        File.Exists(Path.Combine(_media, presenter)).ShouldBeTrue();
-        controlPlane.Saves.Take(3).Select(s => (s.Project.PresenterFile, s.Project.Scenes.Count(c => c.Status == "ready"))).ShouldBe([
-            (null, 0), (presenter, 0), (presenter, 1),
-        ]);
         var saved = await Stored(controlPlane);
-        (saved.Status, saved.Error, saved.PresenterFile).ShouldBe(("media_ready", (string?)null, presenter));
+        (saved.Status, saved.Error, saved.PresenterFile).ShouldBe(("media_ready", (string?)null, (string?)null));
         saved.Scenes.Select(s => (s.Status, s.AudioSource, s.AudioFile, s.VisualSource, s.VisualFile)).ShouldBe([
-            ("ready", "generated", "scene-s1.mp3", "presenter", (string?)null),
-            ("ready", "generated", "scene-s2.mp3", "presenter", (string?)null),
-            ("ready", "generated", "scene-s3.mp3", "presenter", (string?)null),
+            ("ready", "generated", "scene-s1.mp3", "generated", "scene-s1.png"),
+            ("ready", "generated", "scene-s2.mp3", "generated", "scene-s2.png"),
+            ("ready", "generated", "scene-s3.mp3", "generated", "scene-s3.png"),
         ]);
-        Directory.GetFiles(_media, "scene-*.png").ShouldBeEmpty();
+        images.ReceivedCalls().Select(c => c.GetArguments()[0].ShouldBeOfType<TextContent>().Text).ShouldBe(["Picture 1", "Picture 2", "Picture 3"]);
+        Directory.GetFiles(_media, "presenter-*").ShouldBeEmpty();
     }
 
     [Fact]
-    public async Task A_Presenter_Picture_Request_That_Fails_Leaves_A_Note_And_Narrates_The_Scenes()
+    public async Task A_Scene_Of_The_First_Animated_Character_Shown_By_The_Presenter_Alone_Gets_Its_Picture_On_The_Next_Production()
     {
-        var project = AnimatedProducing();
-        var controlPlane = Holding(project);
-        var images = Substitute.For<Microsoft.SemanticKernel.TextToImage.ITextToImageService>();
-        images.GetImageContentsAsync(default!, default, default, default)
-            .ReturnsForAnyArgs<IReadOnlyList<ImageContent>>(_ => throw new HttpRequestException("503 Service Unavailable"));
-
-        await Run(controlPlane, project, Given.Media(Given.Speech(), images));
-
-        var saved = await Stored(controlPlane);
-        (saved.Status, saved.Error, saved.PresenterFile).ShouldBe((
-            "media_ready",
-            "The project has no presenter picture; attach one in Scout Desktop, Production, or connect an AI Source with pictures.",
-            (string?)null));
-        saved.Scenes.ShouldAllBe(s => s.Status == "ready" && s.AudioSource == "generated" && s.VisualSource == "presenter" && s.VisualFile == null);
-        saved.Scenes.Count.ShouldBe(3);
-        images.ReceivedCalls().Count().ShouldBe(1);
-        Directory.GetFiles(_media).Select(Path.GetFileName).Order().ShouldBe(["scene-s1.mp3", "scene-s2.mp3", "scene-s3.mp3"]);
-    }
-
-    [Fact]
-    public async Task The_Presenter_Prompt_Ends_With_The_No_Real_Person_Clause()
-    {
-        var project = AnimatedProducing() with { Direction = string.Empty, Presenter = string.Empty };
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.mp3"), [1]);
+        var project = AnimatedProducing() with
+        {
+            Scenes = [Given.Scene("s1", 1, status: "ready", audioSource: "generated", visualSource: "presenter", audioFile: "scene-s1.mp3", durationMs: 1600)],
+        };
         var controlPlane = Holding(project);
         var images = Given.Images();
 
         await Run(controlPlane, project, Given.Media(Given.Speech(), images));
 
-        var prompt = images.ReceivedCalls().ShouldHaveSingleItem().GetArguments()[0].ShouldBeOfType<TextContent>().Text;
-        prompt.ShouldStartWith(project.Topic + ". flat 2D cartoon illustration", Case.Sensitive);
-        prompt.ShouldEndWith(
-            "head and shoulders, no text, no letters, no logos, no trademarks, no real person's likeness and no public figure.", Case.Sensitive);
+        var scene = (await Stored(controlPlane)).Scenes.ShouldHaveSingleItem();
+        (scene.AudioFile, scene.VisualSource, scene.VisualFile).ShouldBe(("scene-s1.mp3", "generated", "scene-s1.png"));
+        images.ReceivedCalls().ShouldHaveSingleItem();
     }
 }

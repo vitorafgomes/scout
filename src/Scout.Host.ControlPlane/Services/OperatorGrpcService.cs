@@ -9,8 +9,9 @@ namespace Scout.Host.ControlPlane.Services;
 
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
-/// the projects, the owner's claim decisions, production, delegation, the scene edits and the scene text, the presenter
-/// picture's mouth box and its regeneration, the media directory, project deletion,
+/// the projects, the owner's claim decisions, production, delegation, the scene edits, the scene text and picture prompt,
+/// the presenter picture's mouth box and its regeneration, the presenter requests and versions, Scout's own presenters,
+/// the media directory, project deletion,
 /// the worker's readiness, assembly, the owner's package metadata, media rights and approval, publication,
 /// proposal decisions and experiments, and the comments: the list, a sync request, the owner's decisions, approved
 /// replies and ideas.
@@ -104,6 +105,34 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<Project> RegeneratePresenter(GetProjectRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.RegeneratePresenterAsync(request.Id, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> RequestPresenter(RequestPresenterRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RequestPresenterAsync(request.ProjectId, request.Feedback, request.Prompt, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> UsePresenterVersion(UsePresenterVersionRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.UsePresenterVersionAsync(request.ProjectId, request.Index, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<BuiltInPresenters> ListBuiltInPresenters(ListBuiltInPresentersRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () =>
+        {
+            var response = new BuiltInPresenters();
+            response.Presenters.AddRange((await _operator.ListBuiltInPresentersAsync(context.CancellationToken).ConfigureAwait(false))
+                .Select(OperatorMapping.ToWire));
+            return response;
+        });
+
+    public override Task<Project> EditScenePicturePrompt(EditScenePicturePromptRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.EditScenePicturePromptAsync(request.ProjectId, request.SceneId, request.Prompt, context.CancellationToken)
+                .ConfigureAwait(false)));
+
+    public override Task<Project> RegenerateScenePicture(SceneRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RegenerateScenePictureAsync(request.ProjectId, request.SceneId, context.CancellationToken)
+                .ConfigureAwait(false)));
 
     public override Task<Project> AttachSceneMedia(AttachSceneMediaRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(

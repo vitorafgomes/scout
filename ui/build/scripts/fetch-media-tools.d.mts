@@ -54,6 +54,19 @@ export interface MediaToolsTable {
     readonly license: string;
     readonly files: readonly (PinnedFile & { readonly file: string; readonly size: number })[];
   };
+  readonly face: {
+    readonly files: readonly PinnedModel[];
+  };
+}
+
+export interface PinnedModel extends PinnedFile {
+  readonly file: string;
+  readonly size: number;
+  readonly repo: string;
+  readonly commit: string;
+  readonly license: string;
+  readonly model: string;
+  readonly outOfScope?: string;
 }
 
 export interface FetchMediaToolsOptions {

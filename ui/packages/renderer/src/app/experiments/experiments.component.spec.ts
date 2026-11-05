@@ -121,6 +121,10 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     presenter: '',
     presenterFile: null,
     mouthBox: null,
+    presenterVersions: [],
+    presenterPreviewFile: null,
+    presenterRequest: '',
+    presenterSource: '',
     ...overrides,
   };
 }

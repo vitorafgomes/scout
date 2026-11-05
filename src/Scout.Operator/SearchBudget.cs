@@ -66,6 +66,19 @@ internal sealed class SearchBudget
         }
     }
 
+    /// <summary>How many uses are left today.</summary>
+    public int Left
+    {
+        get
+        {
+            var today = TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _pacific).Date;
+            lock (_lock)
+            {
+                return today == _day ? _perDay - _used : _perDay;
+            }
+        }
+    }
+
     /// <summary>Give back one use taken today, for a use that did not happen; nothing once the day has turned.</summary>
     public void GiveBack()
     {

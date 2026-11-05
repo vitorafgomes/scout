@@ -47,6 +47,44 @@ public sealed partial class OperatorServiceTests
         (stored.Format, stored.Direction).ShouldBe(("generated_pictures", string.Empty));
     }
 
+    [Fact]
+    public async Task A_Start_With_No_Format_Takes_The_Mandates_Default()
+    {
+        await GrantYouTubeAsync();
+        await _operator.SaveMandateAsync(Mandate() with { DefaultFormat = " animated_character " }, None);
+
+        var desktop = await _operator.StartProjectAsync("Why rivers meander", "  ", string.Empty, None);
+        var chosen = await _operator.StartProjectAsync("Glaciers explained", "own_pictures", string.Empty, None);
+        var fromChat = await _operator.SaveProjectFromWorkerAsync(
+            NewDraft("Where deltas form", "researching") with { Format = string.Empty }, "discord:1", None);
+        var mandate = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(_store.MandatePath))!.AsObject();
+        mandate["defaultFormat"] = "ai_presenter";
+        await File.WriteAllTextAsync(_store.MandatePath, mandate.ToJsonString());
+        var unknownDefault = await _operator.StartProjectAsync("Why the fox crossed", string.Empty, string.Empty, None);
+
+        (await _operator.GetMandateAsync(None)).DefaultFormat.ShouldBe("generated_pictures");
+        (desktop.Format, (await StoredAsync(desktop.Id)).Format).ShouldBe(("animated_character", "animated_character"));
+        chosen.Format.ShouldBe("own_pictures");
+        (await StoredAsync(fromChat.Id)).Format.ShouldBe("animated_character");
+        unknownDefault.Format.ShouldBe("generated_pictures");
+    }
+
+    [Theory]
+    [InlineData("ai_presenter")]
+    [InlineData("Own_Video")]
+    public async Task A_Mandate_With_A_Default_Format_Scout_Does_Not_Make_Is_Refused_And_A_Blank_One_Is_Generated_Pictures(string format)
+    {
+        var refused = await Should.ThrowAsync<OperatorValidationException>(() =>
+            _operator.SaveMandateAsync(Mandate() with { DefaultFormat = format }, None));
+        var notSaved = File.Exists(_store.MandatePath);
+        var blank = await _operator.SaveMandateAsync(Mandate() with { DefaultFormat = "  " }, None);
+
+        refused.Message.ShouldBe("The default format is generated_pictures, own_pictures, own_video or animated_character.");
+        notSaved.ShouldBeFalse();
+        blank.DefaultFormat.ShouldBe("generated_pictures");
+        (await _operator.GetMandateAsync(None)).DefaultFormat.ShouldBe("generated_pictures");
+    }
+
     [Theory]
     [InlineData("ai_presenter")]
     [InlineData("Own_Pictures")]
@@ -123,9 +161,11 @@ public sealed partial class OperatorServiceTests
     [Theory]
     [InlineData("own_video")]
     [InlineData(" own_video ")]
+    [InlineData("")]
     public async Task A_Chat_Project_Of_The_Owners_Own_Video_Is_Refused_And_Stores_Nothing(string format)
     {
         await GrantYouTubeAsync();
+        await _operator.SaveMandateAsync(Mandate() with { DefaultFormat = "own_video" }, None);
         var logged = await _writes.ListAsync(10, None);
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.SaveProjectFromWorkerAsync(

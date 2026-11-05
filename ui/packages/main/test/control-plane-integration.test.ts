@@ -360,6 +360,7 @@ describe('operator over UDS', () => {
         blockedTopics: ['politics'],
         targetMetric: 'watch_hours',
         targetValue: '500',
+        defaultFormat: 'animated_character' as const,
       };
 
       const before = await client.getMandate();
@@ -676,7 +677,7 @@ describe('operator production over UDS', () => {
         expect(gone).toBeInstanceOf(ControlPlaneNotFoundError);
         expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
         expect((refused as Error).message).toBe(
-          'A project that is researching, scripting, transcribing, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.',
+          'A project that is researching, scripting, transcribing, producing, assembling, presenting or uploading cannot be deleted; wait for it to finish or fail.',
         );
         expect(listed).toContain(running.id);
         expect(listed).not.toContain(ready.id);
@@ -754,7 +755,91 @@ describe('operator production over UDS', () => {
         reportedAt: null,
         transcriptionAvailable: false,
         lipSyncAvailable: false,
+        faceDetectionAvailable: false,
+        picturesLeftToday: 0,
+        builtinPresenters: [],
       });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "an animated character project reads back from the real host with no presenter versions, preview, request or source, and main's four new presenter and scene picture channels forward to the client's methods, stubbed at the client boundary",
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+      const handlers = new Map<string, (event: unknown, req: unknown) => Promise<unknown>>();
+      const forwarded: unknown[][] = [];
+      const stub =
+        (name: string) =>
+        async (projectId: string, ...rest: unknown[]) => {
+          forwarded.push([name, projectId, ...rest]);
+          return client.getProject(projectId);
+        };
+      registerOperatorHandlers(
+        {
+          handle: (channel: string, handler: (event: unknown, req: unknown) => Promise<unknown>) =>
+            handlers.set(channel, handler),
+          removeHandler: (channel: string) => handlers.delete(channel),
+        } as never,
+        async () => ({
+          ...client,
+          requestPresenter: stub('requestPresenter'),
+          usePresenterVersion: stub('usePresenterVersion'),
+          editScenePicturePrompt: stub('editScenePicturePrompt'),
+          regenerateScenePicture: stub('regenerateScenePicture'),
+        }),
+        nullLogger,
+        async () => null,
+      );
+      await client.setWriteGrant('youtube', true, true);
+      try {
+        const started = await client.startProject(
+          'Span<T> in C#',
+          'animated_character',
+          '',
+          'A friendly robot in a workshop',
+        );
+        const read = await client.getProject(started.id);
+        const asked = (await handlers.get('scout:operator.presenterRequest')!(null, {
+          projectId: started.id,
+          feedback: ' Older ',
+          prompt: '',
+        })) as { id: string };
+        await handlers.get('scout:operator.presenterVersion')!(null, {
+          projectId: started.id,
+          index: 0,
+        });
+        await handlers.get('scout:operator.scenePicturePrompt')!(null, {
+          projectId: started.id,
+          sceneId: 's1',
+          prompt: ' A river ',
+        });
+        await handlers.get('scout:operator.scenePictureRegeneration')!(null, {
+          projectId: started.id,
+          sceneId: 's1',
+        });
+
+        expect([
+          read.format,
+          read.presenterVersions,
+          read.presenterPreviewFile,
+          read.presenterRequest,
+          read.presenterSource,
+        ]).toEqual(['animated_character', [], null, '', '']);
+        expect(asked.id).toBe(started.id);
+        expect(forwarded).toEqual([
+          ['requestPresenter', started.id, 'Older', ''],
+          ['usePresenterVersion', started.id, 0],
+          ['editScenePicturePrompt', started.id, 's1', 'A river'],
+          ['regenerateScenePicture', started.id, 's1'],
+        ]);
+      } finally {
+        await client.setWriteGrant('youtube', false, false);
+      }
     },
     TEST_TIMEOUT_MS,
   );

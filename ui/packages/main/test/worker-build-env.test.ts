@@ -125,6 +125,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'OpenAI',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -167,6 +169,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'Gemini',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -257,6 +261,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -288,6 +294,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -316,6 +324,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -387,6 +397,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'ChatGptPlan',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -427,6 +439,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -569,6 +583,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'None',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -595,6 +611,8 @@ describe('buildEnv', () => {
       SCOUT__OPERATOR__VOICESPATH: '',
       SCOUT__OPERATOR__RHUBARBPATH: '',
       SCOUT__OPERATOR__MOUTHSPATH: '',
+      SCOUT__OPERATOR__PRESENTERSPATH: '',
+      SCOUT__OPERATOR__FACEMODELSPATH: '',
       SCOUT__LLM__PROVIDER: 'Ollama',
       DOTNET_ENVIRONMENT: 'Production',
       SCOUT__ADAPTERS__LOCAL__ENABLED: 'true',
@@ -1012,7 +1030,7 @@ describe('buildEnv worker gate', () => {
     },
   };
 
-  it('always gives the worker the bundled ffmpeg, font, piper, voices, rhubarb and mouths paths, empty for any the build did not bundle, so inherited values cannot override them', async () => {
+  it('always gives the worker the bundled ffmpeg, font, piper, voices, rhubarb, mouths, presenters and face models paths, empty for any the build did not bundle, so inherited values cannot override them', async () => {
     const bundled = await buildEnv({
       vaultGet: async () => null,
       mediaTools: {
@@ -1024,6 +1042,8 @@ describe('buildEnv worker gate', () => {
         mouths: '/opt/Scout/resources/mouths',
         tesseract: '',
         tessdata: '',
+        presenters: '/opt/Scout/resources/presenters',
+        faceModels: '/opt/Scout/resources/media-tools/linux-x64/face',
       },
     });
     const notBundled = await buildEnv({
@@ -1037,6 +1057,8 @@ describe('buildEnv worker gate', () => {
         mouths: '',
         tesseract: '',
         tessdata: '',
+        presenters: '',
+        faceModels: '',
       },
     });
     const absent = await buildEnv({ vaultGet: async () => null });
@@ -1047,6 +1069,8 @@ describe('buildEnv worker gate', () => {
       env['SCOUT__OPERATOR__VOICESPATH'],
       env['SCOUT__OPERATOR__RHUBARBPATH'],
       env['SCOUT__OPERATOR__MOUTHSPATH'],
+      env['SCOUT__OPERATOR__PRESENTERSPATH'],
+      env['SCOUT__OPERATOR__FACEMODELSPATH'],
     ];
 
     expect(paths(bundled)).toEqual([
@@ -1056,9 +1080,11 @@ describe('buildEnv worker gate', () => {
       '/opt/Scout/resources/voices',
       '/opt/Scout/resources/media-tools/linux-x64/rhubarb/rhubarb',
       '/opt/Scout/resources/mouths',
+      '/opt/Scout/resources/presenters',
+      '/opt/Scout/resources/media-tools/linux-x64/face',
     ]);
-    expect(paths(notBundled)).toEqual(['', '', '', '', '', '']);
-    expect(paths(absent)).toEqual(['', '', '', '', '', '']);
+    expect(paths(notBundled)).toEqual(['', '', '', '', '', '', '', '']);
+    expect(paths(absent)).toEqual(['', '', '', '', '', '', '', '']);
     expect(Object.keys(bundled).filter((key) => key.toUpperCase().includes('FFPROBE'))).toEqual([]);
   });
 

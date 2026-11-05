@@ -694,6 +694,7 @@ const mandateWire = {
   blockedTopics: ['politics'],
   targetMetric: 'views',
   targetValue: '10000',
+  defaultFormat: '' as const,
   updatedAt: '2026-11-03T09:00:00Z',
 };
 
@@ -759,6 +760,10 @@ const projectDto: OperatorProjectDto = {
   presenter: '',
   presenterFile: null,
   mouthBox: null,
+  presenterVersions: [],
+  presenterPreviewFile: null,
+  presenterRequest: '',
+  presenterSource: '',
 };
 
 const readyScene = {
@@ -1066,6 +1071,31 @@ const characterWire = {
   scenes: [{ ...readyScene, visualSource: 'presenter', visualFile: undefined }],
 };
 
+const presenterWire = {
+  ...characterWire,
+  presenterVersions: [
+    {
+      file: 'presenter-1.png',
+      prompt: 'A friendly robot, flat cartoon',
+      feedback: '',
+      previewFile: 'presenter-preview-1.mp4',
+      mouthBox: { x: 0.42, y: 0.6, width: 0.15, height: 0.08 },
+      madeAt: '2026-11-05T10:00:00Z',
+      source: 'generated',
+    },
+    {
+      file: 'presenter-builtin-ada.png',
+      prompt: '',
+      feedback: 'builtin:ada',
+      madeAt: '2026-11-05T10:05:00Z',
+      source: 'builtin',
+    },
+  ],
+  presenterPreviewFile: 'presenter-preview-1.mp4',
+  presenterRequest: 'Older, with glasses',
+  presenterSource: 'generated',
+};
+
 async function startOperatorServer(
   socketPath: string,
   calls: OperatorCall[],
@@ -1143,6 +1173,10 @@ async function startOperatorServer(
       ...characterWire,
       presenterFile: undefined,
     })),
+    RequestPresenter: handler('RequestPresenter', () => presenterWire),
+    UsePresenterVersion: handler('UsePresenterVersion', () => presenterWire),
+    EditScenePicturePrompt: handler('EditScenePicturePrompt', () => editedWire),
+    RegenerateScenePicture: handler('RegenerateScenePicture', () => editedWire),
     ListComments: handler('ListComments', () => options.comments ?? commentsWire),
     RequestCommentSync: handler('RequestCommentSync', () => ({ comments: [], ideas: [] })),
     DecideComment: handler('DecideComment', () => commentsWire),
@@ -1205,6 +1239,10 @@ describe('createControlPlaneClient operator', () => {
         presenter: '',
         presenterFile: null,
         mouthBox: null,
+        presenterVersions: [],
+        presenterPreviewFile: null,
+        presenterRequest: '',
+        presenterSource: '',
       },
     ]);
     expect(one).toEqual(projectDto);
@@ -1418,6 +1456,9 @@ describe('createControlPlaneClient operator', () => {
       reportedAt: null,
       transcriptionAvailable: false,
       lipSyncAvailable: false,
+      faceDetectionAvailable: false,
+      picturesLeftToday: 0,
+      builtinPresenters: [],
     });
     expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
       {
@@ -1684,6 +1725,174 @@ describe('createControlPlaneClient operator', () => {
       { method: 'RegeneratePresenter', request: { id: 'p1' } },
     ]);
     expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('maps the presenter versions, the preview, the request and the source, the mandate default format, face detection, the pictures left and the built-in presenters, their absence as null, empty, false and 0, and sends RequestPresenter, UsePresenterVersion, EditScenePicturePrompt and RegenerateScenePicture with their wire keys', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: OperatorCall[] = [];
+    server = await startOperatorServer(socketPath, calls, {
+      project: presenterWire,
+      mandate: { ...mandateWire, defaultFormat: 'animated_character' },
+      readiness: {
+        ...readinessWire,
+        faceDetectionAvailable: true,
+        picturesLeftToday: 37,
+        builtinPresenters: [
+          { id: 'ada', label: 'Ada' },
+          { id: 'kofi', label: 'Kofi' },
+        ],
+      },
+    });
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+    const bareSocket = tempSocketPath();
+    const bare = await startOperatorServer(bareSocket, [], {
+      mandate: { ...mandateWire, defaultFormat: 'talking_head' },
+    });
+    const bareClient = createControlPlaneClient({
+      socketPath: bareSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+
+    const read = await client.getProject('p1');
+    const mandate = await client.getMandate();
+    const readiness = await client.getReadiness();
+    await client.requestPresenter('p1', 'Older, with glasses', 'A robot in a lab');
+    await client.usePresenterVersion('p1', 0);
+    await client.editScenePicturePrompt('p1', 's1', 'A river from above');
+    await client.regenerateScenePicture('p1', 's1');
+    const bareProject = await bareClient.getProject('p1');
+    const bareMandate = await bareClient.getMandate();
+    const bareReadiness = await bareClient.getReadiness();
+    bareClient.close();
+    bare.forceShutdown();
+
+    expect(read.presenterVersions).toEqual([
+      {
+        file: 'presenter-1.png',
+        prompt: 'A friendly robot, flat cartoon',
+        feedback: '',
+        previewFile: 'presenter-preview-1.mp4',
+        mouthBox: { x: 0.42, y: 0.6, width: 0.15, height: 0.08 },
+        madeAt: '2026-11-05T10:00:00Z',
+        source: 'generated',
+      },
+      {
+        file: 'presenter-builtin-ada.png',
+        prompt: '',
+        feedback: 'builtin:ada',
+        previewFile: null,
+        mouthBox: null,
+        madeAt: '2026-11-05T10:05:00Z',
+        source: 'builtin',
+      },
+    ]);
+    expect([read.presenterPreviewFile, read.presenterRequest, read.presenterSource]).toEqual([
+      'presenter-preview-1.mp4',
+      'Older, with glasses',
+      'generated',
+    ]);
+    expect(mandate?.defaultFormat).toBe('animated_character');
+    expect([
+      readiness.faceDetectionAvailable,
+      readiness.picturesLeftToday,
+      readiness.builtinPresenters,
+    ]).toEqual([
+      true,
+      37,
+      [
+        { id: 'ada', label: 'Ada' },
+        { id: 'kofi', label: 'Kofi' },
+      ],
+    ]);
+    expect([
+      bareProject.presenterVersions,
+      bareProject.presenterPreviewFile,
+      bareProject.presenterRequest,
+      bareProject.presenterSource,
+      bareMandate?.defaultFormat,
+      bareReadiness.faceDetectionAvailable,
+      bareReadiness.picturesLeftToday,
+      bareReadiness.builtinPresenters,
+    ]).toEqual([[], null, '', '', '', false, 0, []]);
+    expect(
+      calls
+        .filter(({ method }) => !['GetProject', 'GetReadiness', 'GetMandate'].includes(method))
+        .map(({ method, request }) => ({ method, request })),
+    ).toEqual([
+      {
+        method: 'RequestPresenter',
+        request: { projectId: 'p1', feedback: 'Older, with glasses', prompt: 'A robot in a lab' },
+      },
+      { method: 'UsePresenterVersion', request: { projectId: 'p1', index: 0 } },
+      {
+        method: 'EditScenePicturePrompt',
+        request: { projectId: 'p1', sceneId: 's1', prompt: 'A river from above' },
+      },
+      { method: 'RegenerateScenePicture', request: { projectId: 'p1', sceneId: 's1' } },
+    ]);
+    expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
+  });
+
+  it('a presenter request the control plane refuses reaches the caller as invalid-argument with its sentence, and the four presenter and scene picture calls with nothing listening as unavailable within the deadline', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const reason =
+      'A presenter can be asked for on a project whose script or media is ready, an assembled or approved one, one queued for assembly, or a failed one with a script; this one is producing.';
+    const refusingSocket = tempSocketPath();
+    server = await startOperatorServer(refusingSocket, [], {
+      failWith: { code: grpc.status.INVALID_ARGUMENT, details: reason },
+    });
+    client = createControlPlaneClient({
+      socketPath: refusingSocket,
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+    });
+    const unreachableClient = createControlPlaneClient({
+      socketPath: tempSocketPath(),
+      token: TOKEN,
+      protoDir: PROTO_DIR,
+      deadlineMs: 500,
+    });
+
+    const refused = await client.requestPresenter('p1', '', '').then(
+      () => null,
+      (err: unknown) => err,
+    );
+    const startedAt = Date.now();
+    const unreachable = await Promise.all(
+      [
+        unreachableClient.requestPresenter('p1', 'Older', ''),
+        unreachableClient.usePresenterVersion('p1', 1),
+        unreachableClient.editScenePicturePrompt('p1', 's1', 'A river'),
+        unreachableClient.regenerateScenePicture('p1', 's1'),
+      ].map((pending) =>
+        pending.then(
+          () => null,
+          (err: unknown) => err,
+        ),
+      ),
+    );
+    const elapsed = Date.now() - startedAt;
+    unreachableClient.close();
+
+    expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
+    expect((refused as Error).message).toBe(reason);
+    expect(unreachable.map((err) => err instanceof ControlPlaneUnavailableError)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(elapsed).toBeLessThan(5_000);
   });
 
   it('a mouth box the control plane refuses reaches the caller as invalid-argument, and the mouth box and the presenter regeneration with nothing listening as unavailable within the deadline', async () => {

@@ -584,7 +584,7 @@ public sealed class AssemblerTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Presenter_Scene_Overlays_The_Mouth_Track_At_The_Mouth_Box_Over_The_Fitted_Picture()
+    public async Task The_Presenter_Is_Composited_Over_The_Scenes_Backdrop_With_Chroma_Key_At_The_Lower_Right()
     {
         string? track = null;
         var runner = Presenting((_, arguments) =>
@@ -593,22 +593,25 @@ public sealed class AssemblerTests : IDisposable
             track = list > 0 && arguments[list - 1] == "-f" && arguments[list + 1] == "-safe" ? File.ReadAllText(arguments[list + 4]) : track;
             return null;
         });
+        File.WriteAllBytes(Media("scene-s1.png"), [5, 6]);
+        var scene = Speaking() with { VisualSource = "generated", VisualFile = "scene-s1.png" };
 
         var video = await Speaker(runner).AssembleAsync(
-            Given.Tools(), [Speaking()], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+            Given.Tools(), [scene], _media, null, null, "gentle", new PresenterInput(Face, Mouth, "generated"), CancellationToken.None);
 
         runner.Renders[0].SkipLast(1).ShouldBe([
             "-hide_banner", "-nostdin", "-y",
-            "-f", "lavfi", "-t", "3.500", "-i", "color=c=0x14181f:s=3840x2160:r=30",
+            "-i", Media("scene-s1.png"),
             "-i", Media(Face),
             "-f", "concat", "-safe", "0", "-i", Media("mouth-track-s1.txt"),
             "-i", Media("scene-s1.wav"),
             "-filter_complex",
-            "[0:v]setsar=1[bg];[1:v]scale=2160:2160,setsar=1[face];[bg][face]overlay=840:0[body];" +
-            "[2:v]scale=432:216[mouth];[body][mouth]overlay=1704:1296," +
-            "zoompan=z=1+0.08*on/104:x=(iw-iw/zoom)*(0.25+0.25*on/104):y=(ih-ih/zoom)*(0.25+0.25*on/104):d=1:s=1920x1080:fps=30," +
+            "[0:v]scale=3840:2160:force_original_aspect_ratio=decrease,pad=3840:2160:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1," +
+            "zoompan=z=1+0.08*on/104:x=(iw-iw/zoom)*(0.25+0.25*on/104):y=(ih-ih/zoom)*(0.25+0.25*on/104):d=105:s=1920x1080:fps=30[bg];" +
+            "[1:v]chromakey=0x00FF00:0.1:0.2,scale=486:486,setsar=1[face];[bg][face]overlay=1376:562[body];" +
+            "[2:v]scale=97:49[mouth];[body][mouth]overlay=1570:854," +
             "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed it daily.:fontsize=44:fontcolor=white:" +
-            @"x=(w-text_w)/2:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
+            @"x=58:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
             "fade=t=in:st=0:d=0.4,fade=t=out:st=3.100:d=0.4,format=yuv420p[v];[3:a]aresample=48000,apad[a]",
             "-map", "[v]", "-map", "[a]", "-t", "3.500",
             "-c:v", "libopenh264", "-b:v", "6M", "-pix_fmt", "yuv420p", "-r", "30",
@@ -619,19 +622,27 @@ public sealed class AssemblerTests : IDisposable
             "ffconcat version 1.0\n" +
             $"file '{mouths}/X.png'\nduration 0.120\nfile '{mouths}/B.png'\nduration 0.180\nfile '{mouths}/X.png'\nduration 0.320\nfile '{mouths}/X.png'\n");
         var cut = video.Cuts.ShouldHaveSingleItem();
-        (cut.Placeholder, cut.Note).ShouldBe((false, (string?)null));
+        (cut.Placeholder, cut.Note, cut.Presented).ShouldBe((false, (string?)null, true));
+        PackageChecks.Presenter(video.Cuts).ShouldBe(new OperatorCheck("presenter", "pass", "The character's mouth moves with the narration in every scene."));
         File.Exists(Media("mouth-track-s1.txt")).ShouldBeFalse();
         File.Exists(Media("mouth-cues-s1.json")).ShouldBeTrue();
 
-        var still = global::Scout.Operator.Assembler.PresenterArguments(
-            Given.Tools(), Speaking(), 0, 3500, Media("studio.png"), Media(Face), (1024, 1024), (Mouth, Media("mouth-track-s1.txt")),
-            Media("scene-s1.wav"), ["Feed it daily."], "still", "/media/p1/out.mp4");
-        still.Take(11).ShouldBe(["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", "1", "-t", "3.500", "-i", Media("studio.png")]);
-        Graph(still).ShouldStartWith(
-            "[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[bg];" +
-            "[1:v]scale=1080:1080,setsar=1[face];[bg][face]overlay=420:0[body];[2:v]scale=216:108[mouth];[body][mouth]overlay=852:648," +
-            "drawtext=", Case.Sensitive);
-        Graph(still).ShouldNotContain("zoompan", Case.Sensitive);
+        var builtIn = await Speaker(runner).AssembleAsync(
+            Given.Tools(), [scene], _media, null, null, "gentle", new PresenterInput(Face, Mouth, "builtin"), CancellationToken.None);
+        builtIn.Segments.ShouldHaveSingleItem().ShouldNotBe(video.Segments.ShouldHaveSingleItem());
+        var builtInGraph = Graph(runner.Renders.Last(r => r.Contains("-filter_complex")));
+        builtInGraph.ShouldContain("[1:v]scale=486:486,setsar=1[face];[bg][face]overlay=1376:562[body];", Case.Sensitive);
+        builtInGraph.ShouldNotContain("chromakey", Case.Sensitive);
+
+        var preview = global::Scout.Operator.Assembler.PresenterArguments(
+            Given.Tools(), Speaking(), 0, 3500, Media("studio.png"), Media(Face), (1024, 1024), false, (Mouth, Media("mouth-track-s1.txt")),
+            Media("scene-s1.wav"), ["Feed it daily."], "still", "/media/p1/out.mp4", (1280, 720));
+        preview.Take(11).ShouldBe(["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", "1", "-t", "3.500", "-i", Media("studio.png")]);
+        Graph(preview).ShouldStartWith(
+            "[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30[bg];" +
+            "[1:v]scale=324:324,setsar=1[face];[bg][face]overlay=918:374[body];[2:v]scale=65:32[mouth];[body][mouth]overlay=1048:568," +
+            "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed it daily.:fontsize=29:fontcolor=white:x=38:y=627:", Case.Sensitive);
+        Graph(preview).ShouldNotContain("zoompan", Case.Sensitive);
     }
 
     [Theory]
@@ -652,10 +663,9 @@ public sealed class AssemblerTests : IDisposable
         var render = runner.Renders[0];
         render.ShouldNotContain("concat");
         Graph(render).ShouldBe(
-            "[0:v]setsar=1[bg];[1:v]scale=2160:2160,setsar=1[face];[bg][face]overlay=840:0," +
-            "zoompan=z=1+0.08*on/104:x=(iw-iw/zoom)*(0.25+0.25*on/104):y=(ih-ih/zoom)*(0.25+0.25*on/104):d=1:s=1920x1080:fps=30," +
+            "[0:v]setsar=1[bg];[1:v]scale=486:486,setsar=1[face];[bg][face]overlay=1376:562," +
             "drawtext=fontfile=/fonts/NotoSans-Regular.ttf:expansion=none:text=Feed it daily.:fontsize=44:fontcolor=white:" +
-            @"x=(w-text_w)/2:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
+            @"x=58:y=940:box=1:boxcolor=black@0.6:boxborderw=16:enable=between(t\,0.000\,3.500)," +
             "fade=t=in:st=0:d=0.4,fade=t=out:st=3.100:d=0.4,format=yuv420p[v];[2:a]aresample=48000,apad[a]");
         render.ShouldContain(Media("scene-s1.wav"));
         Directory.GetFiles(_media, "mouth-*").ShouldBeEmpty();
@@ -744,7 +754,7 @@ public sealed class AssemblerTests : IDisposable
             Given.Tools(), [Speaking(), Speaking("s2", 2, "scene-s2.wav")], _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
         await Speaker(withoutCharacter).AssembleAsync(
             Given.Tools(), [Given.Scene("s3", 3, "A card.", "ready", audioSource: "generated", audioFile: "scene-s3.wav", durationMs: 3000)],
-            _media, null, null, "gentle", new PresenterInput(Face, Mouth), CancellationToken.None);
+            _media, null, null, "gentle", null, CancellationToken.None);
 
         runner.Measured.ShouldBe([Media(Face)]);
         withoutCharacter.Measured.ShouldBeEmpty();

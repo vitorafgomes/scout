@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Scout.ControlPlane.Tests.Operator;
 
-/// <summary>The animated character: one presenter picture per project, the mouth the owner marks on it, and no scene pictures.</summary>
+/// <summary>The animated character: one presenter picture per project and the mouth the owner marks on it.</summary>
 public sealed partial class OperatorServiceTests
 {
     private const string PresenterName = "owner-presenter-0123456789ab.png";
@@ -233,52 +233,44 @@ public sealed partial class OperatorServiceTests
     }
 
     [Fact]
-    public async Task Regenerating_The_Presenter_Clears_The_Picture_Queues_Production_And_Takes_The_Approval_Back()
+    public async Task Regenerating_The_Presenter_Asks_For_Another_One_Keeps_The_Picture_And_Takes_The_Approval_Back()
     {
         var approved = await CharacterAsync("approved", PresenterScene("s1", 1));
         var scripted = await CharacterAsync("script_ready");
         var forAssembly = await CharacterAsync("assembly_queued", PresenterScene("s1", 1));
         var pictures = await ScriptReadyInAsync("generated_pictures");
         var box = new MouthBox(0.4, 0.6, 0.2, 0.1);
+        await PutInMediaAsync(approved.Id, PresenterName);
         await SetStoredAsync(approved.Id, p => p with { PresenterFile = PresenterName, MouthBox = box });
         await SetStoredAsync(scripted.Id, p => p with { PresenterFile = PresenterName, MouthBox = box });
         await SetStoredAsync(forAssembly.Id, p => p with { PresenterFile = PresenterName, MouthBox = box });
         await RevokeYouTubeAsync();
         var logged = await _writes.ListAsync(500, None);
 
-        var queued = await _operator.RegeneratePresenterAsync(approved.Id, None);
+        var asked = await _operator.RegeneratePresenterAsync(approved.Id, None);
         var notProduced = await _operator.RegeneratePresenterAsync(scripted.Id, None);
         var notAssembled = await _operator.RegeneratePresenterAsync(forAssembly.Id, None);
         var otherFormat = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RegeneratePresenterAsync(pictures.Id, None));
 
-        (queued.Status, queued.PresenterFile, queued.MouthBox).ShouldBe(("production_queued", (string?)null, (MouthBox?)null));
+        (asked.Status, asked.PresenterFile, asked.MouthBox, asked.PresenterRequest).ShouldBe(("media_ready", (string?)PresenterName, (MouthBox?)box, "another"));
         var stored = await StoredAsync(approved.Id);
-        (stored.Status, stored.PresenterFile, stored.MouthBox).ShouldBe(("production_queued", (string?)null, (MouthBox?)null));
+        (stored.Status, stored.PresenterFile, stored.MouthBox, stored.PresenterRequest).ShouldBe(("media_ready", (string?)PresenterName, (MouthBox?)box, "another"));
         var package = stored.Package.ShouldNotBeNull();
         (package.Status, package.RightsConfirmed, package.ApprovedAt).ShouldBe(("assembled", false, (DateTimeOffset?)null));
-        (notProduced.Status, notProduced.PresenterFile, notProduced.MouthBox).ShouldBe(("script_ready", (string?)null, (MouthBox?)null));
-        (notAssembled.Status, notAssembled.PresenterFile, notAssembled.MouthBox).ShouldBe(("production_queued", (string?)null, (MouthBox?)null));
+        File.Exists(Path.Combine(await _operator.GetMediaDirectoryAsync(approved.Id, None), PresenterName)).ShouldBeTrue();
+        (notProduced.Status, notProduced.PresenterFile, notProduced.PresenterRequest).ShouldBe(("script_ready", (string?)PresenterName, "another"));
+        (notAssembled.Status, notAssembled.PresenterFile, notAssembled.PresenterRequest).ShouldBe(("assembly_queued", (string?)PresenterName, "another"));
         otherFormat.Message.ShouldBe(NotACharacter);
         (await _writes.ListAsync(500, None)).ShouldBe(logged);
     }
-
     [Fact]
-    public async Task Regenerate_Scene_And_Attach_Image_Are_Refused_On_An_Animated_Character_Scene_While_Narration_And_Text_Stay_Editable()
+    public async Task The_Narration_And_Text_Of_An_Animated_Character_Scene_Stay_Editable()
     {
         var project = await CharacterAsync("media_ready", PresenterScene("s1", 1), PresenterScene("s2", 2));
-        await PutInMediaAsync(project.Id, "mine.png");
-        var before = JsonSerializer.Serialize(await StoredAsync(project.Id));
 
-        var scene = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RegenerateSceneAsync(project.Id, "s1", None));
-        var picture = await Should.ThrowAsync<OperatorValidationException>(() =>
-            _operator.AttachSceneMediaAsync(project.Id, "s1", "visual", "mine.png", None));
-        var afterRefusals = JsonSerializer.Serialize(await StoredAsync(project.Id));
         var narration = await _operator.RegenerateNarrationAsync(project.Id, "s1", None);
         var text = await _operator.EditSceneTextAsync(project.Id, "s2", "The fox explains the bend.", None);
 
-        scene.Message.ShouldBe("A scene of an animated character has no picture of its own; regenerate its narration or edit its text.");
-        picture.Message.ShouldBe("An animated character project takes no scene picture; attach the presenter picture instead.");
-        afterRefusals.ShouldBe(before);
         narration.Status.ShouldBe("production_queued");
         narration.Scenes[0].ShouldBe(PresenterScene("s1", 1) with { Status = "planned", AudioSource = "none", AudioFile = null, DurationMs = 0 });
         text.Scenes[1].ShouldBe(PresenterScene("s2", 2) with { Narration = "The fox explains the bend.", Status = "planned", AudioSource = "none", AudioFile = null, DurationMs = 0 });
@@ -330,6 +322,7 @@ public sealed partial class OperatorServiceTests
         Directory.Exists(Path.Combine(media, Stuck)).ShouldBeTrue();
     }
 
+
     [Fact]
     public async Task Regenerating_The_Presenter_While_The_Project_Runs_Is_Refused()
     {
@@ -348,55 +341,12 @@ public sealed partial class OperatorServiceTests
         var whileAssembling = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RegeneratePresenterAsync(assembling.Id, None));
 
         (whileProducing.Message, whileAssembling.Message).ShouldBe((
-            "A project that is producing or assembling cannot have its presenter picture regenerated; wait for it to finish or fail.",
-            "A project that is producing or assembling cannot have its presenter picture regenerated; wait for it to finish or fail."));
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, RunningRefusal, "producing"),
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, RunningRefusal, "assembling")));
         JsonSerializer.Serialize(await _store.ReadProjectsAsync(None)).ShouldBe(before);
         (await StoredAsync(producing.Id)).PresenterFile.ShouldBe(PresenterName);
         (await StoredAsync(assembling.Id)).PresenterFile.ShouldBe(PresenterName);
         (await _writes.ListAsync(500, None)).ShouldBe(logged);
-    }
-
-    [Fact]
-    public async Task Regenerating_The_Presenter_Deletes_The_Old_Picture_After_The_Store_Commit_And_Ignores_A_Delete_That_Fails()
-    {
-        var ready = await CharacterAsync("media_ready", PresenterScene("s1", 1));
-        var stuck = await CharacterAsync("script_ready");
-        var missing = await CharacterAsync("approved", PresenterScene("s1", 1));
-        var escaping = await CharacterAsync("script_ready");
-        var running = await CharacterAsync("producing", PresenterScene("s1", 1));
-        var readyMedia = await _operator.GetMediaDirectoryAsync(ready.Id, None);
-        var stuckMedia = await _operator.GetMediaDirectoryAsync(stuck.Id, None);
-        var escapingMedia = await _operator.GetMediaDirectoryAsync(escaping.Id, None);
-        var runningMedia = await _operator.GetMediaDirectoryAsync(running.Id, None);
-        const string Stuck = "owner-presenter-aaaaaaaaaaaa.png";
-        var outside = Path.Combine(Path.GetDirectoryName(escapingMedia)!, "outside.png");
-        await PutInMediaAsync(ready.Id, PresenterName);
-        await PutInMediaAsync(ready.Id, "scene-s1.mp3");
-        Directory.CreateDirectory(Path.Combine(stuckMedia, Stuck));
-        await File.WriteAllTextAsync(outside, "image");
-        await PutInMediaAsync(running.Id, PresenterName);
-        await SetStoredAsync(ready.Id, p => p with { PresenterFile = PresenterName });
-        await SetStoredAsync(stuck.Id, p => p with { PresenterFile = Stuck });
-        await SetStoredAsync(missing.Id, p => p with { PresenterFile = PresenterName });
-        await SetStoredAsync(escaping.Id, p => p with { PresenterFile = "../outside.png" });
-        await SetStoredAsync(running.Id, p => p with { PresenterFile = PresenterName });
-
-        var deleted = await _operator.RegeneratePresenterAsync(ready.Id, None);
-        var undeletable = await _operator.RegeneratePresenterAsync(stuck.Id, None);
-        var gone = await _operator.RegeneratePresenterAsync(missing.Id, None);
-        var kept = await _operator.RegeneratePresenterAsync(escaping.Id, None);
-        await Should.ThrowAsync<OperatorValidationException>(() => _operator.RegeneratePresenterAsync(running.Id, None));
-
-        (deleted.Status, deleted.PresenterFile).ShouldBe(("production_queued", (string?)null));
-        File.Exists(Path.Combine(readyMedia, PresenterName)).ShouldBeFalse();
-        File.Exists(Path.Combine(readyMedia, "scene-s1.mp3")).ShouldBeTrue();
-        undeletable.PresenterFile.ShouldBeNull();
-        (await StoredAsync(stuck.Id)).PresenterFile.ShouldBeNull();
-        Directory.Exists(Path.Combine(stuckMedia, Stuck)).ShouldBeTrue();
-        (gone.Status, gone.PresenterFile).ShouldBe(("production_queued", (string?)null));
-        kept.PresenterFile.ShouldBeNull();
-        File.Exists(outside).ShouldBeTrue();
-        File.Exists(Path.Combine(runningMedia, PresenterName)).ShouldBeTrue();
     }
 
     [Theory]

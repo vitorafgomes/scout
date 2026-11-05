@@ -28,6 +28,9 @@ service WorkerGate {
   rpc ChatReorderScenes(ReorderScenesRequest) returns (Project);
   rpc ChatProduceProject(ProduceProjectRequest) returns (Project);
   rpc ChatDelegateProject(DelegateProjectRequest) returns (Project);
+  rpc ChatRequestPresenter(RequestPresenterRequest) returns (Project);
+  rpc ChatEditScenePicturePrompt(EditScenePicturePromptRequest) returns (Project);
+  rpc ChatRegenerateScenePicture(SceneRequest) returns (Project);
 }
 
 message RequestWriteRequest {

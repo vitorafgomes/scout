@@ -92,7 +92,8 @@ public sealed class YouTubeOperatorPluginTests
     {
         var reply = await Plugin().MakeVideoAsync("sourdough");
 
-        _controlPlane.Saves.ShouldHaveSingleItem().Origin.ShouldBeNull();
+        var (saved, origin) = _controlPlane.Saves.ShouldHaveSingleItem();
+        (origin, saved.Format).ShouldBe(((string?)null, string.Empty));
         reply.ShouldBe("Started a video project on sourdough; follow it in Scout Desktop, Production.");
     }
 
@@ -195,6 +196,7 @@ public sealed class YouTubeOperatorPluginTests
             (YouTubeOperatorPlugin.ReorderScenes, ["project_id", "scene_ids"], ["project_id", "scene_ids"]),
             (YouTubeOperatorPlugin.ProduceProject, ["project_id", "narration_voice", "direction", "motion"], ["project_id"]),
             (YouTubeOperatorPlugin.DelegateProject, ["project_id", "narration_voice", "direction", "motion"], ["project_id"]),
+            (YouTubeOperatorPlugin.ChangePresenter, ["project_id", "feedback_or_prompt"], ["project_id"]),
         ];
 
         var declarations = provider.GetServices<WriteFunctionDeclaration>().ToList();
@@ -227,10 +229,10 @@ public sealed class YouTubeOperatorPluginTests
         declared.ShouldBe([
             YouTubeOperatorPlugin.MakeVideo, YouTubeOperatorPlugin.EditSceneText, YouTubeOperatorPlugin.RegenerateNarration,
             YouTubeOperatorPlugin.RegenerateScene, YouTubeOperatorPlugin.LockScene, YouTubeOperatorPlugin.ReorderScenes,
-            YouTubeOperatorPlugin.ProduceProject, YouTubeOperatorPlugin.DelegateProject,
+            YouTubeOperatorPlugin.ProduceProject, YouTubeOperatorPlugin.DelegateProject, YouTubeOperatorPlugin.ChangePresenter,
         ]);
         plugin.Select(f => f.Name).Except(declared).Order(StringComparer.Ordinal).ShouldBe([
-            YouTubeOperatorPlugin.DeleteProject, YouTubeOperatorPlugin.ListProjects, YouTubeOperatorPlugin.ProjectState,
+            YouTubeOperatorPlugin.DeleteProject, YouTubeOperatorPlugin.ListProjects, YouTubeOperatorPlugin.PresenterPreview, YouTubeOperatorPlugin.ProjectState,
             YouTubeOperatorPlugin.PublishVideo, YouTubeOperatorPlugin.SceneText, "youtube_video_status",
         ]);
     }
@@ -314,6 +316,8 @@ public sealed class YouTubeOperatorPluginTests
         YouTubeOperatorPlugin.ReorderScenes => plugin.ReorderScenesAsync("p1", " s2, s1 ,,s3 "),
         YouTubeOperatorPlugin.ProduceProject => plugin.ProduceProjectAsync("p1", narration_voice: " piper:en_GB-aru-medium "),
         YouTubeOperatorPlugin.DelegateProject => plugin.DelegateProjectAsync("p1"),
+        YouTubeOperatorPlugin.PresenterPreview => plugin.PresenterPreviewAsync("p1"),
+        YouTubeOperatorPlugin.ChangePresenter => plugin.ChangePresenterAsync("p1", "Make the apron blue."),
         _ => throw new ArgumentOutOfRangeException(nameof(function)),
     };
 
@@ -345,6 +349,8 @@ public sealed class YouTubeOperatorPluginTests
     [InlineData(YouTubeOperatorPlugin.ReorderScenes)]
     [InlineData(YouTubeOperatorPlugin.ProduceProject)]
     [InlineData(YouTubeOperatorPlugin.DelegateProject)]
+    [InlineData(YouTubeOperatorPlugin.PresenterPreview)]
+    [InlineData(YouTubeOperatorPlugin.ChangePresenter)]
     public async Task A_Non_Owner_Gets_The_Refusal_And_No_Control_Plane_Call(string function)
     {
         var controlPlane = Substitute.For<IOperatorControlPlane>();
@@ -519,8 +525,11 @@ public sealed class YouTubeOperatorPluginTests
         reply.ShouldBe("Started a video project on sourdough; I will post here when the script is ready.");
         var function = KernelPluginFactory.CreateFromObject(Plugin(), YouTubeOperatorPlugin.PluginName)[YouTubeOperatorPlugin.MakeVideo];
         function.Metadata.Parameters.Single(p => p.Name == "format").Description.ShouldBe(
-            "How the video is made: generated_pictures, the default; own_pictures, where the owner attaches a picture per scene; or animated_character, " +
-            "a cartoon presenter made once whose mouth moves with the narration. Only the owner may choose other than the default; empty for the default.");
+            "How the video is made: generated_pictures; own_pictures, where the owner attaches a picture per scene; or animated_character, " +
+            "a cartoon presenter made by Scout and improved by the owner in Scout Desktop, whose mouth moves with the narration. Only the owner may choose a format; empty for the format the owner set as the mandate's default.");
+        function.Description.ShouldBe(
+            "Start a YouTube video project on a topic: Scout researches the topic and writes a script the owner reviews in Scout Desktop. Uploads nothing. Needs the owner's write permission for YouTube. " +
+            "Only Scout's owner may choose a format or give a direction; with no format the video takes the format the owner set as the mandate's default.");
     }
 
     [Theory]
@@ -601,6 +610,7 @@ public sealed class YouTubeOperatorPluginTests
     [InlineData(YouTubeOperatorPlugin.ReorderScenes)]
     [InlineData(YouTubeOperatorPlugin.ProduceProject)]
     [InlineData(YouTubeOperatorPlugin.DelegateProject)]
+    [InlineData(YouTubeOperatorPlugin.ChangePresenter)]
     public async Task An_Owner_Edit_Without_A_State_Read_In_The_Conversation_Is_Refused_And_Calls_Nothing(string function)
     {
         var controlPlane = Substitute.For<IOperatorControlPlane>();
@@ -754,5 +764,52 @@ public sealed class YouTubeOperatorPluginTests
         lines.ShouldContain(YouTubeOperatorPlugin.NothingMissing);
         generated.ShouldNotBeNull().ShouldContain(YouTubeOperatorPlugin.NoSpeech, Case.Sensitive);
         generated.ShouldContain(YouTubeOperatorPlugin.NoImages, Case.Sensitive);
+    }
+
+    [Theory]
+    [InlineData("Make the apron blue.", "Make the apron blue.", "")]
+    [InlineData("prompt: A robot chef with a copper whisk", "", "A robot chef with a copper whisk")]
+    [InlineData("", "", "")]
+    public async Task Changing_The_Presenter_Queues_The_Job_With_The_Owners_Words_And_Points_To_The_Presenter_Block(string words, string feedback, string prompt)
+    {
+        _controlPlane.Store(ThreeScenes() with { Format = "animated_character", Status = "script_ready" });
+
+        var reply = await AskInATurn(ReadThen(p => p.ChangePresenterAsync(" p1 ", words)), isLocalOwner: true);
+
+        reply.ShouldBe("Making a new presenter; see Scout Desktop, Production, Presenter.");
+        _controlPlane.ChatCalls.ShouldHaveSingleItem().ShouldBe(("RequestPresenter", $"p1|{feedback}|{prompt}"));
+    }
+
+    [Fact]
+    public async Task A_Presenter_Change_The_Control_Plane_Refuses_Changes_Nothing_And_Says_Why()
+    {
+        _controlPlane.Store(ThreeScenes() with { Format = "animated_character" });
+        _controlPlane.ChatNotGranted = true;
+
+        var reply = await AskInATurn(ReadThen(p => p.ChangePresenterAsync("p1", "Smile more")), isLocalOwner: true);
+
+        reply.ShouldBe($"refused: Nothing changed: {RecordingControlPlane.NotGranted}");
+    }
+
+    [Fact]
+    public async Task The_Presenter_Preview_Gives_The_Current_Prompt_Source_And_Versions_After_The_Data_Marker()
+    {
+        var first = new OperatorPresenterVersion("presenter-builtin-ada.png", string.Empty, "builtin:ada", "presenter-preview-1.mp4", null, "2026-11-05T10:00:00Z", "builtin");
+        var second = new OperatorPresenterVersion("presenter-0a1b2c3d4e5f.png", "A cheerful baker. Change: Smile more.", "Smile more", "presenter-preview-2.mp4", null, "2026-11-05T10:05:00Z", "generated");
+        _controlPlane.Store(ThreeScenes() with
+        {
+            Format = "animated_character",
+            PresenterVersions = [first, second],
+            PresenterFile = second.File,
+            PresenterPreviewFile = second.PreviewFile,
+            PresenterSource = "generated",
+        });
+
+        var reply = await AskInATurn(p => p.PresenterPreviewAsync(" p1 "), isLocalOwner: true);
+
+        reply.ShouldBe(
+            "Project p1: presenter 2 versions; the current one is generated, its preview in Scout Desktop, Production, Presenter.\n" +
+            $"{YouTubeOperatorPlugin.DataMarker}\n" +
+            "Prompt: A cheerful baker. Change: Smile more.");
     }
 }

@@ -30,6 +30,7 @@ const mandate: MandateDto = {
   blockedTopics: ['politics', 'crypto'],
   targetMetric: 'watch_hours',
   targetValue: '500',
+  defaultFormat: 'generated_pictures',
   updatedAt: '2026-11-03T09:00:00Z',
 };
 
@@ -78,6 +79,10 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     presenter: '',
     presenterFile: null,
     mouthBox: null,
+    presenterVersions: [],
+    presenterPreviewFile: null,
+    presenterRequest: '',
+    presenterSource: '',
     ...overrides,
   };
 }
@@ -130,6 +135,9 @@ const readiness: ReadinessDto = {
   reportedAt: '2026-11-03T09:00:00Z',
   transcriptionAvailable: false,
   lipSyncAvailable: false,
+  faceDetectionAvailable: false,
+  picturesLeftToday: 40,
+  builtinPresenters: [],
 };
 
 const fullReadiness: ReadinessDto = {
@@ -175,6 +183,10 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
     operatorRegenerateNarration: vi.fn(async () => project()),
     operatorSetMouthBox: vi.fn(async () => project()),
     operatorRegeneratePresenter: vi.fn(async () => project()),
+    operatorRequestPresenter: vi.fn(async () => project()),
+    operatorUsePresenterVersion: vi.fn(async () => project()),
+    operatorEditScenePicturePrompt: vi.fn(async () => project()),
+    operatorRegenerateScenePicture: vi.fn(async () => project()),
     operatorAttachSceneMedia: vi.fn(async () => ({
       project: project() as OperatorProjectDto | null,
     })),
@@ -336,6 +348,7 @@ describe('ProductionComponent', () => {
           'blockedTopics',
           'targetMetric',
           'targetValue',
+          'defaultFormat',
         ],
         'calm',
       ],
@@ -1619,12 +1632,13 @@ describe('ProductionComponent', () => {
     expect(el(fixture, 'project-delegated')).toBeNull();
   });
 
-  it('Delete project is hidden while a project is researching, scripting, producing, assembling or uploading, and offered otherwise', async () => {
+  it('Delete project is hidden while a project is researching, scripting, producing, assembling, presenting or uploading, and offered otherwise', async () => {
     const statuses = [
       'researching',
       'scripting',
       'producing',
       'assembling',
+      'presenting',
       'script_ready',
       'failed',
       'approved',
@@ -1657,7 +1671,7 @@ describe('ProductionComponent', () => {
       if (el(fixture, 'delete') !== null) offered.push(p.id);
     }
 
-    expect(offered).toEqual(['p4', 'p5', 'p6']);
+    expect(offered).toEqual(['p5', 'p6', 'p7']);
   });
 
   it('Delete project asks first, says what goes and what stays, and Cancel sends nothing', async () => {
@@ -1756,7 +1770,9 @@ describe('ProductionComponent', () => {
     ).map((n) => n.textContent?.trim());
 
     expect(order).toEqual(['Span is a view over memory.', 'It never allocates.']);
-    expect(text(fixture, 'scene-s1')).toContain('Picture prompt: A ruler laid over a row of bytes');
+    expect(el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value).toBe(
+      'A ruler laid over a row of bytes',
+    );
     expect(text(fixture, 'scene-status-s1')).toBe('ready');
     expect(text(fixture, 'scene-sources-s1')).toBe('Audio: generated · Picture: your file');
     expect(text(fixture, 'scene-status-s2')).toBe('failed');
@@ -2546,7 +2562,7 @@ describe('ProductionComponent', () => {
     ]);
   });
 
-  it('the Presenter block attaches, replaces and regenerates the presenter picture', async () => {
+  it('the Presenter block attaches and replaces the presenter picture, and Generate takes the place of Regenerate picture', async () => {
     const attached = character({ presenterFile: 'owner-presenter-0a1b2c3d4e5f.png' });
     let refuse = false;
     const bridge = makeBridge({
@@ -2556,7 +2572,6 @@ describe('ProductionComponent', () => {
         if (refuse) throw refusedWith('scout:operator.sceneMedia', 'Pictures are at most 20 MB.');
         return { project: attached as OperatorProjectDto | null };
       }),
-      operatorRegeneratePresenter: vi.fn(async () => character()),
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p2');
@@ -2580,7 +2595,7 @@ describe('ProductionComponent', () => {
     refuse = true;
     await click(fixture, 'presenter-attach');
     const refused = [text(fixture, 'presenter-error'), el(fixture, 'background-error')];
-    await click(fixture, 'presenter-regenerate');
+    const buttons = [el(fixture, 'presenter-regenerate'), text(fixture, 'presenter-generate')];
 
     expect(queued).toEqual([
       'No presenter picture yet: Scout makes one when it produces the video if the connected AI Source makes pictures; or attach your own.',
@@ -2603,29 +2618,35 @@ describe('ProductionComponent', () => {
       [{ projectId: 'p1', sceneId: '', kind: 'presenter' }],
       [{ projectId: 'p1', sceneId: '', kind: 'presenter' }],
     ]);
-    expect(bridge.operatorRegeneratePresenter.mock.calls).toEqual([[{ id: 'p1' }]]);
-    expect([el(fixture, 'presenter-image'), text(fixture, 'presenter-attach')]).toEqual([
-      null,
-      'Attach picture',
-    ]);
+    expect(buttons).toEqual([null, 'Generate']);
+    expect(bridge.operatorRegeneratePresenter).not.toHaveBeenCalled();
   });
 
-  it('Regenerate picture is disabled with its reason while the connected AI Source makes no pictures', async () => {
+  it('Generate and Ask for a change are disabled with their reason while the connected AI Source makes no pictures', async () => {
     const bridge = makeBridge({
       ...listing(character()),
       operatorReadiness: vi.fn(async () => ({ ...fullReadiness, imagesAvailable: false })),
+      operatorRequestPresenter: vi.fn(async () => character()),
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
-    const button = el<HTMLButtonElement>(fixture, 'presenter-regenerate')!;
+    type(fixture, 'presenter-feedback', 'Older');
+    await settle(fixture);
+    const generate = el<HTMLButtonElement>(fixture, 'presenter-generate')!;
+    const change = el<HTMLButtonElement>(fixture, 'presenter-change')!;
 
-    await click(fixture, 'presenter-regenerate');
+    await click(fixture, 'presenter-generate');
+    await click(fixture, 'presenter-change');
 
-    expect([button.disabled, button.getAttribute('title')]).toEqual([
+    expect([generate.disabled, generate.getAttribute('title')]).toEqual([
       true,
       'The connected AI Source makes no pictures',
     ]);
-    expect(bridge.operatorRegeneratePresenter).not.toHaveBeenCalled();
+    expect([change.disabled, change.getAttribute('title')]).toEqual([
+      true,
+      'The connected AI Source makes no pictures',
+    ]);
+    expect(bridge.operatorRequestPresenter).not.toHaveBeenCalled();
   });
 
   it('dragging a box over the presenter picture and saving sends it as fractions of the picture', async () => {
@@ -2711,7 +2732,7 @@ describe('ProductionComponent', () => {
     expect([cancelled, afterCancel]).toEqual([lastMove, lastMove]);
   });
 
-  it('an animated character scene has the narration row and Edit text and no picture controls', async () => {
+  it('an animated character scene has the narration row, Edit text, its picture prompt, Regenerate scene, Regenerate picture and Attach image, and shows the presenter over the background while it has no picture of its own', async () => {
     const spoken = scene({
       narration: 'Span is a view over memory. It never allocates.',
       visualSource: 'presenter',
@@ -2737,10 +2758,11 @@ describe('ProductionComponent', () => {
       text(fixture, 'scene-lock-s1'),
       text(fixture, 'scene-up-s1'),
       text(fixture, 'scene-edit-s1'),
-      el(fixture, 'scene-regenerate-s1'),
-      el(fixture, 'scene-attach-visual-s1'),
+      text(fixture, 'scene-regenerate-s1'),
+      text(fixture, 'scene-picture-regenerate-s1'),
+      text(fixture, 'scene-attach-visual-s1'),
       text(fixture, 'scene-sources-s1'),
-      (el(fixture, 'scene-s1')!.textContent ?? '').includes('Picture prompt'),
+      el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value,
     ];
     const preview = [
       el(fixture, 'scene-preview-presenter-s1')!.getAttribute('src'),
@@ -2761,10 +2783,11 @@ describe('ProductionComponent', () => {
       'Lock',
       'Move up',
       'Edit text',
-      null,
-      null,
+      'Regenerate scene',
+      'Regenerate picture',
+      'Attach image',
       'Audio: generated · Picture: presenter',
-      false,
+      'A ruler laid over a row of bytes',
     ]);
     expect(preview).toEqual([
       'scout-media://p1/owner-presenter-0a1b2c3d4e5f.png?v=2026-11-03T09%3A05%3A00Z',
@@ -2844,5 +2867,412 @@ describe('ProductionComponent', () => {
 
     expect(mediaReady).toEqual([note, null]);
     expect(failed).toEqual([null, 'The AI model did not answer.']);
+  });
+  function versioned(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDto {
+    return character({
+      presenterFile: 'presenter-2.png',
+      presenterSource: 'generated',
+      presenterVersions: [
+        {
+          file: 'presenter-1.png',
+          prompt: 'A friendly robot in a workshop. flat 2D cartoon illustration',
+          feedback: '',
+          previewFile: 'presenter-preview-1.mp4',
+          mouthBox: null,
+          madeAt: '2026-11-05T10:00:00Z',
+          source: 'generated',
+        },
+        {
+          file: 'presenter-2.png',
+          prompt: 'A tall robot with round glasses in a workshop, flat cartoon',
+          feedback:
+            'Give the robot round glasses and make it a lot taller than the workbench beside it',
+          previewFile: 'presenter-preview-2.mp4',
+          mouthBox: { x: 0.43, y: 0.62, width: 0.14, height: 0.07 },
+          madeAt: '2026-11-05T10:10:00Z',
+          source: 'generated',
+        },
+      ],
+      presenterPreviewFile: 'presenter-preview-2.mp4',
+      ...overrides,
+    });
+  }
+
+  it('the Presenter block shows the prompt of the current version, lets the owner edit it and sends it with Generate, then shows the prefilled prompt again', async () => {
+    const fresh = character({
+      id: 'p2',
+      direction: 'Warm colours, a calm tone.',
+      presenter: '',
+      topic: 'Span<T> in C#',
+    });
+    const bridge = makeBridge({
+      ...listing(versioned(), fresh),
+      operatorReadiness: vi.fn(async () => fullReadiness),
+      operatorRequestPresenter: vi.fn(async () => versioned({ presenterRequest: 'edited' })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p2');
+    const composed = el<HTMLTextAreaElement>(fixture, 'presenter-prompt')!.value;
+    const safety = text(fixture, 'presenter-safety');
+    await click(fixture, 'project-p1');
+    const current = el<HTMLTextAreaElement>(fixture, 'presenter-prompt')!.value;
+
+    type(fixture, 'presenter-prompt', '  A tall robot with square glasses, flat cartoon  ');
+    await settle(fixture);
+    const count = text(fixture, 'presenter-prompt-count');
+    await click(fixture, 'presenter-generate');
+    const afterGenerate = el<HTMLTextAreaElement>(fixture, 'presenter-prompt')!.value;
+    type(fixture, 'presenter-prompt', 'p'.repeat(1501));
+    await settle(fixture);
+    const overLimit = el<HTMLButtonElement>(fixture, 'presenter-generate')!.disabled;
+
+    expect(composed).toBe(
+      'Warm colours, a calm tone. Span<T> in C#. flat 2D cartoon illustration, front-facing, looking at the viewer, mouth closed, neutral expression, head and shoulders, on a solid bright green background (#00FF00).',
+    );
+    expect(safety).toBe(
+      "no text, no letters, no logos, no trademarks, no real person's likeness and no public figure.",
+    );
+    expect(current).toBe('A tall robot with round glasses in a workshop, flat cartoon');
+    expect(count).toBe('46 / 1500');
+    expect(bridge.operatorRequestPresenter.mock.calls).toEqual([
+      [
+        {
+          projectId: 'p1',
+          feedback: '',
+          prompt: 'A tall robot with square glasses, flat cartoon',
+        },
+      ],
+    ]);
+    expect(afterGenerate).toBe('A tall robot with round glasses in a workshop, flat cartoon');
+    expect(overLimit).toBe(true);
+  });
+
+  it('a change request sends the feedback and the versions strip makes an older version current', async () => {
+    const older = versioned({ presenterFile: 'presenter-1.png' });
+    const bridge = makeBridge({
+      ...listing(versioned()),
+      operatorReadiness: vi.fn(async () => ({ ...fullReadiness, picturesLeftToday: 37 })),
+      operatorRequestPresenter: vi.fn(async () => versioned({ presenterRequest: 'Older' })),
+      operatorUsePresenterVersion: vi.fn(async () => older),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const changeAtFirst = el<HTMLButtonElement>(fixture, 'presenter-change')!.disabled;
+    type(fixture, 'presenter-feedback', 'f'.repeat(301));
+    await settle(fixture);
+    const overLimit = [
+      text(fixture, 'presenter-feedback-count'),
+      el<HTMLButtonElement>(fixture, 'presenter-change')!.disabled,
+    ];
+    type(fixture, 'presenter-feedback', '  Make the robot look older  ');
+    await settle(fixture);
+    await click(fixture, 'presenter-change');
+    const feedbackAfter = el<HTMLTextAreaElement>(fixture, 'presenter-feedback')!.value;
+    const strip = [0, 1].map((i) => [
+      el<HTMLImageElement>(fixture, `presenter-version-${i}`)!
+        .querySelector('img')!
+        .getAttribute('src'),
+      text(fixture, `presenter-version-label-${i}`),
+      text(fixture, `presenter-version-summary-${i}`),
+      el(fixture, `presenter-current-${i}`) !== null,
+      el(fixture, `presenter-use-${i}`) !== null,
+    ]);
+    const budget = text(fixture, 'presenter-budget');
+    await click(fixture, 'presenter-use-0');
+
+    expect(changeAtFirst).toBe(true);
+    expect(overLimit).toEqual(['301 / 300', true]);
+    expect(bridge.operatorRequestPresenter.mock.calls).toEqual([
+      [{ projectId: 'p1', feedback: 'Make the robot look older', prompt: '' }],
+    ]);
+    expect(feedbackAfter).toBe('');
+    expect(strip).toEqual([
+      [
+        'scout-media://p1/presenter-1.png?v=2026-11-05T10%3A00%3A00Z',
+        '1 · Generated',
+        'A friendly robot in a workshop. flat 2D cartoon illustration',
+        false,
+        true,
+      ],
+      [
+        'scout-media://p1/presenter-2.png?v=2026-11-05T10%3A10%3A00Z',
+        '2 · Generated',
+        'Give the robot round glasses and make it a lot taller than t',
+        true,
+        false,
+      ],
+    ]);
+    expect(budget).toBe('37 of 40 pictures left today');
+    expect(bridge.operatorUsePresenterVersion.mock.calls).toEqual([
+      [{ projectId: 'p1', index: 0 }],
+    ]);
+    expect([
+      el(fixture, 'presenter-current-0') !== null,
+      el(fixture, 'presenter-use-1') !== null,
+    ]).toEqual([true, true]);
+  });
+
+  it('the current presenter preview plays through scout-media and the block says when Scout is making it', async () => {
+    const bridge = makeBridge(
+      listing(versioned(), versioned({ id: 'p2', status: 'presenting' }), character({ id: 'p3' })),
+    );
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const preview = el<HTMLVideoElement>(fixture, 'presenter-preview')!;
+    const ready = [
+      preview.tagName,
+      preview.hasAttribute('controls'),
+      preview.getAttribute('src'),
+      el(fixture, 'presenter-making'),
+      el(fixture, 'presenting-progress'),
+    ];
+    await click(fixture, 'project-p2');
+    const making = [
+      text(fixture, 'presenter-making'),
+      text(fixture, 'presenting-progress'),
+      el(fixture, 'presenter-preview'),
+      el(fixture, 'presenter-generate'),
+    ];
+    await click(fixture, 'project-p3');
+    const pending = [text(fixture, 'presenter-pending'), el(fixture, 'presenter-preview')];
+
+    expect(ready).toEqual([
+      'VIDEO',
+      true,
+      'scout-media://p1/presenter-preview-2.mp4?v=2026-11-05T10%3A10%3A00Z',
+      null,
+      null,
+    ]);
+    expect(making).toEqual(['Scout is making the presenter.', 'Making the presenter.', null, null]);
+    expect(pending).toEqual(['The presenter is made as soon as the script is ready.', null]);
+  });
+
+  it('a built-in presenter is chosen from the readiness list', async () => {
+    const bridge = makeBridge({
+      ...listing(character()),
+      operatorReadiness: vi.fn(async () => ({
+        ...fullReadiness,
+        builtinPresenters: [
+          { id: 'ada', label: 'Ada' },
+          { id: 'kofi', label: 'Kofi' },
+        ],
+      })),
+      operatorRequestPresenter: vi.fn(async () => character({ presenterRequest: 'builtin:kofi' })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const select = el<HTMLSelectElement>(fixture, 'presenter-builtin')!;
+    const options = Array.from(select.options).map((o) => [o.value, o.textContent?.trim()]);
+
+    select.value = 'kofi';
+    select.dispatchEvent(new Event('change'));
+    await click(fixture, 'presenter-builtin-use');
+
+    TestBed.resetTestingModule();
+    const without = await mount(makeBridge(listing(character())));
+    await click(without, 'project-p1');
+
+    expect(options).toEqual([
+      ['ada', 'Ada'],
+      ['kofi', 'Kofi'],
+    ]);
+    expect(bridge.operatorRequestPresenter.mock.calls).toEqual([
+      [{ projectId: 'p1', feedback: 'builtin:kofi', prompt: '' }],
+    ]);
+    expect([el(without, 'presenter-builtin'), el(without, 'presenter-builtin-use')]).toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  it('a scene picture prompt is edited and saved and Regenerate picture sends the scene', async () => {
+    const pictured = scene({ visualSource: 'generated', visualFile: 'scene-s1.png' });
+    const generated = project({ scenes: [pictured] });
+    const animated = character({
+      id: 'p2',
+      presenterFile: 'presenter-1.png',
+      scenes: [pictured],
+    });
+    const own = project({ id: 'p3', format: 'own_pictures', scenes: [scene()] });
+    const bridge = makeBridge({
+      ...listing(generated, animated, own),
+      operatorEditScenePicturePrompt: vi.fn(async () =>
+        project({ scenes: [{ ...pictured, visualPrompt: 'A river seen from above' }] }),
+      ),
+      operatorRegenerateScenePicture: vi.fn(async () =>
+        project({ status: 'production_queued', scenes: [pictured] }),
+      ),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const unchanged = el<HTMLButtonElement>(fixture, 'scene-picture-prompt-save-s1')!.disabled;
+    type(fixture, 'scene-picture-prompt-s1', '   ');
+    await settle(fixture);
+    const empty = [
+      text(fixture, 'scene-picture-prompt-invalid-s1'),
+      el<HTMLButtonElement>(fixture, 'scene-picture-prompt-save-s1')!.disabled,
+    ];
+    type(fixture, 'scene-picture-prompt-s1', 'q'.repeat(701));
+    await settle(fixture);
+    const tooLong = el<HTMLButtonElement>(fixture, 'scene-picture-prompt-save-s1')!.disabled;
+    await click(fixture, 'scene-picture-prompt-cancel-s1');
+    const cancelled = el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value;
+    type(fixture, 'scene-picture-prompt-s1', '  A river seen from above  ');
+    await settle(fixture);
+    await click(fixture, 'scene-picture-prompt-save-s1');
+    const saved = el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value;
+    await click(fixture, 'scene-picture-regenerate-s1');
+    await click(fixture, 'project-p2');
+    const animatedPreview = [
+      el(fixture, 'scene-image-s1')!.getAttribute('src'),
+      el(fixture, 'scene-presenter-badge-s1')!.getAttribute('src'),
+      el(fixture, 'scene-picture-prompt-s1') !== null,
+    ];
+    await click(fixture, 'project-p3');
+    const ownPictures = [
+      el(fixture, 'scene-picture-prompt-s1'),
+      el(fixture, 'scene-picture-regenerate-s1'),
+      text(fixture, 'scene-s1').includes('Picture prompt: A ruler laid over a row of bytes'),
+    ];
+
+    expect(unchanged).toBe(true);
+    expect(empty).toEqual(['A picture prompt is 1 to 700 characters.', true]);
+    expect(tooLong).toBe(true);
+    expect(cancelled).toBe('A ruler laid over a row of bytes');
+    expect(bridge.operatorEditScenePicturePrompt.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1', prompt: 'A river seen from above' }],
+    ]);
+    expect(saved).toBe('A river seen from above');
+    expect(bridge.operatorRegenerateScenePicture.mock.calls).toEqual([
+      [{ projectId: 'p1', sceneId: 's1' }],
+    ]);
+    expect(animatedPreview).toEqual([
+      'scout-media://p2/scene-s1.png?v=2026-11-03T09%3A05%3A00Z',
+      'scout-media://p2/presenter-1.png?v=2026-11-03T09%3A05%3A00Z',
+      true,
+    ]);
+    expect(ownPictures).toEqual([null, null, true]);
+  });
+
+  it('the presenter prompt, the change request, the chosen built-in presenter and a scene picture prompt the owner types survive the 10 s refresh and are dropped when the owner chooses another project', async () => {
+    vi.useFakeTimers();
+    const typed = versioned({ scenes: [scene()] });
+    const bridge = makeBridge({
+      ...listing(typed, character({ id: 'p2' })),
+      operatorReadiness: vi.fn(async () => ({
+        ...fullReadiness,
+        builtinPresenters: [
+          { id: 'ada', label: 'Ada' },
+          { id: 'kofi', label: 'Kofi' },
+        ],
+      })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const drafts = () => [
+      el<HTMLTextAreaElement>(fixture, 'presenter-prompt')!.value,
+      el<HTMLTextAreaElement>(fixture, 'presenter-feedback')!.value,
+      el<HTMLSelectElement>(fixture, 'presenter-builtin')!.value,
+      el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value,
+    ];
+    type(fixture, 'presenter-prompt', 'A robot with a red scarf');
+    type(fixture, 'presenter-feedback', 'Make the robot smile');
+    choose(fixture, 'presenter-builtin', 'kofi');
+    type(fixture, 'scene-picture-prompt-s1', 'A river seen from above');
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settle(fixture);
+    const afterRefresh = drafts();
+    await click(fixture, 'project-p2');
+    await click(fixture, 'project-p1');
+    const afterChoosing = drafts();
+
+    expect(afterRefresh).toEqual([
+      'A robot with a red scarf',
+      'Make the robot smile',
+      'kofi',
+      'A river seen from above',
+    ]);
+    expect(afterChoosing).toEqual([
+      'A tall robot with round glasses in a workshop, flat cartoon',
+      '',
+      'ada',
+      'A ruler laid over a row of bytes',
+    ]);
+  });
+
+  it('the Mandate default format preselects the New project radio, falls back to Generated pictures while the machine cannot make it, and is saved with the mandate', async () => {
+    const preselected = async (
+      defaultFormat: MandateDto['defaultFormat'],
+      lipSyncAvailable: boolean,
+    ): Promise<string | undefined> => {
+      TestBed.resetTestingModule();
+      const fixture = await mount(
+        makeBridge({
+          operatorMandate: vi.fn(async () => ({ mandate: { ...mandate, defaultFormat } })),
+          operatorReadiness: vi.fn(async () => ({ ...readiness, lipSyncAvailable })),
+        }),
+      );
+      return (
+        fixture.nativeElement.querySelector(
+          'input[name="start-format"]:checked',
+        ) as HTMLInputElement | null
+      )?.dataset['test'];
+    };
+
+    const formats = [
+      await preselected('animated_character', true),
+      await preselected('own_pictures', false),
+      await preselected('animated_character', false),
+      await preselected('own_video', false),
+      await preselected('', false),
+    ];
+    TestBed.resetTestingModule();
+    const save = vi.fn(async (_req: MandateSaveRequest) => ({
+      ...mandate,
+      defaultFormat: 'animated_character' as const,
+    }));
+    const bridge = makeBridge({
+      operatorMandate: vi.fn(async () => ({
+        mandate: { ...mandate, defaultFormat: 'own_pictures' as const },
+      })),
+      operatorSaveMandate: save,
+      operatorReadiness: vi.fn(async () => ({ ...readiness, lipSyncAvailable: true })),
+    });
+    const fixture = await mount(bridge);
+    const select = el<HTMLSelectElement>(fixture, 'mandate-default-format')!;
+    const options = Array.from(select.options).map((o) => [o.value, o.textContent?.trim()]);
+    const shown = select.value;
+    select.value = 'animated_character';
+    select.dispatchEvent(new Event('change'));
+    await click(fixture, 'mandate-save');
+    type(fixture, 'topic', 'Records in C#');
+    el<HTMLInputElement>(fixture, 'format-generated_pictures')!.click();
+    await settle(fixture);
+    await click(fixture, 'start-project');
+    const afterStart = (
+      fixture.nativeElement.querySelector('input[name="start-format"]:checked') as HTMLInputElement
+    ).dataset['test'];
+
+    expect(formats).toEqual([
+      'format-animated_character',
+      'format-own_pictures',
+      'format-generated_pictures',
+      'format-generated_pictures',
+      'format-generated_pictures',
+    ]);
+    expect(options).toEqual([
+      ['generated_pictures', 'Generated pictures'],
+      ['own_pictures', 'Your own pictures'],
+      ['animated_character', 'Animated character'],
+      ['own_video', 'Your own video'],
+    ]);
+    expect(shown).toBe('own_pictures');
+    expect(save.mock.calls.map(([sent]) => sent.defaultFormat)).toEqual(['animated_character']);
+    expect(
+      (bridge.operatorStartProject.mock.calls as unknown as [{ format: string }][]).map(
+        ([req]) => req.format,
+      ),
+    ).toEqual(['generated_pictures']);
+    expect(afterStart).toBe('format-animated_character');
   });
 });

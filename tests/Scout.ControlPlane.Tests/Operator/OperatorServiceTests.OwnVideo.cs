@@ -231,7 +231,7 @@ public sealed partial class OperatorServiceTests
 
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.DeleteProjectAsync(project.Id, None));
 
-        ex.Message.ShouldBe("A project that is researching, scripting, transcribing, producing, assembling or uploading cannot be deleted; wait for it to finish or fail.");
+        ex.Message.ShouldBe("A project that is researching, scripting, transcribing, producing, assembling, presenting or uploading cannot be deleted; wait for it to finish or fail.");
         (await StoredAsync(project.Id)).Status.ShouldBe("transcribing");
         File.Exists(Path.Combine(media, RecordingName)).ShouldBeTrue();
     }

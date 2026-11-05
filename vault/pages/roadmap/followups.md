@@ -407,3 +407,23 @@ reliability: medium
 
 - **Blocker:** none. `PiperSpeech.Spelled` (`src/Scout.Operator/PiperSpeech.cs:125`) writes every run of 2 to 4 capital letters as dotted letters, so the bundled voice spells it; a word-like acronym ("Nasa", "Pib") is read as a word only when it arrives capitalised, and nothing in the script prompt says so.
 - **Fix:** tell the script writer to write word-like acronyms capitalised ("Nasa", "Pib") and spelled ones in capitals ("ETF", "IPO").
+
+### The desktop composes the presenter prompt with its own copy of the worker's strings (2026-11-05)
+
+- **Blocker:** none. The Presenter block prefills the prompt from `PRESENTER_STYLE`, `PRESENTER_SAFETY` and its own composition (`ui/packages/renderer/src/app/production/production.component.ts:95`), copies of `PresenterStage.Style`, `VisualGenerator.NoRealPerson` and `PresenterStage.ComposedPrompt`; the review of phase 8c-B caught the two style strings apart (the desktop said "plain background", the worker needs the green one the chroma key removes) and made them equal, but nothing keeps them equal.
+- **Fix:** carry the composed prompt and the safety tail on the wire (a `Readiness` or `Project` field the worker fills), so the desktop shows what the worker uses and composes nothing itself.
+
+### The desktop validates presenters.json with stricter rules than the worker (2026-11-05)
+
+- **Blocker:** none; the shipped manifest (`ui/packages/main/resources/presenters/presenters.json`) satisfies both. `presentersFolder` (`ui/packages/main/src/worker/resolve-binary.ts`) accepts only a bare array whose entries name a `file`, while `BuiltInPresenters` (`src/Scout.Operator/BuiltInPresenters.cs`) also reads an object with `presenters` and defaults the file to `<id>.png`; a manifest the worker would read can be withheld from it by the desktop with an empty `SCOUT__OPERATOR__PRESENTERSPATH`.
+- **Fix:** one validator: the desktop checks the folder exists and leaves the manifest to the worker, which keeps the plain-basename rule.
+
+### Three WorkerGate chat rpcs and one Operator rpc have no caller (2026-11-05)
+
+- **Blocker:** none. `ChatEditScenePicturePrompt` and `ChatRegenerateScenePicture` (`src/Scout.ControlPlane.Contracts/protos/worker.proto`) exist for the owner's picture edits from the chat, but the plugin offers no function for them; `ListBuiltInPresenters` (`operator.proto`) answers the readiness list the desktop already reads. Each is tested on the control plane and reachable only under the grant.
+- **Fix:** add `youtube_edit_scene_picture` and `youtube_regenerate_scene_picture` to the plugin under the owner-identity and state-read rules of phase 8d, or reserve the three rpc names in the proto and drop them.
+
+### The face models stay resident after the first readiness round (2026-11-05)
+
+- **Blocker:** none, unmeasured. `OnnxRunner` keeps one session per model for the life of the worker (`src/Scout.Operator/FaceMouth.cs`), and the readiness probe loads both at the first round whether or not a presenter job ever runs; the optimizer estimated tens of megabytes of RSS.
+- **Fix:** measure the worker's RSS before and after the first round; if it matters, probe with `File.Exists` only and load the sessions at the first job, dropping them after an idle hour.

@@ -18,7 +18,8 @@ public interface IOperatorControlPlane
     Task<OperatorProjectState> SaveProjectAsync(OperatorProjectState project, string? originReference, CancellationToken ct);
 
     /// <summary>
-    /// Take the oldest queued project moved to researching, else the oldest project queued for production moved to
+    /// Take the oldest queued project moved to researching, else a project with a presenter request moved to
+    /// presenting, before the production of the same project, else the oldest project queued for production moved to
     /// producing, else the oldest project queued for assembly moved to assembling, else one left unfinished 15 minutes;
     /// null when none waits.
     /// </summary>
@@ -82,6 +83,12 @@ public interface IOperatorControlPlane
 
     /// <summary>From chat, for the owner: delegate the project up to ready to approve; an empty voice, direction or motion keeps the project's.</summary>
     Task<OperatorProjectState> DelegateProjectAsync(string projectId, string narrationVoice, string direction, string motion, CancellationToken ct);
+
+    /// <summary>
+    /// From chat, for the owner: queue a new presenter with <paramref name="feedback"/> appended to the last prompt, or with
+    /// <paramref name="prompt"/> as the base when given; both empty ask for another one.
+    /// </summary>
+    Task<OperatorProjectState> RequestPresenterAsync(string projectId, string feedback, string prompt, CancellationToken ct);
 }
 
 /// <summary>
@@ -314,7 +321,45 @@ public sealed record OperatorProjectState(
 
     /// <summary>Where the mouth is on the presenter picture, which the owner marks; null until then, and the character is shown still.</summary>
     public OperatorMouthBox? MouthBox { get; init; }
+
+    /// <summary>Every presenter the worker made for the project, oldest first; the worker appends one per presenter job.</summary>
+    public IReadOnlyList<OperatorPresenterVersion> PresenterVersions { get; init; } = [];
+
+    /// <summary>The current presenter's five-second preview clip in the media directory; null without one.</summary>
+    public string? PresenterPreviewFile { get; init; }
+
+    /// <summary>
+    /// The owner's request for a new presenter: empty for none, <c>first</c> for the control plane's automatic one,
+    /// <c>builtin:&lt;id&gt;</c> for a built-in presenter, else the owner's feedback; the worker clears it when it saves the job.
+    /// </summary>
+    public string PresenterRequest { get; init; } = string.Empty;
+
+    /// <summary>Where the current presenter picture came from: <c>generated</c>, <c>builtin</c>, <c>owner</c>, or empty before any.</summary>
+    public string PresenterSource { get; init; } = string.Empty;
+
+    /// <summary>The status a <c>presenting</c> project goes back to once the presenter job is saved; sent back exactly as read.</summary>
+    public string PresenterReturnStatus { get; init; } = string.Empty;
+
+    /// <summary>The owner's own presenter prompt for the requested job, the base the feedback is appended to; empty to compose one.</summary>
+    public string PresenterRequestPrompt { get; init; } = string.Empty;
 }
+
+/// <summary>
+/// One presenter the worker made, as the control plane's <c>PresenterVersion</c> message carries it: the picture, the prompt
+/// it was made from without the safety tail, the owner's feedback it answered, its preview clip, the mouth on it, when it was
+/// made and where the picture came from.
+/// </summary>
+public sealed record OperatorPresenterVersion(
+    string File,
+    string Prompt,
+    string Feedback,
+    string? PreviewFile,
+    OperatorMouthBox? MouthBox,
+    string MadeAt,
+    string Source);
+
+/// <summary>A presenter Scout ships, as the control plane's <c>BuiltInPresenter</c> message carries it: its id and its label.</summary>
+public sealed record OperatorBuiltInPresenter(string Id, string Label);
 
 /// <summary>The mouth on the presenter picture, as the control plane's <c>MouthBox</c> message carries it: its left, top, width and height as fractions of the picture.</summary>
 public sealed record OperatorMouthBox(double X, double Y, double Width, double Height);
@@ -412,6 +457,15 @@ public sealed record OperatorReadiness(
 
     /// <summary>Whether the rhubarb program answers and the nine mouth shapes are on disk, so an animated character's mouth moves with its narration.</summary>
     public bool LipSyncAvailable { get; init; }
+
+    /// <summary>Whether both face models load in the local runtime, so the mouth on a presenter picture is found without the owner marking it.</summary>
+    public bool FaceDetectionAvailable { get; init; }
+
+    /// <summary>How many of the day's pictures from the AI Source are left in this process.</summary>
+    public int PicturesLeftToday { get; init; }
+
+    /// <summary>The presenters Scout ships, in the order of their list.</summary>
+    public IReadOnlyList<OperatorBuiltInPresenter> BuiltInPresenters { get; init; } = [];
 }
 
 /// <summary>A narration voice, as the control plane's <c>Voice</c> message carries it: its id, its label, its source and its sample's file name in the voice samples directory, null when it has none.</summary>

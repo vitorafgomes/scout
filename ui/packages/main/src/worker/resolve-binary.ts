@@ -90,7 +90,8 @@ export function resolveTrayIcon(
 
 /**
  * The ffmpeg, caption font, piper, voices folder, rhubarb, mouth shapes folder, tesseract and its language data
- * folder the worker works with; an empty path for any the build did not bundle.
+ * folder, Scout's own presenters folder and the face models folder the worker works with; an empty path for any the
+ * build did not bundle.
  */
 export interface MediaToolPaths {
   readonly ffmpeg: string;
@@ -101,6 +102,38 @@ export interface MediaToolPaths {
   readonly mouths: string;
   readonly tesseract: string;
   readonly tessdata: string;
+  readonly presenters: string;
+  readonly faceModels: string;
+}
+
+/** The two face models the worker finds the mouth with. */
+const FACE_MODELS = ['blazeface-short-range.onnx', 'face-landmarker.onnx'];
+
+/** The presenters folder when its `presenters.json` lists presenters whose pictures are all there, else empty. */
+function presentersFolder(
+  folder: string,
+  exists: (file: string) => boolean,
+  read: (file: string) => string,
+): string {
+  const manifest = path.join(folder, 'presenters.json');
+  if (!exists(manifest)) return '';
+  try {
+    const listed: unknown = JSON.parse(read(manifest));
+    const files = Array.isArray(listed)
+      ? listed.map((entry: { file?: unknown }) => entry?.file)
+      : [];
+    const complete =
+      files.length > 0 &&
+      files.every(
+        (file) =>
+          typeof file === 'string' &&
+          path.basename(file) === file &&
+          exists(path.join(folder, file)),
+      );
+    return complete ? folder : '';
+  } catch {
+    return '';
+  }
 }
 
 /** The nine mouth shapes rhubarb names, one PNG each. */
@@ -109,13 +142,15 @@ const MOUTH_SHAPES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'X'].map((shape) =
 /**
  * The bundled media tools: under `resources/media-tools/<platform>-<arch>` and `resources/fonts` when packaged, read
  * from `ui/packages/main/resources` otherwise; each one only when its file or folder is there, the voices folder only
- * when it holds a voice model, the mouths folder only when it holds the nine mouth shapes.
+ * when it holds a voice model, the mouths folder only when it holds the nine mouth shapes, the presenters folder
+ * only when every picture its `presenters.json` names is there, and the face folder only with both models.
  */
 export function resolveMediaTools(
   deps: Omit<ResolveBinaryDeps, 'platform' | 'arch'> &
     Partial<Pick<ResolveBinaryDeps, 'platform' | 'arch'>>,
   exists: (file: string) => boolean = fs.existsSync,
   list: (dir: string) => string[] = (dir) => (fs.existsSync(dir) ? fs.readdirSync(dir) : []),
+  read: (file: string) => string = (file) => fs.readFileSync(file, 'utf8'),
 ): MediaToolPaths {
   const { app, resourcesPath, cwd, platform = process.platform, arch = process.arch } = deps;
   const root =
@@ -137,5 +172,9 @@ export function resolveMediaTools(
     mouths: MOUTH_SHAPES.every((shape) => shapes.includes(shape)) ? mouths : '',
     tesseract: present(path.join(tools, 'tesseract', 'AppRun')),
     tessdata: present(path.join(tools, 'tesseract', 'tessdata')),
+    presenters: presentersFolder(path.join(root, 'presenters'), exists, read),
+    faceModels: FACE_MODELS.every((model) => exists(path.join(tools, 'face', model)))
+      ? path.join(tools, 'face')
+      : '',
   };
 }

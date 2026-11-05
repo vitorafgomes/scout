@@ -16,11 +16,11 @@ public static class OperatorServiceCollectionExtensions
     /// Register the operator: the research, script, scene, narration, visual, assembly and pipeline stages, the Openverse
     /// stock pictures on the named HTTP client <c>openverse</c>, the background
     /// worker, the readiness reporter, the samples of the bundled voices, the comment desk with the answer to the owner's comment sync and draft requests, which
-    /// a key-only setup answers too, with the sign-in sentence as the sync's error, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> and owner-only scene, produce and delegate functions are declared writes of the
+    /// a key-only setup answers too, with the sign-in sentence as the sync's error, the built-in presenters, the mouth finder over the local ONNX runtime and the presenter job, and the <c>YouTubeOperator</c> kernel plugin whose <c>youtube_make_video</c> and owner-only scene, produce, delegate and presenter functions are declared writes of the
     /// <c>youtube</c> feature into Scout's data folder. Needs an <see cref="IOperatorControlPlane"/>, a YouTube
     /// client and an origin notifier registered by the caller, and the kernel and media capabilities of
-    /// <c>AddScoutLlm</c>. The ffmpeg, font, piper and voices paths come from <see cref="OperatorMediaOptions"/>, which the
-    /// caller binds.
+    /// <c>AddScoutLlm</c>. The ffmpeg, font, piper, voices, rhubarb, mouths, presenters and face models paths come from
+    /// <see cref="OperatorMediaOptions"/>, which the caller binds.
     /// </summary>
     public static IServiceCollection AddYouTubeOperator(this IServiceCollection services)
     {
@@ -76,6 +76,10 @@ public static class OperatorServiceCollectionExtensions
         services.AddSingleton<ThumbnailMaker>();
         services.AddSingleton<AssemblyStage>();
         services.AddSingleton<TranscriptionStage>();
+        services.AddSingleton<BuiltInPresenters>();
+        services.TryAddSingleton<IOnnxRunner, OnnxRunner>();
+        services.AddSingleton<IFaceMouth, FaceMouth>();
+        services.AddSingleton<PresenterStage>();
         return services;
     }
 
@@ -115,5 +119,6 @@ public static class OperatorServiceCollectionExtensions
         (YouTubeOperatorPlugin.ReorderScenes, ["project_id", "scene_ids"]),
         (YouTubeOperatorPlugin.ProduceProject, ["project_id"]),
         (YouTubeOperatorPlugin.DelegateProject, ["project_id"]),
+        (YouTubeOperatorPlugin.ChangePresenter, ["project_id"]),
     ];
 }
