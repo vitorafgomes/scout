@@ -73,6 +73,7 @@ public sealed class OperatorGrpcTests
             ["RegenerateNarration"] = await Denied(() => client.RegenerateNarrationAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
             ["RequestPresenter"] = await Denied(() => client.RequestPresenterAsync(new RequestPresenterRequest { ProjectId = queued.Id, Feedback = "Smile." }).ResponseAsync),
             ["UsePresenterVersion"] = await Denied(() => client.UsePresenterVersionAsync(new UsePresenterVersionRequest { ProjectId = queued.Id }).ResponseAsync),
+            ["RemovePresenterVersion"] = await Denied(() => client.RemovePresenterVersionAsync(new RemovePresenterVersionRequest { ProjectId = queued.Id }).ResponseAsync),
             ["ListBuiltInPresenters"] = await Denied(() => client.ListBuiltInPresentersAsync(new ListBuiltInPresentersRequest()).ResponseAsync),
             ["EditScenePicturePrompt"] = await Denied(() => client.EditScenePicturePromptAsync(new EditScenePicturePromptRequest { ProjectId = queued.Id, SceneId = "s1", Prompt = "A river." }).ResponseAsync),
             ["RegenerateScenePicture"] = await Denied(() => client.RegenerateScenePictureAsync(new SceneRequest { ProjectId = queued.Id, SceneId = "s1" }).ResponseAsync),
@@ -1510,5 +1511,54 @@ public sealed class OperatorGrpcTests
         (regenerated.Status, regenerated.Scenes.Single().HasVisualFile, regenerated.Scenes.Single().Narration).ShouldBe(("production_queued", false, "Rivers bend."));
         fromChat.PresenterRequest.ShouldBe("builtin:fox");
         logged[0].Outcome.ShouldBe("asked for a new presenter via chat");
+    }
+
+    [Fact]
+    public async Task RemovePresenterVersion_Removes_A_Version_And_Its_Files_Over_The_Socket_For_The_Desktop_Token_Only()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var workerOnOperator = new GrpcOperator.OperatorClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why the fox crossed", Format = "animated_character", Presenter = "A friendly fox." });
+        var media = (await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id })).Path;
+        foreach (var file in new[] { "presenter-1a2b.png", "presenter-preview-1.mp4", "presenter-3c4d.png", "presenter-preview-2.mp4" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(media, file), "media");
+        }
+
+        Scout.ControlPlane.Operator.PresenterVersion Made(string file, string preview) =>
+            new(file, $"Prompt of {file}", string.Empty, preview, null, DateTimeOffset.UnixEpoch, "generated");
+        await host.Services.GetRequiredService<JsonFileOperatorStore>().UpdateProjectsAsync(
+            projects =>
+            {
+                var index = projects.FindIndex(p => p.Id == started.Id);
+                projects[index] = projects[index] with
+                {
+                    Status = "script_ready",
+                    PresenterVersions = [Made("presenter-1a2b.png", "presenter-preview-1.mp4"), Made("presenter-3c4d.png", "presenter-preview-2.mp4")],
+                    PresenterFile = "presenter-3c4d.png",
+                    PresenterPreviewFile = "presenter-preview-2.mp4",
+                    PresenterSource = "generated",
+                };
+                return 0;
+            },
+            CancellationToken.None);
+
+        var workerRemoval = await Denied(() => workerOnOperator.RemovePresenterVersionAsync(new RemovePresenterVersionRequest { ProjectId = started.Id, Index = 0 }).ResponseAsync);
+        var currentRemoval = await Denied(() => desktop.RemovePresenterVersionAsync(new RemovePresenterVersionRequest { ProjectId = started.Id, Index = 1 }).ResponseAsync);
+        var removed = await desktop.RemovePresenterVersionAsync(new RemovePresenterVersionRequest { ProjectId = started.Id, Index = 0 });
+        var read = await desktop.GetProjectAsync(new GetProjectRequest { Id = started.Id });
+
+        (workerRemoval.StatusCode, workerRemoval.Status.Detail).ShouldBe((StatusCode.PermissionDenied, "This caller may not call /scout.controlplane.v1.Operator/RemovePresenterVersion."));
+        (currentRemoval.StatusCode, currentRemoval.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The current presenter cannot be removed; choose another version first."));
+        removed.PresenterVersions.Select(v => v.File).ShouldBe(["presenter-3c4d.png"]);
+        read.PresenterVersions.Select(v => (v.File, v.PreviewFile)).ShouldBe([("presenter-3c4d.png", "presenter-preview-2.mp4")]);
+        (read.Status, read.PresenterFile, read.PresenterPreviewFile).ShouldBe(("script_ready", "presenter-3c4d.png", "presenter-preview-2.mp4"));
+        File.Exists(Path.Combine(media, "presenter-1a2b.png")).ShouldBeFalse();
+        File.Exists(Path.Combine(media, "presenter-preview-1.mp4")).ShouldBeFalse();
+        File.Exists(Path.Combine(media, "presenter-3c4d.png")).ShouldBeTrue();
     }
 }

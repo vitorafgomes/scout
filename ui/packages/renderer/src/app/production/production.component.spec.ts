@@ -185,6 +185,7 @@ function makeBridge(overrides: Record<string, unknown> = {}) {
     operatorRegeneratePresenter: vi.fn(async () => project()),
     operatorRequestPresenter: vi.fn(async () => project()),
     operatorUsePresenterVersion: vi.fn(async () => project()),
+    operatorRemovePresenterVersion: vi.fn(async () => project()),
     operatorEditScenePicturePrompt: vi.fn(async () => project()),
     operatorRegenerateScenePicture: vi.fn(async () => project()),
     operatorAttachSceneMedia: vi.fn(async () => ({
@@ -270,6 +271,51 @@ function pointer(
 function boxStyle(fixture: ComponentFixture<ProductionComponent>, testId: string): string[] {
   const box = el(fixture, testId)!.style;
   return [box.left, box.top, box.width, box.height];
+}
+
+const BLOCK_HELP: readonly (readonly [string, string])[] = [
+  [
+    'mandate',
+    'What the channel is for: who it speaks to, what it covers and how it sounds. Scout reads it before every topic, script and picture.',
+  ],
+  [
+    'make-a-video',
+    'One topic starts a project. Scout researches it, writes the script, then waits for you at every step that costs something or goes public.',
+  ],
+  [
+    'topic-candidates',
+    'The angles Scout found for this topic before writing. They stay here for reference once the script exists.',
+  ],
+  [
+    'script',
+    "The hook, the sections and the close, in the words the narration will say. Edit a scene's text below to change it.",
+  ],
+  [
+    'claims',
+    'Facts the script states that a viewer could dispute. Scout looked for a source for each one. Supported keeps the line; Unsupported rewrites without it; Waive keeps it without a source, with your reason. Production waits until every claim is decided.',
+  ],
+  [
+    'presenter',
+    'The character that speaks the whole video. Scout makes it from the script as soon as the script is ready, finds the mouth on the picture and shows a short preview. Ask for changes in plain words; every request makes a new version you can switch back to.',
+  ],
+  [
+    'scenes',
+    'The video, one scene per sentence group: its narration, its picture and the presenter over it. Produce makes the narration and pictures; Assemble joins them into the file.',
+  ],
+  [
+    'background',
+    'The picture behind any scene that has none of its own. Without it, that scene is a dark card with its text.',
+  ],
+  [
+    'recording',
+    'The video you recorded. Scout transcribes it on this machine and cuts the scenes from it; nothing is uploaded.',
+  ],
+];
+
+function styleText(): string {
+  return Array.from(document.querySelectorAll('style'))
+    .map((style) => style.textContent ?? '')
+    .join('\n');
 }
 
 describe('ProductionComponent', () => {
@@ -722,7 +768,7 @@ describe('ProductionComponent', () => {
       '00:00 Intro',
       'Span<T> is a ref struct.',
       'Risk: low',
-      'https://learn.microsoft.com/dotnet/api/system.span-1',
+      'learn.microsoft.com',
     ]) {
       expect(detail).toContain(part);
     }
@@ -751,23 +797,30 @@ describe('ProductionComponent', () => {
     ]);
   });
 
-  it('a source link is shown as text with a copy button, never as a link the window could follow', async () => {
+  it('a source is a chip with its domain and a Copy link that copies the whole URL, never a link the window could follow', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    const fixture = await mount(
-      makeBridge({ operatorProjects: vi.fn(async () => ({ projects: [project()] })) }),
-    );
+    const odd = project({
+      claims: [
+        { ...project().claims[0]!, sourceUrls: [project().claims[0]!.sourceUrls[0]!, 'not a url'] },
+      ],
+    });
+    const fixture = await mount(makeBridge(listing(odd)));
     await click(fixture, 'project-p1');
 
     const claim = el(fixture, 'claim-c1')!;
-    (Array.from(claim.querySelectorAll('button')) as HTMLButtonElement[])
-      .find((b) => b.textContent?.trim() === 'Copy')!
-      .click();
+    const chips = [0, 1].map((i) => [
+      text(fixture, `claim-source-c1-${i}`),
+      el(fixture, `claim-source-c1-${i}`)!.getAttribute('title'),
+      text(fixture, `claim-copy-c1-${i}`),
+    ]);
+    await click(fixture, 'claim-copy-c1-0');
 
     expect(claim.querySelector('a')).toBeNull();
-    expect(claim.querySelector('code')?.textContent).toBe(
-      'https://learn.microsoft.com/dotnet/api/system.span-1',
-    );
+    expect(chips).toEqual([
+      ['learn.microsoft.com', 'https://learn.microsoft.com/dotnet/api/system.span-1', 'Copy link'],
+      ['not a url', 'not a url', 'Copy link'],
+    ]);
     expect(writeText.mock.calls).toEqual([
       ['https://learn.microsoft.com/dotnet/api/system.span-1'],
     ]);
@@ -785,6 +838,7 @@ describe('ProductionComponent', () => {
 
     await click(fixture, 'supported-c1');
     const afterSupported = text(fixture, 'claim-status-c1');
+    await click(fixture, 'claim-change-c1');
     await click(fixture, 'unsupported-c1');
 
     expect(bridge.operatorDecideClaim.mock.calls).toEqual([
@@ -1770,8 +1824,8 @@ describe('ProductionComponent', () => {
     ).map((n) => n.textContent?.trim());
 
     expect(order).toEqual(['Span is a view over memory.', 'It never allocates.']);
-    expect(el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value).toBe(
-      'A ruler laid over a row of bytes',
+    expect(text(fixture, 'scene-picture-prompt-line-s1')).toBe(
+      'Picture prompt: A ruler laid over a row of bytes',
     );
     expect(text(fixture, 'scene-status-s1')).toBe('ready');
     expect(text(fixture, 'scene-sources-s1')).toBe('Audio: generated · Picture: your file');
@@ -2762,7 +2816,7 @@ describe('ProductionComponent', () => {
       text(fixture, 'scene-picture-regenerate-s1'),
       text(fixture, 'scene-attach-visual-s1'),
       text(fixture, 'scene-sources-s1'),
-      el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value,
+      text(fixture, 'scene-picture-prompt-line-s1'),
     ];
     const preview = [
       el(fixture, 'scene-preview-presenter-s1')!.getAttribute('src'),
@@ -2787,7 +2841,7 @@ describe('ProductionComponent', () => {
       'Regenerate picture',
       'Attach image',
       'Audio: generated · Picture: presenter',
-      'A ruler laid over a row of bytes',
+      'Picture prompt: A ruler laid over a row of bytes',
     ]);
     expect(preview).toEqual([
       'scout-media://p1/owner-presenter-0a1b2c3d4e5f.png?v=2026-11-03T09%3A05%3A00Z',
@@ -2948,7 +3002,10 @@ describe('ProductionComponent', () => {
   });
 
   it('a change request sends the feedback and the versions strip makes an older version current', async () => {
-    const older = versioned({ presenterFile: 'presenter-1.png' });
+    const older = versioned({
+      presenterFile: 'presenter-1.png',
+      presenterPreviewFile: 'presenter-preview-1.mp4',
+    });
     const bridge = makeBridge({
       ...listing(versioned()),
       operatorReadiness: vi.fn(async () => ({ ...fullReadiness, picturesLeftToday: 37 })),
@@ -2977,7 +3034,7 @@ describe('ProductionComponent', () => {
       el(fixture, `presenter-current-${i}`) !== null,
       el(fixture, `presenter-use-${i}`) !== null,
     ]);
-    const budget = text(fixture, 'presenter-budget');
+    const header = text(fixture, 'presenter-header');
     await click(fixture, 'presenter-use-0');
 
     expect(changeAtFirst).toBe(true);
@@ -3002,7 +3059,7 @@ describe('ProductionComponent', () => {
         false,
       ],
     ]);
-    expect(budget).toBe('37 of 40 pictures left today');
+    expect(header).toBe('Version 2 of 2 · Generated · 37 of 40 pictures left today');
     expect(bridge.operatorUsePresenterVersion.mock.calls).toEqual([
       [{ projectId: 'p1', index: 0 }],
     ]);
@@ -3105,6 +3162,11 @@ describe('ProductionComponent', () => {
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
+    const folded = [
+      text(fixture, 'scene-picture-prompt-line-s1'),
+      el(fixture, 'scene-picture-prompt-s1'),
+    ];
+    await click(fixture, 'scene-picture-prompt-edit-s1');
     const unchanged = el<HTMLButtonElement>(fixture, 'scene-picture-prompt-save-s1')!.disabled;
     type(fixture, 'scene-picture-prompt-s1', '   ');
     await settle(fixture);
@@ -3116,33 +3178,41 @@ describe('ProductionComponent', () => {
     await settle(fixture);
     const tooLong = el<HTMLButtonElement>(fixture, 'scene-picture-prompt-save-s1')!.disabled;
     await click(fixture, 'scene-picture-prompt-cancel-s1');
-    const cancelled = el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value;
+    const cancelled = [
+      el(fixture, 'scene-picture-prompt-s1'),
+      text(fixture, 'scene-picture-prompt-line-s1'),
+    ];
+    await click(fixture, 'scene-picture-prompt-edit-s1');
     type(fixture, 'scene-picture-prompt-s1', '  A river seen from above  ');
     await settle(fixture);
     await click(fixture, 'scene-picture-prompt-save-s1');
-    const saved = el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value;
+    const saved = [
+      el(fixture, 'scene-picture-prompt-s1'),
+      text(fixture, 'scene-picture-prompt-line-s1'),
+    ];
     await click(fixture, 'scene-picture-regenerate-s1');
     await click(fixture, 'project-p2');
     const animatedPreview = [
       el(fixture, 'scene-image-s1')!.getAttribute('src'),
       el(fixture, 'scene-presenter-badge-s1')!.getAttribute('src'),
-      el(fixture, 'scene-picture-prompt-s1') !== null,
+      el(fixture, 'scene-picture-prompt-edit-s1') !== null,
     ];
     await click(fixture, 'project-p3');
     const ownPictures = [
-      el(fixture, 'scene-picture-prompt-s1'),
+      el(fixture, 'scene-picture-prompt-edit-s1'),
       el(fixture, 'scene-picture-regenerate-s1'),
       text(fixture, 'scene-s1').includes('Picture prompt: A ruler laid over a row of bytes'),
     ];
 
+    expect(folded).toEqual(['Picture prompt: A ruler laid over a row of bytes', null]);
     expect(unchanged).toBe(true);
     expect(empty).toEqual(['A picture prompt is 1 to 700 characters.', true]);
     expect(tooLong).toBe(true);
-    expect(cancelled).toBe('A ruler laid over a row of bytes');
+    expect(cancelled).toEqual([null, 'Picture prompt: A ruler laid over a row of bytes']);
     expect(bridge.operatorEditScenePicturePrompt.mock.calls).toEqual([
       [{ projectId: 'p1', sceneId: 's1', prompt: 'A river seen from above' }],
     ]);
-    expect(saved).toBe('A river seen from above');
+    expect(saved).toEqual([null, 'Picture prompt: A river seen from above']);
     expect(bridge.operatorRegenerateScenePicture.mock.calls).toEqual([
       [{ projectId: 'p1', sceneId: 's1' }],
     ]);
@@ -3173,8 +3243,9 @@ describe('ProductionComponent', () => {
       el<HTMLTextAreaElement>(fixture, 'presenter-prompt')!.value,
       el<HTMLTextAreaElement>(fixture, 'presenter-feedback')!.value,
       el<HTMLSelectElement>(fixture, 'presenter-builtin')!.value,
-      el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')!.value,
+      el<HTMLTextAreaElement>(fixture, 'scene-picture-prompt-s1')?.value ?? null,
     ];
+    await click(fixture, 'scene-picture-prompt-edit-s1');
     type(fixture, 'presenter-prompt', 'A robot with a red scarf');
     type(fixture, 'presenter-feedback', 'Make the robot smile');
     choose(fixture, 'presenter-builtin', 'kofi');
@@ -3196,7 +3267,7 @@ describe('ProductionComponent', () => {
       'A tall robot with round glasses in a workshop, flat cartoon',
       '',
       'ada',
-      'A ruler laid over a row of bytes',
+      null,
     ]);
   });
 
@@ -3274,5 +3345,596 @@ describe('ProductionComponent', () => {
       ),
     ).toEqual(['generated_pictures']);
     expect(afterStart).toBe('format-animated_character');
+  });
+
+  it('Channel holds the Mandate and What Scout can make, open while no mandate is saved and folded once one is, with the saved date, the default format and what Scout can make on one line', async () => {
+    const able = { ...fullReadiness, lipSyncAvailable: true };
+    const bridge = makeBridge({
+      operatorReadiness: vi.fn(async () => able),
+      operatorSaveMandate: vi.fn(async () => ({
+        ...mandate,
+        defaultFormat: 'own_pictures' as const,
+      })),
+    });
+    const fixture = await mount(bridge);
+    const channel = el<HTMLDetailsElement>(fixture, 'channel')!;
+    const before = [
+      channel.open,
+      text(fixture, 'channel-summary'),
+      channel.contains(el(fixture, 'mandate')),
+      channel.contains(el(fixture, 'readiness')),
+    ];
+    type(fixture, 'mandate-objective', 'Grow a .NET channel');
+    type(fixture, 'mandate-language', 'en');
+    await click(fixture, 'mandate-save');
+    const saved = [channel.open, text(fixture, 'channel-summary')];
+    TestBed.resetTestingModule();
+    const reopened = await mount(
+      makeBridge({ operatorMandate: vi.fn(async () => ({ mandate: { ...mandate } })) }),
+    );
+
+    const at = formatDate(mandate.updatedAt!, 'yyyy-MM-dd HH:mm', 'en-US');
+    expect(before).toEqual([
+      true,
+      'No mandate yet · Can make: Narration, Generated pictures, Animated character',
+      true,
+      true,
+    ]);
+    expect(saved).toEqual([
+      false,
+      `Saved ${at} · Default format: Your own pictures · Can make: Narration, Generated pictures, Animated character`,
+    ]);
+    expect([
+      el<HTMLDetailsElement>(reopened, 'channel')!.open,
+      text(reopened, 'channel-summary'),
+    ]).toEqual([
+      false,
+      `Saved ${at} · Default format: Generated pictures · Can make: Generated pictures`,
+    ]);
+  });
+
+  it('Make a video is one row with the topic and Start, and More options folds the format, the direction and the presenter description', async () => {
+    const fixture = await mount(
+      makeBridge({
+        operatorReadiness: vi.fn(async () => ({ ...readiness, lipSyncAvailable: true })),
+      }),
+    );
+    el<HTMLInputElement>(fixture, 'format-animated_character')!.click();
+    await settle(fixture);
+    const options = el<HTMLDetailsElement>(fixture, 'start-options')!;
+
+    expect(
+      Array.from(el(fixture, 'topic')!.parentElement!.children).map((c) =>
+        c.getAttribute('data-test'),
+      ),
+    ).toEqual(['topic', 'start-project']);
+    expect(text(fixture, 'start-project')).toBe('Start');
+    expect([options.open, options.querySelector('summary')?.textContent?.trim()]).toEqual([
+      false,
+      'More options',
+    ]);
+    expect(
+      ['format-generated_pictures', 'format-own_video', 'start-direction', 'start-presenter'].map(
+        (id) => options.contains(el(fixture, id)),
+      ),
+    ).toEqual([true, true, true, true]);
+  });
+
+  it('the project list and the open project share one grid that puts the list beside the detail on a page at least 960 pixels wide, and the list alone fills it while no project is open', async () => {
+    const fixture = await mount(makeBridge(listing(project())));
+    const work = el(fixture, 'work')!;
+    const closed = [
+      work.classList.contains('work--open'),
+      Array.from(work.children).map((c) => c.getAttribute('data-test')),
+    ];
+    await click(fixture, 'project-p1');
+    const opened = [
+      work.classList.contains('work--open'),
+      Array.from(work.children).map((c) => c.getAttribute('data-test')),
+    ];
+
+    expect(closed).toEqual([false, ['projects']]);
+    expect(opened).toEqual([true, ['projects', 'project-detail']]);
+    expect(styleText()).toMatch(
+      /@container \(min-width: 960px\)\s*\{\s*\.work--open\[[^\]]+\]\s*\{\s*display: grid;\s*grid-template-columns: minmax\(220px, 300px\) minmax\(0, 1fr\);/,
+    );
+  });
+
+  it('the title row carries Delegate, Delete project and the close mark at its right, after the title', async () => {
+    const fixture = await mount(makeBridge(listing(project())));
+    await click(fixture, 'project-p1');
+
+    expect(
+      Array.from(el(fixture, 'project-title-row')!.children).map(
+        (c) => c.getAttribute('data-test') ?? `${c.tagName}: ${c.textContent?.trim()}`,
+      ),
+    ).toEqual(['H2: Span<T> in C#', 'delegate', 'delete', 'project-close']);
+    expect(el(fixture, 'project-close')!.getAttribute('aria-label')).toBe('Close the project');
+  });
+
+  it('the close mark and a second click on the open project close the detail', async () => {
+    const bridge = makeBridge(listing(project(), project({ id: 'p2', topic: 'Records in C#' })));
+    const fixture = await mount(bridge);
+    const state = () => [
+      el(fixture, 'project-detail') !== null,
+      el(fixture, 'project-p1')!.classList.contains('project--selected'),
+    ];
+
+    await click(fixture, 'project-p1');
+    const opened = state();
+    await click(fixture, 'project-close');
+    const closedByMark = state();
+    await click(fixture, 'project-p1');
+    await click(fixture, 'project-p1');
+    const closedByList = state();
+    await click(fixture, 'project-p1');
+    await click(fixture, 'project-p2');
+    const switched = [text(fixture, 'project-title-row'), el(fixture, 'project-detail') !== null];
+
+    expect(opened).toEqual([true, true]);
+    expect(closedByMark).toEqual([false, false]);
+    expect(closedByList).toEqual([false, false]);
+    expect(switched).toEqual(['Records in C# Delegate Delete project ×', true]);
+    expect(bridge.operatorProject.mock.calls).toEqual([
+      [{ id: 'p1' }],
+      [{ id: 'p1' }],
+      [{ id: 'p1' }],
+      [{ id: 'p2' }],
+    ]);
+  });
+
+  it('a block the owner unfolded on one project starts folded again on the next one, and stays unfolded through the 10 s refresh', async () => {
+    vi.useFakeTimers();
+    const fixture = await mount(makeBridge(listing(project(), project({ id: 'p2' }))));
+    await click(fixture, 'project-p1');
+    el<HTMLDetailsElement>(fixture, 'candidates')!.open = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settle(fixture);
+    const afterRefresh = el<HTMLDetailsElement>(fixture, 'candidates')!.open;
+    await click(fixture, 'project-p2');
+
+    expect([afterRefresh, el<HTMLDetailsElement>(fixture, 'candidates')!.open]).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it('the detail follows the work: Topic candidates, Script, Claims, Presenter, Scenes and Background, with Recording last in an own video project', async () => {
+    const fixture = await mount(
+      makeBridge(listing(character(), project({ id: 'p2', format: 'own_video' }))),
+    );
+    const blocks = () =>
+      Array.from(el(fixture, 'project-detail')!.querySelectorAll('h3')).map((h) =>
+        h.textContent?.trim(),
+      );
+
+    await click(fixture, 'project-p1');
+    const animated = blocks();
+    await click(fixture, 'project-p2');
+    const ownVideo = blocks();
+
+    expect(animated).toEqual([
+      'Topic candidates',
+      'Script',
+      'Claims',
+      'Presenter',
+      'Scenes',
+      'Background',
+    ]);
+    expect(ownVideo).toEqual(['Topic candidates', 'Script', 'Claims', 'Scenes', 'Recording']);
+  });
+
+  it('Topic candidates fold once the script exists, and Claims stay open while any claim is pending, ignoring a click on their title, and fold once every claim is decided', async () => {
+    const bridge = makeBridge({
+      ...listing(project(), project({ id: 'p2', script: null, claims: [] })),
+      operatorDecideClaim: vi.fn(async () =>
+        project({ claims: [{ ...project().claims[0]!, status: 'supported' }] }),
+      ),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const claims = el<HTMLDetailsElement>(fixture, 'claims')!;
+    const titleClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    claims.querySelector('summary')!.dispatchEvent(titleClick);
+    await settle(fixture);
+    const pending = [
+      el<HTMLDetailsElement>(fixture, 'candidates')!.open,
+      claims.open,
+      titleClick.defaultPrevented,
+    ];
+    await click(fixture, 'supported-c1');
+    const decided = [claims.open, el(fixture, 'claims-pending')];
+    await click(fixture, 'project-p2');
+
+    expect(pending).toEqual([false, true, true]);
+    expect(decided).toEqual([false, null]);
+    expect(el<HTMLDetailsElement>(fixture, 'candidates')!.open).toBe(true);
+  });
+
+  it('the readiness failure shows on the Channel summary while the details is closed behind a saved mandate, and the message inside stays', async () => {
+    const fixture = await mount(
+      makeBridge({
+        operatorMandate: vi.fn(async () => ({ mandate: { ...mandate } })),
+        operatorReadiness: vi.fn(async () => {
+          throw refusedWith('scout:operator.readiness', 'The readiness check failed.');
+        }),
+      }),
+    );
+    const channel = el<HTMLDetailsElement>(fixture, 'channel')!;
+
+    expect([
+      channel.open,
+      el(fixture, 'channel-summary')!
+        .querySelector('[data-test="channel-error"]')
+        ?.textContent?.trim(),
+      el(fixture, 'readiness-error')?.textContent?.trim(),
+    ]).toEqual([false, 'The readiness check failed.', 'The readiness check failed.']);
+  });
+
+  it('the own-picture fold starts open only when the project has a presenter picture and no mouth box', async () => {
+    const folds = async (project: OperatorProjectDto): Promise<boolean | undefined> => {
+      TestBed.resetTestingModule();
+      const fixture = await mount(makeBridge(listing(project)));
+      await click(fixture, 'project-p1');
+      return el<HTMLDetailsElement>(fixture, 'presenter-own')?.open;
+    };
+    const picture = 'owner-presenter-0a1b2c3d4e5f.png';
+    const result = [
+      await folds(character({ presenterFile: picture, mouthBox: null })),
+      await folds(
+        character({
+          presenterFile: picture,
+          mouthBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.05 },
+        }),
+      ),
+      await folds(character({ presenterFile: null })),
+    ];
+    TestBed.resetTestingModule();
+
+    expect(result).toEqual([true, false, false]);
+  });
+
+  it('the Presenter block has two columns: the preview, or the picture without one, with the versions as thumbnails under it, then the change request as the primary action with the full prompt and the built-in presenters, the picture and the mouth folded', async () => {
+    const bridge = makeBridge({
+      ...listing(
+        versioned({ mouthBox: { x: 0.43, y: 0.62, width: 0.14, height: 0.07 } }),
+        versioned({ id: 'p2', presenterPreviewFile: null }),
+      ),
+      operatorReadiness: vi.fn(async () => ({
+        ...fullReadiness,
+        builtinPresenters: [{ id: 'ada', label: 'Ada' }],
+      })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const block = el(fixture, 'presenter')!;
+    const [view, controls] = Array.from(block.children);
+    const prompt = el<HTMLDetailsElement>(fixture, 'presenter-prompt-options')!;
+    const own = el<HTMLDetailsElement>(fixture, 'presenter-own')!;
+    const thumbnail = el(fixture, 'presenter-use-0')!;
+    const layout = [
+      Array.from(block.children).map((c) => c.className),
+      Array.from(view!.children).map((c) => c.getAttribute('data-test')),
+      controls!.querySelector('textarea')?.getAttribute('data-test'),
+      el(fixture, 'presenter-change')!.classList.contains('btn--primary'),
+      [prompt.open, prompt.querySelector('summary')?.textContent?.trim()],
+      ['presenter-prompt', 'presenter-safety', 'presenter-generate'].map((id) =>
+        prompt.contains(el(fixture, id)),
+      ),
+      [own.open, own.querySelector('summary')?.textContent?.trim()],
+      ['presenter-builtin', 'presenter-attach', 'mouth-area'].map((id) =>
+        own.contains(el(fixture, id)),
+      ),
+      [thumbnail.tagName, thumbnail.querySelector('img') !== null],
+      text(fixture, 'project-presenter'),
+      el(fixture, 'project-presenter')!.previousElementSibling!.contains(
+        el(fixture, 'help-presenter'),
+      ),
+    ];
+    await click(fixture, 'project-p2');
+    const pictureOnly = [
+      el(fixture, 'presenter-preview'),
+      el(fixture, 'presenter-picture')!.getAttribute('src'),
+    ];
+
+    expect(layout).toEqual([
+      ['presenter__view', 'presenter__controls'],
+      ['presenter-preview', 'presenter-versions'],
+      'presenter-feedback',
+      true,
+      [false, 'Edit the full prompt'],
+      [true, true, true],
+      [false, "Use one of Scout's presenters, or your own picture"],
+      [true, true, true],
+      ['BUTTON', true],
+      'Presenter: A friendly robot in a workshop',
+      true,
+    ]);
+    expect(pictureOnly).toEqual([
+      null,
+      'scout-media://p2/presenter-2.png?v=2026-11-03T09%3A05%3A00Z',
+    ]);
+    expect(styleText()).toMatch(
+      /@container detail \(max-width: 720px\)\s*\{\s*\.presenter\[[^\]]+\]\s*\{\s*grid-template-columns: minmax\(0, 1fr\);/,
+    );
+  });
+
+  it('a presenter version that is not current carries a remove mark that sends its 0-based index and nothing else, absent on the current one and while presenting, and a refusal shows under the block', async () => {
+    const three = versioned({
+      presenterFile: 'presenter-2.png',
+      presenterVersions: [
+        { ...versioned().presenterVersions[0]!, file: 'presenter-0.png' },
+        ...versioned().presenterVersions,
+      ],
+    });
+    let refuse = false;
+    const bridge = makeBridge({
+      ...listing(three, versioned({ id: 'p2', status: 'presenting' })),
+      operatorRemovePresenterVersion: vi.fn(async () => {
+        if (refuse) {
+          throw refusedWith(
+            'scout:operator.presenterVersionRemoval',
+            'The current presenter cannot be removed; choose another version first.',
+          );
+        }
+        return versioned();
+      }),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const marks = [0, 1, 2].map((i) => el(fixture, `presenter-version-remove-${i}`) !== null);
+    const label = el(fixture, 'presenter-version-remove-0')!.getAttribute('aria-label');
+    await click(fixture, 'presenter-version-remove-0');
+    const afterRemoval = [
+      el(fixture, 'presenter-version-2'),
+      el<HTMLImageElement>(fixture, 'presenter-version-0')!
+        .querySelector('img')!
+        .getAttribute('src'),
+    ];
+    refuse = true;
+    await click(fixture, 'presenter-version-remove-0');
+    const refused = text(fixture, 'presenter-error');
+    await click(fixture, 'project-p2');
+    const presenting = [0, 1].map((i) => el(fixture, `presenter-version-remove-${i}`));
+
+    expect(marks).toEqual([true, true, false]);
+    expect(label).toBe('Remove presenter version 1');
+    expect(bridge.operatorRemovePresenterVersion.mock.calls).toEqual([
+      [{ projectId: 'p1', index: 0 }],
+      [{ projectId: 'p1', index: 0 }],
+    ]);
+    expect(bridge.operatorUsePresenterVersion).not.toHaveBeenCalled();
+    expect(afterRemoval).toEqual([
+      null,
+      'scout-media://p1/presenter-1.png?v=2026-11-05T10%3A00%3A00Z',
+    ]);
+    expect(refused).toBe('The current presenter cannot be removed; choose another version first.');
+    expect(presenting).toEqual([null, null]);
+  });
+
+  it('a scene is a card: the picture with Regenerate picture and Attach image on it, the narration beside it with the picture prompt on one line, Regenerate scene and Regenerate narration under the Narration menu, and Edit text and Lock in the row', async () => {
+    const pictured = scene({ visualSource: 'generated', visualFile: 'scene-s1.png' });
+    const fixture = await mount(
+      makeBridge(listing(character({ presenterFile: 'presenter-1.png', scenes: [pictured] }))),
+    );
+    await click(fixture, 'project-p1');
+    const card = el(fixture, 'scene-s1')!;
+    const [media, body] = Array.from(card.children);
+    const menu = el<HTMLDetailsElement>(fixture, 'scene-narration-menu-s1')!;
+    const edit = el(fixture, 'scene-edit-s1')!;
+
+    expect([media!.className, body!.className]).toEqual(['scene__media', 'scene__body']);
+    expect(
+      ['scene-preview-s1', 'scene-picture-regenerate-s1', 'scene-attach-visual-s1'].map((id) =>
+        media!.contains(el(fixture, id)),
+      ),
+    ).toEqual([true, true, true]);
+    expect(
+      [
+        'scene-narration',
+        'scene-picture-prompt-line-s1',
+        'scene-picture-prompt-edit-s1',
+        'scene-audio-row-s1',
+      ].map((id) => body!.contains(el(fixture, id))),
+    ).toEqual([true, true, true, true]);
+    expect([
+      menu.open,
+      menu.querySelector('summary')?.textContent?.trim(),
+      Array.from(menu.querySelectorAll('button')).map((b) => b.getAttribute('data-test')),
+    ]).toEqual([false, 'Narration', ['scene-regenerate-s1', 'scene-narration-regenerate-s1']]);
+    expect([
+      menu.contains(edit),
+      edit.parentElement!.contains(el(fixture, 'scene-lock-s1')),
+      text(fixture, 'scene-picture-prompt-edit-s1'),
+    ]).toEqual([false, true, 'Edit prompt']);
+  });
+
+  it('claims read at a glance: a stripe and a chip by risk, pending first under the count production waits for, decided ones folded under Decided (n) with Change, and Supported, Unsupported and Waive as one segmented control with the waive note', async () => {
+    const claim = project().claims[0]!;
+    const fixture = await mount(
+      makeBridge(
+        listing(
+          project({
+            claims: [
+              { ...claim, id: 'c1', risk: 'low' },
+              { ...claim, id: 'c2', risk: 'high', status: 'supported' },
+              { ...claim, id: 'c3', risk: 'medium' },
+            ],
+          }),
+        ),
+      ),
+    );
+    await click(fixture, 'project-p1');
+    const decided = el<HTMLDetailsElement>(fixture, 'claims-decided')!;
+    const control = el(fixture, 'supported-c1')!.parentElement!;
+    const glance = [
+      Array.from(el(fixture, 'claims-open')!.children).map((c) => c.getAttribute('data-test')),
+      text(fixture, 'claims-pending'),
+      [decided.open, decided.querySelector('summary')?.textContent?.trim()],
+      decided.contains(el(fixture, 'claim-c2')),
+      ['c1', 'c2', 'c3'].map((id) => [
+        Array.from(el(fixture, `claim-${id}`)!.classList).find((c) => c.startsWith('claim--')),
+        text(fixture, `claim-risk-${id}`),
+        el(fixture, `claim-risk-${id}`)!.classList.contains(
+          `chip--${id === 'c1' ? 'low' : id === 'c2' ? 'high' : 'medium'}`,
+        ),
+      ]),
+      [control.className, control.getAttribute('role')],
+      Array.from(control.children).map((b) => [
+        b.getAttribute('data-test'),
+        b.getAttribute('aria-pressed'),
+      ]),
+      [el(fixture, 'supported-c2'), text(fixture, 'claim-change-c2')],
+    ];
+    await click(fixture, 'claim-change-c2');
+    const reopened = el(fixture, 'supported-c2')!.getAttribute('aria-pressed');
+    await click(fixture, 'waive-c1');
+    const waiving = [
+      el(fixture, 'waive-c1')!.getAttribute('aria-pressed'),
+      el(fixture, 'waive-note-c1')!.getAttribute('placeholder'),
+    ];
+
+    expect(glance).toEqual([
+      ['claim-c1', 'claim-c3'],
+      '2 to check · production waits for them',
+      [false, 'Decided (1)'],
+      true,
+      [
+        ['claim--low', 'Risk: low', true],
+        ['claim--high', 'Risk: high', true],
+        ['claim--medium', 'Risk: medium', true],
+      ],
+      ['segmented', 'group'],
+      [
+        ['supported-c1', 'false'],
+        ['unsupported-c1', 'false'],
+        ['waive-c1', 'false'],
+      ],
+      [null, 'Change'],
+    ]);
+    expect(reopened).toBe('true');
+    expect(waiving).toEqual(['true', 'Why this claim needs no source (required)']);
+  });
+
+  it("every block carries a ? beside its title whose text, the page's own, shows on hover or keyboard focus and which does nothing else", async () => {
+    const bridge = makeBridge(
+      listing(
+        character({ claims: [{ ...project().claims[0]! }] }),
+        project({ id: 'p2', format: 'own_video' }),
+      ),
+    );
+    const fixture = await mount(bridge);
+    const marks = () =>
+      Array.from(
+        fixture.nativeElement.querySelectorAll('[data-test^="help-"]') as NodeListOf<HTMLElement>,
+      ).map((b) => [
+        b.getAttribute('data-test')!.slice('help-'.length),
+        b.getAttribute('data-tip'),
+      ]);
+    await click(fixture, 'project-p1');
+    const animated = marks();
+    const claims = el<HTMLDetailsElement>(fixture, 'claims')!;
+    const candidates = el<HTMLDetailsElement>(fixture, 'candidates')!;
+    const before = [claims.open, candidates.open];
+    await click(fixture, 'help-claims');
+    await click(fixture, 'help-topic-candidates');
+    const after = [claims.open, candidates.open];
+    const mark = el(fixture, 'help-claims')!;
+    const shape = [
+      mark.tagName,
+      mark.getAttribute('type'),
+      mark.textContent?.trim(),
+      mark.getAttribute('aria-label'),
+      mark.getAttribute('aria-description') === mark.getAttribute('data-tip'),
+    ];
+    await click(fixture, 'project-p2');
+    const ownVideo = marks();
+
+    const byKey = new Map(BLOCK_HELP);
+    expect(animated).toEqual(
+      [
+        'mandate',
+        'make-a-video',
+        'topic-candidates',
+        'script',
+        'claims',
+        'presenter',
+        'scenes',
+        'background',
+      ].map((key) => [key, byKey.get(key)]),
+    );
+    expect(ownVideo.at(-1)).toEqual(['recording', byKey.get('recording')]);
+    expect(after).toEqual(before);
+    expect(shape).toEqual(['BUTTON', 'button', '?', 'What this block is for', true]);
+    expect(styleText()).toMatch(
+      /\.help\[[^\]]+\]:hover::after,\s*\.help\[[^\]]+\]:focus-visible::after\s*\{\s*content: attr\(data-tip\);/,
+    );
+    expect(bridge.operatorDecideClaim).not.toHaveBeenCalled();
+  });
+
+  it("versions of the same built-in presenter: the one whose picture and preview are the project's is outlined and its duplicate with another preview carries the remove mark, and two with the same picture and preview are both outlined and both carry it while the other remains", async () => {
+    const builtin = {
+      file: 'presenter-builtin-ada.png',
+      prompt: '',
+      feedback: 'builtin:ada',
+      mouthBox: null,
+      source: 'builtin',
+    };
+    const duplicated = character({
+      presenterFile: 'presenter-builtin-ada.png',
+      presenterPreviewFile: 'presenter-preview-2.mp4',
+      presenterSource: 'builtin',
+      presenterVersions: [
+        { ...builtin, previewFile: 'presenter-preview-1.mp4', madeAt: '2026-11-05T10:00:00Z' },
+        { ...builtin, previewFile: 'presenter-preview-2.mp4', madeAt: '2026-11-05T10:05:00Z' },
+      ],
+    });
+    const twins = character({
+      id: 'p2',
+      presenterFile: 'presenter-builtin-ada.png',
+      presenterPreviewFile: null,
+      presenterSource: 'builtin',
+      presenterVersions: [
+        { ...builtin, previewFile: null, madeAt: '2026-11-05T10:00:00Z' },
+        { ...builtin, previewFile: null, madeAt: '2026-11-05T10:05:00Z' },
+      ],
+    });
+    const bridge = makeBridge({
+      ...listing(duplicated, twins),
+      operatorReadiness: vi.fn(async () => ({ ...fullReadiness, picturesLeftToday: 39 })),
+    });
+    const fixture = await mount(bridge);
+    await click(fixture, 'project-p1');
+    const strip = [0, 1].map((i) => [
+      el(fixture, `presenter-version-${i}`)!.classList.contains('version--current'),
+      el(fixture, `presenter-current-${i}`) !== null,
+      el(fixture, `presenter-version-remove-${i}`) !== null,
+      el(fixture, `presenter-use-${i}`) !== null,
+    ]);
+    const header = text(fixture, 'presenter-header');
+    const preview = el(fixture, 'presenter-preview')!.getAttribute('src');
+
+    expect(strip).toEqual([
+      [false, false, true, true],
+      [true, true, false, false],
+    ]);
+    await click(fixture, 'presenter-version-remove-0');
+    await click(fixture, 'project-p2');
+    const twinStrip = [0, 1].map((i) => [
+      el(fixture, `presenter-version-${i}`)!.classList.contains('version--current'),
+      el(fixture, `presenter-version-remove-${i}`) !== null,
+      el(fixture, `presenter-use-${i}`) !== null,
+    ]);
+    expect(twinStrip).toEqual([
+      [true, true, false],
+      [true, true, false],
+    ]);
+    await click(fixture, 'presenter-version-remove-1');
+    expect(header).toBe("Version 2 of 2 · Scout's presenter · 39 of 40 pictures left today");
+    expect(preview).toBe('scout-media://p1/presenter-preview-2.mp4?v=2026-11-05T10%3A05%3A00Z');
+    expect(bridge.operatorRemovePresenterVersion.mock.calls).toEqual([
+      [{ projectId: 'p1', index: 0 }],
+      [{ projectId: 'p2', index: 1 }],
+    ]);
   });
 });

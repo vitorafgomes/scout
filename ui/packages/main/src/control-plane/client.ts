@@ -117,6 +117,7 @@ export interface ControlPlaneClient {
     prompt: string,
   ): Promise<OperatorProjectDto>;
   usePresenterVersion(projectId: string, index: number): Promise<OperatorProjectDto>;
+  removePresenterVersion(projectId: string, index: number): Promise<OperatorProjectDto>;
   editScenePicturePrompt(
     projectId: string,
     sceneId: string,
@@ -985,6 +986,8 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     requestPresenter: (projectId, feedback, prompt) =>
       project('RequestPresenter', { projectId, feedback, prompt }),
     usePresenterVersion: (projectId, index) => project('UsePresenterVersion', { projectId, index }),
+    removePresenterVersion: (projectId, index) =>
+      project('RemovePresenterVersion', { projectId, index }),
     editScenePicturePrompt: (projectId, sceneId, prompt) =>
       project('EditScenePicturePrompt', { projectId, sceneId, prompt }),
     regenerateScenePicture: (projectId, sceneId) =>

@@ -168,6 +168,7 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     regeneratePresenter: mock(async () => project),
     requestPresenter: mock(async () => ({ ...project, presenterRequest: 'first' })),
     usePresenterVersion: mock(async () => project),
+    removePresenterVersion: mock(async () => ({ ...project, presenterVersions: [] })),
     editScenePicturePrompt: mock(async () => ({ ...project, status: 'production_queued' })),
     regenerateScenePicture: mock(async () => ({ ...project, status: 'production_queued' })),
     attachSceneMedia: mock(async () => project),
@@ -894,6 +895,38 @@ describe('registerOperatorHandlers', () => {
     ]);
   });
 
+  it('a presenter version removal forwards the trimmed project id and a non-negative whole index, and refuses a missing id or any other index with the sentence before the control plane', async () => {
+    const removed = await invoke(CHANNEL.operatorPresenterVersionRemoval, {
+      projectId: ' p1 ',
+      index: 0,
+    });
+    await invoke(CHANNEL.operatorPresenterVersionRemoval, { projectId: 'p1', index: 3 });
+    const refused = await Promise.all([
+      ...[-1, 1.5, '2', Number.NaN, undefined].map((index) =>
+        rejection(invoke(CHANNEL.operatorPresenterVersionRemoval, { projectId: 'p1', index })),
+      ),
+      rejection(invoke(CHANNEL.operatorPresenterVersionRemoval, { projectId: '  ', index: 0 })),
+    ]);
+
+    expect(client.removePresenterVersion.mock.calls).toEqual([
+      ['p1', 0],
+      ['p1', 3],
+    ]);
+    expect((removed as OperatorProjectDto).presenterVersions).toEqual([]);
+    expect(client.usePresenterVersion).not.toHaveBeenCalled();
+    expect(refused).toEqual([
+      { code: 'operator/invalid-request', message: 'The project has no presenter version -1.' },
+      { code: 'operator/invalid-request', message: 'The project has no presenter version 1.5.' },
+      { code: 'operator/invalid-request', message: 'The project has no presenter version 2.' },
+      { code: 'operator/invalid-request', message: 'The project has no presenter version NaN.' },
+      {
+        code: 'operator/invalid-request',
+        message: 'The project has no presenter version undefined.',
+      },
+      { code: 'operator/invalid-request', message: 'The project id is required.' },
+    ]);
+  });
+
   it('a scene picture prompt forwards the trimmed text of 1 to 700 characters and refuses an empty or longer one with the sentence, and a picture regeneration forwards both ids', async () => {
     await invoke(CHANNEL.operatorScenePicturePrompt, {
       projectId: ' p1 ',
@@ -1547,7 +1580,7 @@ describe('registerOperatorHandlers', () => {
     });
   });
 
-  it('the returned unregister removes the thirty-five operator handlers', () => {
+  it('the returned unregister removes the thirty-six operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -1579,6 +1612,7 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorPresenterRegeneration,
         CHANNEL.operatorPresenterRequest,
         CHANNEL.operatorPresenterVersion,
+        CHANNEL.operatorPresenterVersionRemoval,
         CHANNEL.operatorScenePicturePrompt,
         CHANNEL.operatorScenePictureRegeneration,
         CHANNEL.operatorSceneMedia,

@@ -40,6 +40,7 @@ service Operator {
   rpc RegeneratePresenter(GetProjectRequest) returns (Project);
   rpc RequestPresenter(RequestPresenterRequest) returns (Project);
   rpc UsePresenterVersion(UsePresenterVersionRequest) returns (Project);
+  rpc RemovePresenterVersion(RemovePresenterVersionRequest) returns (Project);
   rpc ListBuiltInPresenters(ListBuiltInPresentersRequest) returns (BuiltInPresenters);
   rpc EditScenePicturePrompt(EditScenePicturePromptRequest) returns (Project);
   rpc RegenerateScenePicture(SceneRequest) returns (Project);
@@ -240,6 +241,11 @@ message RequestPresenterRequest {
 }
 
 message UsePresenterVersionRequest {
+  string project_id = 1;
+  int32 index = 2;
+}
+
+message RemovePresenterVersionRequest {
   string project_id = 1;
   int32 index = 2;
 }

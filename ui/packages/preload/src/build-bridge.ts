@@ -386,6 +386,12 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       >;
     },
 
+    operatorRemovePresenterVersion(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterVersionRemoval, req) as ReturnType<
+        ScoutBridge['operatorRemovePresenterVersion']
+      >;
+    },
+
     operatorEditScenePicturePrompt(req) {
       return ipc.invoke(CHANNEL.operatorScenePicturePrompt, req) as ReturnType<
         ScoutBridge['operatorEditScenePicturePrompt']
