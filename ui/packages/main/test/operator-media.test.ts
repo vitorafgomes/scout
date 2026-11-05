@@ -278,19 +278,24 @@ describe('the scout-media protocol', () => {
   });
 
   it('answers 404 when the control plane knows no such project, or names no absolute directory', async () => {
-    const { media } = projectWithMedia();
+    const { root, media } = projectWithMedia();
     const missing = async (): Promise<string> => {
       throw new ControlPlaneNotFoundError('Project p9 not found');
     };
-    const relative = async (): Promise<string> => path.relative(process.cwd(), media);
+    const relative = async (): Promise<string> => path.relative(root, media);
+    const cwd = process.cwd();
+    process.chdir(root);
+    try {
+      const statuses = [
+        (await fetchMedia(`${MEDIA_SCHEME}://p9/scene-s1.png`, missing)).status,
+        (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, async () => '')).status,
+        (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, relative)).status,
+      ];
 
-    const statuses = [
-      (await fetchMedia(`${MEDIA_SCHEME}://p9/scene-s1.png`, missing)).status,
-      (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, async () => '')).status,
-      (await fetchMedia(`${MEDIA_SCHEME}://p1/scene-s1.png`, relative)).status,
-    ];
-
-    expect(statuses).toEqual([404, 404, 404]);
+      expect(statuses).toEqual([404, 404, 404]);
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
 
