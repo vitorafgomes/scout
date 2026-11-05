@@ -283,6 +283,8 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     operatorUsePresenterVersion: (_req: PresenterVersionRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
+    operatorRemovePresenterVersion: (_req: PresenterVersionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
     operatorEditScenePicturePrompt: (
       _req: ScenePicturePromptRequest,
     ): Promise<OperatorProjectDto> => rejectNotAvailable(),
@@ -681,6 +683,10 @@ export class ScoutBridgeService {
 
   async operatorUsePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorUsePresenterVersion(req);
+  }
+
+  async operatorRemovePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRemovePresenterVersion(req);
   }
 
   async operatorEditScenePicturePrompt(

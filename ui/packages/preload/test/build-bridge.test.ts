@@ -94,6 +94,7 @@ describe('buildBridge', () => {
       'operatorRegeneratePresenter',
       'operatorRequestPresenter',
       'operatorUsePresenterVersion',
+      'operatorRemovePresenterVersion',
       'operatorEditScenePicturePrompt',
       'operatorRegenerateScenePicture',
       'operatorAttachSceneMedia',
@@ -641,7 +642,7 @@ describe('buildBridge', () => {
     ]);
   });
 
-  it('a presenter request, a presenter version, a scene picture prompt and a scene picture regeneration reach main on their own scout:operator channels with their requests', async () => {
+  it('a presenter request, a presenter version, a presenter version removal, a scene picture prompt and a scene picture regeneration reach main on their own scout:operator channels with their requests', async () => {
     const ipc = makeFakeIpc();
     const bridge = buildBridge(ipc);
 
@@ -651,6 +652,7 @@ describe('buildBridge', () => {
       prompt: 'A robot',
     });
     await bridge.operatorUsePresenterVersion({ projectId: 'p1', index: 2 });
+    await bridge.operatorRemovePresenterVersion({ projectId: 'p1', index: 0 });
     await bridge.operatorEditScenePicturePrompt({
       projectId: 'p1',
       sceneId: 's1',
@@ -661,6 +663,7 @@ describe('buildBridge', () => {
     expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
       [CHANNEL.operatorPresenterRequest, { projectId: 'p1', feedback: 'Older', prompt: 'A robot' }],
       [CHANNEL.operatorPresenterVersion, { projectId: 'p1', index: 2 }],
+      [CHANNEL.operatorPresenterVersionRemoval, { projectId: 'p1', index: 0 }],
       [CHANNEL.operatorScenePicturePrompt, { projectId: 'p1', sceneId: 's1', prompt: 'A river' }],
       [CHANNEL.operatorScenePictureRegeneration, { projectId: 'p1', sceneId: 's1' }],
     ]);

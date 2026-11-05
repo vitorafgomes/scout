@@ -1,0 +1,50 @@
+---
+title: "Production screen: the owner's working area first"
+version: "1.0"
+date: 2026-11-05
+changes: "Initial initiative page: the owner's decisions of 2026-11-05 on the Production screen, from the mockups reviewed that day"
+page_type: roadmap
+status: active
+description: "Initiative: rearrange Scout Desktop's Production screen around the project the owner is working on, with the presenter block in two columns, removable presenter versions, claims readable at a glance, a close for the detail and a help mark on every block."
+source:
+  - chat
+reliability: medium
+---
+
+# Production screen: the owner's working area first
+
+> The project the owner is working on sits at the top of the screen, the channel settings fold away, every block reads at a glance and says what it is for, and a presenter version can be removed.
+
+## Why now
+
+The owner tested phase 8c-B of [[pages/roadmap/youtube-channel-operator]] on 2026-11-05 and said the fields had grown into the wrong places: the project detail at the end of a long scroll under the whole mandate, six things stacked in the Presenter block with two look-alike text boxes, fourteen open picture-prompt boxes on a fourteen-scene list, claims as grey paragraphs, Delete away from the title, a detail that opens and never closes, a duplicate presenter version with no way to remove it, and no explanation of what a block decides. The mockups the owner reviewed that day are the design; this page records them so the desktop lane builds from a written source ([[pages/services/desktop-operator]] states how the screen works once built).
+
+## Decisions (owner, 2026-11-05)
+
+1. **The page.** "Channel" (the mandate and "What Scout can make") is one block, folded once a mandate is saved, with a one-line summary (saved date, default format, what the worker can make) and open on a click. "Make a video" is one line, the topic and Start; the format is the mandate's default; "More options" folds the format radios, the direction and the presenter description. The project list sits beside the project detail on a wide window and above it on a narrow one; a project's status is a chip in the list.
+2. **The project detail.** The title row carries, at its right, Delegate, Delete project and a close mark; clicking the selected project in the list again also closes the detail. Inside, the blocks follow the work: Script, Presenter (animated character only), Scenes (with the Produce panel), Background, Recording (own video only). Topic candidates fold once the script exists; Claims fold once every claim is decided and stay open while any is pending.
+3. **The Presenter block.** Two columns. Left: the preview clip (the picture while there is no preview) and, under it, the versions as thumbnails, the current one outlined; a click on a thumbnail makes it current; a thumbnail that is not current carries a remove mark that deletes that version and its files, with no confirmation (remaking costs one of the day's pictures). Right: "What would you change?" with "Ask for a change" as the primary action; "Edit the full prompt" folded (the composed prompt, the greyed safety tail, Generate); "Use one of Scout's presenters, or your own picture" folded (the built-in picker and Use, Attach picture, Mark the mouth). The header carries the version count, the source and the pictures left today. The presenter description moves from the project header into this block.
+4. **The scene.** The picture is the card; the narration beside it; the picture prompt is one line that becomes a text box on "Edit prompt"; Regenerate picture and Attach image sit on the picture; Regenerate scene and Regenerate narration go under a "Narration" menu; Edit text and Lock stay in the row.
+5. **Claims.** The risk is a coloured stripe on the claim's edge (red high, amber medium, green low) and a chip; pending claims come first and decided ones fold under "Decided (n)" with a "Change" to revisit; the header says "n to check" and that production waits for them; the source is a chip with the domain and a "Copy link" beside it (the desktop's external-link allow-list stays as it is, so the chip copies and does not open); Supported, Unsupported and Waive are one segmented control, Waive opening its required note below.
+6. **Help on every block.** A "?" beside the block title shows a short explanation on hover or keyboard focus and does nothing else. The texts, in the app's language:
+   - Mandate: "What the channel is for: who it speaks to, what it covers and how it sounds. Scout reads it before every topic, script and picture."
+   - Make a video: "One topic starts a project. Scout researches it, writes the script, then waits for you at every step that costs something or goes public."
+   - Topic candidates: "The angles Scout found for this topic before writing. They stay here for reference once the script exists."
+   - Script: "The hook, the sections and the close, in the words the narration will say. Edit a scene's text below to change it."
+   - Claims: "Facts the script states that a viewer could dispute. Scout looked for a source for each one. Supported keeps the line; Unsupported rewrites without it; Waive keeps it without a source, with your reason. Production waits until every claim is decided."
+   - Presenter: "The character that speaks the whole video. Scout makes it from the script as soon as the script is ready, finds the mouth on the picture and shows a short preview. Ask for changes in plain words; every request makes a new version you can switch back to."
+   - Scenes: "The video, one scene per sentence group: its narration, its picture and the presenter over it. Produce makes the narration and pictures; Assemble joins them into the file."
+   - Background: "The picture behind any scene that has none of its own. Without it, that scene is a dark card with its text."
+   - Recording: "The video you recorded. Scout transcribes it on this machine and cuts the scenes from it; nothing is uploaded."
+7. **What does not change.** The control plane's rules, channels and limits; the Produce panel inside Scenes; the hidden buttons on running statuses. The one new contract is `RemovePresenterVersion` (project id, 0-based index): refused on the current version only while it is the last version naming the current picture and preview (a twin of it can be removed, `tests/Scout.ControlPlane.Tests/Operator/OperatorServiceTests.Presenter.cs:668`), on an index the project has no version for, and while the project is `presenting`; it takes no grant and writes no log entry, like a scene edit; the files only that version names are deleted after the store write, as the pruning of the eleventh version already does ([[pages/services/control-plane]]).
+
+## Out of scope
+
+The podcast format with two presenters and a consistent cast (phase 8c-C, in brainstorm); opening claim sources in the browser (the allow-list of [[pages/services/desktop-ui]] stays); any change to what the worker makes.
+
+## Status
+
+- 2026-11-05: decided from the mockups; building on `feat/production-screen`.
+- 2026-11-05: control plane built: `RemovePresenterVersion` (decision 7) on the Operator service for the desktop token, its refusals and file deletion pinned by `tests/Scout.ControlPlane.Tests/Operator/OperatorServiceTests.Presenter.cs:637`, `:668`, `:684` and `:704`, the socket round trip and the worker token's denial by `tests/Scout.ControlPlane.Tests/Integration/OperatorGrpcTests.cs:1517` and `:47` ([[pages/services/control-plane]], [[pages/services/control-plane-contracts]]). The desktop's part is open.
+- 2026-11-05: desktop built ([[pages/services/desktop-operator]], Production): decisions 1 to 6 in `ui/packages/renderer/src/app/production/production.component.ts`, proved by `ui/packages/renderer/src/app/production/production.component.spec.ts` (decision 1 at `:3350`, `:3396` and `:3423`; decision 2 at `:3443`, `:3455`, `:3486`, `:3502` and `:3527`; decision 3 at `:3597`, `:3662` and `:3875`; decision 4 at `:3715`; decision 5 at `:3752`, `:800` and `:829`; decision 6, every text verbatim, at `:3819`). The new contract reaches the control plane as `scout:operator.presenterVersionRemoval` (`ui/packages/main/test/ipc-operator.test.ts:898`) and `RemovePresenterVersion` (`ui/packages/main/test/control-plane-client.test.ts:1731`). A version is current when its picture and its preview are both the project's, so a duplicate of a built-in presenter is removable, and of two identical twins either one is, never the last. The Topic candidates help text first said the chosen angle is marked, which the desktop cannot show since a candidate carries no chosen flag; it now says "The angles Scout found for this topic before writing. They stay here for reference once the script exists."
+- 2026-11-05: desktop follow-ups after the review: the readiness failure on the Channel summary (`ui/packages/renderer/src/app/production/production.component.spec.ts:3554`), the own-picture fold open when the picture has no mouth box (`:3574`), the Topic candidates help text without a mark no candidate carries.

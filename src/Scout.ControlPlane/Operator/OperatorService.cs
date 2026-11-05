@@ -2735,4 +2735,54 @@ public sealed class OperatorService
             }
         }
     }
+
+    /// <summary>
+    /// Remove the presenter version at the 0-based <paramref name="index"/> of a project, one the owner made by mistake:
+    /// any version but the last one naming the current picture and preview, on any status but presenting. The
+    /// project keeps its presenter, status and approval, since the video does not change, and once the store holds the
+    /// change the version's picture and preview are deleted from the media directory unless the current presenter or
+    /// another version still names them, a file that cannot be deleted logged and left. Scout's own state, so no grant
+    /// is asked for and nothing is logged.
+    /// </summary>
+    /// <exception cref="OperatorValidationException">The project is making its presenter, has no such version, or the version is the current one.</exception>
+    /// <exception cref="OperatorNotFoundException">No project has <paramref name="projectId"/>.</exception>
+    public async Task<OperatorProject> RemovePresenterVersionAsync(string projectId, int index, CancellationToken ct)
+    {
+        var forgotten = new List<string>();
+        var removed = await _store.UpdateProjectsAsync(
+                projects =>
+                {
+                    var at = IndexOf(projects, projectId);
+                    var project = projects[at];
+                    if (project.Status == Presenting)
+                    {
+                        throw new OperatorValidationException(MakingPresenter);
+                    }
+
+                    if (index < 0 || index >= project.PresenterVersions.Count)
+                    {
+                        throw new OperatorValidationException($"The project has no presenter version {index}.");
+                    }
+
+                    var dropped = project.PresenterVersions[index];
+                    var versions = project.PresenterVersions.Where((_, i) => i != index).ToList();
+                    if (dropped.File == project.PresenterFile && dropped.PreviewFile == project.PresenterPreviewFile
+                        && !versions.Any(v => v.File == dropped.File && v.PreviewFile == dropped.PreviewFile))
+                    {
+                        throw new OperatorValidationException(CurrentPresenterKept);
+                    }
+
+                    forgotten.AddRange(new[] { dropped.File, dropped.PreviewFile }.OfType<string>().Where(file =>
+                        file != project.PresenterFile && file != project.PresenterPreviewFile
+                        && !versions.Any(v => v.File == file || v.PreviewFile == file)));
+                    projects[at] = project with { PresenterVersions = versions, UpdatedAt = DateTimeOffset.UtcNow };
+                    return projects[at];
+                },
+                ct)
+            .ConfigureAwait(false);
+        DeleteForgotten(projectId, forgotten);
+        return ForDesktop(removed);
+    }
+
+    private const string CurrentPresenterKept = "The current presenter cannot be removed; choose another version first.";
 }

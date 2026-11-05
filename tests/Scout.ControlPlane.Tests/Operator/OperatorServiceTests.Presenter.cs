@@ -632,4 +632,111 @@ public sealed partial class OperatorServiceTests
             (character.Id, "asked for a new presenter via chat"),
         ]);
     }
+
+    [Fact]
+    public async Task Removing_A_Presenter_Version_Made_By_Mistake_Drops_It_And_Only_The_Files_No_Other_Version_Names()
+    {
+        var mistake = MadeVersion("presenter-1a2b.png", "presenter-preview-1.mp4");
+        var twin = MadeVersion(Fox, "presenter-preview-0.mp4", source: "builtin", feedback: "builtin:fox");
+        var current = MadeVersion(Fox, "presenter-preview-2.mp4", new MouthBox(0.3, 0.5, 0.2, 0.1), "builtin", "builtin:fox");
+        var project = await WithVersionsAsync("approved", twin, mistake, current);
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        await RevokeYouTubeAsync();
+        var logged = await _writes.ListAsync(500, None);
+
+        var removed = await _operator.RemovePresenterVersionAsync(project.Id, 1, None);
+        var twinRemoved = await _operator.RemovePresenterVersionAsync(project.Id, 0, None);
+
+        removed.PresenterVersions.ShouldBe([twin, current]);
+        File.Exists(Path.Combine(media, "presenter-1a2b.png")).ShouldBeFalse();
+        File.Exists(Path.Combine(media, "presenter-preview-1.mp4")).ShouldBeFalse();
+        twinRemoved.PresenterVersions.ShouldBe([current]);
+        File.Exists(Path.Combine(media, "presenter-preview-0.mp4")).ShouldBeFalse();
+        File.Exists(Path.Combine(media, Fox)).ShouldBeTrue();
+        File.Exists(Path.Combine(media, "presenter-preview-2.mp4")).ShouldBeTrue();
+        var stored = await StoredAsync(project.Id);
+        stored.PresenterVersions.ShouldBe([current]);
+        (stored.PresenterFile, stored.MouthBox, stored.PresenterPreviewFile, stored.PresenterSource)
+            .ShouldBe(((string?)Fox, (MouthBox?)current.MouthBox, (string?)"presenter-preview-2.mp4", "builtin"));
+        stored.Status.ShouldBe("approved");
+        var package = stored.Package.ShouldNotBeNull();
+        (package.Status, package.RightsConfirmed, package.ApprovedAt).ShouldBe(("approved", true, (DateTimeOffset?)DateTimeOffset.UnixEpoch));
+        (await _writes.ListAsync(500, None)).ShouldBe(logged);
+    }
+
+    [Fact]
+    public async Task Removing_A_Twin_Of_The_Current_Presenter_Succeeds_And_The_Last_One_Naming_It_Is_Refused()
+    {
+        var project = await WithVersionsAsync("script_ready", MadeVersion(Fox, null, source: "builtin", feedback: "builtin:fox"), MadeVersion(Fox, null, source: "builtin", feedback: "builtin:fox"));
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+
+        var removed = await _operator.RemovePresenterVersionAsync(project.Id, 1, None);
+        var last = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RemovePresenterVersionAsync(project.Id, 0, None));
+
+        removed.PresenterVersions.Count.ShouldBe(1);
+        removed.PresenterFile.ShouldBe(Fox);
+        File.Exists(Path.Combine(media, Fox)).ShouldBeTrue();
+        (await StoredAsync(project.Id)).PresenterVersions.Count.ShouldBe(1);
+        last.Message.ShouldBe("The current presenter cannot be removed; choose another version first.");
+    }
+
+    [Fact]
+    public async Task The_Current_Presenter_A_Missing_Version_And_A_Presenting_Project_Refuse_A_Removal()
+    {
+        var project = await WithVersionsAsync("script_ready", MadeVersion("presenter-1a2b.png", null), MadeVersion("presenter-3c4d.png", null));
+        var presenting = await WithVersionsAsync("script_ready", MadeVersion("presenter-5e6f.png", null), MadeVersion("presenter-7a8b.png", null));
+        await SetStoredAsync(presenting.Id, p => p with { Status = "presenting", PresenterRequest = "Make the fox smile.", PresenterReturnStatus = "script_ready" });
+        var before = JsonSerializer.Serialize(await _store.ReadProjectsAsync(None));
+
+        var current = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RemovePresenterVersionAsync(project.Id, 1, None));
+        var missing = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RemovePresenterVersionAsync(project.Id, 2, None));
+        var negative = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RemovePresenterVersionAsync(project.Id, -1, None));
+        var making = await Should.ThrowAsync<OperatorValidationException>(() => _operator.RemovePresenterVersionAsync(presenting.Id, 0, None));
+
+        current.Message.ShouldBe("The current presenter cannot be removed; choose another version first.");
+        missing.Message.ShouldBe("The project has no presenter version 2.");
+        negative.Message.ShouldBe("The project has no presenter version -1.");
+        making.Message.ShouldBe(MakingPresenter);
+        JsonSerializer.Serialize(await _store.ReadProjectsAsync(None)).ShouldBe(before);
+    }
+
+    [Fact]
+    public async Task A_Removed_Version_Whose_Picture_Cannot_Be_Deleted_Still_Leaves_The_Store_Without_It()
+    {
+        var project = await WithVersionsAsync("script_ready", MadeVersion("presenter-1a2b.png", null), MadeVersion("presenter-3c4d.png", null));
+        var media = await _operator.GetMediaDirectoryAsync(project.Id, None);
+        File.Delete(Path.Combine(media, "presenter-1a2b.png"));
+        Directory.CreateDirectory(Path.Combine(media, "presenter-1a2b.png"));
+
+        var removed = await _operator.RemovePresenterVersionAsync(project.Id, 0, None);
+
+        removed.PresenterVersions.Select(v => v.File).ShouldBe(["presenter-3c4d.png"]);
+        (await StoredAsync(project.Id)).PresenterVersions.Select(v => v.File).ShouldBe(["presenter-3c4d.png"]);
+        Directory.Exists(Path.Combine(media, "presenter-1a2b.png")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_Removed_Version_Keeps_A_Picture_Another_Version_Or_The_Current_Presenter_Still_Shows()
+    {
+        var shared = await WithVersionsAsync(
+            "script_ready",
+            MadeVersion("presenter-1a2b.png", "presenter-preview-0.mp4"),
+            MadeVersion("presenter-1a2b.png", "presenter-preview-1.mp4"),
+            MadeVersion("presenter-3c4d.png", "presenter-preview-2.mp4"));
+        var shown = await WithVersionsAsync("script_ready", MadeVersion("presenter-5e6f.png", "presenter-preview-3.mp4"), MadeVersion("presenter-7a8b.png", null));
+        await SetStoredAsync(shown.Id, p => p with { PresenterFile = "presenter-5e6f.png", PresenterPreviewFile = null, PresenterSource = "owner" });
+        var sharedMedia = await _operator.GetMediaDirectoryAsync(shared.Id, None);
+        var shownMedia = await _operator.GetMediaDirectoryAsync(shown.Id, None);
+
+        var withoutTwin = await _operator.RemovePresenterVersionAsync(shared.Id, 0, None);
+        var withoutShown = await _operator.RemovePresenterVersionAsync(shown.Id, 0, None);
+
+        withoutTwin.PresenterVersions.Select(v => v.PreviewFile).ShouldBe(["presenter-preview-1.mp4", "presenter-preview-2.mp4"]);
+        File.Exists(Path.Combine(sharedMedia, "presenter-1a2b.png")).ShouldBeTrue();
+        File.Exists(Path.Combine(sharedMedia, "presenter-preview-0.mp4")).ShouldBeFalse();
+        withoutShown.PresenterVersions.Select(v => v.File).ShouldBe(["presenter-7a8b.png"]);
+        (withoutShown.PresenterFile, withoutShown.PresenterSource).ShouldBe(((string?)"presenter-5e6f.png", "owner"));
+        File.Exists(Path.Combine(shownMedia, "presenter-5e6f.png")).ShouldBeTrue();
+        File.Exists(Path.Combine(shownMedia, "presenter-preview-3.mp4")).ShouldBeFalse();
+    }
 }

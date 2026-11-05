@@ -10,7 +10,7 @@ namespace Scout.Host.ControlPlane.Services;
 /// <summary>
 /// Thin gRPC adapter over <see cref="OperatorService"/> for the desktop token only: the mandate,
 /// the projects, the owner's claim decisions, production, delegation, the scene edits, the scene text and picture prompt,
-/// the presenter picture's mouth box and its regeneration, the presenter requests and versions, Scout's own presenters,
+/// the presenter picture's mouth box and its regeneration, the presenter requests and versions and a version's removal, Scout's own presenters,
 /// the media directory, project deletion,
 /// the worker's readiness, assembly, the owner's package metadata, media rights and approval, publication,
 /// proposal decisions and experiments, and the comments: the list, a sync request, the owner's decisions, approved
@@ -114,6 +114,10 @@ public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
     public override Task<Project> UsePresenterVersion(UsePresenterVersionRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () => OperatorMapping.ToWire(
             await _operator.UsePresenterVersionAsync(request.ProjectId, request.Index, context.CancellationToken).ConfigureAwait(false)));
+
+    public override Task<Project> RemovePresenterVersion(RemovePresenterVersionRequest request, ServerCallContext context) =>
+        OperatorMapping.Guard(async () => OperatorMapping.ToWire(
+            await _operator.RemovePresenterVersionAsync(request.ProjectId, request.Index, context.CancellationToken).ConfigureAwait(false)));
 
     public override Task<BuiltInPresenters> ListBuiltInPresenters(ListBuiltInPresentersRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () =>

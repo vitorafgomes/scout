@@ -1,4 +1,4 @@
-import { DatePipe, PercentPipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet, PercentPipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -117,6 +117,27 @@ const DEFAULT_FORMATS: readonly ProjectFormat[] = [
   'own_video',
 ];
 
+const HELP = {
+  mandate:
+    'What the channel is for: who it speaks to, what it covers and how it sounds. Scout reads it before every topic, script and picture.',
+  makeAVideo:
+    'One topic starts a project. Scout researches it, writes the script, then waits for you at every step that costs something or goes public.',
+  topicCandidates:
+    'The angles Scout found for this topic before writing. They stay here for reference once the script exists.',
+  script:
+    "The hook, the sections and the close, in the words the narration will say. Edit a scene's text below to change it.",
+  claims:
+    'Facts the script states that a viewer could dispute. Scout looked for a source for each one. Supported keeps the line; Unsupported rewrites without it; Waive keeps it without a source, with your reason. Production waits until every claim is decided.',
+  presenter:
+    'The character that speaks the whole video. Scout makes it from the script as soon as the script is ready, finds the mouth on the picture and shows a short preview. Ask for changes in plain words; every request makes a new version you can switch back to.',
+  scenes:
+    'The video, one scene per sentence group: its narration, its picture and the presenter over it. Produce makes the narration and pictures; Assemble joins them into the file.',
+  background:
+    'The picture behind any scene that has none of its own. Without it, that scene is a dark card with its text.',
+  recording:
+    'The video you recorded. Scout transcribes it on this machine and cuts the scenes from it; nothing is uploaded.',
+} as const;
+
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'views', label: 'Views' },
   { value: 'watch_hours', label: 'Watch hours' },
@@ -129,7 +150,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
   selector: 'sc-production',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, PercentPipe],
+  imports: [DatePipe, NgTemplateOutlet, PercentPipe],
   template: `
     <main class="page">
       <header class="header">
@@ -141,162 +162,206 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         <p class="err" data-test="production-error">{{ message }}</p>
       }
 
-      <section class="block" data-test="readiness">
-        <h2>What Scout can make</h2>
-        @if (readiness(); as r) {
-          <ul class="plain">
-            <li data-test="readiness-speech">
-              Narration: {{ r.speechAvailable ? 'available' : 'not available' }}
-            </li>
-            <li data-test="readiness-images">
-              Generated pictures: {{ r.imagesAvailable ? 'available' : 'not available' }}
-            </li>
-            <li data-test="readiness-stock">{{ picturesLine(r) }}</li>
-            <li data-test="readiness-provider">Provider: {{ r.provider || 'none' }}</li>
-            <li data-test="readiness-youtube">
-              YouTube: {{ r.youtubeSignedIn ? 'signed in' : 'not signed in' }}
-            </li>
-            <li data-test="readiness-voices">
-              Voices: {{ r.voices.length > 0 ? r.voices.length + ' available' : 'none' }}
-            </li>
-            @for (note of r.notes; track $index) {
-              <li class="meta" data-test="readiness-note">{{ note }}</li>
+      <details class="block channel" data-test="channel" [open]="mandate() === null">
+        <summary>
+          <h2>Channel</h2>
+          <span class="meta" data-test="channel-summary">
+            @if (mandate(); as m) {
+              Saved {{ m.updatedAt | date: 'yyyy-MM-dd HH:mm' }} · Default format:
+              {{ formatName(m.defaultFormat || 'generated_pictures') }}
+            } @else {
+              No mandate yet
             }
-          </ul>
-        }
-        @if (readinessError(); as message) {
-          <p class="err" data-test="readiness-error">{{ message }}</p>
-        }
-      </section>
+            @if (readiness(); as r) {
+              · Can make: {{ makes(r) }}
+            }
+            @if (readinessError(); as message) {
+              <span class="err" data-test="channel-error">{{ message }}</span>
+            }
+          </span>
+        </summary>
 
-      <section class="block" data-test="mandate">
-        <h2>Mandate</h2>
-        @if (mandateLoaded() && mandate() === null) {
-          <p class="empty" data-test="mandate-empty">
-            The operator needs a mandate before it makes a video: what the channel is for, who it is
-            for and its language. Fill it in and save it.
-          </p>
-        }
-        <div class="form">
-          <label
-            >Objective
-            <input
-              type="text"
-              data-test="mandate-objective"
-              [value]="objective()"
-              (input)="objective.set($any($event.target).value)"
-          /></label>
-          <label
-            >Audience
-            <input
-              type="text"
-              data-test="mandate-audience"
-              [value]="audience()"
-              (input)="audience.set($any($event.target).value)"
-          /></label>
-          <fieldset>
-            <legend>Pillars (up to 5)</legend>
-            @for (slot of pillarSlots; track slot) {
+        <section class="block" data-test="mandate">
+          <div class="block-head">
+            <h2>Mandate</h2>
+            <button
+              type="button"
+              class="help"
+              data-test="help-mandate"
+              aria-label="What this block is for"
+              [attr.data-tip]="help.mandate"
+              [attr.aria-description]="help.mandate"
+            >
+              ?
+            </button>
+          </div>
+          @if (mandateLoaded() && mandate() === null) {
+            <p class="empty" data-test="mandate-empty">
+              The operator needs a mandate before it makes a video: what the channel is for, who it
+              is for and its language. Fill it in and save it.
+            </p>
+          }
+          <div class="form">
+            <label
+              >Objective
               <input
                 type="text"
-                maxlength="80"
-                [attr.data-test]="'mandate-pillar-' + slot"
-                [value]="pillars()[slot]"
-                (input)="setPillar(slot, $any($event.target).value)"
-              />
+                data-test="mandate-objective"
+                [value]="objective()"
+                (input)="objective.set($any($event.target).value)"
+            /></label>
+            <label
+              >Audience
+              <input
+                type="text"
+                data-test="mandate-audience"
+                [value]="audience()"
+                (input)="audience.set($any($event.target).value)"
+            /></label>
+            <fieldset>
+              <legend>Pillars (up to 5)</legend>
+              @for (slot of pillarSlots; track slot) {
+                <input
+                  type="text"
+                  maxlength="80"
+                  [attr.data-test]="'mandate-pillar-' + slot"
+                  [value]="pillars()[slot]"
+                  (input)="setPillar(slot, $any($event.target).value)"
+                />
+              }
+            </fieldset>
+            <label
+              >Cadence
+              <input
+                type="text"
+                data-test="mandate-cadence"
+                [value]="cadence()"
+                (input)="cadence.set($any($event.target).value)"
+            /></label>
+            <label
+              >Language
+              <input
+                type="text"
+                data-test="mandate-language"
+                [value]="language()"
+                (input)="language.set($any($event.target).value)"
+            /></label>
+            <label
+              >Voice and style
+              <input
+                type="text"
+                data-test="mandate-style"
+                [value]="voiceAndStyle()"
+                (input)="voiceAndStyle.set($any($event.target).value)"
+            /></label>
+            <label
+              >Blocked topics (comma separated)
+              <input
+                type="text"
+                data-test="mandate-blocked"
+                [value]="blockedTopics()"
+                (input)="blockedTopics.set($any($event.target).value)"
+            /></label>
+            <label
+              >Target metric
+              <select
+                data-test="mandate-metric"
+                (change)="targetMetric.set($any($event.target).value)"
+              >
+                <option value="" [selected]="targetMetric() === ''">Not set</option>
+                @for (m of metrics; track m.value) {
+                  <option [value]="m.value" [selected]="targetMetric() === m.value">
+                    {{ m.label }}
+                  </option>
+                }
+              </select>
+            </label>
+            <label
+              >Target value
+              <input
+                type="text"
+                data-test="mandate-target"
+                [value]="targetValue()"
+                (input)="targetValue.set($any($event.target).value)"
+            /></label>
+            <label
+              >Default format
+              <select
+                data-test="mandate-default-format"
+                (change)="defaultFormat.set($any($event.target).value)"
+              >
+                @for (f of defaultFormats; track f) {
+                  <option [value]="f" [selected]="defaultFormat() === f">
+                    {{ formatName(f) }}
+                  </option>
+                }
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <button
+              type="button"
+              class="btn btn--primary"
+              data-test="mandate-save"
+              [disabled]="savingMandate()"
+              (click)="saveMandate()"
+            >
+              Save
+            </button>
+            @if (mandate()?.updatedAt; as savedAt) {
+              <span class="meta" data-test="mandate-saved">
+                Saved {{ savedAt | date: 'yyyy-MM-dd HH:mm' }}
+              </span>
             }
-          </fieldset>
-          <label
-            >Cadence
-            <input
-              type="text"
-              data-test="mandate-cadence"
-              [value]="cadence()"
-              (input)="cadence.set($any($event.target).value)"
-          /></label>
-          <label
-            >Language
-            <input
-              type="text"
-              data-test="mandate-language"
-              [value]="language()"
-              (input)="language.set($any($event.target).value)"
-          /></label>
-          <label
-            >Voice and style
-            <input
-              type="text"
-              data-test="mandate-style"
-              [value]="voiceAndStyle()"
-              (input)="voiceAndStyle.set($any($event.target).value)"
-          /></label>
-          <label
-            >Blocked topics (comma separated)
-            <input
-              type="text"
-              data-test="mandate-blocked"
-              [value]="blockedTopics()"
-              (input)="blockedTopics.set($any($event.target).value)"
-          /></label>
-          <label
-            >Target metric
-            <select
-              data-test="mandate-metric"
-              (change)="targetMetric.set($any($event.target).value)"
-            >
-              <option value="" [selected]="targetMetric() === ''">Not set</option>
-              @for (m of metrics; track m.value) {
-                <option [value]="m.value" [selected]="targetMetric() === m.value">
-                  {{ m.label }}
-                </option>
+          </div>
+          @if (mandateError(); as message) {
+            <p class="err" data-test="mandate-error">{{ message }}</p>
+          }
+        </section>
+
+        <section class="block" data-test="readiness">
+          <h2>What Scout can make</h2>
+          @if (readiness(); as r) {
+            <ul class="plain">
+              <li data-test="readiness-speech">
+                Narration: {{ r.speechAvailable ? 'available' : 'not available' }}
+              </li>
+              <li data-test="readiness-images">
+                Generated pictures: {{ r.imagesAvailable ? 'available' : 'not available' }}
+              </li>
+              <li data-test="readiness-stock">{{ picturesLine(r) }}</li>
+              <li data-test="readiness-provider">Provider: {{ r.provider || 'none' }}</li>
+              <li data-test="readiness-youtube">
+                YouTube: {{ r.youtubeSignedIn ? 'signed in' : 'not signed in' }}
+              </li>
+              <li data-test="readiness-voices">
+                Voices: {{ r.voices.length > 0 ? r.voices.length + ' available' : 'none' }}
+              </li>
+              @for (note of r.notes; track $index) {
+                <li class="meta" data-test="readiness-note">{{ note }}</li>
               }
-            </select>
-          </label>
-          <label
-            >Target value
-            <input
-              type="text"
-              data-test="mandate-target"
-              [value]="targetValue()"
-              (input)="targetValue.set($any($event.target).value)"
-          /></label>
-          <label
-            >Default format
-            <select
-              data-test="mandate-default-format"
-              (change)="defaultFormat.set($any($event.target).value)"
-            >
-              @for (f of defaultFormats; track f) {
-                <option [value]="f" [selected]="defaultFormat() === f">
-                  {{ formatName(f) }}
-                </option>
-              }
-            </select>
-          </label>
-        </div>
-        <div class="row">
+            </ul>
+          }
+          @if (readinessError(); as message) {
+            <p class="err" data-test="readiness-error">{{ message }}</p>
+          }
+        </section>
+      </details>
+
+      <section class="block" data-test="make-a-video">
+        <div class="block-head">
+          <h2>Make a video</h2>
           <button
             type="button"
-            class="btn btn--primary"
-            data-test="mandate-save"
-            [disabled]="savingMandate()"
-            (click)="saveMandate()"
+            class="help"
+            data-test="help-make-a-video"
+            aria-label="What this block is for"
+            [attr.data-tip]="help.makeAVideo"
+            [attr.aria-description]="help.makeAVideo"
           >
-            Save
+            ?
           </button>
-          @if (mandate()?.updatedAt; as savedAt) {
-            <span class="meta" data-test="mandate-saved">
-              Saved {{ savedAt | date: 'yyyy-MM-dd HH:mm' }}
-            </span>
-          }
         </div>
-        @if (mandateError(); as message) {
-          <p class="err" data-test="mandate-error">{{ message }}</p>
-        }
-      </section>
-
-      <section class="block">
-        <h2>Make a video</h2>
         <div class="row">
           <input
             type="text"
@@ -320,98 +385,101 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             "
             (click)="startProject()"
           >
-            Make a video
+            Start
           </button>
         </div>
-        <fieldset>
-          <legend>Format</legend>
-          <label
-            ><input
-              type="radio"
-              name="start-format"
-              data-test="format-generated_pictures"
-              [checked]="startFormat() === 'generated_pictures'"
-              (change)="startChoice.set('generated_pictures')"
-            />
-            Generated pictures</label
-          >
-          <label
-            ><input
-              type="radio"
-              name="start-format"
-              data-test="format-own_pictures"
-              [checked]="startFormat() === 'own_pictures'"
-              (change)="startChoice.set('own_pictures')"
-            />
-            Your own pictures</label
-          >
-          <label
-            ><input
-              type="radio"
-              name="start-format"
-              data-test="format-animated_character"
-              [disabled]="!lipSyncable()"
-              [checked]="startFormat() === 'animated_character'"
-              (change)="startChoice.set('animated_character')"
-            />
-            Animated character</label
-          >
-          @if (!lipSyncable()) {
-            <p class="meta" data-test="format-animated_character-reason">
-              Scout has no lip-sync tool on this machine; it ships with Scout Desktop.
+        <details class="fold" data-test="start-options">
+          <summary>More options</summary>
+          <fieldset>
+            <legend>Format</legend>
+            <label
+              ><input
+                type="radio"
+                name="start-format"
+                data-test="format-generated_pictures"
+                [checked]="startFormat() === 'generated_pictures'"
+                (change)="startChoice.set('generated_pictures')"
+              />
+              Generated pictures</label
+            >
+            <label
+              ><input
+                type="radio"
+                name="start-format"
+                data-test="format-own_pictures"
+                [checked]="startFormat() === 'own_pictures'"
+                (change)="startChoice.set('own_pictures')"
+              />
+              Your own pictures</label
+            >
+            <label
+              ><input
+                type="radio"
+                name="start-format"
+                data-test="format-animated_character"
+                [disabled]="!lipSyncable()"
+                [checked]="startFormat() === 'animated_character'"
+                (change)="startChoice.set('animated_character')"
+              />
+              Animated character</label
+            >
+            @if (!lipSyncable()) {
+              <p class="meta" data-test="format-animated_character-reason">
+                Scout has no lip-sync tool on this machine; it ships with Scout Desktop.
+              </p>
+            }
+            <label
+              ><input type="radio" name="start-format" data-test="format-ai_presenter" disabled />
+              AI presenter</label
+            >
+            <p class="meta" data-test="format-ai_presenter-reason">
+              The connected AI Source has no video model.
             </p>
-          }
+            <label
+              ><input
+                type="radio"
+                name="start-format"
+                data-test="format-own_video"
+                [disabled]="!transcribable()"
+                [checked]="startFormat() === 'own_video'"
+                (change)="startChoice.set('own_video')"
+              />
+              Your own video</label
+            >
+            @if (!transcribable()) {
+              <p class="meta" data-test="format-own_video-reason">
+                Scout has no speech-to-text model on this machine; download one in AI Sources, Local
+                Models.
+              </p>
+            }
+          </fieldset>
           <label
-            ><input type="radio" name="start-format" data-test="format-ai_presenter" disabled /> AI
-            presenter</label
-          >
-          <p class="meta" data-test="format-ai_presenter-reason">
-            The connected AI Source has no video model.
-          </p>
-          <label
-            ><input
-              type="radio"
-              name="start-format"
-              data-test="format-own_video"
-              [disabled]="!transcribable()"
-              [checked]="startFormat() === 'own_video'"
-              (change)="startChoice.set('own_video')"
-            />
-            Your own video</label
-          >
-          @if (!transcribable()) {
-            <p class="meta" data-test="format-own_video-reason">
-              Scout has no speech-to-text model on this machine; download one in AI Sources, Local
-              Models.
-            </p>
-          }
-        </fieldset>
-        <label
-          >Direction
-          <textarea
-            rows="3"
-            data-test="start-direction"
-            [value]="startDirection()"
-            (input)="startDirection.set($any($event.target).value)"
-          ></textarea>
-        </label>
-        <span class="meta" data-test="start-direction-count"
-          >{{ startDirection().trim().length }} / {{ maxDirection }}</span
-        >
-        @if (startFormat() === 'animated_character') {
-          <label
-            >Presenter
+            >Direction
             <textarea
-              rows="2"
-              data-test="start-presenter"
-              [value]="startPresenter()"
-              (input)="startPresenter.set($any($event.target).value)"
+              rows="3"
+              data-test="start-direction"
+              [value]="startDirection()"
+              (input)="startDirection.set($any($event.target).value)"
             ></textarea>
           </label>
-          <span class="meta" data-test="start-presenter-count"
-            >{{ startPresenter().trim().length }} / {{ maxPresenter }}</span
+          <span class="meta" data-test="start-direction-count"
+            >{{ startDirection().trim().length }} / {{ maxDirection }}</span
           >
-        }
+          @if (startFormat() === 'animated_character') {
+            <label
+              >Presenter
+              <textarea
+                rows="2"
+                data-test="start-presenter"
+                [value]="startPresenter()"
+                (input)="startPresenter.set($any($event.target).value)"
+              ></textarea>
+            </label>
+            <span class="meta" data-test="start-presenter-count"
+              >{{ startPresenter().trim().length }} / {{ maxPresenter }}</span
+            >
+          }
+        </details>
         @if (queued(); as q) {
           <p class="meta" data-test="queued">
             {{ q.topic }} <span class="badge">{{ q.status }}</span>
@@ -422,157 +490,257 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         }
       </section>
 
-      <section class="block">
-        <h2>Projects</h2>
-        @if (projects().length === 0) {
-          <p class="empty" data-test="projects-empty">
-            No videos yet. Ask for one above, or ask Scout in chat.
-          </p>
-        } @else {
-          <ul class="projects">
-            @for (p of projects(); track p.id) {
-              <li>
-                <button
-                  type="button"
-                  class="project"
-                  [class.project--selected]="p.id === selectedId()"
-                  [attr.data-test]="'project-' + p.id"
-                  (click)="select(p.id)"
-                >
-                  <strong>{{ p.topic }}</strong>
-                  <span class="badge">{{ p.status }}</span>
-                  <span class="meta">{{ p.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</span>
-                </button>
-              </li>
-            }
-          </ul>
-        }
-      </section>
-
-      @if (selected(); as p) {
-        <section class="block" data-test="project-detail">
-          <h2>{{ p.topic }}</h2>
-          <div class="row">
-            <span class="meta" data-test="project-voice"
-              >Voice: {{ voiceLabel(p.narrationVoice) }}</span
-            >
-            @if (p.delegated) {
-              <span class="badge" data-test="project-delegated">Delegated</span>
-            }
-            @if (delegable(p)) {
-              <button
-                type="button"
-                class="btn btn--secondary"
-                data-test="delegate"
-                (click)="openDelegate(p)"
-              >
-                Delegate
-              </button>
-            }
-            @if (deletable(p)) {
-              <button
-                type="button"
-                class="btn btn--secondary"
-                data-test="delete"
-                (click)="openDelete(p)"
-              >
-                Delete project
-              </button>
-            }
-          </div>
-          <p class="meta" data-test="project-format">Format: {{ formatName(p.format) }}</p>
-          <p class="meta" data-test="project-visual">Visual: {{ motionName(p.motion) }} motion</p>
-          @if (p.direction) {
-            <p class="meta" data-test="project-direction">{{ p.direction }}</p>
-          }
-          @if (p.presenter) {
-            <p class="meta" data-test="project-presenter">Presenter: {{ p.presenter }}</p>
-          }
-          @if (p.error; as note) {
-            @if (p.status === 'failed') {
-              <p class="err" data-test="project-failure">{{ note }}</p>
-            } @else {
-              <p class="meta" data-test="project-note">{{ note }}</p>
-            }
-          }
-
-          <h3>Topic candidates</h3>
-          @if (p.candidates.length === 0) {
-            <p class="empty" data-test="candidates-empty">No topic candidates yet.</p>
+      <div class="work" data-test="work" [class.work--open]="selected() !== null">
+        <section class="block" data-test="projects">
+          <h2>Projects</h2>
+          @if (projects().length === 0) {
+            <p class="empty" data-test="projects-empty">
+              No videos yet. Ask for one above, or ask Scout in chat.
+            </p>
           } @else {
-            <ul class="plain">
-              @for (c of p.candidates; track $index) {
-                <li data-test="candidate">
-                  <strong>{{ c.title }}</strong> <span class="badge">{{ c.fit | percent }}</span>
-                  <p class="meta">{{ c.reason }}</p>
+            <ul class="projects">
+              @for (p of projects(); track p.id) {
+                <li>
+                  <button
+                    type="button"
+                    class="project"
+                    [class.project--selected]="p.id === selectedId()"
+                    [attr.aria-pressed]="p.id === selectedId()"
+                    [attr.data-test]="'project-' + p.id"
+                    (click)="select(p.id)"
+                  >
+                    <strong>{{ p.topic }}</strong>
+                    <span class="badge">{{ p.status }}</span>
+                    <span class="meta">{{ p.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</span>
+                  </button>
                 </li>
               }
             </ul>
           }
+        </section>
 
-          <h3>Script</h3>
-          @if (p.script; as s) {
-            <div data-test="script">
-              <p><strong>Hook:</strong> {{ s.hook }}</p>
-              @for (section of s.sections; track $index) {
-                <div class="section" data-test="script-section">
-                  @if (p.format === 'own_video') {
-                    <p class="meta" data-test="script-section-time">
-                      {{ clock(section.startMs) }} to {{ clock(section.endMs) }}
-                    </p>
-                  }
-                  <h4>{{ section.heading }}</h4>
-                  <p>{{ section.narration }}</p>
-                </div>
+        @if (selected(); as p) {
+          <section class="block detail" data-test="project-detail">
+            <div class="title-row" data-test="project-title-row">
+              <h2>{{ p.topic }}</h2>
+              @if (delegable(p)) {
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delegate"
+                  (click)="openDelegate(p)"
+                >
+                  Delegate
+                </button>
               }
-              <p><strong>Call to action:</strong> {{ s.callToAction }}</p>
-              <p><strong>Titles:</strong></p>
-              <ul class="plain">
-                @for (t of s.titleVariants; track $index) {
-                  <li data-test="title-variant">{{ t }}</li>
-                }
-              </ul>
-              <p><strong>Description:</strong> {{ s.description }}</p>
-              <p data-test="tags"><strong>Tags:</strong> {{ s.tags.join(', ') }}</p>
-              <ul class="plain">
-                @for (ch of s.chapters; track $index) {
-                  <li data-test="chapter">{{ ch.at }} {{ ch.title }}</li>
-                }
-              </ul>
+              @if (deletable(p)) {
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delete"
+                  (click)="openDelete(p)"
+                >
+                  Delete project
+                </button>
+              }
+              <button
+                type="button"
+                class="close"
+                data-test="project-close"
+                aria-label="Close the project"
+                (click)="close()"
+              >
+                &times;
+              </button>
             </div>
-          } @else {
-            <p class="empty" data-test="script-empty">The script is not written yet.</p>
-          }
+            <div class="row">
+              <span class="meta" data-test="project-voice"
+                >Voice: {{ voiceLabel(p.narrationVoice) }}</span
+              >
+              @if (p.delegated) {
+                <span class="badge" data-test="project-delegated">Delegated</span>
+              }
+            </div>
+            <p class="meta" data-test="project-format">Format: {{ formatName(p.format) }}</p>
+            <p class="meta" data-test="project-visual">Visual: {{ motionName(p.motion) }} motion</p>
+            @if (p.direction) {
+              <p class="meta" data-test="project-direction">{{ p.direction }}</p>
+            }
+            @if (p.error; as note) {
+              @if (p.status === 'failed') {
+                <p class="err" data-test="project-failure">{{ note }}</p>
+              } @else {
+                <p class="meta" data-test="project-note">{{ note }}</p>
+              }
+            }
 
-          <h3>Claims</h3>
-          @if (p.claims.length === 0) {
-            <p class="empty" data-test="claims-empty">No claims to check.</p>
-          } @else {
-            <ul class="claims">
-              @for (c of p.claims; track c.id) {
-                <li class="claim" [attr.data-test]="'claim-' + c.id">
-                  <p>{{ c.text }}</p>
-                  <p class="meta">
-                    Risk: {{ c.risk }} · Status:
-                    <span class="badge" [attr.data-test]="'claim-status-' + c.id">{{
-                      c.status
-                    }}</span>
-                    @if (c.note; as note) {
-                      · {{ note }}
-                    }
-                  </p>
-                  @for (url of c.sourceUrls; track $index) {
-                    <div class="source">
-                      <code>{{ url }}</code>
-                      <button type="button" class="btn btn--secondary" (click)="copy(url)">
-                        Copy
-                      </button>
-                    </div>
+            <details class="fold" data-test="candidates" [open]="p.script === null">
+              <summary>
+                <h3>Topic candidates</h3>
+                <button
+                  type="button"
+                  class="help"
+                  data-test="help-topic-candidates"
+                  aria-label="What this block is for"
+                  [attr.data-tip]="help.topicCandidates"
+                  [attr.aria-description]="help.topicCandidates"
+                >
+                  ?
+                </button>
+              </summary>
+              @if (p.candidates.length === 0) {
+                <p class="empty" data-test="candidates-empty">No topic candidates yet.</p>
+              } @else {
+                <ul class="plain">
+                  @for (c of p.candidates; track $index) {
+                    <li data-test="candidate">
+                      <strong>{{ c.title }}</strong>
+                      <span class="badge">{{ c.fit | percent }}</span>
+                      <p class="meta">{{ c.reason }}</p>
+                    </li>
                   }
-                  <div class="row">
+                </ul>
+              }
+            </details>
+
+            <div class="block-head">
+              <h3>Script</h3>
+              <button
+                type="button"
+                class="help"
+                data-test="help-script"
+                aria-label="What this block is for"
+                [attr.data-tip]="help.script"
+                [attr.aria-description]="help.script"
+              >
+                ?
+              </button>
+            </div>
+            @if (p.script; as s) {
+              <div data-test="script">
+                <p><strong>Hook:</strong> {{ s.hook }}</p>
+                @for (section of s.sections; track $index) {
+                  <div class="section" data-test="script-section">
+                    @if (p.format === 'own_video') {
+                      <p class="meta" data-test="script-section-time">
+                        {{ clock(section.startMs) }} to {{ clock(section.endMs) }}
+                      </p>
+                    }
+                    <h4>{{ section.heading }}</h4>
+                    <p>{{ section.narration }}</p>
+                  </div>
+                }
+                <p><strong>Call to action:</strong> {{ s.callToAction }}</p>
+                <p><strong>Titles:</strong></p>
+                <ul class="plain">
+                  @for (t of s.titleVariants; track $index) {
+                    <li data-test="title-variant">{{ t }}</li>
+                  }
+                </ul>
+                <p><strong>Description:</strong> {{ s.description }}</p>
+                <p data-test="tags"><strong>Tags:</strong> {{ s.tags.join(', ') }}</p>
+                <ul class="plain">
+                  @for (ch of s.chapters; track $index) {
+                    <li data-test="chapter">{{ ch.at }} {{ ch.title }}</li>
+                  }
+                </ul>
+              </div>
+            } @else {
+              <p class="empty" data-test="script-empty">The script is not written yet.</p>
+            }
+
+            <details class="fold" data-test="claims" [open]="pendingClaims(p) > 0">
+              <summary (click)="pendingClaims(p) > 0 && $event.preventDefault()">
+                <h3>Claims</h3>
+                <button
+                  type="button"
+                  class="help"
+                  data-test="help-claims"
+                  aria-label="What this block is for"
+                  [attr.data-tip]="help.claims"
+                  [attr.aria-description]="help.claims"
+                >
+                  ?
+                </button>
+                @if (pendingClaims(p) > 0) {
+                  <span class="meta" data-test="claims-pending"
+                    >{{ pendingClaims(p) }} to check · production waits for them</span
+                  >
+                }
+              </summary>
+              @if (p.claims.length === 0) {
+                <p class="empty" data-test="claims-empty">No claims to check.</p>
+              } @else {
+                <ul class="claims" data-test="claims-open">
+                  @for (c of pendingOf(p); track c.id) {
+                    <ng-container *ngTemplateOutlet="claimItem; context: { $implicit: c }" />
+                  }
+                </ul>
+                @if (decidedOf(p).length > 0) {
+                  <details class="fold" data-test="claims-decided">
+                    <summary>Decided ({{ decidedOf(p).length }})</summary>
+                    <ul class="claims">
+                      @for (c of decidedOf(p); track c.id) {
+                        <ng-container *ngTemplateOutlet="claimItem; context: { $implicit: c }" />
+                      }
+                    </ul>
+                  </details>
+                }
+              }
+              @if (claimError(); as message) {
+                <p class="err" data-test="claim-error">{{ message }}</p>
+              }
+            </details>
+
+            <ng-template #claimItem let-c>
+              <li
+                class="claim"
+                [class.claim--high]="c.risk === 'high'"
+                [class.claim--medium]="c.risk === 'medium'"
+                [class.claim--low]="c.risk === 'low'"
+                [attr.data-test]="'claim-' + c.id"
+              >
+                <p>{{ c.text }}</p>
+                <p class="meta">
+                  <span
+                    class="chip"
+                    [class.chip--high]="c.risk === 'high'"
+                    [class.chip--medium]="c.risk === 'medium'"
+                    [class.chip--low]="c.risk === 'low'"
+                    [attr.data-test]="'claim-risk-' + c.id"
+                    >Risk: {{ c.risk }}</span
+                  >
+                  Status:
+                  <span class="badge" [attr.data-test]="'claim-status-' + c.id">{{
+                    c.status
+                  }}</span>
+                  @if (c.note; as note) {
+                    · {{ note }}
+                  }
+                </p>
+                @for (url of c.sourceUrls; track $index) {
+                  <div class="source">
+                    <span
+                      class="chip"
+                      [attr.title]="url"
+                      [attr.data-test]="'claim-source-' + c.id + '-' + $index"
+                      >{{ domainOf(url) }}</span
+                    >
                     <button
                       type="button"
-                      class="btn btn--secondary"
+                      class="btn btn--secondary btn--small"
+                      [attr.data-test]="'claim-copy-' + c.id + '-' + $index"
+                      (click)="copy(url)"
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                }
+                @if (c.status === 'pending' || reopenedClaim() === c.id) {
+                  <div class="segmented" role="group" aria-label="Decision">
+                    <button
+                      type="button"
+                      [attr.aria-pressed]="c.status === 'supported'"
                       [attr.data-test]="'supported-' + c.id"
                       [disabled]="deciding() === c.id"
                       (click)="decide(p, c, 'supported')"
@@ -581,7 +749,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     </button>
                     <button
                       type="button"
-                      class="btn btn--secondary"
+                      [attr.aria-pressed]="c.status === 'unsupported'"
                       [attr.data-test]="'unsupported-' + c.id"
                       [disabled]="deciding() === c.id"
                       (click)="decide(p, c, 'unsupported')"
@@ -590,7 +758,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     </button>
                     <button
                       type="button"
-                      class="btn btn--secondary"
+                      [attr.aria-pressed]="c.status === 'waived' || waiving() === c.id"
                       [attr.data-test]="'waive-' + c.id"
                       [disabled]="deciding() === c.id"
                       (click)="openWaive(c.id)"
@@ -598,358 +766,1003 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                       Waive
                     </button>
                   </div>
-                  @if (waiving() === c.id) {
+                } @else {
+                  <div class="row">
+                    <button
+                      type="button"
+                      class="btn btn--secondary btn--small"
+                      [attr.data-test]="'claim-change-' + c.id"
+                      (click)="reopenedClaim.set(c.id)"
+                    >
+                      Change
+                    </button>
+                  </div>
+                }
+                @if (waiving() === c.id) {
+                  <div class="row">
+                    <input
+                      type="text"
+                      class="grow"
+                      placeholder="Why this claim needs no source (required)"
+                      [attr.data-test]="'waive-note-' + c.id"
+                      [value]="waiveNote()"
+                      (input)="waiveNote.set($any($event.target).value)"
+                    />
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      [attr.data-test]="'waive-confirm-' + c.id"
+                      [disabled]="waiveNote().trim().length === 0 || deciding() === c.id"
+                      (click)="decide(p, c, 'waived')"
+                    >
+                      Waive claim
+                    </button>
+                  </div>
+                }
+              </li>
+            </ng-template>
+
+            @if (p.format === 'animated_character') {
+              <div class="block-head">
+                <h3>Presenter</h3>
+                <button
+                  type="button"
+                  class="help"
+                  data-test="help-presenter"
+                  aria-label="What this block is for"
+                  [attr.data-tip]="help.presenter"
+                  [attr.aria-description]="help.presenter"
+                >
+                  ?
+                </button>
+                <span class="meta" data-test="presenter-header">{{ presenterHeader(p) }}</span>
+              </div>
+              @if (p.presenter) {
+                <p class="meta" data-test="project-presenter">Presenter: {{ p.presenter }}</p>
+              }
+              <div class="presenter" data-test="presenter">
+                <div class="presenter__view">
+                  @if (p.status === 'presenting') {
+                    <p class="meta" data-test="presenter-making">Scout is making the presenter.</p>
+                  } @else if (p.presenterPreviewFile; as preview) {
+                    <video
+                      controls
+                      class="preview"
+                      data-test="presenter-preview"
+                      [src]="mediaUrl(p, preview, presenterStamp(p))"
+                    ></video>
+                  } @else if (p.presenterFile; as file) {
+                    <img
+                      class="preview"
+                      data-test="presenter-picture"
+                      [src]="mediaUrl(p, file)"
+                      alt="Presenter of the video"
+                    />
+                  }
+                  @if (
+                    p.status !== 'presenting' &&
+                    !p.presenterPreviewFile &&
+                    p.presenterVersions.length === 0
+                  ) {
+                    <p class="meta" data-test="presenter-pending">
+                      The presenter is made as soon as the script is ready.
+                    </p>
+                  }
+                  @if (!p.presenterFile) {
+                    <p class="empty" data-test="presenter-empty">
+                      No presenter picture yet: Scout makes one when it produces the video if the
+                      connected AI Source makes pictures; or attach your own.
+                    </p>
+                  }
+                  @if (p.presenterVersions.length > 0) {
+                    <ol class="versions" data-test="presenter-versions">
+                      @for (
+                        v of p.presenterVersions;
+                        track v.file + ' ' + v.previewFile + ' ' + v.madeAt;
+                        let i = $index
+                      ) {
+                        <li
+                          class="version"
+                          [class.version--current]="isCurrent(p, v)"
+                          [attr.data-test]="'presenter-version-' + i"
+                        >
+                          @if (!isCurrent(p, v) && presenterRequestable(p)) {
+                            <button
+                              type="button"
+                              class="version__pick"
+                              [attr.data-test]="'presenter-use-' + i"
+                              [attr.aria-label]="'Use presenter version ' + (i + 1)"
+                              [disabled]="projectMediaBusy()"
+                              (click)="usePresenterVersion(p, i)"
+                            >
+                              <img
+                                class="version__thumb"
+                                [src]="mediaUrl(p, v.file, v.madeAt)"
+                                [alt]="'Presenter version ' + (i + 1)"
+                              />
+                            </button>
+                          } @else {
+                            <img
+                              class="version__thumb"
+                              [src]="mediaUrl(p, v.file, v.madeAt)"
+                              [alt]="'Presenter version ' + (i + 1)"
+                            />
+                          }
+                          @if (removable(p, v)) {
+                            <button
+                              type="button"
+                              class="version__remove"
+                              [attr.data-test]="'presenter-version-remove-' + i"
+                              [attr.aria-label]="'Remove presenter version ' + (i + 1)"
+                              [disabled]="projectMediaBusy()"
+                              (click)="removePresenterVersion(p, i)"
+                            >
+                              &times;
+                            </button>
+                          }
+                          <span [attr.data-test]="'presenter-version-label-' + i"
+                            >{{ i + 1 }} · {{ presenterSourceName(v.source) }}</span
+                          >
+                          <span
+                            class="meta version__summary"
+                            [attr.data-test]="'presenter-version-summary-' + i"
+                            [attr.title]="versionSummary(v)"
+                            >{{ versionSummary(v) }}</span
+                          >
+                          @if (isCurrent(p, v)) {
+                            <span class="badge" [attr.data-test]="'presenter-current-' + i"
+                              >Current</span
+                            >
+                          }
+                        </li>
+                      }
+                    </ol>
+                  }
+                </div>
+                <div class="presenter__controls">
+                  @if (presenterRequestable(p)) {
+                    <label
+                      >What would you change?
+                      <textarea
+                        rows="2"
+                        data-test="presenter-feedback"
+                        [value]="presenterFeedback()"
+                        (input)="presenterFeedback.set($any($event.target).value)"
+                      ></textarea>
+                    </label>
+                    <span class="meta" data-test="presenter-feedback-count"
+                      >{{ presenterFeedback().trim().length }} / {{ maxPresenterFeedback }}</span
+                    >
                     <div class="row">
-                      <input
-                        type="text"
-                        class="grow"
-                        placeholder="Why this claim needs no source (required)"
-                        [attr.data-test]="'waive-note-' + c.id"
-                        [value]="waiveNote()"
-                        (input)="waiveNote.set($any($event.target).value)"
-                      />
                       <button
                         type="button"
                         class="btn btn--primary"
-                        [attr.data-test]="'waive-confirm-' + c.id"
-                        [disabled]="waiveNote().trim().length === 0 || deciding() === c.id"
-                        (click)="decide(p, c, 'waived')"
+                        data-test="presenter-change"
+                        [disabled]="
+                          projectMediaBusy() ||
+                          noPictures() ||
+                          presenterFeedback().trim().length === 0 ||
+                          presenterFeedback().trim().length > maxPresenterFeedback
+                        "
+                        [attr.title]="
+                          noPictures() ? 'The connected AI Source makes no pictures' : null
+                        "
+                        (click)="askPresenterChange(p)"
                       >
-                        Waive claim
+                        Ask for a change
                       </button>
                     </div>
-                  }
-                </li>
-              }
-            </ul>
-          }
-          @if (claimError(); as message) {
-            <p class="err" data-test="claim-error">{{ message }}</p>
-          }
-
-          @if (p.format === 'animated_character') {
-            <h3>Presenter</h3>
-            <div data-test="presenter">
-              @if (p.status === 'presenting') {
-                <p class="meta" data-test="presenter-making">Scout is making the presenter.</p>
-              } @else if (p.presenterPreviewFile; as preview) {
-                <video
-                  controls
-                  class="preview"
-                  data-test="presenter-preview"
-                  [src]="mediaUrl(p, preview, presenterStamp(p))"
-                ></video>
-              } @else if (p.presenterVersions.length === 0) {
-                <p class="meta" data-test="presenter-pending">
-                  The presenter is made as soon as the script is ready.
-                </p>
-              }
-              @if (p.presenterFile; as file) {
-                <div
-                  class="mouth-area"
-                  data-test="mouth-area"
-                  (pointerdown)="startMouth($event)"
-                  (pointermove)="moveMouth($event)"
-                  (pointerup)="endMouth($event)"
-                  (pointercancel)="cancelMouth()"
-                >
-                  <img
-                    class="mouth-area__image"
-                    data-test="presenter-image"
-                    draggable="false"
-                    [src]="mediaUrl(p, file)"
-                    alt="Presenter of the video"
-                  />
-                  @if (p.mouthBox; as box) {
-                    <div
-                      class="mouth"
-                      data-test="mouth-current"
-                      [style.left.%]="box.x * 100"
-                      [style.top.%]="box.y * 100"
-                      [style.width.%]="box.width * 100"
-                      [style.height.%]="box.height * 100"
-                    ></div>
-                  }
-                  @if (mouthDraft(); as box) {
-                    <div
-                      class="mouth mouth--drawn"
-                      data-test="mouth-drawn"
-                      [style.left.%]="box.x * 100"
-                      [style.top.%]="box.y * 100"
-                      [style.width.%]="box.width * 100"
-                      [style.height.%]="box.height * 100"
-                    ></div>
-                  }
-                </div>
-                <p class="meta" data-test="mouth-hint">
-                  Drag a box around the mouth so the character speaks.
-                </p>
-                <div class="row">
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    data-test="mouth-save"
-                    [disabled]="!mouthDraftValid() || projectMediaBusy()"
-                    (click)="saveMouth(p)"
-                  >
-                    Save mouth
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    data-test="mouth-clear"
-                    (click)="mouthDraft.set(null)"
-                  >
-                    Clear
-                  </button>
-                </div>
-              } @else {
-                <p class="empty" data-test="presenter-empty">
-                  No presenter picture yet: Scout makes one when it produces the video if the
-                  connected AI Source makes pictures; or attach your own.
-                </p>
-              }
-              @if (presenterRequestable(p)) {
-                <label
-                  >Prompt
-                  <textarea
-                    rows="4"
-                    data-test="presenter-prompt"
-                    [value]="presenterPromptText(p)"
-                    (input)="presenterPrompt.set($any($event.target).value)"
-                  ></textarea>
-                </label>
-                <span class="meta" data-test="presenter-prompt-count"
-                  >{{ presenterPromptText(p).trim().length }} / {{ maxPresenterPrompt }}</span
-                >
-                <p class="meta safety" data-test="presenter-safety">{{ presenterSafety }}</p>
-                <div class="row">
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    data-test="presenter-generate"
-                    [disabled]="
-                      projectMediaBusy() ||
-                      noPictures() ||
-                      presenterPromptText(p).trim().length > maxPresenterPrompt
-                    "
-                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
-                    (click)="generatePresenter(p)"
-                  >
-                    Generate
-                  </button>
-                </div>
-                <label
-                  >What would you change?
-                  <textarea
-                    rows="2"
-                    data-test="presenter-feedback"
-                    [value]="presenterFeedback()"
-                    (input)="presenterFeedback.set($any($event.target).value)"
-                  ></textarea>
-                </label>
-                <span class="meta" data-test="presenter-feedback-count"
-                  >{{ presenterFeedback().trim().length }} / {{ maxPresenterFeedback }}</span
-                >
-                <div class="row">
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    data-test="presenter-change"
-                    [disabled]="
-                      projectMediaBusy() ||
-                      noPictures() ||
-                      presenterFeedback().trim().length === 0 ||
-                      presenterFeedback().trim().length > maxPresenterFeedback
-                    "
-                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
-                    (click)="askPresenterChange(p)"
-                  >
-                    Ask for a change
-                  </button>
-                </div>
-                @if (builtinPresenters().length > 0) {
-                  <div class="row">
-                    <label
-                      >Scout's presenters
-                      <select
-                        data-test="presenter-builtin"
-                        (change)="builtinChoice.set($any($event.target).value)"
+                    <details class="fold" data-test="presenter-prompt-options">
+                      <summary>Edit the full prompt</summary>
+                      <label
+                        >Prompt
+                        <textarea
+                          rows="4"
+                          data-test="presenter-prompt"
+                          [value]="presenterPromptText(p)"
+                          (input)="presenterPrompt.set($any($event.target).value)"
+                        ></textarea>
+                      </label>
+                      <span class="meta" data-test="presenter-prompt-count"
+                        >{{ presenterPromptText(p).trim().length }} / {{ maxPresenterPrompt }}</span
                       >
-                        @for (b of builtinPresenters(); track b.id) {
-                          <option [value]="b.id" [selected]="builtinChosen() === b.id">
-                            {{ b.label }}
+                      <p class="meta safety" data-test="presenter-safety">{{ presenterSafety }}</p>
+                      <div class="row">
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          data-test="presenter-generate"
+                          [disabled]="
+                            projectMediaBusy() ||
+                            noPictures() ||
+                            presenterPromptText(p).trim().length > maxPresenterPrompt
+                          "
+                          [attr.title]="
+                            noPictures() ? 'The connected AI Source makes no pictures' : null
+                          "
+                          (click)="generatePresenter(p)"
+                        >
+                          Generate
+                        </button>
+                      </div>
+                    </details>
+                  }
+                  @if (presenterRequestable(p) || backgroundAttachable(p) || p.presenterFile) {
+                    <details
+                      class="fold"
+                      data-test="presenter-own"
+                      [open]="!!p.presenterFile && !p.mouthBox"
+                    >
+                      <summary>Use one of Scout's presenters, or your own picture</summary>
+                      @if (presenterRequestable(p) && builtinPresenters().length > 0) {
+                        <div class="row">
+                          <label
+                            >Scout's presenters
+                            <select
+                              data-test="presenter-builtin"
+                              (change)="builtinChoice.set($any($event.target).value)"
+                            >
+                              @for (b of builtinPresenters(); track b.id) {
+                                <option [value]="b.id" [selected]="builtinChosen() === b.id">
+                                  {{ b.label }}
+                                </option>
+                              }
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            data-test="presenter-builtin-use"
+                            [disabled]="projectMediaBusy()"
+                            (click)="useBuiltinPresenter(p)"
+                          >
+                            Use this one
+                          </button>
+                        </div>
+                      }
+                      @if (backgroundAttachable(p)) {
+                        <div class="row">
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            data-test="presenter-attach"
+                            [disabled]="projectMediaBusy()"
+                            (click)="attachProjectMedia(p, 'presenter')"
+                          >
+                            {{ p.presenterFile ? 'Replace picture' : 'Attach picture' }}
+                          </button>
+                        </div>
+                      }
+                      @if (p.presenterFile; as file) {
+                        <h4>Mark the mouth</h4>
+                        <div
+                          class="mouth-area"
+                          data-test="mouth-area"
+                          (pointerdown)="startMouth($event)"
+                          (pointermove)="moveMouth($event)"
+                          (pointerup)="endMouth($event)"
+                          (pointercancel)="cancelMouth()"
+                        >
+                          <img
+                            class="mouth-area__image"
+                            data-test="presenter-image"
+                            draggable="false"
+                            [src]="mediaUrl(p, file)"
+                            alt="Presenter of the video"
+                          />
+                          @if (p.mouthBox; as box) {
+                            <div
+                              class="mouth"
+                              data-test="mouth-current"
+                              [style.left.%]="box.x * 100"
+                              [style.top.%]="box.y * 100"
+                              [style.width.%]="box.width * 100"
+                              [style.height.%]="box.height * 100"
+                            ></div>
+                          }
+                          @if (mouthDraft(); as box) {
+                            <div
+                              class="mouth mouth--drawn"
+                              data-test="mouth-drawn"
+                              [style.left.%]="box.x * 100"
+                              [style.top.%]="box.y * 100"
+                              [style.width.%]="box.width * 100"
+                              [style.height.%]="box.height * 100"
+                            ></div>
+                          }
+                        </div>
+                        <p class="meta" data-test="mouth-hint">
+                          Drag a box around the mouth so the character speaks.
+                        </p>
+                        <div class="row">
+                          <button
+                            type="button"
+                            class="btn btn--primary"
+                            data-test="mouth-save"
+                            [disabled]="!mouthDraftValid() || projectMediaBusy()"
+                            (click)="saveMouth(p)"
+                          >
+                            Save mouth
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            data-test="mouth-clear"
+                            (click)="mouthDraft.set(null)"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      }
+                    </details>
+                  }
+                  @if (presenterError(); as message) {
+                    <p class="err" data-test="presenter-error">{{ message }}</p>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="block-head">
+              <h3>Scenes</h3>
+              <button
+                type="button"
+                class="help"
+                data-test="help-scenes"
+                aria-label="What this block is for"
+                [attr.data-tip]="help.scenes"
+                [attr.aria-description]="help.scenes"
+              >
+                ?
+              </button>
+            </div>
+            @if (producible(p)) {
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-test="produce"
+                  [disabled]="producing() || pendingClaims(p) > 0"
+                  (click)="openProduce(p)"
+                >
+                  Produce video media
+                </button>
+                @if (pendingClaims(p) > 0) {
+                  <span class="err" data-test="produce-blocked">
+                    {{ pendingClaims(p) }} {{ pendingClaims(p) === 1 ? 'claim is' : 'claims are' }}
+                    still pending; decide every claim before producing the video.
+                  </span>
+                }
+              </div>
+              @if (producePanel() === p.id) {
+                <div class="panel" data-test="produce-panel">
+                  @if (p.format !== 'own_video') {
+                    <label
+                      >Narration voice
+                      <select
+                        data-test="produce-voice"
+                        (change)="produceVoice.set($any($event.target).value)"
+                      >
+                        <option value="" [selected]="produceVoice() === ''">Scout's choice</option>
+                        @if (unavailableVoice(p); as id) {
+                          <option [value]="id" [selected]="produceVoice() === id" disabled>
+                            {{ id }} (not available on this machine)
                           </option>
+                        }
+                        @for (group of voiceGroups(); track group.source) {
+                          <optgroup [label]="group.source">
+                            @for (v of group.voices; track v.id) {
+                              <option [value]="v.id" [selected]="produceVoice() === v.id">
+                                {{ v.label }}
+                              </option>
+                            }
+                          </optgroup>
                         }
                       </select>
                     </label>
                     <button
                       type="button"
                       class="btn btn--secondary"
-                      data-test="presenter-builtin-use"
-                      [disabled]="projectMediaBusy()"
-                      (click)="useBuiltinPresenter(p)"
+                      data-test="produce-voice-preview"
+                      [disabled]="voiceSample(produceVoice()) === null"
+                      [attr.title]="voiceSample(produceVoice()) === null ? 'No sample yet' : null"
+                      (click)="playSample(produceVoice())"
                     >
-                      Use this one
+                      Preview
+                    </button>
+                  }
+                  <label
+                    >Direction
+                    <textarea
+                      rows="3"
+                      data-test="produce-brief"
+                      [value]="produceBrief()"
+                      (input)="produceBrief.set($any($event.target).value)"
+                    ></textarea>
+                  </label>
+                  <span class="meta" data-test="produce-brief-count"
+                    >{{ produceBrief().trim().length }} / {{ maxDirection }}</span
+                  >
+                  @if (p.format === 'animated_character') {
+                    <label
+                      >Presenter
+                      <textarea
+                        rows="2"
+                        data-test="produce-presenter"
+                        [value]="producePresenter()"
+                        (input)="producePresenter.set($any($event.target).value)"
+                      ></textarea>
+                    </label>
+                    <span class="meta" data-test="produce-presenter-count"
+                      >{{ producePresenter().trim().length }} / {{ maxPresenter }}</span
+                    >
+                  }
+                  @if (p.format !== 'own_video') {
+                    <label
+                      >Motion
+                      <select
+                        data-test="produce-motion"
+                        (change)="produceMotion.set($any($event.target).value)"
+                      >
+                        @for (m of motions; track m.value) {
+                          <option [value]="m.value" [selected]="produceMotion() === m.value">
+                            {{ m.label }}
+                          </option>
+                        }
+                      </select>
+                    </label>
+                  }
+                  @if (mediaWarning(); as warning) {
+                    <p class="meta" data-test="produce-warning">{{ warning }}</p>
+                  }
+                  <div class="row">
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      data-test="produce-confirm"
+                      [disabled]="producing()"
+                      (click)="confirmProduce(p)"
+                    >
+                      Produce
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      data-test="produce-cancel"
+                      (click)="producePanel.set(null)"
+                    >
+                      Cancel
                     </button>
                   </div>
-                }
+                </div>
               }
-              @if (p.presenterVersions.length > 0) {
-                <ol class="versions" data-test="presenter-versions">
-                  @for (v of p.presenterVersions; track v.file; let i = $index) {
-                    <li
-                      class="version"
-                      [class.version--current]="v.file === p.presenterFile"
-                      [attr.data-test]="'presenter-version-' + i"
-                    >
-                      <img
-                        class="version__thumb"
-                        [src]="mediaUrl(p, v.file, v.madeAt)"
-                        [alt]="'Presenter version ' + (i + 1)"
-                      />
-                      <span [attr.data-test]="'presenter-version-label-' + i"
-                        >{{ i + 1 }} · {{ presenterSourceName(v.source) }}</span
-                      >
-                      <span class="meta" [attr.data-test]="'presenter-version-summary-' + i">{{
-                        versionSummary(v)
-                      }}</span>
-                      @if (v.file === p.presenterFile) {
-                        <span class="badge" [attr.data-test]="'presenter-current-' + i"
-                          >Current</span
+            }
+            @if (produceError(); as message) {
+              <p class="err" data-test="produce-error">{{ message }}</p>
+            }
+            @if (p.status === 'presenting') {
+              <p class="meta" data-test="presenting-progress">Making the presenter.</p>
+            }
+            @if (p.status === 'producing') {
+              <p class="meta" data-test="production-progress">
+                {{ readyScenes(p) }} of {{ p.scenes.length }} scenes ready
+              </p>
+            }
+            @if (p.status === 'transcribing') {
+              <p class="meta" data-test="transcription-progress">
+                Transcribed {{ clock(transcribedMs(p)) }} of {{ clock(p.recordingMs) }}
+              </p>
+            }
+            @if (p.scenes.length === 0) {
+              <p class="empty" data-test="scenes-empty">No scenes yet.</p>
+            } @else {
+              <ol class="scenes">
+                @for (s of orderedScenes(p); track s.id; let first = $first, last = $last) {
+                  <li class="scene" [attr.data-test]="'scene-' + s.id">
+                    <div class="scene__media">
+                      @if (
+                        s.visualSource !== 'text_card' &&
+                          p.format === 'animated_character' &&
+                          s.visualFile;
+                        as file
+                      ) {
+                        <div class="card" [attr.data-test]="'scene-preview-' + s.id">
+                          <img
+                            class="card__image"
+                            [attr.data-test]="'scene-image-' + s.id"
+                            [src]="mediaUrl(p, file)"
+                            [alt]="'Picture of scene ' + s.order"
+                          />
+                          @if (p.presenterFile; as presenter) {
+                            <img
+                              class="card__badge"
+                              [attr.data-test]="'scene-presenter-badge-' + s.id"
+                              [src]="mediaUrl(p, presenter)"
+                              alt=""
+                            />
+                          }
+                        </div>
+                      } @else if (s.visualSource !== 'text_card' && s.visualFile; as file) {
+                        <img
+                          class="preview"
+                          [attr.data-test]="'scene-image-' + s.id"
+                          [src]="mediaUrl(p, file)"
+                          [alt]="'Picture of scene ' + s.order"
+                        />
+                      } @else {
+                        <div
+                          class="card"
+                          [class.card--background]="p.backgroundFile !== null"
+                          [attr.data-test]="'scene-preview-' + s.id"
                         >
-                      } @else if (presenterRequestable(p)) {
+                          @if (p.backgroundFile; as background) {
+                            <img
+                              class="card__image"
+                              [attr.data-test]="'scene-preview-background-' + s.id"
+                              [src]="mediaUrl(p, background)"
+                              alt=""
+                            />
+                          }
+                          @if (p.format === 'animated_character' && p.presenterFile; as presenter) {
+                            <img
+                              class="card__image card__image--presenter"
+                              [attr.data-test]="'scene-preview-presenter-' + s.id"
+                              [src]="mediaUrl(p, presenter)"
+                              alt=""
+                            />
+                          } @else {
+                            <p class="card__text" [attr.data-test]="'scene-preview-text-' + s.id">
+                              {{ firstSentence(s.narration) }}
+                            </p>
+                          }
+                        </div>
+                      }
+                      @if (
+                        p.format === 'generated_pictures' ||
+                        p.format === 'animated_character' ||
+                        p.format === 'own_pictures'
+                      ) {
+                        <div class="scene__tools">
+                          @if (
+                            p.format === 'generated_pictures' || p.format === 'animated_character'
+                          ) {
+                            <button
+                              type="button"
+                              class="btn btn--secondary btn--small"
+                              [attr.data-test]="'scene-picture-regenerate-' + s.id"
+                              [disabled]="s.locked || sceneBusy() !== null"
+                              (click)="regeneratePicture(p, s)"
+                            >
+                              Regenerate picture
+                            </button>
+                          }
+                          @if (p.format === 'own_pictures' || p.format === 'animated_character') {
+                            <button
+                              type="button"
+                              class="btn btn--secondary btn--small"
+                              [attr.data-test]="'scene-attach-visual-' + s.id"
+                              [disabled]="sceneBusy() !== null"
+                              (click)="attach(p, s, 'visual')"
+                            >
+                              Attach image
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                    <div class="scene__body">
+                      <p data-test="scene-narration">{{ s.narration }}</p>
+                      @if (p.format === 'own_video') {
+                        <p class="meta" [attr.data-test]="'scene-clip-' + s.id">
+                          Clip: {{ clock(s.clipStartMs) }} to {{ clock(s.clipEndMs) }}
+                        </p>
+                      } @else if (p.format === 'own_pictures') {
+                        <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
+                      } @else if (picturePromptDrafts()[s.id] === undefined) {
+                        <div class="row prompt-line">
+                          <span
+                            class="meta prompt-line__text"
+                            [attr.data-test]="'scene-picture-prompt-line-' + s.id"
+                            [attr.title]="s.visualPrompt"
+                            >Picture prompt: {{ s.visualPrompt }}</span
+                          >
+                          <button
+                            type="button"
+                            class="btn btn--secondary btn--small"
+                            [attr.data-test]="'scene-picture-prompt-edit-' + s.id"
+                            [disabled]="s.locked || sceneBusy() !== null"
+                            (click)="setPicturePrompt(s, s.visualPrompt)"
+                          >
+                            Edit prompt
+                          </button>
+                        </div>
+                      } @else {
+                        <label class="meta"
+                          >Picture prompt
+                          <textarea
+                            rows="2"
+                            [attr.data-test]="'scene-picture-prompt-' + s.id"
+                            [value]="picturePromptOf(s)"
+                            (input)="setPicturePrompt(s, $any($event.target).value)"
+                          ></textarea>
+                        </label>
+                        @if (picturePromptInvalid(s)) {
+                          <p class="err" [attr.data-test]="'scene-picture-prompt-invalid-' + s.id">
+                            A picture prompt is 1 to 700 characters.
+                          </p>
+                        }
+                        <div class="row">
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            [attr.data-test]="'scene-picture-prompt-save-' + s.id"
+                            [disabled]="
+                              picturePromptInvalid(s) ||
+                              picturePromptOf(s).trim() === s.visualPrompt ||
+                              s.locked ||
+                              sceneBusy() !== null
+                            "
+                            (click)="savePicturePrompt(p, s)"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            [attr.data-test]="'scene-picture-prompt-cancel-' + s.id"
+                            (click)="cancelPicturePrompt(s)"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      }
+                      <p class="meta">
+                        <span class="badge" [attr.data-test]="'scene-status-' + s.id">{{
+                          s.status
+                        }}</span>
+                        <span [attr.data-test]="'scene-sources-' + s.id"
+                          >Audio: {{ sourceLabel(s.audioSource) }} · Picture:
+                          {{ sourceLabel(s.visualSource) }}</span
+                        >
+                      </p>
+                      @if (s.visualCredit; as credit) {
+                        <p class="meta" [attr.data-test]="'scene-credit-' + s.id">
+                          Credit: {{ credit }}
+                        </p>
+                      }
+                      @if (s.error; as note) {
+                        @if (s.status === 'failed') {
+                          <p class="err" [attr.data-test]="'scene-failure-' + s.id">{{ note }}</p>
+                        } @else {
+                          <p class="meta" [attr.data-test]="'scene-note-' + s.id">{{ note }}</p>
+                        }
+                      }
+                      @if (p.format !== 'own_video') {
+                        <div class="row" [attr.data-test]="'scene-audio-row-' + s.id">
+                          @if (s.audioFile; as file) {
+                            <audio
+                              controls
+                              [attr.data-test]="'scene-audio-' + s.id"
+                              [src]="mediaUrl(p, file)"
+                            ></audio>
+                          }
+                          <button
+                            type="button"
+                            class="btn btn--secondary"
+                            [attr.data-test]="'scene-narration-replace-' + s.id"
+                            [disabled]="sceneBusy() !== null"
+                            (click)="attach(p, s, 'audio')"
+                          >
+                            Replace narration
+                          </button>
+                          <details class="menu" [attr.data-test]="'scene-narration-menu-' + s.id">
+                            <summary class="btn btn--secondary btn--small">Narration</summary>
+                            <div class="menu__items">
+                              @if (
+                                p.format === 'generated_pictures' ||
+                                p.format === 'animated_character'
+                              ) {
+                                <button
+                                  type="button"
+                                  class="btn btn--secondary"
+                                  [attr.data-test]="'scene-regenerate-' + s.id"
+                                  [disabled]="s.locked || sceneBusy() !== null"
+                                  (click)="regenerate(p, s)"
+                                >
+                                  Regenerate scene
+                                </button>
+                              }
+                              <button
+                                type="button"
+                                class="btn btn--secondary"
+                                [attr.data-test]="'scene-narration-regenerate-' + s.id"
+                                [disabled]="s.locked || sceneBusy() !== null"
+                                (click)="askRegenerateNarration(p, s)"
+                              >
+                                Regenerate narration
+                              </button>
+                            </div>
+                          </details>
+                        </div>
+                      }
+                      <div class="row">
                         <button
                           type="button"
                           class="btn btn--secondary"
-                          [attr.data-test]="'presenter-use-' + i"
-                          [disabled]="projectMediaBusy()"
-                          (click)="usePresenterVersion(p, i)"
+                          [attr.data-test]="'scene-edit-' + s.id"
+                          [disabled]="s.locked || sceneBusy() !== null"
+                          (click)="openSceneText(s)"
                         >
-                          Use this one
+                          Edit text
                         </button>
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          [attr.data-test]="'scene-lock-' + s.id"
+                          [disabled]="sceneBusy() !== null"
+                          (click)="toggleLock(p, s)"
+                        >
+                          {{ s.locked ? 'Unlock' : 'Lock' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          [attr.data-test]="'scene-up-' + s.id"
+                          [disabled]="first || sceneBusy() !== null"
+                          (click)="move(p, s, -1)"
+                        >
+                          Move up
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn--secondary"
+                          [attr.data-test]="'scene-down-' + s.id"
+                          [disabled]="last || sceneBusy() !== null"
+                          (click)="move(p, s, 1)"
+                        >
+                          Move down
+                        </button>
+                      </div>
+                      @if (editingScene() === s.id) {
+                        <div class="panel">
+                          @if (p.format === 'own_video') {
+                            <p class="meta" [attr.data-test]="'scene-text-hint-' + s.id">
+                              The new text replaces this scene's captions; the recording is not
+                              changed.
+                            </p>
+                          }
+                          <textarea
+                            rows="4"
+                            [attr.data-test]="'scene-text-' + s.id"
+                            [value]="sceneText()"
+                            (input)="sceneText.set($any($event.target).value)"
+                          ></textarea>
+                          <span class="meta" [attr.data-test]="'scene-text-count-' + s.id"
+                            >{{ sceneText().trim().length }} / {{ maxSceneText }}</span
+                          >
+                          @if (sceneTextInvalid()) {
+                            <p class="err" [attr.data-test]="'scene-text-invalid-' + s.id">
+                              A scene's text is 1 to 700 characters.
+                            </p>
+                          }
+                          <div class="row">
+                            <button
+                              type="button"
+                              class="btn btn--primary"
+                              [attr.data-test]="'scene-text-save-' + s.id"
+                              [disabled]="
+                                sceneTextInvalid() ||
+                                sceneText().trim() === s.narration ||
+                                sceneBusy() !== null
+                              "
+                              (click)="saveSceneText(p, s)"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn--secondary"
+                              [attr.data-test]="'scene-text-cancel-' + s.id"
+                              (click)="editingScene.set(null)"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       }
-                    </li>
-                  }
-                </ol>
-              }
-              @if (readiness(); as r) {
-                <p class="meta" data-test="presenter-budget">
-                  {{ r.picturesLeftToday }} of {{ dailyPictures }} pictures left today
+                    </div>
+                  </li>
+                }
+              </ol>
+            }
+            @if (sceneError(); as message) {
+              <p class="err" data-test="scene-error">{{ message }}</p>
+            }
+
+            @if (p.format === 'own_video') {
+              <div class="block-head">
+                <h3>Recording</h3>
+                <button
+                  type="button"
+                  class="help"
+                  data-test="help-recording"
+                  aria-label="What this block is for"
+                  [attr.data-tip]="help.recording"
+                  [attr.aria-description]="help.recording"
+                >
+                  ?
+                </button>
+              </div>
+              <div data-test="recording">
+                @if (p.recordingFile === null) {
+                  <p class="empty" data-test="recording-empty">
+                    No recording yet: attach the video you recorded; Scout transcribes it on this
+                    machine.
+                  </p>
+                }
+                @if (recordingAttachable(p)) {
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="recording-attach"
+                    [disabled]="projectMediaBusy()"
+                    (click)="attachProjectMedia(p, 'recording')"
+                  >
+                    {{ p.recordingFile ? 'Replace recording' : 'Attach recording' }}
+                  </button>
+                }
+                @if (projectMediaError(); as message) {
+                  <p class="err" data-test="recording-error">{{ message }}</p>
+                }
+              </div>
+            } @else {
+              <div class="block-head">
+                <h3>Background</h3>
+                <button
+                  type="button"
+                  class="help"
+                  data-test="help-background"
+                  aria-label="What this block is for"
+                  [attr.data-tip]="help.background"
+                  [attr.aria-description]="help.background"
+                >
+                  ?
+                </button>
+              </div>
+              <div data-test="background">
+                @if (p.backgroundFile; as file) {
+                  <img
+                    class="preview"
+                    data-test="background-image"
+                    [src]="mediaUrl(p, file)"
+                    alt="Background of the video"
+                  />
+                } @else {
+                  <p class="empty" data-test="background-empty">
+                    No background yet: every scene without its own picture is a dark text card.
+                  </p>
+                }
+                @if (backgroundAttachable(p)) {
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="background-attach"
+                    [disabled]="projectMediaBusy()"
+                    (click)="attachProjectMedia(p, 'background')"
+                  >
+                    {{ p.backgroundFile ? 'Replace background' : 'Attach background' }}
+                  </button>
+                }
+                @if (projectMediaError(); as message) {
+                  <p class="err" data-test="background-error">{{ message }}</p>
+                }
+              </div>
+            }
+          </section>
+
+          @if (replacingNarration(); as replacing) {
+            <div
+              class="backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="narration-replace-title"
+              data-test="narration-replace-dialog"
+            >
+              <div class="dialog">
+                <h2 id="narration-replace-title">Replace your own narration</h2>
+                <p>
+                  Replace your own narration on this scene with Scout's voice? Your file stays on
+                  disk but the video will use the generated narration.
                 </p>
-              }
-              @if (backgroundAttachable(p)) {
                 <div class="row">
                   <button
                     type="button"
                     class="btn btn--secondary"
-                    data-test="presenter-attach"
-                    [disabled]="projectMediaBusy()"
-                    (click)="attachProjectMedia(p, 'presenter')"
+                    data-test="narration-replace-cancel"
+                    (click)="replacingNarration.set(null)"
                   >
-                    {{ p.presenterFile ? 'Replace picture' : 'Attach picture' }}
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="narration-replace-confirm"
+                    (click)="confirmRegenerateNarration(p, replacing)"
+                  >
+                    Confirm
                   </button>
                 </div>
-              }
-              @if (presenterError(); as message) {
-                <p class="err" data-test="presenter-error">{{ message }}</p>
-              }
-            </div>
-          }
-          @if (p.format === 'own_video') {
-            <h3>Recording</h3>
-            <div data-test="recording">
-              @if (p.recordingFile === null) {
-                <p class="empty" data-test="recording-empty">
-                  No recording yet: attach the video you recorded; Scout transcribes it on this
-                  machine.
-                </p>
-              }
-              @if (recordingAttachable(p)) {
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="recording-attach"
-                  [disabled]="projectMediaBusy()"
-                  (click)="attachProjectMedia(p, 'recording')"
-                >
-                  {{ p.recordingFile ? 'Replace recording' : 'Attach recording' }}
-                </button>
-              }
-              @if (projectMediaError(); as message) {
-                <p class="err" data-test="recording-error">{{ message }}</p>
-              }
-            </div>
-          } @else {
-            <h3>Background</h3>
-            <div data-test="background">
-              @if (p.backgroundFile; as file) {
-                <img
-                  class="preview"
-                  data-test="background-image"
-                  [src]="mediaUrl(p, file)"
-                  alt="Background of the video"
-                />
-              } @else {
-                <p class="empty" data-test="background-empty">
-                  No background yet: every scene without its own picture is a dark text card.
-                </p>
-              }
-              @if (backgroundAttachable(p)) {
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="background-attach"
-                  [disabled]="projectMediaBusy()"
-                  (click)="attachProjectMedia(p, 'background')"
-                >
-                  {{ p.backgroundFile ? 'Replace background' : 'Attach background' }}
-                </button>
-              }
-              @if (projectMediaError(); as message) {
-                <p class="err" data-test="background-error">{{ message }}</p>
-              }
+              </div>
             </div>
           }
 
-          <h3>Scenes</h3>
-          @if (producible(p)) {
-            <div class="row">
-              <button
-                type="button"
-                class="btn btn--primary"
-                data-test="produce"
-                [disabled]="producing() || pendingClaims(p) > 0"
-                (click)="openProduce(p)"
-              >
-                Produce video media
-              </button>
-              @if (pendingClaims(p) > 0) {
-                <span class="err" data-test="produce-blocked">
-                  {{ pendingClaims(p) }} {{ pendingClaims(p) === 1 ? 'claim is' : 'claims are' }}
-                  still pending; decide every claim before producing the video.
-                </span>
-              }
+          @if (deleting() === p.id) {
+            <div
+              class="backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-title"
+              data-test="delete-dialog"
+            >
+              <div class="dialog">
+                <h2 id="delete-title">Delete {{ p.topic }}</h2>
+                <p>
+                  This removes the project, its script, scenes and media files from Scout's data
+                  folder. A video already on YouTube stays there.
+                </p>
+                @if (deleteError(); as message) {
+                  <p class="err" data-test="delete-error">{{ message }}</p>
+                }
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="delete-cancel"
+                    (click)="deleting.set(null)"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="delete-confirm"
+                    [disabled]="deletingBusy()"
+                    (click)="confirmDelete(p)"
+                  >
+                    Confirm and delete
+                  </button>
+                </div>
+              </div>
             </div>
-            @if (producePanel() === p.id) {
-              <div class="panel" data-test="produce-panel">
+          }
+
+          @if (delegating() === p.id) {
+            <div
+              class="backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delegate-title"
+              data-test="delegate-dialog"
+            >
+              <div class="dialog">
+                <h2 id="delegate-title">Delegate {{ p.topic }}</h2>
                 @if (p.format !== 'own_video') {
                   <label
                     >Narration voice
                     <select
-                      data-test="produce-voice"
-                      (change)="produceVoice.set($any($event.target).value)"
+                      data-test="delegate-voice"
+                      (change)="delegateVoice.set($any($event.target).value)"
                     >
-                      <option value="" [selected]="produceVoice() === ''">Scout's choice</option>
+                      <option value="" [selected]="delegateVoice() === ''">Scout's choice</option>
                       @if (unavailableVoice(p); as id) {
-                        <option [value]="id" [selected]="produceVoice() === id" disabled>
+                        <option [value]="id" [selected]="delegateVoice() === id" disabled>
                           {{ id }} (not available on this machine)
                         </option>
                       }
                       @for (group of voiceGroups(); track group.source) {
                         <optgroup [label]="group.source">
                           @for (v of group.voices; track v.id) {
-                            <option [value]="v.id" [selected]="produceVoice() === v.id">
+                            <option [value]="v.id" [selected]="delegateVoice() === v.id">
                               {{ v.label }}
                             </option>
                           }
@@ -960,10 +1773,10 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   <button
                     type="button"
                     class="btn btn--secondary"
-                    data-test="produce-voice-preview"
-                    [disabled]="voiceSample(produceVoice()) === null"
-                    [attr.title]="voiceSample(produceVoice()) === null ? 'No sample yet' : null"
-                    (click)="playSample(produceVoice())"
+                    data-test="delegate-voice-preview"
+                    [disabled]="voiceSample(delegateVoice()) === null"
+                    [attr.title]="voiceSample(delegateVoice()) === null ? 'No sample yet' : null"
+                    (click)="playSample(delegateVoice())"
                   >
                     Preview
                   </button>
@@ -972,37 +1785,37 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   >Direction
                   <textarea
                     rows="3"
-                    data-test="produce-brief"
-                    [value]="produceBrief()"
-                    (input)="produceBrief.set($any($event.target).value)"
+                    data-test="delegate-brief"
+                    [value]="delegateBrief()"
+                    (input)="delegateBrief.set($any($event.target).value)"
                   ></textarea>
                 </label>
-                <span class="meta" data-test="produce-brief-count"
-                  >{{ produceBrief().trim().length }} / {{ maxDirection }}</span
+                <span class="meta" data-test="delegate-brief-count"
+                  >{{ delegateBrief().trim().length }} / {{ maxDirection }}</span
                 >
                 @if (p.format === 'animated_character') {
                   <label
                     >Presenter
                     <textarea
                       rows="2"
-                      data-test="produce-presenter"
-                      [value]="producePresenter()"
-                      (input)="producePresenter.set($any($event.target).value)"
+                      data-test="delegate-presenter"
+                      [value]="delegatePresenter()"
+                      (input)="delegatePresenter.set($any($event.target).value)"
                     ></textarea>
                   </label>
-                  <span class="meta" data-test="produce-presenter-count"
-                    >{{ producePresenter().trim().length }} / {{ maxPresenter }}</span
+                  <span class="meta" data-test="delegate-presenter-count"
+                    >{{ delegatePresenter().trim().length }} / {{ maxPresenter }}</span
                   >
                 }
                 @if (p.format !== 'own_video') {
                   <label
                     >Motion
                     <select
-                      data-test="produce-motion"
-                      (change)="produceMotion.set($any($event.target).value)"
+                      data-test="delegate-motion"
+                      (change)="delegateMotion.set($any($event.target).value)"
                     >
                       @for (m of motions; track m.value) {
-                        <option [value]="m.value" [selected]="produceMotion() === m.value">
+                        <option [value]="m.value" [selected]="delegateMotion() === m.value">
                           {{ m.label }}
                         </option>
                       }
@@ -1010,527 +1823,41 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   </label>
                 }
                 @if (mediaWarning(); as warning) {
-                  <p class="meta" data-test="produce-warning">{{ warning }}</p>
+                  <p class="meta" data-test="delegate-warning">{{ warning }}</p>
+                }
+                <h3>What will run</h3>
+                <ul data-test="delegate-steps">
+                  <li>Produce media</li>
+                  <li>Assemble the video</li>
+                  <li>Stop at ready to approve: publishing needs your approval</li>
+                </ul>
+                @if (delegateError(); as message) {
+                  <p class="err" data-test="delegate-error">{{ message }}</p>
                 }
                 <div class="row">
                   <button
                     type="button"
-                    class="btn btn--primary"
-                    data-test="produce-confirm"
-                    [disabled]="producing()"
-                    (click)="confirmProduce(p)"
-                  >
-                    Produce
-                  </button>
-                  <button
-                    type="button"
                     class="btn btn--secondary"
-                    data-test="produce-cancel"
-                    (click)="producePanel.set(null)"
+                    data-test="delegate-cancel"
+                    (click)="delegating.set(null)"
                   >
                     Cancel
                   </button>
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="delegate-confirm"
+                    [disabled]="delegatingBusy()"
+                    (click)="confirmDelegate(p)"
+                  >
+                    Confirm and delegate
+                  </button>
                 </div>
               </div>
-            }
-          }
-          @if (produceError(); as message) {
-            <p class="err" data-test="produce-error">{{ message }}</p>
-          }
-          @if (p.status === 'presenting') {
-            <p class="meta" data-test="presenting-progress">Making the presenter.</p>
-          }
-          @if (p.status === 'producing') {
-            <p class="meta" data-test="production-progress">
-              {{ readyScenes(p) }} of {{ p.scenes.length }} scenes ready
-            </p>
-          }
-          @if (p.status === 'transcribing') {
-            <p class="meta" data-test="transcription-progress">
-              Transcribed {{ clock(transcribedMs(p)) }} of {{ clock(p.recordingMs) }}
-            </p>
-          }
-          @if (p.scenes.length === 0) {
-            <p class="empty" data-test="scenes-empty">No scenes yet.</p>
-          } @else {
-            <ol class="claims">
-              @for (s of orderedScenes(p); track s.id; let first = $first, last = $last) {
-                <li class="claim" [attr.data-test]="'scene-' + s.id">
-                  <p data-test="scene-narration">{{ s.narration }}</p>
-                  @if (p.format === 'own_video') {
-                    <p class="meta" [attr.data-test]="'scene-clip-' + s.id">
-                      Clip: {{ clock(s.clipStartMs) }} to {{ clock(s.clipEndMs) }}
-                    </p>
-                  } @else if (p.format === 'own_pictures') {
-                    <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
-                  } @else {
-                    <label class="meta"
-                      >Picture prompt
-                      <textarea
-                        rows="2"
-                        [attr.data-test]="'scene-picture-prompt-' + s.id"
-                        [value]="picturePromptOf(s)"
-                        (input)="setPicturePrompt(s, $any($event.target).value)"
-                      ></textarea>
-                    </label>
-                    @if (picturePromptInvalid(s)) {
-                      <p class="err" [attr.data-test]="'scene-picture-prompt-invalid-' + s.id">
-                        A picture prompt is 1 to 700 characters.
-                      </p>
-                    }
-                    <div class="row">
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-picture-prompt-save-' + s.id"
-                        [disabled]="
-                          picturePromptInvalid(s) ||
-                          picturePromptOf(s).trim() === s.visualPrompt ||
-                          s.locked ||
-                          sceneBusy() !== null
-                        "
-                        (click)="savePicturePrompt(p, s)"
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-picture-prompt-cancel-' + s.id"
-                        (click)="cancelPicturePrompt(s)"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  }
-                  <p class="meta">
-                    <span class="badge" [attr.data-test]="'scene-status-' + s.id">{{
-                      s.status
-                    }}</span>
-                    <span [attr.data-test]="'scene-sources-' + s.id"
-                      >Audio: {{ sourceLabel(s.audioSource) }} · Picture:
-                      {{ sourceLabel(s.visualSource) }}</span
-                    >
-                  </p>
-                  @if (s.visualCredit; as credit) {
-                    <p class="meta" [attr.data-test]="'scene-credit-' + s.id">
-                      Credit: {{ credit }}
-                    </p>
-                  }
-                  @if (s.error; as note) {
-                    @if (s.status === 'failed') {
-                      <p class="err" [attr.data-test]="'scene-failure-' + s.id">{{ note }}</p>
-                    } @else {
-                      <p class="meta" [attr.data-test]="'scene-note-' + s.id">{{ note }}</p>
-                    }
-                  }
-                  @if (
-                    s.visualSource !== 'text_card' &&
-                      p.format === 'animated_character' &&
-                      s.visualFile;
-                    as file
-                  ) {
-                    <div class="card" [attr.data-test]="'scene-preview-' + s.id">
-                      <img
-                        class="card__image"
-                        [attr.data-test]="'scene-image-' + s.id"
-                        [src]="mediaUrl(p, file)"
-                        [alt]="'Picture of scene ' + s.order"
-                      />
-                      @if (p.presenterFile; as presenter) {
-                        <img
-                          class="card__badge"
-                          [attr.data-test]="'scene-presenter-badge-' + s.id"
-                          [src]="mediaUrl(p, presenter)"
-                          alt=""
-                        />
-                      }
-                    </div>
-                  } @else if (s.visualSource !== 'text_card' && s.visualFile; as file) {
-                    <img
-                      class="preview"
-                      [attr.data-test]="'scene-image-' + s.id"
-                      [src]="mediaUrl(p, file)"
-                      [alt]="'Picture of scene ' + s.order"
-                    />
-                  } @else {
-                    <div
-                      class="card"
-                      [class.card--background]="p.backgroundFile !== null"
-                      [attr.data-test]="'scene-preview-' + s.id"
-                    >
-                      @if (p.backgroundFile; as background) {
-                        <img
-                          class="card__image"
-                          [attr.data-test]="'scene-preview-background-' + s.id"
-                          [src]="mediaUrl(p, background)"
-                          alt=""
-                        />
-                      }
-                      @if (p.format === 'animated_character' && p.presenterFile; as presenter) {
-                        <img
-                          class="card__image card__image--presenter"
-                          [attr.data-test]="'scene-preview-presenter-' + s.id"
-                          [src]="mediaUrl(p, presenter)"
-                          alt=""
-                        />
-                      } @else {
-                        <p class="card__text" [attr.data-test]="'scene-preview-text-' + s.id">
-                          {{ firstSentence(s.narration) }}
-                        </p>
-                      }
-                    </div>
-                  }
-                  @if (p.format !== 'own_video') {
-                    <div class="row" [attr.data-test]="'scene-audio-row-' + s.id">
-                      @if (s.audioFile; as file) {
-                        <audio
-                          controls
-                          [attr.data-test]="'scene-audio-' + s.id"
-                          [src]="mediaUrl(p, file)"
-                        ></audio>
-                      }
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-narration-regenerate-' + s.id"
-                        [disabled]="s.locked || sceneBusy() !== null"
-                        (click)="askRegenerateNarration(p, s)"
-                      >
-                        Regenerate narration
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-narration-replace-' + s.id"
-                        [disabled]="sceneBusy() !== null"
-                        (click)="attach(p, s, 'audio')"
-                      >
-                        Replace narration
-                      </button>
-                    </div>
-                  }
-                  <div class="row">
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-lock-' + s.id"
-                      [disabled]="sceneBusy() !== null"
-                      (click)="toggleLock(p, s)"
-                    >
-                      {{ s.locked ? 'Unlock' : 'Lock' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-up-' + s.id"
-                      [disabled]="first || sceneBusy() !== null"
-                      (click)="move(p, s, -1)"
-                    >
-                      Move up
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-down-' + s.id"
-                      [disabled]="last || sceneBusy() !== null"
-                      (click)="move(p, s, 1)"
-                    >
-                      Move down
-                    </button>
-                    @if (p.format === 'generated_pictures' || p.format === 'animated_character') {
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-regenerate-' + s.id"
-                        [disabled]="s.locked || sceneBusy() !== null"
-                        (click)="regenerate(p, s)"
-                      >
-                        Regenerate scene
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-picture-regenerate-' + s.id"
-                        [disabled]="s.locked || sceneBusy() !== null"
-                        (click)="regeneratePicture(p, s)"
-                      >
-                        Regenerate picture
-                      </button>
-                    }
-                    <button
-                      type="button"
-                      class="btn btn--secondary"
-                      [attr.data-test]="'scene-edit-' + s.id"
-                      [disabled]="s.locked || sceneBusy() !== null"
-                      (click)="openSceneText(s)"
-                    >
-                      Edit text
-                    </button>
-                    @if (p.format === 'own_pictures' || p.format === 'animated_character') {
-                      <button
-                        type="button"
-                        class="btn btn--secondary"
-                        [attr.data-test]="'scene-attach-visual-' + s.id"
-                        [disabled]="sceneBusy() !== null"
-                        (click)="attach(p, s, 'visual')"
-                      >
-                        Attach image
-                      </button>
-                    }
-                  </div>
-                  @if (editingScene() === s.id) {
-                    <div class="panel">
-                      @if (p.format === 'own_video') {
-                        <p class="meta" [attr.data-test]="'scene-text-hint-' + s.id">
-                          The new text replaces this scene's captions; the recording is not changed.
-                        </p>
-                      }
-                      <textarea
-                        rows="4"
-                        [attr.data-test]="'scene-text-' + s.id"
-                        [value]="sceneText()"
-                        (input)="sceneText.set($any($event.target).value)"
-                      ></textarea>
-                      <span class="meta" [attr.data-test]="'scene-text-count-' + s.id"
-                        >{{ sceneText().trim().length }} / {{ maxSceneText }}</span
-                      >
-                      @if (sceneTextInvalid()) {
-                        <p class="err" [attr.data-test]="'scene-text-invalid-' + s.id">
-                          A scene's text is 1 to 700 characters.
-                        </p>
-                      }
-                      <div class="row">
-                        <button
-                          type="button"
-                          class="btn btn--primary"
-                          [attr.data-test]="'scene-text-save-' + s.id"
-                          [disabled]="
-                            sceneTextInvalid() ||
-                            sceneText().trim() === s.narration ||
-                            sceneBusy() !== null
-                          "
-                          (click)="saveSceneText(p, s)"
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn--secondary"
-                          [attr.data-test]="'scene-text-cancel-' + s.id"
-                          (click)="editingScene.set(null)"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  }
-                </li>
-              }
-            </ol>
-          }
-          @if (sceneError(); as message) {
-            <p class="err" data-test="scene-error">{{ message }}</p>
-          }
-        </section>
-
-        @if (replacingNarration(); as replacing) {
-          <div
-            class="backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="narration-replace-title"
-            data-test="narration-replace-dialog"
-          >
-            <div class="dialog">
-              <h2 id="narration-replace-title">Replace your own narration</h2>
-              <p>
-                Replace your own narration on this scene with Scout's voice? Your file stays on disk
-                but the video will use the generated narration.
-              </p>
-              <div class="row">
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="narration-replace-cancel"
-                  (click)="replacingNarration.set(null)"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="btn btn--primary"
-                  data-test="narration-replace-confirm"
-                  (click)="confirmRegenerateNarration(p, replacing)"
-                >
-                  Confirm
-                </button>
-              </div>
             </div>
-          </div>
+          }
         }
-
-        @if (deleting() === p.id) {
-          <div
-            class="backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-            data-test="delete-dialog"
-          >
-            <div class="dialog">
-              <h2 id="delete-title">Delete {{ p.topic }}</h2>
-              <p>
-                This removes the project, its script, scenes and media files from Scout's data
-                folder. A video already on YouTube stays there.
-              </p>
-              @if (deleteError(); as message) {
-                <p class="err" data-test="delete-error">{{ message }}</p>
-              }
-              <div class="row">
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="delete-cancel"
-                  (click)="deleting.set(null)"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="btn btn--primary"
-                  data-test="delete-confirm"
-                  [disabled]="deletingBusy()"
-                  (click)="confirmDelete(p)"
-                >
-                  Confirm and delete
-                </button>
-              </div>
-            </div>
-          </div>
-        }
-
-        @if (delegating() === p.id) {
-          <div
-            class="backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delegate-title"
-            data-test="delegate-dialog"
-          >
-            <div class="dialog">
-              <h2 id="delegate-title">Delegate {{ p.topic }}</h2>
-              @if (p.format !== 'own_video') {
-                <label
-                  >Narration voice
-                  <select
-                    data-test="delegate-voice"
-                    (change)="delegateVoice.set($any($event.target).value)"
-                  >
-                    <option value="" [selected]="delegateVoice() === ''">Scout's choice</option>
-                    @if (unavailableVoice(p); as id) {
-                      <option [value]="id" [selected]="delegateVoice() === id" disabled>
-                        {{ id }} (not available on this machine)
-                      </option>
-                    }
-                    @for (group of voiceGroups(); track group.source) {
-                      <optgroup [label]="group.source">
-                        @for (v of group.voices; track v.id) {
-                          <option [value]="v.id" [selected]="delegateVoice() === v.id">
-                            {{ v.label }}
-                          </option>
-                        }
-                      </optgroup>
-                    }
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="delegate-voice-preview"
-                  [disabled]="voiceSample(delegateVoice()) === null"
-                  [attr.title]="voiceSample(delegateVoice()) === null ? 'No sample yet' : null"
-                  (click)="playSample(delegateVoice())"
-                >
-                  Preview
-                </button>
-              }
-              <label
-                >Direction
-                <textarea
-                  rows="3"
-                  data-test="delegate-brief"
-                  [value]="delegateBrief()"
-                  (input)="delegateBrief.set($any($event.target).value)"
-                ></textarea>
-              </label>
-              <span class="meta" data-test="delegate-brief-count"
-                >{{ delegateBrief().trim().length }} / {{ maxDirection }}</span
-              >
-              @if (p.format === 'animated_character') {
-                <label
-                  >Presenter
-                  <textarea
-                    rows="2"
-                    data-test="delegate-presenter"
-                    [value]="delegatePresenter()"
-                    (input)="delegatePresenter.set($any($event.target).value)"
-                  ></textarea>
-                </label>
-                <span class="meta" data-test="delegate-presenter-count"
-                  >{{ delegatePresenter().trim().length }} / {{ maxPresenter }}</span
-                >
-              }
-              @if (p.format !== 'own_video') {
-                <label
-                  >Motion
-                  <select
-                    data-test="delegate-motion"
-                    (change)="delegateMotion.set($any($event.target).value)"
-                  >
-                    @for (m of motions; track m.value) {
-                      <option [value]="m.value" [selected]="delegateMotion() === m.value">
-                        {{ m.label }}
-                      </option>
-                    }
-                  </select>
-                </label>
-              }
-              @if (mediaWarning(); as warning) {
-                <p class="meta" data-test="delegate-warning">{{ warning }}</p>
-              }
-              <h3>What will run</h3>
-              <ul data-test="delegate-steps">
-                <li>Produce media</li>
-                <li>Assemble the video</li>
-                <li>Stop at ready to approve: publishing needs your approval</li>
-              </ul>
-              @if (delegateError(); as message) {
-                <p class="err" data-test="delegate-error">{{ message }}</p>
-              }
-              <div class="row">
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="delegate-cancel"
-                  (click)="delegating.set(null)"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="btn btn--primary"
-                  data-test="delegate-confirm"
-                  [disabled]="delegatingBusy()"
-                  (click)="confirmDelegate(p)"
-                >
-                  Confirm and delegate
-                </button>
-              </div>
-            </div>
-          </div>
-        }
-      }
+      </div>
       <audio #samplePlayer data-test="voice-sample-player"></audio>
     </main>
   `,
@@ -1540,8 +1867,9 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         display: block;
       }
       .page {
+        container-type: inline-size;
         padding: 32px;
-        max-width: 1080px;
+        max-width: 1280px;
         margin: 0 auto;
         font-family:
           Inter,
@@ -1622,7 +1950,8 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       }
       .projects,
       .plain,
-      .claims {
+      .claims,
+      .scenes {
         list-style: none;
         margin: 0;
         padding: 0;
@@ -1649,11 +1978,247 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
       .claim {
         background: #171b26;
         border: 1px solid #252b3b;
+        border-left-width: 4px;
         border-radius: 8px;
         padding: 12px 16px;
       }
+      .claim--high {
+        border-left-color: #ef4444;
+      }
+      .claim--medium {
+        border-left-color: #f59e0b;
+      }
+      .claim--low {
+        border-left-color: #22c55e;
+      }
       .claim p {
         margin: 0 0 4px;
+      }
+      .chip {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 0 8px;
+        font-size: 12px;
+        background: #1f2433;
+        color: #e4e8f0;
+      }
+      .chip--high {
+        background: rgba(239, 68, 68, 0.15);
+        color: #fca5a5;
+      }
+      .chip--medium {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fcd34d;
+      }
+      .chip--low {
+        background: rgba(34, 197, 94, 0.15);
+        color: #86efac;
+      }
+      .segmented {
+        display: inline-flex;
+        margin-top: 8px;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .segmented button {
+        background: transparent;
+        color: #e4e8f0;
+        border: 0;
+        border-right: 1px solid #252b3b;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .segmented button:last-child {
+        border-right: 0;
+      }
+      .segmented button[aria-pressed='true'] {
+        background: #2563eb;
+        color: white;
+      }
+      .segmented button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      summary {
+        cursor: pointer;
+      }
+      .channel > summary,
+      .fold > summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 16px 0 8px;
+      }
+      .channel > summary h2,
+      .fold > summary h3 {
+        margin: 0;
+      }
+      .block-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 16px 0 8px;
+      }
+      .block-head h2,
+      .block-head h3 {
+        margin: 0;
+      }
+      .help {
+        position: relative;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: 1px solid #3a4258;
+        border-radius: 50%;
+        background: transparent;
+        color: #7b8299;
+        font-size: 11px;
+        line-height: 1;
+        cursor: help;
+      }
+      .help:hover::after,
+      .help:focus-visible::after {
+        content: attr(data-tip);
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        z-index: 10;
+        width: 320px;
+        padding: 8px 10px;
+        background: #11131a;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        color: #e4e8f0;
+        font-size: 12px;
+        line-height: 1.4;
+        text-align: left;
+        white-space: normal;
+        pointer-events: none;
+      }
+      .work {
+        display: flex;
+        flex-direction: column;
+      }
+      @container (min-width: 960px) {
+        .work--open {
+          display: grid;
+          grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+          gap: 24px;
+          align-items: start;
+        }
+      }
+      .detail {
+        container: detail / inline-size;
+      }
+      .title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .title-row h2 {
+        flex: 1;
+        margin: 0;
+      }
+      .close {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
+        background: transparent;
+        color: #e4e8f0;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .presenter {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      @container detail (max-width: 720px) {
+        .presenter {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .presenter__controls {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .presenter__controls .fold > summary {
+        margin: 8px 0 4px;
+      }
+      .scene {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        background: #171b26;
+        border: 1px solid #252b3b;
+        border-radius: 8px;
+        padding: 12px 16px;
+      }
+      .scene__media {
+        position: relative;
+        flex: 0 0 320px;
+        align-self: flex-start;
+      }
+      .scene__media .card,
+      .scene__media .preview {
+        margin: 0;
+      }
+      .scene__tools {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        display: flex;
+        gap: 6px;
+      }
+      .scene__tools .btn {
+        background: rgba(15, 17, 23, 0.85);
+      }
+      .scene__body {
+        flex: 1 1 260px;
+        min-width: 0;
+      }
+      .scene__body p {
+        margin: 0 0 4px;
+      }
+      .prompt-line {
+        margin-top: 0;
+      }
+      .prompt-line__text {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .menu {
+        position: relative;
+      }
+      .menu > summary {
+        list-style: none;
+      }
+      .menu > summary::-webkit-details-marker {
+        display: none;
+      }
+      .menu__items {
+        position: absolute;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 4px;
+        padding: 6px;
+        background: #11131a;
+        border: 1px solid #252b3b;
+        border-radius: 6px;
       }
       .preview {
         display: block;
@@ -1701,23 +2266,51 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         flex-wrap: wrap;
         gap: 8px;
         list-style: none;
+        margin: 8px 0;
         padding: 0;
       }
       .version {
+        position: relative;
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        width: 140px;
-        padding: 6px;
-        border: 1px solid #252b3b;
-        border-radius: 6px;
-      }
-      .version--current {
-        border-color: #22c55e;
+        gap: 2px;
+        width: 96px;
+        font-size: 11px;
       }
       .version__thumb {
+        display: block;
         width: 100%;
+        border: 2px solid transparent;
         border-radius: 4px;
+        box-sizing: border-box;
+      }
+      .version--current .version__thumb {
+        border-color: #22c55e;
+      }
+      .version__pick {
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+      }
+      .version__remove {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(15, 17, 23, 0.85);
+        color: #e4e8f0;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .version__summary {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .mouth-area {
         position: relative;
@@ -1801,6 +2394,10 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         border: 1px solid transparent;
         cursor: pointer;
       }
+      .btn--small {
+        padding: 2px 8px;
+        font-size: 12px;
+      }
       .btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -1863,6 +2460,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly waiveNote = signal('');
   readonly deciding = signal<string | null>(null);
   readonly claimError = signal<string | null>(null);
+  readonly reopenedClaim = signal<string | null>(null);
+  readonly help = HELP;
 
   readonly readiness = signal<ReadinessDto | null>(null);
   readonly readinessError = signal<string | null>(null);
@@ -1921,7 +2520,6 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly maxSceneText = MAX_SCENE_TEXT;
   readonly maxPresenterPrompt = MAX_PRESENTER_PROMPT;
   readonly maxPresenterFeedback = MAX_PRESENTER_FEEDBACK;
-  readonly dailyPictures = DAILY_PICTURES;
   readonly presenterSafety = PRESENTER_SAFETY;
   readonly presenterPrompt = signal<string | null>(null);
   readonly presenterFeedback = signal('');
@@ -2025,9 +2623,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Opens a project's detail, or closes it when the project is the one already open. */
   async select(id: string): Promise<void> {
+    if (id === this.selectedId()) {
+      this.close();
+      return;
+    }
     this.selectedId.set(id);
     this.waiving.set(null);
+    this.reopenedClaim.set(null);
     this.claimError.set(null);
     this.produceError.set(null);
     this.producePanel.set(null);
@@ -2047,6 +2651,11 @@ export class ProductionComponent implements OnInit, OnDestroy {
     await this.loadSelected();
   }
 
+  close(): void {
+    this.selectedId.set(null);
+    this.detail.set(null);
+  }
+
   openWaive(claimId: string): void {
     this.waiving.set(claimId);
     this.waiveNote.set('');
@@ -2064,6 +2673,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     try {
       this.apply(await this.bridge.operatorDecideClaim(req));
       this.waiving.set(null);
+      this.reopenedClaim.set(null);
     } catch (err: unknown) {
       this.claimError.set(readIpcError(err).message);
     } finally {
@@ -2080,6 +2690,34 @@ export class ProductionComponent implements OnInit, OnDestroy {
 
   pendingClaims(project: OperatorProjectDto): number {
     return project.claims.filter((c) => c.status === 'pending').length;
+  }
+
+  pendingOf(project: OperatorProjectDto): ClaimDto[] {
+    return project.claims.filter((c) => c.status === 'pending');
+  }
+
+  decidedOf(project: OperatorProjectDto): ClaimDto[] {
+    return project.claims.filter((c) => c.status !== 'pending');
+  }
+
+  /** The host of a source URL for its chip, or the text as it came when it is not a URL. */
+  domainOf(url: string): string {
+    try {
+      return new URL(url).hostname || url;
+    } catch {
+      return url;
+    }
+  }
+
+  /** What the worker can make, as the short labels of the Channel summary. */
+  makes(r: ReadinessDto): string {
+    const labels = [
+      r.speechAvailable ? 'Narration' : null,
+      r.imagesAvailable ? 'Generated pictures' : r.stockPictures ? 'Openverse pictures' : null,
+      r.lipSyncAvailable ? 'Animated character' : null,
+      r.transcriptionAvailable ? 'Your own video' : null,
+    ].filter((label) => label !== null);
+    return labels.length > 0 ? labels.join(', ') : 'text cards only';
   }
 
   readyScenes(project: OperatorProjectDto): number {
@@ -2111,10 +2749,16 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return `scout-media://${project.id}/${encodeURIComponent(fileName)}?v=${encodeURIComponent(stamp)}`;
   }
 
+  /** The control plane's current version: its picture and its preview are the project's. */
+  isCurrent(project: OperatorProjectDto, version: PresenterVersionDto): boolean {
+    return (
+      version.file === project.presenterFile && version.previewFile === project.presenterPreviewFile
+    );
+  }
+
   presenterStamp(project: OperatorProjectDto): string {
     return (
-      project.presenterVersions.find((v) => v.file === project.presenterFile)?.madeAt ??
-      project.updatedAt
+      project.presenterVersions.find((v) => this.isCurrent(project, v))?.madeAt ?? project.updatedAt
     );
   }
 
@@ -2312,7 +2956,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
    * description or the topic, and the style; the safety tail is never part of it.
    */
   presenterPromptOf(project: OperatorProjectDto): string {
-    const current = project.presenterVersions.find((v) => v.file === project.presenterFile);
+    const current = project.presenterVersions.find((v) => this.isCurrent(project, v));
     if (current !== undefined && current.prompt !== '') return current.prompt;
     const parts = [project.direction, project.presenter || project.topic, PRESENTER_STYLE]
       .map((part) => part.trim().replace(/\.+$/, ''))
@@ -2367,6 +3011,28 @@ export class ProductionComponent implements OnInit, OnDestroy {
         feedback: `builtin:${id}`,
         prompt: '',
       }),
+    );
+  }
+
+  /** "Version i of n · source · k of 40 pictures left today", each part only when it is known. */
+  presenterHeader(project: OperatorProjectDto): string {
+    const index = project.presenterVersions.findIndex((v) => this.isCurrent(project, v));
+    const current = project.presenterVersions[index];
+    const parts =
+      current === undefined
+        ? []
+        : [
+            `Version ${index + 1} of ${project.presenterVersions.length}`,
+            this.presenterSourceName(current.source),
+          ];
+    const r = this.readiness();
+    if (r !== null) parts.push(`${r.picturesLeftToday} of ${DAILY_PICTURES} pictures left today`);
+    return parts.join(' · ');
+  }
+
+  removePresenterVersion(project: OperatorProjectDto, index: number): Promise<void> {
+    return this.projectMediaAction(this.presenterError, () =>
+      this.bridge.operatorRemovePresenterVersion({ projectId: project.id, index }),
     );
   }
 
@@ -2639,5 +3305,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
     } catch (err: unknown) {
       this.error.set(readIpcError(err).message);
     }
+  }
+
+  /**
+   * The control plane's removal rule: never while presenting, and never the last version naming the current picture
+   * and preview; a version that is not current, or a current one with a twin left, can go.
+   */
+  removable(project: OperatorProjectDto, version: PresenterVersionDto): boolean {
+    if (project.status === 'presenting') return false;
+    if (!this.isCurrent(project, version)) return true;
+    return project.presenterVersions.filter((v) => this.isCurrent(project, v)).length > 1;
   }
 }

@@ -155,6 +155,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/desktop-auto-update|Desktop update notice and one-click update]] - Initiative: version check against GitHub Releases, what is new, user-approved update.
 - [[pages/roadmap/youtube-channel-operator|YouTube channel operator]] - Initiative: research, script, narration, visuals, video, review, approved publish, learn loop, engage (comments).
 - [[pages/roadmap/live-assistant|Live assistant: hear, see and translate for the owner]] - Initiative: streaming transcription, screenshot on demand, system audio, translation, OCR and a meeting session, local first and declared as reads.
+- [[pages/roadmap/production-screen|Production screen: the owner's working area first]] - Initiative: the Production screen rearranged around the project the owner works on, removable presenter versions, claims at a glance, help marks on every block.
 - [[pages/roadmap/teams-adapter-spike|Teams adapter spike]] - Research: Teams needs a public HTTPS endpoint; options, security and a phased plan.
 - [[pages/roadmap/live-voice-spike|Live voice spike]] - Research: DAVE voice encryption, Discord.Net receive, local STT and TTS; verdict and phased plan.
 

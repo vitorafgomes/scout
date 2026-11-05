@@ -764,7 +764,7 @@ describe('operator production over UDS', () => {
   );
 
   it(
-    "an animated character project reads back from the real host with no presenter versions, preview, request or source, and main's four new presenter and scene picture channels forward to the client's methods, stubbed at the client boundary",
+    "an animated character project reads back from the real host with no presenter versions, preview, request or source, and main's five new presenter and scene picture channels forward to the client's methods, stubbed at the client boundary",
     async () => {
       if (process.platform === 'win32') {
         expect(result.kind).toBe('unsupported');
@@ -789,6 +789,7 @@ describe('operator production over UDS', () => {
           ...client,
           requestPresenter: stub('requestPresenter'),
           usePresenterVersion: stub('usePresenterVersion'),
+          removePresenterVersion: stub('removePresenterVersion'),
           editScenePicturePrompt: stub('editScenePicturePrompt'),
           regenerateScenePicture: stub('regenerateScenePicture'),
         }),
@@ -813,6 +814,10 @@ describe('operator production over UDS', () => {
           projectId: started.id,
           index: 0,
         });
+        await handlers.get('scout:operator.presenterVersionRemoval')!(null, {
+          projectId: ` ${started.id} `,
+          index: 1,
+        });
         await handlers.get('scout:operator.scenePicturePrompt')!(null, {
           projectId: started.id,
           sceneId: 's1',
@@ -834,6 +839,7 @@ describe('operator production over UDS', () => {
         expect(forwarded).toEqual([
           ['requestPresenter', started.id, 'Older', ''],
           ['usePresenterVersion', started.id, 0],
+          ['removePresenterVersion', started.id, 1],
           ['editScenePicturePrompt', started.id, 's1', 'A river'],
           ['regenerateScenePicture', started.id, 's1'],
         ]);

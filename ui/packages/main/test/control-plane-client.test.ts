@@ -1175,6 +1175,7 @@ async function startOperatorServer(
     })),
     RequestPresenter: handler('RequestPresenter', () => presenterWire),
     UsePresenterVersion: handler('UsePresenterVersion', () => presenterWire),
+    RemovePresenterVersion: handler('RemovePresenterVersion', () => presenterWire),
     EditScenePicturePrompt: handler('EditScenePicturePrompt', () => editedWire),
     RegenerateScenePicture: handler('RegenerateScenePicture', () => editedWire),
     ListComments: handler('ListComments', () => options.comments ?? commentsWire),
@@ -1727,7 +1728,7 @@ describe('createControlPlaneClient operator', () => {
     expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
   });
 
-  it('maps the presenter versions, the preview, the request and the source, the mandate default format, face detection, the pictures left and the built-in presenters, their absence as null, empty, false and 0, and sends RequestPresenter, UsePresenterVersion, EditScenePicturePrompt and RegenerateScenePicture with their wire keys', async () => {
+  it('maps the presenter versions, the preview, the request and the source, the mandate default format, face detection, the pictures left and the built-in presenters, their absence as null, empty, false and 0, and sends RequestPresenter, UsePresenterVersion, RemovePresenterVersion, EditScenePicturePrompt and RegenerateScenePicture with their wire keys', async () => {
     if (process.platform === 'win32') {
       expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
       return;
@@ -1764,6 +1765,7 @@ describe('createControlPlaneClient operator', () => {
     const readiness = await client.getReadiness();
     await client.requestPresenter('p1', 'Older, with glasses', 'A robot in a lab');
     await client.usePresenterVersion('p1', 0);
+    await client.removePresenterVersion('p1', 1);
     await client.editScenePicturePrompt('p1', 's1', 'A river from above');
     await client.regenerateScenePicture('p1', 's1');
     const bareProject = await bareClient.getProject('p1');
@@ -1830,6 +1832,7 @@ describe('createControlPlaneClient operator', () => {
         request: { projectId: 'p1', feedback: 'Older, with glasses', prompt: 'A robot in a lab' },
       },
       { method: 'UsePresenterVersion', request: { projectId: 'p1', index: 0 } },
+      { method: 'RemovePresenterVersion', request: { projectId: 'p1', index: 1 } },
       {
         method: 'EditScenePicturePrompt',
         request: { projectId: 'p1', sceneId: 's1', prompt: 'A river from above' },
@@ -1839,7 +1842,7 @@ describe('createControlPlaneClient operator', () => {
     expect(calls.every((c) => c.token.length === 1 && c.token[0] === TOKEN)).toBe(true);
   });
 
-  it('a presenter request the control plane refuses reaches the caller as invalid-argument with its sentence, and the four presenter and scene picture calls with nothing listening as unavailable within the deadline', async () => {
+  it('a presenter request the control plane refuses reaches the caller as invalid-argument with its sentence, and the five presenter and scene picture calls with nothing listening as unavailable within the deadline', async () => {
     if (process.platform === 'win32') {
       expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
       return;
@@ -1872,6 +1875,7 @@ describe('createControlPlaneClient operator', () => {
       [
         unreachableClient.requestPresenter('p1', 'Older', ''),
         unreachableClient.usePresenterVersion('p1', 1),
+        unreachableClient.removePresenterVersion('p1', 1),
         unreachableClient.editScenePicturePrompt('p1', 's1', 'A river'),
         unreachableClient.regenerateScenePicture('p1', 's1'),
       ].map((pending) =>
@@ -1887,6 +1891,7 @@ describe('createControlPlaneClient operator', () => {
     expect(refused).toBeInstanceOf(ControlPlaneInvalidArgumentError);
     expect((refused as Error).message).toBe(reason);
     expect(unreachable.map((err) => err instanceof ControlPlaneUnavailableError)).toEqual([
+      true,
       true,
       true,
       true,

@@ -73,6 +73,7 @@ export type OperatorClient = Pick<
   | 'regeneratePresenter'
   | 'requestPresenter'
   | 'usePresenterVersion'
+  | 'removePresenterVersion'
   | 'editScenePicturePrompt'
   | 'regenerateScenePicture'
   | 'attachSceneMedia'
@@ -643,6 +644,26 @@ export function registerOperatorHandlers(
   );
 
   ipcMain.handle(
+    CHANNEL.operatorPresenterVersionRemoval,
+    async (_event, req: PresenterVersionRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        const index = req?.index;
+        if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
+          invalid(`The project has no presenter version ${String(index)}.`);
+        }
+        return await (await getClient()).removePresenterVersion(projectId, index);
+      } catch (err: unknown) {
+        logger.warn('operator: presenter version removal failed', {
+          projectId: req?.projectId,
+          err: String(err),
+        });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
     CHANNEL.operatorScenePicturePrompt,
     async (_event, req: ScenePicturePromptRequest | undefined): Promise<OperatorProjectDto> => {
       try {
@@ -908,6 +929,7 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorPresenterRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorPresenterRequest);
     ipcMain.removeHandler(CHANNEL.operatorPresenterVersion);
+    ipcMain.removeHandler(CHANNEL.operatorPresenterVersionRemoval);
     ipcMain.removeHandler(CHANNEL.operatorScenePicturePrompt);
     ipcMain.removeHandler(CHANNEL.operatorScenePictureRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneMedia);

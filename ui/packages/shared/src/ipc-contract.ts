@@ -76,6 +76,7 @@ export const CHANNEL = {
   operatorPresenterRegeneration: 'scout:operator.presenterRegeneration',
   operatorPresenterRequest: 'scout:operator.presenterRequest',
   operatorPresenterVersion: 'scout:operator.presenterVersion',
+  operatorPresenterVersionRemoval: 'scout:operator.presenterVersionRemoval',
   operatorScenePicturePrompt: 'scout:operator.scenePicturePrompt',
   operatorScenePictureRegeneration: 'scout:operator.scenePictureRegeneration',
   operatorSceneMedia: 'scout:operator.sceneMedia',
@@ -1568,6 +1569,8 @@ export interface ScoutBridge {
   operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto>;
   operatorRequestPresenter(req: PresenterRequest): Promise<OperatorProjectDto>;
   operatorUsePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto>;
+  /** Removes a presenter version that is not the current one, with the files only it names. */
+  operatorRemovePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto>;
   operatorEditScenePicturePrompt(req: ScenePicturePromptRequest): Promise<OperatorProjectDto>;
   operatorRegenerateScenePicture(req: SceneRequest): Promise<OperatorProjectDto>;
   operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse>;
