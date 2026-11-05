@@ -196,6 +196,28 @@ internal static class Given
         return (piper, voices);
     }
 
+    /// <summary>The rhubarb program at <paramref name="rhubarb"/> and the mouth shapes in <paramref name="mouths"/>; no lip sync when both are empty.</summary>
+    public static RhubarbLipSync LipSync(IProcessRunner runner, string rhubarb = "", string mouths = "", TimeProvider? time = null)
+        => new(
+            runner,
+            Toolset(runner),
+            Microsoft.Extensions.Options.Options.Create(new OperatorMediaOptions { RhubarbPath = rhubarb, MouthsPath = mouths }),
+            time ?? new FakeTimeProvider(Now));
+
+    /// <summary>A rhubarb program and a folder of the nine mouth shapes under <paramref name="root"/>, each an empty file.</summary>
+    public static (string Rhubarb, string Mouths) MouthShapes(string root)
+    {
+        var rhubarb = Path.Combine(root, "rhubarb");
+        File.WriteAllText(rhubarb, "#!/bin/sh");
+        var mouths = Directory.CreateDirectory(Path.Combine(root, "mouths")).FullName;
+        foreach (var shape in RhubarbLipSync.Shapes)
+        {
+            File.WriteAllBytes(Path.Combine(mouths, $"{shape}.png"), []);
+        }
+
+        return (rhubarb, mouths);
+    }
+
     /// <summary>The font path the tests configure: a file that exists, so the toolset finds a font.</summary>
     public static readonly string Font = typeof(Given).Assembly.Location;
 
@@ -208,7 +230,14 @@ internal static class Given
     public static AssemblyStage Assembly(IProcessRunner runner, VisualGenerator visuals)
     {
         var toolset = Toolset(runner);
-        return new(toolset, new MediaProbe(runner), new Assembler(toolset), new ShortsCutter(toolset), new ThumbnailMaker(visuals, toolset));
+        return new(toolset, new MediaProbe(runner), Assembler(runner), new ShortsCutter(toolset), new ThumbnailMaker(visuals, toolset));
+    }
+
+    /// <summary>The assembler over <paramref name="runner"/>, with lip sync through <paramref name="lipSync"/>, none unless given.</summary>
+    public static Assembler Assembler(IProcessRunner runner, RhubarbLipSync? lipSync = null)
+    {
+        var toolset = Toolset(runner);
+        return new(toolset, new MediaProbe(runner), lipSync ?? LipSync(runner));
     }
 
     public static string Prompts(int count)

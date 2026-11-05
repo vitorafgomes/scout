@@ -36,6 +36,8 @@ service Operator {
   rpc GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest) returns (MediaDirectory);
   rpc EditSceneText(EditSceneTextRequest) returns (Project);
   rpc RegenerateNarration(SceneRequest) returns (Project);
+  rpc SetMouthBox(SetMouthBoxRequest) returns (Project);
+  rpc RegeneratePresenter(GetProjectRequest) returns (Project);
 }
 
 message GetMandateRequest {}
@@ -73,6 +75,7 @@ message ProduceProjectRequest {
   string narration_voice = 2;
   string direction = 3;
   string motion = 4;
+  string presenter = 5;
 }
 
 message DelegateProjectRequest {
@@ -80,12 +83,14 @@ message DelegateProjectRequest {
   string narration_voice = 2;
   string direction = 3;
   string motion = 4;
+  string presenter = 5;
 }
 
 message StartProjectRequest {
   string topic = 1;
   string format = 2;
   string direction = 3;
+  string presenter = 4;
 }
 
 message DecideClaimRequest {
@@ -117,6 +122,16 @@ message Project {
   string format = 19;
   optional string recording_file = 20;
   int32 recording_ms = 21;
+  string presenter = 22;
+  optional string presenter_file = 23;
+  optional MouthBox mouth_box = 24;
+}
+
+message MouthBox {
+  double x = 1;
+  double y = 2;
+  double width = 3;
+  double height = 4;
 }
 
 message TopicCandidate {
@@ -191,6 +206,11 @@ message SceneRequest {
   string scene_id = 2;
 }
 
+message SetMouthBoxRequest {
+  string project_id = 1;
+  MouthBox mouth_box = 2;
+}
+
 message EditSceneTextRequest {
   string project_id = 1;
   string scene_id = 2;
@@ -221,6 +241,7 @@ message Readiness {
   repeated Voice voices = 8;
   bool stock_pictures = 9;
   bool transcription_available = 10;
+  bool lip_sync_available = 11;
 }
 
 message Voice {

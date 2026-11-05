@@ -1,0 +1,2 @@
+The mouth shapes in this folder (A.png to H.png and X.png) are part of Scout and are licensed under
+Scout's MIT licence, the LICENSE file at the root of the Scout repository.

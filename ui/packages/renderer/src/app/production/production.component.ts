@@ -16,6 +16,7 @@ import {
   type ClaimDto,
   type ClaimStatus,
   type MandateDto,
+  type MouthBoxDto,
   type OperatorProjectDto,
   type ProjectFormat,
   type ProjectMotion,
@@ -70,9 +71,12 @@ const FORMAT_NAMES: Readonly<Record<ProjectFormat, string>> = {
   generated_pictures: 'Generated pictures',
   own_pictures: 'Your own pictures',
   own_video: 'Your own video',
+  animated_character: 'Animated character',
 };
 
 const MAX_DIRECTION = 1000;
+const MAX_PRESENTER = 300;
+const MIN_MOUTH_SIZE = 0.02;
 const MAX_SCENE_TEXT = 700;
 
 const TARGET_METRICS: readonly { readonly value: string; readonly label: string }[] = [
@@ -259,7 +263,9 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             [disabled]="
               starting() ||
               topic().trim().length < minTopicLength ||
-              startDirection().trim().length > maxDirection
+              startDirection().trim().length > maxDirection ||
+              (startFormat() === 'animated_character' &&
+                startPresenter().trim().length > maxPresenter)
             "
             (click)="startProject()"
           >
@@ -288,6 +294,22 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             />
             Your own pictures</label
           >
+          <label
+            ><input
+              type="radio"
+              name="start-format"
+              data-test="format-animated_character"
+              [disabled]="!lipSyncable()"
+              [checked]="startFormat() === 'animated_character'"
+              (change)="startFormat.set('animated_character')"
+            />
+            Animated character</label
+          >
+          @if (!lipSyncable()) {
+            <p class="meta" data-test="format-animated_character-reason">
+              Scout has no lip-sync tool on this machine; it ships with Scout Desktop.
+            </p>
+          }
           <label
             ><input type="radio" name="start-format" data-test="format-ai_presenter" disabled /> AI
             presenter</label
@@ -325,6 +347,20 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         <span class="meta" data-test="start-direction-count"
           >{{ startDirection().trim().length }} / {{ maxDirection }}</span
         >
+        @if (startFormat() === 'animated_character') {
+          <label
+            >Presenter
+            <textarea
+              rows="2"
+              data-test="start-presenter"
+              [value]="startPresenter()"
+              (input)="startPresenter.set($any($event.target).value)"
+            ></textarea>
+          </label>
+          <span class="meta" data-test="start-presenter-count"
+            >{{ startPresenter().trim().length }} / {{ maxPresenter }}</span
+          >
+        }
         @if (queued(); as q) {
           <p class="meta" data-test="queued">
             {{ q.topic }} <span class="badge">{{ q.status }}</span>
@@ -398,8 +434,15 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
           @if (p.direction) {
             <p class="meta" data-test="project-direction">{{ p.direction }}</p>
           }
-          @if (p.error; as failure) {
-            <p class="err" data-test="project-failure">{{ failure }}</p>
+          @if (p.presenter) {
+            <p class="meta" data-test="project-presenter">Presenter: {{ p.presenter }}</p>
+          }
+          @if (p.error; as note) {
+            @if (p.status === 'failed') {
+              <p class="err" data-test="project-failure">{{ note }}</p>
+            } @else {
+              <p class="meta" data-test="project-note">{{ note }}</p>
+            }
           }
 
           <h3>Topic candidates</h3>
@@ -533,6 +576,102 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             <p class="err" data-test="claim-error">{{ message }}</p>
           }
 
+          @if (p.format === 'animated_character') {
+            <h3>Presenter</h3>
+            <div data-test="presenter">
+              @if (p.presenterFile; as file) {
+                <div
+                  class="mouth-area"
+                  data-test="mouth-area"
+                  (pointerdown)="startMouth($event)"
+                  (pointermove)="moveMouth($event)"
+                  (pointerup)="endMouth($event)"
+                  (pointercancel)="cancelMouth()"
+                >
+                  <img
+                    class="mouth-area__image"
+                    data-test="presenter-image"
+                    draggable="false"
+                    [src]="mediaUrl(p, file)"
+                    alt="Presenter of the video"
+                  />
+                  @if (p.mouthBox; as box) {
+                    <div
+                      class="mouth"
+                      data-test="mouth-current"
+                      [style.left.%]="box.x * 100"
+                      [style.top.%]="box.y * 100"
+                      [style.width.%]="box.width * 100"
+                      [style.height.%]="box.height * 100"
+                    ></div>
+                  }
+                  @if (mouthDraft(); as box) {
+                    <div
+                      class="mouth mouth--drawn"
+                      data-test="mouth-drawn"
+                      [style.left.%]="box.x * 100"
+                      [style.top.%]="box.y * 100"
+                      [style.width.%]="box.width * 100"
+                      [style.height.%]="box.height * 100"
+                    ></div>
+                  }
+                </div>
+                <p class="meta" data-test="mouth-hint">
+                  Drag a box around the mouth so the character speaks.
+                </p>
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    data-test="mouth-save"
+                    [disabled]="!mouthDraftValid() || projectMediaBusy()"
+                    (click)="saveMouth(p)"
+                  >
+                    Save mouth
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="mouth-clear"
+                    (click)="mouthDraft.set(null)"
+                  >
+                    Clear
+                  </button>
+                </div>
+              } @else {
+                <p class="empty" data-test="presenter-empty">
+                  No presenter picture yet: Scout makes one when it produces the video if the
+                  connected AI Source makes pictures; or attach your own.
+                </p>
+              }
+              @if (backgroundAttachable(p)) {
+                <div class="row">
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="presenter-attach"
+                    [disabled]="projectMediaBusy()"
+                    (click)="attachProjectMedia(p, 'presenter')"
+                  >
+                    {{ p.presenterFile ? 'Replace picture' : 'Attach picture' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--secondary"
+                    data-test="presenter-regenerate"
+                    [disabled]="projectMediaBusy() || noPictures()"
+                    [attr.title]="noPictures() ? 'The connected AI Source makes no pictures' : null"
+                    (click)="regeneratePresenter(p)"
+                  >
+                    Regenerate picture
+                  </button>
+                </div>
+              }
+              @if (presenterError(); as message) {
+                <p class="err" data-test="presenter-error">{{ message }}</p>
+              }
+            </div>
+          }
           @if (p.format === 'own_video') {
             <h3>Recording</h3>
             <div data-test="recording">
@@ -657,6 +796,20 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                 <span class="meta" data-test="produce-brief-count"
                   >{{ produceBrief().trim().length }} / {{ maxDirection }}</span
                 >
+                @if (p.format === 'animated_character') {
+                  <label
+                    >Presenter
+                    <textarea
+                      rows="2"
+                      data-test="produce-presenter"
+                      [value]="producePresenter()"
+                      (input)="producePresenter.set($any($event.target).value)"
+                    ></textarea>
+                  </label>
+                  <span class="meta" data-test="produce-presenter-count"
+                    >{{ producePresenter().trim().length }} / {{ maxPresenter }}</span
+                  >
+                }
                 @if (p.format !== 'own_video') {
                   <label
                     >Motion
@@ -721,7 +874,7 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     <p class="meta" [attr.data-test]="'scene-clip-' + s.id">
                       Clip: {{ clock(s.clipStartMs) }} to {{ clock(s.clipEndMs) }}
                     </p>
-                  } @else {
+                  } @else if (p.format !== 'animated_character') {
                     <p class="meta">Picture prompt: {{ s.visualPrompt }}</p>
                   }
                   <p class="meta">
@@ -766,9 +919,18 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                           alt=""
                         />
                       }
-                      <p class="card__text" [attr.data-test]="'scene-preview-text-' + s.id">
-                        {{ firstSentence(s.narration) }}
-                      </p>
+                      @if (p.format === 'animated_character' && p.presenterFile; as presenter) {
+                        <img
+                          class="card__image card__image--presenter"
+                          [attr.data-test]="'scene-preview-presenter-' + s.id"
+                          [src]="mediaUrl(p, presenter)"
+                          alt=""
+                        />
+                      } @else {
+                        <p class="card__text" [attr.data-test]="'scene-preview-text-' + s.id">
+                          {{ firstSentence(s.narration) }}
+                        </p>
+                      }
                     </div>
                   }
                   @if (p.format !== 'own_video') {
@@ -1048,6 +1210,20 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
               <span class="meta" data-test="delegate-brief-count"
                 >{{ delegateBrief().trim().length }} / {{ maxDirection }}</span
               >
+              @if (p.format === 'animated_character') {
+                <label
+                  >Presenter
+                  <textarea
+                    rows="2"
+                    data-test="delegate-presenter"
+                    [value]="delegatePresenter()"
+                    (input)="delegatePresenter.set($any($event.target).value)"
+                  ></textarea>
+                </label>
+                <span class="meta" data-test="delegate-presenter-count"
+                  >{{ delegatePresenter().trim().length }} / {{ maxPresenter }}</span
+                >
+              }
               @if (p.format !== 'own_video') {
                 <label
                   >Motion
@@ -1250,6 +1426,32 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         height: 100%;
         object-fit: cover;
       }
+      .card__image--presenter {
+        object-fit: contain;
+      }
+      .mouth-area {
+        position: relative;
+        display: inline-block;
+        margin: 8px 0;
+        cursor: crosshair;
+        touch-action: none;
+        user-select: none;
+      }
+      .mouth-area__image {
+        display: block;
+        max-width: 320px;
+        border-radius: 6px;
+      }
+      .mouth {
+        position: absolute;
+        border: 2px solid #22c55e;
+        box-sizing: border-box;
+        pointer-events: none;
+      }
+      .mouth--drawn {
+        border-style: dashed;
+        border-color: #facc15;
+      }
       .card p {
         position: relative;
         margin: 0;
@@ -1352,6 +1554,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly topic = signal('');
   readonly startFormat = signal<ProjectFormat>('generated_pictures');
   readonly startDirection = signal('');
+  readonly startPresenter = signal('');
   readonly starting = signal(false);
   readonly startError = signal<string | null>(null);
   readonly queued = signal<OperatorProjectDto | null>(null);
@@ -1372,6 +1575,8 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly readiness = signal<ReadinessDto | null>(null);
   readonly readinessError = signal<string | null>(null);
   readonly transcribable = computed(() => this.readiness()?.transcriptionAvailable === true);
+  readonly lipSyncable = computed(() => this.readiness()?.lipSyncAvailable === true);
+  readonly noPictures = computed(() => this.readiness()?.imagesAvailable === false);
   readonly voiceGroups = computed(() => {
     const groups = new Map<string, VoiceDto[]>();
     for (const voice of this.readiness()?.voices ?? []) {
@@ -1385,6 +1590,15 @@ export class ProductionComponent implements OnInit, OnDestroy {
     const format = this.selected()?.format;
     if (format === 'own_video') return null;
     const provider = r.provider || 'The connected AI Source';
+    if (format === 'animated_character') {
+      if (!r.speechAvailable) {
+        return `${provider} has no speech service in Scout: the character will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.`;
+      }
+      if (!r.imagesAvailable && !this.selected()?.presenterFile) {
+        return `${provider} has no image service in Scout: attach a presenter picture, or every scene will be a text card.`;
+      }
+      return null;
+    }
     const silent = `${provider} has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.`;
     if (format === 'own_pictures') return r.speechAvailable ? null : silent;
     if (r.speechAvailable && (r.imagesAvailable || r.stockPictures)) return null;
@@ -1399,6 +1613,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
   });
   readonly motions = MOTIONS;
   readonly maxDirection = MAX_DIRECTION;
+  readonly maxPresenter = MAX_PRESENTER;
   readonly maxSceneText = MAX_SCENE_TEXT;
   private readonly samplePlayer = viewChild<ElementRef<HTMLAudioElement>>('samplePlayer');
   readonly producing = signal(false);
@@ -1407,10 +1622,12 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly produceVoice = signal('');
   readonly produceBrief = signal('');
   readonly produceMotion = signal<ProjectMotion>('gentle');
+  readonly producePresenter = signal('');
   readonly delegating = signal<string | null>(null);
   readonly delegateVoice = signal('');
   readonly delegateBrief = signal('');
   readonly delegateMotion = signal<ProjectMotion>('gentle');
+  readonly delegatePresenter = signal('');
   readonly delegatingBusy = signal(false);
   readonly delegateError = signal<string | null>(null);
   readonly deleting = signal<string | null>(null);
@@ -1419,6 +1636,13 @@ export class ProductionComponent implements OnInit, OnDestroy {
   readonly deleteError = signal<string | null>(null);
   readonly projectMediaBusy = signal(false);
   readonly projectMediaError = signal<string | null>(null);
+  readonly presenterError = signal<string | null>(null);
+  readonly mouthDraft = signal<MouthBoxDto | null>(null);
+  readonly mouthDraftValid = computed(() => {
+    const box = this.mouthDraft();
+    return box !== null && box.width >= MIN_MOUTH_SIZE && box.height >= MIN_MOUTH_SIZE;
+  });
+  private mouthStart: { readonly x: number; readonly y: number } | null = null;
   readonly sceneBusy = signal<string | null>(null);
   readonly sceneError = signal<string | null>(null);
   readonly editingScene = signal<string | null>(null);
@@ -1474,11 +1698,13 @@ export class ProductionComponent implements OnInit, OnDestroy {
         topic: this.topic().trim(),
         format: this.startFormat(),
         direction: this.startDirection().trim(),
+        presenter: this.startFormat() === 'animated_character' ? this.startPresenter().trim() : '',
       });
       this.queued.set(project);
       this.topic.set('');
       this.startFormat.set('generated_pictures');
       this.startDirection.set('');
+      this.startPresenter.set('');
       await this.refresh();
     } catch (err: unknown) {
       this.startError.set(readIpcError(err).message);
@@ -1497,6 +1723,9 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.deleting.set(null);
     this.replacingNarration.set(null);
     this.projectMediaError.set(null);
+    this.presenterError.set(null);
+    this.mouthDraft.set(null);
+    this.mouthStart = null;
     this.sceneError.set(null);
     this.editingScene.set(null);
     await this.loadSelected();
@@ -1649,6 +1878,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.produceVoice.set(project.narrationVoice);
     this.produceBrief.set(this.briefOf(project));
     this.produceMotion.set(project.motion);
+    this.producePresenter.set(project.presenter);
     this.produceError.set(null);
     this.producePanel.set(project.id);
   }
@@ -1663,6 +1893,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
           narrationVoice: this.produceVoice(),
           direction: this.produceBrief().trim(),
           motion: this.produceMotion(),
+          presenter: project.format === 'animated_character' ? this.producePresenter().trim() : '',
         }),
       );
       this.producePanel.set(null);
@@ -1677,6 +1908,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
     this.delegateVoice.set(project.narrationVoice);
     this.delegateBrief.set(this.briefOf(project));
     this.delegateMotion.set(project.motion);
+    this.delegatePresenter.set(project.presenter);
     this.delegateError.set(null);
     this.delegating.set(project.id);
   }
@@ -1691,6 +1923,7 @@ export class ProductionComponent implements OnInit, OnDestroy {
           narrationVoice: this.delegateVoice(),
           direction: this.delegateBrief().trim(),
           motion: this.delegateMotion(),
+          presenter: project.format === 'animated_character' ? this.delegatePresenter().trim() : '',
         }),
       );
       this.delegating.set(null);
@@ -1723,21 +1956,96 @@ export class ProductionComponent implements OnInit, OnDestroy {
     }
   }
 
-  async attachProjectMedia(
+  attachProjectMedia(
     project: OperatorProjectDto,
-    kind: 'background' | 'recording',
+    kind: 'background' | 'recording' | 'presenter',
+  ): Promise<void> {
+    return this.projectMediaAction(
+      kind === 'presenter' ? this.presenterError : this.projectMediaError,
+      async () =>
+        (
+          await this.bridge.operatorAttachSceneMedia({
+            projectId: project.id,
+            sceneId: '',
+            kind,
+          })
+        ).project,
+    );
+  }
+
+  regeneratePresenter(project: OperatorProjectDto): Promise<void> {
+    return this.projectMediaAction(this.presenterError, () =>
+      this.bridge.operatorRegeneratePresenter({ id: project.id }),
+    );
+  }
+
+  startMouth(event: PointerEvent): void {
+    const at = this.pointOnPicture(event);
+    if (at === null) return;
+    event.preventDefault();
+    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    this.mouthStart = at;
+    this.mouthDraft.set(this.boxBetween(at, at));
+  }
+
+  moveMouth(event: PointerEvent): void {
+    const at = this.mouthStart === null ? null : this.pointOnPicture(event);
+    if (this.mouthStart === null || at === null) return;
+    this.mouthDraft.set(this.boxBetween(this.mouthStart, at));
+  }
+
+  endMouth(event: PointerEvent): void {
+    this.moveMouth(event);
+    this.mouthStart = null;
+  }
+
+  cancelMouth(): void {
+    this.mouthStart = null;
+  }
+
+  saveMouth(project: OperatorProjectDto): Promise<void> {
+    const mouthBox = this.mouthDraft();
+    if (mouthBox === null) return Promise.resolve();
+    return this.projectMediaAction(this.presenterError, async () => {
+      const updated = await this.bridge.operatorSetMouthBox({ projectId: project.id, mouthBox });
+      this.mouthDraft.set(null);
+      return updated;
+    });
+  }
+
+  /** The pointer on the presenter picture in thousandths of its rendered width and height, clamped to the picture. */
+  private pointOnPicture(event: MouseEvent): { x: number; y: number } | null {
+    const image = (event.currentTarget as HTMLElement | null)?.querySelector('img');
+    const rect = image?.getBoundingClientRect();
+    if (rect === undefined || rect.width <= 0 || rect.height <= 0) return null;
+    const thousandths = (offset: number, size: number): number =>
+      Math.round(Math.min(Math.max(offset / size, 0), 1) * 1000);
+    return {
+      x: thousandths(event.clientX - rect.left, rect.width),
+      y: thousandths(event.clientY - rect.top, rect.height),
+    };
+  }
+
+  private boxBetween(a: { x: number; y: number }, b: { x: number; y: number }): MouthBoxDto {
+    return {
+      x: Math.min(a.x, b.x) / 1000,
+      y: Math.min(a.y, b.y) / 1000,
+      width: Math.abs(a.x - b.x) / 1000,
+      height: Math.abs(a.y - b.y) / 1000,
+    };
+  }
+
+  private async projectMediaAction(
+    failure: { set(message: string | null): void },
+    action: () => Promise<OperatorProjectDto | null>,
   ): Promise<void> {
     this.projectMediaBusy.set(true);
-    this.projectMediaError.set(null);
+    failure.set(null);
     try {
-      const { project: updated } = await this.bridge.operatorAttachSceneMedia({
-        projectId: project.id,
-        sceneId: '',
-        kind,
-      });
+      const updated = await action();
       if (updated !== null) this.apply(updated);
     } catch (err: unknown) {
-      this.projectMediaError.set(readIpcError(err).message);
+      failure.set(readIpcError(err).message);
     } finally {
       this.projectMediaBusy.set(false);
     }

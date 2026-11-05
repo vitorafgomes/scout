@@ -763,6 +763,42 @@ public sealed class GrpcOperatorControlPlaneTests
         runner.Programs.Count.ShouldBe(4);
     }
 
+    [Fact]
+    public async Task The_Rhubarb_And_Mouths_Paths_Bind_From_Scout_Operator_And_Reach_The_Readiness_Of_Lip_Sync()
+    {
+        var mouths = Directory.CreateTempSubdirectory("scout-mouths-").FullName;
+        try
+        {
+            foreach (var shape in new[] { "A", "B", "C", "D", "E", "F", "G", "H", "X" })
+            {
+                File.WriteAllBytes(Path.Combine(mouths, $"{shape}.png"), []);
+            }
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Scout:Plugins:YouTube:ApiKey"] = "youtube-key",
+                    ["Scout:Operator:RhubarbPath"] = "/opt/scout/rhubarb/rhubarb",
+                    ["Scout:Operator:MouthsPath"] = mouths,
+                })
+                .Build();
+            var runner = new ListingRunner();
+            var services = new ServiceCollection().AddLogging().AddScoutHost(configuration);
+            services.AddSingleton<IProcessRunner>(runner);
+            using var provider = services.BuildServiceProvider();
+
+            var readiness = await provider.GetRequiredService<ReadinessReporter>().CurrentAsync(CancellationToken.None);
+
+            readiness.LipSyncAvailable.ShouldBeTrue();
+            readiness.Notes.ShouldNotContain(n => n.StartsWith("Lip sync", StringComparison.Ordinal));
+            runner.Programs.ShouldContain("/opt/scout/rhubarb/rhubarb");
+        }
+        finally
+        {
+            Directory.Delete(mouths, recursive: true);
+        }
+    }
+
     private sealed class ListingRunner : IProcessRunner
     {
         public List<string> Programs { get; } = [];
@@ -976,6 +1012,54 @@ public sealed class GrpcOperatorControlPlaneTests
         var can = service.Reported.ShouldNotBeNull().TranscriptionAvailable;
         await controlPlane.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []), CancellationToken.None);
         var cannot = service.Reported.ShouldNotBeNull().TranscriptionAvailable;
+
+        (can, cannot).ShouldBe((true, false));
+    }
+
+    [Fact]
+    public async Task The_Presenter_Its_Picture_And_Its_Mouth_Box_Travel_To_The_Wire_And_Back_And_Absent_Ones_Stay_Absent()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var operatorPlane = new GrpcOperatorControlPlane(gate);
+        var project = Ready() with
+        {
+            Format = "animated_character",
+            Presenter = "A cheerful baker in a flour-dusted apron, in a small kitchen.",
+            PresenterFile = "presenter-0a1b2c3d4e5f.png",
+            MouthBox = new OperatorMouthBox(0.41, 0.62, 0.18, 0.07),
+            Scenes = [new OperatorScene("s1", 1, "Feed it daily.", string.Empty, false, "ready", null, "generated", "presenter", "scene-s1.wav", null, 1600)],
+        };
+
+        var saved = await operatorPlane.SaveProjectAsync(project, null, CancellationToken.None);
+        var sentWith = service.Saved.ShouldNotBeNull().Project;
+        var without = await operatorPlane.SaveProjectAsync(Ready(), null, CancellationToken.None);
+        var sentWithout = service.Saved.ShouldNotBeNull().Project;
+
+        (sentWith.Format, sentWith.Presenter, sentWith.HasPresenterFile, sentWith.PresenterFile).ShouldBe(
+            ("animated_character", "A cheerful baker in a flour-dusted apron, in a small kitchen.", true, "presenter-0a1b2c3d4e5f.png"));
+        (sentWith.MouthBox.X, sentWith.MouthBox.Y, sentWith.MouthBox.Width, sentWith.MouthBox.Height).ShouldBe((0.41, 0.62, 0.18, 0.07));
+        sentWith.Scenes.ShouldHaveSingleItem().VisualSource.ShouldBe("presenter");
+        (saved.Format, saved.Presenter, saved.PresenterFile, saved.MouthBox).ShouldBe(
+            ("animated_character", project.Presenter, "presenter-0a1b2c3d4e5f.png", new OperatorMouthBox(0.41, 0.62, 0.18, 0.07)));
+        saved.Scenes.ShouldBe(project.Scenes);
+        (sentWithout.Presenter, sentWithout.HasPresenterFile, sentWithout.MouthBox).ShouldBe((string.Empty, false, (MouthBox?)null));
+        (without.Presenter, without.PresenterFile, without.MouthBox).ShouldBe((string.Empty, (string?)null, (OperatorMouthBox?)null));
+    }
+
+    [Fact]
+    public async Task Whether_This_Machine_Can_Move_A_Characters_Mouth_Is_Reported_To_The_Control_Plane()
+    {
+        var service = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        var controlPlane = new GrpcOperatorControlPlane(gate);
+
+        await controlPlane.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []) { LipSyncAvailable = true }, CancellationToken.None);
+        var can = service.Reported.ShouldNotBeNull().LipSyncAvailable;
+        await controlPlane.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []), CancellationToken.None);
+        var cannot = service.Reported.ShouldNotBeNull().LipSyncAvailable;
 
         (can, cannot).ShouldBe((true, false));
     }

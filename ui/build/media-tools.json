@@ -111,5 +111,36 @@
         ]
       }
     ]
+  },
+  "rhubarb": {
+    "version": "1.14.0",
+    "source": "https://github.com/DanielSWolf/rhubarb-lip-sync",
+    "license": "MIT",
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Linux.zip",
+        "size": 87225003,
+        "sha256": "a9a9074862cff47b2d59b8bf399a678a3b0b74f9452ad6ad94cb292913dd8667",
+        "root": "Rhubarb-Lip-Sync-1.14.0-Linux"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-macOS.zip",
+        "size": 86870942,
+        "sha256": "f991deacac6c973a14a4431a16a58b842f436531e120cfaea142c87c0d3ab4c5",
+        "root": "Rhubarb-Lip-Sync-1.14.0-macOS"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-macOS.zip",
+        "size": 86870942,
+        "sha256": "f991deacac6c973a14a4431a16a58b842f436531e120cfaea142c87c0d3ab4c5",
+        "root": "Rhubarb-Lip-Sync-1.14.0-macOS"
+      },
+      "win32-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Windows.zip",
+        "size": 87374842,
+        "sha256": "62fa416a8d5e382a3828ee4bef358ce520d0b4cabdeaea75a7ac266d098d1fe3",
+        "root": "Rhubarb-Lip-Sync-1.14.0-Windows"
+      }
+    }
   }
 }

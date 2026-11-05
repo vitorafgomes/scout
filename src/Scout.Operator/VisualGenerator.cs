@@ -149,7 +149,9 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
         return true;
     }
 
+    internal const string NoRealPerson =
+        "no text, no letters, no logos, no trademarks, no real person's likeness and no public figure.";
+
     internal static string ThumbnailPrompt(string title) =>
-        $"A YouTube thumbnail picture for a video titled \"{title}\": one bold, simple subject, strong contrast, no text, " +
-        "no letters, no logos, no trademarks, no real person's likeness and no public figure.";
+        $"A YouTube thumbnail picture for a video titled \"{title}\": one bold, simple subject, strong contrast, {NoRealPerson}";
 }

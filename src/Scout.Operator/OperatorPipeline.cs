@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
 
@@ -25,7 +26,9 @@ namespace Scout.Operator;
 /// once a minute, ending <c>script_ready</c>, or <c>failed</c> with no partial transcript, and it stops the same way once
 /// the project is no longer <c>transcribing</c>; production of such a project plans its scenes as clips of the recording
 /// and makes no narration or picture, and once it has scenes names their chapters again under the owner's direction,
-/// leaving the clips as they are.
+/// leaving the clips as they are. Production of an animated character makes the presenter picture once, when the project
+/// has none, then only the narration, every scene shown by the presenter, a picture that could not be made being the
+/// project's note.
 /// </summary>
 internal sealed class OperatorPipeline(
     IOperatorControlPlane controlPlane,
@@ -62,6 +65,14 @@ internal sealed class OperatorPipeline(
     internal const string NoLongerTranscribing = "The project is no longer transcribing; the worker's transcript was not saved.";
     internal const string OwnVideo = "own_video";
     internal const string Recording = "recording";
+    internal const string AnimatedCharacter = "animated_character";
+    internal const string Presenter = "presenter";
+
+    internal const string NoPresenterPicture =
+        "The project has no presenter picture; attach one in Scout Desktop, Production, or connect an AI Source with pictures.";
+
+    internal const string PresenterStyle =
+        "flat 2D cartoon illustration, front-facing, looking at the viewer, mouth closed, neutral expression, plain background, head and shoulders";
 
     internal static string ResearchingNotice(string topic) => $"Researching {topic}...";
 
@@ -236,6 +247,17 @@ internal sealed class OperatorPipeline(
                 .ConfigureAwait(false) is not null;
         }
 
+        var animated = project.Format == AnimatedCharacter;
+        string? presenterNote = null;
+        if (animated)
+        {
+            (var running, presenterNote) = await PresenterPictureAsync(id, directory, ct).ConfigureAwait(false);
+            if (!running)
+            {
+                return false;
+            }
+        }
+
         var speechNow = await narration.SpeechAvailableAsync(ct).ConfigureAwait(false);
         var ownPictures = project.Format == OwnPictures;
         var imagesNow = visuals.ImagesAvailable && !ownPictures;
@@ -255,7 +277,7 @@ internal sealed class OperatorPipeline(
             }
 
             var scene = ordered[position - 1];
-            if (scene.Locked || !NeedsMedia(scene, directory, speechNow, imagesNow))
+            if (scene.Locked || !NeedsMedia(scene, directory, speechNow, imagesNow, animated))
             {
                 continue;
             }
@@ -265,7 +287,9 @@ internal sealed class OperatorPipeline(
             try
             {
                 audio = scene.AudioSource == Owner || (scene.Status == Ready && AudioDone(scene, directory, speechNow)) ? null : await narration.GenerateAsync(scene, current.NarrationVoice, directory, ct).ConfigureAwait(false);
-                visual = PictureKept(scene, directory) || (scene.Status == Ready && scene.VisualSource == TextCard && !imagesNow)
+                visual = animated
+                    ? scene.VisualSource == Presenter ? null : new VisualResult(Presenter, null, null)
+                    : PictureKept(scene, directory) || (scene.Status == Ready && scene.VisualSource == TextCard && !imagesNow)
                     ? null
                     : ownPictures
                         ? new VisualResult(TextCard, null, VisualGenerator.NoOwnPicture)
@@ -299,9 +323,64 @@ internal sealed class OperatorPipeline(
             }
         }
 
-        return await SaveProductionAsync(id, current => current with { Status = MediaReady, Error = null }, ct)
+        return await SaveProductionAsync(id, current => current with { Status = MediaReady, Error = presenterNote }, ct)
             .ConfigureAwait(false) is not null;
     }
+
+    /// <summary>
+    /// Make the animated character's picture once, when the project has none: one request to the image service from the
+    /// owner's direction, the presenter description, or the topic without one, <see cref="PresenterStyle"/> and
+    /// <see cref="VisualGenerator.NoRealPerson"/>, counted in
+    /// the day's pictures and saved as <c>presenter-&lt;12 hex&gt;.png</c> on the project unless the owner attached one
+    /// meanwhile. A picture that could not be made is <see cref="NoPresenterPicture"/>, the project's note, never a failure;
+    /// not running when the project is no longer producing.
+    /// </summary>
+    private async Task<(bool Running, string? Note)> PresenterPictureAsync(string id, string directory, CancellationToken ct)
+    {
+        var project = await controlPlane.GetProjectAsync(id, ct).ConfigureAwait(false);
+        if (project.Status != Producing)
+        {
+            return (false, null);
+        }
+
+        if (!string.IsNullOrEmpty(project.PresenterFile))
+        {
+            return (true, null);
+        }
+
+        var file = $"presenter-{RandomNumberGenerator.GetHexString(12, lowercase: true)}.png";
+        bool made;
+        try
+        {
+            made = await visuals.PictureAsync(PresenterPrompt(project), directory, file, ct).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            made = false;
+        }
+
+        if (!made)
+        {
+            return (true, NoPresenterPicture);
+        }
+
+        var saved = await SaveProductionAsync(
+            id, current => string.IsNullOrEmpty(current.PresenterFile) ? current with { PresenterFile = file } : current, ct)
+            .ConfigureAwait(false);
+        if (saved?.PresenterFile != file)
+        {
+            MediaFiles.Delete(directory, file);
+        }
+
+        return (saved is not null, null);
+    }
+
+    internal static string PresenterPrompt(OperatorProjectState project)
+        => string.Join(
+            ". ",
+            new[] { project.Direction, project.Presenter.Length > 0 ? project.Presenter : project.Topic, $"{PresenterStyle}, {VisualGenerator.NoRealPerson}" }
+                .Select(part => part.Trim().TrimEnd('.'))
+                .Where(part => part.Length > 0)) + ".";
 
     /// <summary>
     /// Save a change to the project as the control plane holds it now, read immediately before; null, and nothing saved,
@@ -395,8 +474,10 @@ internal sealed class OperatorPipeline(
         return saved is not null;
     }
 
-    private static bool NeedsMedia(OperatorScene scene, string directory, bool speechNow, bool imagesNow)
-        => scene.Status != Ready || !AudioDone(scene, directory, speechNow) || !VisualDone(scene, directory, imagesNow);
+    private static bool NeedsMedia(OperatorScene scene, string directory, bool speechNow, bool imagesNow, bool animated)
+        => scene.Status != Ready
+            || !AudioDone(scene, directory, speechNow)
+            || !(animated ? scene.VisualSource == Presenter : VisualDone(scene, directory, imagesNow));
 
     private static bool AudioDone(OperatorScene scene, string directory, bool speechNow)
         => scene.AudioSource == Owner

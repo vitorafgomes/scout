@@ -80,9 +80,14 @@ internal sealed class ScriptWriter(IChatCompletionService chat)
         "Give 3 to 5 title variants. List every factual claim the narration makes, at most 25, with risk high when " +
         "a wrong claim could harm the viewer or the channel; cite only links from the research sources given, " +
         "and leave sourceUrls empty when none supports the claim. " +
-        (format == OperatorPipeline.OwnPictures
-            ? "The video is narration over pictures the owner takes or already has, one per scene; write narration around things the owner can photograph. "
-            : "The video is narration over a picture for each scene, which Scout makes from the narration; write narration a picture can show. ") +
+        (format switch
+        {
+            OperatorPipeline.OwnPictures =>
+                "The video is narration over pictures the owner takes or already has, one per scene; write narration around things the owner can photograph. ",
+            OperatorPipeline.AnimatedCharacter =>
+                "The video is an animated character on screen presenting to the viewer, who speaks the whole script; write it as that character's own speech, in the first person, with no stage directions and no picture descriptions. ",
+            _ => "The video is narration over a picture for each scene, which Scout makes from the narration; write narration a picture can show. ",
+        }) +
         (string.IsNullOrWhiteSpace(direction)
             ? string.Empty
             : $"Direction the owner gave for this video, which the script follows for its angle, tone and structure: {direction.Trim()}\n") +

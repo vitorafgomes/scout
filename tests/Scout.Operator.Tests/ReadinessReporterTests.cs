@@ -19,14 +19,14 @@ public sealed class ReadinessReporterTests : IDisposable
         string tokenFile = "",
         TimeProvider? time = null,
         ILogger<ReadinessReporter>? logger = null, IProcessRunner? runner = null, ScheduleNotes? schedule = null, PiperSpeech? piper = null,
-        OpenversePictures? stock = null, Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null)
+        OpenversePictures? stock = null, Scout.Conversation.Abstractions.IAudioTranscriber? transcriber = null, RhubarbLipSync? lipSync = null)
         => new(
             controlPlane ?? new RecordingControlPlane(),
             media,
             Options.Create(new YouTubeOptions { TokenFile = tokenFile }),
             time ?? new FakeTimeProvider(Given.Now),
             logger ?? new RecordingLogger<ReadinessReporter>(), Given.Toolset(runner ?? new FakeProcessRunner()),
-            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock, transcriber);
+            piper ?? Given.Piper(new FakeProcessRunner()), schedule, stock, transcriber, lipSync);
 
     private PiperSpeech Bundled()
     {
@@ -255,6 +255,58 @@ public sealed class ReadinessReporterTests : IDisposable
 
         withModel.TranscriptionAvailable.ShouldBeTrue();
         without.TranscriptionAvailable.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Lip_Sync_Is_Available_Only_With_Rhubarb_And_The_Nine_Mouths_And_The_Notes_Name_What_Is_Missing()
+    {
+        var media = new MediaCapabilities(true, true, "OpenAI");
+        var (rhubarb, mouths) = Given.MouthShapes(_folder);
+        var runner = new FakeProcessRunner
+        {
+            Answer = (program, _) => program == "/missing/rhubarb" ? throw new InvalidOperationException(ProcessRunner.NotStarted(program)) : null,
+        };
+        Task<OperatorReadiness> With(string program, string folder)
+            => Reporter(media, lipSync: Given.LipSync(runner, program, folder)).CurrentAsync(CancellationToken.None);
+        string[] lipNotes = ["Lip sync: the rhubarb program was not found.", "Lip sync: the mouth shapes were not found."];
+
+        var bundled = await With(rhubarb, mouths);
+        var noProgram = await With("/missing/rhubarb", mouths);
+        File.Delete(Path.Combine(mouths, "H.png"));
+        var noShapes = await With(rhubarb, mouths);
+        var neither = await With(string.Empty, Path.Combine(_folder, "nowhere"));
+        var unbundled = await With(string.Empty, string.Empty);
+
+        (bundled.LipSyncAvailable, noProgram.LipSyncAvailable, noShapes.LipSyncAvailable, neither.LipSyncAvailable, unbundled.LipSyncAvailable)
+            .ShouldBe((true, false, false, false, false));
+        bundled.Notes.ShouldNotContain(n => n.StartsWith("Lip sync", StringComparison.Ordinal));
+        noProgram.Notes.Where(lipNotes.Contains).ShouldBe(["Lip sync: the rhubarb program was not found."]);
+        noShapes.Notes.Where(lipNotes.Contains).ShouldBe(["Lip sync: the mouth shapes were not found."]);
+        neither.Notes.Where(lipNotes.Contains).ShouldBe(lipNotes);
+        unbundled.Notes.ShouldNotContain(n => n.StartsWith("Lip sync", StringComparison.Ordinal));
+        runner.Calls.Where(c => c.Arguments.SequenceEqual(["--version"])).Select(c => c.Program).ShouldBe([rhubarb, "/missing/rhubarb", rhubarb]);
+    }
+
+    [Fact]
+    public async Task A_Rhubarb_That_Did_Not_Answer_Is_Asked_Again_After_Two_Minutes_And_One_That_Did_Is_Kept()
+    {
+        var (rhubarb, mouths) = Given.MouthShapes(_folder);
+        var time = new FakeTimeProvider(Given.Now);
+        var answers = false;
+        var runner = new FakeProcessRunner { Answer = (_, _) => new ProcessResult(answers ? 0 : 1, string.Empty, string.Empty) };
+        var lipSync = Given.LipSync(runner, rhubarb, mouths, time);
+
+        var first = await lipSync.ProbeAsync(CancellationToken.None);
+        answers = true;
+        time.Advance(TimeSpan.FromSeconds(119));
+        var soon = await lipSync.ProbeAsync(CancellationToken.None);
+        time.Advance(TimeSpan.FromSeconds(1));
+        var later = await lipSync.ProbeAsync(CancellationToken.None);
+        answers = false;
+        var kept = await lipSync.ProbeAsync(CancellationToken.None);
+
+        (first.Available, soon.Available, later.Available, kept.Available).ShouldBe((false, false, true, true));
+        runner.Calls.Count.ShouldBe(2);
     }
 
     private static async Task WaitFor(Func<bool> condition)

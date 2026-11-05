@@ -374,6 +374,10 @@ describe('createSupervisor', () => {
         'Scout:Operator:VoicesPath': '/tmp/other/voices',
         DOTNET_Scout__Operator__PiperPath: '/tmp/other/piper',
         'ASPNETCORE_SCOUT:OPERATOR:VOICESPATH': '/tmp/other/voices',
+        scout__operator__rhubarbpath: '/tmp/other/rhubarb',
+        'Scout:Operator:MouthsPath': '/tmp/other/mouths',
+        DOTNET_Scout__Operator__RhubarbPath: '/tmp/other/rhubarb',
+        'ASPNETCORE_SCOUT:OPERATOR:MOUTHSPATH': '/tmp/other/mouths',
       };
       const unrelatedKey = 'SCOUT__TEST__SUPERVISOR_INHERITED';
       const keys = [...Object.keys(inherited), unrelatedKey];
@@ -388,6 +392,9 @@ describe('createSupervisor', () => {
           SCOUT__OPERATOR__FONTPATH: '',
           SCOUT__OPERATOR__PIPERPATH: '/opt/Scout/resources/media-tools/linux-x64/piper/piper',
           SCOUT__OPERATOR__VOICESPATH: '',
+          SCOUT__OPERATOR__RHUBARBPATH:
+            '/opt/Scout/resources/media-tools/linux-x64/rhubarb/rhubarb',
+          SCOUT__OPERATOR__MOUTHSPATH: '',
         };
         const { child, ...deps } = makeDeps({ buildEnv: async () => ({ ...fromBuildEnv }) });
         const supervisor = createSupervisor(deps);

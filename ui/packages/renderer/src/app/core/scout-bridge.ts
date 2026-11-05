@@ -88,6 +88,7 @@ import {
   type SceneOrderRequest,
   type SceneRequest,
   type SceneTextRequest,
+  type MouthBoxRequest,
   type FeatureSetCredentialsRequest,
   type FeatureSetupRequest,
   type FeaturesListResponse,
@@ -255,6 +256,10 @@ function createFakeBridge(): ScoutBridge {
     operatorEditSceneText: (_req: SceneTextRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorRegenerateNarration: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorSetMouthBox: (_req: MouthBoxRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegeneratePresenter: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
       rejectNotAvailable(),
     operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
       rejectNotAvailable(),
@@ -616,6 +621,14 @@ export class ScoutBridgeService {
 
   async operatorRegenerateNarration(req: SceneRequest): Promise<OperatorProjectDto> {
     return this.bridge.operatorRegenerateNarration(req);
+  }
+
+  async operatorSetMouthBox(req: MouthBoxRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorSetMouthBox(req);
+  }
+
+  async operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegeneratePresenter(req);
   }
 
   async operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse> {

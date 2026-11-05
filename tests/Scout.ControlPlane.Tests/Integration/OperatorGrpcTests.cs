@@ -420,7 +420,7 @@ public sealed class OperatorGrpcTests
         using var workerChannel = host.CreateWorkerChannel();
         var desktop = new GrpcOperator.OperatorClient(desktopChannel);
         var gate = new WorkerGate.WorkerGateClient(workerChannel);
-        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, StockPictures = true, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
+        var report = new WireReadiness { SpeechAvailable = true, Provider = "openai", FfmpegAvailable = true, YoutubeSignedIn = true, StockPictures = true, LipSyncAvailable = true, ReportedAt = "1970-01-01T00:00:00.0000000+00:00" };
         report.Notes.Add("No image model is configured.");
         report.Voices.Add(new Scout.ControlPlane.Contracts.Voice { Id = "piper:en_GB-cori-medium", Label = "Cori (medium)", Source = "piper" });
 
@@ -434,6 +434,7 @@ public sealed class OperatorGrpcTests
             .ShouldBe((true, false, "openai", true, true, "No image model is configured."));
         read.Voices.Select(v => (v.Id, v.Label, v.Source)).ShouldBe([("piper:en_GB-cori-medium", "Cori (medium)", "piper")]);
         (before.StockPictures, read.StockPictures).ShouldBe((false, true));
+        (before.LipSyncAvailable, read.LipSyncAvailable).ShouldBe((false, true));
         DateTimeOffset.ParseExact(read.ReportedAt, "O", System.Globalization.CultureInfo.InvariantCulture)
             .ShouldBeInRange(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow);
     }
@@ -706,7 +707,7 @@ public sealed class OperatorGrpcTests
         var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = started.Id });
         var defaulted = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Glaciers explained" });
 
-        (unknownFormat.StatusCode, unknownFormat.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The format is generated_pictures, own_pictures or own_video."));
+        (unknownFormat.StatusCode, unknownFormat.Status.Detail).ShouldBe((StatusCode.InvalidArgument, "The format is generated_pictures, own_pictures, own_video or animated_character."));
         (started.Format, started.Direction).ShouldBe(("own_pictures", "A walk along the Thames.\nShow the bends."));
         (defaulted.Format, defaulted.Direction).ShouldBe(("generated_pictures", string.Empty));
         (taken.Id, taken.Format, taken.Direction).ShouldBe((started.Id, "own_pictures", "A walk along the Thames.\nShow the bends."));
@@ -1382,5 +1383,42 @@ public sealed class OperatorGrpcTests
         read.Scenes.Select(s => (s.Id, s.AudioSource, s.VisualSource, s.ClipStartMs, s.ClipEndMs))
             .ShouldBe([("s1", "recording", "recording", 0, 4200), ("s2", "recording", "recording", 4200, 9000)]);
         readiness.TranscriptionAvailable.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task SetMouthBox_And_RegeneratePresenter_Answer_The_Desktop_Token_Only()
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var desktop = new GrpcOperator.OperatorClient(desktopChannel);
+        var workerOnOperator = new GrpcOperator.OperatorClient(workerChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await new GrpcFeatures.FeaturesClient(desktopChannel).SetWriteGrantAsync(new SetWriteGrantRequest { Id = "youtube", Granted = true, ConfirmWrites = true });
+
+        var started = await desktop.StartProjectAsync(new StartProjectRequest { Topic = "Why the fox crossed", Format = "animated_character", Presenter = " A friendly fox. " });
+        var taken = (await gate.NextQueuedProjectAsync(new NextQueuedProjectRequest())).Project;
+        var draft = taken.Clone();
+        draft.Status = "script_ready";
+        draft.PresenterFile = "presenter-1a2b.png";
+        draft.MouthBox = new MouthBox { X = 0, Y = 0, Width = 1, Height = 1 };
+        await File.WriteAllTextAsync(Path.Combine((await desktop.GetMediaDirectoryAsync(new GetProjectRequest { Id = started.Id })).Path, "presenter-1a2b.png"), "image");
+        await gate.SaveOperatorProjectAsync(new SaveOperatorProjectRequest { Project = draft });
+        var box = new MouthBox { X = 0.4, Y = 0.6, Width = 0.2, Height = 0.1 };
+        var workerMouth = await Denied(() => workerOnOperator.SetMouthBoxAsync(new SetMouthBoxRequest { ProjectId = started.Id, MouthBox = box }).ResponseAsync);
+        var workerPresenter = await Denied(() => workerOnOperator.RegeneratePresenterAsync(new GetProjectRequest { Id = started.Id }).ResponseAsync);
+        var noBox = await Denied(() => desktop.SetMouthBoxAsync(new SetMouthBoxRequest { ProjectId = started.Id }).ResponseAsync);
+        var marked = await desktop.SetMouthBoxAsync(new SetMouthBoxRequest { ProjectId = started.Id, MouthBox = box });
+        var workerRead = await gate.GetOperatorProjectAsync(new GetProjectRequest { Id = started.Id });
+        var regenerated = await desktop.RegeneratePresenterAsync(new GetProjectRequest { Id = started.Id });
+
+        (workerMouth.StatusCode, workerMouth.Status.Detail).ShouldBe((StatusCode.PermissionDenied, "This caller may not call /scout.controlplane.v1.Operator/SetMouthBox."));
+        (workerPresenter.StatusCode, workerPresenter.Status.Detail).ShouldBe((StatusCode.PermissionDenied, "This caller may not call /scout.controlplane.v1.Operator/RegeneratePresenter."));
+        (noBox.StatusCode, noBox.Status.Detail).ShouldBe((StatusCode.InvalidArgument,
+            "A mouth box is four fractions of the picture, each between 0 and 1, at least 0.02 wide and high and inside the picture."));
+        (started.Format, started.Presenter, started.HasPresenterFile, started.MouthBox).ShouldBe(("animated_character", "A friendly fox.", false, (MouthBox?)null));
+        (marked.PresenterFile, marked.MouthBox).ShouldBe(("presenter-1a2b.png", box));
+        (workerRead.Presenter, workerRead.PresenterFile, workerRead.MouthBox).ShouldBe(("A friendly fox.", "presenter-1a2b.png", box));
+        (regenerated.Status, regenerated.HasPresenterFile, regenerated.MouthBox).ShouldBe(("script_ready", false, (MouthBox?)null));
     }
 }

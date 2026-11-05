@@ -21,6 +21,7 @@ import {
   type CommentsViewDto,
   type MandateDto,
   type MandateSaveRequest,
+  type MouthBoxDto,
   type OperatorProjectDto,
   type PendingActionDto,
   type PrivacyStatus,
@@ -80,6 +81,7 @@ export interface ControlPlaneClient {
     topic: string,
     format: ProjectFormat,
     direction: string,
+    presenter: string,
   ): Promise<OperatorProjectDto>;
   decideClaim(
     projectId: string,
@@ -92,12 +94,14 @@ export interface ControlPlaneClient {
     narrationVoice: string,
     direction: string,
     motion: ProjectMotion,
+    presenter: string,
   ): Promise<OperatorProjectDto>;
   delegateProject(
     id: string,
     narrationVoice: string,
     direction: string,
     motion: ProjectMotion,
+    presenter: string,
   ): Promise<OperatorProjectDto>;
   deleteProject(id: string): Promise<void>;
   reorderScenes(projectId: string, sceneIds: readonly string[]): Promise<OperatorProjectDto>;
@@ -105,6 +109,8 @@ export interface ControlPlaneClient {
   regenerateScene(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
   editSceneText(projectId: string, sceneId: string, text: string): Promise<OperatorProjectDto>;
   regenerateNarration(projectId: string, sceneId: string): Promise<OperatorProjectDto>;
+  setMouthBox(projectId: string, mouthBox: MouthBoxDto): Promise<OperatorProjectDto>;
+  regeneratePresenter(id: string): Promise<OperatorProjectDto>;
   attachSceneMedia(
     projectId: string,
     sceneId: string,
@@ -247,6 +253,9 @@ interface ProjectMessage {
   format: string;
   recordingFile?: string;
   recordingMs?: number;
+  presenter?: string;
+  presenterFile?: string;
+  mouthBox?: MouthBoxDto | null;
 }
 
 interface PublicationMessage {
@@ -373,6 +382,7 @@ interface ReadinessMessage {
   voices?: { id: string; label: string; source: string; sampleFile?: string }[];
   reportedAt?: string;
   transcriptionAvailable?: boolean;
+  lipSyncAvailable?: boolean;
 }
 
 type UnaryMethod = (
@@ -383,6 +393,13 @@ type UnaryMethod = (
 ) => grpc.ClientUnaryCall;
 
 const TOKEN_HEADER = 'x-scout-token';
+
+const FORMATS: readonly ProjectFormat[] = [
+  'generated_pictures',
+  'own_pictures',
+  'own_video',
+  'animated_character',
+];
 const MAX_MESSAGE_BYTES = 16 * 1024 * 1024;
 const CHANNEL_OPTIONS: grpc.ChannelOptions = {
   'grpc.max_receive_message_length': MAX_MESSAGE_BYTES,
@@ -530,12 +547,22 @@ function toProject(message: ProjectMessage): OperatorProjectDto {
     delegated: message.delegated,
     direction: message.direction ?? '',
     motion: message.motion === 'still' || message.motion === 'dynamic' ? message.motion : 'gentle',
-    format:
-      message.format === 'own_pictures' || message.format === 'own_video'
-        ? message.format
-        : 'generated_pictures',
+    format: FORMATS.includes(message.format as ProjectFormat)
+      ? (message.format as ProjectFormat)
+      : 'generated_pictures',
     recordingFile: message.recordingFile ?? null,
     recordingMs: message.recordingMs ?? 0,
+    presenter: message.presenter ?? '',
+    presenterFile: message.presenterFile ?? null,
+    mouthBox:
+      message.mouthBox == null
+        ? null
+        : {
+            x: message.mouthBox.x,
+            y: message.mouthBox.y,
+            width: message.mouthBox.width,
+            height: message.mouthBox.height,
+          },
   };
 }
 
@@ -661,6 +688,7 @@ function toReadiness(message: ReadinessMessage): ReadinessDto {
     })),
     reportedAt: message.reportedAt ?? null,
     transcriptionAvailable: message.transcriptionAvailable ?? false,
+    lipSyncAvailable: message.lipSyncAvailable ?? false,
   };
 }
 
@@ -889,14 +917,14 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       return response.projects.map(toProject);
     },
     getProject: (id) => project('GetProject', { id }),
-    startProject: (topic, format, direction) =>
-      project('StartProject', { topic, format, direction }),
+    startProject: (topic, format, direction, presenter) =>
+      project('StartProject', { topic, format, direction, presenter }),
     decideClaim: (projectId, claimId, status, note) =>
       project('DecideClaim', { projectId, claimId, status, note }),
-    produceProject: (id, narrationVoice, direction, motion) =>
-      project('ProduceProject', { id, narrationVoice, direction, motion }),
-    delegateProject: (id, narrationVoice, direction, motion) =>
-      project('DelegateProject', { id, narrationVoice, direction, motion }),
+    produceProject: (id, narrationVoice, direction, motion, presenter) =>
+      project('ProduceProject', { id, narrationVoice, direction, motion, presenter }),
+    delegateProject: (id, narrationVoice, direction, motion, presenter) =>
+      project('DelegateProject', { id, narrationVoice, direction, motion, presenter }),
     async deleteProject(id): Promise<void> {
       await operatorCall<object>('DeleteProject', { id });
     },
@@ -908,6 +936,8 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       project('EditSceneText', { projectId, sceneId, text }),
     regenerateNarration: (projectId, sceneId) =>
       project('RegenerateNarration', { projectId, sceneId }),
+    setMouthBox: (projectId, mouthBox) => project('SetMouthBox', { projectId, mouthBox }),
+    regeneratePresenter: (id) => project('RegeneratePresenter', { id }),
     attachSceneMedia: (projectId, sceneId, kind, fileName) =>
       project('AttachSceneMedia', { projectId, sceneId, kind, fileName }),
     async getMediaDirectory(projectId): Promise<string> {
