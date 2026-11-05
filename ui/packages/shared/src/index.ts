@@ -159,6 +159,8 @@ export {
   type SceneLockRequest,
   type SceneRequest,
   type SceneTextRequest,
+  type MouthBoxDto,
+  type MouthBoxRequest,
   type SceneMediaKind,
   type SceneMediaRequest,
   type SceneMediaResponse,

@@ -16,6 +16,8 @@ import {
   type MandateDto,
   type MandateResponse,
   type MandateSaveRequest,
+  type MouthBoxDto,
+  type MouthBoxRequest,
   type OperatorDelegateRequest,
   type OperatorProduceRequest,
   type OperatorProjectDto,
@@ -64,6 +66,8 @@ export type OperatorClient = Pick<
   | 'regenerateScene'
   | 'editSceneText'
   | 'regenerateNarration'
+  | 'setMouthBox'
+  | 'regeneratePresenter'
   | 'attachSceneMedia'
   | 'getMediaDirectory'
   | 'getReadiness'
@@ -101,7 +105,14 @@ const MAX_ARM_HOURS = 168;
 const COMMENT_DECISIONS: readonly CommentDecision[] = ['draft', 'dismiss', 'not_spam', 'hold'];
 const NARRATION_VOICE = /^[A-Za-z0-9_:.#-]{0,80}$/;
 const MAX_DIRECTION = 1000;
-const FORMATS: readonly string[] = ['generated_pictures', 'own_pictures', 'own_video'];
+const FORMATS: readonly string[] = [
+  'generated_pictures',
+  'own_pictures',
+  'own_video',
+  'animated_character',
+];
+const MAX_PRESENTER = 300;
+const MIN_MOUTH_SIZE = 0.02;
 const MAX_SCENE_TEXT = 700;
 const MOTIONS: readonly string[] = ['still', 'gentle', 'dynamic'];
 const COMMENT_ID = /^[A-Za-z0-9_.-]{1,100}$/;
@@ -184,9 +195,40 @@ function direction(value: unknown): string {
 function format(value: unknown): ProjectFormat {
   const chosen = text(value) || 'generated_pictures';
   if (!FORMATS.includes(chosen)) {
-    invalid('The format is generated_pictures, own_pictures or own_video.');
+    invalid('The format is generated_pictures, own_pictures, own_video or animated_character.');
   }
   return chosen as ProjectFormat;
+}
+
+function presenter(value: unknown): string {
+  const words = text(value);
+  if (words.length > MAX_PRESENTER) {
+    invalid(`A presenter description is at most ${MAX_PRESENTER} characters.`);
+  }
+  return words;
+}
+
+function fraction(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function mouthBox(value: unknown): MouthBoxDto {
+  const { x, y, width, height } = (value ?? {}) as Partial<Record<keyof MouthBoxDto, unknown>>;
+  if (
+    !fraction(x) ||
+    !fraction(y) ||
+    !fraction(width) ||
+    !fraction(height) ||
+    width < MIN_MOUTH_SIZE ||
+    height < MIN_MOUTH_SIZE ||
+    x + width > 1 ||
+    y + height > 1
+  ) {
+    invalid(
+      'A mouth box is four fractions of the picture, each between 0 and 1, at least 0.02 wide and high and inside the picture.',
+    );
+  }
+  return { x, y, width, height };
 }
 
 function motion(value: unknown): ProjectMotion {
@@ -325,7 +367,8 @@ export function registerOperatorHandlers(
         }
         const chosen = format(req?.format);
         const words = direction(req?.direction);
-        return await (await getClient()).startProject(topic, chosen, words);
+        const character = presenter(req?.presenter);
+        return await (await getClient()).startProject(topic, chosen, words, character);
       } catch (err: unknown) {
         logger.warn('operator: startProject failed', { err: String(err) });
         throwSerialized(err);
@@ -377,6 +420,7 @@ export function registerOperatorHandlers(
           narrationVoice(req?.narrationVoice),
           direction(req?.direction),
           motion(req?.motion),
+          presenter(req?.presenter),
         );
       } catch (err: unknown) {
         logger.warn('operator: produce failed', { id: req?.id, err: String(err) });
@@ -397,6 +441,7 @@ export function registerOperatorHandlers(
           narrationVoice(req?.narrationVoice),
           direction(req?.direction),
           motion(req?.motion),
+          presenter(req?.presenter),
         );
       } catch (err: unknown) {
         logger.warn('operator: delegation failed', { id: req?.id, err: String(err) });
@@ -513,22 +558,50 @@ export function registerOperatorHandlers(
   );
 
   ipcMain.handle(
+    CHANNEL.operatorMouthBox,
+    async (_event, req: MouthBoxRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        const projectId = requiredId(req?.projectId, 'The project id');
+        return await (await getClient()).setMouthBox(projectId, mouthBox(req?.mouthBox));
+      } catch (err: unknown) {
+        logger.warn('operator: mouth box failed', { projectId: req?.projectId, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
+    CHANNEL.operatorPresenterRegeneration,
+    async (_event, req: OperatorProjectRequest | undefined): Promise<OperatorProjectDto> => {
+      try {
+        return await (await getClient()).regeneratePresenter(requiredId(req?.id, 'The project id'));
+      } catch (err: unknown) {
+        logger.warn('operator: presenter regeneration failed', { id: req?.id, err: String(err) });
+        throwSerialized(err);
+      }
+    },
+  );
+
+  ipcMain.handle(
     CHANNEL.operatorSceneMedia,
     async (_event, req: SceneMediaRequest | undefined): Promise<SceneMediaResponse> => {
       try {
         const { projectId, sceneId, kind } = req ?? {};
-        const ofProject = kind === 'background' || kind === 'recording';
+        const ofProject = kind === 'background' || kind === 'recording' || kind === 'presenter';
         if (!isSafeId(projectId) || (!ofProject && !isSafeId(sceneId))) {
           invalid('The project and scene ids are letters, digits, - and _ only.');
         }
         if (ofProject && sceneId !== '') {
-          invalid(`A ${kind} is attached to the project, not to a scene.`);
+          invalid(
+            `A ${kind === 'presenter' ? 'presenter picture' : kind} is attached to the project, not to a scene.`,
+          );
         }
         if (!ofProject && !MEDIA_KINDS.includes(kind as SceneMediaKind)) {
           invalid('Media is attached as audio, visual, background or recording.');
         }
         const media = kind as SceneMediaRequest['kind'];
-        const fileKind: OwnerMediaKind = media === 'background' ? 'visual' : media;
+        const fileKind: OwnerMediaKind =
+          media === 'background' || media === 'presenter' ? 'visual' : media;
         const target = ofProject ? '' : (sceneId as string);
         const client = await getClient();
         const directory = await client.getMediaDirectory(projectId);
@@ -731,6 +804,8 @@ export function registerOperatorHandlers(
     ipcMain.removeHandler(CHANNEL.operatorSceneRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneText);
     ipcMain.removeHandler(CHANNEL.operatorNarrationRegeneration);
+    ipcMain.removeHandler(CHANNEL.operatorMouthBox);
+    ipcMain.removeHandler(CHANNEL.operatorPresenterRegeneration);
     ipcMain.removeHandler(CHANNEL.operatorSceneMedia);
     ipcMain.removeHandler(CHANNEL.operatorReadiness);
     ipcMain.removeHandler(CHANNEL.operatorAssembly);

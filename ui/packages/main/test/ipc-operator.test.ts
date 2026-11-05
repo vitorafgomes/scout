@@ -87,6 +87,9 @@ const project: OperatorProjectDto = {
   format: 'generated_pictures',
   recordingFile: null,
   recordingMs: 0,
+  presenter: '',
+  presenterFile: null,
+  mouthBox: null,
 };
 
 const readiness: ReadinessDto = {
@@ -107,6 +110,7 @@ const readiness: ReadinessDto = {
   ],
   reportedAt: '2026-11-03T09:00:00Z',
   transcriptionAvailable: false,
+  lipSyncAvailable: false,
 };
 
 const view: CommentsViewDto = {
@@ -152,6 +156,8 @@ function makeClient(overrides: Partial<StubClient> = {}): StubClient {
     regenerateScene: mock(async () => project),
     editSceneText: mock(async () => ({ ...project, status: 'production_queued' })),
     regenerateNarration: mock(async () => ({ ...project, status: 'production_queued' })),
+    setMouthBox: mock(async () => project),
+    regeneratePresenter: mock(async () => project),
     attachSceneMedia: mock(async () => project),
     getMediaDirectory: mock(async () => '/nowhere'),
     getReadiness: mock(async () => readiness),
@@ -269,8 +275,8 @@ describe('registerOperatorHandlers', () => {
 
     expect(started).toEqual(project);
     expect(client.startProject.mock.calls).toEqual([
-      ['Span<T> in C#', 'generated_pictures', ''],
-      ['x'.repeat(200), 'generated_pictures', ''],
+      ['Span<T> in C#', 'generated_pictures', '', ''],
+      ['x'.repeat(200), 'generated_pictures', '', ''],
     ]);
     expect([short, long]).toEqual([
       { code: 'operator/invalid-request', message: 'The topic must be 3 to 200 characters.' },
@@ -299,13 +305,13 @@ describe('registerOperatorHandlers', () => {
     );
 
     expect(client.startProject.mock.calls).toEqual([
-      ['Span<T> in C#', 'own_pictures', 'Explain it to a junior developer'],
-      ['Records in C#', 'generated_pictures', 'd'.repeat(1000)],
-      ['Pattern matching', 'generated_pictures', ''],
+      ['Span<T> in C#', 'own_pictures', 'Explain it to a junior developer', ''],
+      ['Records in C#', 'generated_pictures', 'd'.repeat(1000), ''],
+      ['Pattern matching', 'generated_pictures', '', ''],
     ]);
     const format = {
       code: 'operator/invalid-request',
-      message: 'The format is generated_pictures, own_pictures or own_video.',
+      message: 'The format is generated_pictures, own_pictures, own_video or animated_character.',
     };
     expect(refused).toEqual([
       format,
@@ -324,11 +330,57 @@ describe('registerOperatorHandlers', () => {
       invoke(CHANNEL.operatorStartProject, { topic: 'Span', format: 'ai_presenter' }),
     );
 
-    expect(client.startProject.mock.calls).toEqual([['My talk at the meetup', 'own_video', '']]);
+    expect(client.startProject.mock.calls).toEqual([
+      ['My talk at the meetup', 'own_video', '', ''],
+    ]);
     expect(refused).toEqual({
       code: 'operator/invalid-request',
-      message: 'The format is generated_pictures, own_pictures or own_video.',
+      message: 'The format is generated_pictures, own_pictures, own_video or animated_character.',
     });
+  });
+
+  it('a presenter description over 300 characters is refused with the sentence', async () => {
+    await invoke(CHANNEL.operatorStartProject, {
+      topic: 'Span<T> in C#',
+      format: 'animated_character',
+      direction: '',
+      presenter: '  A friendly robot in a workshop  ',
+    });
+    await invoke(CHANNEL.operatorProduction, {
+      id: 'p1',
+      narrationVoice: '',
+      presenter: ` ${'r'.repeat(300)} `,
+    });
+    await invoke(CHANNEL.operatorDelegation, {
+      id: 'p1',
+      narrationVoice: '',
+      presenter: ' A cartoon owl on a bookshelf ',
+    });
+    const tooLong = 'r'.repeat(301);
+    const refused = await Promise.all([
+      rejection(
+        invoke(CHANNEL.operatorStartProject, {
+          topic: 'Span<T> in C#',
+          format: 'animated_character',
+          presenter: tooLong,
+        }),
+      ),
+      rejection(invoke(CHANNEL.operatorProduction, { id: 'p1', presenter: tooLong })),
+      rejection(invoke(CHANNEL.operatorDelegation, { id: 'p1', presenter: tooLong })),
+    ]);
+
+    expect(client.startProject.mock.calls).toEqual([
+      ['Span<T> in C#', 'animated_character', '', 'A friendly robot in a workshop'],
+    ]);
+    expect(client.produceProject.mock.calls).toEqual([['p1', '', '', 'gentle', 'r'.repeat(300)]]);
+    expect(client.delegateProject.mock.calls).toEqual([
+      ['p1', '', '', 'gentle', 'A cartoon owl on a bookshelf'],
+    ]);
+    const sentence = {
+      code: 'operator/invalid-request',
+      message: 'A presenter description is at most 300 characters.',
+    };
+    expect(refused).toEqual([sentence, sentence, sentence]);
   });
 
   it('a claim decision forwards supported and unsupported without a note, and waived with its trimmed note', async () => {
@@ -480,9 +532,9 @@ describe('registerOperatorHandlers', () => {
     expect((produced as OperatorProjectDto).status).toBe('production_queued');
     expect((delegated as OperatorProjectDto).delegated).toBe(true);
     expect(client.produceProject.mock.calls).toEqual([
-      ['p1', 'piper:en_GB-aru-medium#3', 'Chalk on slate', 'dynamic'],
+      ['p1', 'piper:en_GB-aru-medium#3', 'Chalk on slate', 'dynamic', ''],
     ]);
-    expect(client.delegateProject.mock.calls).toEqual([['p1', '', '', 'gentle']]);
+    expect(client.delegateProject.mock.calls).toEqual([['p1', '', '', 'gentle', '']]);
     expect(missing).toEqual([
       { code: 'operator/invalid-request', message: 'The project id is required.' },
       { code: 'operator/invalid-request', message: 'The project id is required.' },
@@ -530,7 +582,7 @@ describe('registerOperatorHandlers', () => {
         { code: 'operator/invalid-request', message: sentence },
       ]),
     );
-    expect(client.produceProject.mock.calls).toEqual([['p1', 'x'.repeat(80), '', 'gentle']]);
+    expect(client.produceProject.mock.calls).toEqual([['p1', 'x'.repeat(80), '', 'gentle', '']]);
     expect(client.delegateProject).not.toHaveBeenCalled();
   });
 
@@ -558,7 +610,7 @@ describe('registerOperatorHandlers', () => {
       message: 'Motion is still, gentle or dynamic.',
     };
     expect(refused).toEqual([brief, brief, motion, motion]);
-    expect(client.produceProject.mock.calls).toEqual([['p1', '', 'b'.repeat(1000), 'still']]);
+    expect(client.produceProject.mock.calls).toEqual([['p1', '', 'b'.repeat(1000), 'still', '']]);
     expect(client.delegateProject).not.toHaveBeenCalled();
   });
 
@@ -688,6 +740,62 @@ describe('registerOperatorHandlers', () => {
     ]);
   });
 
+  it('a mouth box outside the picture or too small is refused with the sentence', async () => {
+    const box = { x: 0.4, y: 0.6, width: 0.2, height: 0.1 };
+    const marked = await invoke(CHANNEL.operatorMouthBox, { projectId: ' p1 ', mouthBox: box });
+    await invoke(CHANNEL.operatorMouthBox, {
+      projectId: 'p1',
+      mouthBox: { x: 0, y: 0.98, width: 1, height: 0.02 },
+    });
+    const outside = [
+      { ...box, x: 0.9 },
+      { ...box, y: 0.95 },
+      { ...box, width: 0.01 },
+      { ...box, height: 0.019 },
+      { ...box, x: -0.1 },
+      { ...box, y: 1.2 },
+      { ...box, width: Number.NaN },
+      { ...box, height: Number.POSITIVE_INFINITY },
+      { ...box, x: '0.4' },
+      { y: 0.6, width: 0.2, height: 0.1 },
+      null,
+    ];
+    const refused = await Promise.all(
+      outside.map((mouthBox) =>
+        rejection(invoke(CHANNEL.operatorMouthBox, { projectId: 'p1', mouthBox })),
+      ),
+    );
+    const noProject = await rejection(invoke(CHANNEL.operatorMouthBox, { mouthBox: box }));
+
+    expect(marked).toEqual(project);
+    expect(client.setMouthBox.mock.calls).toEqual([
+      ['p1', box],
+      ['p1', { x: 0, y: 0.98, width: 1, height: 0.02 }],
+    ]);
+    const sentence = {
+      code: 'operator/invalid-request',
+      message:
+        'A mouth box is four fractions of the picture, each between 0 and 1, at least 0.02 wide and high and inside the picture.',
+    };
+    expect(refused).toEqual(outside.map(() => sentence));
+    expect(noProject).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The project id is required.',
+    });
+  });
+
+  it('a presenter regeneration forwards the trimmed project id and refuses a missing one before the control plane', async () => {
+    const regenerated = await invoke(CHANNEL.operatorPresenterRegeneration, { id: ' p1 ' });
+    const missing = await rejection(invoke(CHANNEL.operatorPresenterRegeneration, { id: ' ' }));
+
+    expect(regenerated).toEqual(project);
+    expect(client.regeneratePresenter.mock.calls).toEqual([['p1']]);
+    expect(missing).toEqual({
+      code: 'operator/invalid-request',
+      message: 'The project id is required.',
+    });
+  });
+
   it('readiness answers what the worker last reported', async () => {
     expect(await invoke(CHANNEL.operatorReadiness)).toEqual(readiness);
   });
@@ -811,6 +919,44 @@ describe('registerOperatorHandlers', () => {
     expect(withScene).toEqual({
       code: 'operator/invalid-request',
       message: 'A background is attached to the project, not to a scene.',
+    });
+    expect(notAPicture).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A picture must be a png, jpg, jpeg or webp file.',
+    });
+    expect(readdirSync(media)).toEqual([copied!]);
+  });
+
+  it("a presenter attach needs no scene id and only a picture: it copies the owner's picture as owner-presenter-<hex> and records it with the kind presenter and an empty scene id", async () => {
+    const media = tempDir();
+    const picture = path.join(tempDir(), 'My robot.WEBP');
+    writeFileSync(picture, PNG);
+    client.getMediaDirectory = mock(async () => media);
+    chosen = picture;
+
+    const response = await invoke(CHANNEL.operatorSceneMedia, {
+      projectId: 'p1',
+      sceneId: '',
+      kind: 'presenter',
+    });
+    const [copied] = readdirSync(media);
+    const withScene = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: 's1', kind: 'presenter' }),
+    );
+    const audio = path.join(tempDir(), 'voice.mp3');
+    writeFileSync(audio, 'ID3');
+    chosen = audio;
+    const notAPicture = await rejection(
+      invoke(CHANNEL.operatorSceneMedia, { projectId: 'p1', sceneId: '', kind: 'presenter' }),
+    );
+
+    expect(copied).toMatch(/^owner-presenter-[0-9a-f]{12}\.webp$/);
+    expect(chooseFile.mock.calls).toEqual([['visual'], ['visual']]);
+    expect(client.attachSceneMedia.mock.calls).toEqual([['p1', '', 'presenter', copied]]);
+    expect(response).toEqual({ project });
+    expect(withScene).toEqual({
+      code: 'operator/invalid-request',
+      message: 'A presenter picture is attached to the project, not to a scene.',
     });
     expect(notAPicture).toEqual({
       code: 'operator/invalid-request',
@@ -1247,7 +1393,7 @@ describe('registerOperatorHandlers', () => {
     });
   });
 
-  it('the returned unregister removes the twenty-nine operator handlers', () => {
+  it('the returned unregister removes the thirty-one operator handlers', () => {
     const own = makeFakeIpcMain();
     const unregister = registerOperatorHandlers(
       own,
@@ -1275,6 +1421,8 @@ describe('registerOperatorHandlers', () => {
         CHANNEL.operatorSceneRegeneration,
         CHANNEL.operatorSceneText,
         CHANNEL.operatorNarrationRegeneration,
+        CHANNEL.operatorMouthBox,
+        CHANNEL.operatorPresenterRegeneration,
         CHANNEL.operatorSceneMedia,
         CHANNEL.operatorReadiness,
         CHANNEL.operatorAssembly,

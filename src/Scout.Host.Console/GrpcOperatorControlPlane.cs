@@ -112,6 +112,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             Motion = project.Motion,
             Format = project.Format,
             RecordingMs = project.RecordingMs,
+            Presenter = project.Presenter,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new TopicCandidate { Title = c.Title, Reason = c.Reason, Fit = c.Fit }));
         if (project.Script is { } script)
@@ -159,6 +160,16 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
         if (project.RecordingFile is not null)
         {
             wire.RecordingFile = project.RecordingFile;
+        }
+
+        if (project.PresenterFile is not null)
+        {
+            wire.PresenterFile = project.PresenterFile;
+        }
+
+        if (project.MouthBox is { } mouth)
+        {
+            wire.MouthBox = new MouthBox { X = mouth.X, Y = mouth.Y, Width = mouth.Width, Height = mouth.Height };
         }
 
         return wire;
@@ -255,6 +266,9 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             Format = wire.Format,
             RecordingFile = wire.HasRecordingFile ? wire.RecordingFile : null,
             RecordingMs = wire.RecordingMs,
+            Presenter = wire.Presenter,
+            PresenterFile = wire.HasPresenterFile ? wire.PresenterFile : null,
+            MouthBox = wire.MouthBox is { } mouth ? new OperatorMouthBox(mouth.X, mouth.Y, mouth.Width, mouth.Height) : null,
         };
 
     public async Task<string> GetMediaDirectoryAsync(string projectId, CancellationToken ct)
@@ -278,6 +292,7 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             YoutubeSignedIn = readiness.YouTubeSignedIn,
             StockPictures = readiness.StockPictures,
             TranscriptionAvailable = readiness.TranscriptionAvailable,
+            LipSyncAvailable = readiness.LipSyncAvailable,
         };
         wire.Notes.AddRange(readiness.Notes);
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));

@@ -107,4 +107,25 @@ public sealed class ScriptWriterTests
         ex.Message.ShouldBe("The AI model did not return a script in the expected form, twice.");
         chat.Requests.Count.ShouldBe(2);
     }
+
+    [Fact]
+    public async Task An_Animated_Character_Script_Is_Asked_For_As_The_Characters_Own_Speech()
+    {
+        const string Character =
+            "The video is an animated character on screen presenting to the viewer, who speaks the whole script; write it as that character's own speech, in the first person, with no stage directions and no picture descriptions. ";
+        const string Pictures =
+            "The video is narration over a picture for each scene, which Scout makes from the narration; write narration a picture can show. ";
+        var animated = ScriptedChat.Answering(Given.Script());
+        var pictured = ScriptedChat.Answering(Given.Script());
+
+        await new ScriptWriter(animated).WriteAsync("sourdough", Given.Mandate(), Research, "animated_character", string.Empty, CancellationToken.None);
+        await new ScriptWriter(pictured).WriteAsync("sourdough", Given.Mandate(), Research, "generated_pictures", string.Empty, CancellationToken.None);
+
+        var animatedSystem = animated.Requests.ShouldHaveSingleItem().Single(m => m.Role == AuthorRole.System).Text;
+        animatedSystem.ShouldContain(Character, Case.Sensitive);
+        animatedSystem.ShouldNotContain(Pictures, Case.Sensitive);
+        var picturedSystem = pictured.Requests.ShouldHaveSingleItem().Single(m => m.Role == AuthorRole.System).Text;
+        picturedSystem.ShouldContain(Pictures, Case.Sensitive);
+        picturedSystem.ShouldNotContain(Character, Case.Sensitive);
+    }
 }

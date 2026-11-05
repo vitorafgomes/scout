@@ -408,7 +408,7 @@ public sealed class YouTubeOperatorPluginTests
 
         state.ShouldBe(string.Join('\n',
             "Project p1: media_ready, format own_pictures, voice piper:en_GB-cori-medium, motion still, delegated yes.",
-            "Formats Scout makes now: generated_pictures, own_pictures.",
+            "Formats Scout makes now: generated_pictures, own_pictures, animated_character.",
             "Voices: none",
             "Missing:",
             "- 2 claims are still pending: Produce waits for them, Delegate does not; the owner decides them in Scout Desktop, Production.",
@@ -428,7 +428,7 @@ public sealed class YouTubeOperatorPluginTests
             "- s2 #2 ready, locked, audio generated, visual owner: Shape the loaf.",
             "- s3 #3 failed, audio none, visual text_card: Bake it hot."));
         ungranted.ShouldBe(string.Join('\n',
-            "Formats Scout makes now: generated_pictures, own_pictures.",
+            "Formats Scout makes now: generated_pictures, own_pictures, animated_character.",
             "Voices: none",
             "Missing:",
             $"- {RecordingControlPlane.NotGranted}",
@@ -455,7 +455,7 @@ public sealed class YouTubeOperatorPluginTests
 
         lines[..7].ShouldBe([
             "Project p1: media_ready, format generated_pictures, voice Scout's choice, motion gentle, delegated no.",
-            "Formats Scout makes now: generated_pictures, own_pictures.",
+            "Formats Scout makes now: generated_pictures, own_pictures, animated_character.",
             "Voices: OpenAI:nova, piper:en_GB-cori-medium",
             YouTubeOperatorPlugin.NothingMissing,
             "Notes:",
@@ -464,7 +464,7 @@ public sealed class YouTubeOperatorPluginTests
         ]);
         lines.ShouldNotContain("Missing:");
         readinessOnly.ShouldBe([
-            "Formats Scout makes now: generated_pictures, own_pictures.", "Voices: OpenAI:nova, piper:en_GB-cori-medium",
+            "Formats Scout makes now: generated_pictures, own_pictures, animated_character.", "Voices: OpenAI:nova, piper:en_GB-cori-medium",
             YouTubeOperatorPlugin.NothingMissing, "Notes:", $"- {assembly}",
         ]);
     }
@@ -509,8 +509,23 @@ public sealed class YouTubeOperatorPluginTests
         reply.ShouldBe("Started a video project on sourdough; I will post here when the script is ready.");
     }
 
+    [Fact]
+    public async Task Make_Video_From_The_Owner_Starts_An_Animated_Character_And_The_Format_Is_Offered_To_The_Model()
+    {
+        var reply = await AskInATurn(p => p.MakeVideoAsync("sourdough", format: "animated_character"), isLocalOwner: true, origin: "local:quick-ask");
+
+        var (saved, _) = _controlPlane.Saves.ShouldHaveSingleItem();
+        (saved.Status, saved.Format, saved.Presenter, saved.PresenterFile).ShouldBe(("researching", "animated_character", string.Empty, (string?)null));
+        reply.ShouldBe("Started a video project on sourdough; I will post here when the script is ready.");
+        var function = KernelPluginFactory.CreateFromObject(Plugin(), YouTubeOperatorPlugin.PluginName)[YouTubeOperatorPlugin.MakeVideo];
+        function.Metadata.Parameters.Single(p => p.Name == "format").Description.ShouldBe(
+            "How the video is made: generated_pictures, the default; own_pictures, where the owner attaches a picture per scene; or animated_character, " +
+            "a cartoon presenter made once whose mouth moves with the narration. Only the owner may choose other than the default; empty for the default.");
+    }
+
     [Theory]
     [InlineData("own_pictures", "")]
+    [InlineData("animated_character", "")]
     [InlineData("", "Calm, close-up shots.")]
     [InlineData("generated_pictures", "Calm, close-up shots.")]
     public async Task Make_Video_With_A_Format_From_A_Non_Owner_Starts_Nothing(string format, string direction)

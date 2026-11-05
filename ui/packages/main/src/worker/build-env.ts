@@ -26,7 +26,7 @@ export interface BuildEnvDeps {
   grantedWriteFeatures?: readonly string[];
   /** The control plane's write gate for the worker; null while the control plane is not launched. */
   workerGate?: WorkerGateAccess | null;
-  /** The bundled ffmpeg, font, piper and voices folder; the worker gets each path, empty when not bundled. */
+  /** The bundled ffmpeg, font, piper, voices, rhubarb and mouths; the worker gets each path, empty when not bundled. */
   mediaTools?: MediaToolPaths;
 }
 
@@ -96,6 +96,8 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
   env['SCOUT__OPERATOR__FONTPATH'] = deps.mediaTools?.font ?? '';
   env['SCOUT__OPERATOR__PIPERPATH'] = deps.mediaTools?.piper ?? '';
   env['SCOUT__OPERATOR__VOICESPATH'] = deps.mediaTools?.voices ?? '';
+  env['SCOUT__OPERATOR__RHUBARBPATH'] = deps.mediaTools?.rhubarb ?? '';
+  env['SCOUT__OPERATOR__MOUTHSPATH'] = deps.mediaTools?.mouths ?? '';
 
   const guardKey = await vaultGet('guard.typesafe-api-key');
   if (guardKey !== null) env['SCOUT__GUARD__TYPESAFE__APIKEY'] = guardKey;

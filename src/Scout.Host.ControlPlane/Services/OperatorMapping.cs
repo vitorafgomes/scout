@@ -6,6 +6,7 @@ using DomainClaim = Scout.ControlPlane.Operator.Claim;
 using DomainExperiment = Scout.ControlPlane.Operator.Experiment;
 using DomainExperimentArm = Scout.ControlPlane.Operator.ExperimentArm;
 using DomainMandate = Scout.ControlPlane.Operator.Mandate;
+using DomainMouthBox = Scout.ControlPlane.Operator.MouthBox;
 using DomainPackage = Scout.ControlPlane.Operator.VideoPackage;
 using DomainPackageCheck = Scout.ControlPlane.Operator.PackageCheck;
 using DomainProposal = Scout.ControlPlane.Operator.Proposal;
@@ -24,6 +25,7 @@ using WireClaim = Scout.ControlPlane.Contracts.Claim;
 using WireExperiment = Scout.ControlPlane.Contracts.Experiment;
 using WireExperimentArm = Scout.ControlPlane.Contracts.ExperimentArm;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
+using WireMouthBox = Scout.ControlPlane.Contracts.MouthBox;
 using WirePackage = Scout.ControlPlane.Contracts.VideoPackage;
 using WirePackageCheck = Scout.ControlPlane.Contracts.PackageCheck;
 using WireProject = Scout.ControlPlane.Contracts.Project;
@@ -97,6 +99,7 @@ internal static class OperatorMapping
             Motion = project.Motion,
             Format = project.Format,
             RecordingMs = project.RecordingMs,
+            Presenter = project.Presenter,
         };
         wire.Candidates.AddRange(project.Candidates.Select(c => new WireTopicCandidate
         {
@@ -129,6 +132,14 @@ internal static class OperatorMapping
         if (project.RecordingFile is not null)
         {
             wire.RecordingFile = project.RecordingFile;
+        }
+        if (project.PresenterFile is not null)
+        {
+            wire.PresenterFile = project.PresenterFile;
+        }
+        if (project.MouthBox is { } box)
+        {
+            wire.MouthBox = new WireMouthBox { X = box.X, Y = box.Y, Width = box.Width, Height = box.Height };
         }
         return wire;
     }
@@ -180,7 +191,13 @@ internal static class OperatorMapping
         Format = wire.Format,
         RecordingFile = wire.HasRecordingFile ? wire.RecordingFile : null,
         RecordingMs = wire.RecordingMs,
+        Presenter = wire.Presenter,
+        PresenterFile = wire.HasPresenterFile ? wire.PresenterFile : null,
+        MouthBox = ToDomain(wire.MouthBox),
     };
+
+    public static DomainMouthBox? ToDomain(WireMouthBox? wire) =>
+        wire is null ? null : new DomainMouthBox(wire.X, wire.Y, wire.Width, wire.Height);
 
     public static DateTimeOffset? ToDomainTime(bool has, string value) => has ? ParseIso(value) : null;
 
@@ -195,6 +212,7 @@ internal static class OperatorMapping
             YoutubeSignedIn = readiness.YouTubeSignedIn,
             StockPictures = readiness.StockPictures,
             TranscriptionAvailable = readiness.TranscriptionAvailable,
+            LipSyncAvailable = readiness.LipSyncAvailable,
         };
         wire.Notes.AddRange(readiness.Notes);
         wire.Voices.AddRange(readiness.Voices.Select(ToWire));
@@ -216,6 +234,7 @@ internal static class OperatorMapping
         Voices = wire.Voices.Select(v => new DomainVoice(v.Id, v.Label, v.Source, v.HasSampleFile ? v.SampleFile : null)).ToList(),
         StockPictures = wire.StockPictures,
         TranscriptionAvailable = wire.TranscriptionAvailable,
+        LipSyncAvailable = wire.LipSyncAvailable,
     };
 
     public static async Task<T> Guard<T>(Func<Task<T>> action)

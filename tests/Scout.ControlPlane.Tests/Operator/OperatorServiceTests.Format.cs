@@ -58,7 +58,7 @@ public sealed partial class OperatorServiceTests
         var ex = await Should.ThrowAsync<OperatorValidationException>(() =>
             _operator.StartProjectAsync("Why rivers meander", format, "Calm and slow.", None));
 
-        ex.Message.ShouldBe("The format is generated_pictures, own_pictures or own_video.");
+        ex.Message.ShouldBe("The format is generated_pictures, own_pictures, own_video or animated_character.");
         (await _store.ReadProjectsAsync(None)).ShouldBeEmpty();
         (await _writes.ListAsync(10, None)).ShouldBe(logged);
     }
@@ -91,12 +91,17 @@ public sealed partial class OperatorServiceTests
             NewDraft("Glaciers explained", "researching") with { Format = " own_pictures ", Direction = "  A walk along\tthe glacier.  " }, "discord:1", None);
         var defaulted = await _operator.SaveProjectFromWorkerAsync(
             NewDraft("Why rivers meander", "researching") with { Format = string.Empty, Direction = string.Empty }, "discord:1", None);
+        var character = await _operator.SaveProjectFromWorkerAsync(
+            NewDraft("Why the fox crossed", "researching") with { Format = " animated_character ", Presenter = "A robot.", PresenterFile = "presenter-1a2b.png", MouthBox = new MouthBox(0, 0, 1, 1) }, "discord:1", None);
 
         (own.Origin, own.Format, own.Direction).ShouldBe(("chat", "own_pictures", "A walk along the glacier."));
         var stored = await StoredAsync(own.Id);
         (stored.Format, stored.Direction).ShouldBe(("own_pictures", "A walk along the glacier."));
         var storedDefault = await StoredAsync(defaulted.Id);
         (storedDefault.Format, storedDefault.Direction).ShouldBe(("generated_pictures", string.Empty));
+        var storedCharacter = await StoredAsync(character.Id);
+        (storedCharacter.Format, storedCharacter.Presenter, storedCharacter.PresenterFile, storedCharacter.MouthBox)
+            .ShouldBe(("animated_character", string.Empty, (string?)null, (MouthBox?)null));
     }
 
     [Theory]
@@ -110,7 +115,7 @@ public sealed partial class OperatorServiceTests
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.SaveProjectFromWorkerAsync(
             NewDraft("Glaciers explained", "researching") with { Format = format, Direction = "Calm." }, "discord:1", None));
 
-        ex.Message.ShouldBe("The format is generated_pictures, own_pictures or own_video.");
+        ex.Message.ShouldBe("The format is generated_pictures, own_pictures, own_video or animated_character.");
         (await _store.ReadProjectsAsync(None)).ShouldBeEmpty();
         (await _writes.ListAsync(10, None)).ShouldBe(logged);
     }
@@ -147,5 +152,29 @@ public sealed partial class OperatorServiceTests
         (ownDelegated.Status, ownDelegated.Delegated).ShouldBe(("assembly_queued", true));
         (await StoredAsync(own.Id)).Status.ShouldBe("assembly_queued");
         generatedDelegated.Status.ShouldBe("production_queued");
+    }
+
+    [Fact]
+    public async Task Delegating_A_Media_Ready_Animated_Character_Queues_Assembly_Only_With_Its_Presenter_Picture()
+    {
+        await GrantYouTubeAsync();
+        await _operator.ReportReadinessAsync(new Readiness(true, true, "openai", true, true, []), None);
+        Scene[] presenterScenes =
+        [
+            new("s1", 1, "Narration s1", string.Empty, false, "ready", null, "generated", "presenter", "s1.mp3", null, 3000),
+            new("s2", 2, "Narration s2", string.Empty, false, "ready", null, "generated", "presenter", "s2.mp3", null, 3000),
+        ];
+        var pictured = await _operator.StartProjectAsync("Why the fox crossed", "animated_character", string.Empty, "A friendly fox.", None);
+        var unpictured = await _operator.StartProjectAsync("Why the owl hoots", "animated_character", string.Empty, "A wise owl.", None);
+        await SetStoredAsync(pictured.Id, p => p with { Status = "media_ready", Scenes = presenterScenes, PresenterFile = "owner-presenter-0123456789ab.png" });
+        await SetStoredAsync(unpictured.Id, p => p with { Status = "media_ready", Scenes = presenterScenes });
+
+        var withPicture = await _operator.DelegateProjectAsync(pictured.Id, string.Empty, string.Empty, string.Empty, None);
+        var withoutPicture = await _operator.DelegateProjectAsync(unpictured.Id, string.Empty, string.Empty, string.Empty, None);
+
+        (withPicture.Status, withPicture.Delegated).ShouldBe(("assembly_queued", true));
+        (withoutPicture.Status, withoutPicture.Delegated).ShouldBe(("production_queued", true));
+        (await StoredAsync(pictured.Id)).Status.ShouldBe("assembly_queued");
+        (await StoredAsync(unpictured.Id)).Status.ShouldBe("production_queued");
     }
 }

@@ -9,7 +9,7 @@ namespace Scout.Operator;
 /// word, the script's description followed by chapters timed from the real scene lengths and the credits of the stock
 /// pictures, cut to YouTube's 5000 characters by shortening the script's description first, and the script's tags kept in order while they fit
 /// YouTube's 500 characters. Checks, each <c>pass</c>, <c>warn</c> or <c>fail</c>: duration, loudness, captions, placeholders,
-/// metadata and discoverability.
+/// metadata and discoverability, and, for a video with an animated character, presenter.
 /// </summary>
 internal static partial class PackageChecks
 {
@@ -34,7 +34,29 @@ internal static partial class PackageChecks
         ArgumentNullException.ThrowIfNull(video);
         ArgumentNullException.ThrowIfNull(mandate);
         return [Duration(video.DurationMs), Loudness(loudness), Captions(video.Cuts), Placeholders(video.Cuts),
-            Metadata(title, description, tags), Discoverability(title, description, topic, mandate)];
+            Metadata(title, description, tags), Discoverability(title, description, topic, mandate),
+            .. Presenter(video.Cuts) is { } presenter ? [presenter] : Array.Empty<OperatorCheck>()];
+    }
+
+    /// <summary>
+    /// For a video with an animated character, a warning naming the scenes the character could not speak in and why, the
+    /// notes the assembler left on their cuts, else a pass; null for a video without one.
+    /// </summary>
+    internal static OperatorCheck? Presenter(IReadOnlyList<SceneCut> cuts)
+    {
+        if (!cuts.Any(c => c.Scene.VisualSource == OperatorPipeline.Presenter))
+        {
+            return null;
+        }
+
+        var notes = cuts
+            .Where(c => c.Note is not null)
+            .GroupBy(c => c.Note!, StringComparer.Ordinal)
+            .Select(g => $"Scenes {string.Join(", ", g.Select(c => c.Scene.Order))}: {g.Key.TrimEnd('.')}")
+            .ToList();
+        return notes.Count > 0
+            ? new("presenter", Warn, string.Join("; ", notes) + ".")
+            : new("presenter", Pass, "The character's mouth moves with the narration in every scene.");
     }
 
     internal static OperatorCheck Duration(int ms)

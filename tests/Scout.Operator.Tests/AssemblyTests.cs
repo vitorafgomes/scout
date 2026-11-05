@@ -97,6 +97,31 @@ public sealed class AssemblyTests : IDisposable
     }
 
     [Fact]
+    public async Task An_Animated_Character_Project_Is_Assembled_With_Its_Presenter_Picture_And_Says_Where_The_Mouth_Is_Missing()
+    {
+        File.WriteAllBytes(Path.Combine(_media, "presenter-0a1b2c3d4e5f.png"), [1, 2, 3]);
+        File.WriteAllBytes(Path.Combine(_media, "scene-s1.mp3"), [1, 2, 3]);
+        var project = Given.Producing(
+            Given.Scene("s1", 1, "Bread in ten minutes? Here is how.", "ready", audioSource: "generated", visualSource: "presenter",
+                audioFile: "scene-s1.mp3", durationMs: 2000)) with
+        {
+            Status = "assembling",
+            Format = "animated_character",
+            PresenterFile = "presenter-0a1b2c3d4e5f.png",
+        };
+        var controlPlane = Holding(project);
+        var runner = new FakeProcessRunner { ProbedMs = 31_000, ReportsPicture = true };
+
+        await Run(controlPlane, project, runner);
+
+        var save = controlPlane.Saves.ShouldHaveSingleItem().Project;
+        save.Status.ShouldBe("assembled");
+        runner.Renders[0].ShouldContain(Path.Combine(_media, "presenter-0a1b2c3d4e5f.png"));
+        save.Package.ShouldNotBeNull().Checks.Last().ShouldBe(new OperatorCheck(
+            "presenter", "warn", "Scenes 1: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
+    }
+
+    [Fact]
     public async Task The_Projects_Background_Is_Rendered_Under_The_Scenes_Without_A_Picture_And_Goes_Back_As_Read()
     {
         File.WriteAllBytes(Path.Combine(_media, "studio.png"), [5, 6]);

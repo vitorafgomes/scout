@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
@@ -7,6 +8,7 @@ import { dirname, join } from 'node:path';
 import {
   TABLE_PATH,
   archiveFor,
+  extractArchive,
   extractWithTar,
   fetchMediaTools,
 } from '../../../build/scripts/fetch-media-tools.mjs';
@@ -18,6 +20,7 @@ const FONT = 'font bytes';
 const LICENCE = 'licence bytes';
 const PIPER = 'piper archive bytes';
 const MODEL = 'voice model bytes';
+const RHUBARB = 'rhubarb archive bytes';
 
 const table = {
   ffmpeg: {
@@ -53,6 +56,28 @@ const table = {
         url: 'https://example.test/piper-mac.tar.gz',
         sha256: sha(PIPER),
         root: 'piper',
+      },
+    },
+  },
+  rhubarb: {
+    version: '1.14.0-test',
+    source: 'https://github.com/DanielSWolf/rhubarb-lip-sync',
+    license: 'MIT',
+    archives: {
+      'linux-x64': {
+        url: 'https://example.test/rhubarb-Linux.zip',
+        sha256: sha(RHUBARB),
+        root: 'Rhubarb-Linux',
+      },
+      'win32-x64': {
+        url: 'https://example.test/rhubarb-Windows.zip',
+        sha256: sha(RHUBARB),
+        root: 'Rhubarb-Windows',
+      },
+      'darwin-arm64': {
+        url: 'https://example.test/rhubarb-macOS.zip',
+        sha256: sha(RHUBARB),
+        root: 'Rhubarb-macOS',
       },
     },
   },
@@ -109,6 +134,9 @@ const BODIES: Record<string, string> = {
   'https://example.test/cori.onnx': MODEL,
   'https://example.test/cori-card': LICENCE,
   'https://example.test/aru.onnx': MODEL,
+  'https://example.test/rhubarb-Linux.zip': RHUBARB,
+  'https://example.test/rhubarb-Windows.zip': RHUBARB,
+  'https://example.test/rhubarb-macOS.zip': RHUBARB,
 };
 
 function fakeFetch(bodies: Record<string, string> = BODIES) {
@@ -121,7 +149,24 @@ function fakeFetch(bodies: Record<string, string> = BODIES) {
   return { fetch, urls };
 }
 
+const rhubarbMembers: string[] = [];
+
 async function fakeExtract(archive: string, dir: string, members: readonly string[]) {
+  if (archive.includes('rhubarb')) {
+    rhubarbMembers.push(...members);
+    const root = join(dir, members[0]!.split('/')[0]!);
+    const exe = archive.includes('Windows') ? 'rhubarb.exe' : 'rhubarb';
+    await mkdir(join(root, 'res', 'sphinx'), { recursive: true });
+    await mkdir(join(root, 'extras'), { recursive: true });
+    await mkdir(join(root, 'tests'), { recursive: true });
+    await writeFile(join(root, exe), 'rhubarb exe', { mode: 0o644 });
+    await writeFile(join(root, 'res', 'sphinx', 'cmudict-en-us.dict'), 'dictionary');
+    await writeFile(join(root, 'LICENSE.md'), 'rhubarb licence');
+    await writeFile(join(root, 'README.adoc'), 'readme');
+    await writeFile(join(root, 'extras', 'plugin.jsx'), 'plugin');
+    await writeFile(join(root, 'tests', 'fixture.wav'), 'fixture');
+    return;
+  }
   if (archive.includes('piper')) {
     for (const member of members) {
       const exe = archive.includes('win') ? 'piper.exe' : 'piper';
@@ -199,6 +244,128 @@ describe('fetch-media-tools', () => {
     ]);
   });
 
+  it('the pinned table names Rhubarb Lip Sync 1.14.0 (MIT) with one release zip and its SHA-256 per target, the macOS zip for both Mac archs', () => {
+    const pinned = JSON.parse(readFileSync(TABLE_PATH, 'utf8')) as typeof table;
+    const release =
+      'https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-';
+    const { archives: pinnedArchives, ...about } = pinned.rhubarb;
+    const archives: Record<string, { url: string; sha256: string; root: string }> = pinnedArchives;
+
+    expect(about).toEqual({
+      version: '1.14.0',
+      source: 'https://github.com/DanielSWolf/rhubarb-lip-sync',
+      license: 'MIT',
+    });
+    expect(
+      Object.entries(archives)
+        .map(([target, a]) => [target, a.url, a.root])
+        .sort(),
+    ).toEqual([
+      ['darwin-arm64', `${release}macOS.zip`, 'Rhubarb-Lip-Sync-1.14.0-macOS'],
+      ['darwin-x64', `${release}macOS.zip`, 'Rhubarb-Lip-Sync-1.14.0-macOS'],
+      ['linux-x64', `${release}Linux.zip`, 'Rhubarb-Lip-Sync-1.14.0-Linux'],
+      ['win32-x64', `${release}Windows.zip`, 'Rhubarb-Lip-Sync-1.14.0-Windows'],
+    ]);
+    expect(Object.values(archives).filter((a) => !/^[0-9a-f]{64}$/.test(a.sha256))).toEqual([]);
+    expect(archives['darwin-x64']!.sha256).toBe(archives['darwin-arm64']!.sha256);
+    expect(new Set(Object.values(archives).map((a) => a.sha256)).size).toBe(3);
+  });
+
+  it('fetches rhubarb for the target and takes its executable, its res folder and its licence, without the editor plugins and test fixtures, with its notice', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    rhubarbMembers.splice(0);
+
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    });
+
+    const rhubarb = join(resourcesDir, 'media-tools', 'linux-x64', 'rhubarb');
+    expect((await readdir(rhubarb)).sort()).toEqual(['LICENSE.md', 'NOTICE.txt', 'res', 'rhubarb']);
+    expect(rhubarbMembers).toEqual([
+      'Rhubarb-Linux/rhubarb',
+      'Rhubarb-Linux/res',
+      'Rhubarb-Linux/LICENSE.md',
+    ]);
+    expect(await readFile(join(rhubarb, 'res', 'sphinx', 'cmudict-en-us.dict'), 'utf8')).toBe(
+      'dictionary',
+    );
+    if (process.platform !== 'win32')
+      expect(statSync(join(rhubarb, 'rhubarb')).mode & 0o777).toBe(0o755);
+    const notice = await readFile(join(rhubarb, 'NOTICE.txt'), 'utf8');
+    expect(notice).toContain('rhubarb 1.14.0-test, Rhubarb Lip Sync (MIT)');
+    expect(notice).toContain('https://github.com/DanielSWolf/rhubarb-lip-sync');
+    expect(notice).toContain(`Archive SHA-256: ${sha(RHUBARB)}`);
+    expect(notice).toContain('separate program');
+    expect(notice).toContain('PocketSphinx under its BSD licence');
+    expect(notice).toContain('Licence: LICENSE.md beside this file.');
+  });
+
+  it('a rhubarb archive whose digest is not the pinned one is refused and nothing of it is kept', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const { fetch } = fakeFetch({
+      ...BODIES,
+      'https://example.test/rhubarb-Linux.zip': 'tampered',
+    });
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: checksum mismatch for https://example.test/rhubarb-Linux.zip: expected ${sha(RHUBARB)}, got ${sha('tampered')}`,
+    );
+    expect(existsSync(join(cacheDir, 'rhubarb-Linux.zip'))).toBe(false);
+    expect(existsSync(join(resourcesDir, 'media-tools', 'linux-x64', 'rhubarb'))).toBe(false);
+  });
+
+  it('a new ffmpeg build replaces only its own files and leaves the piper and rhubarb folders in place', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    });
+    const extracted: string[] = [];
+
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table: { ...table, ffmpeg: { ...table.ffmpeg, version: 'n9.0.3-test' } },
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: async (archive: string, dir: string, members: readonly string[]) => {
+        extracted.push(archive);
+        await fakeExtract(archive, dir, members);
+      },
+      log: () => undefined,
+    });
+
+    const tools = join(resourcesDir, 'media-tools', 'linux-x64');
+    expect(extracted).toEqual([join(cacheDir, 'ffmpeg-linux64.tar.xz')]);
+    expect(existsSync(join(tools, 'rhubarb', 'rhubarb'))).toBe(true);
+    expect(existsSync(join(tools, 'piper', 'piper'))).toBe(true);
+    expect(await readFile(join(tools, 'NOTICE.txt'), 'utf8')).toContain('n9.0.3-test');
+  });
+
   it('selects the archive of the platform and arch, with ffmpeg alone and the licence to take from it; none for macOS', () => {
     expect(archiveFor(table, 'linux-x64')?.members).toEqual({
       ffmpeg: 'ffmpeg-linux64/bin/ffmpeg',
@@ -225,7 +392,13 @@ describe('fetch-media-tools', () => {
     });
 
     const tools = join(resourcesDir, 'media-tools', 'linux-x64');
-    expect((await readdir(tools)).sort()).toEqual(['LICENSE.txt', 'NOTICE.txt', 'ffmpeg', 'piper']);
+    expect((await readdir(tools)).sort()).toEqual([
+      'LICENSE.txt',
+      'NOTICE.txt',
+      'ffmpeg',
+      'piper',
+      'rhubarb',
+    ]);
     expect(await readFile(join(tools, 'ffmpeg'), 'utf8')).toBe(
       'extracted ffmpeg-linux64/bin/ffmpeg',
     );
@@ -338,7 +511,10 @@ describe('fetch-media-tools', () => {
       'en_GB-cori-medium.MODEL_CARD',
       'en_GB-cori-medium.onnx',
     ]);
-    expect(await readdir(join(resourcesDir, 'media-tools', 'darwin-arm64'))).toEqual(['piper']);
+    expect((await readdir(join(resourcesDir, 'media-tools', 'darwin-arm64'))).sort()).toEqual([
+      'piper',
+      'rhubarb',
+    ]);
     expect(lines).toEqual([
       'media tools: no ffmpeg bundled for darwin-arm64; the worker uses ffmpeg from the system path',
       `media tools: darwin-arm64 ready in ${resourcesDir}`,
@@ -468,6 +644,47 @@ describe('fetch-media-tools', () => {
     expect(existsSync(join(resourcesDir, 'fonts', 'NotoSans-Regular.ttf'))).toBe(true);
   });
 
+  it.skipIf(process.platform === 'win32')(
+    'a zip is extracted whole with the system unzip outside Windows, where tar reads no zip',
+    async () => {
+      const { cacheDir } = await folders();
+      const source = join(cacheDir, 'source');
+      const out = join(cacheDir, 'out');
+      await mkdir(join(source, 'Rhubarb-Linux', 'res'), { recursive: true });
+      await mkdir(out, { recursive: true });
+      await writeFile(join(source, 'Rhubarb-Linux', 'rhubarb'), 'rhubarb exe');
+      await writeFile(join(source, 'Rhubarb-Linux', 'res', 'model'), 'model');
+      const archive = join(cacheDir, 'rhubarb.zip');
+      expect(spawnSync('zip', ['-qr', archive, 'Rhubarb-Linux'], { cwd: source }).status).toBe(0);
+
+      extractArchive(archive, out, ['Rhubarb-Linux']);
+
+      expect(await readFile(join(out, 'Rhubarb-Linux', 'rhubarb'), 'utf8')).toBe('rhubarb exe');
+      expect(await readFile(join(out, 'Rhubarb-Linux', 'res', 'model'), 'utf8')).toBe('model');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'the system unzip failing on a zip it cannot read fails the build, naming the members and the archive',
+    async () => {
+      const { cacheDir } = await folders();
+      await mkdir(cacheDir, { recursive: true });
+      const archive = join(cacheDir, 'not-a-zip.zip');
+      await writeFile(archive, 'these bytes are not a zip');
+
+      let failure: Error | null = null;
+      try {
+        extractArchive(archive, cacheDir, ['Rhubarb-Linux']);
+      } catch (err: unknown) {
+        failure = err as Error;
+      }
+
+      expect(failure?.message).toBe(
+        `media tools: unzip could not extract Rhubarb-Linux from ${archive}`,
+      );
+    },
+  );
+
   it('the system tar failing on an archive it cannot read fails the build, naming the members and the archive', async () => {
     const { cacheDir } = await folders();
     await mkdir(cacheDir, { recursive: true });
@@ -484,5 +701,72 @@ describe('fetch-media-tools', () => {
     expect(failure?.message).toBe(
       `media tools: tar could not extract ffmpeg-linux64/bin/ffmpeg from ${archive}`,
     );
+  });
+
+  const rhubarbOfSize = (size: number) => ({
+    ...table,
+    rhubarb: {
+      ...table.rhubarb,
+      archives: {
+        ...table.rhubarb.archives,
+        'linux-x64': { ...table.rhubarb.archives['linux-x64'], size },
+      },
+    },
+  });
+
+  it('every pinned rhubarb archive carries its byte size', () => {
+    const pinned = JSON.parse(readFileSync(TABLE_PATH, 'utf8')) as {
+      rhubarb: { archives: Record<string, { size?: number }> };
+    };
+
+    expect(
+      Object.entries(pinned.rhubarb.archives).filter(
+        ([, a]) => !Number.isInteger(a.size) || a.size! <= 0,
+      ),
+    ).toEqual([]);
+  });
+
+  it('a download whose byte length is not the pinned size is refused, even with the pinned digest, and nothing of it is kept', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const expected = Buffer.byteLength(RHUBARB) + 1;
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table: rhubarbOfSize(expected),
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: size mismatch for https://example.test/rhubarb-Linux.zip: expected ${expected}, got ${Buffer.byteLength(RHUBARB)}`,
+    );
+    expect(existsSync(join(cacheDir, 'rhubarb-Linux.zip'))).toBe(false);
+    expect(existsSync(join(cacheDir, 'rhubarb-Linux.zip.partial'))).toBe(false);
+    expect(existsSync(join(resourcesDir, 'media-tools', 'linux-x64', 'rhubarb'))).toBe(false);
+  });
+
+  it('a download of the pinned size and digest is kept and extracted', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table: rhubarbOfSize(Buffer.byteLength(RHUBARB)),
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      log: () => undefined,
+    });
+
+    expect(await readFile(join(cacheDir, 'rhubarb-Linux.zip'), 'utf8')).toBe(RHUBARB);
+    expect(
+      await readFile(join(resourcesDir, 'media-tools', 'linux-x64', 'rhubarb', 'rhubarb'), 'utf8'),
+    ).toBe('rhubarb exe');
   });
 });

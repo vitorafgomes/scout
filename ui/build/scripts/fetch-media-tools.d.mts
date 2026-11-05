@@ -22,6 +22,12 @@ export interface MediaToolsTable {
     readonly source: string;
     readonly archives: Readonly<Record<string, PinnedArchive>>;
   };
+  readonly rhubarb: {
+    readonly version: string;
+    readonly source: string;
+    readonly license: string;
+    readonly archives: Readonly<Record<string, PinnedArchive & { readonly size?: number }>>;
+  };
   readonly voices: {
     readonly repo: string;
     readonly commit: string;
@@ -53,6 +59,12 @@ export declare function archiveFor(
 ): (PinnedArchive & { readonly members: Readonly<Record<string, string>> }) | null;
 
 export declare function extractWithTar(
+  archive: string,
+  dir: string,
+  members: readonly string[],
+): void;
+
+export declare function extractArchive(
   archive: string,
   dir: string,
   members: readonly string[],

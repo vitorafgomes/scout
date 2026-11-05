@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { load } from 'js-yaml';
@@ -214,6 +214,8 @@ describe('the packaged app finds the control-plane host and its protos', () => {
       font: join(RESOURCES, fonts!.to, 'NotoSans-Regular.ttf'),
       piper: '',
       voices: '',
+      rhubarb: '',
+      mouths: '',
     });
   });
 
@@ -233,6 +235,36 @@ describe('the packaged app finds the control-plane host and its protos', () => {
         (dir) => (dir === join(RESOURCES, 'voices') ? ['en_GB-cori-medium.onnx'] : []),
       ),
     ).toMatchObject({ piper, voices: join(RESOURCES, 'voices') });
+  });
+
+  it('ships the committed mouth shapes as a resource outside the asar, where resolveMediaTools looks for them, with rhubarb inside media-tools', () => {
+    const mouths = config.extraResources.find((r) => r.to === 'mouths');
+    const rhubarb = join(RESOURCES, 'media-tools', 'linux-x64', 'rhubarb', 'rhubarb');
+    const committed = readdirSync(join(UI_ROOT, 'packages/main/resources/mouths')).sort();
+
+    expect(mouths?.from).toBe('packages/main/resources/mouths');
+    expect(mouths!.filter).toEqual(['**/*']);
+    expect(config.files).toContain('!packages/main/resources/mouths/**');
+    expect(committed).toEqual([
+      'A.png',
+      'B.png',
+      'C.png',
+      'D.png',
+      'E.png',
+      'F.png',
+      'G.png',
+      'H.png',
+      'LICENSE.txt',
+      'VERSION',
+      'X.png',
+    ]);
+    expect(
+      resolveMediaTools(
+        packaged,
+        (file) => file === rhubarb,
+        (dir) => (dir === join(RESOURCES, 'mouths') ? committed : []),
+      ),
+    ).toMatchObject({ rhubarb, mouths: join(RESOURCES, 'mouths') });
   });
 
   it.each(['publish-worker.sh', 'publish-worker.ps1'])(

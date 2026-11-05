@@ -604,6 +604,56 @@ public sealed class OperatorContractTests : IDisposable
         stored.Script.ShouldNotBeNull().Sections.Select(s => (s.Heading, s.StartMs, s.EndMs)).ShouldBe([("The bend", 0, 24_800), ("The cut", 24_800, 47_000)]);
     }
 
+    [Fact]
+    public async Task An_Animated_Character_Save_Fills_The_Presenter_Picture_Once_And_Carries_Lip_Sync_In_The_Readiness()
+    {
+        var features = new FeaturesService(
+            new FeatureCatalog(), _states, new InMemoryCredentialStore(), new NullFeatureActivator(), []);
+        await features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
+        var writeGate = new WriteGateService(new FeatureCatalog(), _states, _actions, _writes);
+        var service = new OperatorService(_store, writeGate, _writes);
+        await using var server = await GrpcWriteGateTests.WorkerGateServer.StartAsync(
+            new Scout.Host.ControlPlane.Services.WorkerGateGrpcService(writeGate, service, new CommentService(_store, service)));
+        using var gate = new GrpcWriteGate(server.SocketPath, "worker-session-token");
+        var worker = new GrpcOperatorControlPlane(gate);
+        OperatorScene Spoken(string id, int order) => new(id, order, $"Narration {id}.", string.Empty, false, OperatorPipeline.Ready, null,
+            OperatorPipeline.Generated, OperatorPipeline.Presenter, $"scene-{id}.mp3", null, 1600);
+        var started = await service.StartProjectAsync("Why rivers meander", OperatorPipeline.AnimatedCharacter, string.Empty, "A friendly fox.", CancellationToken.None);
+        var researching = (await worker.NextQueuedAsync(CancellationToken.None)).ShouldNotBeNull().Project;
+        await worker.SaveProjectAsync(
+            researching with
+            {
+                Status = OperatorPipeline.ScriptReady,
+                Script = new OperatorScript("Hook", [new OperatorScriptSection("Bends", "Rivers bend.")], "Subscribe", ["A", "B", "C"], string.Empty, [], []),
+            },
+            null,
+            CancellationToken.None);
+        await service.ProduceProjectAsync(started.Id, string.Empty, string.Empty, string.Empty, CancellationToken.None);
+        var producing = (await worker.NextQueuedAsync(CancellationToken.None)).ShouldNotBeNull().Project;
+
+        var scenes = await worker.SaveProjectAsync(producing with { Scenes = [Spoken("s1", 1), Spoken("s2", 2)] }, null, CancellationToken.None);
+        await File.WriteAllBytesAsync(Path.Combine(await service.GetMediaDirectoryAsync(started.Id, CancellationToken.None), "presenter-0a1b2c3d4e5f.png"), [1]);
+        var filled = await worker.SaveProjectAsync(scenes with { PresenterFile = "presenter-0a1b2c3d4e5f.png" }, null, CancellationToken.None);
+        var later = await worker.SaveProjectAsync(
+            filled with { Status = OperatorPipeline.MediaReady, PresenterFile = "presenter-ffffffffffff.png" }, null, CancellationToken.None);
+        await worker.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []) { LipSyncAvailable = true }, CancellationToken.None);
+        var canMoveTheMouth = (await service.GetReadinessAsync(CancellationToken.None)).LipSyncAvailable;
+        await worker.ReportReadinessAsync(new OperatorReadiness(true, true, "OpenAI", true, true, []), CancellationToken.None);
+        var cannotMoveTheMouth = (await service.GetReadinessAsync(CancellationToken.None)).LipSyncAvailable;
+
+        (producing.Format, producing.Presenter, producing.PresenterFile).ShouldBe((OperatorPipeline.AnimatedCharacter, "A friendly fox.", (string?)null));
+        scenes.Scenes.Select(s => (s.Id, s.VisualSource, s.VisualFile)).ShouldBe([
+            ("s1", OperatorPipeline.Presenter, (string?)null), ("s2", OperatorPipeline.Presenter, (string?)null),
+        ]);
+        scenes.PresenterFile.ShouldBeNull();
+        filled.PresenterFile.ShouldBe("presenter-0a1b2c3d4e5f.png");
+        (later.Status, later.PresenterFile).ShouldBe((OperatorPipeline.MediaReady, (string?)"presenter-0a1b2c3d4e5f.png"));
+        var stored = await service.GetProjectForWorkerAsync(started.Id, CancellationToken.None);
+        (stored.Status, stored.PresenterFile).ShouldBe((OperatorPipeline.MediaReady, (string?)"presenter-0a1b2c3d4e5f.png"));
+        stored.Scenes.Select(s => s.VisualSource).ShouldBe([OperatorPipeline.Presenter, OperatorPipeline.Presenter]);
+        (canMoveTheMouth, cannotMoveTheMouth).ShouldBe((true, false));
+    }
+
     /// <summary>The plugin's chat calls answered by the real operator service's chat methods.</summary>
     private sealed class ChatBridge(OperatorService service) : IOperatorControlPlane
     {

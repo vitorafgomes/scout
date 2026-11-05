@@ -21,9 +21,54 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### The presenter description cannot be given from the chat (2026-11-04)
+
+- **Gap:** `youtube_make_video` starts an `animated_character` project with an empty presenter description, so its presenter picture is drawn from the direction and the topic alone (`src/Scout.Operator/OperatorPipeline.cs:378`); only Scout Desktop's Start, Produce and Delegate take the description ([[pages/services/operator]], [[pages/services/desktop-operator]]).
+- **Unblocks with:** a `presenter` parameter on `youtube_make_video` and on the owner's produce and delegate functions, owner only like the direction, at most 300 characters, carried to the control plane's start and produce requests, with a plugin test that a non-owner's presenter starts nothing.
+
+### The animated character never blinks or turns its head (2026-11-04)
+
+- **Gap:** the assembler lays only the mouth over the presenter picture (`src/Scout.Operator/Assembler.cs:297`), so the face is otherwise frozen for the whole scene ([[pages/services/operator]]).
+- **Unblocks with:** an eye box the owner marks beside the mouth box and a closed-eyes picture laid over it for about 150 ms every 3 to 6 seconds, timed by the scene's length so the segment key stays stable, with the overlay asserted in an assembler test; head turns wait for the realistic photo animation spike of phase 8c.
+
+### Only one mouth style (2026-11-04)
+
+- **Gap:** every animated character speaks with the same nine cartoon mouths Scout Desktop bundles (`SCOUT__OPERATOR__MOUTHSPATH`), whatever the presenter picture's style ([[pages/services/operator]], [[pages/services/desktop-operator]]).
+- **Unblocks with:** a second set of nine shapes under its own folder, chosen per project and stored like the motion, its name joining the presenter segment's identity (`src/Scout.Operator/Assembler.cs:410`), with a segment-key test that a changed style renders the scene again.
+
+### Mouth shapes drawn to match the presenter picture (2026-11-04)
+
+- **Gap:** the bundled mouths are drawn once for every character, so their colour and line can differ from the picture the image service made ([[pages/services/operator]]).
+- **Unblocks with:** an image-edit request per shape against the presenter picture's mouth box, nine pictures saved in the media folder and counted in the 40 pictures a day, behind the readiness of an image-edit service; measured against the bundled set on a few pictures before it is the default.
+
+### Rhubarb on macOS is not verified (2026-11-04)
+
+- **Gap:** Rhubarb Lip Sync 1.14.0 publishes a macOS archive, but no run of Scout Desktop's macOS build has shown that the bundled program starts there, signed and outside quarantine, and answers `--version` ([[pages/services/desktop-operator]]); until then the readiness of lip sync on a Mac is unproven (`src/Scout.Operator/RhubarbLipSync.cs:57`).
+- **Unblocks with:** one run of the macOS build that reports `lip_sync_available` and renders a presenter scene with its mouth moving, recorded on [[pages/services/desktop-operator]].
+
+### Regenerate picture is offered while the project runs (2026-11-04)
+
+- **Gap:** the control plane refuses `RegeneratePresenter` on a `producing` or `assembling` project with "A project that is producing or assembling cannot have its presenter picture regenerated; wait for it to finish or fail." (`tests/Scout.ControlPlane.Tests/Operator/OperatorServiceTests.Character.cs:334`), but the Presenter block's "Regenerate picture" is disabled only while a media action runs or the AI Source makes no pictures (`ui/packages/renderer/src/app/production/production.component.ts:661`), so the owner learns it from the refusal under the block ([[pages/services/desktop-operator]]). The same holds for "Save mouth": the control plane refuses a mouth box on a `producing`, `production_queued` or `assembling` project with its own sentence, and the button stays enabled there.
+- **Unblocks with:** both buttons disabled on the running statuses with the control plane's sentence as their title, asserted in `production.component.spec.ts`.
+
+### The presenter composite is blended at 30 frames a second though it changes once a second (2026-11-04)
+
+- **Gap:** a presenter scene over the project's background turns the background to 30 fps before the presenter picture is laid over it (`src/Scout.Operator/Assembler.cs:322`), so the overlay of a picture that only changes with the background's one frame a second runs on every output frame ([[pages/services/operator]]).
+- **Unblocks with:** the picture laid over the background before `fps=30`, measured with `ffmpeg -benchmark` on a 10 s scene against today's graph, and taken only if it is faster; it changes the presenter graphs every assembler test asserts, so the argument lists are updated in the same change.
+
+### A failing rhubarb runs again on every assembly (2026-11-04)
+
+- **Gap:** a rhubarb failure or timeout leaves no cues file, and only a cues file newer than the narration skips the run (`src/Scout.Operator/RhubarbLipSync.cs:90`), so a narration rhubarb cannot read is run again, up to its timeout, on every assembly of the project ([[pages/services/operator]]).
+- **Unblocks with:** a failure marker beside the cues, `mouth-cues-<scene>.failed`, newer than the narration, read like the cues so the scene is shown still with its note without running rhubarb, and removed when the narration changes; with a test that a second assembly of a failing scene runs rhubarb once.
+
+### The learning loop's thumbnail prompt repeats the no-real-person clause (2026-11-04)
+
+- **Gap:** the thumbnail and the presenter picture end their prompts with one constant, `VisualGenerator.NoRealPerson` (`src/Scout.Operator/VisualGenerator.cs:152`), while the learning loop's thumbnail proposal writes the same words inline (`src/Scout.Operator/LearningLoop.cs:294`), and no test pins that prompt ([[pages/services/operator]]).
+- **Unblocks with:** a learning-loop test asserting the prompt the image service receives ends with the clause, then the inline words replaced by the constant.
+
 ### The Production screen reads every project in full every 10 seconds (2026-11-04)
 
-- **Gap:** the Production screen refreshes the whole project list every 10 seconds (`ui/packages/renderer/src/app/production/production.component.ts:30`), and every project comes with its script, claims and scenes; an `own_video` project with its timed transcript and scenes is about 100 to 130 KB, so a list of a few long recordings is megabytes over the socket every 10 seconds ([[pages/services/desktop-operator]], [[pages/services/operator]], phase 8b of [[pages/roadmap/youtube-channel-operator]]).
+- **Gap:** the Production screen refreshes the whole project list every 10 seconds (`ui/packages/renderer/src/app/production/production.component.ts:31`), and every project comes with its script, claims and scenes; an `own_video` project with its timed transcript and scenes is about 100 to 130 KB, so a list of a few long recordings is megabytes over the socket every 10 seconds ([[pages/services/desktop-operator]], [[pages/services/operator]], phase 8b of [[pages/roadmap/youtube-channel-operator]]).
 - **Unblocks with:** a list summary rpc that answers id, topic, status, format, progress and `UpdatedAt` per project, the full project read only for the one the owner opens, with a client test for the summary and a contract test for the rpc.
 
 ### A long recording holds the speech model and its samples for the whole transcription (2026-11-04)
@@ -53,7 +98,7 @@ reliability: medium
 
 ### Editing the first scene of a section can drop its chapter (2026-11-04)
 
-- **Gap:** `PackageChecks.cs:239-243` anchors a chapter by finding the scene's cleaned narration inside its section's narration, so an edited text on a section's first scene no longer matches and the chapter is dropped, and the whole chapter list if fewer than 3 remain ([[pages/services/operator]]). Since 2026-11-04 a scene of the owner's recording is anchored by its clip start instead, so this stays open for the narrated formats only.
+- **Gap:** `src/Scout.Operator/PackageChecks.cs:261-265` anchors a chapter by finding the scene's cleaned narration inside its section's narration, so an edited text on a section's first scene no longer matches and the chapter is dropped, and the whole chapter list if fewer than 3 remain ([[pages/services/operator]]). Since 2026-11-04 a scene of the owner's recording is anchored by its clip start instead, so this stays open for the narrated formats only.
 - **Unblocks with:** anchoring chapters by scene id instead of narration text, with a test that edits the first scene of a section and checks the chapter survives.
 
 ### An approved upload action survives a scene edit (2026-11-04)
@@ -136,7 +181,7 @@ reliability: medium
 
 ### Desktop builds are unsigned (2026-11-02)
 
-- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:77`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
+- **Blocker:** no signing identities. The release workflow packages with `CSC_IDENTITY_AUTO_DISCOVERY` false and the mac config sets `identity: null` (`ui/build/electron-builder.yml:82`), so macOS Gatekeeper refuses the dmg until the user allows it in System Settings, and Windows SmartScreen warns on the installer. The site and the README say so ([[pages/decisions/0029-project-site-and-releases]]).
 - **Unblocks with:** an Apple Developer ID certificate plus notarization (an App Store Connect API key, `hardenedRuntime: true`), and a Windows code-signing certificate (an OV or EV certificate, or Azure Trusted Signing), each stored as a GitHub Actions secret and read by electron-builder in the `build` job of `.github/workflows/release.yml:32`.
 
 ### Intel Mac package is built but not released (2026-11-02)
@@ -195,7 +240,7 @@ reliability: medium
 
 ### `electron-builder-squirrel-windows` peer mismatch (2026-10-21)
 
-- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:93` stays `nsis`.
+- **Blocker:** none. `electron-builder` is on 26.18.0, while its unpinned peer `electron-builder-squirrel-windows` stays at 26.8.1 in `ui/bun.lock`, and `bun install` warns about it. The peer is unused while the Windows target in `ui/build/electron-builder.yml:98` stays `nsis`.
 - **Fix:** add the peer at the matching version only if a Squirrel target is ever configured.
 
 ### Adapter stop has no fault isolation (2026-10-21)
@@ -265,7 +310,7 @@ reliability: medium
 
 ### Raw gRPC text for feature validation errors (2026-10-23)
 
-- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:403`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
+- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:420`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
 - **Fix:** typed errors for those codes and card copy per code, with a client test for each.
 
 ### Kubernetes pod logs: owner decision (2026-10-23)

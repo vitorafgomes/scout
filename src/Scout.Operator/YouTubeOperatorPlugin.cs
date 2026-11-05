@@ -58,10 +58,10 @@ internal sealed class YouTubeOperatorPlugin(
     /// the write as failed and the model reads the reason.
     /// </exception>
     [KernelFunction(MakeVideo)]
-    [Description("Start a YouTube video project on a topic: Scout researches the topic and writes a script the owner reviews in Scout Desktop. Uploads nothing. Needs the owner's write permission for YouTube. Only Scout's owner may choose own_pictures or give a direction.")]
+    [Description("Start a YouTube video project on a topic: Scout researches the topic and writes a script the owner reviews in Scout Desktop. Uploads nothing. Needs the owner's write permission for YouTube. Only Scout's owner may choose a format other than generated_pictures or give a direction.")]
     public async Task<string> MakeVideoAsync(
         [Description("What the video is about, 3 to 200 characters.")] string topic,
-        [Description("How the video is made: generated_pictures, the default, or own_pictures, where the owner attaches a picture per scene, which only the owner may choose; empty for the default.")] string format = "",
+        [Description("How the video is made: generated_pictures, the default; own_pictures, where the owner attaches a picture per scene; or animated_character, a cartoon presenter made once whose mouth moves with the narration. Only the owner may choose other than the default; empty for the default.")] string format = "",
         [Description("The owner's direction for the script and the pictures, at most 1000 characters; empty for none. Owner only.")] string direction = "",
         CancellationToken ct = default)
     {
@@ -222,7 +222,7 @@ internal sealed class YouTubeOperatorPlugin(
 
     internal const string NoImages = "No image service: pictures come from Openverse when it is on, else text cards.";
 
-    internal const string FormatsNow = "Formats Scout makes now: generated_pictures, own_pictures.";
+    internal const string FormatsNow = "Formats Scout makes now: generated_pictures, own_pictures, animated_character.";
 
     internal const string ReadStateFirst = "read the project's state first in this conversation: youtube_project_state";
 

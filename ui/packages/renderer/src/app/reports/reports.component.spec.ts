@@ -97,6 +97,9 @@ function project(overrides: Partial<OperatorProjectDto> = {}): OperatorProjectDt
     format: 'generated_pictures',
     recordingFile: null,
     recordingMs: 0,
+    presenter: '',
+    presenterFile: null,
+    mouthBox: null,
     ...overrides,
   };
 }
