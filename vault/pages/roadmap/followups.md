@@ -81,11 +81,6 @@ reliability: medium
 - **Gap:** in `own_video` the scene's text is always drawn as captions over the recording, and the assembler spreads them evenly over the scene rather than at each spoken segment, so a caption runs a little ahead of or behind the words; an owner whose recording already carries its own titles, or who wants none, has no way to leave them out ([[pages/services/desktop-operator]], [[pages/services/operator]], phase 8b of [[pages/roadmap/youtube-channel-operator]]).
 - **Unblocks with:** a per-project caption toggle, chosen in the Produce panel and stored on the project like the motion, that the assembler reads; and captions timed from the transcript segments, which the script keeps with their start and end only until the scene plan rewrites it as one section per chapter, so the segment times would need to stay on the scenes.
 
-### The Azure OpenAI image default names a retired model (2026-11-04)
-
-- **Gap:** Azure retired `gpt-image-1` (2025-04-15) on 2026-10-23 per its model retirement schedule, while `AzureOpenAIOptions.ImageModel` still defaults to `"gpt-image-1"` (`src/Scout.Llm/Configuration/LlmOptions.cs:167`); an Azure deployment left at the default answers 410 and every generated picture falls back to Openverse or a text card ([[pages/services/llm]], [[pages/services/operator]]). Found while planning phase 8c of [[pages/roadmap/youtube-channel-operator]].
-- **Unblocks with:** a default that matches the current Azure image model, or no default and a readiness note "name an image deployment" when it is blank, with a test on the readiness.
-
 ### A "This is me" mark for the owner's chat ids (2026-11-04)
 
 - **Gap:** the operator's owner-only functions from the chat answer an allowed chat user only when `Scout:Access:OwnerUserIds` lists that id ([[pages/decisions/0021-allowed-users]], amendment of 2026-11-04), and Scout Desktop sets no such list yet, so on Discord and Slack nobody is the owner and the owner acts from the quick ask only.

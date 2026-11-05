@@ -80,8 +80,8 @@ public sealed class OpenAIOptions
     /// <summary>Text-to-audio model for narration, on the chat endpoint and key.</summary>
     public string SpeechModel { get; set; } = "gpt-4o-mini-tts";
 
-    /// <summary>Text-to-image model for scene visuals, on the chat endpoint and key.</summary>
-    public string ImageModel { get; set; } = "gpt-image-1";
+    /// <summary>Text-to-image model for scene visuals, on the chat endpoint and key; gpt-image-1 was shut down by OpenAI on 2026-10-23, so the default is gpt-image-2.5-sunburst.</summary>
+    public string ImageModel { get; set; } = "gpt-image-2.5-sunburst";
 
     /// <summary>Quality a <c>gpt-image</c> model is asked for: low or medium.</summary>
     public string ImageQuality { get; set; } = "medium";
@@ -163,8 +163,8 @@ public sealed class AzureOpenAIOptions
     /// <summary>Optional text-to-image deployment for scene visuals; empty registers no image service.</summary>
     public string ImageDeployment { get; set; } = string.Empty;
 
-    /// <summary>The model behind <see cref="ImageDeployment"/>, which decides the picture settings: dall-e-3 or a gpt-image model.</summary>
-    public string ImageModel { get; set; } = "gpt-image-1";
+    /// <summary>The model behind <see cref="ImageDeployment"/>, which decides the picture settings: dall-e-3 or a gpt-image model; gpt-image-2.5-sunburst by default, because gpt-image-1 was shut down on 2026-10-23.</summary>
+    public string ImageModel { get; set; } = "gpt-image-2.5-sunburst";
 }
 
 /// <summary>Azure OpenAI deployment settings. The deployment name is the unit the
