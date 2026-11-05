@@ -116,6 +116,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0022-discord-setup-from-the-bot-token|ADR 0022 - Discord setup from the bot token]] - The wizard sets up the Discord bot from the pasted token: reads the app, turns on Message Content, invites without OAuth.
 - [[pages/decisions/0023-slack-setup-from-a-manifest|ADR 0023 - Slack is set up from a prefilled app manifest and two pasted tokens]] - The desktop opens Slack's app creation flow with Scout's Socket Mode manifest; main checks the pasted bot and app-level tokens with Slack, keeps them in main-only keys and passes them to the worker.
 - [[pages/decisions/0024-voice-messages-transcribed-locally|ADR 0024 - Voice messages are transcribed locally, after the allow-list]] - A Discord voice message is downloaded and transcribed by a local Whisper model only for an allowed sender, within 25 MB and 5 minutes, and answered with a quote of what was heard.
+- [[pages/decisions/0025-teams-inbound-endpoint|ADR 0025 - Teams inbound endpoint (proposed)]] - One loopback POST /api/messages route exposed by an owner-created tunnel, with the Bot Framework token check failing closed.
+- [[pages/decisions/0026-live-voice-conversation|ADR 0026 - Live voice conversation (proposed)]] - Join a voice channel only on an allowed user's command, DAVE through Discord.Net, drop non-allowed audio on arrival.
 - [[pages/decisions/0027-desktop-presence|ADR 0027 - Scout stays resident on the desktop: tray, keep running, start at login, notifications]] - Closing the window hides Scout to the tray and the worker keeps running; start at login with --hidden; three native notifications; no tray means the old quit-on-close.
 - [[pages/decisions/0028-local-quick-ask-assistant|ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio]] - A global shortcut opens a small window to type or hold Space to talk; main writes JSON lines to the worker's stdin and reads SCOUT_LOCAL lines from stdout, and the local owner skips the allow-list.
 - [[pages/decisions/0029-project-site-and-releases|ADR 0029 - Project site and releases]] - Site in docs/ on Pages; v* tags publish packages.
@@ -153,6 +155,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/desktop-auto-update|Desktop update notice and one-click update]] - Initiative: version check against GitHub Releases, what is new, user-approved update.
 - [[pages/roadmap/youtube-channel-operator|YouTube channel operator]] - Initiative: research, script, narration, visuals, video, review, approved publish, learn loop, engage (comments).
 - [[pages/roadmap/live-assistant|Live assistant: hear, see and translate for the owner]] - Initiative: streaming transcription, screenshot on demand, system audio, translation, OCR and a meeting session, local first and declared as reads.
+- [[pages/roadmap/teams-adapter-spike|Teams adapter spike]] - Research: Teams needs a public HTTPS endpoint; options, security and a phased plan.
+- [[pages/roadmap/live-voice-spike|Live voice spike]] - Research: DAVE voice encryption, Discord.Net receive, local STT and TTS; verdict and phased plan.
 
 ## History
 
