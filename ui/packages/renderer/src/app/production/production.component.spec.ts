@@ -709,7 +709,7 @@ describe('ProductionComponent', () => {
         (e: Element) => e.textContent!.trim(),
       ),
     ).toEqual(['0:00 to 1:02', '1:02 to 2:05']);
-    expect([el(fixture, 'recording-attach'), el(fixture, 'delete')]).toEqual([null, null]);
+    expect(el(fixture, 'recording-attach')).toBeNull();
   });
 
   it('the direction counter shows n / 1000 and Make a video is disabled past it', async () => {
@@ -1721,8 +1721,7 @@ describe('ProductionComponent', () => {
 
     const offered: string[] = [];
     for (const p of projects) {
-      await click(fixture, `project-${p.id}`);
-      if (el(fixture, 'delete') !== null) offered.push(p.id);
+      if (el(fixture, `project-delete-${p.id}`) !== null) offered.push(p.id);
     }
 
     expect(offered).toEqual(['p5', 'p6', 'p7']);
@@ -1731,10 +1730,9 @@ describe('ProductionComponent', () => {
   it('Delete project asks first, says what goes and what stays, and Cancel sends nothing', async () => {
     const bridge = makeBridge({ ...listing(project()) });
     const fixture = await mount(bridge);
-    await click(fixture, 'project-p1');
-    const buttonText = text(fixture, 'delete');
+    const label = el(fixture, 'project-delete-p1')!.getAttribute('aria-label');
 
-    await click(fixture, 'delete');
+    await click(fixture, 'project-delete-p1');
     const dialog = [
       text(fixture, 'delete-dialog'),
       text(fixture, 'delete-confirm'),
@@ -1742,7 +1740,7 @@ describe('ProductionComponent', () => {
     ];
     await click(fixture, 'delete-cancel');
 
-    expect(buttonText).toBe('Delete project');
+    expect(label).toBe('Delete Span<T> in C#');
     expect(dialog[0]).toContain(
       "This removes the project, its script, scenes and media files from Scout's data folder. A video already on YouTube stays there.",
     );
@@ -1763,7 +1761,7 @@ describe('ProductionComponent', () => {
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
-    await click(fixture, 'delete');
+    await click(fixture, 'project-delete-p1');
 
     await click(fixture, 'delete-confirm');
 
@@ -1772,6 +1770,26 @@ describe('ProductionComponent', () => {
     expect(el(fixture, 'project-p2')).not.toBeNull();
     expect(el(fixture, 'project-detail')).toBeNull();
     expect(el(fixture, 'delete-dialog')).toBeNull();
+  });
+
+  it('the trash on a project row opens the delete dialog for that project without selecting it, and is absent on a running project', async () => {
+    const fixture = await mount(
+      makeBridge(
+        listing(
+          project(),
+          project({ id: 'p2', topic: 'Records in C#' }),
+          project({ id: 'p3', topic: 'Busy one', status: 'producing' }),
+        ),
+      ),
+    );
+
+    await click(fixture, 'project-delete-p2');
+
+    expect([
+      text(fixture, 'delete-dialog').includes('Records in C#'),
+      fixture.componentInstance.selectedId(),
+      el(fixture, 'project-delete-p3'),
+    ]).toEqual([true, null, null]);
   });
 
   it('a refused delete keeps the dialog with its reason and the project in the list', async () => {
@@ -1784,7 +1802,7 @@ describe('ProductionComponent', () => {
     });
     const fixture = await mount(bridge);
     await click(fixture, 'project-p1');
-    await click(fixture, 'delete');
+    await click(fixture, 'project-delete-p1');
 
     await click(fixture, 'delete-confirm');
 
@@ -3440,7 +3458,7 @@ describe('ProductionComponent', () => {
     );
   });
 
-  it('the title row carries Delegate, Delete project and the close mark at its right, after the title', async () => {
+  it('the title row carries Delegate and the close mark at its right, after the title', async () => {
     const fixture = await mount(makeBridge(listing(project())));
     await click(fixture, 'project-p1');
 
@@ -3448,7 +3466,7 @@ describe('ProductionComponent', () => {
       Array.from(el(fixture, 'project-title-row')!.children).map(
         (c) => c.getAttribute('data-test') ?? `${c.tagName}: ${c.textContent?.trim()}`,
       ),
-    ).toEqual(['H2: Span<T> in C#', 'delegate', 'delete', 'project-close']);
+    ).toEqual(['H2: Span<T> in C#', 'delegate', 'project-close']);
     expect(el(fixture, 'project-close')!.getAttribute('aria-label')).toBe('Close the project');
   });
 
@@ -3474,7 +3492,7 @@ describe('ProductionComponent', () => {
     expect(opened).toEqual([true, true]);
     expect(closedByMark).toEqual([false, false]);
     expect(closedByList).toEqual([false, false]);
-    expect(switched).toEqual(['Records in C# Delegate Delete project ×', true]);
+    expect(switched).toEqual(['Records in C# Delegate ×', true]);
     expect(bridge.operatorProject.mock.calls).toEqual([
       [{ id: 'p1' }],
       [{ id: 'p1' }],
