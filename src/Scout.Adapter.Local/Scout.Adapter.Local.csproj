@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Adapter.Local.Tests" />
+    <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
   </ItemGroup>
 </Project>

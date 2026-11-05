@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import {
   TABLE_PATH,
   archiveFor,
+  extractAppImage,
   extractArchive,
   extractWithTar,
   fetchMediaTools,
@@ -21,6 +22,10 @@ const LICENCE = 'licence bytes';
 const PIPER = 'piper archive bytes';
 const MODEL = 'voice model bytes';
 const RHUBARB = 'rhubarb archive bytes';
+const APPIMAGE = 'tesseract appimage bytes';
+const ENG = 'eng traineddata bytes';
+const POR = 'por traineddata bytes';
+const LEPTONICA_LICENCE = 'leptonica licence bytes';
 
 const table = {
   ffmpeg: {
@@ -121,6 +126,52 @@ const table = {
     { file: 'NotoSans-Regular.ttf', url: 'https://example.test/regular.ttf', sha256: sha(FONT) },
     { file: 'OFL.txt', url: 'https://example.test/LICENSE', sha256: sha(LICENCE) },
   ],
+  tesseract: {
+    version: '5.5.4-test',
+    project: 'https://github.com/tesseract-ocr/tesseract',
+    release: 'https://github.com/AlexanderP/tesseract-appimage/releases/tag/test',
+    source: 'https://github.com/tesseract-ocr/tesseract/tree/test',
+    leptonica: 'https://github.com/DanBloomberg/leptonica/tree/test',
+    leptonicaLicense: {
+      file: 'leptonica-license.txt',
+      url: 'https://example.test/leptonica-license.txt',
+      size: LEPTONICA_LICENCE.length,
+      sha256: sha(LEPTONICA_LICENCE),
+    },
+    archives: {
+      'linux-x64': {
+        url: 'https://example.test/tesseract-x86_64.AppImage',
+        size: APPIMAGE.length,
+        sha256: sha(APPIMAGE),
+        root: 'squashfs-root',
+      },
+    },
+  },
+  tessdata: {
+    repo: 'https://github.com/tesseract-ocr/tessdata_fast',
+    commit: 'def456',
+    license: 'Apache-2.0',
+    files: [
+      {
+        file: 'eng.traineddata',
+        url: 'https://example.test/eng.traineddata',
+        size: ENG.length,
+        sha256: sha(ENG),
+      },
+      {
+        file: 'por.traineddata',
+        url: 'https://example.test/por.traineddata',
+        size: POR.length,
+        sha256: sha(POR),
+      },
+      {
+        file: 'LICENSE',
+        url: 'https://example.test/tessdata-LICENSE',
+        size: LICENCE.length,
+        sha256: sha(LICENCE),
+      },
+    ],
+  },
 };
 
 const BODIES: Record<string, string> = {
@@ -137,6 +188,11 @@ const BODIES: Record<string, string> = {
   'https://example.test/rhubarb-Linux.zip': RHUBARB,
   'https://example.test/rhubarb-Windows.zip': RHUBARB,
   'https://example.test/rhubarb-macOS.zip': RHUBARB,
+  'https://example.test/tesseract-x86_64.AppImage': APPIMAGE,
+  'https://example.test/eng.traineddata': ENG,
+  'https://example.test/por.traineddata': POR,
+  'https://example.test/tessdata-LICENSE': LICENCE,
+  'https://example.test/leptonica-license.txt': LEPTONICA_LICENCE,
 };
 
 function fakeFetch(bodies: Record<string, string> = BODIES) {
@@ -181,6 +237,17 @@ async function fakeExtract(archive: string, dir: string, members: readonly strin
     await mkdir(dirname(join(dir, member)), { recursive: true });
     await writeFile(join(dir, member), `extracted ${member}`, { mode: 0o644 });
   }
+}
+
+async function fakeExtractAppImage(_appImage: string, dir: string) {
+  const root = join(dir, 'squashfs-root');
+  await mkdir(root, { mode: 0o700 });
+  await mkdir(join(root, 'usr', 'bin'), { recursive: true, mode: 0o700 });
+  await mkdir(join(root, 'usr', 'lib'), { mode: 0o700 });
+  await writeFile(join(root, 'AppRun'), '#!/bin/sh', { mode: 0o644 });
+  await writeFile(join(root, 'ld-linux-x86-64.so.2'), 'loader', { mode: 0o644 });
+  await writeFile(join(root, 'usr', 'bin', 'tesseract'), 'tesseract exe', { mode: 0o644 });
+  await writeFile(join(root, 'usr', 'lib', 'libtesseract.so.5'), 'lib');
 }
 
 describe('fetch-media-tools', () => {
@@ -282,6 +349,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 
@@ -320,6 +388,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     }).then(
       () => null,
@@ -342,6 +411,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
     const extracted: string[] = [];
@@ -356,6 +426,7 @@ describe('fetch-media-tools', () => {
         extracted.push(archive);
         await fakeExtract(archive, dir, members);
       },
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 
@@ -364,6 +435,54 @@ describe('fetch-media-tools', () => {
     expect(existsSync(join(tools, 'rhubarb', 'rhubarb'))).toBe(true);
     expect(existsSync(join(tools, 'piper', 'piper'))).toBe(true);
     expect(await readFile(join(tools, 'NOTICE.txt'), 'utf8')).toContain('n9.0.3-test');
+  });
+
+  it('the pinned table names the tesseract AppImage for linux-x64 only and the eng and por data with their licence from one tessdata_fast commit, each with an https URL, a size and a 64-hex SHA-256', () => {
+    const pinned = JSON.parse(readFileSync(TABLE_PATH, 'utf8')) as typeof table;
+    const appImages = Object.values(pinned.tesseract.archives);
+    const pinnedEntries = [
+      ...appImages,
+      ...pinned.tessdata.files,
+      pinned.tesseract.leptonicaLicense,
+    ].filter(
+      (e) =>
+        !/^https:\/\//.test(e.url) ||
+        !/^[0-9a-f]{64}$/.test(e.sha256) ||
+        !Number.isInteger(e.size) ||
+        e.size <= 0,
+    );
+
+    expect(Object.keys(pinned.tesseract.archives)).toEqual(['linux-x64']);
+    expect(pinnedEntries).toEqual([]);
+    expect(
+      appImages.filter(
+        (a) =>
+          !a.url.startsWith(
+            `https://github.com/AlexanderP/tesseract-appimage/releases/download/v${pinned.tesseract.version}/`,
+          ) ||
+          !a.url.endsWith('-x86_64.AppImage') ||
+          a.root !== 'squashfs-root',
+      ),
+    ).toEqual([]);
+    expect(pinned.tesseract.leptonicaLicense).toEqual({
+      file: 'leptonica-license.txt',
+      url: 'https://raw.githubusercontent.com/DanBloomberg/leptonica/13275a278eb55b5746e33f95fbf5a2c8f604b3ab/leptonica-license.txt',
+      size: 1521,
+      sha256: '87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806',
+    });
+    expect(pinned.tessdata.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(pinned.tessdata.files.map((f) => f.file).sort()).toEqual([
+      'LICENSE',
+      'eng.traineddata',
+      'por.traineddata',
+    ]);
+    expect(
+      pinned.tessdata.files.filter(
+        (f) =>
+          f.url !==
+          `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/${pinned.tessdata.commit}/${f.file}`,
+      ),
+    ).toEqual([]);
   });
 
   it('selects the archive of the platform and arch, with ffmpeg alone and the licence to take from it; none for macOS', () => {
@@ -388,6 +507,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 
@@ -398,6 +518,7 @@ describe('fetch-media-tools', () => {
       'ffmpeg',
       'piper',
       'rhubarb',
+      'tesseract',
     ]);
     expect(await readFile(join(tools, 'ffmpeg'), 'utf8')).toBe(
       'extracted ffmpeg-linux64/bin/ffmpeg',
@@ -428,6 +549,7 @@ describe('fetch-media-tools', () => {
         cacheDir,
         fetch: fakeFetch().fetch,
         extract: fakeExtract,
+        extractAppImage: fakeExtractAppImage,
         log: () => undefined,
       });
 
@@ -450,6 +572,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     }).then(
       () => null,
@@ -474,6 +597,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     }).then(
       () => null,
@@ -495,6 +619,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: (line: string) => lines.push(line),
     });
 
@@ -515,8 +640,10 @@ describe('fetch-media-tools', () => {
       'piper',
       'rhubarb',
     ]);
+    expect(urls).not.toContain('https://example.test/tesseract-x86_64.AppImage');
     expect(lines).toEqual([
       'media tools: no ffmpeg bundled for darwin-arm64; the worker uses ffmpeg from the system path',
+      'media tools: no tesseract bundled for darwin-arm64; the worker cannot read text on a screenshot',
       `media tools: darwin-arm64 ready in ${resourcesDir}`,
     ]);
   });
@@ -531,6 +658,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 
@@ -571,6 +699,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     }).then(
       () => null,
@@ -593,6 +722,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
     const again = fakeFetch();
@@ -608,12 +738,223 @@ describe('fetch-media-tools', () => {
         extracted.push(archive);
         await fakeExtract(archive, dir, members);
       },
+      extractAppImage: async (appImage: string, dir: string) => {
+        extracted.push(appImage);
+        await fakeExtractAppImage(appImage, dir);
+      },
       log: () => undefined,
     });
 
     expect(again.urls).toEqual([]);
     expect(extracted).toEqual([]);
   });
+
+  it('extracts the tesseract AppImage whole into media-tools/linux-x64/tesseract with AppRun, the program and its loader executable, every folder readable by all, a notice, and the eng and por data with their licence in tessdata', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+
+    await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch: fakeFetch().fetch,
+      extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
+      log: () => undefined,
+    });
+
+    const tesseract = join(resourcesDir, 'media-tools', 'linux-x64', 'tesseract');
+    expect((await readdir(tesseract)).sort()).toEqual([
+      'AppRun',
+      'NOTICE.txt',
+      'ld-linux-x86-64.so.2',
+      'leptonica-license.txt',
+      'tessdata',
+      'usr',
+    ]);
+    expect(await readFile(join(tesseract, 'usr', 'bin', 'tesseract'), 'utf8')).toBe(
+      'tesseract exe',
+    );
+    expect((await readdir(join(tesseract, 'tessdata'))).sort()).toEqual([
+      'LICENSE',
+      'eng.traineddata',
+      'por.traineddata',
+    ]);
+    expect(await readFile(join(tesseract, 'tessdata', 'por.traineddata'), 'utf8')).toBe(POR);
+    expect(await readFile(join(tesseract, 'leptonica-license.txt'), 'utf8')).toBe(
+      LEPTONICA_LICENCE,
+    );
+    if (process.platform !== 'win32') {
+      expect(
+        ['AppRun', 'ld-linux-x86-64.so.2', 'usr/bin/tesseract'].map(
+          (file) => statSync(join(tesseract, file)).mode & 0o777,
+        ),
+      ).toEqual([0o755, 0o755, 0o755]);
+      expect(
+        ['.', 'usr', 'usr/bin', 'usr/lib'].map(
+          (dir) => statSync(join(tesseract, dir)).mode & 0o777,
+        ),
+      ).toEqual([0o755, 0o755, 0o755, 0o755]);
+    }
+    const notice = await readFile(join(tesseract, 'NOTICE.txt'), 'utf8');
+    expect(notice).toContain('tesseract 5.5.4-test');
+    expect(notice).toContain('Apache-2.0');
+    expect(notice).toContain(table.tesseract.release);
+    expect(notice).toContain(table.tesseract.source);
+    expect(notice).toContain(table.tesseract.leptonica);
+    expect(notice).toContain(table.tesseract.archives['linux-x64'].sha256);
+    expect(notice).toContain('https://github.com/tesseract-ocr/tessdata_fast at commit def456');
+  });
+
+  it('a tesseract AppImage whose hash does not match fails the build and is neither kept nor extracted', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const tampered = 'x'.repeat(APPIMAGE.length);
+    const { fetch } = fakeFetch({
+      ...BODIES,
+      'https://example.test/tesseract-x86_64.AppImage': tampered,
+    });
+    const extracted: string[] = [];
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch,
+      extract: fakeExtract,
+      extractAppImage: async (appImage: string, dir: string) => {
+        extracted.push(appImage);
+        await fakeExtractAppImage(appImage, dir);
+      },
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: checksum mismatch for https://example.test/tesseract-x86_64.AppImage: expected ${sha(APPIMAGE)}, got ${sha(tampered)}`,
+    );
+    expect(extracted).toEqual([]);
+    expect(existsSync(join(cacheDir, 'tesseract-x86_64.AppImage'))).toBe(false);
+    expect(existsSync(join(resourcesDir, 'media-tools', 'linux-x64', 'tesseract'))).toBe(false);
+  });
+
+  it('a leptonica licence whose hash does not match fails the build and is not kept', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const tampered = 'x'.repeat(LEPTONICA_LICENCE.length);
+    const { fetch } = fakeFetch({
+      ...BODIES,
+      'https://example.test/leptonica-license.txt': tampered,
+    });
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch,
+      extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: checksum mismatch for https://example.test/leptonica-license.txt: expected ${sha(LEPTONICA_LICENCE)}, got ${sha(tampered)}`,
+    );
+    expect(existsSync(join(cacheDir, 'leptonica-license.txt'))).toBe(false);
+    expect(
+      existsSync(
+        join(resourcesDir, 'media-tools', 'linux-x64', 'tesseract', 'leptonica-license.txt'),
+      ),
+    ).toBe(false);
+  });
+
+  it('a leptonica licence in place with its pinned hash is not fetched again, and one altered is replaced', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const options = {
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
+      log: () => undefined,
+    };
+    await fetchMediaTools({ ...options, fetch: fakeFetch().fetch });
+    await rm(join(cacheDir, 'leptonica-license.txt'), { force: true });
+    const kept = fakeFetch();
+    await fetchMediaTools({ ...options, fetch: kept.fetch });
+    const file = join(
+      resourcesDir,
+      'media-tools',
+      'linux-x64',
+      'tesseract',
+      'leptonica-license.txt',
+    );
+    await writeFile(file, 'altered');
+    await rm(join(cacheDir, 'leptonica-license.txt'), { force: true });
+    const replaced = fakeFetch();
+    await fetchMediaTools({ ...options, fetch: replaced.fetch });
+
+    expect(kept.urls).toEqual([]);
+    expect(replaced.urls).toEqual(['https://example.test/leptonica-license.txt']);
+    expect(await readFile(file, 'utf8')).toBe(LEPTONICA_LICENCE);
+  });
+
+  it('a tesseract language file whose hash does not match fails the build and is not kept', async () => {
+    const { resourcesDir, cacheDir } = await folders();
+    const tampered = 'x'.repeat(POR.length);
+    const { fetch } = fakeFetch({ ...BODIES, 'https://example.test/por.traineddata': tampered });
+
+    const failure = await fetchMediaTools({
+      target: 'linux-x64',
+      table,
+      resourcesDir,
+      cacheDir,
+      fetch,
+      extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
+      log: () => undefined,
+    }).then(
+      () => null,
+      (err: unknown) => err as Error,
+    );
+
+    expect(failure?.message).toBe(
+      `media tools: checksum mismatch for https://example.test/por.traineddata: expected ${sha(POR)}, got ${sha(tampered)}`,
+    );
+    expect(existsSync(join(cacheDir, 'tessdata', 'por.traineddata'))).toBe(false);
+    expect(
+      existsSync(
+        join(resourcesDir, 'media-tools', 'linux-x64', 'tesseract', 'tessdata', 'por.traineddata'),
+      ),
+    ).toBe(false);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'a file that is not an AppImage failing to extract itself fails the build, naming the file',
+    async () => {
+      const { cacheDir } = await folders();
+      await mkdir(cacheDir, { recursive: true });
+      const appImage = join(cacheDir, 'not-an-appimage.AppImage');
+      await writeFile(appImage, 'exit 3\n');
+
+      let failure: Error | null = null;
+      try {
+        extractAppImage(appImage, cacheDir);
+      } catch (err: unknown) {
+        failure = err as Error;
+      }
+
+      expect(failure?.message).toBe(
+        `media tools: ${appImage} could not extract itself into ${cacheDir}`,
+      );
+    },
+  );
 
   it('a cached archive with the pinned hash is extracted again without a download when the tools are gone', async () => {
     const { resourcesDir, cacheDir } = await folders();
@@ -624,6 +965,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
     await rm(resourcesDir, { recursive: true });
@@ -636,6 +978,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: again.fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 
@@ -737,6 +1080,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     }).then(
       () => null,
@@ -761,6 +1105,7 @@ describe('fetch-media-tools', () => {
       cacheDir,
       fetch: fakeFetch().fetch,
       extract: fakeExtract,
+      extractAppImage: fakeExtractAppImage,
       log: () => undefined,
     });
 

@@ -8,7 +8,9 @@ using Scout.Conversation;
 using Scout.Conversation.Access;
 using Scout.Knowledge;
 using Scout.Llm;
+using Scout.Meetings;
 using Scout.Operator;
+using Scout.Operator.ScreenText;
 using Scout.Plugin.GitHub;
 using Scout.Plugin.Kubernetes;
 using Scout.Plugin.YouTube;
@@ -27,6 +29,7 @@ internal static class HostComposition
 {
     /// <summary>
     /// Register every service the host needs: readiness and pairing signals, LLM, conversation, project knowledge, voice transcription,
+    /// the screenshot text reader when tesseract and its language data are configured, the kept meetings when their database is,
     /// the self-gating chat adapters (the local one first, so stdin has a reader before any network adapter) and plugins, the write gate,
     /// the YouTube channel operator when YouTube is configured, the worker, the watchdog.
     /// </summary>
@@ -50,6 +53,8 @@ internal static class HostComposition
 
         // Local voice transcription, only when the configured Whisper model file exists.
         services.AddWhisperTranscription(configuration);
+        services.AddScreenText(configuration);
+        services.AddMeetings(configuration);
 
         // Each adapter self-gates on its configured credentials, so the host runs
         // whatever combination is configured and starts none when nothing is set.
@@ -99,7 +104,8 @@ internal static class HostComposition
 
     /// <summary>
     /// The YouTube channel operator, only when the YouTube plugin registered its client; it reaches the control
-    /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed. The ffmpeg
+    /// plane on the write gate's channel and token, or through a closed control plane when the gate is closed; the mandate's
+    /// language, read through that control plane, is what a live translation set to <c>auto</c> targets. The ffmpeg
     /// and font paths and the upload category bind from <c>Scout:Operator</c>, which the desktop sets as environment variables.
     /// Publishing and learning are composed only when the owner signed in, because an API key cannot upload or read analytics.
     /// </summary>
@@ -119,6 +125,11 @@ internal static class HostComposition
             services.AddSingleton<IOperatorControlPlane, ClosedOperatorControlPlane>();
         }
 
+        services.AddSingleton<Func<CancellationToken, Task<string?>>>(sp => async ct =>
+        {
+            var mandate = await sp.GetRequiredService<IOperatorControlPlane>().GetMandateAsync(ct).ConfigureAwait(false);
+            return string.IsNullOrWhiteSpace(mandate.Language) ? null : mandate.Language;
+        });
         services.AddOptions<OperatorMediaOptions>().Bind(configuration.GetSection(OperatorMediaOptions.Section));
         services.AddYouTubeOperator();
         if (services.Any(d => d.ServiceType == typeof(IYouTubeWriteClient)))

@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 
-import { readIpcError, type LocalAskRequest, type LocalTurn } from '@scout/shared';
+import { readIpcError, type LocalAskRequest, type LocalImage, type LocalTurn } from '@scout/shared';
 
 import { ScoutBridgeService } from './scout-bridge';
 import { toBase64 } from '../quick-ask/wav-recorder';
@@ -31,14 +31,26 @@ export class LocalConversation {
       .catch(() => undefined);
   }
 
-  /** Resolves to the refusal to show when the question never became a turn, or null. */
-  ask(text: string): Promise<string | null> {
-    return this.send((id) => ({ id, text }));
+  /**
+   * Sends a typed question, with a screenshot when one is given, marked as asked during a meeting when
+   * `meeting` is true; resolves to the refusal to show when the question never became a turn, or null.
+   */
+  ask(text: string, image?: LocalImage, meeting = false): Promise<string | null> {
+    return this.send((id) => ({
+      id,
+      text,
+      ...(image !== undefined ? { image } : {}),
+      ...(meeting ? { meeting: true as const } : {}),
+    }));
   }
 
-  askByVoice(wav: Uint8Array): Promise<string | null> {
+  askByVoice(wav: Uint8Array, image?: LocalImage): Promise<string | null> {
     const base64 = toBase64(wav);
-    return this.send((id) => ({ id, audio: { contentType: 'audio/wav', base64 } }));
+    return this.send((id) => ({
+      id,
+      audio: { contentType: 'audio/wav', base64 },
+      ...(image !== undefined ? { image } : {}),
+    }));
   }
 
   stop(): void {

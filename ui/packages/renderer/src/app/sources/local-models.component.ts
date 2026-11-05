@@ -35,11 +35,17 @@ const OLLAMA_ENDPOINT = 'http://localhost:11434';
 const ollamaTagFor = ollamaTagForCatalogId;
 
 const CATALOG_TO_WHISPER: Readonly<Record<string, WhisperVariant>> = Object.freeze({
+  'whisper-tiny': 'tiny',
+  'whisper-base': 'base',
+  'whisper-small': 'small',
   'whisper-large-v3': 'large-v3',
   'whisper-large-v3-turbo': 'large-v3-turbo',
 });
 
 const WHISPER_TO_CATALOG: Readonly<Record<WhisperVariant, string>> = Object.freeze({
+  tiny: 'whisper-tiny',
+  base: 'whisper-base',
+  small: 'whisper-small',
   'large-v3': 'whisper-large-v3',
   'large-v3-turbo': 'whisper-large-v3-turbo',
 });
@@ -831,7 +837,8 @@ export class LocalModelsComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     try {
       const res = await this.bridge.whisperListInstalled();
-      for (const variant of res.installed) {
+      for (const { variant, verified } of res.installed) {
+        if (!verified) continue;
         const catalogId = WHISPER_TO_CATALOG[variant];
         if (!this.store.isDownloaded(catalogId)) {
           this.store.markDownloaded(catalogId);

@@ -74,7 +74,7 @@ export const NO_ALLOWED_USERS_WARNING =
                   (connectedChange)="youtubeConnection.set($event ? 'connected' : 'not-connected')"
                 />
               }
-              @if (connectionOf(f.id) === 'connected' && noAllowedUsers()) {
+              @if (f.id !== 'desktop' && connectionOf(f.id) === 'connected' && noAllowedUsers()) {
                 <p class="access-warning" [attr.data-test]="'access-warning-' + f.id">
                   {{ noAllowedUsersWarning }}
                 </p>
@@ -185,6 +185,8 @@ export class FeaturesComponent implements OnInit {
         return this.kubernetesConnection();
       case 'youtube':
         return this.youtubeConnection();
+      case 'desktop':
+        return 'connected';
       default:
         return null;
     }

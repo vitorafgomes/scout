@@ -144,7 +144,34 @@ public sealed class MediaServicesRegistrationTests
 
         kernel.Services.GetService<ITextToAudioService>().ShouldBeNull();
         kernel.Services.GetService<ITextToImageService>().ShouldBeNull();
-        provider.GetRequiredService<MediaCapabilities>().ShouldBe(new MediaCapabilities(false, false, name));
+        (provider.GetRequiredService<MediaCapabilities>() with { Vision = false })
+            .ShouldBe(new MediaCapabilities(false, false, name));
+    }
+
+    [Theory]
+    [InlineData("OpenAI", true)]
+    [InlineData("OpenAI on a custom endpoint", true)]
+    [InlineData("AzureOpenAI", true)]
+    [InlineData("OpenRouter", true)]
+    [InlineData("ChatGptPlan", true)]
+    [InlineData("Ollama", false)]
+    [InlineData("Gemini", false)]
+    [InlineData("Mistral", false)]
+    [InlineData("HuggingFace", false)]
+    [InlineData("AzureAIInference", false)]
+    [InlineData("None", false)]
+    public void Each_Provider_Says_Whether_Its_Chat_Accepts_Pictures(string name, bool vision)
+    {
+        var settings = name switch
+        {
+            "OpenAI" => OpenAI(),
+            "OpenAI on a custom endpoint" => OpenAI(("Scout:Llm:OpenAI:Endpoint", "https://integrate.example.test/v1")),
+            "AzureOpenAI" => AzureOpenAI(),
+            _ => ProvidersWithoutMedia().Single(row => (string)row[0] == name)[1] as Dictionary<string, string?>,
+        };
+        using var provider = Compose(settings!);
+
+        provider.GetRequiredService<MediaCapabilities>().Vision.ShouldBe(vision);
     }
 
     [Theory]
@@ -199,7 +226,7 @@ public sealed class MediaServicesRegistrationTests
 
         kernel.Services.GetService<ITextToAudioService>().ShouldBeNull();
         kernel.Services.GetService<ITextToImageService>().ShouldBeNull();
-        provider.GetRequiredService<MediaCapabilities>().ShouldBe(new MediaCapabilities(false, false, "OpenAI"));
+        provider.GetRequiredService<MediaCapabilities>().ShouldBe(new MediaCapabilities(false, false, "OpenAI") { Vision = true });
     }
 
     [Theory]
@@ -304,7 +331,7 @@ public sealed class MediaServicesRegistrationTests
 
         kernel.Services.GetService<ITextToAudioService>().ShouldBeNull();
         kernel.Services.GetService<ITextToImageService>().ShouldBeNull();
-        provider.GetRequiredService<MediaCapabilities>().ShouldBe(new MediaCapabilities(false, false, "AzureOpenAI"));
+        provider.GetRequiredService<MediaCapabilities>().ShouldBe(new MediaCapabilities(false, false, "AzureOpenAI") { Vision = true });
     }
 
     [Fact]

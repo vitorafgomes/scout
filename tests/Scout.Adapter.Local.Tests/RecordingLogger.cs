@@ -20,7 +20,7 @@ internal sealed class RecordingLogger<T> : ILogger<T>
     {
         lock (Entries)
         {
-            Entries.Add((logLevel, formatter(state, exception)));
+            Entries.Add((logLevel, exception is null ? formatter(state, exception) : $"{formatter(state, exception)} {exception}"));
         }
     }
 }

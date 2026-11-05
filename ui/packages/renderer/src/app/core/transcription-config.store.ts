@@ -3,7 +3,16 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ScoutBridgeService } from './scout-bridge';
 
 export type TranscriptionProvider = 'LocalWhisper';
-export type WhisperModel = 'whisper-large-v3' | 'whisper-large-v3-turbo';
+export type WhisperModel =
+  'whisper-tiny' | 'whisper-base' | 'whisper-small' | 'whisper-large-v3' | 'whisper-large-v3-turbo';
+
+const MODELS: ReadonlySet<unknown> = new Set<WhisperModel>([
+  'whisper-tiny',
+  'whisper-base',
+  'whisper-small',
+  'whisper-large-v3',
+  'whisper-large-v3-turbo',
+]);
 
 export interface TranscriptionConfigSnapshot {
   readonly provider: TranscriptionProvider;
@@ -32,7 +41,7 @@ function isProvider(value: unknown): value is TranscriptionProvider {
 }
 
 function isModel(value: unknown): value is WhisperModel {
-  return value === 'whisper-large-v3' || value === 'whisper-large-v3-turbo';
+  return MODELS.has(value);
 }
 
 function readPersisted(): PersistedShape | null {

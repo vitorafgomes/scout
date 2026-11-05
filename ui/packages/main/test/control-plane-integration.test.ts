@@ -201,7 +201,7 @@ describe('control plane over UDS', () => {
   );
 
   it(
-    'ListFeatures returns github, kubernetes and youtube from the real Scout.Host.ControlPlane binary',
+    'ListFeatures returns github, kubernetes, youtube and desktop from the real Scout.Host.ControlPlane binary',
     async () => {
       if (process.platform === 'win32') {
         expect(result.kind).toBe('unsupported');
@@ -214,6 +214,7 @@ describe('control plane over UDS', () => {
         ['github', 'GitHub'],
         ['kubernetes', 'Kubernetes'],
         ['youtube', 'YouTube'],
+        ['desktop', 'Desktop'],
       ]);
       expect(features[0]?.credentialFields.map((f) => f.key)).toEqual(['pat']);
     },
@@ -1459,7 +1460,7 @@ describe('control-plane host environment', () => {
         const features = await client.listFeatures();
         client.close();
 
-        expect(features.length).toBe(3);
+        expect(features.length).toBe(4);
         expect(await tcpConnects(port)).toBe(false);
       } finally {
         if (launched.kind === 'launched') {

@@ -6,7 +6,8 @@ namespace Scout.Transcription.Whisper;
 
 /// <summary>
 /// DI composition for local voice transcription. Registers
-/// <see cref="WhisperAudioTranscriber"/> as the <see cref="IAudioTranscriber"/>
+/// <see cref="WhisperAudioTranscriber"/> as the <see cref="IAudioTranscriber"/>,
+/// and live transcription over the same instance as the <see cref="ILiveTranscriber"/>,
 /// only when <c>Scout:Transcription:ModelPath</c> names a file that exists;
 /// otherwise registers nothing and voice messages get setup guidance.
 /// </summary>
@@ -15,7 +16,7 @@ public static class WhisperServiceCollectionExtensions
     /// <summary>Configuration section read by <see cref="AddWhisperTranscription"/>.</summary>
     public const string ConfigSection = "Scout:Transcription";
 
-    /// <summary>Registers the Whisper transcriber when the configured model file exists.</summary>
+    /// <summary>Registers the Whisper transcribers when the configured model file exists.</summary>
     public static IServiceCollection AddWhisperTranscription(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -29,7 +30,9 @@ public static class WhisperServiceCollectionExtensions
             return services;
         }
 
-        services.AddSingleton<IAudioTranscriber>(_ => new WhisperAudioTranscriber(modelPath));
+        services.AddSingleton(_ => new WhisperAudioTranscriber(modelPath));
+        services.AddSingleton<IAudioTranscriber>(sp => sp.GetRequiredService<WhisperAudioTranscriber>());
+        services.AddSingleton<ILiveTranscriber>(sp => new WhisperLiveTranscriber(sp.GetRequiredService<WhisperAudioTranscriber>()));
         return services;
     }
 }

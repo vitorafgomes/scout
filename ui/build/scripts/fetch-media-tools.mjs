@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { chmodSync, createReadStream, existsSync, readFileSync } from 'node:fs';
 import {
   chmod,
   copyFile,
@@ -19,8 +19,8 @@ import { pipeline } from 'node:stream/promises';
 const uiRoot = join(import.meta.dirname, '..', '..');
 
 /**
- * The pinned downloads: the ffmpeg, piper and rhubarb archives of each bundled platform, the caption fonts and the
- * piper voices with their licences.
+ * The pinned downloads: the ffmpeg, piper and rhubarb archives of each bundled platform, the tesseract AppImage of
+ * linux-x64 with its language data, the caption fonts and the piper voices with their licences.
  */
 export const TABLE_PATH = join(uiRoot, 'build', 'media-tools.json');
 
@@ -125,6 +125,33 @@ function rhubarbNoticeOf(rhubarb, sha256) {
   ].join('\n');
 }
 
+/**
+ * Runs `appImage` with `--appimage-extract` in `dir`, which writes the AppImage's contents into `dir/squashfs-root`.
+ */
+export function extractAppImage(appImage, dir) {
+  chmodSync(appImage, 0o755);
+  const result = spawnSync(appImage, ['--appimage-extract'], {
+    cwd: dir,
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  if (result.status !== 0 || !existsSync(join(dir, 'squashfs-root'))) {
+    throw new Error(`media tools: ${appImage} could not extract itself into ${dir}`);
+  }
+}
+
+function tesseractNoticeOf(tesseract, tessdata, sha256) {
+  return [
+    `tesseract ${tesseract.version}, the OCR engine of ${tesseract.project} (Apache-2.0),`,
+    `as the x86_64 AppImage of ${tesseract.release}:`,
+    `AppImage SHA-256: ${sha256}`,
+    `Tesseract source of this build: ${tesseract.source}`,
+    `The AppImage also contains leptonica (BSD-2-Clause, source ${tesseract.leptonica}),`,
+    'its image libraries and the GNU C library with its loader; Scout runs tesseract as a separate program through AppRun.',
+    `Language data: ${tessdata.repo} at commit ${tessdata.commit} (${tessdata.license}, tessdata/LICENSE).`,
+    '',
+  ].join('\n');
+}
+
 function piperNoticeOf(piper, sha256) {
   return [
     `piper ${piper.version}, the text-to-speech engine of ${piper.project} (MIT):`,
@@ -168,7 +195,7 @@ async function fetchFfmpeg({ target, table, toolsDir, cacheDir, fetch, extract }
     await extract(cached, scratch, Object.values(archive.members));
     await mkdir(toolsDir, { recursive: true });
     for (const name of await readdir(toolsDir)) {
-      if (name !== 'piper' && name !== 'rhubarb') {
+      if (name !== 'piper' && name !== 'rhubarb' && name !== 'tesseract') {
         await rm(join(toolsDir, name), { recursive: true, force: true });
       }
     }
@@ -259,12 +286,65 @@ async function fetchRhubarb({ target, table, toolsDir, cacheDir, fetch, extract 
   return true;
 }
 
+async function fetchTesseract({ target, table, toolsDir, cacheDir, fetch, extractAppImage }) {
+  const archive = table.tesseract.archives[target];
+  if (archive === undefined) return false;
+  const tesseractDir = join(toolsDir, 'tesseract');
+  const notice = tesseractNoticeOf(table.tesseract, table.tessdata, archive.sha256);
+  const noticeFile = join(tesseractDir, 'NOTICE.txt');
+  const inPlace =
+    existsSync(noticeFile) &&
+    (await readFile(noticeFile, 'utf8')) === notice &&
+    existsSync(join(tesseractDir, 'AppRun'));
+  if (!inPlace) {
+    const cached = join(cacheDir, basename(new URL(archive.url).pathname));
+    await fetchPinned(archive, cached, fetch);
+    const scratch = await mkdtemp(join(cacheDir, 'extract-'));
+    try {
+      await extractAppImage(cached, scratch);
+      await rm(tesseractDir, { recursive: true, force: true });
+      await mkdir(toolsDir, { recursive: true });
+      await cp(join(scratch, archive.root), tesseractDir, {
+        recursive: true,
+        verbatimSymlinks: true,
+      });
+      for (const entry of await readdir(tesseractDir, { recursive: true, withFileTypes: true })) {
+        if (entry.isDirectory()) await chmod(join(entry.parentPath, entry.name), 0o755);
+      }
+      for (const name of ['.', 'AppRun', 'ld-linux-x86-64.so.2', join('usr', 'bin', 'tesseract')]) {
+        await chmod(join(tesseractDir, name), 0o755);
+      }
+      await writeFile(noticeFile, notice);
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
+  }
+  const tessdataDir = join(tesseractDir, 'tessdata');
+  await mkdir(tessdataDir, { recursive: true });
+  for (const entry of table.tessdata.files) {
+    const dest = join(tessdataDir, entry.file);
+    if (existsSync(dest) && (await sha256Of(dest)) === entry.sha256) continue;
+    const cached = join(cacheDir, 'tessdata', entry.file);
+    await fetchPinned(entry, cached, fetch);
+    await copyFile(cached, dest);
+  }
+  const licence = table.tesseract.leptonicaLicense;
+  const licenceDest = join(tesseractDir, licence.file);
+  if (!existsSync(licenceDest) || (await sha256Of(licenceDest)) !== licence.sha256) {
+    const cached = join(cacheDir, licence.file);
+    await fetchPinned(licence, cached, fetch);
+    await copyFile(cached, licenceDest);
+  }
+  return true;
+}
+
 /**
  * Puts the pinned fonts with their licence into `<resourcesDir>/fonts/` and the pinned piper voices with their
  * licences into `<resourcesDir>/voices/` on every target, and the pinned ffmpeg with its licence and the
  * whole pinned piper and rhubarb folders into `<resourcesDir>/media-tools/<target>/` where the table has an
- * archive for the target; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is downloaded
- * or extracted again when it is already in place.
+ * archive for the target, and the whole pinned tesseract AppImage with its language data in `tesseract/tessdata/`
+ * there too where the table has one; each download checked against its SHA-256 and kept in `cacheDir`. Nothing is
+ * downloaded or extracted again when it is already in place.
  */
 export async function fetchMediaTools({
   target,
@@ -273,6 +353,7 @@ export async function fetchMediaTools({
   cacheDir,
   fetch,
   extract,
+  extractAppImage,
   log,
 }) {
   const fontsDir = join(resourcesDir, 'fonts');
@@ -297,7 +378,7 @@ export async function fetchMediaTools({
   await writeFile(join(voicesDir, 'LICENSES.txt'), voiceLicensesOf(table.voices));
 
   const toolsDir = join(resourcesDir, 'media-tools', target);
-  const options = { target, table, toolsDir, cacheDir, fetch, extract };
+  const options = { target, table, toolsDir, cacheDir, fetch, extract, extractAppImage };
   if (!(await fetchFfmpeg(options))) {
     log(
       `media tools: no ffmpeg bundled for ${target}; the worker uses ffmpeg from the system path`,
@@ -308,6 +389,11 @@ export async function fetchMediaTools({
   }
   if (!(await fetchRhubarb(options))) {
     log(`media tools: no rhubarb bundled for ${target}; the worker has no lip sync`);
+  }
+  if (!(await fetchTesseract(options))) {
+    log(
+      `media tools: no tesseract bundled for ${target}; the worker cannot read text on a screenshot`,
+    );
   }
   log(`media tools: ${target} ready in ${resourcesDir}`);
 }
@@ -320,6 +406,7 @@ if (import.meta.main) {
     cacheDir: join(uiRoot, 'build', 'media-cache'),
     fetch: (url) => globalThis.fetch(url),
     extract: extractArchive,
+    extractAppImage,
     log: (line) => console.log(line),
   });
 }

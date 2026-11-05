@@ -378,6 +378,9 @@ describe('createSupervisor', () => {
         'Scout:Operator:MouthsPath': '/tmp/other/mouths',
         DOTNET_Scout__Operator__RhubarbPath: '/tmp/other/rhubarb',
         'ASPNETCORE_SCOUT:OPERATOR:MOUTHSPATH': '/tmp/other/mouths',
+        scout__tools__tesseractpath: '/tmp/other/tesseract',
+        'Scout:Tools:TessdataPath': '/tmp/other/tessdata',
+        DOTNET_SCOUT__TOOLS__LOCALE: 'xx',
       };
       const unrelatedKey = 'SCOUT__TEST__SUPERVISOR_INHERITED';
       const keys = [...Object.keys(inherited), unrelatedKey];

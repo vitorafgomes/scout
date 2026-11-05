@@ -136,4 +136,26 @@ public sealed class ConversationConductorLocalOwnerTests
         sink.FinalText.ShouldBe("> (voice) is the billing service green\n\nhello");
         router.Received(1).Route(Arg.Is<ChatMessage>(m => m.IsLocalOwner && m.Text == "is the billing service green"));
     }
+
+    [Fact]
+    public async Task A_Transcribed_Voice_Message_Keeps_The_Screenshot_Attached_To_It()
+    {
+        byte[] screenshot = [0xFF, 0xD8, 0xFF, 0xE0, 0x07];
+        var router = AnsweringRouter();
+        var transcriber = Substitute.For<IAudioTranscriber>();
+        transcriber.TranscribeAsync(Arg.Any<Stream>(), "audio/wav", Arg.Any<CancellationToken>())
+            .Returns("what is this error");
+        var conductor = Conductor(router, new AccessOptions { RequireAllowList = true }, transcriber);
+        var audio = new AudioAttachment(
+            "audio/wav", 64, TimeSpan.FromSeconds(2), _ => Task.FromResult<Stream>(new MemoryStream(new byte[64])));
+        var message = Local(string.Empty, audio) with { Image = new ImageAttachment("image/jpeg", screenshot) };
+
+        await conductor.HandleAsync(message, new RecordingResponseSink(FineGrained), CancellationToken.None);
+
+        var routed = router.ReceivedCalls().ShouldHaveSingleItem().GetArguments()[0].ShouldBeOfType<ChatMessage>();
+        routed.Text.ShouldBe("what is this error");
+        var image = routed.Image.ShouldNotBeNull();
+        image.ContentType.ShouldBe("image/jpeg");
+        image.Bytes.ToArray().ShouldBe(screenshot);
+    }
 }

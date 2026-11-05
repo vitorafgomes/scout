@@ -803,7 +803,8 @@ public sealed class GrpcOperatorControlPlaneTests
     {
         public List<string> Programs { get; } = [];
 
-        public Task<ProcessResult> RunAsync(string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null)
+        public Task<ProcessResult> RunAsync(
+            string program, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct, string? input = null, byte[]? inputBytes = null)
         {
             Programs.Add(program);
             var listing = arguments[^1] switch

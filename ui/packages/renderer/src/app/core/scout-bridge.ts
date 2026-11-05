@@ -112,6 +112,21 @@ import {
   type LocalTurn,
   type LocalShortcut,
   type LocalBubbleSettings,
+  type LocalListenRequest,
+  type LocalListenResponse,
+  type LocalAudioRequest,
+  type LocalStopListeningRequest,
+  type LocalReadTextRequest,
+  type LocalReadTextResponse,
+  type LocalKeepMeetingRequest,
+  type LocalKeepMeetingResponse,
+  type LocalMeetingsRequest,
+  type LocalMeetingsResponse,
+  type LocalExportMeetingRequest,
+  type LocalExportMeetingResponse,
+  type LocalDeleteMeetingsRequest,
+  type LocalDeleteMeetingsResponse,
+  type LocalTranscriptEvent,
   type UpdateNotice,
   type UpdateProgress,
   type UpdateSkipVersionRequest,
@@ -334,6 +349,23 @@ function createFakeBridge(): ScoutBridge {
     localGetBubble: (): Promise<LocalBubbleSettings> => rejectNotAvailable(),
     localSetBubble: (_req: LocalBubbleSettings): Promise<LocalBubbleSettings> =>
       rejectNotAvailable(),
+    localListen: (): Promise<LocalListenResponse> => rejectNotAvailable(),
+    localAudio: (_req: LocalAudioRequest): Promise<void> => rejectNotAvailable(),
+    localStopListening: (_req: LocalStopListeningRequest): Promise<void> => rejectNotAvailable(),
+    localReadText: (_req: LocalReadTextRequest): Promise<LocalReadTextResponse> =>
+      rejectNotAvailable(),
+    localKeepMeeting: (_req: LocalKeepMeetingRequest): Promise<LocalKeepMeetingResponse> =>
+      rejectNotAvailable(),
+    localMeetings: (_req: LocalMeetingsRequest): Promise<LocalMeetingsResponse> =>
+      rejectNotAvailable(),
+    localExportMeeting: (_req: LocalExportMeetingRequest): Promise<LocalExportMeetingResponse> =>
+      rejectNotAvailable(),
+    localDeleteMeetings: (_req: LocalDeleteMeetingsRequest): Promise<LocalDeleteMeetingsResponse> =>
+      rejectNotAvailable(),
+    onLocalTranscript:
+      (_listener: (event: LocalTranscriptEvent) => void): (() => void) =>
+      () =>
+        undefined,
     updateGetState: (): Promise<UpdateState> => rejectNotAvailable(),
     updateSetCheckEnabled: (_req: DesktopToggleRequest): Promise<UpdateState> =>
       rejectNotAvailable(),
@@ -837,6 +869,42 @@ export class ScoutBridgeService {
 
   async localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleSettings> {
     return this.bridge.localSetBubble(req);
+  }
+
+  async localListen(req?: LocalListenRequest): Promise<LocalListenResponse> {
+    return this.bridge.localListen(req);
+  }
+
+  async localAudio(req: LocalAudioRequest): Promise<void> {
+    return this.bridge.localAudio(req);
+  }
+
+  async localStopListening(req: LocalStopListeningRequest): Promise<void> {
+    return this.bridge.localStopListening(req);
+  }
+
+  onLocalTranscript(listener: (event: LocalTranscriptEvent) => void): () => void {
+    return this.bridge.onLocalTranscript(listener);
+  }
+
+  async localReadText(req: LocalReadTextRequest): Promise<LocalReadTextResponse> {
+    return this.bridge.localReadText(req);
+  }
+
+  async localKeepMeeting(req: LocalKeepMeetingRequest): Promise<LocalKeepMeetingResponse> {
+    return this.bridge.localKeepMeeting(req);
+  }
+
+  async localMeetings(req: LocalMeetingsRequest): Promise<LocalMeetingsResponse> {
+    return this.bridge.localMeetings(req);
+  }
+
+  async localExportMeeting(req: LocalExportMeetingRequest): Promise<LocalExportMeetingResponse> {
+    return this.bridge.localExportMeeting(req);
+  }
+
+  async localDeleteMeetings(req: LocalDeleteMeetingsRequest): Promise<LocalDeleteMeetingsResponse> {
+    return this.bridge.localDeleteMeetings(req);
   }
 
   async updateGetState(): Promise<UpdateState> {

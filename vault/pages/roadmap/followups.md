@@ -106,6 +106,51 @@ reliability: medium
 - **Gap:** an approved `videos.insert` stays queued after a scene edit, regenerate or attach; only `ApprovedAt` blocks it at execution, so once the owner re-approves the edited package the old approval runs ([[pages/services/control-plane]], ADR 0032). Pre-existing before 8a.
 - **Unblocks with:** `AfterSceneEdit` cancelling pending upload actions of that project, with a test.
 
+### A long meeting keeps only its newest 500 lines (2026-11-04)
+
+- **Gap:** the transcript store holds 500 lines and the Meetings screen lists the newest 100, while the worker accepts 5,000 lines per meeting ([[pages/services/desktop-quick-ask]], [[pages/services/meetings]]).
+- **Unblocks with:** a larger store while a meeting runs, or paging in the list, with tests.
+
+### Done during a streaming reply keeps a partial answer (2026-11-04)
+
+- **Gap:** a turn whose reply is still streaming or failed is kept with the partial text or the failure sentence as its answer ([[pages/services/desktop-quick-ask]], [[pages/services/meetings]]).
+- **Unblocks with:** waiting for the reply or marking the turn unfinished, with a test.
+
+### A meeting line over 2,000 characters gets the generic limits sentence (2026-11-04)
+
+- **Gap:** the store refuses a line over 2,000 characters, but the local adapter's sentence for a refused `keep` names only the lines, the turns and the title ([[pages/services/meetings]], [[pages/services/adapter-local]], [[pages/decisions/0037-meetings-kept-locally-in-sqlite]]).
+- **Unblocks with:** a sentence naming the line length, with a test that a `keep` holding a 2,001-character line answers it.
+
+### The meetings WAL checkpoint is a no-op while another connection reads (2026-11-04)
+
+- **Gap:** a `meetings` request racing a `delete` can leave the deleted text in `meetings.db-wal` until the next delete, as the ADR states ([[pages/services/meetings]], [[pages/decisions/0037-meetings-kept-locally-in-sqlite]]).
+- **Unblocks with:** retrying the checkpoint on the busy flag, or failing the delete, with a test that holds a read open during a delete.
+
+### A meeting at every limit can exceed the local adapter's request line (2026-11-04)
+
+- **Gap:** 5,000 lines of 2,000 characters with their translations passes the 20 MB stdin line the local adapter accepts, so a meeting at every limit is refused as an oversized request ([[pages/services/adapter-local]], [[pages/services/meetings]], [[pages/decisions/0037-meetings-kept-locally-in-sqlite]]).
+- **Unblocks with:** the desktop capping what it sends, or the adapter accepting a chunked keep, with a test at the limit.
+
+### The OCR bundle ships without the licence texts of its other bundled libraries (2026-11-04)
+
+- **Gap:** the tesseract AppImage carries only the tesseract Apache-2.0 `LICENSE` and `AUTHORS`; glibc, libstdc++, libgomp, libarchive, libxml2, nettle and the image libraries ship with no notice, and the tree is 54 MB with six unused languages and man pages ([[pages/decisions/0036-text-read-from-a-screenshot-by-a-local-ocr-program]], [[pages/services/desktop-operator]]). The leptonica licence is the one text that ships beside the program.
+- **Unblocks with:** a first-party static build in CI, or a pruned tree with each library's notice collected at build.
+
+### The transcript sent with a question enters the conversation memory (2026-11-04)
+
+- **Gap:** the quick-ask window appends the last 10 minutes of the transcript (up to 24,000 characters) to the question text, and the worker stores the whole text as the turn, so every follow-up turn replays it to the provider ([[pages/services/desktop-quick-ask]], [[pages/services/adapter-local]], [[pages/decisions/0034-live-transcription-on-the-local-adapter]]).
+- **Unblocks with:** a `context` field on the ask line that the adapter passes to the model request and leaves out of the stored turn, with a test that a follow-up turn's history holds the bare question.
+
+### Live sessions are not stopped when the local adapter shuts down (2026-11-04)
+
+- **Gap:** `LocalChatAdapter.StopAsync` cancels the lifetime token but leaves any session still in `_sessions` to its own end ([[pages/services/adapter-local]], [[pages/decisions/0034-live-transcription-on-the-local-adapter]]); the desktop stops every session before it stops the worker, so nothing is lost today, but a worker stopped mid-session never writes `complete` for it. Present since phase 1 with one session; the two-session change (review of 2026-11-04) made it visible.
+- **Unblocks with:** `StopAsync` stopping every open session and writing their `complete` events before the token is cancelled, with a test that stops the adapter while a session is open.
+
+### A listen that reuses an id just stopped can share that id with the old session's last final (2026-11-04)
+
+- **Gap:** `stop` frees the id as soon as it is removed, while the old session's last final may still be decoding; a new `listen` with the same id is accepted and both could write events under one id. The desktop never reuses an id, so this cannot happen from Scout Desktop.
+- **Unblocks with:** refusing a `listen` whose id is still stopping, or the desktop contract stating that ids are never reused; one test that stops and immediately re-listens under the same id.
+
 ### A revoke and re-grant during an upload can let a second upload be queued (2026-11-03)
 
 - **Gap:** `PublishPackageAsync` ignores an executing `videos.insert` whose claim predates the current grant (`!Stale(a, grantedAt)` in [[pages/services/control-plane]]), so after the owner revokes YouTube writes mid-upload and grants again, the publication reads failed and a second Publish queues a second upload while the first may still finish on YouTube (`/code-review medium` of 2026-11-03). Rare: it needs a revoke and a re-grant inside one upload.
@@ -201,15 +246,15 @@ reliability: medium
 
 ### X11 always-on-top unverified on COSMIC (2026-10-31)
 
-- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:119`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
+- **Blocker:** the owner's run of the AppImage. On Linux under Wayland with XWayland, Scout relaunches once with `--ozone-platform=x11` (`ui/packages/main/src/shell/x11-relaunch.ts:12`, `ui/packages/main/src/main.ts:122`) so the floating button and the quick-ask window are placed in the chosen corner and stay on top through XWayland. The corner and display choice are measured to hold (below); what stays open is only whether the bubble stays above native Wayland windows, visible only on screen. The second start costs one extra process launch on every Wayland start.
 - **Fix:** none expected; what remains open is the owner confirming on screen that the bubble stays above native Wayland windows. If it does not, record it under ADR 0028.
 - **Measured 2026-10-31 with Electron 45 under `--ozone-platform=x11`:** every window COSMIC's X window manager manages, whatever its type, is placed where COSMIC chooses, ignores `setPosition` and `setBounds` before and after `show`, reports not always-on-top and gets a server-side frame. A window created with `focusable: false`, shown, then made focusable and focused stays unmanaged, keeps its position and always-on-top, and `document.hasFocus()` reported focus to its page, but that was not real X keyboard focus (see the last bullet).
 - **Measured 2026-10-31 on the owner's COSMIC session** (AppImage started with `--ozone-platform=x11`, read with `xwininfo` and `xprop` on `DISPLAY=:1`): the bubble window was 64x64 at +1840+1190, the bottom-right corner of the 1920x1080 laptop display (offset +0+190) minus the 16 px margin, so the corner and the display choice hold. COSMIC's X window manager reports itself as "Smithay X WM" and lists `_NET_WM_STATE_ABOVE` and `_NET_WM_STATE_SKIP_TASKBAR` in `_NET_SUPPORTED`. The bubble carries no `WM_STATE` and is absent from `_NET_CLIENT_LIST_STACKING`: with `focusable: false` Electron creates it as a window the X window manager does not manage, which the compositor draws above managed windows. Whether that holds above native Wayland windows is only visible on screen.
-- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:352`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
+- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:683`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
 
 ### Voice transcript shown inside the reply, not as the question (2026-10-31)
 
-- **Blocker:** no worker event carries the transcript. The owner's request is deferred, not done: a voice turn's question is "(voice message)" (`ui/packages/main/src/quick-ask/quick-ask.ts:62`), and what Scout heard reaches the owner only as the reply's opening `> (voice) ` quote, which the worker writes once the reply starts. The owner asked to see what was heard so they can check it ("deveria mostrar o que falei, para que eu veja se esta correto").
+- **Blocker:** no worker event carries the transcript. The owner's request is deferred, not done: a voice turn's question is "(voice message)" (`ui/packages/main/src/quick-ask/quick-ask.ts:112`), and what Scout heard reaches the owner only as the reply's opening `> (voice) ` quote, which the worker writes once the reply starts. The owner asked to see what was heard so they can check it ("deveria mostrar o que falei, para que eu veja se esta correto").
 - **Fix:** a `heard` event from the local adapter, carrying the transcript before the reply, that main sets as the turn's question; the reply then drops the quote for local turns. It touches the worker's local protocol and main's turn handling, with a test on each side.
 
 ### Floating button cannot be dragged (2026-10-31)
@@ -219,12 +264,12 @@ reliability: medium
 
 ### Floating button does not follow display changes (2026-10-31)
 
-- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:287`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
+- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:616`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
 - **Fix:** reposition it on `screen`'s `display-metrics-changed` and `display-removed` events, removing the listeners on dispose, with a test that emits each event on the fake screen.
 
 ### Clear on the Chat screen keeps the worker's local memory (2026-10-30)
 
-- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:512`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
+- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:852`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
 - **Fix:** let Clear also reset the worker's memory for the local channel, for example a `reset` request on the quick-ask stdin protocol that the local adapter turns into a memory reset; it touches only Scout's own state.
 
 ### Provisioning pages still describe the old Discord flow (2026-10-28)
@@ -340,12 +385,12 @@ reliability: medium
 
 ### The GitHub card bypasses the control-plane Features service (2026-10-23)
 
-- **Blocker:** no activator. The desktop main process owns the GitHub sign-in and hands the worker a token file (`ui/packages/main/src/worker/build-env.ts:68`); the control plane's GitHub entry, its `pat` credential and its enabled state play no part in it, so the GitHub card shows the main-owned connection as its badge and hides the toggle and credential buttons. The Kubernetes card does the same with the kubeconfig selection ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The card also hides with the Features grid when the control plane is not running, although the sign-in does not need it.
+- **Blocker:** no activator. The desktop main process owns the GitHub sign-in and hands the worker a token file (`ui/packages/main/src/worker/build-env.ts:76`); the control plane's GitHub entry, its `pat` credential and its enabled state play no part in it, so the GitHub card shows the main-owned connection as its badge and hides the toggle and credential buttons. The Kubernetes card does the same with the kubeconfig selection ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]). The card also hides with the Features grid when the control plane is not running, although the sign-in does not need it.
 - **Unblocks when:** a real feature activator exists; then decide whether the control plane reports the GitHub connection or the card leaves the control-plane grid.
 
 ### An API-key provider does not close the bot to other users (2026-10-23)
 
-- **Blocker:** an owner decision. `SCOUT__ACCESS__REQUIREALLOWLIST` is set for GitHub, Kubernetes and the ChatGPT plan only (`ui/packages/main/src/worker/build-env.ts:80`); with an OpenAI or Gemini key in use and no allowed users, anyone who can message the bot spends the owner's API credit ([[pages/decisions/0021-allowed-users]]).
+- **Blocker:** an owner decision. `SCOUT__ACCESS__REQUIREALLOWLIST` is set for GitHub, Kubernetes and the ChatGPT plan only (`ui/packages/main/src/worker/build-env.ts:88`); with an OpenAI or Gemini key in use and no allowed users, anyone who can message the bot spends the owner's API credit ([[pages/decisions/0021-allowed-users]]).
 - **Fix:** add `llm.provider` OpenAI and Gemini to the condition, with the same card warning on those cards, if the owner wants API credit treated as an owner credential.
 
 ### Teams allowed-user ids are Bot Framework ids (2026-10-23)

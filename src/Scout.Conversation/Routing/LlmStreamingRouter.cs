@@ -81,6 +81,7 @@ public sealed class LlmStreamingRouter : IConversationRouter
             UserMessage = userMessage,
             Temperature = _options.Temperature,
             MaxTokens = _options.MaxTokens,
+            Image = message.Image is { } image ? new ChatImage(image.ContentType, image.Bytes) : null,
         };
 
         string? key = null;

@@ -113,8 +113,9 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
                 SpeechVoices = OpenAIMediaSettings.Voices,
                 SpeechSettingsFor = OpenAIMediaSettings.Speech,
                 ImageSettings = OpenAIMediaSettings.Image(_imageModel, quality),
+                Vision = true,
             }
-            : new MediaCapabilities(false, false, Name);
+            : new MediaCapabilities(false, false, Name) { Vision = true };
     }
 
     private static bool IsDefaultEndpoint(string? endpoint)

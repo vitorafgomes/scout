@@ -99,10 +99,23 @@ describe('TranscriptionConfigStore', () => {
   it('rejects unknown model strings stored in localStorage', async () => {
     window.localStorage.setItem(
       STT_CONFIG_STORAGE_KEY,
-      JSON.stringify({ provider: 'LocalWhisper', model: 'whisper-tiny' }),
+      JSON.stringify({ provider: 'LocalWhisper', model: 'whisper-medium' }),
     );
     const store = provide(makeBridge({ vaultHas: true }));
     await store.loadFromVault();
     expect(store.model()).toBeNull();
   });
+
+  it.each(['whisper-tiny', 'whisper-base', 'whisper-small'] as const)(
+    'keeps the live transcription model %s across a reload',
+    async (model) => {
+      await provide(makeBridge()).setSelection('LocalWhisper', model);
+      TestBed.resetTestingModule();
+      const store = provide(makeBridge({ vaultHas: true }));
+
+      await store.loadFromVault();
+
+      expect(store.model()).toBe(model);
+    },
+  );
 });

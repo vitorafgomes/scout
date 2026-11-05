@@ -163,9 +163,19 @@ public static class LlmServiceCollectionExtensions
                 // Optional: when a feature module registers the Project Expert
                 // agent, the gateway streams replies through it so its grounding
                 // instructions and tools apply. Absent, the direct chat path runs.
-                sp.GetService<ChatCompletionAgent>()));
+                sp.GetService<ChatCompletionAgent>(),
+                sp.GetRequiredService<ILlmProviderFactory>().Media));
 
         services.AddSingleton(sp => sp.GetRequiredService<ILlmProviderFactory>().Media);
+
+        if (provider != "None")
+        {
+            services.AddSingleton<ILiveTranslator>(sp =>
+            {
+                var chat = sp.GetRequiredService<IChatCompletionService>();
+                return new LiveTranslator(chat is ReadOnlyGuardChatCompletionService guard ? guard.Inner : chat);
+            });
+        }
 
         return services;
     }

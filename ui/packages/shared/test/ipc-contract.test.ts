@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
   CHANNEL,
+  FEATURE_IDS,
   type ChannelName,
+  type LocalAskRequest,
+  type LocalImage,
+  type LocalTurn,
   type MandateDto,
   type OperatorProjectDto,
   type ReadinessDto,
@@ -65,15 +69,24 @@ describe('CHANNEL constant', () => {
         'kubernetesStatus',
         'kubernetesUse',
         'localAsk',
+        'localAudio',
         'localCancel',
         'localClearTurns',
         'localGetBubble',
         'localGetShortcut',
         'localGetTurns',
         'localHide',
+        'localListen',
         'localOpen',
+        'localReadText',
+        'localKeepMeeting',
+        'localMeetings',
+        'localExportMeeting',
+        'localDeleteMeetings',
         'localSetBubble',
         'localSetShortcut',
+        'localStopListening',
+        'localTranscript',
         'localTurns',
         'llmDeleteOllamaModel',
         'llmDetectEnvironment',
@@ -165,6 +178,86 @@ describe('local conversation channels', () => {
     expect(CHANNEL.localClearTurns).toBe('scout:local.clearTurns');
     expect(CHANNEL.localTurns).toBe('scout:local.turns');
     expect(Object.values(CHANNEL)).not.toContain('scout:local.event');
+  });
+
+  test('live listening starts, streams audio and stops on its own scout:local channels, the transcript is pushed, and none is named with a write verb', () => {
+    const channels = [
+      CHANNEL.localListen,
+      CHANNEL.localAudio,
+      CHANNEL.localStopListening,
+      CHANNEL.localTranscript,
+    ];
+
+    expect(channels).toEqual([
+      'scout:local.listen',
+      'scout:local.audio',
+      'scout:local.stopListening',
+      'scout:local.transcript',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('kept meetings', () => {
+  test('keeping, listing, exporting and deleting meetings each have their own scout:local channel, and only the delete carries a write verb', () => {
+    const channels = [
+      CHANNEL.localKeepMeeting,
+      CHANNEL.localMeetings,
+      CHANNEL.localExportMeeting,
+      CHANNEL.localDeleteMeetings,
+    ];
+
+    expect(channels).toEqual([
+      'scout:local.keepMeeting',
+      'scout:local.meetings',
+      'scout:local.exportMeeting',
+      'scout:local.deleteMeetings',
+    ]);
+    expect(
+      channels.filter((c) =>
+        ['create', 'post', 'write', 'send', 'update', 'delete', 'publish', 'upload'].some((verb) =>
+          c.toLowerCase().includes(verb),
+        ),
+      ),
+    ).toEqual(['scout:local.deleteMeetings']);
+  });
+});
+
+describe('screenshot on a question', () => {
+  test('the This computer feature has the id desktop', () => {
+    expect(FEATURE_IDS).toContain('desktop');
+  });
+
+  test('a question carries one JPEG screenshot beside its text or its recording, and its turn keeps only the flag (compile-time check)', () => {
+    const image: LocalImage = { contentType: 'image/jpeg', base64: '/9j/4AAQ' };
+    const asked: LocalAskRequest[] = [
+      { id: 'q-1', text: 'what is on my screen?', image },
+      { id: 'v-1', audio: { contentType: 'audio/wav', base64: 'UklGRg==' }, image },
+    ];
+    const turnFields: Record<keyof LocalTurn, true> = {
+      id: true,
+      question: true,
+      reply: true,
+      citations: true,
+      state: true,
+      notRunning: true,
+      notice: true,
+      screenshot: true,
+      transcript: true,
+      screenText: true,
+      meeting: true,
+    };
+    const imageTypes: Record<LocalImage['contentType'], true> = { 'image/jpeg': true };
+
+    expect(asked).toHaveLength(2);
+    expect(Object.keys(turnFields)).not.toContain('image');
+    expect(Object.keys(imageTypes)).toEqual(['image/jpeg']);
   });
 });
 
@@ -478,6 +571,15 @@ describe('ChannelName type', () => {
       'scout:local.open': true,
       'scout:local.getBubble': true,
       'scout:local.setBubble': true,
+      'scout:local.listen': true,
+      'scout:local.audio': true,
+      'scout:local.stopListening': true,
+      'scout:local.transcript': true,
+      'scout:local.readText': true,
+      'scout:local.keepMeeting': true,
+      'scout:local.meetings': true,
+      'scout:local.exportMeeting': true,
+      'scout:local.deleteMeetings': true,
       'scout:update.getState': true,
       'scout:update.setCheckEnabled': true,
       'scout:update.checkNow': true,
@@ -532,6 +634,7 @@ describe('no-external-write sanity scan', () => {
     'scout:update.progress',
     'scout:writes.list',
     'scout:features.writeGrant',
+    'scout:local.deleteMeetings',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new

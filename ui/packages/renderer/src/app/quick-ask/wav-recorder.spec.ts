@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MAX_SAMPLES, WavRecorder, encodeWav, toBase64 } from './wav-recorder';
+import { MAX_SAMPLES, WavRecorder, encodeWav, toBase64, toPcm16 } from './wav-recorder';
 
 describe('encodeWav', () => {
   it('writes a 44-byte PCM header and clamps samples to 16 bits', () => {
@@ -13,6 +13,16 @@ describe('encodeWav', () => {
     expect(view.getUint32(28, true)).toBe(32_000);
     expect([view.getInt16(44, true), view.getInt16(46, true), view.getInt16(48, true)]).toEqual([
       32767, -32768, 32767,
+    ]);
+  });
+
+  it('toPcm16 turns float samples into 16-bit little-endian PCM, clamped', () => {
+    const pcm = toPcm16(Float32Array.from([0.5, -0.5, 1, -1, 3]));
+    const view = new DataView(pcm.buffer);
+
+    expect(pcm.length).toBe(10);
+    expect([0, 2, 4, 6, 8].map((offset) => view.getInt16(offset, true))).toEqual([
+      16383, -16384, 32767, -32768, 32767,
     ]);
   });
 
@@ -148,6 +158,88 @@ describe('WavRecorder', () => {
     ]);
     expect(gain.gain.value).toBe(0);
     await recorder.stop();
+  });
+
+  function streamingAudio(sampleRate: number) {
+    const state = {
+      processor: null as { onaudioprocess: ((event: unknown) => void) | null } | null,
+      requestedRate: 0,
+      closed: 0,
+      stopped: 0,
+    };
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        readonly sampleRate = sampleRate;
+        readonly destination = {};
+        constructor(options: { sampleRate: number }) {
+          state.requestedRate = options.sampleRate;
+        }
+        createMediaStreamSource() {
+          return { connect: () => undefined, disconnect: () => undefined };
+        }
+        createScriptProcessor(size: number) {
+          expect(size).toBe(4096);
+          state.processor = { onaudioprocess: null };
+          return Object.assign(state.processor, {
+            connect: () => undefined,
+            disconnect: () => undefined,
+          });
+        }
+        createGain() {
+          return { gain: { value: 1 }, connect: () => undefined, disconnect: () => undefined };
+        }
+        async close() {
+          state.closed++;
+        }
+      },
+    );
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop: () => state.stopped++ }] }),
+      },
+    });
+    return state;
+  }
+
+  it('streams PCM16 chunks at 16 kHz: each 4096-sample buffer goes to onChunk and nothing is kept', async () => {
+    const audio = streamingAudio(16_000);
+    const recorder = TestBed.inject(WavRecorder);
+    const chunks: Uint8Array[] = [];
+    const block = new Float32Array(4096).fill(0.25);
+    block[0] = -1;
+
+    await recorder.start(
+      () => undefined,
+      (pcm16) => chunks.push(pcm16),
+    );
+    audio.processor!.onaudioprocess!({ inputBuffer: { getChannelData: () => block } });
+    audio.processor!.onaudioprocess!({ inputBuffer: { getChannelData: () => block } });
+    const kept = await recorder.stop();
+
+    expect(audio.requestedRate).toBe(16_000);
+    expect(chunks.map((c) => c.length)).toEqual([8192, 8192]);
+    const view = new DataView(chunks[0]!.buffer);
+    expect([view.getInt16(0, true), view.getInt16(2, true)]).toEqual([-32768, 8191]);
+    expect(kept).toBeNull();
+    expect(audio.stopped).toBe(1);
+  });
+
+  it('streaming refuses a microphone context that is not at 16 kHz and leaves nothing open', async () => {
+    const audio = streamingAudio(48_000);
+    const recorder = TestBed.inject(WavRecorder);
+
+    const refusal = await recorder
+      .start(
+        () => undefined,
+        () => undefined,
+      )
+      .catch((err: Error) => err.message);
+
+    expect(refusal).toBe('Scout could not open the microphone at 16 kHz.');
+    expect(audio.stopped).toBe(1);
+    expect(audio.closed).toBe(1);
   });
 
   it('stops at 5 minutes of audio and tells the caller', async () => {

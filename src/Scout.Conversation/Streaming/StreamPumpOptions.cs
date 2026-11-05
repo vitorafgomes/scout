@@ -55,4 +55,11 @@ public sealed record StreamPumpOptions
     /// </summary>
     public string SignInRequiredMessage { get; init; } =
         "ChatGPT sign-in is missing or expired. Sign in again on the AI Sources screen in Scout.";
+
+    /// <summary>
+    /// User-facing text sent when a message carries a picture and the connected
+    /// provider cannot read images. Rendered verbatim via the terminal Complete call.
+    /// </summary>
+    public string VisionUnavailableMessage { get; init; } =
+        "The connected AI source cannot look at pictures; ask it in words or connect one that can.";
 }

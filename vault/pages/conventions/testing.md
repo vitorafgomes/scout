@@ -19,11 +19,11 @@ reliability: high
 
 Versions come from `Directory.Packages.props` (central package management).
 
-- xUnit 2.9.3 (`Directory.Packages.props:55`) with `xunit.runner.visualstudio` 4.0.1 (still runs xUnit v1, v2 and v3 test projects) and `Microsoft.NET.Test.Sdk` 18.11.0 (`:56`, `:57`).
-- Shouldly 4.3.0 for assertions (`Directory.Packages.props:60`). FluentAssertions was removed because v8 went commercial; do not mix two assertion libraries (comment at `:58`).
-- NSubstitute 6.2.0 for substitutes (`Directory.Packages.props:61`).
-- `Microsoft.Extensions.TimeProvider.Testing` 10.11.0 for a fake clock (`Directory.Packages.props:62`); the adapter and conversation tests use it.
-- `coverlet.collector` 10.1.0 for coverage (`Directory.Packages.props:63`).
+- xUnit 2.9.3 (`Directory.Packages.props:60`) with `xunit.runner.visualstudio` 4.0.1 (still runs xUnit v1, v2 and v3 test projects) and `Microsoft.NET.Test.Sdk` 18.11.0 (`:61`, `:62`).
+- Shouldly 4.3.0 for assertions (`Directory.Packages.props:65`). FluentAssertions was removed because v8 went commercial; do not mix two assertion libraries (comment at `:63`).
+- NSubstitute 6.2.0 for substitutes (`Directory.Packages.props:66`).
+- `Microsoft.Extensions.TimeProvider.Testing` 10.11.0 for a fake clock (`Directory.Packages.props:67`); the adapter and conversation tests use it.
+- `coverlet.collector` 10.1.0 for coverage (`Directory.Packages.props:68`).
 - `Grpc.Net.Client` for the control-plane integration tests (`tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj`).
 - `Microsoft.AspNetCore.Mvc.Testing` is declared (`Directory.Packages.props:19`) but no test project references it.
 
@@ -57,6 +57,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Host.Console.Tests` | 35 | [[pages/services/host-console]] |
 | `Scout.Adapter.Local.Tests` | 16 | [[pages/services/adapter-local]] |
 | `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
+| `Scout.Meetings.Tests` | 12 | [[pages/services/meetings]] |
 
 `tests/old` holds 653 further attributes for the retired code under `src/old`. It is not in `Scout.slnx`, so CI does not build or run it. Exclude it from any count.
 
@@ -95,7 +96,7 @@ The format-check step is commented out because `dotnet format --verify-no-change
 
 - `ui/package.json:19` runs `bun test` in `packages/shared`, `packages/main` and `packages/preload`, and `vitest run` in `packages/renderer`.
 - 81 spec or test files: 43 in `ui/packages/main/test`, 4 in `ui/packages/shared/test`, 1 in `ui/packages/preload/test`, 33 in `ui/packages/renderer/src/app` (counted 2026-10-30).
-- On GitHub Actions Bun prints every test title. A title that interpolates its data (`%p`, `%o`, `%j`) with a large fixture makes a log line the runner's problem matchers cannot regex-match, and the job hangs until `timeout-minutes` (20, `.github/workflows/ui-ci.yml:34`) ends it. An `it.each` with a large fixture carries a short label as its first column and puts only that label in the title (`ui/packages/main/test/quick-ask.test.ts:347`). Measured 2026-11-02: one 14,000,004-character title stalled all three runners for an hour.
+- On GitHub Actions Bun prints every test title. A title that interpolates its data (`%p`, `%o`, `%j`) with a large fixture makes a log line the runner's problem matchers cannot regex-match, and the job hangs until `timeout-minutes` (20, `.github/workflows/ui-ci.yml:34`) ends it. An `it.each` with a large fixture carries a short label as its first column and puts only that label in the title (`ui/packages/main/test/quick-ask.test.ts:384`). Measured 2026-11-02: one 14,000,004-character title stalled all three runners for an hour.
 - The project site under `docs/` has one test file, `docs/site.test.js`, run with `bun test ./docs` from the repository root. It covers the one HTTP call (`fetchLatestRelease`, with an injected `fetch`: 403, 404 and a network failure yield `null`) and the pure functions in `docs/site.js`: detecting the visitor's platform, sorting a release's assets per platform and ignoring blockmaps, `latest*.yml` and checksums, the size label, and the model with and without a release. The `Test (site)` step runs it right after `Setup Node` on all three legs, before `bun install` (`.github/workflows/ui-ci.yml:64`); it needs no install, because the module imports nothing. The DOM part of `docs/site.js` has no test. [[pages/decisions/0029-project-site-and-releases]]
 - `ui/e2e` is a stub: its `test`, `build`, `lint` and `typecheck` scripts print a no-op message (`ui/e2e/package.json`). There is no end-to-end test yet.
 - The path filters (`.github/workflows/ui-ci.yml:8` to `:11` and `:19` to `:22`) name `src/Scout.Host.Console`, `src/Scout.Host.ControlPlane`, `src/Scout.ControlPlane` and `src/Scout.ControlPlane.Contracts`, so a change to the worker or the control plane triggers the UI workflow; `docs/**` (`:14`, `:25`) triggers it for the project site.

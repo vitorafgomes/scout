@@ -1,9 +1,9 @@
 ---
 title: "Project map"
-version: "1.6"
+version: "1.7"
 date: 2026-10-21
-updated: 2026-11-03
-changes: "Host.Console.Tests references Host.ControlPlane"
+updated: 2026-11-04
+changes: "Scout.Meetings, the kept meetings over SQLite, referenced by Host.Console. Earlier: Host.Console.Tests references Host.ControlPlane"
 page_type: longform
 status: active
 description: "Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it."
@@ -13,7 +13,7 @@ reliability: high
 
 # Project map
 
-> Seventeen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. Projects under `src/old` and `tests/old` are not in the solution.
+> Eighteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. Projects under `src/old` and `tests/old` are not in the solution.
 
 Derived from the `ProjectReference` items in each `.csproj`. Package references are listed on the service pages.
 
@@ -31,13 +31,14 @@ Derived from the `ProjectReference` items in each `.csproj`. Package references 
 | [[pages/services/plugin-kubernetes]] | plugin | none | `Scout.Plugin.Kubernetes.Tests` |
 | [[pages/services/plugin-youtube]] | plugin | none | `Scout.Plugin.YouTube.Tests` |
 | [[pages/services/transcription-whisper]] | library | Conversation | `Scout.Transcription.Whisper.Tests` |
+| [[pages/services/meetings]] | library | Conversation | `Scout.Meetings.Tests` |
 | [[pages/services/operator]] | library | Llm, Conversation, Plugin.YouTube | `Scout.Operator.Tests` |
 | [[pages/services/control-plane-contracts]] | contracts | none | none of its own (`Scout.ControlPlane.Tests`) |
 | [[pages/services/control-plane]] | library | none | `Scout.ControlPlane.Tests` |
-| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, four adapters, Plugin.GitHub, Plugin.Kubernetes, Plugin.YouTube, Operator, Transcription.Whisper, ControlPlane.Contracts | `Scout.Host.Console.Tests` (also references ControlPlane, for the feature catalog, and Host.ControlPlane, so one test carries a comments view over 4 MB between the worker and the real control-plane host) |
+| [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, four adapters, Plugin.GitHub, Plugin.Kubernetes, Plugin.YouTube, Operator, Transcription.Whisper, Meetings, ControlPlane.Contracts | `Scout.Host.Console.Tests` (also references ControlPlane, for the feature catalog, and Host.ControlPlane, so one test carries a comments view over 4 MB between the worker and the real control-plane host) |
 | [[pages/services/host-control-plane]] | host | Contracts, ControlPlane | none of its own (`Scout.ControlPlane.Tests`) |
 
-`Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.GitHub`, `Scout.Plugin.Kubernetes` and `Scout.Plugin.YouTube` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:43` to `:66`). `Scout.Operator` references `Scout.Llm` only for `AddWriteFunction`, and reaches the control plane through its own `IOperatorControlPlane`, which the host implements over the `WorkerGate` client; it references no Contracts or gRPC package.
+`Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.GitHub`, `Scout.Plugin.Kubernetes` and `Scout.Plugin.YouTube` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:46` to `:71`). `Scout.Operator` references `Scout.Llm` only for `AddWriteFunction`, and reaches the control plane through its own `IOperatorControlPlane`, which the host implements over the `WorkerGate` client; it references no Contracts or gRPC package.
 
 ```mermaid
 flowchart TD
@@ -58,6 +59,8 @@ flowchart TD
     HC --> Whisper[Transcription.Whisper]
     HC --> Contracts[ControlPlane.Contracts]
     Whisper --> Conversation
+    HC --> Meetings
+    Meetings --> Conversation
     Conversation --> Llm
     Conversation --> Skills
     Discord --> Conversation

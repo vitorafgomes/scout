@@ -142,6 +142,36 @@ public sealed class FeatureCatalogTests
     }
 
     [Fact]
+    public void The_desktop_feature_declares_screen_microphone_and_system_audio_reads_and_no_write()
+    {
+        var desktop = new FeatureCatalog().Find(FeatureCatalog.DesktopId).ShouldNotBeNull();
+
+        desktop.Id.ShouldBe("desktop");
+        desktop.DisplayName.ShouldBe("Desktop");
+        desktop.Description.ShouldBe(
+            "What Scout can see and hear on this computer when you ask from the desktop: a screenshot you attach " +
+            "to a question, your microphone while you record or listen, and the system audio while you keep Others on. " +
+            "Nothing is captured unless you click.");
+        desktop.RequiresCredentials.ShouldBeFalse();
+        desktop.CredentialFields.ShouldBeEmpty();
+        desktop.SettingsFields.ShouldBeEmpty();
+        desktop.WriteClass.ShouldBe(WriteClass.None);
+        desktop.HasWriteRows.ShouldBeFalse();
+        desktop.ScopeMatrix.ShouldNotBeNull().Select(r => (r.Scope, string.Join(" | ", r.Actions), r.Access))
+            .ShouldBe([
+                ("Screen", "Send one screenshot with a question when you attach it | Read the text on a screenshot with the bundled OCR program", ScopeAccess.Read),
+                ("Microphone", "Record a voice question | Listen while you speak", ScopeAccess.Read),
+                ("System audio", "Listen to what this computer plays while you keep Others on", ScopeAccess.Read),
+            ]);
+    }
+
+    [Fact]
+    public void The_catalog_lists_github_kubernetes_youtube_and_desktop_in_that_order()
+    {
+        new FeatureCatalog().All.Select(f => f.Id).ShouldBe(["github", "kubernetes", "youtube", "desktop"]);
+    }
+
+    [Fact]
     public void A_Write_Row_Under_WriteClass_None_Fails_The_Catalog_Check()
     {
         var undeclared = new FeatureMetadata(

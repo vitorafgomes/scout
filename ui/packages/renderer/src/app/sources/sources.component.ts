@@ -14,6 +14,7 @@ import {
   type CloudLlmProvider,
   DEFAULT_CLOUD_MODELS,
   LlmConfigStore,
+  providerLabel,
 } from '../core/llm-config.store';
 import { LocalModelsStore } from '../core/local-models.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -57,10 +58,6 @@ const CHATGPT_SIGNED_OUT: ChatGptStatus = Object.freeze({
   email: null,
   planUsageGranted: false,
 });
-
-function providerLabel(provider: ActiveCloudProvider): string {
-  return provider === 'ChatGptPlan' ? 'ChatGPT' : provider;
-}
 
 const CLOUD_PROVIDERS: Readonly<Record<string, { readonly provider: CloudLlmProvider }>> =
   Object.freeze({

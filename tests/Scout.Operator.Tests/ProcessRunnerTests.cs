@@ -97,4 +97,16 @@ public sealed class ProcessRunnerTests
 
         watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(8));
     }
+
+    [Fact]
+    public async Task Input_Bytes_Reach_The_Programs_Stdin()
+    {
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x0A, 0x80, 0xFF, 0xD9];
+
+        var result = await new ProcessRunner().RunAsync(
+            "/bin/sh", ["-c", "od -An -tx1 | tr -s ' \n' ' '"], Generous, CancellationToken.None, inputBytes: jpeg);
+
+        result.ExitCode.ShouldBe(0);
+        result.Output.Trim().ShouldBe("ff d8 ff e0 00 0a 80 ff d9");
+    }
 }

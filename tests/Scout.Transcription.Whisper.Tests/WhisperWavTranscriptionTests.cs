@@ -29,13 +29,14 @@ public sealed class WhisperWavTranscriptionTests
             },
             TimeProvider.System);
 
-        private async IAsyncEnumerable<TranscribedSegment> Segments(float[] samples, [EnumeratorCancellation] CancellationToken ct)
+        private async IAsyncEnumerable<(TranscribedSegment, string?)> Segments(
+            float[] samples, WhisperAudioTranscriber.Decoding decoding, [EnumeratorCancellation] CancellationToken ct)
         {
             Samples = samples;
             foreach (var segment in Heard)
             {
                 await Task.Yield();
-                yield return segment;
+                yield return (segment, null);
             }
         }
     }

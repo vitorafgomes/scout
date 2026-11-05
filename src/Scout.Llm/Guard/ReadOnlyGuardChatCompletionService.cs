@@ -140,6 +140,9 @@ internal sealed class ReadOnlyGuardChatCompletionService(
     private static string Tail(string text, int maxLength) =>
         text.Length <= maxLength ? text : text[^maxLength..];
 
+    /// <summary>The provider's own chat-completion service this guard decorates.</summary>
+    internal IChatCompletionService Inner => _inner;
+
     private sealed record GuardState(
         [property: JsonPropertyName("recent_turns")] IReadOnlyList<GuardTurn> RecentTurns,
         [property: JsonPropertyName("latest_user_message")] string LatestUserMessage);

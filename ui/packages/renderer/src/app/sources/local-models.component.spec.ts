@@ -14,7 +14,11 @@ function makeFakeBridge() {
     onLlmPullOllamaProgress: vi.fn(() => () => undefined),
     llmDeleteOllamaModel: vi.fn(async (req: { tag: string }) => ({ tag: req.tag })),
     llmListLmStudioModels: vi.fn(async () => ({ models: [] })),
-    whisperListInstalled: vi.fn(async () => ({ installed: [] as readonly string[] })),
+    whisperListInstalled: vi.fn(
+      async (): Promise<{ installed: readonly { variant: string; verified: boolean }[] }> => ({
+        installed: [],
+      }),
+    ),
     whisperDownloadModel: vi.fn(async (req: { variant: string }) => ({
       variant: req.variant,
       path: `/tmp/${req.variant}.bin`,
@@ -55,12 +59,11 @@ function makeProviderStatus(
   };
 }
 
-async function setup(): Promise<{
+async function setup(bridge = makeFakeBridge()): Promise<{
   fixture: ComponentFixture<LocalModelsComponent>;
   store: LocalModelsStore;
   bridge: ReturnType<typeof makeFakeBridge>;
 }> {
-  const bridge = makeFakeBridge();
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
@@ -92,6 +95,57 @@ describe('LocalModelsComponent', () => {
       fixture.nativeElement.querySelector('[data-test="row-whisper-large-v3-turbo"]'),
     ).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-test="row-qwen-3-vl-2b"]')).toBeNull();
+  });
+
+  it('offers Whisper tiny, base and small next to the large models, with their sizes, and marks base recommended for live transcription', async () => {
+    const { fixture } = await setup();
+    const row = (id: string) =>
+      fixture.nativeElement.querySelector(`[data-test="row-${id}"]`) as HTMLElement | null;
+    const text = (id: string, part: string) =>
+      row(id)?.querySelector(part)?.textContent?.replace(/\s+/g, ' ').trim();
+
+    expect(
+      ['whisper-tiny', 'whisper-base', 'whisper-small'].map((id) => text(id, '.row-meta')),
+    ).toEqual(['~74 MB · ~273 MB RAM', '~141 MB · ~388 MB RAM', '~465 MB · ~852 MB RAM']);
+    expect(text('whisper-base', '.row-name')).toBe('Whisper Base');
+    expect(text('whisper-base', '.tag--recommended')).toBe('Recommended');
+    expect(text('whisper-base', '.row-desc')).toBe(
+      'Recommended for live transcription: words appear within about a second on most computers.',
+    );
+    expect(
+      ['whisper-tiny', 'whisper-small', 'whisper-large-v3', 'whisper-large-v3-turbo'].filter((id) =>
+        row(id)?.querySelector('.tag--recommended'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('marks only the Whisper models main verified as downloaded', async () => {
+    const bridge = makeFakeBridge();
+    bridge.whisperListInstalled.mockResolvedValueOnce({
+      installed: [
+        { variant: 'base', verified: true },
+        { variant: 'small', verified: false },
+      ],
+    });
+
+    const { store } = await setup(bridge);
+
+    expect(store.isDownloaded('whisper-base')).toBe(true);
+    expect(store.isDownloaded('whisper-small')).toBe(false);
+  });
+
+  it('downloads Whisper base as the base variant', async () => {
+    const { fixture, bridge } = await setup();
+
+    (
+      fixture.nativeElement.querySelector(
+        '[data-test="download-whisper-base"]',
+      ) as HTMLButtonElement
+    ).click();
+    await fixture.whenStable();
+
+    expect(bridge.whisperDownloadModel).toHaveBeenCalledTimes(1);
+    expect(bridge.whisperDownloadModel.mock.calls[0]![0]).toMatchObject({ variant: 'base' });
   });
 
   it('switches to Analysis tab and renders five rows', async () => {

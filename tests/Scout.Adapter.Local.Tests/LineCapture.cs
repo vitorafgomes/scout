@@ -48,7 +48,7 @@ internal sealed class LineCapture : TextWriter
         changed.TrySetResult();
     }
 
-    public async Task<JsonElement> WaitForAsync(string? id, string kind)
+    public async Task<JsonElement> WaitForAsync(string? id, string kind, Func<JsonElement, bool>? where = null)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         while (true)
@@ -58,7 +58,8 @@ internal sealed class LineCapture : TextWriter
             {
                 changed = _changed.Task;
             }
-            var found = Events.FirstOrDefault(e => e.GetProperty("event").GetString() == kind && IdOf(e) == id);
+            var found = Events.FirstOrDefault(
+                e => e.GetProperty("event").GetString() == kind && IdOf(e) == id && (where is null || where(e)));
             if (found.ValueKind != JsonValueKind.Undefined)
             {
                 return found;

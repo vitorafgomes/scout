@@ -40,6 +40,12 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
           <li class="turn">
             @if (!turn.notice) {
               <p class="question" data-test="question" [textContent]="turn.question"></p>
+              @if (turn.transcript) {
+                <p class="with-transcript" data-test="with-transcript">with transcript</p>
+              }
+              @if (turn.screenText) {
+                <p class="with-transcript" data-test="with-screen-text">with screen text</p>
+              }
             }
             <p
               class="reply"
@@ -155,6 +161,12 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
         border-radius: 8px;
         padding: 8px 12px;
         white-space: pre-wrap;
+      }
+      .with-transcript {
+        margin: 0 0 6px auto;
+        width: fit-content;
+        font-size: 11px;
+        color: #8a93a6;
       }
       .reply {
         margin: 0;

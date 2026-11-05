@@ -44,7 +44,7 @@ public sealed class FeaturesServiceTests
         var snapshots = await Build().ListAsync(CancellationToken.None);
 
         snapshots.Select(s => s.Id)
-            .ShouldBe(new[] { FeatureCatalog.GitHubId, FeatureCatalog.KubernetesId, FeatureCatalog.YouTubeId });
+            .ShouldBe(new[] { FeatureCatalog.GitHubId, FeatureCatalog.KubernetesId, FeatureCatalog.YouTubeId, FeatureCatalog.DesktopId });
     }
 
     [Fact]

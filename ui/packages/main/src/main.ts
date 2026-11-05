@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   dialog,
   globalShortcut,
   ipcMain,
@@ -105,12 +106,14 @@ import { CHANNEL } from '@scout/shared';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import type { ControlPlaneClient } from './control-plane/client.js';
 import { buildEnv, migrateLegacyApiKey, readGrantedWriteFeatures } from './worker/build-env.js';
-import { findBestWhisperModel } from './worker/whisper-model.js';
+import { chooseWhisperModel } from './worker/whisper-model.js';
 import type { Supervisor } from './worker/supervisor.js';
 import {
   allowMicrophoneOnlyForApp,
+  allowScreenCaptureOnlyForApp,
   openQuickAsk,
   registerQuickAsk,
+  withSystemAudioFeatures,
   type QuickAsk,
 } from './quick-ask/quick-ask.js';
 
@@ -261,6 +264,13 @@ const notifierLogger = logger.child({ module: 'notifications' });
 let notifier: ReturnType<typeof createPresenceNotifier> | null = null;
 
 protocol.registerSchemesAsPrivileged([MEDIA_SCHEME_PRIVILEGES]);
+
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch(
+    'enable-features',
+    withSystemAudioFeatures(app.commandLine.getSwitchValue('enable-features')),
+  );
+}
 
 const lifecycle = installAppLifecycle({
   app,
@@ -502,7 +512,10 @@ app
           allowedUserIds: await readAllowedUserIds(vault),
           pairing: access.pendingPairing(),
           slackTokens: await readSlackTokens(vault),
-          whisperModelPath: await findBestWhisperModel(whisperRootDir()),
+          whisperModelPath: await chooseWhisperModel(
+            whisperRootDir(app.getPath('userData')),
+            await vault.get('stt.model').catch(() => null),
+          ),
           grantedWriteFeatures: await readGrantedWriteFeatures(
             connection.client,
             logger.child({ module: 'supervisor' }),
@@ -513,6 +526,8 @@ app
             resourcesPath: process.resourcesPath,
             cwd: __dirname,
           }),
+          locale: app.getLocale(),
+          userDataDir: app.getPath('userData'),
         }),
       onPaired: (userId) =>
         void reportPairing(userId, access, () => readAllowedUserIds(vault), presence),
@@ -665,6 +680,7 @@ app
       ipcMain,
       globalThis.fetch,
       logger.child({ module: 'whisper' }),
+      whisperRootDir(app.getPath('userData')),
     );
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -698,10 +714,8 @@ app
       preloadPath = undefined;
     }
 
-    allowMicrophoneOnlyForApp(session.defaultSession, {
-      indexHtmlPath,
-      ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}),
-    });
+    const appPage = { indexHtmlPath, ...(DEV ? { devServerUrl: 'http://localhost:4200' } : {}) };
+    allowMicrophoneOnlyForApp(session.defaultSession, appPage);
     quickAsk = await registerQuickAsk({
       ipcMain,
       supervisor: workerSupervisor,
@@ -717,7 +731,17 @@ app
       env: process.env,
       execPath: process.execPath,
       windows: () => BrowserWindow.getAllWindows(),
+      locale: () => app.getLocale(),
+      showSaveDialog: (options) => dialog.showSaveDialog(options),
+      writeFile: (file, text) => fsWriteFile(file, text, 'utf8'),
+      documentsDir: () => app.getPath('documents'),
     });
+    allowScreenCaptureOnlyForApp(
+      session.defaultSession,
+      appPage,
+      desktopCapturer,
+      quickAsk.screenCapture,
+    );
     operatorWindow = await registerOperatorWindow({
       ipcMain,
       createWindow: (opts) => new BrowserWindow(opts),

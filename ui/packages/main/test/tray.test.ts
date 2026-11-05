@@ -191,6 +191,10 @@ describe('the tray menu', () => {
       env: {},
       execPath: '/opt/Scout/scout-desktop',
       windows: () => [],
+      locale: () => 'en-US',
+      showSaveDialog: async () => ({ canceled: true }),
+      writeFile: async () => undefined,
+      documentsDir: () => '/home/owner/Documents',
     });
     const { fakeTray } = setup();
 

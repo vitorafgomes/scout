@@ -166,6 +166,6 @@ public sealed class WorkerGateGrpcTests
 
         worker.StatusCode.ShouldBe(StatusCode.Unauthenticated);
         desktopOnGate.StatusCode.ShouldBe(StatusCode.PermissionDenied);
-        listed.Features.Select(f => f.Id).ShouldBe([FeatureCatalog.GitHubId, FeatureCatalog.KubernetesId, FeatureCatalog.YouTubeId]);
+        listed.Features.Select(f => f.Id).ShouldBe([FeatureCatalog.GitHubId, FeatureCatalog.KubernetesId, FeatureCatalog.YouTubeId, FeatureCatalog.DesktopId]);
     }
 }
