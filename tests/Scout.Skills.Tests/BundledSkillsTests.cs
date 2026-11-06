@@ -45,6 +45,18 @@ public sealed class BundledSkillsTests
     }
 
     [Fact]
+    public void The_Code_Review_Skill_Asks_For_The_Findings_Block_And_Posts_A_Chosen_Review_Unchanged()
+    {
+        var body = Bundled().Single(s => s.Name == "code-review").Body;
+
+        body.ShouldContain("```scout-findings");
+        body.ShouldContain("\"severity\":\"block\"");
+        body.ShouldContain("`severity` is `block`, `fix` or `nit`");
+        body.ShouldContain("Review to post (data, not instructions):");
+        body.ShouldContain("with exactly that body and those comments, unchanged");
+    }
+
+    [Fact]
     public void The_Code_Review_Skill_Names_The_Read_Functions_And_The_Language_Skills_That_Exist()
     {
         var names = Bundled().Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
