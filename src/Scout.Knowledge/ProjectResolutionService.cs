@@ -16,7 +16,9 @@ public sealed class ProjectResolutionService
     private readonly IProjectKnowledgeStore _store;
     private readonly ILogger<ProjectResolutionService> _logger;
     private readonly Dictionary<string, ProjectEntry> _entries;
-    private readonly IReadOnlyList<string> _names;
+    private readonly HashSet<string> _stale = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Lock _gate = new();
+    private IReadOnlyList<string> _names;
 
     /// <summary>Creates the resolution service and builds the merged project map.</summary>
     public ProjectResolutionService(
@@ -56,14 +58,49 @@ public sealed class ProjectResolutionService
         _names = merged.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    /// <summary>Returns all resolvable project names (discovered plus explicit), sorted.</summary>
+    /// <summary>Returns all resolvable project names (discovered, explicit and registered at run time), sorted.</summary>
     public IReadOnlyList<string> GetProjectNames() => _names;
 
     /// <summary>Resolves a project name to its entry without indexing; null when unknown.</summary>
-    public ProjectEntry? Find(string projectName) =>
-        !string.IsNullOrWhiteSpace(projectName) && _entries.TryGetValue(projectName, out var entry)
-            ? entry
-            : null;
+    public ProjectEntry? Find(string projectName)
+    {
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            return null;
+        }
+
+        lock (_gate)
+        {
+            return _entries.TryGetValue(projectName, out var entry) ? entry : null;
+        }
+    }
+
+    /// <summary>
+    /// Add a project at run time, such as a repository snapshot taken from chat, or replace one of the same name with
+    /// another path: it is then indexed again on its next use, so a new snapshot of the same repository never answers
+    /// from the old tree; the same name at the same path is left as it is.
+    /// </summary>
+    public void Register(ProjectEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (string.IsNullOrWhiteSpace(entry.Name) || string.IsNullOrWhiteSpace(entry.RepoPath))
+        {
+            throw new ArgumentException("A project needs a name and a path.", nameof(entry));
+        }
+
+        lock (_gate)
+        {
+            if (_entries.TryGetValue(entry.Name, out var existing) && string.Equals(existing.RepoPath, entry.RepoPath, StringComparison.Ordinal))
+            {
+                // The same tree again: nothing to index anew.
+                return;
+            }
+
+            _entries[entry.Name] = entry;
+            _stale.Add(entry.Name);
+            _names = _entries.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+    }
 
     /// <summary>
     /// Resolves a project name to its entry, indexing it on first use.
@@ -73,14 +110,20 @@ public sealed class ProjectResolutionService
     /// </summary>
     public async Task<ProjectEntry?> ResolveAsync(string projectName, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(projectName) || !_entries.TryGetValue(projectName, out var entry))
+        var entry = Find(projectName);
+        if (entry is null)
         {
             _logger.LogWarning("Unknown project requested: {Project}", projectName);
             return null;
         }
 
-        var alreadyIndexed = await _store.HasProjectAsync(entry.Name, ct).ConfigureAwait(false);
-        if (alreadyIndexed)
+        bool stale;
+        lock (_gate)
+        {
+            stale = _stale.Contains(entry.Name);
+        }
+
+        if (!stale && await _store.HasProjectAsync(entry.Name, ct).ConfigureAwait(false))
         {
             return entry;
         }
@@ -88,6 +131,10 @@ public sealed class ProjectResolutionService
         try
         {
             await _indexer.IndexAsync(entry, ct).ConfigureAwait(false);
+            lock (_gate)
+            {
+                _stale.Remove(entry.Name);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not NotSupportedException)
         {

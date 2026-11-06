@@ -21,6 +21,11 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### A structural graph over a repository snapshot (2026-11-06)
+
+- **Gap:** a review reads a snapshot file by file and searches it by text or by embedding ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]); "who calls this", "what breaks if this changes" and "where are the hubs" still cost many reads. The owner asked on 2026-11-06 whether a graphify-style graph (AST nodes and edges, god nodes, blast radius) should be a third toolset.
+- **Unblocks with:** one real review on a snapshot first, to see which questions the reads and the index leave unanswered; then a graph built once per snapshot under its folder and three functions (callers, affected, hubs), weighed against the build cost per snapshot.
+
 ### Every local `update` carries the whole reply so far (2026-11-06)
 
 - **Gap:** the sink contract is cumulative for Teams's sake, and the local adapter writes the full text on every `update` (`src/Scout.Adapter.Local/LocalResponseSink.cs:47`), so a long reply streaming to the desktop costs O(n²) bytes on the worker's stdout; harmless at today's sizes (32,000-character cap), waste at the pace of a code review ([[pages/services/adapter-local]], [[pages/decisions/0013-conversation-core-streaming-sink]]).

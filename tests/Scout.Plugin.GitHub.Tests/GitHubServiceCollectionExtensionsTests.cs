@@ -105,14 +105,17 @@ public sealed class GitHubServiceCollectionExtensionsTests
 
         var actions = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHubActions");
         actions.Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal)
-            .ShouldBe(["create_issue", "get_project_conventions", "remember_project_conventions", "submit_pull_request_review"]);
+            .ShouldBe(["create_issue", "get_project_conventions", "remember_project_conventions", "snapshot_repository", "submit_pull_request_review"]);
         provider.GetServices<WriteFunctionDeclaration>()
             .Select(d => (d.PluginName, d.FunctionName, d.FeatureId, d.Scope))
             .ShouldBe([
                 ("GitHubActions", "submit_pull_request_review", "github", "Pull request reviews"),
                 ("GitHubActions", "create_issue", "github", "New issues"),
                 ("GitHubActions", "remember_project_conventions", "github", "Scout's data folder"),
+                ("GitHubActions", "snapshot_repository", "github", "Scout's data folder"),
             ]);
+        provider.GetRequiredService<RepositorySnapshotStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultSnapshotsDirectory());
+        provider.GetRequiredService<RepositorySnapshotStore>().MaxBytes.ShouldBe(RepositorySnapshotStore.DefaultMaxBytes);
         provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultProfilesDirectory());
         provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldBeEmpty();
     }
@@ -124,9 +127,13 @@ public sealed class GitHubServiceCollectionExtensionsTests
         {
             ["Scout:Plugins:GitHub:Token"] = "test-token",
             ["Scout:Plugins:GitHub:ProfilesDirectory"] = "/tmp/scout-test-profiles",
+            ["Scout:Plugins:GitHub:SnapshotsDirectory"] = "/tmp/scout-test-snapshots",
+            ["Scout:Plugins:GitHub:SnapshotMaxBytes"] = "1024",
         };
         using var provider = Build(new ConfigurationBuilder().AddInMemoryCollection(data).Build());
 
         provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe("/tmp/scout-test-profiles");
+        provider.GetRequiredService<RepositorySnapshotStore>().Directory.ShouldBe("/tmp/scout-test-snapshots");
+        provider.GetRequiredService<RepositorySnapshotStore>().MaxBytes.ShouldBe(1024);
     }
 }

@@ -15,14 +15,18 @@ namespace Scout.Plugin.GitHub;
 /// <c>create_issue</c> opens an issue, both at once, the answer carrying the URL GitHub gave; the write gate refuses
 /// either before anything is sent while the owner has not allowed GitHub writes, and records every run.
 /// <c>remember_project_conventions</c> is a write into Scout's data folder: the conventions profile of a repository
-/// an audit judges the code against, read back with <c>get_project_conventions</c>. The model is told what GitHub
-/// accepted, never more: a review or an issue that was not posted is a <see cref="WriteFailedException"/>, which the
-/// write gate filter turns into the answer and records as failed.
+/// an audit judges the code against, read back with <c>get_project_conventions</c>; <c>snapshot_repository</c> is
+/// another: the repository at one commit, extracted under that folder so every read of it is local and the Knowledge
+/// index can search it. The model is told what GitHub accepted, never more: a review or an issue that was not
+/// posted is a <see cref="WriteFailedException"/>, which the write gate filter turns into the answer and records as
+/// failed.
 /// </summary>
 internal sealed class GitHubActionsPlugin(
     IGitHubClient reads,
     IGitHubWriteClient writes,
     GitHubProfileStore profiles,
+    RepositorySnapshotStore snapshots,
+    IRepositoryProjects projects,
     TimeProvider time)
 {
     internal const string PluginName = "GitHubActions";
@@ -30,6 +34,7 @@ internal sealed class GitHubActionsPlugin(
     internal const string CreateIssue = "create_issue";
     internal const string RememberConventions = "remember_project_conventions";
     internal const string GetConventions = "get_project_conventions";
+    internal const string SnapshotRepository = "snapshot_repository";
 
     internal const int MaxConventionsLength = 20_000;
     internal const int MinConventionsLength = 40;
@@ -203,6 +208,87 @@ internal sealed class GitHubActionsPlugin(
 
         return $"Opened issue #{created.Number.ToString(CultureInfo.InvariantCulture)} on {owner}/{repo}: {created.HtmlUrl}";
     }
+
+    /// <summary>Take a snapshot of a repository at a commit, under Scout's data folder, so the reads and the Knowledge index work on it locally.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="reference">Branch, tag or commit; empty for the default branch.</param>
+    /// <param name="ct">Cancels the download.</param>
+    /// <returns>What was taken and where it is searchable, or why it was refused.</returns>
+    [KernelFunction(SnapshotRepository)]
+    [Description("Download a repository at a branch, tag or commit (empty for the default branch) into Scout's data folder, so get_file_contents, list_repository_files and search_code read every file locally, at that commit, with no API limits, and search_project and find_symbol can search it as the project named owner/repo. Take one before reviewing a large pull request (at its head branch) or auditing a whole repository. Refused over the size cap (200 MB unless configured).")]
+    public async Task<string> SnapshotRepositoryAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Branch, tag or commit to snapshot; empty for the default branch.")] string reference = "",
+        CancellationToken ct = default)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            throw Refused(GitHubNames.InvalidRepository);
+        }
+
+        if (!GitHubNames.IsValidReference(reference))
+        {
+            throw Refused(GitHubNames.InvalidReference);
+        }
+
+        RepositoryCommit? commit;
+        try
+        {
+            commit = await reads.ResolveCommitAsync(owner, repo, reference, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: false);
+        }
+
+        if (commit is null)
+        {
+            throw Refused($"{owner}/{repo}{(reference.Length == 0 ? string.Empty : " at " + reference)} not found or not accessible.");
+        }
+
+        var name = $"{owner}/{repo}";
+        if (snapshots.FindBySha(owner, repo, commit.Sha) is { } existing)
+        {
+            if (existing.Reference != commit.Reference || existing.IsDefaultBranch != commit.IsDefaultBranch)
+            {
+                existing = await RepositorySnapshotStore.RelabelAsync(existing, commit, ct).ConfigureAwait(false);
+            }
+
+            projects.Register(name, existing.Root);
+            return Taken(existing, name, already: true);
+        }
+
+        RepositorySnapshot? taken = null;
+        try
+        {
+            var found = await reads.DownloadTarballAsync(owner, repo, commit.Sha, async (stream, token) =>
+            {
+                taken = await snapshots.ExtractAsync(owner, repo, commit, stream, token).ConfigureAwait(false);
+            }, ct).ConfigureAwait(false);
+            if (!found || taken is null)
+            {
+                throw Refused($"{owner}/{repo} at {commit.Reference} has no tarball GitHub can serve.");
+            }
+        }
+        catch (SnapshotRefusedException ex)
+        {
+            throw Refused(ex.Message);
+        }
+        catch (Exception ex) when ((IsHandledFailure(ex) || ex is IOException) && !ct.IsCancellationRequested)
+        {
+            // A stream that breaks mid-download surfaces as an IOException; the store has removed its staging folder.
+            throw Failed(ex, posted: false);
+        }
+
+        projects.Register(name, taken.Root);
+        return Taken(taken, name, already: false);
+    }
+
+    private static string Taken(RepositorySnapshot snapshot, string project, bool already) =>
+        $"{(already ? "Already have a snapshot of" : "Took a snapshot of")} {snapshot.Label}: {snapshot.FileCount.ToString(CultureInfo.InvariantCulture)} files, {(snapshot.Bytes / 1024).ToString(CultureInfo.InvariantCulture)} KB. "
+        + $"get_file_contents, list_repository_files and search_code now read it locally at that commit; search_project and find_symbol search it as the project \"{project}\" (indexed on first use).";
 
     /// <summary>The conventions profile of a repository, as Scout discovered it or the owner corrected it.</summary>
     /// <param name="owner">Repository owner or organization login.</param>

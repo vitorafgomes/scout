@@ -104,14 +104,15 @@ public sealed class KnowledgeServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void Does_Not_Register_Search_Project_Plugin_When_No_Projects_Configured()
+    public void Registers_The_Plugin_Even_With_No_Projects_Configured_Because_A_Snapshot_May_Register_One_At_Run_Time()
     {
         using var provider = Build();
 
         var plugin = provider.GetServices<KernelPlugin>()
             .SingleOrDefault(p => p.Name == "ProjectKnowledge");
 
-        plugin.ShouldBeNull();
+        plugin.ShouldNotBeNull();
+        provider.GetRequiredService<ProjectResolutionService>().GetProjectNames().ShouldBeEmpty();
     }
 
     [Fact]

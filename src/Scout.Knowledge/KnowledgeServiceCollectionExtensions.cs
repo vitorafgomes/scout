@@ -61,21 +61,21 @@ public static class KnowledgeServiceCollectionExtensions
             sp.GetRequiredService<ProjectResolutionService>(),
             sp.GetRequiredService<ILogger<ProjectKnowledgeService>>()));
 
-        // Gate the search_project plugin and the agent on configured projects.
-        // With none, the search_project plugin is not added to the kernel so the
-        // model never picks it (it would 404 on an empty index), and the gateway
-        // resolves no ChatCompletionAgent and falls back to general chat. The agent
-        // binds the fully-composed shared kernel (which carries the plugin).
+        // The plugin is always on the kernel: a project may arrive at run time (a repository
+        // snapshot taken from chat registers one), and with none the functions answer that
+        // nothing is indexed. The agent and the watcher stay gated on configured projects:
+        // the agent binds the fully-composed shared kernel (which carries the plugin).
+        services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
+            new ProjectKnowledgePlugin(
+                sp.GetRequiredService<ProjectKnowledgeService>(),
+                sp.GetRequiredService<ProjectResolutionService>()),
+            "ProjectKnowledge"));
+
         var projects = new ProjectsOptions();
         configuration.GetSection(ProjectsOptions.SectionName).Bind(projects);
         var hasProjects = projects.Items.Count > 0 || projects.Roots.Count > 0;
         if (hasProjects)
         {
-            services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
-                new ProjectKnowledgePlugin(
-                    sp.GetRequiredService<ProjectKnowledgeService>(),
-                    sp.GetRequiredService<ProjectResolutionService>()),
-                "ProjectKnowledge"));
 
             // Ground the agent on the merged project names (discovered roots plus explicit
             // items) so the model defaults to a real project instead of any example in the

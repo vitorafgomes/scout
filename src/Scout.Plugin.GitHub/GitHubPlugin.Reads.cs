@@ -12,7 +12,7 @@ namespace Scout.Plugin.GitHub;
 /// characters and names the files it left out, which <c>get_pull_request_file</c> reads one at a time up to
 /// <see cref="PatchCap"/>. A tree listing carries at most <see cref="ListedPathsCap"/> paths after the filters.
 /// </summary>
-public sealed partial class GitHubPlugin
+internal sealed partial class GitHubPlugin
 {
     /// <summary>Characters of diff a pull request answer carries in total.</summary>
     internal const int PatchBudget = 12_000;
@@ -241,6 +241,11 @@ public sealed partial class GitHubPlugin
             return GitHubNames.InvalidReference;
         }
 
+        if (_snapshots?.Find(owner, repo, reference) is { } snapshot)
+        {
+            return ReadFromSnapshot(snapshot, path);
+        }
+
         try
         {
             var file = await _client.GetFileContentAsync(owner, repo, path, reference, ct).ConfigureAwait(false);
@@ -309,6 +314,12 @@ public sealed partial class GitHubPlugin
             return GitHubNames.InvalidPath;
         }
 
+        if (_snapshots?.Find(owner, repo, reference) is { } snapshot)
+        {
+            return FormatTree(owner, repo, new RepositoryTree(snapshot.Reference, false, RepositorySnapshotStore.Files(snapshot)), prefix, extensions)
+                + $"\n(from the local snapshot at {snapshot.ShortSha})";
+        }
+
         try
         {
             var tree = await _client.ListRepositoryFilesAsync(owner, repo, reference, ct).ConfigureAwait(false);
@@ -360,6 +371,12 @@ public sealed partial class GitHubPlugin
             return GitHubNames.InvalidExtension;
         }
 
+        if (_snapshots?.FindNewest(owner, repo) is { } snapshot)
+        {
+            return FormatSearch(owner, repo, query, RepositorySnapshotStore.Search(snapshot, query.Trim(), path, extension))
+                + $"\n(from the local snapshot of {snapshot.Reference} at {snapshot.ShortSha}, every file searched)";
+        }
+
         try
         {
             var result = await _client.SearchCodeAsync(owner, repo, query, path, extension, ct).ConfigureAwait(false);
@@ -369,6 +386,27 @@ public sealed partial class GitHubPlugin
         {
             return ErrorLine(ex);
         }
+    }
+
+    private static string ReadFromSnapshot(RepositorySnapshot snapshot, string path)
+    {
+        var entries = RepositorySnapshotStore.ListDirectory(snapshot, path);
+        if (entries is not null)
+        {
+            return entries.Count == 0
+                ? $"{path} is an empty directory."
+                : $"{path} is a directory (local snapshot at {snapshot.ShortSha}):\n" + string.Join("\n", entries.Select(e => $"  - {e}"));
+        }
+
+        var text = RepositorySnapshotStore.ReadText(snapshot, path, out var size);
+        if (text is null)
+        {
+            return size == 0
+                ? $"{path} not found in {snapshot.Label}."
+                : $"{path} ({size} bytes) is binary or over 1 MB; no text to show.";
+        }
+
+        return $"{path} ({size} bytes) at {snapshot.Reference} (local snapshot at {snapshot.ShortSha}):\n{Cut(text, PatchCap)}";
     }
 
     internal static string FormatTree(string owner, string repo, RepositoryTree tree, string prefix, string extensions)

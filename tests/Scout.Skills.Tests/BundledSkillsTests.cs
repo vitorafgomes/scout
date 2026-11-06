@@ -37,7 +37,7 @@ public sealed class BundledSkillsTests
         skill.Body.ShouldContain(name == "code-review" ? "submit_pull_request_review" : "create_issue");
         if (name == "code-audit")
         {
-            foreach (var function in new[] { "get_project_conventions", "remember_project_conventions", "list_repository_files", "search_code", "get_file_contents" })
+            foreach (var function in new[] { "snapshot_repository", "get_project_conventions", "remember_project_conventions", "list_repository_files", "search_code", "get_file_contents", "find_symbol", "search_project" })
             {
                 skill.Body.ShouldContain(function);
             }
@@ -55,7 +55,7 @@ public sealed class BundledSkillsTests
             body.ShouldContain(marker);
         }
 
-        foreach (var function in new[] { "get_pull_request", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "get_project_conventions" })
+        foreach (var function in new[] { "get_pull_request", "snapshot_repository", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "find_symbol", "get_project_conventions" })
         {
             body.ShouldContain(function);
         }

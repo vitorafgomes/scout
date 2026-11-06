@@ -14,11 +14,13 @@ namespace Scout.Plugin.GitHub;
 /// tool call never throws back into the kernel, and every owner, repository, path
 /// and reference the model passes is checked before a URL is built.
 /// </summary>
-/// <remarks>Creates the plugin over a read-only GitHub client.</remarks>
+/// <remarks>Creates the plugin over a read-only GitHub client and, when given, the local snapshots a file, a listing or a search is served from first.</remarks>
 /// <param name="client">The GitHub client. Must be non-null.</param>
-public sealed partial class GitHubPlugin(IGitHubClient client)
+/// <param name="snapshots">The repository snapshots taken from chat; null when the host keeps none.</param>
+internal sealed partial class GitHubPlugin(IGitHubClient client, RepositorySnapshotStore? snapshots = null)
 {
     private readonly IGitHubClient _client = client ?? throw new ArgumentNullException(nameof(client));
+    private readonly RepositorySnapshotStore? _snapshots = snapshots;
 
     /// <summary>List repositories the authenticated user can access.</summary>
     /// <param name="ct">Cancels the underlying GitHub request.</param>

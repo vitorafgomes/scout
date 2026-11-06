@@ -84,7 +84,7 @@ sequenceDiagram
 ## Hot spots
 
 - `src/Scout.Conversation/Streaming/StreamPump.cs:51`: edit throttling, timeout and truncation for every platform.
-- `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:49`: `NoOpSkillSelector` is a `TryAdd` fallback, so `AddScoutSkills` must run first (`src/Scout.Host.Console/HostComposition.cs:50`).
+- `src/Scout.Conversation/ConversationServiceCollectionExtensions.cs:49`: `NoOpSkillSelector` is a `TryAdd` fallback, so `AddScoutSkills` must run first (`src/Scout.Host.Console/HostComposition.cs:51`).
 
 ## Testing footprint
 

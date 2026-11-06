@@ -72,7 +72,11 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Scout's data folder",
-                Actions: new[] { "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules" },
+                Actions: new[]
+                {
+                    "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules",
+                    "Keep a snapshot of a repository at one commit, within a size cap (200 MB unless configured), so a review or an audit reads every file locally and the Knowledge index can search it",
+                },
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "Pull request reviews",

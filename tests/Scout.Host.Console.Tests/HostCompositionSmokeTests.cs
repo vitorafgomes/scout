@@ -189,11 +189,11 @@ public sealed class HostCompositionSmokeTests
 
         provider.GetServices<IChatAdapter>().ShouldBeEmpty();
 
-        // No projects configured: the search_project plugin is gated off the kernel
-        // so the model never picks a tool that would fail on an empty index, and the
-        // Project Expert agent is not registered. The host still builds regardless.
+        // No projects configured: the ProjectKnowledge plugin still rides the kernel,
+        // because a repository snapshot taken from chat registers a project at run time,
+        // while the Project Expert agent is not registered. The host still builds regardless.
         var kernel = ResolveWithin(() => provider.GetRequiredService<Kernel>());
-        kernel.Plugins.ShouldNotContain(p => p.Name == "ProjectKnowledge");
+        kernel.Plugins.ShouldContain(p => p.Name == "ProjectKnowledge");
         kernel.Plugins.ShouldNotContain(p => p.Name == "Kubernetes");
         kernel.Plugins.ShouldNotContain(p => p.Name == "YouTube");
 

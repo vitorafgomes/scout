@@ -175,4 +175,39 @@ public sealed class ProjectResolutionServiceTests : IDisposable
             Arg.Any<IReadOnlyList<ChunkRecord>>(),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task A_Project_Registered_At_Run_Time_Is_Listed_Found_Indexed_Once_For_The_Same_Path_And_Again_When_Its_Path_Changes()
+    {
+        var store = Substitute.For<IProjectKnowledgeStore>();
+        store.HasProjectAsync("octocat/hello", Arg.Any<CancellationToken>()).Returns(true);
+        var indexer = RealIndexer(store);
+        var service = NewService(new ProjectsOptions(), store, indexer);
+        var first = MakeRepo("first");
+        var second = MakeRepo("second");
+
+        service.GetProjectNames().ShouldBeEmpty();
+        service.Register(new ProjectEntry { Name = "octocat/hello", RepoPath = first });
+        service.GetProjectNames().ShouldBe(["octocat/hello"]);
+        service.Find("octocat/hello").ShouldNotBeNull().RepoPath.ShouldBe(first);
+
+        (await service.ResolveAsync("octocat/hello")).ShouldNotBeNull();
+        (await service.ResolveAsync("octocat/hello")).ShouldNotBeNull();
+        service.Register(new ProjectEntry { Name = "octocat/hello", RepoPath = first });
+        (await service.ResolveAsync("octocat/hello")).ShouldNotBeNull();
+        await store.Received(1).ReplaceProjectAsync("octocat/hello", Arg.Any<IReadOnlyList<ChunkRecord>>(), Arg.Any<CancellationToken>());
+
+        service.Register(new ProjectEntry { Name = "octocat/hello", RepoPath = second });
+        (await service.ResolveAsync("octocat/hello")).ShouldNotBeNull().RepoPath.ShouldBe(second);
+        await store.Received(2).ReplaceProjectAsync("octocat/hello", Arg.Any<IReadOnlyList<ChunkRecord>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void A_Project_Without_A_Name_Or_A_Path_Cannot_Be_Registered()
+    {
+        var service = NewService(new ProjectsOptions(), Substitute.For<IProjectKnowledgeStore>());
+
+        Should.Throw<ArgumentException>(() => service.Register(new ProjectEntry { Name = "", RepoPath = "/x" }));
+        Should.Throw<ArgumentException>(() => service.Register(new ProjectEntry { Name = "x", RepoPath = " " }));
+    }
 }
