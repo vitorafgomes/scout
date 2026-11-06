@@ -390,7 +390,7 @@ reliability: medium
 
 ### The control-plane toggle and credential dialog are unreachable on the desktop (2026-10-23)
 
-- **Blocker:** an owner decision. Both catalog features now show a main-owned connection (`ui/packages/renderer/src/app/features/features.component.ts:180`), so the toggle, the credential dialog and the `Enable` path in `FeaturesComponent` serve no typed feature; their specs reach them only through a cast feature id (`ui/packages/renderer/src/app/features/features.component.spec.ts:65`).
+- **Blocker:** an owner decision. Both catalog features now show a main-owned connection (`ui/packages/renderer/src/app/features/features.component.ts:182`), so the toggle, the credential dialog and the `Enable` path in `FeaturesComponent` serve no typed feature; their specs reach them only through a cast feature id (`ui/packages/renderer/src/app/features/features.component.spec.ts:66`).
 - **Fix:** remove that path and its specs, or keep it for a future feature without a main-owned connection.
 
 ### The GitHub card bypasses the control-plane Features service (2026-10-23)

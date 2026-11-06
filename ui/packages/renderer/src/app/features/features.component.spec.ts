@@ -1,5 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -484,6 +485,7 @@ describe('FeaturesComponent', () => {
         providers: [
           provideZonelessChangeDetection(),
           { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+          { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
           FeaturesStore,
         ],
       });
@@ -509,6 +511,15 @@ describe('FeaturesComponent', () => {
 
     function dialog(fixture: ComponentFixture<FeaturesComponent>): HTMLElement | null {
       return fixture.nativeElement.querySelector('[data-test="write-confirmation-dialog"]');
+    }
+
+    function toasts(): { text: string; kind: string | undefined }[] {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>('.cdk-overlay-container .sc-notice'),
+      ).map((el) => ({
+        text: (el.textContent ?? '').trim(),
+        kind: Array.from(el.classList).find((c) => c.startsWith('sc-notice--')),
+      }));
     }
 
     function grantLine(fixture: ComponentFixture<FeaturesComponent>): string {
@@ -612,6 +623,62 @@ describe('FeaturesComponent', () => {
         [{ id: 'youtube', granted: false, confirmWrites: false }],
       ]);
       expect(grantLine(fixture)).toBe('Write permission: not granted');
+    });
+
+    it('allowing the writes shows a toast naming the feature, revoking shows another', async () => {
+      const { fixture } = await mount([youtube]);
+
+      await click(fixture, 'allow-writes-youtube');
+      const beforeAllow = toasts();
+      await click(fixture, 'write-confirmation-allow');
+      const afterAllow = toasts();
+      await click(fixture, 'revoke-writes-youtube');
+
+      expect(beforeAllow).toEqual([]);
+      expect(afterAllow).toEqual([
+        { text: 'Writes allowed for YouTube', kind: 'sc-notice--success' },
+      ]);
+      expect(toasts()).toEqual([{ text: 'Writes revoked for YouTube', kind: 'sc-notice--info' }]);
+      expect(grantLine(fixture)).toBe('Write permission: not granted');
+    });
+
+    it('a grant the control plane refuses shows no toast and keeps the error on the card', async () => {
+      const { fixture } = await mount([youtube], {
+        featureWriteGrant: vi.fn(async () => {
+          throw new Error('The control plane refused the grant.');
+        }),
+      });
+
+      await click(fixture, 'allow-writes-youtube');
+      await click(fixture, 'write-confirmation-allow');
+
+      expect(toasts()).toEqual([]);
+      expect(
+        (
+          fixture.nativeElement.querySelector('[data-test="grant-err-youtube"]') as HTMLElement
+        ).textContent?.trim(),
+      ).toBe('The control plane refused the grant.');
+      expect(grantLine(fixture)).toBe('Write permission: not granted');
+    });
+
+    it('a revoke the control plane refuses shows no toast and keeps the error on the card', async () => {
+      const { fixture } = await mount(
+        [{ ...youtube, granted: true, grantedAt: '2026-11-01T09:00:00Z' }],
+        {
+          featureWriteGrant: vi.fn(async () => {
+            throw new Error('The control plane refused the revoke.');
+          }),
+        },
+      );
+
+      await click(fixture, 'revoke-writes-youtube');
+
+      expect(toasts()).toEqual([]);
+      expect(
+        (
+          fixture.nativeElement.querySelector('[data-test="grant-err-youtube"]') as HTMLElement
+        ).textContent?.trim(),
+      ).toBe('The control plane refused the revoke.');
     });
   });
 });

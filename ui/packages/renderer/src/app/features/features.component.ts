@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import type { FeatureId } from '@scout/shared';
 
 import { FeaturesStore, type FeatureViewModel } from '../core/features.store';
+import { NoticeService } from '../core/notice.service';
 import { ScoutBridgeService } from '../core/scout-bridge';
 
 import { CredentialDialogComponent } from './credential-dialog.component';
@@ -53,7 +54,7 @@ export const NO_ALLOWED_USERS_WARNING =
               [connection]="connectionOf(f.id)"
               (toggle)="onToggle(f)"
               (allowWrites)="confirming.set({ feature: f, purpose: 'grant' })"
-              (revokeWrites)="store.setWriteGrant(f.id, false, false)"
+              (revokeWrites)="onRevokeWrites(f)"
               (openCredentialDialog)="openDialog(f)"
               (clearCredentials)="store.clearCredentials(f.id)"
             >
@@ -170,6 +171,7 @@ export const NO_ALLOWED_USERS_WARNING =
 export class FeaturesComponent implements OnInit {
   readonly store = inject(FeaturesStore);
   private readonly bridge = inject(ScoutBridgeService);
+  private readonly notice = inject(NoticeService);
   readonly noAllowedUsers = signal(false);
   readonly noAllowedUsersWarning = NO_ALLOWED_USERS_WARNING;
   readonly activeDialog = signal<FeatureViewModel | null>(null);
@@ -211,9 +213,23 @@ export class FeaturesComponent implements OnInit {
 
   async onAllowWrites(confirmation: WriteConfirmation): Promise<void> {
     this.confirming.set(null);
-    const { id } = confirmation.feature;
-    if (confirmation.purpose === 'enable') await this.store.toggle(id, true);
-    else await this.store.setWriteGrant(id, true, true);
+    const { id, displayName } = confirmation.feature;
+    if (confirmation.purpose === 'enable') {
+      await this.store.toggle(id, true);
+      return;
+    }
+    await this.store.setWriteGrant(id, true, true);
+    if (this.errorOf(id) === null) this.notice.show(`Writes allowed for ${displayName}`, 'success');
+  }
+
+  async onRevokeWrites(feature: FeatureViewModel): Promise<void> {
+    await this.store.setWriteGrant(feature.id, false, false);
+    if (this.errorOf(feature.id) === null)
+      this.notice.show(`Writes revoked for ${feature.displayName}`, 'info');
+  }
+
+  private errorOf(id: FeatureId): string | null {
+    return this.store.features().find((f) => f.id === id)?.lastError ?? this.store.lastError();
   }
 
   openDialog(feature: FeatureViewModel): void {

@@ -1,0 +1,95 @@
+@use '@angular/material' as mat;
+@use './theme-colors' as palette;
+
+html {
+  color-scheme: dark;
+  @include mat.theme(
+    (
+      color: (
+        theme-type: dark,
+        primary: palette.$primary-palette,
+        tertiary: palette.$tertiary-palette,
+      ),
+      typography: (
+        plain-family: (
+          Inter,
+          -apple-system,
+          'Segoe UI',
+          sans-serif,
+        ),
+        brand-family: (
+          Inter,
+          -apple-system,
+          'Segoe UI',
+          sans-serif,
+        ),
+      ),
+      density: 0,
+    )
+  );
+  @include mat.theme-overrides(
+    (
+      surface: #0f1623,
+      surface-container: #131c2d,
+      surface-container-high: #1a2436,
+      outline-variant: #253249,
+      on-surface: #e6e9f0,
+      on-surface-variant: #c3cadb,
+      outline: #8a93a6,
+      primary: #7aa2f7,
+      on-primary: #0f1623,
+      primary-container: #3b6ff2,
+      on-primary-container: #ffffff,
+      error: #c0504f,
+      on-error: #ffffff,
+    )
+  );
+}
+
+:root {
+  --sc-bg: var(--mat-sys-surface);
+  --sc-surface: var(--mat-sys-surface-container);
+  --sc-surface-2: var(--mat-sys-surface-container-high);
+  --sc-line: var(--mat-sys-outline-variant);
+  --sc-fg: var(--mat-sys-on-surface);
+  --sc-fg-2: var(--mat-sys-on-surface-variant);
+  --sc-muted: var(--mat-sys-outline);
+  --sc-accent: var(--mat-sys-primary);
+  --sc-accent-strong: var(--mat-sys-primary-container);
+  --sc-ok: #2f7a57;
+  --sc-warn: #c9962a;
+  --sc-error: var(--mat-sys-error);
+  --sc-radius: 12px;
+  --sc-radius-sm: 8px;
+}
+
+.sc-notice {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: var(--sc-surface-2),
+      supporting-text-color: var(--sc-fg),
+    )
+  );
+
+  .mat-mdc-snackbar-surface {
+    min-height: 44px;
+  }
+}
+
+.sc-notice--success {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: var(--sc-ok),
+      supporting-text-color: #ffffff,
+    )
+  );
+}
+
+.sc-notice--error {
+  @include mat.snack-bar-overrides(
+    (
+      container-color: var(--sc-error),
+      supporting-text-color: var(--mat-sys-on-error),
+    )
+  );
+}
