@@ -17,7 +17,7 @@ public sealed class FeatureCatalogTests
             .OfType<string>();
 
     [Fact]
-    public void GitHub_Declares_The_Four_App_Permissions_As_Reads_The_Drafts_As_A_Write_And_The_Review_And_The_Issue_As_Irreversible()
+    public void GitHub_Declares_The_Four_App_Permissions_As_Reads_And_The_Profile_The_Review_And_The_Issue_As_Writes_Under_The_Grant()
     {
         GitHub.ScopeMatrix!.Select(r => (r.Scope, r.Access))
             .ShouldBe([
@@ -26,8 +26,8 @@ public sealed class FeatureCatalogTests
                 ("Pull requests", ScopeAccess.Read),
                 ("Issues", ScopeAccess.Read),
                 ("Scout's data folder", ScopeAccess.Write),
-                ("Pull request reviews", ScopeAccess.IrreversibleWrite),
-                ("New issues", ScopeAccess.IrreversibleWrite),
+                ("Pull request reviews", ScopeAccess.Write),
+                ("New issues", ScopeAccess.Write),
             ]);
         GitHub.WriteClass.ShouldBe(WriteClass.Executive);
         GitHub.HasWriteRows.ShouldBeTrue();
@@ -41,7 +41,7 @@ public sealed class FeatureCatalogTests
             "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
             "List every file of a repository and search its code, to audit a whole project",
         ]);
-        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.Count.ShouldBe(2);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.ShouldHaveSingleItem().ShouldContain("conventions profile");
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull requests").Actions.ShouldBe([
             "List open pull requests",
             "Read one pull request with its changed files and their diffs",
@@ -52,7 +52,7 @@ public sealed class FeatureCatalogTests
     }
 
     [Fact]
-    public void GitHub_Text_Promises_No_Keyring_No_Repo_Scope_And_Says_Writes_Wait_For_Approval()
+    public void GitHub_Text_Promises_No_Keyring_No_Repo_Scope_And_Says_Writes_Run_When_Asked_In_Chat_Under_The_Grant()
     {
         AllText(GitHub).Count().ShouldBeGreaterThan(8);
         foreach (var text in AllText(GitHub))
@@ -63,8 +63,12 @@ public sealed class FeatureCatalogTests
             text.ShouldNotContain("never writes to GitHub", Case.Insensitive);
         }
 
-        GitHub.Description.ShouldContain("one action at a time with your approval");
-        GitHub.SetupSteps!.ShouldContain(step => step.Contains("approve each one on the Review screen"));
+        GitHub.Description.ShouldContain("when you ask for it in chat");
+        GitHub.SetupSteps!.ShouldContain(step => step.Contains("only when you ask for it in chat"));
+        foreach (var text in AllText(GitHub))
+        {
+            text.ShouldNotContain("Review screen");
+        }
     }
 
     [Fact]

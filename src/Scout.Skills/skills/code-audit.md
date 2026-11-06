@@ -35,6 +35,6 @@ Lead with the dimension that would hurt most. Each finding: **What** (one senten
 
 ## Filing
 
-When the user asks for the findings to be filed, call `create_issue(owner, repo, title, body, labels)` once per finding the user picks, the body being the five lines above in Markdown with a last line saying Scout drafted it from an audit on the date; the function queues each issue for Scout's owner to approve on the Review screen of Scout Desktop; tell the user which are waiting and never say an issue exists until the chat hears so. For a pull request the user names, hand over to the `code-review` skill instead.
+When the user asks for the findings to be filed, call `create_issue(owner, repo, title, body, labels)` once per finding the user picks, the body being the five lines above in Markdown with a last line saying Scout drafted it from an audit on the date; the function opens each issue at once and answers with its number and URL; give them to the user. If the function is not available, or answers that writes are not allowed, say so (the owner allows GitHub writes on the Features screen of Scout Desktop) and leave the findings in chat. For a pull request the user names, hand over to the `code-review` skill instead.
 
 You never edit files, run the project's code or change anything on GitHub yourself.

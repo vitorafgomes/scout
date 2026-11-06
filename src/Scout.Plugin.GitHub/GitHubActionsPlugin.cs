@@ -10,19 +10,18 @@ using Scout.Plugin.GitHub.Abstractions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// The writes the model may ask for around GitHub. <c>submit_pull_request_review</c> and <c>create_issue</c> are each a
-/// draft Scout keeps and an action the owner approves: neither reaches GitHub; each is declared as a write into Scout's
-/// data folder, so the write gate refuses it before anything is saved while the owner has not allowed GitHub writes;
-/// under the grant it checks the request, saves the draft, and asks the control plane for the irreversible action,
-/// which waits on the Review screen, and the <see cref="GitHubActionExecutor"/> posts it after the owner approves.
-/// <c>remember_project_conventions</c> is a reversible write into the same folder: the conventions profile of a
-/// repository an audit judges the code against, read back with <c>get_project_conventions</c>. The model is told an
-/// action waits, never that it ran.
+/// The writes the model may ask for around GitHub, each declared on its own row of the <c>github</c> feature and run
+/// only under the owner's grant: <c>submit_pull_request_review</c> posts a commenting review on a pull request and
+/// <c>create_issue</c> opens an issue, both at once, the answer carrying the URL GitHub gave; the write gate refuses
+/// either before anything is sent while the owner has not allowed GitHub writes, and records every run.
+/// <c>remember_project_conventions</c> is a write into Scout's data folder: the conventions profile of a repository
+/// an audit judges the code against, read back with <c>get_project_conventions</c>. The model is told what GitHub
+/// accepted, never more: a review or an issue that was not posted is a <see cref="WriteFailedException"/>, which the
+/// write gate filter turns into the answer and records as failed.
 /// </summary>
 internal sealed class GitHubActionsPlugin(
     IGitHubClient reads,
-    IWriteGate gate,
-    GitHubDraftStore drafts,
+    IGitHubWriteClient writes,
     GitHubProfileStore profiles,
     TimeProvider time)
 {
@@ -38,7 +37,7 @@ internal sealed class GitHubActionsPlugin(
     /// <summary>The catalog id of the GitHub feature.</summary>
     internal const string FeatureId = "github";
 
-    /// <summary>The catalog row the drafts are saved under.</summary>
+    /// <summary>The catalog row the conventions profile is saved under.</summary>
     internal const string DataFolderScope = "Scout's data folder";
 
     /// <summary>The catalog row a posted review performs.</summary>
@@ -52,36 +51,26 @@ internal sealed class GitHubActionsPlugin(
     internal const int MaxCommentLength = 2_000;
     internal const int MaxTitleLength = 256;
     internal const int MaxLabels = 10;
-    private const int SummaryExcerpt = 200;
 
     internal const string NothingToPost = "Nothing to post: the review has no body and no comment on a line of the diff.";
     internal const string InvalidComments =
         "The comments must be a JSON array of objects with \"path\", \"line\" (a positive integer) and \"body\".";
-    internal const string ControlPlaneUnreachable =
-        "Scout could not reach its control plane, so nothing was queued; nothing was posted.";
-
-    internal const string UnexpectedlyAllowed =
-        "The control plane allowed this write without the owner's approval, which Scout does not do for a review or an issue; nothing was posted.";
-
-    internal static string Queued(string actionId, string what) =>
-        $"Queued for the owner's approval on the Review screen of Scout Desktop (action {actionId}): {what}. It is not posted yet; the chat hears when it is.";
-
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNameCaseInsensitive = true,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
-    /// <summary>Queue a review with comments on a pull request for the owner's approval.</summary>
+    /// <summary>Post a commenting review on a pull request, under the owner's grant.</summary>
     /// <param name="owner">Repository owner or organization login.</param>
     /// <param name="repo">Repository name.</param>
     /// <param name="number">Pull request number.</param>
     /// <param name="body">The review's summary text; may be empty when there are comments.</param>
     /// <param name="comments">JSON array of comments: path, line (in the file after the change), body.</param>
     /// <param name="ct">Cancels the requests.</param>
-    /// <returns>That the review waits for the owner, with the comments dropped for pointing outside the diff, or why it was refused.</returns>
+    /// <returns>That the review was posted, with its URL and the comments dropped for pointing outside the diff, or why it was refused.</returns>
     [KernelFunction(SubmitReview)]
-    [Description("Queue a code review for the owner's approval: a summary and comments anchored to lines of the pull request's diff, posted on the pull request as comments (never an approval) once the owner approves it on the Review screen of Scout Desktop. Only after the user asked for the review to be posted. A comment whose path and line are not in the diff is dropped and named in the answer.")]
+    [Description("Post a code review on a pull request: a summary and comments anchored to lines of the pull request's diff, as a commenting review (never an approval or a request for changes). Only after the user asked for the review to be posted. The answer carries the review's URL. A comment whose path and line are not in the diff is dropped and named in the answer.")]
     public async Task<string> SubmitPullRequestReviewAsync(
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
@@ -92,87 +81,78 @@ internal sealed class GitHubActionsPlugin(
     {
         if (!GitHubNames.IsValidRepository(owner, repo))
         {
-            return GitHubNames.InvalidRepository;
+            throw Refused(GitHubNames.InvalidRepository);
         }
 
         if (number <= 0)
         {
-            return "The pull request number must be positive.";
+            throw Refused("The pull request number must be positive.");
         }
 
-        var requested = ParseComments(comments);
-        if (requested is null)
-        {
-            return InvalidComments;
-        }
-
+        var requested = ParseComments(comments) ?? throw Refused(InvalidComments);
         var summary = (body ?? string.Empty).Trim();
         if (summary.Length > MaxBodyLength)
         {
-            return $"The review body is over {MaxBodyLength} characters; shorten it.";
+            throw Refused($"The review body is over {MaxBodyLength} characters; shorten it.");
         }
 
         if (requested.Count > MaxComments)
         {
-            return $"The review has more than {MaxComments} comments; keep the ones that matter most.";
+            throw Refused($"The review has more than {MaxComments} comments; keep the ones that matter most.");
         }
 
         if (requested.Any(c => c.Body.Length > MaxCommentLength))
         {
-            return $"A comment is over {MaxCommentLength} characters; shorten it.";
+            throw Refused($"A comment is over {MaxCommentLength} characters; shorten it.");
         }
 
+        IReadOnlyList<ChangedFile>? files;
         try
         {
-            var files = await reads.ListPullRequestFilesAsync(owner, repo, number, ct).ConfigureAwait(false);
-            if (files is null)
-            {
-                return $"Pull request #{number} not found in {owner}/{repo} or not accessible.";
-            }
-
-            var (kept, dropped) = Anchor(requested, files);
-            if (kept.Count == 0 && summary.Length == 0)
-            {
-                return NothingToPost;
-            }
-
-            var draft = new GitHubDraft(
-                NewId(), GitHubDraft.ReviewKind, owner, repo, number, string.Empty, summary, kept, [],
-                ChatOrigin.Current, time.GetUtcNow(), ActionId: null);
-            var what = $"{kept.Count} comment(s) on {draft.Target}";
-            var request = $"Post a review on {draft.Target}: {kept.Count} comment(s){Excerpt(summary)}";
-            var queued = await QueueAsync(draft, ReviewScope, request, ct).ConfigureAwait(false);
-            if (queued is null)
-            {
-                return UnexpectedlyAllowed;
-            }
-
-            if (queued.Kind != WriteGateDecisionKind.Queued)
-            {
-                return queued.Reason;
-            }
-
-            var answer = Queued(queued.ActionId ?? string.Empty, what);
-            return dropped.Count == 0
-                ? answer
-                : answer + " Dropped, not on a line of the diff: " + string.Join(", ", dropped) + ".";
+            files = await reads.ListPullRequestFilesAsync(owner, repo, number, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsHandledFailure(ex))
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
-            return GitHubPlugin.ErrorLineFor(ex);
+            throw Failed(ex, posted: false);
         }
+
+        if (files is null)
+        {
+            throw Refused($"Pull request #{number.ToString(CultureInfo.InvariantCulture)} not found in {owner}/{repo} or not accessible.");
+        }
+
+        var (kept, dropped) = Anchor(requested, files);
+        if (kept.Count == 0 && summary.Length == 0)
+        {
+            throw Refused(NothingToPost);
+        }
+
+        PostedReview posted;
+        try
+        {
+            posted = await writes.SubmitReviewAsync(owner, repo, number, summary, kept, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: true);
+        }
+
+        var answer = $"Posted a review on {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)} with {kept.Count} comment(s): {posted.HtmlUrl}";
+        return dropped.Count == 0
+            ? answer
+            : answer + " Dropped, not on a line of the diff: " + string.Join(", ", dropped) + ".";
     }
 
-    /// <summary>Queue a new issue for the owner's approval.</summary>
+    /// <summary>Open an issue on a repository, under the owner's grant.</summary>
     /// <param name="owner">Repository owner or organization login.</param>
     /// <param name="repo">Repository name.</param>
     /// <param name="title">The issue title.</param>
     /// <param name="body">The issue body, in Markdown.</param>
     /// <param name="labels">Comma-separated label names; empty for none.</param>
     /// <param name="ct">Cancels the requests.</param>
-    /// <returns>That the issue waits for the owner, or why it was refused.</returns>
+    /// <returns>That the issue was opened, with its number and URL, or why it was refused.</returns>
     [KernelFunction(CreateIssue)]
-    [Description("Queue a new issue on a repository for the owner's approval; it is opened once the owner approves it on the Review screen of Scout Desktop. Only after the user asked for the improvement to be filed. The body says what to change, why, how and where (path:line).")]
+    [Description("Open an issue on a repository. Only after the user asked for the improvement to be filed. The body says what to change, why, how and where (path:line). The answer carries the issue's number and URL.")]
     public async Task<string> CreateIssueAsync(
         [Description("Repository owner or organization login.")] string owner,
         [Description("Repository name.")] string repo,
@@ -183,24 +163,24 @@ internal sealed class GitHubActionsPlugin(
     {
         if (!GitHubNames.IsValidRepository(owner, repo))
         {
-            return GitHubNames.InvalidRepository;
+            throw Refused(GitHubNames.InvalidRepository);
         }
 
         var heading = (title ?? string.Empty).Trim();
         if (heading.Length == 0 || heading.Length > MaxTitleLength)
         {
-            return $"The issue title must be 1 to {MaxTitleLength} characters.";
+            throw Refused($"The issue title must be 1 to {MaxTitleLength} characters.");
         }
 
         var text = (body ?? string.Empty).Trim();
         if (text.Length == 0)
         {
-            return "The issue needs a body: what to change, why, how and where.";
+            throw Refused("The issue needs a body: what to change, why, how and where.");
         }
 
         if (text.Length > MaxBodyLength)
         {
-            return $"The issue body is over {MaxBodyLength} characters; shorten it.";
+            throw Refused($"The issue body is over {MaxBodyLength} characters; shorten it.");
         }
 
         var names = (labels ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -208,29 +188,20 @@ internal sealed class GitHubActionsPlugin(
             .ToList();
         if (names.Count > MaxLabels || names.Any(n => n.Length > 50))
         {
-            return $"At most {MaxLabels} labels of up to 50 characters.";
+            throw Refused($"At most {MaxLabels} labels of up to 50 characters.");
         }
 
+        CreatedIssue created;
         try
         {
-            var draft = new GitHubDraft(
-                NewId(), GitHubDraft.IssueKind, owner, repo, 0, heading, text, [], names,
-                ChatOrigin.Current, time.GetUtcNow(), ActionId: null);
-            var request = $"Open an issue on {draft.Target}: {heading}";
-            var queued = await QueueAsync(draft, IssueScope, request, ct).ConfigureAwait(false);
-            if (queued is null)
-            {
-                return UnexpectedlyAllowed;
-            }
-
-            return queued.Kind == WriteGateDecisionKind.Queued
-                ? Queued(queued.ActionId ?? string.Empty, $"the issue \"{heading}\" on {draft.Target}")
-                : queued.Reason;
+            created = await writes.CreateIssueAsync(owner, repo, heading, text, names, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (IsHandledFailure(ex))
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
-            return GitHubPlugin.ErrorLineFor(ex);
+            throw Failed(ex, posted: true);
         }
+
+        return $"Opened issue #{created.Number.ToString(CultureInfo.InvariantCulture)} on {owner}/{repo}: {created.HtmlUrl}";
     }
 
     /// <summary>The conventions profile of a repository, as Scout discovered it or the owner corrected it.</summary>
@@ -257,7 +228,7 @@ internal sealed class GitHubActionsPlugin(
                 ? $"No conventions profile for {owner}/{repo} yet. Discover the conventions from the project's own files and save them with {RememberConventions}."
                 : $"Conventions of {owner}/{repo}, written {profile.UpdatedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}:\n{profile.Conventions}";
         }
-        catch (Exception ex) when (IsHandledFailure(ex))
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
             return GitHubPlugin.ErrorLineFor(ex);
         }
@@ -293,42 +264,9 @@ internal sealed class GitHubActionsPlugin(
             await profiles.SaveAsync(new GitHubProjectProfile(owner, repo, text, time.GetUtcNow(), ChatOrigin.Current), ct).ConfigureAwait(false);
             return $"Saved the conventions profile of {owner}/{repo} ({text.Length} characters). Later audits read it with {GetConventions}.";
         }
-        catch (Exception ex) when (IsHandledFailure(ex))
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
             return GitHubPlugin.ErrorLineFor(ex);
-        }
-    }
-
-    /// <summary>
-    /// Save the draft, then ask the control plane for the irreversible action. Queued: the draft keeps the action id.
-    /// Refused: the draft is deleted and the decision returned. Allowed: a misconfigured catalog row, the draft is
-    /// deleted and null is returned, because a review or an issue never runs without the owner's approval.
-    /// </summary>
-    private async Task<WriteGateDecision?> QueueAsync(GitHubDraft draft, string scope, string summary, CancellationToken ct)
-    {
-        await drafts.SaveAsync(draft, ct).ConfigureAwait(false);
-        WriteGateDecision decision;
-        try
-        {
-            decision = await gate.RequestAsync(FeatureId, scope, draft.Target, summary, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            await drafts.DeleteAsync(draft.Id).ConfigureAwait(false);
-            return new WriteGateDecision(WriteGateDecisionKind.Refused, ControlPlaneUnreachable + " (" + ex.GetType().Name + ")", null);
-        }
-
-        switch (decision.Kind)
-        {
-            case WriteGateDecisionKind.Queued when decision.ActionId is not null:
-                await drafts.SaveAsync(draft with { ActionId = decision.ActionId }, ct).ConfigureAwait(false);
-                return decision;
-            case WriteGateDecisionKind.Refused:
-                await drafts.DeleteAsync(draft.Id).ConfigureAwait(false);
-                return decision;
-            default:
-                await drafts.DeleteAsync(draft.Id).ConfigureAwait(false);
-                return null;
         }
     }
 
@@ -377,10 +315,21 @@ internal sealed class GitHubActionsPlugin(
         return (kept, dropped);
     }
 
-    private static string Excerpt(string body) =>
-        body.Length == 0 ? string.Empty : "; " + (body.Length <= SummaryExcerpt ? body : body[..SummaryExcerpt]);
+    internal const string MayAlreadyBePosted =
+        " GitHub did not answer after the request was sent, so it may already be there: check the repository before asking again.";
 
-    private static string NewId() => Guid.NewGuid().ToString("N");
+    /// <summary>A write Scout refused before sending anything.</summary>
+    private static WriteFailedException Refused(string reason) => new(reason, "refused");
+
+    /// <summary>
+    /// A write GitHub refused, or one the network lost. After the request left (<paramref name="posted"/>), a lost
+    /// answer may hide an accepted write, and the sentence says so.
+    /// </summary>
+    private static WriteFailedException Failed(Exception ex, bool posted) => ex switch
+    {
+        GitHubApiException api => new WriteFailedException(GitHubPlugin.ErrorLineFor(api), api.StatusCode is { } code ? $"github {((int)code).ToString(CultureInfo.InvariantCulture)}" : "github"),
+        _ => new WriteFailedException(GitHubPlugin.ErrorLineFor(ex) + (posted ? MayAlreadyBePosted : string.Empty), ex.GetType().Name),
+    };
 
     private static bool IsHandledFailure(Exception ex)
         => ex is GitHubApiException or HttpRequestException or OperationCanceledException or IOException;

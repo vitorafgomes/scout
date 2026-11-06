@@ -32,7 +32,7 @@ The owner asked on 2026-11-06 for Scout to help with code quality from chat: kno
 
 ## Scope
 
-- **In scope:** review of a pull request on GitHub from chat, in any language; a prioritised improvement list for a repository, indexed locally or read from GitHub; an audit of a whole repository with no pull request, judged against the project's own conventions, across bugs, security, conventions, performance, tests and documentation (phase 4); posting the review as review comments on the pull request; opening issues for the improvements; every write declared, granted and approved per action.
+- **In scope:** review of a pull request on GitHub from chat, in any language; a prioritised improvement list for a repository, indexed locally or read from GitHub; an audit of a whole repository with no pull request, judged against the project's own conventions, across bugs, security, conventions, performance, tests and documentation (phase 4); posting the review as review comments on the pull request; opening issues for the improvements; every write declared and granted, posted the moment the user asks in chat (v1.3 of ADR 0038; the per-action approval of phases 2 and 3 was removed the same day).
 - **Out of scope:** a review triggered by a webhook when a pull request opens (needs a public endpoint, the same blocker as [[pages/roadmap/teams-adapter-spike]]); replying inside an existing review thread; GitLab and Azure DevOps (another plugin behind the same two skills); editing code or pushing fixes (Scout never changes a repository).
 
 ## Target outcome
@@ -41,7 +41,7 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 
 ## Status
 
-- **As of 2026-11-06:** phases 0 to 3 merged into `main` (#91 with #92 inside, #93); phase 4, the audit of a whole project against its own conventions, on `feat/code-audit-from-chat`.
+- **As of 2026-11-06:** phases 0 to 4 merged into `main` (#91, #93, #95); the same evening the owner's first real review (QuotAI #5) sat in the Review queue unseen, and the review and the issue became direct writes under the grant on `feat/github-writes-under-the-grant` (ADR 0038 v1.3): no draft, no queue, no executor.
 - **Next milestone:** merge, then the owner widens the GitHub App to Pull requests and Issues read & write and grants GitHub writes on the Features screen; first review posted end to end.
 - **Blocker:** the App permissions on github.com are the owner's step; until then the executor's POST answers 403 and the chat is told the write was not performed.
 

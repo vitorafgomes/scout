@@ -18,7 +18,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
-        Description: "Query repositories, issues and pull requests from chat; read a pull request's diffs, comments and files for a code review; list a repository's files and search its code to audit a whole project. With your write permission it also keeps the reviews, issues and conventions profiles it drafts under Scout's folder and, one action at a time with your approval, posts a review with comments on a pull request or opens an issue.",
+        Description: "Query repositories, issues and pull requests from chat; read a pull request's diffs, comments and files for a code review; list a repository's files and search its code to audit a whole project. With your write permission it also posts a review with comments on a pull request or opens an issue when you ask for it in chat, answering with the link, and keeps the conventions profile of each repository it audited under Scout's folder.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -72,26 +72,22 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Scout's data folder",
-                Actions: new[]
-                {
-                    "Keep a review or an issue drafted from chat until you approve or reject it on the Review screen",
-                    "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules",
-                },
+                Actions: new[] { "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules" },
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "Pull request reviews",
-                Actions: new[] { "Post a review with comments on a pull request; Scout comments, it never approves or requests changes" },
-                Access: ScopeAccess.IrreversibleWrite),
+                Actions: new[] { "Post a review with comments on a pull request when you ask for it in chat; Scout comments, it never approves or requests changes, and a comment can be edited or deleted on GitHub" },
+                Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "New issues",
-                Actions: new[] { "Open an issue on a repository" },
-                Access: ScopeAccess.IrreversibleWrite),
+                Actions: new[] { "Open an issue on a repository when you ask for it in chat; an issue can be edited or closed on GitHub" },
+                Access: ScopeAccess.Write),
         },
         SetupSteps: new[]
         {
             "Click 'Connect with GitHub'. Scout shows a one-time code.",
             "Click 'Open GitHub', sign in with your GitHub account and enter the code.",
-            "Approve the Scout GitHub App. It reads your repositories, pull requests and issues; it writes a review or an issue only after you allow the writes here and approve each one on the Review screen.",
+            "Approve the Scout GitHub App. It reads your repositories, pull requests and issues; it posts a review or opens an issue only after you allow the writes here, and only when you ask for it in chat.",
             "If the card says so, click 'Install Scout on your GitHub account' and pick the repositories Scout may use.",
         });
 
