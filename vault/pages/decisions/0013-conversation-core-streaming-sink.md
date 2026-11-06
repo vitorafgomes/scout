@@ -177,4 +177,4 @@ alongside the gRPC backend↔frontend transport
 - Descriptive-write invariant: [[pages/decisions/0009-descriptive-vs-executive-writes]].
 - Backend↔frontend transport: [[pages/decisions/0011-backend-frontend-grpc-uds]].
 - Generalized from the archived `Scout.Adapter.Discord/Streaming/EmbedEditThrottler.cs`
-  (frozen under `src/old/`).
+  (frozen under `src/old/` until 2026-11-06, now in the history before `93da0d4`).

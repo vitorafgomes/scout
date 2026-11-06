@@ -13,7 +13,7 @@ reliability: high
 
 # Project map
 
-> Eighteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. Projects under `src/old` and `tests/old` are not in the solution.
+> Eighteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. The retired first cut under `src/old` and `tests/old` was deleted on 2026-11-06 (in the history before `93da0d4`).
 
 Derived from the `ProjectReference` items in each `.csproj`. Package references are listed on the service pages.
 

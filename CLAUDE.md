@@ -13,7 +13,7 @@ Loaded into every session in this repo, for me, for every subagent I spawn, and 
 
 - **What:** open-source (MIT) chatops assistant for Discord, Slack and Teams. It answers operational and business questions by reading from source control, code repositories and cloud providers, and from ADR 0032 (2026-11-02) it may also act through features that declare their writes, which the owner grants one by one in the desktop and approves per irreversible action.
 - **Stack:** .NET 10 (`global.json` pins the SDK), Microsoft Semantic Kernel as the one LLM path (ADR 0012), `Discord.Net`, `SlackNet`, Bot Framework for Teams, OpenTelemetry. Solution file `Scout.slnx`.
-- **Projects:** `src/Scout.Adapter.{Discord,Slack,Teams}`, `Scout.Conversation`, `Scout.Skills`, `Scout.Llm`, `Scout.Knowledge`, `Scout.Plugin.GitHub`, `Scout.ControlPlane` + `.Contracts`, hosts `Scout.Host.Console` and `Scout.Host.ControlPlane`; one test project per project under `tests/`. `src/old` and `tests/old` are the retired first cut; nothing new goes there. `vault/pages/architecture/project-map.md`.
+- **Projects:** `src/Scout.Adapter.{Discord,Slack,Teams}`, `Scout.Conversation`, `Scout.Skills`, `Scout.Llm`, `Scout.Knowledge`, `Scout.Plugin.GitHub`, `Scout.ControlPlane` + `.Contracts`, hosts `Scout.Host.Console` and `Scout.Host.ControlPlane`; one test project per project under `tests/`. The retired first cut (`src/old`, `tests/old`) was deleted on 2026-11-06; it is in the git history before `93da0d4`. `vault/pages/architecture/project-map.md`.
 - **Desktop UI:** `ui/` (Bun, Electron 45, Angular 22) provisions chat clients and spawns and supervises the `Scout.Host.Console` worker directly; the gRPC/UDS control plane (ADR 0004, ADR 0011) exists on the .NET side only, the Electron client is the open initiative in `vault/pages/roadmap/control-plane-client.md`. Same repo, same vault. `vault/pages/services/desktop-ui.md`.
 - **LLM providers:** pluggable; Ollama local is the default so a contributor runs Scout without paid credentials (ADR 0008); OpenRouter, Azure OpenAI and OpenAI behind the same abstraction.
 - **Secrets:** User Secrets in development, environment variables in production; `appsettings*.json` ships without values.
@@ -39,7 +39,7 @@ The letters are stable; hooks, skills and the vault reference them by letter. A 
 - **I - One failing-call test per external boundary.** A change that adds or alters a call across HTTP, gRPC, a chat SDK, a provider, the filesystem or a subprocess ships one test where that call fails (timeout, 5xx, reset) and asserts what the caller does. `vault/pages/conventions/testing.md`.
 - **J - Documentation lives in the vault.** English only, no emojis, no AI-attribution comments or headers. A `<summary>` on a public type or member is fine; no narration inside a member, no reference to an ADR, a page or an issue in code; the one exception is a `ponytail:` deferral line.
 
-Also mandatory: identifiers and comments in English; the first cut under `src/old` and `tests/old` is read for history and never extended.
+Also mandatory: identifiers and comments in English; the retired first cut is read from the git history, never restored into the tree.
 
 ## When working here
 

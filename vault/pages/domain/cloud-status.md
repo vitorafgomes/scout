@@ -14,7 +14,7 @@ reliability: medium
 
 # `Plugin.CloudStatus`
 
-> **Archived 2026-10-22.** This page describes `Scout.Plugin.CloudStatus` from the retired first cut, which lives under `src/old/` and is not built. Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record.
+> **Archived 2026-10-22.** This page describes `Scout.Plugin.CloudStatus` from the retired first cut, deleted from the tree on 2026-11-06 (in the history before `93da0d4`). Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record.
 
 Read-only cloud health plugin. Answers questions about whether Azure, AWS,
 and Oracle Cloud services are healthy, degraded, or down.

@@ -133,8 +133,8 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Domain
 
-- [[pages/domain/cloud-status|`Plugin.CloudStatus`]] *(archived)* - Retired first cut under src/old. Read-only cloud health plugin. Answers questions about whether Azure, AWS, and Oracle Cloud services are healthy, degraded, or down.
-- [[pages/domain/code-qa|`Plugin.CodeQA`]] *(archived)* - Retired first cut under src/old. Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG).
+- [[pages/domain/cloud-status|`Plugin.CloudStatus`]] *(archived)* - Retired first cut, deleted from the tree 2026-11-06; design record. Read-only cloud health plugin. Answers questions about whether Azure, AWS, and Oracle Cloud services are healthy, degraded, or down.
+- [[pages/domain/code-qa|`Plugin.CodeQA`]] *(archived)* - Retired first cut, deleted from the tree 2026-11-06, superseded by Knowledge. Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG).
 - [[pages/domain/daily-assistant-plugins|Daily-Assistant Plugins - Wave 1 Reference]] - What actually shipped in Wave 1 of the daily-assistant plugin roadmap (plugin-roadmap-daily-assistant (private note)): the tools the chat LLM can call, their data sources, config, and how to use...
 
 ## Conventions
