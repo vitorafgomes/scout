@@ -29,6 +29,7 @@ import { LocalConversation } from '../core/local-conversation';
 import { MarkdownPipe } from '../core/markdown.pipe';
 import { replyLinkTarget } from '../core/reply-links';
 import { REPLY_STYLES } from '../core/reply-styles';
+import { ReviewFindingsComponent, ReviewFindingsPipe } from '../core/review-findings.component';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { LiveListener } from './live-listener';
 import { grabScreenshot, type Screenshot } from './screen-grab';
@@ -105,7 +106,7 @@ function storedTranslationMode(): LocalTranslationMode {
 @Component({
   selector: 'sc-quick-ask',
   standalone: true,
-  imports: [MarkdownPipe],
+  imports: [MarkdownPipe, ReviewFindingsComponent, ReviewFindingsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(window:keydown)': 'onKeyDown($event)',
@@ -373,6 +374,9 @@ function storedTranslationMode(): LocalTranslationMode {
                   @if (turn.screenText) {
                     <p class="with-transcript" data-test="with-screen-text">with screen text</p>
                   }
+                  @if (turn.review) {
+                    <p class="with-transcript" data-test="with-review">with the review</p>
+                  }
                 </div>
               </div>
             }
@@ -402,13 +406,17 @@ function storedTranslationMode(): LocalTranslationMode {
                     <span>{{ turn.activity ?? 'Working on it' }}</span>
                   </p>
                 }
+                @let findings = turn.state === 'done' ? (turn.reply | reviewFindings) : null;
                 <div
                   class="reply"
                   data-test="reply"
                   [class.failed]="turn.state === 'failed'"
-                  [innerHTML]="turn.reply | markdown"
+                  [innerHTML]="findings?.markdown ?? turn.reply | markdown"
                   (click)="onReplyClick($event)"
                 ></div>
+                @if (findings) {
+                  <sc-review-findings [turnId]="turn.id" [review]="findings.review" />
+                }
                 @if (turn.citations.length > 0) {
                   <ul class="citations" data-test="citations">
                     @for (citation of turn.citations; track $index) {

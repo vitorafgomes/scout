@@ -15,6 +15,7 @@ import { LocalConversation } from '../core/local-conversation';
 import { MarkdownPipe } from '../core/markdown.pipe';
 import { replyLinkTarget } from '../core/reply-links';
 import { REPLY_STYLES } from '../core/reply-styles';
+import { ReviewFindingsComponent, ReviewFindingsPipe } from '../core/review-findings.component';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { WavRecorder } from '../quick-ask/wav-recorder';
 
@@ -27,7 +28,7 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
 @Component({
   selector: 'sc-chat',
   standalone: true,
-  imports: [DatePipe, MarkdownPipe],
+  imports: [DatePipe, MarkdownPipe, ReviewFindingsComponent, ReviewFindingsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:blur)': 'discardRecording()' },
   template: `
@@ -77,6 +78,9 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
                   @if (turn.screenText) {
                     <p class="with-transcript" data-test="with-screen-text">with screen text</p>
                   }
+                  @if (turn.review) {
+                    <p class="with-transcript" data-test="with-review">with the review</p>
+                  }
                 </div>
               </div>
             }
@@ -106,13 +110,17 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
                     <span>{{ turn.activity ?? 'Working on it' }}</span>
                   </p>
                 }
+                @let findings = turn.state === 'done' ? (turn.reply | reviewFindings) : null;
                 <div
                   class="reply"
                   data-test="reply"
                   [class.failed]="turn.state === 'failed'"
-                  [innerHTML]="turn.reply | markdown"
+                  [innerHTML]="findings?.markdown ?? turn.reply | markdown"
                   (click)="onReplyClick($event)"
                 ></div>
+                @if (findings) {
+                  <sc-review-findings [turnId]="turn.id" [review]="findings.review" />
+                }
                 @if (turn.notRunning && startedFor() !== turn.id) {
                   <button type="button" data-test="start-scout" (click)="startScout(turn.id)">
                     Start Scout
