@@ -14,6 +14,7 @@ import {
   CHANNEL,
   LAST_ANSWER_MARKER,
   MEETING_WINDOWS,
+  REVIEW_MARKER,
   SCREEN_TEXT_MARKER,
   ScoutError,
   encodeIpcErrorMessage,
@@ -88,6 +89,7 @@ const MAX_TEXT_CHARS = 4000;
 const MAX_TRANSCRIPT_ASK_CHARS = MAX_TEXT_CHARS + 24_200;
 const MAX_SCREEN_TEXT_EXTRA_CHARS = 5_200;
 const MAX_LAST_ANSWER_EXTRA_CHARS = 4_200;
+const MAX_REVIEW_EXTRA_CHARS = 120_000;
 const TRANSCRIPT_MARKERS = MEETING_WINDOWS.map(transcriptMarker);
 const MEETING_TIMEOUT_MS = 30_000;
 const MAX_MEETING_LINES = 5_000;
@@ -302,6 +304,7 @@ function toWorkerRequest(req: unknown): {
   transcript: boolean;
   screenText: boolean;
   meeting: boolean;
+  review: boolean;
 } {
   const r = (typeof req === 'object' && req !== null ? req : {}) as Record<string, unknown>;
   const id = typeof r['id'] === 'string' ? r['id'] : '';
@@ -316,12 +319,14 @@ function toWorkerRequest(req: unknown): {
     const marker = firstAt(text, TRANSCRIPT_MARKERS);
     const screenMarker = text.indexOf(SCREEN_TEXT_MARKER);
     const lastAnswer = text.indexOf(LAST_ANSWER_MARKER);
-    const markers = [marker, screenMarker, lastAnswer].filter((at) => at !== -1);
+    const reviewMarker = text.indexOf(REVIEW_MARKER);
+    const markers = [marker, screenMarker, lastAnswer, reviewMarker].filter((at) => at !== -1);
     const question = markers.length === 0 ? text : text.slice(0, Math.min(...markers));
     const limit =
       (marker === -1 ? MAX_TEXT_CHARS : MAX_TRANSCRIPT_ASK_CHARS) +
       (screenMarker === -1 ? 0 : MAX_SCREEN_TEXT_EXTRA_CHARS) +
-      (lastAnswer === -1 ? 0 : MAX_LAST_ANSWER_EXTRA_CHARS);
+      (lastAnswer === -1 ? 0 : MAX_LAST_ANSWER_EXTRA_CHARS) +
+      (reviewMarker === -1 ? 0 : MAX_REVIEW_EXTRA_CHARS);
     if (question.length === 0 || question.length > MAX_TEXT_CHARS || text.length > limit) {
       fail('local/invalid-request', `Type a question of 1 to ${MAX_TEXT_CHARS} characters.`);
     }
@@ -333,6 +338,7 @@ function toWorkerRequest(req: unknown): {
       transcript: marker !== -1,
       screenText: screenMarker !== -1,
       meeting: r['meeting'] === true,
+      review: reviewMarker !== -1,
     };
   }
 
@@ -362,6 +368,7 @@ function toWorkerRequest(req: unknown): {
     transcript: false,
     screenText: false,
     meeting: false,
+    review: false,
   };
 }
 
@@ -818,7 +825,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   }
 
   function ask(req: LocalAskRequest | undefined): void {
-    const { id, question, line, screenshot, transcript, screenText, meeting } =
+    const { id, question, line, screenshot, transcript, screenText, meeting, review } =
       toWorkerRequest(req);
     if (turns.some((turn) => turn.id === id)) {
       fail('local/invalid-request', 'That question is already running.');
@@ -835,6 +842,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
       ...(transcript ? { transcript: true as const } : {}),
       ...(screenText ? { screenText: true as const } : {}),
       ...(meeting ? { meeting: true as const } : {}),
+      ...(review ? { review: true as const } : {}),
     });
     const accepted = supervisor.writeStdin(line, (err) => {
       logger.warn('quick-ask: question not delivered to the worker', { error: err.message });

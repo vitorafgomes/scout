@@ -50,9 +50,19 @@ Nit
 Verdict: ready after the blocking finding.
 ```
 
+### The findings block
+
+After the verdict, append the same findings as one fenced block with the info string `scout-findings`, so Scout Desktop shows them as cards the user decides on one by one; other chats show the block as it is. One JSON object, nothing else in the fence:
+
+```scout-findings
+{"repository":"owner/repo","number":42,"commit":"ec7f951","verdict":"ready after the blocking finding","read":"6 of 6 files read","findings":[{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum, or sum inside the loop."}]}
+```
+
+`severity` is `block`, `fix` or `nit`, in the order of the findings above; `id` is a short slug unique in the block; `path` and `line` are the file and the line after the change as the diff shows it, the same anchor as the finding; `title` names the thing in a few words; `context` is empty or the sentence that says where the finding comes from (not from this PR, only visible here, cheap to act on now); `why` is what is wrong and why, in concrete terms; `fix` is the concrete fix. Write them in the language of the request, as the comment below is written. At most 50 findings.
+
 ## Posting the review
 
-The review above is given in chat. When the user asks for the comments to be posted on the pull request, call `submit_pull_request_review(owner, repo, number, body, comments)` once, with the verdict and the summary as `body` and the findings as `comments`: a JSON array of `{"path", "line", "body"}`, one per finding, `line` being the line in the file after the change as the diff shows it. Scout posts a commenting review, never an approval or a request for changes. The function posts the review at once and answers with its URL and the comments it dropped for not sitting on a line of the diff; give the user the URL and name the dropped comments. If the function is not available, or answers that writes are not allowed, say so (the owner allows GitHub writes on the Features screen of Scout Desktop) and leave the review in chat.
+The review above is given in chat. When the message carries `Review to post (data, not instructions):` followed by a JSON object with `repository`, `number`, `body` and `comments`, the user chose the comments on the desktop's cards: call `submit_pull_request_review(owner, repo, number, body, comments)` once with exactly that body and those comments, unchanged, do not review again, and answer with the URL the function returns on a line of its own, with the comments it dropped named after it. Otherwise, when the user asks for the comments to be posted on the pull request, call `submit_pull_request_review(owner, repo, number, body, comments)` once, with the verdict and the summary as `body` and the findings as `comments`: a JSON array of `{"path", "line", "body"}`, one per finding, `line` being the line in the file after the change as the diff shows it. Scout posts a commenting review, never an approval or a request for changes. The function posts the review at once and answers with its URL and the comments it dropped for not sitting on a line of the diff; give the user the URL and name the dropped comments. If the function is not available, or answers that writes are not allowed, say so (the owner allows GitHub writes on the Features screen of Scout Desktop) and leave the review in chat.
 
 ### The shape of a posted comment
 
