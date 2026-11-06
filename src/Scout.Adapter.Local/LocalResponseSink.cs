@@ -4,8 +4,9 @@ namespace Scout.Adapter.Local;
 
 /// <summary>
 /// Streams one reply to the desktop's quick-ask window as <c>begin</c>,
-/// <c>update</c> (the full text so far), then <c>complete</c> or <c>fail</c>
-/// events tagged with the request id.
+/// <c>progress</c> (what Scout is doing before the text arrives), <c>update</c>
+/// (the full text so far), then <c>complete</c> or <c>fail</c> events tagged
+/// with the request id.
 /// </summary>
 internal sealed class LocalResponseSink(string requestId, LocalEventWriter writer) : IResponseSink
 {
@@ -44,6 +45,16 @@ internal sealed class LocalResponseSink(string requestId, LocalEventWriter write
             throw new InvalidOperationException("The reply is already finished.");
         }
         writer.Write(requestId, "update", cumulativeText);
+        return Task.CompletedTask;
+    }
+
+    public Task ProgressAsync(string activity, CancellationToken cancellationToken)
+    {
+        if (!IsTerminal && !string.IsNullOrWhiteSpace(activity))
+        {
+            writer.Write(requestId, "progress", activity);
+        }
+
         return Task.CompletedTask;
     }
 

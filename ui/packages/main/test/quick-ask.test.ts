@@ -328,9 +328,18 @@ function turn(
     citations: unknown[];
     state: string;
     notRunning: boolean;
+    activity: string;
   }> = {},
 ) {
-  return { id, question, reply: '', citations: [], state: 'running', ...changes };
+  return {
+    id,
+    question,
+    reply: '',
+    citations: [],
+    state: 'running',
+    askedAt: expect.any(Number),
+    ...changes,
+  };
 }
 
 describe('quick ask: questions to the worker', () => {
@@ -468,6 +477,33 @@ describe('quick ask: one conversation for every window', () => {
         state: 'done',
       }),
       turn('q-2', 'second', { reply: 'Cancelled.', state: 'failed' }),
+    ]);
+    t.quickAsk.dispose();
+  });
+
+  it('progress says what Scout is doing until the next reply event, and is dropped once the question ended', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'review it' });
+
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"begin"}');
+    t.quickAsk.handleWorkerLine(
+      '{"id":"q-1","event":"progress","text":"  Reading pull request file src/Checkout.cs  "}',
+    );
+    const reading = pushedTurns(t.mainWindow).at(-1);
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"progress","text":"   "}');
+    const blankIgnored = pushedTurns(t.mainWindow).length;
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"One"}');
+    const streaming = pushedTurns(t.mainWindow).at(-1);
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"complete","text":"One finding."}');
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"progress","text":"too late"}');
+
+    expect(reading).toEqual([
+      turn('q-1', 'review it', { activity: 'Reading pull request file src/Checkout.cs' }),
+    ]);
+    expect(pushedTurns(t.mainWindow).length).toBe(blankIgnored + 2);
+    expect(streaming).toEqual([turn('q-1', 'review it', { reply: 'One' })]);
+    expect(pushedTurns(t.mainWindow).at(-1)).toEqual([
+      turn('q-1', 'review it', { reply: 'One finding.', state: 'done' }),
     ]);
     t.quickAsk.dispose();
   });

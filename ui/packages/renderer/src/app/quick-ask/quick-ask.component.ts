@@ -26,6 +26,9 @@ import {
 
 import { LlmConfigStore, providerLabel } from '../core/llm-config.store';
 import { LocalConversation } from '../core/local-conversation';
+import { MarkdownPipe } from '../core/markdown.pipe';
+import { replyLinkTarget } from '../core/reply-links';
+import { REPLY_STYLES } from '../core/reply-styles';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { LiveListener } from './live-listener';
 import { grabScreenshot, type Screenshot } from './screen-grab';
@@ -102,6 +105,7 @@ function storedTranslationMode(): LocalTranslationMode {
 @Component({
   selector: 'sc-quick-ask',
   standalone: true,
+  imports: [MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(window:keydown)': 'onKeyDown($event)',
@@ -389,45 +393,66 @@ function storedTranslationMode(): LocalTranslationMode {
         @for (turn of turns(); track turn.id) {
           <li class="turn">
             @if (!turn.notice) {
-              <p class="asked" data-test="asked" [textContent]="turn.question"></p>
-              @if (turn.transcript) {
-                <p class="with-transcript" data-test="with-transcript">with transcript</p>
-              }
-              @if (turn.screenText) {
-                <p class="with-transcript" data-test="with-screen-text">with screen text</p>
-              }
+              <div class="row user">
+                <span class="avatar user" aria-hidden="true">You</span>
+                <div class="col">
+                  <p class="who" data-test="who-user"><span>You</span></p>
+                  <p class="asked" data-test="asked" [textContent]="turn.question"></p>
+                  @if (turn.transcript) {
+                    <p class="with-transcript" data-test="with-transcript">with transcript</p>
+                  }
+                  @if (turn.screenText) {
+                    <p class="with-transcript" data-test="with-screen-text">with screen text</p>
+                  }
+                </div>
+              </div>
             }
-            <p
-              class="reply"
-              data-test="reply"
-              [class.failed]="turn.state === 'failed'"
-              [textContent]="turn.reply"
-            ></p>
-            @if (turn.citations.length > 0) {
-              <ul class="citations" data-test="citations">
-                @for (citation of turn.citations; track $index) {
-                  <li>
-                    @if (citation.url; as url) {
-                      <a href="#" (click)="$event.preventDefault(); open(url)">{{
-                        citation.label
-                      }}</a>
-                    } @else {
-                      <span>{{ citation.label }}</span>
-                    }
-                  </li>
+            <div class="row scout">
+              <span class="avatar scout" aria-hidden="true">S</span>
+              <div class="col">
+                <p class="who" data-test="who-scout"><span>Scout</span></p>
+                @if (turn.state === 'running' && (turn.reply.length === 0 || turn.activity)) {
+                  <p class="working" data-test="working">
+                    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span>{{ turn.activity ?? 'Working on it' }}</span>
+                  </p>
                 }
-              </ul>
-            }
+                <div
+                  class="reply"
+                  data-test="reply"
+                  [class.failed]="turn.state === 'failed'"
+                  [innerHTML]="turn.reply | markdown"
+                  (click)="onReplyClick($event)"
+                ></div>
+                @if (turn.citations.length > 0) {
+                  <ul class="citations" data-test="citations">
+                    @for (citation of turn.citations; track $index) {
+                      <li>
+                        @if (citation.url; as url) {
+                          <a href="#" (click)="$event.preventDefault(); open(url)">{{
+                            citation.label
+                          }}</a>
+                        } @else {
+                          <span>{{ citation.label }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </div>
           </li>
         }
       </ol>
     </main>
   `,
   styles: [
+    REPLY_STYLES,
     `
       :host {
         display: block;
         height: 100vh;
+        overflow: hidden;
         background: #0f1117;
         color: #e4e8f0;
         font-family:
@@ -611,38 +636,24 @@ function storedTranslationMode(): LocalTranslationMode {
       }
       .turns {
         flex: 1;
+        min-height: 0;
         overflow-y: auto;
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: 0 4px 0 0;
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 14px;
       }
       .asked {
-        margin: 0 0 4px auto;
+        margin: 0;
         max-width: 80%;
         width: fit-content;
         background: #1e2e45;
-        border-radius: 8px;
+        border-radius: 10px 2px 10px 10px;
         padding: 6px 10px;
         white-space: pre-wrap;
         font-size: 14px;
-      }
-      .with-transcript {
-        margin: 0 0 6px auto;
-        width: fit-content;
-        font-size: 11px;
-        color: #8a93a6;
-      }
-      .reply {
-        margin: 0;
-        white-space: pre-wrap;
-        font-size: 14px;
-        line-height: 1.5;
-      }
-      .reply.failed {
-        color: #d45a5a;
       }
       .hint {
         margin: 0;
@@ -656,14 +667,6 @@ function storedTranslationMode(): LocalTranslationMode {
         margin: 0;
         font-size: 13px;
         color: #d45a5a;
-      }
-      .citations {
-        margin: 4px 0 0;
-        padding-left: 18px;
-        font-size: 13px;
-      }
-      .citations a {
-        color: #7aa2f7;
       }
     `,
   ],
@@ -1066,5 +1069,10 @@ export class QuickAskComponent {
     this.bridge
       .appOpenExternal({ url })
       .catch((err: unknown) => this.error.set(readIpcError(err).message));
+  }
+  /** A link in a rendered reply opens in the browser, never in this window. */
+  onReplyClick(event: MouseEvent): void {
+    const url = replyLinkTarget(event);
+    if (url !== null) this.open(url);
   }
 }

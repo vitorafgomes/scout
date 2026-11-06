@@ -104,7 +104,14 @@ const MAX_IMAGE_BASE64_CHARS = 4_000_000;
 const MAX_PCM16_BASE64_CHARS = 48_000;
 const SYSTEM_AUDIO_ARMED_MS = 10_000;
 const SYSTEM_AUDIO_FEATURES = ['PulseaudioLoopbackForScreenShare', 'WebRtcPipeWireCapturer'];
-const EVENT_KINDS: ReadonlySet<string> = new Set(['begin', 'update', 'complete', 'fail']);
+const EVENT_KINDS: ReadonlySet<string> = new Set([
+  'begin',
+  'progress',
+  'update',
+  'complete',
+  'fail',
+]);
+const MAX_ACTIVITY_CHARS = 200;
 const TRANSCRIPT_KINDS: ReadonlySet<string> = new Set(['partial', 'final', 'complete', 'fail']);
 // ponytail: the shared conversation keeps the last 200 turns in memory only; persist or page it if the owner wants more.
 const MAX_TURNS = 200;
@@ -823,6 +830,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
       reply: '',
       citations: [],
       state: 'running',
+      askedAt: Date.now(),
       ...(screenshot ? { screenshot: true as const } : {}),
       ...(transcript ? { transcript: true as const } : {}),
       ...(screenText ? { screenText: true as const } : {}),
@@ -1227,7 +1235,12 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         return;
       }
       if (event.event === 'begin') return;
-      reshape(event.id, (turn) => ({
+      if (event.event === 'progress') {
+        const activity = (event.text ?? '').trim().slice(0, MAX_ACTIVITY_CHARS);
+        if (activity.length > 0) reshape(event.id, (turn) => ({ ...turn, activity }));
+        return;
+      }
+      reshape(event.id, ({ activity: _cleared, ...turn }) => ({
         ...turn,
         reply: event.text ?? turn.reply,
         citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,

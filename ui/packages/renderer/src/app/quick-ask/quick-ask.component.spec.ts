@@ -27,6 +27,18 @@ import { TranscriptStore } from './transcript-store';
 
 const NOT_RUNNING = 'Scout is not running. Start it from the tray or the app.';
 
+/** Main's rule for a progress event: the latest activity, trimmed and cut to 200 characters; a blank one changes nothing. */
+function progressed(
+  turn: Omit<LocalTurn, 'activity'>,
+  activity: string | undefined,
+  text: string | undefined,
+): LocalTurn {
+  const next = (text ?? '').trim().slice(0, 200);
+  return next.length === 0
+    ? { ...turn, ...(activity === undefined ? {} : { activity }) }
+    : { ...turn, activity: next };
+}
+
 function makeBridge() {
   let turns: readonly LocalTurn[] = [];
   const listeners: ((turns: readonly LocalTurn[]) => void)[] = [];
@@ -85,20 +97,22 @@ function makeBridge() {
     })),
     emit: (event: LocalEvent) =>
       push(
-        turns.map((turn) =>
+        turns.map(({ activity, ...turn }) =>
           turn.id !== event.id || turn.state !== 'running' || event.event === 'begin'
-            ? turn
-            : {
-                ...turn,
-                reply: event.text ?? turn.reply,
-                citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
-                state:
-                  event.event === 'complete'
-                    ? 'done'
-                    : event.event === 'fail'
-                      ? 'failed'
-                      : 'running',
-              },
+            ? { ...turn, ...(activity === undefined ? {} : { activity }) }
+            : event.event === 'progress'
+              ? progressed(turn, activity, event.text)
+              : {
+                  ...turn,
+                  reply: event.text ?? turn.reply,
+                  citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
+                  state:
+                    event.event === 'complete'
+                      ? 'done'
+                      : event.event === 'fail'
+                        ? 'failed'
+                        : 'running',
+                },
         ),
       ),
     refuseNextAsNotRunning: () =>
@@ -254,6 +268,33 @@ describe('Quick ask', () => {
     vi.unstubAllGlobals();
   });
 
+  it('shows who spoke, three dots with what Scout is doing before the reply, and the reply as Markdown', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+
+    await askTyped(fixture, 'review PR #5');
+    const request = bridge.localAsk.mock.calls[0]![0] as { id: string };
+    expect(texts(fixture, 'who-user').map((t) => t.trim())).toEqual(['You']);
+    expect(texts(fixture, 'who-scout').map((t) => t.trim())).toEqual(['Scout']);
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe('Working on it');
+
+    bridge.emit({
+      id: request.id,
+      event: 'progress',
+      text: 'Reading pull request file src/Checkout.cs',
+    });
+    await settle(fixture);
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe(
+      'Reading pull request file src/Checkout.cs',
+    );
+
+    bridge.emit({ id: request.id, event: 'complete', text: '## Done\n\n**One** finding.' });
+    await settle(fixture);
+    expect(el(fixture, 'working')).toBeNull();
+    expect(el(fixture, 'reply')?.querySelector('h2')?.textContent).toBe('Done');
+    expect(el(fixture, 'reply')?.querySelector('strong')?.textContent).toBe('One');
+  });
+
   it('sends a typed question, shows it as a turn and streams the answer under it', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge);
@@ -402,9 +443,11 @@ describe('Quick ask', () => {
     await settle(fixture);
 
     expect(texts(fixture, 'asked')).toEqual(['(voice message)']);
-    expect(texts(fixture, 'reply')).toEqual([
-      '> (voice) is the nightly build green?\n\nIt is green.',
-    ]);
+    const reply = el(fixture, 'reply')!;
+    expect(reply.querySelector('blockquote')?.textContent?.trim()).toBe(
+      '(voice) is the nightly build green?',
+    );
+    expect(reply.textContent).toContain('It is green.');
   });
 
   it('shows "Scout is not running" as the turn\'s reply when the worker is stopped, with no second error line', async () => {

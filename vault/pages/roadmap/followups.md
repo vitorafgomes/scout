@@ -21,6 +21,16 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### Every local `update` carries the whole reply so far (2026-11-06)
+
+- **Gap:** the sink contract is cumulative for Teams's sake, and the local adapter writes the full text on every `update` (`src/Scout.Adapter.Local/LocalResponseSink.cs:47`), so a long reply streaming to the desktop costs O(n²) bytes on the worker's stdout; harmless at today's sizes (32,000-character cap), waste at the pace of a code review ([[pages/services/adapter-local]], [[pages/decisions/0013-conversation-core-streaming-sink]]).
+- **Unblocks with:** an `append` event on the local wire only, the sink sending what grew since its last write and main concatenating; the core's contract untouched; measured first on a 30 KB reply.
+
+### Main re-sends the whole conversation to every window on every event (2026-11-06)
+
+- **Gap:** each event reshapes one turn and broadcasts the whole list, up to 200 turns with their replies, to every window (`ui/packages/main/src/quick-ask/quick-ask.ts:814`); with replies now rendered from Markdown each push costs more on the renderer side ([[pages/services/desktop-quick-ask]]).
+- **Unblocks with:** a per-turn push (`scout:local.turn` with the one turn that changed) that the renderer patches into its list, the full list kept for the first load and a clear; measured first with a long conversation open in both windows.
+
 ### The presenter description cannot be given from the chat (2026-11-04)
 
 - **Gap:** `youtube_make_video` starts an `animated_character` project with an empty presenter description, so its presenter picture is drawn from the direction and the topic alone (`src/Scout.Operator/OperatorPipeline.cs:378`); only Scout Desktop's Start, Produce and Delegate take the description ([[pages/services/operator]], [[pages/services/desktop-operator]]).

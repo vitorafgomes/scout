@@ -22,6 +22,9 @@ internal sealed class VoiceReplySink(IResponseSink inner, string prefix) : IResp
     public Task UpdateAsync(string cumulativeText, CancellationToken cancellationToken)
         => inner.UpdateAsync(prefix + cumulativeText, cancellationToken);
 
+    public Task ProgressAsync(string activity, CancellationToken cancellationToken)
+        => inner.ProgressAsync(activity, cancellationToken);
+
     public Task CompleteAsync(string finalText, IReadOnlyList<Citation> citations, CancellationToken cancellationToken)
         => inner.CompleteAsync(prefix + finalText, citations, cancellationToken);
 

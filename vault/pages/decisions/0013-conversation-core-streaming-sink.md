@@ -1,9 +1,9 @@
 ---
 title: "Conversation core - cumulative streaming sink and pump-owned drive loop"
-version: "1.0"
+version: "1.1"
 date: 2026-05-29
-updated: 2026-10-21
-changes: "Migrated from the Obsidian notes on 2026-10-21"
+updated: 2026-11-06
+changes: "v1.1 (2026-11-06): amendment, progress before the text: IResponseSink.ProgressAsync with a default that ignores it, TurnProgress and the ActivityFilter in Scout.Llm, the local adapter's progress event. v1.0 migrated from the Obsidian notes on 2026-10-21"
 page_type: adr
 status: accepted
 description: "Decision on the conversation core's cumulative streaming sink and pump-owned streaming across chat platforms."
@@ -48,6 +48,7 @@ layer never knows a platform's capabilities.
 RenderCapabilities Capabilities { get; }
 Task BeginAsync(CancellationToken ct);
 Task UpdateAsync(string cumulativeText, CancellationToken ct);   // CUMULATIVE, not a delta
+Task ProgressAsync(string activity, CancellationToken ct) => Task.CompletedTask;   // v1.1: what Scout is doing, before any text
 Task CompleteAsync(string finalText, IReadOnlyList<Citation> citations, CancellationToken ct);
 Task FailAsync(string finalTextSoFar, string reason, CancellationToken ct);
 ```
@@ -111,6 +112,15 @@ typed exception (e.g. `DiscordResponseSink` catches `Discord.Net`'s
 `RateLimitedException` and applies Retry-After backoff). The pump simply calls
 `UpdateAsync`; a transient interim failure is swallowed and the buffer retained.
 This keeps the core free of platform-specific rate-limit reflection.
+
+## Amendment: progress before the text (2026-11-06)
+
+The owner, after the first real code review from the desktop: "quando está aguardando a execução o agente deveria ter a animação dos pontinhos que está sendo verificado algo em background". While the model reads a pull request file by file, nothing reached the sink until the first token, so the chat sat silent for a minute.
+
+- `IResponseSink.ProgressAsync(activity, ct)` (`src/Scout.Conversation/Abstractions/IResponseSink.cs:36`) with a default body that ignores it: Discord, Slack and Teams change nothing; `VoiceReplySink` forwards it (`src/Scout.Conversation/Streaming/VoiceReplySink.cs:25`); the local adapter writes it as a `progress` event with the activity as `text` (`src/Scout.Adapter.Local/LocalResponseSink.cs:51`), never after the end. It sits between `Begin` and the terminal call and carries no text of the reply; the lifecycle of v1.0 is untouched.
+- Who reports: `TurnProgress` (`src/Scout.Llm/Abstractions/TurnProgress.cs:8`), an async-local the conductor enters for the turn with the sink's `ProgressAsync` (`src/Scout.Conversation/ConversationConductor.cs:156`), the same shape as `ChatOrigin`; and `ActivityFilter` (`src/Scout.Llm/Guard/ActivityFilter.cs:13`), a kernel function-invocation filter registered for every kernel (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:129`) that announces each function the model calls as a sentence with the short values of allow-listed argument names, "Get pull request file: octocat hello 42 src/Checkout.cs" (`:40`), never a body, a token, an unknown name, a long or a multi-line value; a report that fails never costs the function. Every plugin gets it without code: Kubernetes, Knowledge, YouTube, GitHub.
+- On the desktop, main keeps the latest activity on the running turn and clears it on the next reply event ([[pages/services/desktop-quick-ask]]); the Chat screen and the quick-ask window show three dots with it, or "Working on it", while the reply is still empty.
+- Enforcement: `tests/Scout.Llm.Tests/Guard/ActivityFilterTests.cs:33` (the sentence, outside a turn nothing, a report that throws, the scope ending with the turn), `tests/Scout.Conversation.Tests/ConversationConductorTests.cs:48` (a report during the turn reaches the sink and stops with it), `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:100` (the event between begin and update, a blank one skipped, none after the end).
 
 ## Alternatives considered
 

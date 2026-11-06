@@ -1256,10 +1256,13 @@ export interface LocalCitation {
   readonly url?: string;
 }
 
-/** A step of the worker's reply to one quick-ask question; `text` is always the full reply so far. */
+/**
+ * A step of the worker's reply to one quick-ask question; `text` is always the full reply so far, except on
+ * `progress`, where it is what Scout is doing right now ("Reading pull request file src/Checkout.cs").
+ */
 export interface LocalEvent {
   readonly id: string;
-  readonly event: 'begin' | 'update' | 'complete' | 'fail';
+  readonly event: 'begin' | 'progress' | 'update' | 'complete' | 'fail';
   readonly text?: string;
   readonly citations?: readonly LocalCitation[];
 }
@@ -1274,6 +1277,10 @@ export interface LocalTurn {
   readonly reply: string;
   readonly citations: readonly LocalCitation[];
   readonly state: 'running' | 'done' | 'failed';
+  /** When the question was asked, as epoch milliseconds; absent on a notice. */
+  readonly askedAt?: number;
+  /** What Scout is doing right now, while the turn runs and before or between replies; cleared by the next reply event. */
+  readonly activity?: string;
   /** True when the question failed because the worker is not running. */
   readonly notRunning?: boolean;
   /** True for a message Scout posted on its own, such as operator progress; it has no question. */
