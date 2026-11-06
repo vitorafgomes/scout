@@ -40,6 +40,10 @@ export const REPLY_STYLES = `
     font-size: 11px;
     font-weight: 600;
   }
+  .avatar svg {
+    width: 16px;
+    height: 16px;
+  }
   .avatar.user {
     background: #1e2e45;
     color: #c3cadb;
