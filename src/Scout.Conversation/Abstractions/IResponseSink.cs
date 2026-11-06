@@ -29,6 +29,13 @@ public interface IResponseSink
     Task UpdateAsync(string cumulativeText, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Say what Scout is doing right now, before any text ("Reading pull request
+    /// file src/Checkout.cs"), between <see cref="BeginAsync"/> and the terminal
+    /// call. A platform that cannot show it keeps the default and ignores it.
+    /// </summary>
+    Task ProgressAsync(string activity, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    /// <summary>
     /// Finish successfully: render the final text plus any citations. Terminal.
     /// </summary>
     Task CompleteAsync(

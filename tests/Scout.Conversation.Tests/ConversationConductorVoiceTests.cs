@@ -290,4 +290,15 @@ public sealed class ConversationConductorVoiceTests
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
+    [Fact]
+    public async Task The_Voice_Reply_Sink_Forwards_Progress_To_The_Platform_Sink()
+    {
+        var inner = new RecordingResponseSink(new RenderCapabilities { FineGrainedEdit = true, MaxBodyLength = 4096 });
+        var sink = new VoiceReplySink(inner, "> heard\n\n");
+
+        await sink.ProgressAsync("Reading the diff", CancellationToken.None);
+
+        inner.Progress.ShouldBe(["Reading the diff"]);
+    }
 }

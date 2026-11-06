@@ -10,6 +10,18 @@ import { ChatComponent } from './chat.component';
 
 const NOT_RUNNING = 'Scout is not running. Start it from the tray or the app.';
 
+/** Main's rule for a progress event: the latest activity, trimmed and cut to 200 characters; a blank one changes nothing. */
+function progressed(
+  turn: Omit<LocalTurn, 'activity'>,
+  activity: string | undefined,
+  text: string | undefined,
+): LocalTurn {
+  const next = (text ?? '').trim().slice(0, 200);
+  return next.length === 0
+    ? { ...turn, ...(activity === undefined ? {} : { activity }) }
+    : { ...turn, activity: next };
+}
+
 function makeBridge() {
   let turns: readonly LocalTurn[] = [];
   const listeners: ((turns: readonly LocalTurn[]) => void)[] = [];
@@ -34,20 +46,22 @@ function makeBridge() {
     push,
     emit: (event: LocalEvent) =>
       push(
-        turns.map((turn) =>
+        turns.map(({ activity, ...turn }) =>
           turn.id !== event.id || turn.state !== 'running' || event.event === 'begin'
-            ? turn
-            : {
-                ...turn,
-                reply: event.text ?? turn.reply,
-                citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
-                state:
-                  event.event === 'complete'
-                    ? 'done'
-                    : event.event === 'fail'
-                      ? 'failed'
-                      : 'running',
-              },
+            ? { ...turn, ...(activity === undefined ? {} : { activity }) }
+            : event.event === 'progress'
+              ? progressed(turn, activity, event.text)
+              : {
+                  ...turn,
+                  reply: event.text ?? turn.reply,
+                  citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
+                  state:
+                    event.event === 'complete'
+                      ? 'done'
+                      : event.event === 'fail'
+                        ? 'failed'
+                        : 'running',
+                },
         ),
       ),
     refuseNextAsNotRunning: () =>
@@ -178,6 +192,95 @@ describe('Chat screen', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('says who spoke: the question under "You" with its time, the reply under "Scout"', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'is prod green?',
+        reply: 'Yes.',
+        citations: [],
+        state: 'done',
+        askedAt: Date.UTC(2026, 10, 6, 14, 2),
+      },
+    ]);
+    const fixture = await open();
+
+    expect(texts(fixture, 'who-user').map((t) => t.replace(/\s+/g, ' ').trim())).toEqual([
+      expect.stringMatching(/^You\s*\d\d:02$/),
+    ]);
+    expect(texts(fixture, 'who-scout').map((t) => t.trim())).toEqual(['Scout']);
+    expect(texts(fixture, 'question')).toEqual(['is prod green?']);
+    expect(texts(fixture, 'reply')).toEqual(['Yes.']);
+  });
+
+  it('shows three dots and what Scout is doing while the reply is still empty, then the reply as it streams', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    await type(fixture, 'review PR #5');
+    await press(fixture, {});
+    const request = bridge.localAsk.mock.calls[0]![0];
+
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe('Working on it');
+
+    bridge.emit({
+      id: request.id,
+      event: 'progress',
+      text: 'Reading pull request file src/Checkout.cs',
+    });
+    await settle(fixture);
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe(
+      'Reading pull request file src/Checkout.cs',
+    );
+
+    bridge.emit({ id: request.id, event: 'progress', text: '   ' });
+    await settle(fixture);
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe(
+      'Reading pull request file src/Checkout.cs',
+    );
+
+    bridge.emit({ id: request.id, event: 'update', text: 'One finding so far.' });
+    await settle(fixture);
+    expect(el(fixture, 'working')).toBeNull();
+    expect(texts(fixture, 'reply')).toEqual(['One finding so far.']);
+
+    bridge.emit({ id: request.id, event: 'progress', text: 'Searching code: MenuOrdering' });
+    await settle(fixture);
+    expect(el(fixture, 'working')?.textContent?.trim()).toBe('Searching code: MenuOrdering');
+
+    bridge.emit({ id: request.id, event: 'complete', text: 'One finding so far.\n\nDone.' });
+    await settle(fixture);
+    expect(el(fixture, 'working')).toBeNull();
+  });
+
+  it('renders the reply as Markdown: headings, emphasis, lists and code, and opens a link in the browser', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'review it',
+        reply:
+          '## Review of #5\n\n**Verdict:** needs work.\n\n- `MenuOrdering.Move` has no lock\n\nSee [the run](https://github.com/acme/ci/actions/runs/42).',
+        citations: [],
+        state: 'done',
+      },
+    ]);
+    const fixture = await open();
+    const reply = el(fixture, 'reply')!;
+
+    expect(reply.querySelector('h2')?.textContent).toBe('Review of #5');
+    expect(reply.querySelector('strong')?.textContent).toBe('Verdict:');
+    expect(reply.querySelector('li code')?.textContent).toBe('MenuOrdering.Move');
+    const link = reply.querySelector('a') as HTMLAnchorElement;
+    link.click();
+    expect(bridge.appOpenExternal).toHaveBeenCalledWith({
+      url: 'https://github.com/acme/ci/actions/runs/42',
+    });
   });
 
   it('talks to Scout directly on this computer: Enter sends the typed question and the reply streams in', async () => {

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Time.Testing;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Tests.Fakes;
+using Scout.Llm.Abstractions;
 
 namespace Scout.Conversation.Tests;
 
@@ -41,6 +42,28 @@ public sealed class ConversationConductorTests
 
         sink.Completed.ShouldBeTrue();
         sink.FinalText.ShouldBe("hello");
+    }
+
+    [Fact]
+    public async Task What_A_Function_Reports_During_The_Turn_Reaches_The_Sink_And_Stops_With_It()
+    {
+        var router = Substitute.For<IConversationRouter>();
+        router.Route(Arg.Any<ChatMessage>()).Returns(new ChatResponse(Reporting("Reading pull request file src/Checkout.cs", "hello")));
+        var conductor = new ConversationConductor(router, Pump());
+        var sink = new RecordingResponseSink(FineGrained);
+
+        await conductor.HandleAsync(new ChatMessage("u1", "c1", "hi"), sink, CancellationToken.None);
+        await TurnProgress.ReportAsync("after the turn", CancellationToken.None);
+
+        sink.Progress.ShouldBe(["Reading pull request file src/Checkout.cs"]);
+        sink.FinalText.ShouldBe("hello");
+        TurnProgress.IsEntered.ShouldBeFalse();
+    }
+
+    private static async IAsyncEnumerable<string> Reporting(string activity, string chunk)
+    {
+        await TurnProgress.ReportAsync(activity, CancellationToken.None);
+        yield return chunk;
     }
 
     [Fact]

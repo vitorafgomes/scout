@@ -7,19 +7,27 @@ import {
   signal,
 } from '@angular/core';
 
+import { DatePipe } from '@angular/common';
+
 import { readIpcError } from '@scout/shared';
 
 import { LocalConversation } from '../core/local-conversation';
+import { MarkdownPipe } from '../core/markdown.pipe';
+import { replyLinkTarget } from '../core/reply-links';
+import { REPLY_STYLES } from '../core/reply-styles';
 import { ScoutBridgeService } from '../core/scout-bridge';
 import { WavRecorder } from '../quick-ask/wav-recorder';
 
 /**
  * The Chat screen: talk to Scout from this computer, with no chat platform. Enter sends,
- * Shift+Enter adds a line, hold the microphone button to talk, Stop cancels the answer.
+ * Shift+Enter adds a line, hold the microphone button to talk, Stop cancels the answer. Each
+ * turn shows who spoke: the owner's question on the right, Scout's reply under its mark on the
+ * left, rendered from Markdown; while Scout works the reply shows three dots and what it is doing.
  */
 @Component({
   selector: 'sc-chat',
   standalone: true,
+  imports: [DatePipe, MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(window:blur)': 'discardRecording()' },
   template: `
@@ -39,40 +47,64 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
         @for (turn of turns(); track turn.id) {
           <li class="turn">
             @if (!turn.notice) {
-              <p class="question" data-test="question" [textContent]="turn.question"></p>
-              @if (turn.transcript) {
-                <p class="with-transcript" data-test="with-transcript">with transcript</p>
-              }
-              @if (turn.screenText) {
-                <p class="with-transcript" data-test="with-screen-text">with screen text</p>
-              }
-            }
-            <p
-              class="reply"
-              data-test="reply"
-              [class.failed]="turn.state === 'failed'"
-              [textContent]="turn.reply"
-            ></p>
-            @if (turn.notRunning && startedFor() !== turn.id) {
-              <button type="button" data-test="start-scout" (click)="startScout(turn.id)">
-                Start Scout
-              </button>
-            }
-            @if (turn.citations.length > 0) {
-              <ul class="citations" data-test="citations">
-                @for (citation of turn.citations; track $index) {
-                  <li>
-                    @if (citation.url; as url) {
-                      <a href="#" (click)="$event.preventDefault(); open(url)">{{
-                        citation.label
-                      }}</a>
-                    } @else {
-                      <span>{{ citation.label }}</span>
+              <div class="row user">
+                <span class="avatar user" aria-hidden="true">You</span>
+                <div class="col">
+                  <p class="who" data-test="who-user">
+                    <span>You</span>
+                    @if (turn.askedAt; as askedAt) {
+                      <span>{{ askedAt | date: 'HH:mm' }}</span>
                     }
-                  </li>
-                }
-              </ul>
+                  </p>
+                  <p class="question" data-test="question" [textContent]="turn.question"></p>
+                  @if (turn.transcript) {
+                    <p class="with-transcript" data-test="with-transcript">with transcript</p>
+                  }
+                  @if (turn.screenText) {
+                    <p class="with-transcript" data-test="with-screen-text">with screen text</p>
+                  }
+                </div>
+              </div>
             }
+            <div class="row scout">
+              <span class="avatar scout" aria-hidden="true">S</span>
+              <div class="col">
+                <p class="who" data-test="who-scout"><span>Scout</span></p>
+                @if (turn.state === 'running' && (turn.reply.length === 0 || turn.activity)) {
+                  <p class="working" data-test="working">
+                    <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span>{{ turn.activity ?? 'Working on it' }}</span>
+                  </p>
+                }
+                <div
+                  class="reply"
+                  data-test="reply"
+                  [class.failed]="turn.state === 'failed'"
+                  [innerHTML]="turn.reply | markdown"
+                  (click)="onReplyClick($event)"
+                ></div>
+                @if (turn.notRunning && startedFor() !== turn.id) {
+                  <button type="button" data-test="start-scout" (click)="startScout(turn.id)">
+                    Start Scout
+                  </button>
+                }
+                @if (turn.citations.length > 0) {
+                  <ul class="citations" data-test="citations">
+                    @for (citation of turn.citations; track $index) {
+                      <li>
+                        @if (citation.url; as url) {
+                          <a href="#" (click)="$event.preventDefault(); open(url)">{{
+                            citation.label
+                          }}</a>
+                        } @else {
+                          <span>{{ citation.label }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            </div>
           </li>
         } @empty {
           <li class="empty">Ask Scout anything, or hold the microphone button to talk.</li>
@@ -116,10 +148,12 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
     </main>
   `,
   styles: [
+    REPLY_STYLES,
     `
       :host {
         display: block;
-        height: 100vh;
+        height: 100%;
+        overflow: hidden;
         font-family:
           Inter,
           -apple-system,
@@ -145,36 +179,15 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
       }
       .turns {
         flex: 1;
+        min-height: 0;
         overflow-y: auto;
         list-style: none;
         margin: 0;
-        padding: 0;
+        padding: 0 4px 0 0;
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 20px;
       }
-      .question {
-        margin: 0 0 6px auto;
-        max-width: 80%;
-        width: fit-content;
-        background: #1e2e45;
-        border-radius: 8px;
-        padding: 8px 12px;
-        white-space: pre-wrap;
-      }
-      .with-transcript {
-        margin: 0 0 6px auto;
-        width: fit-content;
-        font-size: 11px;
-        color: #8a93a6;
-      }
-      .reply {
-        margin: 0;
-        white-space: pre-wrap;
-        line-height: 1.5;
-        font-size: 14px;
-      }
-      .reply.failed,
       .error {
         color: #d45a5a;
       }
@@ -187,14 +200,6 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
       .error {
         margin: 0;
         font-size: 13px;
-      }
-      .citations {
-        margin: 6px 0 0;
-        padding-left: 18px;
-        font-size: 13px;
-      }
-      .citations a {
-        color: #7aa2f7;
       }
       .ask {
         display: flex;
@@ -302,5 +307,11 @@ export class ChatComponent {
     this.bridge
       .appOpenExternal({ url })
       .catch((err: unknown) => this.error.set(readIpcError(err).message));
+  }
+
+  /** A link in a rendered reply opens in the browser, never in this window. */
+  onReplyClick(event: MouseEvent): void {
+    const url = replyLinkTarget(event);
+    if (url !== null) this.open(url);
   }
 }

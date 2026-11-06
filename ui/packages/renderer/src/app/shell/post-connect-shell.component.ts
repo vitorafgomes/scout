@@ -112,19 +112,21 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
     `
       :host {
         display: block;
-        min-height: 100vh;
+        height: 100vh;
+        overflow: hidden;
         background: #0f1117;
         color: #e4e8f0;
       }
       .shell {
         display: grid;
         grid-template-columns: 240px 1fr;
-        min-height: 100vh;
+        height: 100vh;
       }
       .rail {
         background: #171b26;
         border-right: 1px solid #252b3b;
         padding: 24px 12px;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
         gap: 24px;
@@ -178,6 +180,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
         display: flex;
         flex-direction: column;
         min-width: 0;
+        min-height: 0;
       }
       .main {
         flex: 1;

@@ -126,6 +126,7 @@ public static class LlmServiceCollectionExtensions
                 builder.Plugins.Add(plugin);
             }
 
+            builder.Services.AddSingleton<IFunctionInvocationFilter>(new ActivityFilter());
             var writeFunctions = sp.GetServices<WriteFunctionDeclaration>().ToList();
             if (writeFunctions.Count > 0)
             {

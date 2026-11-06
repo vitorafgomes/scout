@@ -25,6 +25,8 @@ internal sealed class RecordingResponseSink(
     public string? FailReason { get; private set; }
     public IReadOnlyList<Citation> FinalCitations { get; private set; } = [];
 
+    public List<string> Progress { get; } = [];
+
     public int BeginCount { get; private set; }
     public int TerminalCount { get; private set; }
 
@@ -36,6 +38,12 @@ internal sealed class RecordingResponseSink(
         }
         _begun = true;
         BeginCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task ProgressAsync(string activity, CancellationToken cancellationToken)
+    {
+        Progress.Add(activity);
         return Task.CompletedTask;
     }
 

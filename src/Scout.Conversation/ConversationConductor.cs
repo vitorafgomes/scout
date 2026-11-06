@@ -8,6 +8,7 @@ using Scout.Conversation.Access;
 using Scout.Conversation.Memory;
 using Scout.Conversation.Streaming;
 using Scout.Conversation.Telemetry;
+using Scout.Llm.Abstractions;
 
 namespace Scout.Conversation;
 
@@ -152,6 +153,7 @@ public sealed partial class ConversationConductor(
                 "Routing inbound message for channel {ChannelId} (textLen={Length}).",
                 message.ChannelId, message.Text.Length);
             var response = _router.Route(message);
+            using var progress = TurnProgress.Enter(sink.ProgressAsync);
             await _pump.RunAsync(response, sink, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Response completed for channel {ChannelId}.", message.ChannelId);
         }

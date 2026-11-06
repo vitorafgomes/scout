@@ -250,6 +250,8 @@ describe('screenshot on a question', () => {
       question: true,
       reply: true,
       citations: true,
+      askedAt: true,
+      activity: true,
       state: true,
       notRunning: true,
       notice: true,

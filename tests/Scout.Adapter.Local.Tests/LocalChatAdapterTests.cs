@@ -97,6 +97,26 @@ public sealed class LocalChatAdapterTests
     }
 
     [Fact]
+    public async Task What_Scout_Is_Doing_Reaches_Stdout_As_A_Progress_Event_Before_The_Text_And_Never_After_The_End()
+    {
+        await using var harness = new Harness(async (_, sink, ct) =>
+        {
+            await sink.BeginAsync(ct);
+            await sink.ProgressAsync("Reading pull request file src/Checkout.cs", ct);
+            await sink.ProgressAsync("   ", ct);
+            await sink.UpdateAsync("Half", ct);
+            await sink.CompleteAsync("Half done.", [], ct);
+            await sink.ProgressAsync("too late", ct);
+        });
+
+        harness.Send(Ask("q-1", "review it"));
+        await harness.Stdout.WaitForAsync("q-1", "complete");
+
+        harness.Stdout.KindsFor("q-1").ShouldBe(["begin", "progress", "update", "complete"]);
+        (await harness.Stdout.WaitForAsync("q-1", "progress")).GetProperty("text").GetString().ShouldBe("Reading pull request file src/Checkout.cs");
+    }
+
+    [Fact]
     public async Task Every_Ask_Is_A_Local_Owner_Message_In_One_Stable_Channel_So_Memory_Continues()
     {
         var received = new List<ChatMessage>();
