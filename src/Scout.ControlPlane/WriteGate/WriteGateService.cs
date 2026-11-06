@@ -71,6 +71,28 @@ public sealed class WriteGateService
     internal async Task<DateTimeOffset?> GrantedAtAsync(string featureId, CancellationToken ct) =>
         (await _states.GetAsync(featureId, ct).ConfigureAwait(false)).GrantedAt;
 
+    /// <summary>How long a worker's claim on an approved action holds before another run may take it over.</summary>
+    public static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// For a worker that runs a feature's approved actions itself: claim the oldest approved action of
+    /// <paramref name="featureId"/> that was requested under the current grant, or an executing one whose claim lapsed.
+    /// Null when the feature holds no grant, or nothing waits. An action requested before the owner granted, or
+    /// re-granted, the feature is never handed out: the grant it ran under is gone.
+    /// </summary>
+    public async Task<PendingAction?> ClaimNextApprovedAsync(string featureId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
+        var grantedAt = await GrantedAtAsync(featureId, ct).ConfigureAwait(false);
+        if (grantedAt is null)
+        {
+            return null;
+        }
+
+        return await _actions.ClaimNextAsync(featureId, ClaimLease, (action, _) => action.RequestedAt >= grantedAt, ct)
+            .ConfigureAwait(false);
+    }
+
     /// <summary>Decide whether <paramref name="scope"/> of <paramref name="featureId"/> may be written now.</summary>
     public async Task<WriteDecision> RequestAsync(
         string featureId,

@@ -19,4 +19,10 @@ public sealed class GitHubOptions
     /// refreshed token is picked up without a restart.
     /// </summary>
     public string TokenFile { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Folder where a review or an issue drafted from chat waits for the owner's decision on the Review
+    /// screen; empty for <c>Scout/github-drafts</c> under the user's local application data.
+    /// </summary>
+    public string DraftsDirectory { get; set; } = string.Empty;
 }

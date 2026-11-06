@@ -68,7 +68,10 @@ message NextQueuedProjectResponse {
   optional string origin_reference = 2;
 }
 
-message NextApprovedActionRequest {}
+message NextApprovedActionRequest {
+  // The feature whose approved actions the worker runs; empty for the YouTube operator's queue.
+  optional string feature_id = 1;
+}
 
 message NextApprovedActionResponse {
   optional PendingAction action = 1;

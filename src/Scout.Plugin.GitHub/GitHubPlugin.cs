@@ -177,6 +177,8 @@ public sealed partial class GitHubPlugin
     private static bool IsHandledFailure(Exception ex)
         => ex is GitHubApiException or HttpRequestException or OperationCanceledException;
 
+    internal static string ErrorLineFor(Exception ex) => ErrorLine(ex);
+
     private static string ErrorLine(Exception ex) => ex switch
     {
         GitHubApiException api => api.Message,

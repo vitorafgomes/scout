@@ -1,8 +1,9 @@
 ---
 title: "ADR 0038 - The code quality assistant: GitHub reads and writes on the write gate, CodeQA superseded by Knowledge"
-version: "1.0"
+version: "1.1"
 date: 2026-11-06
-changes: "Initial ADR"
+updated: 2026-11-06
+changes: "v1.1: phases 2 and 3 implemented the same day; the draft-and-executor shape, the feature-scoped claim on the worker gate, and Scout commenting only are recorded. v1.0 initial ADR"
 page_type: adr
 status: proposed
 description: "Code review and project improvements come from two skills over the GitHub plugin: reads of one pull request, its comments, one issue and one file now; a posted review and an opened issue later as irreversible writes under the github feature's grant, with the GitHub App widened to Pull requests and Issues read & write. The retired Scout.Plugin.CodeQA is superseded by Scout.Knowledge and stays under src/old."
@@ -27,7 +28,7 @@ reliability: high
 - [ ] Accepted
 - [ ] Deprecated / superseded by
 
-Updated: 2026-11-06. Proposed on the owner's request of 2026-11-06 ("se for um code review ele deve saber que deve criar os comentarios dentro do PR, e caso for melhorias de projeto tem que saber que tem que abrir um Issue", "nao deve ser algo apenas para uma linguagem especifica de programacao mais sim para todos") and the owner's "Estruture tudo entao pode iniciar" on the proposal below. Merging the phase 1 pull request accepts it.
+Updated: 2026-11-06 (phases 2 and 3 implemented on `feat/code-quality-assistant-writes`). Proposed on the owner's request of 2026-11-06 ("se for um code review ele deve saber que deve criar os comentarios dentro do PR, e caso for melhorias de projeto tem que saber que tem que abrir um Issue", "nao deve ser algo apenas para uma linguagem especifica de programacao mais sim para todos") and the owner's "Estruture tudo entao pode iniciar" on the proposal below. Merging the phase 1 pull request accepts it.
 
 ## Context
 
@@ -44,7 +45,9 @@ The retired first cut has `Scout.Plugin.CodeQA` under `src/old`: a RAG over one 
 - **Two irreversible writes follow, in phases 2 and 3,** on the `github` feature under `WriteClass.Executive`: a scope row "Post a review with comments on a pull request" behind `submit_pull_request_review`, and "Open an issue" behind `create_issue`, each declared with `AddWriteFunction`, each one action in the owner's queue (a review with all its comments is one action), each logged. They are irreversible because a third party reads them the moment they exist, the class [[pages/decisions/0032-per-feature-write-permissions]] gives a published comment reply. Before a review is queued, each comment is mapped to a line of the diff; one that maps to nothing is dropped and the model is told.
 - **The GitHub App is widened to Pull requests: read & write and Issues: read & write** (Metadata and Contents stay read-only), so the device-flow token can post. GitHub's permission model no longer proves Scout reads only; the write gate does: the only non-GET requests leave from declared write functions, to the two endpoints they name, after the control plane allowed them, and the GET-only test becomes that statement. A pasted fine-grained token keeps working for a host without the desktop, with the same two permissions when the owner grants the writes. This amends [[pages/decisions/0019-github-app-device-flow]].
 - **`Scout.Plugin.CodeQA` is superseded by `Scout.Knowledge`** and is not rebuilt; `Scout.Plugin.Agent`, `Scout.Plugin.Chat` and `Scout.Plugin.Help` are superseded by the conversation core's function calling and skills. The tree under `src/old` stays as the history the root `CLAUDE.md` says it is; deleting it is a separate decision of the owner.
-- **No new project.** The orchestration is the model's, directed by the skills; the code lives where the logic is: the GitHub client and plugin, and later the review mapping and the issue template.
+- **A write from chat is a draft, an action and an executor** (phases 2 and 3, 2026-11-06). The two functions, `submit_pull_request_review` and `create_issue` on the `GitHubActions` plugin, never reach GitHub: each is declared as a write into Scout's data folder, so the write gate refuses it before anything is saved while the owner has not allowed GitHub writes; under the grant it checks the request (names, caps, and for a review every comment against the right side of the diff, `DiffLines`), saves a draft file under `Scout/github-drafts` with the chat it came from, and asks the control plane for the irreversible row, which queues the action for the Review screen. The queue holds only the summary the owner reads; the text stays in the draft. The `GitHubActionExecutor`, a hosted service in the worker, claims the next approved `github` action every minute through `IApprovedActions`, finds the draft by the action id, posts it with `IGitHubWriteClient`, records the write against the action, deletes the draft and tells the chat; an action without a draft is recorded failed so the queue moves on, a failure GitHub may get past (a transport fault, a 5xx, a 401 during a token refresh, a 403 rate limit, a 429) leaves the claim to lapse and retry, any other GitHub refusal is recorded failed and the chat told why; the draft is marked posting before the POST and a draft another run left posting is never posted again, so a crash between the post and its record cannot post twice; drafts older than a week are purged. Scout posts `COMMENT` reviews only, never an approval or a request for changes. This is the operator's shape ([[pages/decisions/0033-channel-operator-architecture]]) without a project: the draft is the state the approved action acts on.
+- **The worker gate hands out another feature's approved actions by name.** `NextApprovedActionRequest.feature_id`, empty for the YouTube operator's queue, names the feature whose oldest approved action the worker claims, through `WriteGateService.ClaimNextApprovedAsync`: only under the feature's grant, only actions requested under the current grant, the same 30-minute lease. The origin reference for such an action is not the control plane's to know; the draft keeps it.
+- **No new project.** The orchestration is the model's, directed by the skills; the code lives where the logic is: the GitHub clients and plugins, the diff anchoring, the draft store and the executor.
 
 ## Consequences
 
@@ -68,7 +71,13 @@ The retired first cut has `Scout.Plugin.CodeQA` under `src/old`: a RAG over one 
 - `tests/Scout.Plugin.GitHub.Tests/GitHubClientReadsTests.cs:99` and `:111` - a 5xx becomes the unavailable message and a timeout bubbles to the plugin's clean line (Rule I).
 - `tests/Scout.Skills.Tests/BundledSkillsTests.cs:25` and `:39` - the two skills load, describe the requests in the users' words, and name only functions and language skills that exist.
 - `src/Scout.ControlPlane/Features/FeatureCatalog.cs:19` - the `github` rows name every read the functions perform, the five new ones included (the review of 2026-11-06 found them undeclared; Rule A).
-- Phase 2 adds: `FeatureCatalogTests` pins the two write rows under `WriteClass.Executive`; `WriteDeclarationCatalogTests` pins the two declarations against the rows; a test that a comment outside the diff is dropped before the action is queued.
+- `tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:20` - the `github` rows: four reads, the data folder as `Write`, "Pull request reviews" and "New issues" as `IrreversibleWrite`, under `WriteClass.Executive`; `tests/Scout.Host.Console.Tests/WriteDeclarationCatalogTests.cs:13` - the two declared functions name a write row of their feature.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginTests.cs:29` - a review is saved as a draft, queued, and keeps only the comments on the diff; `:55` - a refusal leaves no draft; `:67` - an `Allowed` answer for an irreversible row runs nothing; `:79` - nothing to post, malformed comments and a missing pull request are refused before the gate; `:110` - a control plane that does not answer leaves no draft.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubActionExecutorTests.cs:34` to `:186` - an approved review or issue is posted, recorded against the action, deleted and told to the chat; no draft records failed; a recoverable failure retries from a clean draft; a draft left posting is not posted again; a post not recorded is recorded next run without a second post; an unexpected exception never leaves the run; a rejection records failed and tells why; stale drafts are purged.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubTokenFileHandlerTests.cs:194` - the only requests that are not a GET come from the write client to its two endpoints; `:216` - the two write functions themselves send only reads and queue.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubWriteClientTests.cs:22` - the review is posted with event `COMMENT` and every comment on side `RIGHT`; `:64` - a 422 names what GitHub rejected; `:78` - a 5xx maps as the reads do and a timeout bubbles (Rule I).
+- `tests/Scout.Plugin.GitHub.Tests/DiffLinesTests.cs:23` - added and context lines anchor, removed lines do not; `:42` - a trailing newline adds no phantom anchor.
+- `tests/Scout.ControlPlane.Tests/WriteGate/WriteGateServiceTests.cs:359` - the feature-scoped claim: oldest approved first, nothing before the grant, nothing without it, another feature's queue untouched; `tests/Scout.Host.Console.Tests/GrpcWriteGateTests.cs:58` - the claim over the socket carries the feature id.
 - Convention page: [[pages/conventions/testing]]. Invariant page: [[pages/invariants/no-executive-writes]].
 
 ## Related
@@ -76,4 +85,5 @@ The retired first cut has `Scout.Plugin.CodeQA` under `src/old`: a RAG over one 
 - Services affected: [[pages/services/plugin-github]], [[pages/services/skills]], [[pages/services/control-plane]] (phase 2), [[pages/services/desktop-ui]] (phase 2).
 - Amends: [[pages/decisions/0019-github-app-device-flow]] (App permissions), [[pages/decisions/0032-per-feature-write-permissions]] (the GitHub feature joins the write-capable ones).
 - Supersedes the design in [[pages/domain/code-qa]] with [[pages/services/knowledge]].
+- The desktop grants GitHub writes on the Features screen like any write-capable feature ([[pages/services/desktop-ui]]); the GitHub App's permissions are widened once by the owner on github.com, the only step this ADR leaves to a person.
 - Initiative: [[pages/roadmap/code-quality-assistant]].

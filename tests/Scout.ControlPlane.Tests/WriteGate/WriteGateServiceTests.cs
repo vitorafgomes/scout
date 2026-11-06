@@ -351,4 +351,59 @@ public sealed class WriteGateServiceTests : IDisposable
         (await _actions.FindAsync(queued.ActionId!, CancellationToken.None)).ShouldNotBeNull().Status
             .ShouldBe(PendingActionStatus.Executed);
     }
+
+    private Task GrantGitHubAsync() =>
+        _features.SetWriteGrantAsync(FeatureCatalog.GitHubId, granted: true, confirmWrites: true, CancellationToken.None);
+
+    [Fact]
+    public async Task A_Feature_That_Runs_Its_Own_Actions_Claims_The_Oldest_Approved_One_Requested_Under_The_Grant()
+    {
+        var gate = Gate();
+        var before = await _actions.EnqueueAsync(FeatureCatalog.GitHubId, "Pull request reviews", "o/r#1", "before the grant", CancellationToken.None);
+        await _actions.ApproveAsync(before.Id, null, CancellationToken.None);
+        await GrantGitHubAsync();
+        var first = await gate.RequestAsync(FeatureCatalog.GitHubId, "Pull request reviews", "o/r#2", "Post a review on o/r#2", CancellationToken.None);
+        var second = await gate.RequestAsync(FeatureCatalog.GitHubId, "New issues", "o/r", "Open an issue on o/r", CancellationToken.None);
+        first.Kind.ShouldBe(WriteDecisionKind.Queued);
+        second.Kind.ShouldBe(WriteDecisionKind.Queued);
+
+        (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldBeNull("nothing is approved yet");
+        await _actions.ApproveAsync(second.ActionId!, null, CancellationToken.None);
+        await _actions.ApproveAsync(first.ActionId!, null, CancellationToken.None);
+
+        var claimed = (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldNotBeNull();
+        claimed.Id.ShouldBe(first.ActionId, "oldest approved first; the one requested before the grant is never handed out");
+        claimed.Status.ShouldBe(PendingActionStatus.Executing);
+        (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldNotBeNull().Id.ShouldBe(second.ActionId);
+        (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldBeNull("both are claimed within the lease");
+        (await gate.ClaimNextApprovedAsync(FeatureCatalog.YouTubeId, CancellationToken.None)).ShouldBeNull("another feature's queue is untouched");
+    }
+
+    [Fact]
+    public async Task Without_The_Grant_No_Action_Is_Handed_Out_Even_When_One_Is_Approved()
+    {
+        var gate = Gate();
+        var action = await _actions.EnqueueAsync(FeatureCatalog.GitHubId, "New issues", "o/r", "Open an issue on o/r", CancellationToken.None);
+        await _actions.ApproveAsync(action.Id, null, CancellationToken.None);
+
+        (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_Claimed_GitHub_Action_Is_Recorded_Once_Against_Its_Id()
+    {
+        var gate = Gate();
+        await GrantGitHubAsync();
+        var queued = await gate.RequestAsync(FeatureCatalog.GitHubId, "New issues", "o/r", "Open an issue on o/r", CancellationToken.None);
+        await _actions.ApproveAsync(queued.ActionId!, null, CancellationToken.None);
+        var claimed = (await gate.ClaimNextApprovedAsync(FeatureCatalog.GitHubId, CancellationToken.None)).ShouldNotBeNull();
+
+        await gate.RecordAsync(FeatureCatalog.GitHubId, "New issues", "o/r", "succeeded", claimed.Id, CancellationToken.None);
+
+        (await _actions.FindAsync(claimed.Id, CancellationToken.None)).ShouldNotBeNull().Status.ShouldBe(PendingActionStatus.Executed);
+        var entry = (await _writes.ListSinceAsync(DateTimeOffset.MinValue, CancellationToken.None)).Single(e => e.ActionId == claimed.Id && e.Outcome == "succeeded");
+        entry.Action.ShouldBe("New issues");
+        await Should.ThrowAsync<WriteNotRecordableException>(
+            () => gate.RecordAsync(FeatureCatalog.GitHubId, "New issues", "o/r", "succeeded", claimed.Id, CancellationToken.None));
+    }
 }

@@ -173,7 +173,7 @@ internal sealed partial class GitHubClient(HttpClient http) : IGitHubClient
             "GitHub returned an unexpected empty response.");
     }
 
-    private static GitHubApiException ToApiException(HttpResponseMessage response)
+    internal static GitHubApiException ToApiException(HttpResponseMessage response)
     {
         var status = response.StatusCode;
         switch (status)
