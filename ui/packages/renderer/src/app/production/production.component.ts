@@ -513,6 +513,32 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                     <span class="badge">{{ p.status }}</span>
                     <span class="meta">{{ p.updatedAt | date: 'yyyy-MM-dd HH:mm' }}</span>
                   </button>
+                  @if (deletable(p)) {
+                    <button
+                      type="button"
+                      class="project-delete"
+                      [attr.data-test]="'project-delete-' + p.id"
+                      [attr.aria-label]="'Delete ' + p.topic"
+                      (click)="openDelete(p)"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M3 6h18" />
+                        <path d="M8 6V4h8v2" />
+                        <path d="M6 6l1 14h10l1-14" />
+                        <path d="M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  }
                 </li>
               }
             </ul>
@@ -531,16 +557,6 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
                   (click)="openDelegate(p)"
                 >
                   Delegate
-                </button>
-              }
-              @if (deletable(p)) {
-                <button
-                  type="button"
-                  class="btn btn--secondary"
-                  data-test="delete"
-                  (click)="openDelete(p)"
-                >
-                  Delete project
                 </button>
               }
               <button
@@ -1696,46 +1712,6 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             </div>
           }
 
-          @if (deleting() === p.id) {
-            <div
-              class="backdrop"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="delete-title"
-              data-test="delete-dialog"
-            >
-              <div class="dialog">
-                <h2 id="delete-title">Delete {{ p.topic }}</h2>
-                <p>
-                  This removes the project, its script, scenes and media files from Scout's data
-                  folder. A video already on YouTube stays there.
-                </p>
-                @if (deleteError(); as message) {
-                  <p class="err" data-test="delete-error">{{ message }}</p>
-                }
-                <div class="row">
-                  <button
-                    type="button"
-                    class="btn btn--secondary"
-                    data-test="delete-cancel"
-                    (click)="deleting.set(null)"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn--primary"
-                    data-test="delete-confirm"
-                    [disabled]="deletingBusy()"
-                    (click)="confirmDelete(p)"
-                  >
-                    Confirm and delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          }
-
           @if (delegating() === p.id) {
             <div
               class="backdrop"
@@ -1857,6 +1833,46 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
             </div>
           }
         }
+
+        @if (deletingProject(); as p) {
+          <div
+            class="backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            data-test="delete-dialog"
+          >
+            <div class="dialog">
+              <h2 id="delete-title">Delete {{ p.topic }}</h2>
+              <p>
+                This removes the project, its script, scenes and media files from Scout's data
+                folder. A video already on YouTube stays there.
+              </p>
+              @if (deleteError(); as message) {
+                <p class="err" data-test="delete-error">{{ message }}</p>
+              }
+              <div class="row">
+                <button
+                  type="button"
+                  class="btn btn--secondary"
+                  data-test="delete-cancel"
+                  (click)="deleting.set(null)"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  data-test="delete-confirm"
+                  [disabled]="deletingBusy()"
+                  (click)="confirmDelete(p)"
+                >
+                  Confirm and delete
+                </button>
+              </div>
+            </div>
+          </div>
+        }
       </div>
       <audio #samplePlayer data-test="voice-sample-player"></audio>
     </main>
@@ -1959,8 +1975,27 @@ const TARGET_METRICS: readonly { readonly value: string; readonly label: string 
         flex-direction: column;
         gap: 8px;
       }
+      .projects > li {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .project-delete {
+        flex: none;
+        display: inline-flex;
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        padding: 6px;
+        color: #9aa3b5;
+        cursor: pointer;
+      }
+      .project-delete:hover {
+        color: #ef4444;
+      }
       .project {
-        width: 100%;
+        flex: 1;
+        min-width: 0;
         display: flex;
         gap: 8px;
         align-items: center;
@@ -2456,6 +2491,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     return detail !== null && detail.id === this.selectedId() ? detail : null;
   });
 
+  readonly deletingProject = computed(
+    () => this.projects().find((p) => p.id === this.deleting()) ?? null,
+  );
+
   readonly waiving = signal<string | null>(null);
   readonly waiveNote = signal('');
   readonly deciding = signal<string | null>(null);
@@ -2916,8 +2955,10 @@ export class ProductionComponent implements OnInit, OnDestroy {
     try {
       await this.bridge.operatorDeleteProject({ id: project.id });
       this.deleting.set(null);
-      this.selectedId.set(null);
-      this.detail.set(null);
+      if (this.selectedId() === project.id) {
+        this.selectedId.set(null);
+        this.detail.set(null);
+      }
       this.projects.update((list) => list.filter((p) => p.id !== project.id));
       await this.refresh();
     } catch (err: unknown) {

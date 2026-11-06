@@ -6,6 +6,8 @@ The owner asked for code review and project improvements from chat, for every la
 
 ## [2026-11-05] integrate | Production screen: the owner's working area first
 New initiative page pages/roadmap/production-screen.md (the owner's decisions of 2026-11-05 from the mockups: channel folded, one-line start, list beside detail, title-row actions and close, block order, two-column Presenter with removable versions, scene card, claims redesign, help marks, the one new rpc RemovePresenterVersion); indexed; linked from desktop-operator.md and control-plane.md.
+## [2026-11-05] crystallize | The default image model gpt-image-1 was shut down
+OpenAI shut down gpt-image-1 on 2026-10-23 while Scout's OpenAI and Azure OpenAI providers still defaulted to it, so every picture request on a key failed; the default is gpt-image-2.5-sunburst now (pages/services/llm.md); the followups entry is closed.
 
 ## [2026-11-05] crystallize | Windows ui CI red since 2026-11-04: LF checkout rule and a relative fixture
 Three ui tests failed only on the Windows runner: two read main.ts as text and the checkout had CRLF, one built a "relative" directory with path.relative across drives. Fix at the root: `.gitattributes` `* text=auto eol=lf` (no file renormalised), and the fixture `path.basename`; recorded on pages/conventions/testing.md.

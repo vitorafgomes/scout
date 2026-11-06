@@ -97,7 +97,7 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
         _embeddingModel = embeddings.Model;
         _httpClient = httpClient;
         _speechModel = string.IsNullOrWhiteSpace(openAI.SpeechModel) ? "gpt-4o-mini-tts" : openAI.SpeechModel;
-        _imageModel = string.IsNullOrWhiteSpace(openAI.ImageModel) ? "gpt-image-1" : openAI.ImageModel;
+        _imageModel = string.IsNullOrWhiteSpace(openAI.ImageModel) ? "gpt-image-2.5-sunburst" : openAI.ImageModel;
         var quality = string.IsNullOrWhiteSpace(openAI.ImageQuality) ? "medium" : openAI.ImageQuality.Trim();
         if (!ImageQualities.Contains(quality, StringComparer.Ordinal))
         {

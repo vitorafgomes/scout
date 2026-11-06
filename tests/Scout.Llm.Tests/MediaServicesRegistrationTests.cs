@@ -177,7 +177,7 @@ public sealed class MediaServicesRegistrationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void OpenAI_Gets_Speech_On_Gpt_4o_Mini_Tts_And_Images_On_Gpt_Image_1_By_Default_With_The_Owners_Key(bool blankKeys)
+    public void OpenAI_Gets_Speech_On_Gpt_4o_Mini_Tts_And_Images_On_Gpt_Image_2_5_Sunburst_By_Default_With_The_Owners_Key(bool blankKeys)
     {
         using var provider = Compose(blankKeys
             ? OpenAI(("Scout:Llm:OpenAI:SpeechModel", " "), ("Scout:Llm:OpenAI:ImageModel", ""))
@@ -187,7 +187,7 @@ public sealed class MediaServicesRegistrationTests
         kernel.Services.GetRequiredService<ITextToAudioService>().Attributes[AIServiceExtensions.ModelIdKey]
             .ShouldBe("gpt-4o-mini-tts");
         kernel.Services.GetRequiredService<ITextToImageService>().Attributes[AIServiceExtensions.ModelIdKey]
-            .ShouldBe("gpt-image-1");
+            .ShouldBe("gpt-image-2.5-sunburst");
         var media = provider.GetRequiredService<MediaCapabilities>();
         (media.Speech, media.Images, media.Provider).ShouldBe((true, true, "OpenAI"));
     }
@@ -262,7 +262,7 @@ public sealed class MediaServicesRegistrationTests
         var picture = JsonDocument.Parse(handler.Bodies.Single()).RootElement;
         var model = picture.GetProperty("model").GetString();
         var asked = picture.TryGetProperty("quality", out var value) ? value.GetString() : null;
-        (model, asked).ShouldBe(("gpt-image-1", sent));
+        (model, asked).ShouldBe(("gpt-image-2.5-sunburst", sent));
     }
 
     [Theory]
@@ -280,7 +280,7 @@ public sealed class MediaServicesRegistrationTests
     }
 
     [Theory]
-    [InlineData(null, "gpt-image-1", "1536x1024", null)]
+    [InlineData(null, "gpt-image-2.5-sunburst", "1536x1024", null)]
     [InlineData("dall-e-3", "dall-e-3", "1792x1024", "b64_json")]
     public async Task Azure_OpenAI_Picks_The_Image_Settings_Of_The_Configured_Image_Model(
         string? imageModel, string expectedModel, string size, string? responseFormat)
@@ -378,7 +378,7 @@ public sealed class MediaServicesRegistrationTests
             .ShouldBe(("gpt-4o-mini-tts", "alloy", "mp3"));
         audio.ShouldHaveSingleItem().Data!.Value.ToArray().ShouldBe(new byte[] { 1, 2, 3 });
         var picture = JsonDocument.Parse(handler.Bodies[1]).RootElement;
-        (picture.GetProperty("model").GetString(), picture.GetProperty("size").GetString()).ShouldBe(("gpt-image-1", "1536x1024"));
+        (picture.GetProperty("model").GetString(), picture.GetProperty("size").GetString()).ShouldBe(("gpt-image-2.5-sunburst", "1536x1024"));
         picture.TryGetProperty("response_format", out _).ShouldBeFalse();
         image.ShouldHaveSingleItem().Data!.Value.ToArray().ShouldBe(png);
     }
