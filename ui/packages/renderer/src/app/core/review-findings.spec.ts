@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { REVIEW_MARKER, type ReviewFinding, type ReviewFindings } from '@scout/shared';
+import {
+  ISSUES_MARKER,
+  REVIEW_MARKER,
+  type ReviewFinding,
+  type ReviewFindings,
+} from '@scout/shared';
 
-import { commentBody, parseReviewFindings, postingAsk, reviewBody } from './review-findings';
+import {
+  commentBody,
+  issueBody,
+  issuesAsk,
+  parseReviewFindings,
+  postingAsk,
+  reviewBody,
+} from './review-findings';
 
 const RED = '\u{1F534}';
 const YELLOW = '\u{1F7E1}';
@@ -34,6 +46,19 @@ const review: ReviewFindings = {
   verdict: 'merge after the blocking finding',
   read: '6 of 6 files read',
   findings: [total, naming],
+};
+
+const audit: ReviewFindings = {
+  kind: 'audit',
+  repository: 'acme/shop',
+  commit: 'ec7f951',
+  verdict: 'two defects to fix before the release',
+  read: '41 of 41 files read',
+  known: ['Refunds are manual until v2, as the README says.'],
+  findings: [
+    { ...total, rule: 'ADR 0007: totals are computed after discounts' },
+    { ...naming, rule: 'Defect' },
+  ],
 };
 
 function reply(block: unknown): string {
@@ -123,6 +148,73 @@ describe('review findings', () => {
     });
     expect(postingAsk(review, [{ finding: naming, body: 'x' }]).split(REVIEW_MARKER)[0]).toBe(
       'Post 1 finding on acme/shop#5',
+    );
+  });
+
+  it('parseReviewFindings takes an audit block without a number, with rule and known, and refuses an audit with a malformed known list', () => {
+    expect(parseReviewFindings(reply(audit))).toEqual({
+      review: audit,
+      markdown: '## Review of acme/shop\n\nOne blocker.\n\nAsk me to post it.',
+    });
+    const { known: _known, ...withoutKnown } = audit;
+    expect(parseReviewFindings(reply(withoutKnown))?.review).toEqual(withoutKnown);
+    expect(parseReviewFindings(reply({ ...audit, known: [] }))?.review.known).toEqual([]);
+    expect(
+      parseReviewFindings(reply({ ...review, findings: [{ ...total, rule: 'Defect' }] }))?.review
+        .findings,
+    ).toEqual([{ ...total, rule: 'Defect' }]);
+    expect(
+      parseReviewFindings(reply({ ...audit, known: Array.from({ length: 20 }, () => 'k') }))?.review
+        .known,
+    ).toHaveLength(20);
+
+    const refused = [
+      reply({ ...audit, known: 'Refunds are manual.' }),
+      reply({ ...audit, known: [''] }),
+      reply({ ...audit, known: ['   '] }),
+      reply({ ...audit, known: [42] }),
+      reply({ ...audit, known: ['k'.repeat(301)] }),
+      reply({ ...audit, known: Array.from({ length: 21 }, () => 'k') }),
+      reply({ ...audit, number: 5 }),
+      reply({ ...audit, kind: 'scan' }),
+      reply({ ...audit, findings: [{ ...total, rule: '' }] }),
+      reply({ ...audit, findings: [{ ...total, rule: 'r'.repeat(301) }] }),
+      reply({ ...review, findings: [{ ...total, rule: 7 }] }),
+      reply({ ...withoutKnown, kind: 'review' }),
+    ];
+    expect(refused.map(parseReviewFindings)).toEqual(refused.map(() => null));
+  });
+
+  it('issueBody follows the Problem, Evidence, Proposed change shape with the rule and the drafted-by line', () => {
+    expect(issueBody(audit, audit.findings[0]!)).toBe(
+      `## Problem\n\n${RED} Discounts applied after the sum\n\n\`total\` is summed before the discount loop runs.\n\n## Evidence\n\n\`src/orders/Checkout.cs:88\`\n\nNot from this PR, but this is where it shows.\n\n## Proposed change\n\nApply the discounts before the sum.\n\n**Rule:** ADR 0007: totals are computed after discounts\n\n---\nDrafted by Scout from an audit of acme/shop at ec7f951.`,
+    );
+    const { commit: _commit, ...atHead } = audit;
+    expect(issueBody(atHead, naming)).toBe(
+      `## Problem\n\n${GREEN} Name says the wrong thing\n\n\`items\` holds ids.\n\n## Evidence\n\n\`src/orders/Cart.cs:12\`\n\n## Proposed change\n\nRename it \`itemIds\`.\n\n---\nDrafted by Scout from an audit of acme/shop.`,
+    );
+    expect(issueBody(audit, naming, 'The owner rewrote this issue.')).toBe(
+      'The owner rewrote this issue.',
+    );
+  });
+
+  it('issuesAsk is the bare question, the issues marker and one issue per chosen finding in order with its title and body', () => {
+    const ask = issuesAsk(audit, [
+      { finding: naming, body: 'edited body' },
+      { finding: total, body: issueBody(audit, total) },
+    ]);
+    const [question, json] = ask.split(ISSUES_MARKER);
+
+    expect(question).toBe('Open 2 issues on acme/shop');
+    expect(JSON.parse(json!)).toEqual({
+      repository: 'acme/shop',
+      issues: [
+        { title: 'Name says the wrong thing', body: 'edited body' },
+        { title: 'Discounts applied after the sum', body: issueBody(audit, total) },
+      ],
+    });
+    expect(issuesAsk(audit, [{ finding: naming, body: 'x' }]).split(ISSUES_MARKER)[0]).toBe(
+      'Open 1 issue on acme/shop',
     );
   });
 });

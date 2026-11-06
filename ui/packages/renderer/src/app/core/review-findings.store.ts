@@ -10,7 +10,7 @@ export interface ReviewState {
   readonly edited: Readonly<Record<string, string>>;
   readonly editing: string | null;
   readonly postTurnId?: string;
-  readonly posted?: { readonly url: string };
+  readonly posted?: { readonly urls: readonly string[] };
   readonly target?: string;
   readonly preview: boolean;
 }
@@ -18,11 +18,14 @@ export interface ReviewState {
 const EMPTY: ReviewState = { picks: {}, edited: {}, editing: null, preview: false };
 const GITHUB_URL = /https:\/\/github\.com\/[^\s)\]>"'<]+/;
 const POST_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/;
+const ISSUES_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/;
+const ISSUE_URL = /https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/\d+/g;
 
 /**
  * The owner's picks, edited comments and posting state per findings turn. It follows the conversation:
- * a post turn that completes with a GitHub link marks the review posted, one that fails or ends without
- * a link brings the buttons back, and a findings turn that leaves the list, as on Clear, is forgotten.
+ * a post turn that completes with a GitHub link marks the review posted, an issues turn that completes
+ * with issue links of the audited repository marks the audit's issues opened, one that fails or ends
+ * without a link brings the buttons back, and a findings turn that leaves the list, as on Clear, is forgotten.
  */
 @Injectable({ providedIn: 'root' })
 export class ReviewFindingsStore {
@@ -41,9 +44,10 @@ export class ReviewFindingsStore {
     return this.states()[turnId] ?? EMPTY;
   }
 
-  register(turnId: string, repository: string, number: number): void {
+  register(turnId: string, repository: string, number?: number): void {
+    const target = number === undefined ? repository.toLowerCase() : `${repository}#${number}`;
     untracked(() => {
-      this.update(turnId, (s) => ({ ...s, target: `${repository}#${number}` }));
+      this.update(turnId, (s) => ({ ...s, target }));
       this.observe(this.conversation.turns(), false);
     });
   }
@@ -88,18 +92,21 @@ export class ReviewFindingsStore {
 
   observe(turns: readonly LocalTurn[], prune = true): void {
     const byId = new Map(turns.map((turn) => [turn.id, turn]));
-    const postedBy = new Map<string, { readonly url: string; readonly at: number }>();
+    const postedBy = new Map<string, { readonly urls: readonly string[]; readonly at: number }>();
     turns.forEach((turn, at) => {
-      const target =
-        turn.review && turn.state === 'done' ? POST_TARGET.exec(turn.question)?.[1] : undefined;
-      const url = target === undefined ? undefined : GITHUB_URL.exec(turn.reply)?.[0];
-      if (target !== undefined && url !== undefined)
-        postedBy.set(target, { url: url.replace(/[.,;:!?]+$/, ''), at });
+      if (turn.state !== 'done') return;
+      const target = turn.review
+        ? POST_TARGET.exec(turn.question)?.[1]
+        : turn.issues
+          ? ISSUES_TARGET.exec(turn.question)?.[1]?.toLowerCase()
+          : undefined;
+      const urls = target === undefined ? [] : links(target, turn.reply);
+      if (target !== undefined && urls.length > 0) postedBy.set(target, { urls, at });
     });
     const next: Record<string, ReviewState> = {};
     for (const [turnId, state] of Object.entries(this.states())) {
       if (prune && !byId.has(turnId)) continue;
-      const elsewhere: { readonly url: string; readonly at: number } | undefined =
+      const elsewhere: { readonly urls: readonly string[]; readonly at: number } | undefined =
         state.target === undefined ? undefined : postedBy.get(state.target);
       if (
         state.posted === undefined &&
@@ -107,7 +114,7 @@ export class ReviewFindingsStore {
         turns.findIndex((turn) => turn.id === turnId) < elsewhere.at
       ) {
         const { postTurnId: _pending, ...rest } = state;
-        next[turnId] = { ...rest, posted: { url: elsewhere.url } };
+        next[turnId] = { ...rest, posted: { urls: elsewhere.urls } };
         continue;
       }
       const post = state.postTurnId === undefined ? undefined : byId.get(state.postTurnId);
@@ -115,10 +122,9 @@ export class ReviewFindingsStore {
         next[turnId] = state;
         continue;
       }
-      const url = post.state === 'done' ? GITHUB_URL.exec(post.reply)?.[0] : undefined;
+      const urls = post.state === 'done' ? links(state.target, post.reply) : [];
       const { postTurnId: _done, ...rest } = state;
-      next[turnId] =
-        url === undefined ? rest : { ...state, posted: { url: url.replace(/[.,;:!?]+$/, '') } };
+      next[turnId] = urls.length === 0 ? rest : { ...state, posted: { urls } };
     }
     this.states.set(next);
   }
@@ -126,4 +132,13 @@ export class ReviewFindingsStore {
   private update(turnId: string, change: (state: ReviewState) => ReviewState): void {
     this.states.update((states) => ({ ...states, [turnId]: change(states[turnId] ?? EMPTY) }));
   }
+}
+
+function links(target: string | undefined, reply: string): readonly string[] {
+  if (target === undefined || target.includes('#')) {
+    const url = GITHUB_URL.exec(reply)?.[0];
+    return url === undefined ? [] : [url.replace(/[.,;:!?]+$/, '')];
+  }
+  const found = [...reply.matchAll(ISSUE_URL)].filter((m) => m[1]!.toLowerCase() === target);
+  return [...new Set(found.map((m) => m[0]))];
 }

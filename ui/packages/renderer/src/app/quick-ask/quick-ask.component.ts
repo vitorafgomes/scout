@@ -377,6 +377,9 @@ function storedTranslationMode(): LocalTranslationMode {
                   @if (turn.review) {
                     <p class="with-transcript" data-test="with-review">with the review</p>
                   }
+                  @if (turn.issues) {
+                    <p class="with-transcript" data-test="with-issues">with the issues</p>
+                  }
                 </div>
               </div>
             }

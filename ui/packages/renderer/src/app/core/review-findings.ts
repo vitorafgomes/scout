@@ -1,4 +1,9 @@
-import { REVIEW_MARKER, type ReviewFinding, type ReviewFindings } from '@scout/shared';
+import {
+  ISSUES_MARKER,
+  REVIEW_MARKER,
+  type ReviewFinding,
+  type ReviewFindings,
+} from '@scout/shared';
 
 const BLOCK = /```scout-findings[ \t]*\r?\n([\s\S]*?)\r?\n```/g;
 const REPOSITORY = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
@@ -6,6 +11,8 @@ const FINDING_ID = /^[A-Za-z0-9-]{1,40}$/;
 const SEVERITIES: ReadonlySet<unknown> = new Set(['block', 'fix', 'nit']);
 const MAX_FINDINGS = 50;
 const MAX_TITLE_CHARS = 200;
+const MAX_KNOWN = 20;
+const MAX_NOTE_CHARS = 300;
 
 const MARKS: Readonly<Record<ReviewFinding['severity'], string>> = {
   block: '\u{1F534}',
@@ -13,15 +20,15 @@ const MARKS: Readonly<Record<ReviewFinding['severity'], string>> = {
   nit: '\u{1F7E2}',
 };
 
-/** A finding the owner chose to post, with the comment body it goes with. */
+/** A finding the owner chose to post, with the comment or issue body it goes with. */
 export interface SelectedFinding {
   readonly finding: ReviewFinding;
   readonly body: string;
 }
 
 /**
- * The review in a reply's single `scout-findings` block, validated, and the reply without the block;
- * null when there is no such block, more than one, or the block is not a valid review.
+ * The review or audit in a reply's single `scout-findings` block, validated, and the reply without the
+ * block; null when there is no such block, more than one, or the block is not a valid review or audit.
  */
 export function parseReviewFindings(
   reply: string,
@@ -70,14 +77,41 @@ export function postingAsk(review: ReviewFindings, selected: readonly SelectedFi
   return `Post ${n} finding${n === 1 ? '' : 's'} on ${review.repository}#${review.number}${REVIEW_MARKER}${JSON.stringify(payload)}`;
 }
 
+/** The issue a finding of an audit becomes: the owner's edited text when there is one, otherwise the problem, the evidence and the proposed change. */
+export function issueBody(review: ReviewFindings, finding: ReviewFinding, edited?: string): string {
+  if (edited !== undefined) return edited;
+  const context = finding.context ? `\n\n${finding.context}` : '';
+  const rule = finding.rule ? `\n\n**Rule:** ${finding.rule}` : '';
+  const at = review.commit ? ` at ${review.commit}` : '';
+  return (
+    `## Problem\n\n${MARKS[finding.severity]} ${finding.title}\n\n${finding.why}\n\n` +
+    `## Evidence\n\n\`${finding.path}:${finding.line}\`${context}\n\n` +
+    `## Proposed change\n\n${finding.fix}${rule}\n\n` +
+    `---\nDrafted by Scout from an audit of ${review.repository}${at}.`
+  );
+}
+
+/** The question that asks the worker to open one issue per selected finding of an audit, the issues after the marker. */
+export function issuesAsk(review: ReviewFindings, selected: readonly SelectedFinding[]): string {
+  const n = selected.length;
+  const payload = {
+    repository: review.repository,
+    issues: selected.map((s) => ({ title: s.finding.title, body: s.body })),
+  };
+  return `Open ${n} issue${n === 1 ? '' : 's'} on ${review.repository}${ISSUES_MARKER}${JSON.stringify(payload)}`;
+}
+
 function toReview(data: unknown): ReviewFindings | null {
   if (!isRecord(data)) return null;
-  const { repository, number, commit, verdict, read, findings } = data;
+  const { kind, repository, number, commit, verdict, read, known, findings } = data;
+  const audit = kind === 'audit';
   if (
+    (kind !== undefined && kind !== 'review' && !audit) ||
     typeof repository !== 'string' ||
     !REPOSITORY.test(repository) ||
-    !Number.isInteger(number) ||
-    (number as number) < 1 ||
+    (audit
+      ? number !== undefined || !optionalNotes(known)
+      : !Number.isInteger(number) || (number as number) < 1) ||
     !isText(verdict) ||
     !optionalString(commit) ||
     !optionalString(read) ||
@@ -92,18 +126,20 @@ function toReview(data: unknown): ReviewFindings | null {
   const valid = parsed as ReviewFinding[];
   if (new Set(valid.map((f) => f.id)).size !== valid.length) return null;
   return {
+    ...(kind === undefined ? {} : { kind: kind as 'review' | 'audit' }),
     repository,
-    number: number as number,
+    ...(audit ? {} : { number: number as number }),
     ...(commit === undefined ? {} : { commit: commit as string }),
     verdict: verdict as string,
     ...(read === undefined ? {} : { read: read as string }),
+    ...(audit && known !== undefined ? { known: known as string[] } : {}),
     findings: valid,
   };
 }
 
 function toFinding(data: unknown): ReviewFinding | null {
   if (!isRecord(data)) return null;
-  const { id, severity, title, path, line, context, why, fix } = data;
+  const { id, severity, title, path, line, context, why, fix, rule } = data;
   if (
     typeof id !== 'string' ||
     !FINDING_ID.test(id) ||
@@ -116,7 +152,8 @@ function toFinding(data: unknown): ReviewFinding | null {
     (line as number) < 1 ||
     !optionalString(context) ||
     !isText(why) ||
-    !isText(fix)
+    !isText(fix) ||
+    (rule !== undefined && !isNote(rule))
   ) {
     return null;
   }
@@ -129,6 +166,7 @@ function toFinding(data: unknown): ReviewFinding | null {
     ...(context === undefined ? {} : { context: context as string }),
     why: why as string,
     fix: fix as string,
+    ...(rule === undefined ? {} : { rule: rule as string }),
   };
 }
 
@@ -138,6 +176,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isText(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isNote(value: unknown): boolean {
+  return isText(value) && (value as string).length <= MAX_NOTE_CHARS;
+}
+
+function optionalNotes(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.length <= MAX_KNOWN && value.every(isNote))
+  );
 }
 
 function optionalString(value: unknown): boolean {
