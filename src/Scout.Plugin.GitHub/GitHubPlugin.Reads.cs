@@ -7,9 +7,10 @@ using Scout.Plugin.GitHub.Abstractions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// The single-item reads a code review needs. Diffs are bounded: a pull request answer carries each
-/// file's diff while the diffs fit <see cref="PatchBudget"/> characters and names the files it left out,
-/// which <c>get_pull_request_file</c> reads one at a time up to <see cref="PatchCap"/>.
+/// The single-item reads a code review needs, and the two whole-project reads an audit needs. Diffs are
+/// bounded: a pull request answer carries each file's diff while the diffs fit <see cref="PatchBudget"/>
+/// characters and names the files it left out, which <c>get_pull_request_file</c> reads one at a time up to
+/// <see cref="PatchCap"/>. A tree listing carries at most <see cref="ListedPathsCap"/> paths after the filters.
 /// </summary>
 public sealed partial class GitHubPlugin
 {
@@ -269,6 +270,182 @@ public sealed partial class GitHubPlugin
             return ErrorLine(ex);
         }
     }
+
+    /// <summary>Paths a tree listing prints after the filters; the rest is counted and the model is told to narrow.</summary>
+    internal const int ListedPathsCap = 300;
+
+    internal const int FragmentCap = 300;
+
+    /// <summary>List the files of a repository, with counts by folder and by extension.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="reference">Branch, tag or commit; empty for the default branch.</param>
+    /// <param name="prefix">Only paths under this folder; empty for the whole repository.</param>
+    /// <param name="extensions">Comma-separated extensions to keep, e.g. ".cs,.ts"; empty for all.</param>
+    /// <param name="ct">Cancels the underlying GitHub requests.</param>
+    /// <returns>The counts and the matching paths, cut at a cap, or a clean message when not found or on failure.</returns>
+    [KernelFunction("list_repository_files")]
+    [Description("List the files of a repository in one call: how many per top-level folder and per extension, then the paths that match an optional folder prefix and extension list, up to 300. Use it first when judging a whole project, to see its shape and pick what to read; narrow with prefix or extensions when it says the listing was cut.")]
+    public async Task<string> ListRepositoryFilesAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Branch, tag or commit to list at; empty for the default branch.")] string reference = "",
+        [Description("Only paths under this folder, e.g. src/; empty for the whole repository.")] string prefix = "",
+        [Description("Comma-separated extensions to keep, e.g. .cs,.ts; empty for all.")] string extensions = "",
+        CancellationToken ct = default)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
+        if (!GitHubNames.IsValidReference(reference))
+        {
+            return GitHubNames.InvalidReference;
+        }
+
+        if (prefix.Length > 0 && !GitHubNames.IsValidPath(prefix.TrimEnd('/')))
+        {
+            return GitHubNames.InvalidPath;
+        }
+
+        try
+        {
+            var tree = await _client.ListRepositoryFilesAsync(owner, repo, reference, ct).ConfigureAwait(false);
+            return tree is null
+                ? $"Repository {owner}/{repo}{At(reference)} not found or not accessible."
+                : FormatTree(owner, repo, tree, prefix, extensions);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex))
+        {
+            return ErrorLine(ex);
+        }
+    }
+
+    /// <summary>Search a repository's code on its default branch.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="query">What to look for: words, an identifier, a string.</param>
+    /// <param name="path">Only files under this folder; empty for all.</param>
+    /// <param name="extension">Only files with this extension, e.g. cs; empty for all.</param>
+    /// <param name="ct">Cancels the underlying GitHub request.</param>
+    /// <returns>The matching files with the highlighted fragments, or a clean message when none or on failure.</returns>
+    [KernelFunction("search_code")]
+    [Description("Search a repository's code on its default branch for words, an identifier or a string, optionally under one folder or one extension: the matching files with the fragments GitHub highlights, first 30. Use it to find where something is done or called across the project. GitHub allows about ten searches a minute.")]
+    public async Task<string> SearchCodeAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("What to look for, 1 to 200 characters, without repo:, org: or user: qualifiers.")] string query,
+        [Description("Only files under this folder, e.g. src/Orders; empty for all.")] string path = "",
+        [Description("Only files with this extension, e.g. cs or ts; empty for all.")] string extension = "",
+        CancellationToken ct = default)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
+        if (!GitHubNames.IsValidSearchQuery(query))
+        {
+            return GitHubNames.InvalidQuery;
+        }
+
+        if (path.Length > 0 && !GitHubNames.IsValidPath(path.TrimEnd('/')))
+        {
+            return GitHubNames.InvalidPath;
+        }
+
+        if (!GitHubNames.IsValidExtension(extension))
+        {
+            return GitHubNames.InvalidExtension;
+        }
+
+        try
+        {
+            var result = await _client.SearchCodeAsync(owner, repo, query, path, extension, ct).ConfigureAwait(false);
+            return FormatSearch(owner, repo, query, result);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex))
+        {
+            return ErrorLine(ex);
+        }
+    }
+
+    internal static string FormatTree(string owner, string repo, RepositoryTree tree, string prefix, string extensions)
+    {
+        var wanted = extensions.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(e => e.StartsWith('.') ? e : "." + e)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var folder = prefix.Length == 0 ? string.Empty : prefix.TrimEnd('/') + "/";
+        var selected = tree.Entries
+            .Where(e => folder.Length == 0 || e.Path.StartsWith(folder, StringComparison.Ordinal))
+            .Where(e => wanted.Count == 0 || wanted.Contains(Path.GetExtension(e.Path)))
+            .ToList();
+
+        var text = new StringBuilder();
+        text.Append(CultureInfo.InvariantCulture, $"{owner}/{repo} at {tree.Reference}: {tree.Entries.Count} file(s)");
+        if (tree.Truncated)
+        {
+            text.Append("; GitHub cut the listing, so this is a prefix of the repository");
+        }
+
+        text.Append("\nBy top-level folder: ").Append(Counts(tree.Entries.Select(e => e.Path.Contains('/') ? e.Path[..e.Path.IndexOf('/')] + "/" : "(root)")));
+        text.Append("\nBy extension: ").Append(Counts(tree.Entries.Select(e => Path.GetExtension(e.Path) is { Length: > 0 } ext ? ext : "(none)")));
+
+        var parts = new List<string>();
+        if (folder.Length > 0)
+        {
+            parts.Add($"prefix \"{folder}\"");
+        }
+
+        if (wanted.Count > 0)
+        {
+            parts.Add($"extensions \"{string.Join(",", wanted.OrderBy(w => w, StringComparer.OrdinalIgnoreCase))}\"");
+        }
+
+        var filter = parts.Count == 0 ? string.Empty : " matching " + string.Join(" and ", parts);
+        text.Append(CultureInfo.InvariantCulture, $"\nFiles{filter}: {selected.Count}");
+        foreach (var entry in selected.OrderBy(e => e.Path, StringComparer.Ordinal).Take(ListedPathsCap))
+        {
+            text.Append(CultureInfo.InvariantCulture, $"\n  {entry.Path} ({entry.Size} bytes)");
+        }
+
+        if (selected.Count > ListedPathsCap)
+        {
+            text.Append(CultureInfo.InvariantCulture, $"\n  ... {selected.Count - ListedPathsCap} more; narrow with prefix or extensions");
+        }
+
+        return text.ToString();
+    }
+
+    internal static string FormatSearch(string owner, string repo, string query, CodeSearchResult result)
+    {
+        if (result.TotalCount == 0 || result.Hits.Count == 0)
+        {
+            return $"No file in {owner}/{repo} matches \"{query.Trim()}\" (default branch).";
+        }
+
+        var text = new StringBuilder();
+        text.Append(CultureInfo.InvariantCulture, $"{result.TotalCount} file(s) in {owner}/{repo} match \"{query.Trim()}\" (default branch; first {result.Hits.Count} shown)");
+        foreach (var hit in result.Hits)
+        {
+            text.Append("\n--- ").Append(hit.Path);
+            foreach (var fragment in hit.Fragments.Take(2))
+            {
+                text.Append('\n').Append(Cut(fragment.Trim(), FragmentCap));
+            }
+        }
+
+        return text.ToString();
+    }
+
+    private static string Counts(IEnumerable<string> keys) =>
+        string.Join(", ", keys
+            .GroupBy(k => k, StringComparer.Ordinal)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .Take(30)
+            .Select(g => string.Create(CultureInfo.InvariantCulture, $"{g.Key} {g.Count()}")));
 
     internal static string FormatPullRequest(PullRequestDetails pr)
     {

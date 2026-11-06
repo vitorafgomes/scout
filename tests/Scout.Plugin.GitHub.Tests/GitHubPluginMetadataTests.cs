@@ -27,6 +27,8 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_pull_request_comments")]
     [InlineData("get_issue")]
     [InlineData("get_file_contents")]
+    [InlineData("list_repository_files")]
+    [InlineData("search_code")]
     public void Exposes_Expected_Function(string functionName)
     {
         var plugin = BuildPlugin();
@@ -35,10 +37,11 @@ public sealed class GitHubPluginMetadataTests
     }
 
     [Fact]
-    public void Exposes_Exactly_The_Nine_Read_Functions() =>
+    public void Exposes_Exactly_The_Eleven_Read_Functions() =>
         BuildPlugin().Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ShouldBe([
             "get_file_contents", "get_issue", "get_pull_request", "get_pull_request_file", "get_repository",
-            "list_issues", "list_pull_request_comments", "list_pull_requests", "list_repositories",
+            "list_issues", "list_pull_request_comments", "list_pull_requests", "list_repositories", "list_repository_files",
+            "search_code",
         ]);
 
     [Theory]
@@ -51,6 +54,8 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_pull_request_comments")]
     [InlineData("get_issue")]
     [InlineData("get_file_contents")]
+    [InlineData("list_repository_files")]
+    [InlineData("search_code")]
     public void Function_Has_NonEmpty_Description(string functionName)
     {
         var plugin = BuildPlugin();
@@ -68,6 +73,8 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_pull_request_comments")]
     [InlineData("get_issue")]
     [InlineData("get_file_contents")]
+    [InlineData("list_repository_files")]
+    [InlineData("search_code")]
     public void RepoScoped_Function_Exposes_Owner_And_Repo_With_Descriptions(string functionName)
     {
         var plugin = BuildPlugin();
@@ -90,6 +97,10 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("get_issue", "number")]
     [InlineData("get_file_contents", "path")]
     [InlineData("get_file_contents", "reference")]
+    [InlineData("list_repository_files", "prefix")]
+    [InlineData("list_repository_files", "extensions")]
+    [InlineData("search_code", "query")]
+    [InlineData("search_code", "extension")]
     public void Single_Item_Function_Describes_Its_Selector(string functionName, string parameter)
     {
         var plugin = BuildPlugin();

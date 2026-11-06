@@ -1,8 +1,8 @@
 namespace Scout.Plugin.GitHub.Abstractions;
 
 /// <summary>
-/// Read access to GitHub data via the authenticated user's token: listing, and reading one
-/// pull request, its comments, one issue and one file. No create, merge, push or comment
+/// Read access to GitHub data via the authenticated user's token: listing, reading one
+/// pull request, its comments, one issue and one file, the whole file tree, and code search. No create, merge, push or comment
 /// operation exists here; a write, when one is added, is a separate declared function.
 /// </summary>
 public interface IGitHubClient
@@ -59,4 +59,19 @@ public interface IGitHubClient
     /// </summary>
     Task<RepositoryFile?> GetFileContentAsync(
         string owner, string repo, string path, string? reference, CancellationToken ct);
+
+    /// <summary>
+    /// List every file of the repository at <paramref name="reference"/>, or at the default branch when empty,
+    /// in one recursive read. Returns null when the repository or the reference is not found.
+    /// </summary>
+    Task<RepositoryTree?> ListRepositoryFilesAsync(
+        string owner, string repo, string? reference, CancellationToken ct);
+
+    /// <summary>
+    /// Search the repository's code on its default branch for <paramref name="query"/>, narrowed to
+    /// <paramref name="path"/> and <paramref name="extension"/> when given; the first page of files with the
+    /// fragments GitHub highlighted.
+    /// </summary>
+    Task<CodeSearchResult> SearchCodeAsync(
+        string owner, string repo, string query, string? path, string? extension, CancellationToken ct);
 }

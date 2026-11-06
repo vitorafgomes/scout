@@ -213,4 +213,75 @@ public sealed class GitHubPluginReadsTests
         (await plugin.GetRepositoryAsync("", "hello", CancellationToken.None)).ShouldBe(GitHubNames.InvalidRepository);
         await client.DidNotReceiveWithAnyArgs().ListOpenPullRequestsAsync(default!, default!, default);
     }
+
+    [Fact]
+    public async Task ListRepositoryFiles_Counts_By_Folder_And_Extension_And_Lists_The_Paths_The_Filters_Keep()
+    {
+        var client = Client();
+        client.ListRepositoryFilesAsync("octocat", "hello", "", Arg.Any<CancellationToken>())
+            .Returns(new RepositoryTree("main", false, [
+                new RepositoryEntry("src/A.cs", 10), new RepositoryEntry("src/B.cs", 20), new RepositoryEntry("src/ui/app.ts", 30),
+                new RepositoryEntry("tests/A.Tests.cs", 40), new RepositoryEntry("README.md", 5), new RepositoryEntry("Makefile", 1),
+            ]));
+        var plugin = new GitHubPlugin(client);
+
+        var all = await plugin.ListRepositoryFilesAsync("octocat", "hello", "", "", "", CancellationToken.None);
+        var filtered = await plugin.ListRepositoryFilesAsync("octocat", "hello", "", "src/", "cs", CancellationToken.None);
+        var byFolder = await plugin.ListRepositoryFilesAsync("octocat", "hello", "", "src/", "", CancellationToken.None);
+
+        all.ShouldStartWith("octocat/hello at main: 6 file(s)\nBy top-level folder: src/ 3, (root) 2, tests/ 1\nBy extension: .cs 3, (none) 1, .md 1, .ts 1\nFiles: 6");
+        all.ShouldContain("\n  Makefile (1 bytes)");
+        filtered.ShouldContain("Files matching prefix \"src/\" and extensions \".cs\": 2\n  src/A.cs (10 bytes)\n  src/B.cs (20 bytes)");
+        filtered.ShouldNotContain("app.ts");
+        byFolder.ShouldContain("Files matching prefix \"src/\": 3");
+        byFolder.ShouldNotContain("extensions");
+    }
+
+    [Fact]
+    public async Task ListRepositoryFiles_Cuts_The_Listing_At_The_Cap_And_Says_So()
+    {
+        var client = Client();
+        var entries = Enumerable.Range(1, GitHubPlugin.ListedPathsCap + 25).Select(i => new RepositoryEntry($"src/f{i:D4}.cs", i)).ToList();
+        client.ListRepositoryFilesAsync("octocat", "hello", "", Arg.Any<CancellationToken>()).Returns(new RepositoryTree("main", true, entries));
+
+        var result = await new GitHubPlugin(client).ListRepositoryFilesAsync("octocat", "hello", "", "", "", CancellationToken.None);
+
+        result.ShouldContain("GitHub cut the listing, so this is a prefix of the repository");
+        result.ShouldEndWith($"... 25 more; narrow with prefix or extensions");
+        result.Split('\n').Count(l => l.StartsWith("  src/f", StringComparison.Ordinal)).ShouldBe(GitHubPlugin.ListedPathsCap);
+    }
+
+    [Fact]
+    public async Task SearchCode_Formats_The_Hits_With_Their_Fragments_And_Says_When_Nothing_Matches()
+    {
+        var client = Client();
+        client.SearchCodeAsync("octocat", "hello", "catch (Exception)", "", "", Arg.Any<CancellationToken>())
+            .Returns(new CodeSearchResult(41, [new CodeSearchHit("src/Checkout.cs", ["  catch (Exception)\n  {\n  }", "second", "third"]), new CodeSearchHit("src/Old.cs", [])]));
+        client.SearchCodeAsync("octocat", "hello", "nothing", "", "", Arg.Any<CancellationToken>())
+            .Returns(new CodeSearchResult(0, []));
+        var plugin = new GitHubPlugin(client);
+
+        var hits = await plugin.SearchCodeAsync("octocat", "hello", "catch (Exception)", "", "", CancellationToken.None);
+        var none = await plugin.SearchCodeAsync("octocat", "hello", "nothing", "", "", CancellationToken.None);
+
+        hits.ShouldBe("41 file(s) in octocat/hello match \"catch (Exception)\" (default branch; first 2 shown)\n--- src/Checkout.cs\ncatch (Exception)\n  {\n  }\nsecond\n--- src/Old.cs");
+        none.ShouldBe("No file in octocat/hello matches \"nothing\" (default branch).");
+    }
+
+    [Theory]
+    [InlineData("", "", "")]
+    [InlineData("secret repo:evil/other", "", "")]
+    [InlineData("ORG:evil token", "", "")]
+    [InlineData("token", "../x", "")]
+    [InlineData("token", "", "cs ts")]
+    [InlineData("token", "", ".")]
+    public async Task SearchCode_Refuses_A_Query_That_Could_Leave_The_Repository_Before_Any_Request(string query, string path, string extension)
+    {
+        var client = Client();
+
+        var result = await new GitHubPlugin(client).SearchCodeAsync("octocat", "hello", query, path, extension, CancellationToken.None);
+
+        result.ShouldBeOneOf(GitHubNames.InvalidQuery, GitHubNames.InvalidPath, GitHubNames.InvalidExtension);
+        await client.DidNotReceiveWithAnyArgs().SearchCodeAsync(default!, default!, default!, default, default, default);
+    }
 }

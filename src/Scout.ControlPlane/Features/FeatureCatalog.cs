@@ -18,7 +18,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
-        Description: "Query repositories, issues and pull requests from chat, and read a pull request's diffs, comments and files for a code review. With your write permission it also keeps the reviews and issues it drafts under Scout's folder and, one action at a time with your approval, posts a review with comments on a pull request or opens an issue.",
+        Description: "Query repositories, issues and pull requests from chat; read a pull request's diffs, comments and files for a code review; list a repository's files and search its code to audit a whole project. With your write permission it also keeps the reviews, issues and conventions profiles it drafts under Scout's folder and, one action at a time with your approval, posts a review with comments on a pull request or opens an issue.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -54,6 +54,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 {
                     "Read the README, languages and top-level files of a repository",
                     "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
+                    "List every file of a repository and search its code, to audit a whole project",
                 },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
@@ -71,7 +72,11 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Scout's data folder",
-                Actions: new[] { "Keep a review or an issue drafted from chat until you approve or reject it on the Review screen" },
+                Actions: new[]
+                {
+                    "Keep a review or an issue drafted from chat until you approve or reject it on the Review screen",
+                    "Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules",
+                },
                 Access: ScopeAccess.Write),
             new FeatureScopeRow(
                 Scope: "Pull request reviews",

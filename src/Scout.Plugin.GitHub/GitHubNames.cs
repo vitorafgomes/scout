@@ -18,7 +18,20 @@ internal static partial class GitHubNames
     internal const string InvalidReference =
         "The git reference must be a branch, tag or commit name made of letters, digits, dots, slashes, hyphens or underscores.";
 
+    internal const string InvalidExtension =
+        "The extension must be 1 to 16 letters or digits, e.g. cs or ts, with or without the leading dot.";
+
+    internal const string InvalidQuery =
+        "The search query must be 1 to 200 characters and may not carry a repo:, org: or user: qualifier; the repository is given separately.";
+
     private const int MaxPathLength = 1000;
+    private const int MaxQueryLength = 200;
+
+    [GeneratedRegex(@"(^|\s)(repo|org|user):", RegexOptions.IgnoreCase)]
+    private static partial Regex ScopeQualifier();
+
+    [GeneratedRegex(@"^\.?[A-Za-z0-9]{1,16}$")]
+    private static partial Regex Extension();
 
     [GeneratedRegex(@"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$")]
     private static partial Regex RepositoryName();
@@ -38,6 +51,12 @@ internal static partial class GitHubNames
 
         return path.Split('/').All(segment => segment.Length > 0 && segment != "." && segment != "..");
     }
+
+    internal static bool IsValidExtension(string? extension) =>
+        string.IsNullOrEmpty(extension) || Extension().IsMatch(extension);
+
+    internal static bool IsValidSearchQuery(string? query) =>
+        !string.IsNullOrWhiteSpace(query) && query.Trim().Length <= MaxQueryLength && !ScopeQualifier().IsMatch(query);
 
     internal static bool IsValidReference(string? reference) =>
         string.IsNullOrEmpty(reference) || (Reference().IsMatch(reference) && !reference.Contains("..", StringComparison.Ordinal));

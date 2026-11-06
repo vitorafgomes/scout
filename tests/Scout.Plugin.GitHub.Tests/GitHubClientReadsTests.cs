@@ -1,5 +1,6 @@
 using System.Net;
 using Scout.Plugin.GitHub;
+using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
@@ -222,5 +223,81 @@ public sealed class GitHubClientReadsTests
         file.Kind.ShouldBe("submodule");
         file.IsDirectory.ShouldBeFalse();
         file.Text.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ListRepositoryFiles_Resolves_The_Default_Branch_Then_Reads_The_Recursive_Tree_Keeping_Blobs_Only()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """{"full_name":"octocat/hello","default_branch":"trunk"}""");
+        handler.EnqueueJson(HttpStatusCode.OK, """
+            {"truncated":false,"tree":[{"path":"src","type":"tree"},{"path":"src/Program.cs","type":"blob","size":120},{"path":"README.md","type":"blob","size":9}]}
+            """);
+
+        var tree = await client.ListRepositoryFilesAsync("octocat", "hello", "", CancellationToken.None);
+
+        tree.ShouldNotBeNull();
+        tree.Reference.ShouldBe("trunk");
+        tree.Truncated.ShouldBeFalse();
+        tree.Entries.ShouldBe([new RepositoryEntry("src/Program.cs", 120), new RepositoryEntry("README.md", 9)]);
+        handler.LastRequest!.RequestUri!.AbsoluteUri.ShouldEndWith("repos/octocat/hello/git/trees/trunk?recursive=1");
+    }
+
+    [Fact]
+    public async Task ListRepositoryFiles_At_A_Reference_Reads_One_Tree_And_Reports_A_Cut_Listing()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """{"truncated":true,"tree":[{"path":"a.go","type":"blob","size":1}]}""");
+        handler.EnqueueJson(HttpStatusCode.NotFound, """{"message":"Not Found"}""");
+
+        var tree = await client.ListRepositoryFilesAsync("octocat", "hello", "feat/x", CancellationToken.None);
+        var missing = await client.ListRepositoryFilesAsync("octocat", "hello", "nope", CancellationToken.None);
+
+        tree.ShouldNotBeNull().Truncated.ShouldBeTrue();
+        tree.Reference.ShouldBe("feat/x");
+        missing.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SearchCode_Scopes_The_Query_To_The_Repository_Asks_For_Text_Matches_And_Reads_The_Fragments()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """
+            {"total_count":2,"items":[{"path":"src/Checkout.cs","text_matches":[{"fragment":"catch (Exception)\n{\n}"}]},{"path":"src/Old.cs"}]}
+            """);
+
+        var result = await client.SearchCodeAsync("octocat", "hello", "catch (Exception)", "src", ".cs", CancellationToken.None);
+
+        result.TotalCount.ShouldBe(2);
+        result.Hits.Select(h => h.Path).ShouldBe(["src/Checkout.cs", "src/Old.cs"]);
+        result.Hits[0].Fragments.ShouldBe(["catch (Exception)\n{\n}"]);
+        result.Hits[1].Fragments.ShouldBeEmpty();
+        var uri = handler.LastRequest!.RequestUri!.AbsoluteUri;
+        uri.ShouldContain("/search/code?q=");
+        uri.ShouldContain(Uri.EscapeDataString("catch (Exception) repo:octocat/hello path:src extension:cs"));
+        uri.ShouldEndWith("&per_page=30");
+        handler.LastRequest.Headers.Accept.ToString().ShouldContain("application/vnd.github.text-match+json");
+    }
+
+    [Fact]
+    public async Task SearchCode_Quotes_A_Path_Qualifier_With_A_Space_So_It_Stays_One_Term()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """{"total_count":0,"items":[]}""");
+
+        await client.SearchCodeAsync("octocat", "hello", "token", "src/My Module", "", CancellationToken.None);
+
+        handler.LastRequest!.RequestUri!.AbsoluteUri.ShouldContain(Uri.EscapeDataString("token repo:octocat/hello path:\"src/My Module\""));
+    }
+
+    [Fact]
+    public async Task SearchCode_Maps_A_Rate_Limit_Like_The_Reads()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.Forbidden, "", r => r.Headers.Add("X-RateLimit-Remaining", "0"));
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.SearchCodeAsync("octocat", "hello", "x", "", "", CancellationToken.None));
+
+        ex.Message.ShouldBe("GitHub rate limit reached. Try again later.");
     }
 }

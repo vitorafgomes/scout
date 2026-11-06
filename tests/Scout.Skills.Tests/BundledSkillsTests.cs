@@ -22,6 +22,7 @@ public sealed class BundledSkillsTests
     [Theory]
     [InlineData("code-review", "pull request", "review PR", "revisa esse PR", "file and line")]
     [InlineData("project-improvements", "improve", "technical debt", "o que dá para melhorar", "how and where")]
+    [InlineData("code-audit", "audit", "security", "performance", "analisa o código", "padrões não seguidos", "file and line")]
     public void The_Code_Quality_Skills_Describe_The_Requests_They_Answer(string name, params string[] phrases)
     {
         var skill = Bundled().SingleOrDefault(s => s.Name == name).ShouldNotBeNull($"skills/{name}.md must load");
@@ -34,6 +35,13 @@ public sealed class BundledSkillsTests
         skill.Body.ShouldContain("load_skill");
         skill.Body.ShouldContain("never say", Case.Insensitive);
         skill.Body.ShouldContain(name == "code-review" ? "submit_pull_request_review" : "create_issue");
+        if (name == "code-audit")
+        {
+            foreach (var function in new[] { "get_project_conventions", "remember_project_conventions", "list_repository_files", "search_code", "get_file_contents" })
+            {
+                skill.Body.ShouldContain(function);
+            }
+        }
     }
 
     [Fact]
@@ -42,7 +50,7 @@ public sealed class BundledSkillsTests
         var names = Bundled().Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
         var body = Bundled().Single(s => s.Name == "code-review").Body;
 
-        foreach (var function in new[] { "get_pull_request", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review" })
+        foreach (var function in new[] { "get_pull_request", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "get_project_conventions" })
         {
             body.ShouldContain(function);
         }

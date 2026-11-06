@@ -10,22 +10,30 @@ using Scout.Plugin.GitHub.Abstractions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// The two writes the model may ask for on GitHub, each a draft Scout keeps and an action the owner approves:
-/// <c>submit_pull_request_review</c> and <c>create_issue</c>. Neither function reaches GitHub. Each is declared as a
-/// write into Scout's data folder, so the write gate refuses it before anything is saved while the owner has not
-/// allowed GitHub writes; under the grant it checks the request, saves the draft, and asks the control plane for the
-/// irreversible action, which waits on the Review screen. The <see cref="GitHubActionExecutor"/> posts it after the
-/// owner approves. The model is told the action waits, never that it ran.
+/// The writes the model may ask for around GitHub. <c>submit_pull_request_review</c> and <c>create_issue</c> are each a
+/// draft Scout keeps and an action the owner approves: neither reaches GitHub; each is declared as a write into Scout's
+/// data folder, so the write gate refuses it before anything is saved while the owner has not allowed GitHub writes;
+/// under the grant it checks the request, saves the draft, and asks the control plane for the irreversible action,
+/// which waits on the Review screen, and the <see cref="GitHubActionExecutor"/> posts it after the owner approves.
+/// <c>remember_project_conventions</c> is a reversible write into the same folder: the conventions profile of a
+/// repository an audit judges the code against, read back with <c>get_project_conventions</c>. The model is told an
+/// action waits, never that it ran.
 /// </summary>
 internal sealed class GitHubActionsPlugin(
     IGitHubClient reads,
     IWriteGate gate,
     GitHubDraftStore drafts,
+    GitHubProfileStore profiles,
     TimeProvider time)
 {
     internal const string PluginName = "GitHubActions";
     internal const string SubmitReview = "submit_pull_request_review";
     internal const string CreateIssue = "create_issue";
+    internal const string RememberConventions = "remember_project_conventions";
+    internal const string GetConventions = "get_project_conventions";
+
+    internal const int MaxConventionsLength = 20_000;
+    internal const int MinConventionsLength = 40;
 
     /// <summary>The catalog id of the GitHub feature.</summary>
     internal const string FeatureId = "github";
@@ -218,6 +226,72 @@ internal sealed class GitHubActionsPlugin(
             return queued.Kind == WriteGateDecisionKind.Queued
                 ? Queued(queued.ActionId ?? string.Empty, $"the issue \"{heading}\" on {draft.Target}")
                 : queued.Reason;
+        }
+        catch (Exception ex) when (IsHandledFailure(ex))
+        {
+            return GitHubPlugin.ErrorLineFor(ex);
+        }
+    }
+
+    /// <summary>The conventions profile of a repository, as Scout discovered it or the owner corrected it.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="ct">Cancels the read.</param>
+    /// <returns>The profile with its date, or that none exists yet.</returns>
+    [KernelFunction(GetConventions)]
+    [Description("Read the conventions profile Scout keeps for a repository: naming, layers, error handling, tests, dependency injection, logging, as its own files define them, with the date it was written. Read it before judging the repository's code; when there is none, discover the conventions and save them with remember_project_conventions.")]
+    public async Task<string> GetProjectConventionsAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        CancellationToken ct)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
+        try
+        {
+            var profile = await profiles.FindAsync(owner, repo, ct).ConfigureAwait(false);
+            return profile is null
+                ? $"No conventions profile for {owner}/{repo} yet. Discover the conventions from the project's own files and save them with {RememberConventions}."
+                : $"Conventions of {owner}/{repo}, written {profile.UpdatedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}:\n{profile.Conventions}";
+        }
+        catch (Exception ex) when (IsHandledFailure(ex))
+        {
+            return GitHubPlugin.ErrorLineFor(ex);
+        }
+    }
+
+    /// <summary>Keep the conventions profile of a repository under Scout's data folder; a write under the GitHub grant.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="conventions">The profile in Markdown.</param>
+    /// <param name="ct">Cancels the write.</param>
+    /// <returns>That the profile was saved, or why it was refused.</returns>
+    [KernelFunction(RememberConventions)]
+    [Description("Save or replace the conventions profile of a repository under Scout's data folder, so later audits judge the code against the house rules. Write it from the project's own files (manifests, lint and format configuration, CI, README, CONTRIBUTING, architecture notes, a sample of files per layer) and from what the user corrects in chat; never from assumptions. Markdown, 40 to 20,000 characters, with a line per rule and the file that shows it.")]
+    public async Task<string> RememberProjectConventionsAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("The profile in Markdown: one line per convention, each naming the file that shows it.")] string conventions,
+        CancellationToken ct)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
+        var text = (conventions ?? string.Empty).Trim();
+        if (text.Length < MinConventionsLength || text.Length > MaxConventionsLength)
+        {
+            return $"The conventions profile must be {MinConventionsLength} to {MaxConventionsLength} characters.";
+        }
+
+        try
+        {
+            await profiles.SaveAsync(new GitHubProjectProfile(owner, repo, text, time.GetUtcNow(), ChatOrigin.Current), ct).ConfigureAwait(false);
+            return $"Saved the conventions profile of {owner}/{repo} ({text.Length} characters). Later audits read it with {GetConventions}.";
         }
         catch (Exception ex) when (IsHandledFailure(ex))
         {

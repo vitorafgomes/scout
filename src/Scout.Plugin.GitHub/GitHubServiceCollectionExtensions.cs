@@ -76,17 +76,22 @@ public static class GitHubServiceCollectionExtensions
         var draftsDirectory = section.GetValue<string>("DraftsDirectory");
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton(new GitHubDraftStore(string.IsNullOrWhiteSpace(draftsDirectory) ? DefaultDraftsDirectory() : draftsDirectory));
+        var profilesDirectory = section.GetValue<string>("ProfilesDirectory");
+        services.AddSingleton(new GitHubProfileStore(string.IsNullOrWhiteSpace(profilesDirectory) ? DefaultProfilesDirectory() : profilesDirectory));
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new GitHubActionsPlugin(
                 sp.GetRequiredService<IGitHubClient>(),
                 sp.GetRequiredService<IWriteGate>(),
                 sp.GetRequiredService<GitHubDraftStore>(),
+                sp.GetRequiredService<GitHubProfileStore>(),
                 sp.GetRequiredService<TimeProvider>()),
             GitHubActionsPlugin.PluginName));
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SubmitReview, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "number"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.CreateIssue, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "title"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.RememberConventions, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
         services.AddHostedService<GitHubActionExecutor>();
 
         return services;
@@ -95,4 +100,8 @@ public static class GitHubServiceCollectionExtensions
     /// <summary>Scout's data folder for the drafts: <c>Scout/github-drafts</c> under the user's local application data.</summary>
     internal static string DefaultDraftsDirectory() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout", "github-drafts");
+
+    /// <summary>Scout's data folder for the conventions profiles: <c>Scout/github-profiles</c> under the user's local application data.</summary>
+    internal static string DefaultProfilesDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout", "github-profiles");
 }
