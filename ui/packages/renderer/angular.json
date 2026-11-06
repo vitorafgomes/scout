@@ -23,12 +23,17 @@
                 "output": "assets"
               }
             ],
-            "polyfills": []
+            "polyfills": [],
+            "styles": ["src/styles.scss"]
           },
           "configurations": {
             "production": {
               "outputHashing": "all",
-              "optimization": true,
+              "optimization": {
+                "scripts": true,
+                "styles": { "minify": true, "inlineCritical": false },
+                "fonts": true
+              },
               "sourceMap": false,
               "namedChunks": false,
               "extractLicenses": true

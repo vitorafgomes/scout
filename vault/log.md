@@ -6,6 +6,8 @@ The owner on the Features prototype: "seria bom poder esconder as permissões pa
 
 ## [2026-11-06] crystallize | The review's findings as cards in the chat, posted as one review from the cards (ADR 0040)
 The owner, with his prototype of the chat: "o chat era para estar assim", "com os botões e tudo mais", "quero que fique bonito igual". On feat/chat-review-findings: the code-review skill ends the review with a scout-findings block, both chat surfaces render it as cards with Yes, No, Edit, Yes to all, Post, the GitHub preview and the posted box, Post being a marked question the skill posts unchanged; the microphone button as the prototype's icon. ADR 0040 proposed; desktop-quick-ask, skills, plugin-github and the roadmap updated.
+## [2026-11-06] crystallize | Angular Material as the renderer's component library and theme (ADR 0041)
+The owner, after asking what CSS the app uses: "o ponto é eu quero usar o Angular Material", "pode iniciar a migração para o Angular Material". On feat/angular-material: the dependencies, the global theme from the prototypes' palette, the sc aliases over the Material tokens, NoticeService over MatSnackBar with its first use on the Features screen; screens migrate one per version afterwards.
 
 ## [2026-11-06] crystallize | The floating-button chat reads top to bottom, the question line at the bottom
 The owner, shaping the finding cards on the prototype: "com isso ele deveria mudar aonde mandamos as msg de cima para baixo". On feat/quick-ask-composer-bottom the quick-ask page puts the question line under the turn list (grip, tools, turns, question), with the list still the one scrolling region and still scrolled to the newest turn; the same order the Chat screen already has. One spec pins the order.

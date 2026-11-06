@@ -56,7 +56,7 @@ Owns reading requests from stdin, turning each into a local-owner `ChatMessage`,
   - Meeting replies, one stdout line each: `{"id","event":"kept","meetingId"}`, `{"id","event":"meetings","items":[{"id","startedAt","endedAt","title","lineCount","turnCount"}]}`, `{"id","event":"markdown","meetingId","text"}`, `{"id","event":"deleted","count"}`, or `{"id","event":"fail","text"}`.
   - Live session events, one per stdout line: `{"id","event":"partial","text"}`, `{"id","event":"final","text","seq"}` with `seq` counting the session's finals from 1, then `{"id","event":"complete"}` after the stop, or `{"id","event":"fail","text"}`.
   - Translation events, when the listen asked for one: `{"id","event":"translation","seq","text","language"}`, or `{"id","event":"translation","seq","language","error"}`; `seq` is the final's, or 0 for a note about the whole session.
-  - A later unsolicited post, outside any turn: `SCOUT_LOCAL {"id":null,"event":"notice","text":"..."}`, no citations. The desktop shows it as its own Scout message in the shared local conversation ([[pages/services/desktop-quick-ask]], `ui/packages/main/src/quick-ask/quick-ask.ts:522`).
+  - A later unsolicited post, outside any turn: `SCOUT_LOCAL {"id":null,"event":"notice","text":"..."}`, no citations. The desktop shows it as its own Scout message in the shared local conversation ([[pages/services/desktop-quick-ask]], `ui/packages/main/src/quick-ask/quick-ask.ts:529`).
 - **External boundaries:** the process's stdin (read) and stdout (write). No network of its own: a translation reaches the connected provider through `ILiveTranslator` ([[pages/services/llm]]), and the mandate language the control plane through the host's delegate ([[pages/services/host-console]]).
 
 ## How it works
