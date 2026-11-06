@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
@@ -20,6 +21,7 @@ public sealed class StreamPump
     // Tail-preserving truncation marker (recent text is more useful than head).
     private const string TruncationMarker = "... (truncated)\n\n";
     private static readonly int TruncationMarkerLength = TruncationMarker.Length;
+    private static readonly TimeSpan FenceMatchTimeout = TimeSpan.FromSeconds(1);
 
     private readonly StreamPumpOptions _options;
 
@@ -163,12 +165,57 @@ public sealed class StreamPump
             return;
         }
 
-        var finalText = buffer.Length == 0
-            ? _options.EmptyStreamPlaceholder
-            : Truncate(buffer.ToString(), maxLength);
+        var text = buffer.ToString();
+        var blocks = string.Empty;
+        if (TurnAttachments.Take() is { Count: > 0 } attached)
+        {
+            text = WithoutFencesLike(text, attached).Trim();
+            blocks = BlocksThatFit(attached, maxLength);
+        }
+
+        var prose = Truncate(text, maxLength == int.MaxValue ? maxLength : maxLength - blocks.Length);
+        var finalText = (prose.Length, blocks.Length) switch
+        {
+            (0, 0) => _options.EmptyStreamPlaceholder,
+            (0, _) => blocks.TrimStart('\n'),
+            _ => prose + blocks,
+        };
 
         await sink.CompleteAsync(finalText, response.Citations, pumpToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The model's text without any fenced block that opens like an attached block, from its opening line to its
+    /// closing fence or the end of the text, so the reply carries the attached block alone.
+    /// </summary>
+    private static string WithoutFencesLike(string text, IReadOnlyList<string> attached)
+    {
+        foreach (var opening in attached.Select(block => block.Split('\n')[0].TrimEnd()).Distinct(StringComparer.Ordinal))
+        {
+            text = Regex.Replace(
+                text, Regex.Escape(opening) + @"[ \t]*\r?\n[\s\S]*?(?:\r?\n```|\z)", string.Empty, RegexOptions.None, FenceMatchTimeout);
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// The attached blocks, each after a blank line, in the order attached, keeping only the blocks that fit whole in
+    /// <paramref name="maxLength"/>; the model's text is cut to what the kept blocks leave.
+    /// </summary>
+    private static string BlocksThatFit(IReadOnlyList<string> attached, int maxLength)
+    {
+        var kept = new StringBuilder();
+        foreach (var block in attached)
+        {
+            if (maxLength == int.MaxValue || kept.Length + block.Length + 2 <= maxLength)
+            {
+                kept.Append("\n\n").Append(block);
+            }
+        }
+
+        return kept.ToString();
     }
 
     private CompositeDisposable? LinkTimeout(

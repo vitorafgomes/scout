@@ -50,15 +50,15 @@ Nit
 Verdict: ready after the blocking finding.
 ```
 
-### The findings block
+### The findings for the cards
 
-After the verdict, append the same findings as one fenced block with the info string `scout-findings`, so Scout Desktop shows them as cards the user decides on one by one; other chats show the block as it is. One JSON object, nothing else in the fence:
+Before the final answer, call `present_review_findings(repository, number, verdict, findings_json, commit, read)` once, with the same findings the answer lists, so Scout Desktop shows them as cards the user decides on one by one; Scout adds them to the reply itself. Never write the `scout-findings` fence yourself. `repository` is `owner/repo`; `commit` is the head commit reviewed; `read` says what was read ("6 of 6 files read"); `findings_json` is a JSON array:
 
-```scout-findings
-{"repository":"owner/repo","number":42,"commit":"ec7f951","verdict":"ready after the blocking finding","read":"6 of 6 files read","findings":[{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum, or sum inside the loop."}]}
+```
+[{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum, or sum inside the loop."}]
 ```
 
-`severity` is `block`, `fix` or `nit`, in the order of the findings above; `id` is a short slug unique in the block; `path` and `line` are the file and the line after the change as the diff shows it, the same anchor as the finding; `title` names the thing in a few words; `context` is empty or the sentence that says where the finding comes from (not from this PR, only visible here, cheap to act on now); `why` is what is wrong and why, in concrete terms; `fix` is the concrete fix. Write them in the language of the request, as the comment below is written. At most 50 findings.
+`severity` is `block`, `fix` or `nit`, in the order of the findings above; `id` is a short slug unique in the list; `path` and `line` are the file and the line after the change as the diff shows it, the same anchor as the finding; `title` names the thing in a few words; `context` is empty or the sentence that says where the finding comes from (not from this PR, only visible here, cheap to act on now); `why` is what is wrong and why, in concrete terms; `fix` is the concrete fix. Write them in the language of the request, as the comment below is written. At most 50 findings. When the function answers with a problem, fix that finding and call it again; a second call replaces the first. Then end the answer with the verdict.
 
 ## Posting the review
 

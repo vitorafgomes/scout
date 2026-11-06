@@ -168,6 +168,9 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             ["extensions"] = "",
             ["query"] = "token",
             ["extension"] = "",
+            ["repository"] = "octocat/hello-world",
+            ["verdict"] = "ready to merge",
+            ["findings_json"] = """[{"id":"a","severity":"nit","title":"t","path":"README.md","line":1,"why":"w","fix":"f"}]""",
         };
 
         foreach (var function in plugin)

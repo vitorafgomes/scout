@@ -154,6 +154,7 @@ public sealed partial class ConversationConductor(
                 message.ChannelId, message.Text.Length);
             var response = _router.Route(message);
             using var progress = TurnProgress.Enter(sink.ProgressAsync);
+            using var attachments = TurnAttachments.Begin();
             await _pump.RunAsync(response, sink, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Response completed for channel {ChannelId}.", message.ChannelId);
         }

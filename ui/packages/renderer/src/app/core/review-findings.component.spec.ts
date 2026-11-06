@@ -325,6 +325,58 @@ describe('review findings cards', () => {
     expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: URL });
   });
 
+  it('a review posted from the other window shows as posted here too, and a post for another pull request does not', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const findingsTurn = (await bridge.localGetTurns())[0]!;
+    const postFrom = (id: string, target: string, reply: string): LocalTurn => ({
+      id,
+      question: `Post 1 finding on ${target}`,
+      reply,
+      citations: [],
+      state: 'done',
+      review: true,
+    });
+
+    bridge.push([
+      findingsTurn,
+      postFrom('p-other-pr', 'acme/shop#6', `Posted: ${URL.replace('/5#', '/6#')}`),
+    ]);
+    await settle(fixture);
+    const stillOpen = el(fixture, 'post') !== null && el(fixture, 'posted') === null;
+
+    bridge.push([
+      findingsTurn,
+      postFrom('p-elsewhere', 'acme/shop#5', `Posted the review: [PR #5](${URL}).`),
+    ]);
+    await settle(fixture);
+
+    expect(stillOpen).toBe(true);
+    expect(el(fixture, 'posted')?.querySelector('strong')?.textContent).toBe(
+      'Review posted on PR #5',
+    );
+    expect(text(el(fixture, 'posted')?.querySelector('a') ?? null)).toBe(URL);
+    expect(el(fixture, 'post')).toBeNull();
+  });
+
+  it('a review asked after an earlier post of the same pull request starts open, with its Post button', async () => {
+    const bridge = makeBridge();
+    const findingsTurn = (await bridge.localGetTurns())[0]!;
+    const earlierPost: LocalTurn = {
+      id: 'p-earlier',
+      question: 'Post 2 findings on acme/shop#5',
+      reply: `Posted the review: [PR #5](${URL}).`,
+      citations: [],
+      state: 'done',
+      review: true,
+    };
+    bridge.push([earlierPost, findingsTurn]);
+    const fixture = await render(bridge);
+
+    expect(el(fixture, 'posted')).toBeNull();
+    expect(el(fixture, 'post')).not.toBeNull();
+  });
+
   it('a post the worker refuses before it becomes a turn shows the sentence and keeps the buttons', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge);

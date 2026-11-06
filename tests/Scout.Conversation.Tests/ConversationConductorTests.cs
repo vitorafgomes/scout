@@ -60,6 +60,28 @@ public sealed class ConversationConductorTests
         TurnProgress.IsEntered.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task A_Block_A_Function_Attaches_During_The_Turn_Ends_The_Reply_And_Stops_With_The_Turn()
+    {
+        var router = Substitute.For<IConversationRouter>();
+        router.Route(Arg.Any<ChatMessage>()).Returns(new ChatResponse(Attaching("```scout-findings\n{}\n```", "Verdict: ready.")));
+        var conductor = new ConversationConductor(router, Pump());
+        var sink = new RecordingResponseSink(FineGrained);
+
+        await conductor.HandleAsync(new ChatMessage("u1", "c1", "review PR 5"), sink, CancellationToken.None);
+        TurnAttachments.Attach("```after\n{}\n```");
+
+        sink.FinalText.ShouldBe("Verdict: ready.\n\n```scout-findings\n{}\n```");
+        TurnAttachments.Take().ShouldBeEmpty();
+    }
+
+    private static async IAsyncEnumerable<string> Attaching(string block, string chunk)
+    {
+        await Task.Yield();
+        TurnAttachments.Attach(block);
+        yield return chunk;
+    }
+
     private static async IAsyncEnumerable<string> Reporting(string activity, string chunk)
     {
         await TurnProgress.ReportAsync(activity, CancellationToken.None);

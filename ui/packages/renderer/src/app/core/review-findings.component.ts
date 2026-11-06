@@ -3,6 +3,7 @@ import {
   Component,
   Pipe,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -628,6 +629,13 @@ export class ReviewFindingsComponent {
 
   readonly turnId = input.required<string>();
   readonly review = input.required<ReviewFindings>();
+
+  constructor() {
+    effect(() => {
+      const { repository, number } = this.review();
+      this.store.register(this.turnId(), repository, number);
+    });
+  }
 
   readonly draft = signal('');
   readonly error = signal<string | null>(null);
