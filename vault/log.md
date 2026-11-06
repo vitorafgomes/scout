@@ -1,3 +1,5 @@
+## [2026-11-06] crystallize | Models → Analysis: the model in use on top, search, one collapsible group per connected source
+The owner on the Models prototype: "não está legal de ver", "deveria mostrar o que está conectado; neste momento não tenho nada local e está me mostrando Local LLM com Qwen", then "Gostei do que foi proposto no Analysis, pode fazer". On feat/models-analysis: the In use strip, the search and chips, the groups with families, tags and Show all, the local group only while a runtime answers; desktop-ui.md updated.
 
 ## [2026-11-06] crystallize | The Features screen cards, compact: Reads and Permissions closed until a click
 The owner on the Features prototype: "seria bom poder esconder as permissões para não ficar grande; caso queira ver seria só clicar", then "pode seguir com o proposto". On feat/features-cards: the card restyled (logo, badge beside the name, connection block, chips, rows with pills and the actions sentence, the grant state on the summary, the switch); desktop-ui.md updated.
