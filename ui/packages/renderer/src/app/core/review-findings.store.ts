@@ -11,11 +11,13 @@ export interface ReviewState {
   readonly editing: string | null;
   readonly postTurnId?: string;
   readonly posted?: { readonly url: string };
+  readonly target?: string;
   readonly preview: boolean;
 }
 
 const EMPTY: ReviewState = { picks: {}, edited: {}, editing: null, preview: false };
 const GITHUB_URL = /https:\/\/github\.com\/[^\s)\]>"'<]+/;
+const POST_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/;
 
 /**
  * The owner's picks, edited comments and posting state per findings turn. It follows the conversation:
@@ -26,16 +28,24 @@ const GITHUB_URL = /https:\/\/github\.com\/[^\s)\]>"'<]+/;
 export class ReviewFindingsStore {
   private readonly states = signal<Readonly<Record<string, ReviewState>>>({});
 
+  private readonly conversation = inject(LocalConversation);
+
   constructor() {
-    const conversation = inject(LocalConversation);
     effect(() => {
-      const turns = conversation.turns();
+      const turns = this.conversation.turns();
       untracked(() => this.observe(turns));
     });
   }
 
   state(turnId: string): ReviewState {
     return this.states()[turnId] ?? EMPTY;
+  }
+
+  register(turnId: string, repository: string, number: number): void {
+    untracked(() => {
+      this.update(turnId, (s) => ({ ...s, target: `${repository}#${number}` }));
+      this.observe(this.conversation.turns(), false);
+    });
   }
 
   pick(turnId: string, id: string, choice: 'yes' | 'no'): void {
@@ -76,11 +86,30 @@ export class ReviewFindingsStore {
     );
   }
 
-  observe(turns: readonly LocalTurn[]): void {
+  observe(turns: readonly LocalTurn[], prune = true): void {
     const byId = new Map(turns.map((turn) => [turn.id, turn]));
+    const postedBy = new Map<string, { readonly url: string; readonly at: number }>();
+    turns.forEach((turn, at) => {
+      const target =
+        turn.review && turn.state === 'done' ? POST_TARGET.exec(turn.question)?.[1] : undefined;
+      const url = target === undefined ? undefined : GITHUB_URL.exec(turn.reply)?.[0];
+      if (target !== undefined && url !== undefined)
+        postedBy.set(target, { url: url.replace(/[.,;:!?]+$/, ''), at });
+    });
     const next: Record<string, ReviewState> = {};
     for (const [turnId, state] of Object.entries(this.states())) {
-      if (!byId.has(turnId)) continue;
+      if (prune && !byId.has(turnId)) continue;
+      const elsewhere: { readonly url: string; readonly at: number } | undefined =
+        state.target === undefined ? undefined : postedBy.get(state.target);
+      if (
+        state.posted === undefined &&
+        elsewhere !== undefined &&
+        turns.findIndex((turn) => turn.id === turnId) < elsewhere.at
+      ) {
+        const { postTurnId: _pending, ...rest } = state;
+        next[turnId] = { ...rest, posted: { url: elsewhere.url } };
+        continue;
+      }
       const post = state.postTurnId === undefined ? undefined : byId.get(state.postTurnId);
       if (state.posted !== undefined || post === undefined || post.state === 'running') {
         next[turnId] = state;

@@ -28,6 +28,7 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("get_file_contents")]
     [InlineData("list_repository_files")]
     [InlineData("search_code")]
+    [InlineData("present_review_findings")]
     public void Exposes_Expected_Function(string functionName)
     {
         var plugin = BuildPlugin();
@@ -36,11 +37,11 @@ public sealed class GitHubPluginMetadataTests
     }
 
     [Fact]
-    public void Exposes_Exactly_The_Eleven_Read_Functions() =>
+    public void Exposes_Exactly_The_Twelve_Read_Functions() =>
         BuildPlugin().Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ShouldBe([
             "get_file_contents", "get_issue", "get_pull_request", "get_pull_request_file", "get_repository",
             "list_issues", "list_pull_request_comments", "list_pull_requests", "list_repositories", "list_repository_files",
-            "search_code",
+            "present_review_findings", "search_code",
         ]);
 
     [Theory]
@@ -55,6 +56,7 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("get_file_contents")]
     [InlineData("list_repository_files")]
     [InlineData("search_code")]
+    [InlineData("present_review_findings")]
     public void Function_Has_NonEmpty_Description(string functionName)
     {
         var plugin = BuildPlugin();
@@ -100,6 +102,12 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_repository_files", "extensions")]
     [InlineData("search_code", "query")]
     [InlineData("search_code", "extension")]
+    [InlineData("present_review_findings", "repository")]
+    [InlineData("present_review_findings", "number")]
+    [InlineData("present_review_findings", "verdict")]
+    [InlineData("present_review_findings", "findings_json")]
+    [InlineData("present_review_findings", "commit")]
+    [InlineData("present_review_findings", "read")]
     public void Single_Item_Function_Describes_Its_Selector(string functionName, string parameter)
     {
         var plugin = BuildPlugin();

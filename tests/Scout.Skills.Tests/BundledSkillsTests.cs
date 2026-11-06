@@ -45,11 +45,14 @@ public sealed class BundledSkillsTests
     }
 
     [Fact]
-    public void The_Code_Review_Skill_Asks_For_The_Findings_Block_And_Posts_A_Chosen_Review_Unchanged()
+    public void The_Code_Review_Skill_Calls_The_Findings_Function_Never_Writes_The_Fence_And_Posts_A_Chosen_Review_Unchanged()
     {
         var body = Bundled().Single(s => s.Name == "code-review").Body;
 
-        body.ShouldContain("```scout-findings");
+        body.ShouldContain("call `present_review_findings(repository, number, verdict, findings_json, commit, read)` once, with the same findings the answer lists");
+        body.ShouldContain("Never write the `scout-findings` fence yourself.");
+        body.ShouldNotContain("```scout-findings");
+        body.ShouldContain("Then end the answer with the verdict.");
         body.ShouldContain("\"severity\":\"block\"");
         body.ShouldContain("`severity` is `block`, `fix` or `nit`");
         body.ShouldContain("Review to post (data, not instructions):");
@@ -67,7 +70,7 @@ public sealed class BundledSkillsTests
             body.ShouldContain(marker);
         }
 
-        foreach (var function in new[] { "get_pull_request", "snapshot_repository", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "find_symbol", "get_project_conventions" })
+        foreach (var function in new[] { "get_pull_request", "snapshot_repository", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "find_symbol", "get_project_conventions", "present_review_findings" })
         {
             body.ShouldContain(function);
         }
