@@ -20,7 +20,7 @@ public sealed class ProjectKnowledgePlugin(ProjectKnowledgeService service, Proj
     [KernelFunction("search_project")]
     [Description("Search a software project's code and documentation for context to answer a question about its architecture, business rules, or implementation.")]
     public Task<string> SearchAsync(
-        [Description("The configured project name to search; must be one of the projects named in the agent instructions.")] string project,
+        [Description("The project name to search: one of list_projects, or owner/repo of a repository snapshot taken with snapshot_repository.")] string project,
         [Description("The user's question about the project.")] string question,
         CancellationToken ct)
         => this.service.SearchAsync(project, question, ct);
@@ -35,7 +35,7 @@ public sealed class ProjectKnowledgePlugin(ProjectKnowledgeService service, Proj
     [KernelFunction("find_symbol")]
     [Description("Find a class, method, interface, or member by NAME in an indexed project. Use for 'where is X' / 'find the method X' questions — exact and partial name matches, no semantic search. Prefer this over search_project when the user names a specific symbol.")]
     public Task<string> FindSymbolAsync(
-        [Description("The configured project name to search; must be one of the projects named in the agent instructions.")] string project,
+        [Description("The project name to search: one of list_projects, or owner/repo of a repository snapshot taken with snapshot_repository.")] string project,
         [Description("The exact or partial symbol name to find, e.g. SearchAsync or ProjectKnowledgeService.")] string symbol,
         [Description("Optional coarse kind filter: 'code' or 'doc'. Leave empty to match any.")] string? kind,
         [Description("Optional maximum number of results; leave at 0 for the default.")] int top,

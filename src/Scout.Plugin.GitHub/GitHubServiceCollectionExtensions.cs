@@ -69,10 +69,15 @@ public static class GitHubServiceCollectionExtensions
             writes.AddHttpMessageHandler(() => new GitHubTokenFileHandler(tokenFile!));
         }
 
-        services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
-            new GitHubPlugin(sp.GetRequiredService<IGitHubClient>()), "GitHub"));
-
+        var snapshotsDirectory = section.GetValue<string>("SnapshotsDirectory");
         services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton(sp => new RepositorySnapshotStore(
+            string.IsNullOrWhiteSpace(snapshotsDirectory) ? DefaultSnapshotsDirectory() : snapshotsDirectory,
+            section.GetValue<long>("SnapshotMaxBytes"),
+            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
+            new GitHubPlugin(sp.GetRequiredService<IGitHubClient>(), sp.GetRequiredService<RepositorySnapshotStore>()), "GitHub"));
+
         var profilesDirectory = section.GetValue<string>("ProfilesDirectory");
         services.AddSingleton(new GitHubProfileStore(string.IsNullOrWhiteSpace(profilesDirectory) ? DefaultProfilesDirectory() : profilesDirectory));
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
@@ -80,6 +85,8 @@ public static class GitHubServiceCollectionExtensions
                 sp.GetRequiredService<IGitHubClient>(),
                 sp.GetRequiredService<IGitHubWriteClient>(),
                 sp.GetRequiredService<GitHubProfileStore>(),
+                sp.GetRequiredService<RepositorySnapshotStore>(),
+                sp.GetService<IRepositoryProjects>() ?? NoProjects.Instance,
                 sp.GetRequiredService<TimeProvider>()),
             GitHubActionsPlugin.PluginName));
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SubmitReview, GitHubActionsPlugin.FeatureId,
@@ -88,7 +95,23 @@ public static class GitHubServiceCollectionExtensions
             GitHubActionsPlugin.IssueScope, summaryArguments: ["owner", "repo", "title"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.RememberConventions, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SnapshotRepository, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "reference"]);
         return services;
+    }
+
+    /// <summary>Scout's data folder for the repository snapshots: <c>Scout/github-snapshots</c> under the user's local application data.</summary>
+    internal static string DefaultSnapshotsDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout", "github-snapshots");
+
+    /// <summary>A host that wires no Knowledge index: a snapshot is still read locally, only not searched semantically.</summary>
+    private sealed class NoProjects : IRepositoryProjects
+    {
+        public static readonly NoProjects Instance = new();
+
+        public void Register(string name, string path)
+        {
+        }
     }
 
     /// <summary>Scout's data folder for the conventions profiles: <c>Scout/github-profiles</c> under the user's local application data.</summary>

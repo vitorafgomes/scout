@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -134,6 +135,48 @@ internal sealed partial class GitHubClient
         return new RepositoryFile(path, Kind: file.Type ?? "file", Text: text, Size: file.Size, Entries: []);
     }
 
+    public async Task<RepositoryCommit?> ResolveCommitAsync(string owner, string repo, string? reference, CancellationToken ct)
+    {
+        var at = reference;
+        var isDefault = false;
+        if (string.IsNullOrWhiteSpace(at))
+        {
+            var repoDto = await TryGetAsync<RepoInfoDto>($"repos/{owner}/{repo}", ct).ConfigureAwait(false);
+            if (repoDto is null)
+            {
+                return null;
+            }
+
+            at = repoDto.DefaultBranch ?? "main";
+            isDefault = true;
+        }
+
+        var commit = await TryGetAsync<CommitDto>(
+            $"repos/{owner}/{repo}/commits/{Uri.EscapeDataString(at)}", ct).ConfigureAwait(false);
+        return commit?.Sha is { Length: > 0 } sha ? new RepositoryCommit(at, sha, isDefault) : null;
+    }
+
+    public async Task<bool> DownloadTarballAsync(
+        string owner, string repo, string sha, Func<Stream, CancellationToken, Task> consume, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(consume);
+        using var response = await _http.GetAsync(
+            $"repos/{owner}/{repo}/tarball/{Uri.EscapeDataString(sha)}", HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw ToApiException(response);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        await consume(stream, ct).ConfigureAwait(false);
+        return true;
+    }
+
     public async Task<RepositoryTree?> ListRepositoryFilesAsync(
         string owner, string repo, string? reference, CancellationToken ct)
     {
@@ -252,6 +295,8 @@ internal sealed partial class GitHubClient
 
     private sealed record LabelDto(
         [property: JsonPropertyName("name")] string? Name);
+
+    private sealed record CommitDto([property: JsonPropertyName("sha")] string? Sha);
 
     private sealed record TreeDto(
         [property: JsonPropertyName("truncated")] bool Truncated,

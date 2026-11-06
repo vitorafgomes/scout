@@ -178,15 +178,17 @@ public sealed class ProjectKnowledgePluginTests : IDisposable
     {
         // Regression lock: the project parameter [Description] is serialized into the
         // tool schema the model sees. A concrete project name inlined there gets parroted
-        // regardless of configuration, so the description must delegate to the runtime
-        // agent instructions and carry no inline example.
+        // regardless of configuration, so the description points at list_projects and the
+        // snapshot function and carries no inline example.
         var plugin = BuildPlugin(Substitute.For<IProjectKnowledgeStore>(), "scout");
         plugin.TryGetFunction(functionName, out var function).ShouldBeTrue();
 
         var parameter = function!.Metadata.Parameters.Single(p => p.Name == "project");
 
-        parameter.Description.ShouldContain("instructions");
+        parameter.Description.ShouldContain("list_projects");
+        parameter.Description.ShouldContain("snapshot_repository");
         parameter.Description.ShouldNotContain("e.g.");
+        parameter.Description.ShouldNotContain("scout");
     }
 
     [Fact]

@@ -41,7 +41,7 @@ public sealed class FeatureCatalogTests
             "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
             "List every file of a repository and search its code, to audit a whole project",
         ]);
-        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.ShouldHaveSingleItem().ShouldContain("conventions profile");
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.Select(a => a.Split(' ')[2]).ShouldBe(["conventions", "snapshot"]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull requests").Actions.ShouldBe([
             "List open pull requests",
             "Read one pull request with its changed files and their diffs",

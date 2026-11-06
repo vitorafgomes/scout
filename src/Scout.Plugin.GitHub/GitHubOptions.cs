@@ -25,4 +25,13 @@ public sealed class GitHubOptions
     /// <c>Scout/github-profiles</c> under the user's local application data.
     /// </summary>
     public string ProfilesDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Folder where a repository snapshot taken for a review or an audit is extracted; empty for
+    /// <c>Scout/github-snapshots</c> under the user's local application data.
+    /// </summary>
+    public string SnapshotsDirectory { get; set; } = string.Empty;
+
+    /// <summary>The most a snapshot may hold once extracted, in bytes; 0 for the default of 200 MB.</summary>
+    public long SnapshotMaxBytes { get; set; }
 }
