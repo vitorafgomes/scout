@@ -162,12 +162,24 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
           [disabled]="busy()"
           [class.recording]="recording()"
           [attr.aria-pressed]="recording()"
-          aria-label="Hold to talk"
+          [attr.aria-label]="recording() ? 'Listening' : 'Hold to talk'"
+          [title]="recording() ? 'Listening' : 'Hold to talk'"
           (pointerdown)="startRecording()"
           (pointerup)="stopRecording()"
           (pointerleave)="stopRecording()"
         >
-          {{ recording() ? 'Listening' : 'Mic' }}
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>
+          </svg>
         </button>
         @if (busy()) {
           <button type="button" data-test="stop" (click)="store.stop()">Stop</button>

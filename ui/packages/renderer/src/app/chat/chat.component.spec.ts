@@ -458,6 +458,28 @@ describe('Chat screen', () => {
     expect(el(fixture, 'send')).not.toBeNull();
   });
 
+  it('the microphone button is an icon, labelled Hold to talk and Listening while held', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    const mic = el(fixture, 'mic') as HTMLButtonElement;
+
+    const idle = {
+      icon: mic.querySelector('svg') !== null,
+      text: mic.textContent?.trim(),
+      label: mic.getAttribute('aria-label'),
+    };
+    mic.dispatchEvent(new Event('pointerdown'));
+    await vi.waitFor(() => expect(audio.processor).not.toBeNull());
+    await settle(fixture);
+    const held = mic.getAttribute('aria-label');
+    mic.dispatchEvent(new Event('pointerup'));
+    await settle(fixture);
+
+    expect(idle).toEqual({ icon: true, text: '', label: 'Hold to talk' });
+    expect(held).toBe('Listening');
+  });
+
   it('holding the microphone button sends the recording as a voice question', async () => {
     const bridge = makeBridge();
     configure(bridge);

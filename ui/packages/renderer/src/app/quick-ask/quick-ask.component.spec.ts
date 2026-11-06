@@ -523,6 +523,27 @@ describe('Quick ask', () => {
     expect(el(fixture, 'recording')).toBeNull();
   });
 
+  it('the microphone button is an icon, labelled Hold to talk and Listening while held', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const mic = el(fixture, 'mic') as HTMLButtonElement;
+
+    const idle = {
+      icon: mic.querySelector('svg') !== null,
+      text: mic.textContent?.trim(),
+      label: mic.getAttribute('aria-label'),
+    };
+    mic.dispatchEvent(new Event('pointerdown'));
+    await vi.waitFor(() => expect(audio.processor).not.toBeNull());
+    await settle(fixture);
+    const held = mic.getAttribute('aria-label');
+    mic.dispatchEvent(new Event('pointerup'));
+    await settle(fixture);
+
+    expect(idle).toEqual({ icon: true, text: '', label: 'Hold to talk' });
+    expect(held).toBe('Listening');
+  });
+
   it('shows a clear message when the microphone cannot be used', async () => {
     const bridge = makeBridge();
     vi.mocked(navigator.mediaDevices.getUserMedia).mockRejectedValueOnce(
