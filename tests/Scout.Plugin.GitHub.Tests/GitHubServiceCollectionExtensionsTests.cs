@@ -112,13 +112,16 @@ public sealed class GitHubServiceCollectionExtensionsTests
         using var provider = Build(Config(token: "test-token"));
 
         var actions = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHubActions");
-        actions.Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ShouldBe(["create_issue", "submit_pull_request_review"]);
+        actions.Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal)
+            .ShouldBe(["create_issue", "get_project_conventions", "remember_project_conventions", "submit_pull_request_review"]);
         provider.GetServices<WriteFunctionDeclaration>()
             .Select(d => (d.PluginName, d.FunctionName, d.FeatureId, d.Scope))
             .ShouldBe([
                 ("GitHubActions", "submit_pull_request_review", "github", "Scout's data folder"),
                 ("GitHubActions", "create_issue", "github", "Scout's data folder"),
+                ("GitHubActions", "remember_project_conventions", "github", "Scout's data folder"),
             ]);
+        provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultProfilesDirectory());
         provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldHaveSingleItem().ShouldBeOfType<GitHubActionExecutor>();
         provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultDraftsDirectory());
     }
@@ -130,9 +133,11 @@ public sealed class GitHubServiceCollectionExtensionsTests
         {
             ["Scout:Plugins:GitHub:Token"] = "test-token",
             ["Scout:Plugins:GitHub:DraftsDirectory"] = "/tmp/scout-test-drafts",
+            ["Scout:Plugins:GitHub:ProfilesDirectory"] = "/tmp/scout-test-profiles",
         };
         using var provider = Build(new ConfigurationBuilder().AddInMemoryCollection(data).Build());
 
         provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe("/tmp/scout-test-drafts");
+        provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe("/tmp/scout-test-profiles");
     }
 }

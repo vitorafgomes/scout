@@ -32,7 +32,7 @@ The owner asked on 2026-11-06 for Scout to help with code quality from chat: kno
 
 ## Scope
 
-- **In scope:** review of a pull request on GitHub from chat, in any language; a prioritised improvement list for a repository, indexed locally or read from GitHub; posting the review as review comments on the pull request; opening issues for the improvements; every write declared, granted and approved per action.
+- **In scope:** review of a pull request on GitHub from chat, in any language; a prioritised improvement list for a repository, indexed locally or read from GitHub; an audit of a whole repository with no pull request, judged against the project's own conventions, across bugs, security, conventions, performance, tests and documentation (phase 4); posting the review as review comments on the pull request; opening issues for the improvements; every write declared, granted and approved per action.
 - **Out of scope:** a review triggered by a webhook when a pull request opens (needs a public endpoint, the same blocker as [[pages/roadmap/teams-adapter-spike]]); replying inside an existing review thread; GitLab and Azure DevOps (another plugin behind the same two skills); editing code or pushing fixes (Scout never changes a repository).
 
 ## Target outcome
@@ -41,7 +41,7 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 
 ## Status
 
-- **As of 2026-11-06:** phases 0 and 1 on `feat/code-quality-assistant` (PR #91); phases 2 and 3 on `feat/code-quality-assistant-writes`, stacked on it: the two write functions, the drafts, the executor, the feature-scoped claim on the worker gate, the catalog rows, with tests.
+- **As of 2026-11-06:** phases 0 to 3 merged into `main` (#91 with #92 inside, #93); phase 4, the audit of a whole project against its own conventions, on `feat/code-audit-from-chat`.
 - **Next milestone:** merge, then the owner widens the GitHub App to Pull requests and Issues read & write and grants GitHub writes on the Features screen; first review posted end to end.
 - **Blocker:** the App permissions on github.com are the owner's step; until then the executor's POST answers 403 and the chat is told the write was not performed.
 
@@ -66,6 +66,13 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 - **Status:** done 2026-11-06
 - **Scope:** `create_issue(owner, repo, title, body, labels)` declared for the `github` feature, scope row "Open an issue", `IrreversibleWrite`; the body follows Problem, Evidence (`path:line`), Proposed change, Acceptance; the `project-improvements` skill files one issue per item the user picks.
 - **Success criteria:** an issue the owner approved exists with that body; an improvement already tracked is reported with its number instead.
+
+### Phase 4 - Audit a whole project from chat, against its own conventions
+- **Status:** done 2026-11-06 (on `feat/code-audit-from-chat`)
+- **Why:** the owner's limit of 2026-11-06: "nao consigo solicitar que o agente faca uma analise direta ao codigo se nao tiver um PR aberto ... deveria permitir analisar todo o projeto ... primeiro tente identificar os padroes usados". The reads stopped at one file and the root folder, the Knowledge index covered ten extensions, and nothing judged the code against the house rules.
+- **Scope:** two reads on the GitHub plugin, `list_repository_files` (the recursive tree in one call with counts by folder and extension, filters and a 300-path cap; `src/Scout.Plugin.GitHub/GitHubPlugin.Reads.cs:287`) and `search_code` (GitHub's code search on the default branch, with highlighted fragments; `:333`), the query refusing any `repo:`, `org:` or `user:` qualifier so a search cannot leave the repository (`src/Scout.Plugin.GitHub/GitHubNames.cs:58`); a **conventions profile** per repository, written by the model from the project's own files and from the owner's corrections in chat, kept under `Scout/github-profiles` as a reversible write of the `github` feature (`remember_project_conventions`, `get_project_conventions`; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:272`, `:241`); the Knowledge file filter widened to the languages the skills cover, the manifests and the extensionless build files, with credentials files excluded (`src/Scout.Knowledge/ProjectFileFilter.cs:50`, `:83`); and the `code-audit` skill (`src/Scout.Skills/skills/code-audit.md`): pass 1 reads or discovers the profile, pass 2 audits one dimension at a time and anchors every finding to `path:line` and to the profile line it departs from.
+- **Success criteria:** "analisa o código do owner/repo" with no pull request open ends in findings with `path:line`, each tied to a rule of the project or named a defect, and the profile the user can correct; the search cannot reach another repository (`tests/Scout.Plugin.GitHub.Tests/GitHubPluginReadsTests.cs:278`); a `.env` or a `.pem` never enters the index (`tests/Scout.Knowledge.Tests/ProjectFileFilterTests.cs:55`).
+- **Out of scope, still:** cloning a GitHub repository into the Knowledge index from chat (a disk write and a large download; its own ADR if the GitHub reads do not suffice), running analysers on the project's code (Scout reads, it does not execute third-party code), Dependabot alerts (one more App permission; a later phase if wanted).
 
 ## Where the spec lives
 

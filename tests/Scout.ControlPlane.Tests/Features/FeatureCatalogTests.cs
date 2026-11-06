@@ -39,7 +39,9 @@ public sealed class FeatureCatalogTests
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Contents").Actions.ShouldBe([
             "Read the README, languages and top-level files of a repository",
             "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
+            "List every file of a repository and search its code, to audit a whole project",
         ]);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Scout's data folder").Actions.Count.ShouldBe(2);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull requests").Actions.ShouldBe([
             "List open pull requests",
             "Read one pull request with its changed files and their diffs",

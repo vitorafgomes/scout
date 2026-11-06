@@ -155,6 +155,8 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             "/repos/octocat/hello-world/pulls/1" => Json("""{"number":1,"title":"t","user":{"login":"a"},"base":{"ref":"main"},"head":{"ref":"f","sha":"abc"}}"""),
             "/repos/octocat/hello-world/issues/1" => Json("""{"number":1,"title":"t","user":{"login":"a"},"labels":[]}"""),
             "/repos/octocat/hello-world/contents/README.md" => Json("""{"type":"file","encoding":"base64","size":0,"content":""}"""),
+            "/repos/octocat/hello-world/git/trees/main" => Json("""{"truncated":false,"tree":[]}"""),
+            "/search/code" => Json("""{"total_count":0,"items":[]}"""),
             "/user/repos" or "/repos/octocat/hello-world/pulls" or "/repos/octocat/hello-world/issues"
                 or "/repos/octocat/hello-world/pulls/1/files" or "/repos/octocat/hello-world/pulls/1/comments"
                 or "/repos/octocat/hello-world/issues/1/comments" => Json("[]"),
@@ -168,7 +170,11 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             ["repo"] = "hello-world",
             ["number"] = 1,
             ["path"] = "README.md",
-            ["reference"] = "",
+            ["reference"] = "main",
+            ["prefix"] = "",
+            ["extensions"] = "",
+            ["query"] = "token",
+            ["extension"] = "",
         };
 
         foreach (var function in plugin)
@@ -187,6 +193,8 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
         paths.ShouldContain("/repos/octocat/hello-world/issues/1/comments");
         paths.ShouldContain("/repos/octocat/hello-world/issues/1");
         paths.ShouldContain("/repos/octocat/hello-world/contents/README.md");
+        paths.ShouldContain("/repos/octocat/hello-world/git/trees/main");
+        paths.ShouldContain("/search/code");
         _requests.ShouldAllBe(r => r.Method == "GET" && r.Host == "api.github.com");
     }
 

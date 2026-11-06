@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Scout.Plugin.GitHub.Abstractions;
 
 namespace Scout.Plugin.GitHub;
@@ -45,19 +43,13 @@ internal sealed record GitHubDraft(
 }
 
 /// <summary>
-/// One JSON file per draft in the drafts folder, written through a temporary file and a rename so a reader never
-/// sees half a draft. Drafts older than <see cref="MaxAge"/> are deleted on each purge: an action the owner never
-/// decided, or rejected, leaves its draft behind and this is what clears it.
+/// One JSON file per draft in the drafts folder, through <see cref="JsonFiles"/>. Drafts older than <see cref="MaxAge"/>
+/// are deleted on each purge: an action the owner never decided, or rejected, leaves its draft behind and this is what
+/// clears it.
 /// </summary>
 internal sealed class GitHubDraftStore
 {
     internal static readonly TimeSpan MaxAge = TimeSpan.FromDays(7);
-
-    private static readonly JsonSerializerOptions Json = new()
-    {
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 
     private readonly string _directory;
 
@@ -70,28 +62,20 @@ internal sealed class GitHubDraftStore
     /// <summary>The folder the drafts live in.</summary>
     internal string Directory => _directory;
 
-    public async Task SaveAsync(GitHubDraft draft, CancellationToken ct)
+    public Task SaveAsync(GitHubDraft draft, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(draft);
-        System.IO.Directory.CreateDirectory(_directory);
-        var path = PathOf(draft.Id);
-        var temporary = path + ".tmp";
-        await using (var stream = File.Create(temporary))
-        {
-            await JsonSerializer.SerializeAsync(stream, draft, Json, ct).ConfigureAwait(false);
-        }
-
-        File.Move(temporary, path, overwrite: true);
+        return JsonFiles.SaveAsync(PathOf(draft.Id), draft, ct);
     }
 
-    public Task<GitHubDraft?> FindAsync(string id, CancellationToken ct) => ReadAsync(PathOf(id), ct);
+    public Task<GitHubDraft?> FindAsync(string id, CancellationToken ct) => JsonFiles.ReadAsync<GitHubDraft>(PathOf(id), ct);
 
     /// <summary>The draft whose queued action is <paramref name="actionId"/>, or null.</summary>
     public async Task<GitHubDraft?> FindByActionAsync(string actionId, CancellationToken ct)
     {
         foreach (var file in Files())
         {
-            var draft = await ReadAsync(file, ct).ConfigureAwait(false);
+            var draft = await JsonFiles.ReadAsync<GitHubDraft>(file, ct).ConfigureAwait(false);
             if (draft is not null && string.Equals(draft.ActionId, actionId, StringComparison.Ordinal))
             {
                 return draft;
@@ -113,7 +97,7 @@ internal sealed class GitHubDraftStore
         var purged = 0;
         foreach (var file in Files())
         {
-            var draft = await ReadAsync(file, ct).ConfigureAwait(false);
+            var draft = await JsonFiles.ReadAsync<GitHubDraft>(file, ct).ConfigureAwait(false);
             if (draft is null || draft.CreatedAt <= now - MaxAge)
             {
                 File.Delete(file);
@@ -128,22 +112,4 @@ internal sealed class GitHubDraftStore
         System.IO.Directory.Exists(_directory) ? System.IO.Directory.EnumerateFiles(_directory, "*.json") : [];
 
     private string PathOf(string id) => Path.Combine(_directory, id + ".json");
-
-    private static async Task<GitHubDraft?> ReadAsync(string path, CancellationToken ct)
-    {
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            await using var stream = File.OpenRead(path);
-            return await JsonSerializer.DeserializeAsync<GitHubDraft>(stream, Json, ct).ConfigureAwait(false);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
 }

@@ -25,4 +25,10 @@ public sealed class GitHubOptions
     /// screen; empty for <c>Scout/github-drafts</c> under the user's local application data.
     /// </summary>
     public string DraftsDirectory { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Folder where the conventions profile of each repository Scout audited is kept; empty for
+    /// <c>Scout/github-profiles</c> under the user's local application data.
+    /// </summary>
+    public string ProfilesDirectory { get; set; } = string.Empty;
 }

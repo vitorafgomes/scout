@@ -1,0 +1,40 @@
+---
+name: code-audit
+description: Auditing a whole software project from chat, with or without a pull request, in any programming language - "analyse the code", "audit this repository", "look for bugs", "security problems", "performance issues", "where the project does not follow its own patterns", "analisa o código do projeto", "procura bugs", "problemas de segurança", "performance", "padrões não seguidos", "audita o repositório". First learns the project's own conventions from its files, then judges the code against them across bugs, security, conventions, performance, tests and documentation, with findings anchored to file and line. Not for reviewing one pull request (code-review), not for a short list of improvements (project-improvements), not for a question about one function.
+---
+
+# Code audit
+
+Use this when a user asks what is wrong, risky or inconsistent in a project as a whole. No pull request is needed: the audit reads the repository as it is. It runs in two passes, and the first one is never skipped: a finding is a deviation from the project's own rules or a defect the code shows, never a taste.
+
+## Pass 1: the project's conventions
+
+1. `get_project_conventions(owner, repo)`. When a profile exists, read it and go to pass 2; when the user corrects a rule in chat, save the corrected profile with `remember_project_conventions` before judging anything.
+2. When none exists, discover the conventions from the project's own files, in this order, and nothing from assumption:
+   - `list_repository_files(owner, repo)` for the shape: top-level folders, languages by extension, where tests live, whether there is a `docs/`, `adr/`, `vault/` or `.github/` folder.
+   - The files that define the house rules, with `get_file_contents`: the build or package manifests (`*.csproj`, `Directory.Build.props`, `package.json`, `go.mod`, `pom.xml`, `build.gradle`, `Cargo.toml`, `pyproject.toml`, `Gemfile`, `composer.json`), the lint and format configuration (`.editorconfig`, `eslint.config.*`, `.prettierrc`, `ruff.toml`, `.golangci.yml`, `rustfmt.toml`, `.rubocop.yml`, `phpstan.neon`), the CI workflows under `.github/workflows/`, `README`, `CONTRIBUTING`, `CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, the ADRs and the architecture notes.
+   - A sample: two or three files from each layer the shape shows (an entry point, a domain or model file, a handler or controller, a repository or data access file, one test file per test project), read whole.
+   - `search_code` to confirm a rule before writing it down: how errors are handled (`catch (`, `Result`, `panic(`, `raise`), how dependencies are injected, how logging is done, how async is written, how tests assert.
+3. Write the profile as Markdown, one line per convention, each naming the file that shows it, grouped: language and framework versions; folder and layer structure and what may depend on what; naming; error handling and the result or exception shape; dependency injection and composition; logging; async and concurrency; data access; configuration and secrets; test framework, naming and what a test asserts; formatting and lint rules the build enforces; documentation where it lives. Mark a rule the files contradict as "mixed" with both forms. Load the language skill for each main language with `load_skill` (csharp, typescript, javascript, python, go, java, kotlin, rust, ruby, php, swift, scala, dart, c, cpp, sql, bash, powershell, elixir, clojure, haskell, lua, perl, r) and keep only the rules the project itself follows.
+4. `remember_project_conventions(owner, repo, profile)`; when it answers that writes are not allowed, keep the profile in the conversation and say the owner can allow GitHub writes in Scout Desktop so it is kept.
+
+## Pass 2: the audit, one dimension at a time
+
+Read what each dimension needs; `search_code` finds the places, `get_file_contents` reads them whole. A repository too large to read in one conversation is audited by area the user picks (a folder, a module, a dimension), and the answer says what was read and what was not.
+
+- **Bugs.** Swallowed or over-broad catches, a failure turned into a silent default, null or undefined reached without a check, off-by-one, a resource opened and not closed, a shared mutable without a lock, an async call not awaited, a retry without a limit, time or culture assumed.
+- **Security.** Input reaching a query, a shell, a path or a URL without validation; a secret, token or connection string in code, in configuration committed with values, in a log line or a test fixture; permissions wider than the task; an authentication or authorization check missing on one path and present on its siblings; a dependency the manifest pins to a version with a known advisory; `search_code` for `password`, `secret`, `token`, `api_key`, `BEGIN PRIVATE KEY`, `eval(`, `exec(`, `Process.Start`, `shell=True`, raw SQL concatenation.
+- **Conventions.** Where the code departs from the profile: a layer reaching into another, a name against the rule, an exception where the project returns results, a logger used differently, a test that asserts a call instead of an outcome, a public member without the documentation the project writes. A "mixed" rule is reported as the inconsistency it is, not as a violation of one side.
+- **Performance.** A query or an I/O call inside a loop, N+1 reads, sequential awaits on independent I/O, a list endpoint without paging, a whole collection materialised to find one item, a regular expression compiled per call, string concatenation in a loop, a cache without invalidation, a hot path allocating per request.
+- **Tests.** Behaviour with no test, a test that only checks a call happened, a skipped or ignored test, a CI that builds but does not run the tests, a test project outside the solution or the test command, flaky patterns (sleeps, real time, shared state).
+- **Documentation and delivery.** A README that does not run the project, a setup needing undocumented steps or paid credentials, no versioning or release path, no record of decisions, observability missing where the project runs unattended.
+
+## How to answer
+
+Lead with the dimension that would hurt most. Each finding: **What** (one sentence), **Why** (the risk or cost), **Where** (`path:line`, quoted), **Fix** (the smallest change, naming the pattern the project already uses when one fits), **Rule** (the profile line it departs from, or "defect" when it is one). At most twelve findings per answer, grouped by dimension, with a count of the rest; then what was read and what was not. The profile's summary comes first when it was just written, so the user can correct it.
+
+## Filing
+
+When the user asks for the findings to be filed, call `create_issue(owner, repo, title, body, labels)` once per finding the user picks, the body being the five lines above in Markdown with a last line saying Scout drafted it from an audit on the date; the function queues each issue for Scout's owner to approve on the Review screen of Scout Desktop; tell the user which are waiting and never say an issue exists until the chat hears so. For a pull request the user names, hand over to the `code-review` skill instead.
+
+You never edit files, run the project's code or change anything on GitHub yourself.

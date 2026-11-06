@@ -1,8 +1,9 @@
 ---
 title: "Knowledge"
-version: "1.1"
+version: "1.2"
 date: 2026-10-21
-changes: "Added the hot spot that holds Semantic Kernel at 1.78.0"
+updated: 2026-11-06
+changes: "v1.2 (2026-11-06) the file filter covers every language the skills cover, the project manifests and the extensionless build files, and never a credentials file. v1.1 added the hot spot that holds Semantic Kernel at 1.78.0"
 page_type: service
 status: active
 description: "Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent."
@@ -53,12 +54,12 @@ Indexing runs from the host command `index <project>` ([[pages/services/host-con
 ## Invariants
 
 - [[pages/invariants/no-executive-writes]]: the three tools read the index; the only write is Scout's own database.
-- [[pages/invariants/secrets-never-in-source]]: the filter indexes `.json`, `.yml` and `.yaml` (`src/Scout.Knowledge/ProjectFileFilter.cs:12`), so secrets inside an indexed repository are embedded and searchable.
+- [[pages/invariants/secrets-never-in-source]]: the filter indexes `.json`, `.yml`, `.yaml`, `.toml` and `.xml` among the configuration formats (`src/Scout.Knowledge/ProjectFileFilter.cs:50`), so a secret written into a committed configuration file is embedded and searchable; since 2026-11-06 it refuses the files that hold credentials by convention, `.env*`, `secrets.json`, `.pem`, `.key`, `.pfx`, `.p12`, `.jks`, `.keystore`, `.crt`, `.cer` (`:83`, `tests/Scout.Knowledge.Tests/ProjectFileFilterTests.cs:55`).
 - [[pages/invariants/pluggable-boundaries]]: the store sits behind `IProjectKnowledgeStore`.
 
 ## Hot spots
 
-- `src/Scout.Knowledge/ProjectFileFilter.cs:27`: the only allow-list for what enters the index; no secret-file exclusion.
+- `src/Scout.Knowledge/ProjectFileFilter.cs:50`: the only allow-list for what enters the index: the source of the 24 languages the bundled skills cover, the manifests (`*.csproj`, `go.mod` by extension, `Cargo.toml`, `pom.xml`, `build.gradle`), the extensionless build files (`Dockerfile`, `Makefile`, `Jenkinsfile`, `Gemfile`, `Rakefile`, `Procfile`, `CMakeLists.txt`), `.md`, `.txt`, `.rst` and `.adoc` as docs; skipped: `bin`, `obj`, `.git`, `node_modules`, `dist`, `.vs`, `vendor`, `.idea`, `__pycache__`, `.venv`, `venv`, and `target/` at the repository root only (a nested `target/` or `build/` is as likely source as output: Scout's own `ui/build/` holds the packaging configuration). A committed `.env.example`, `.env.sample` or `.env.template` is indexed; `.env` and `.env.<stage>` are not. Anything that is not C# is chunked by a 100-line window.
 - `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`: OpenAI-typed execution settings in a provider-neutral project.
 - `src/Scout.Knowledge/ProjectWatchService.cs:14`: debounce and re-index on file events.
 - The SqliteVec connector holds the whole Semantic Kernel family at 1.78.0 ([[pages/roadmap/followups]]).

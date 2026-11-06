@@ -1,13 +1,15 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Scout.Plugin.GitHub.Abstractions;
 
 namespace Scout.Plugin.GitHub;
 
-/// <summary>The single-item reads: one pull request with its files, its files alone, its comments, one issue, one file.</summary>
+/// <summary>The single-item reads: one pull request with its files, its files alone, its comments, one issue, one file, the whole tree, a code search.</summary>
 internal sealed partial class GitHubClient
 {
     private const int FilesPage = 100;
+    private const int SearchPage = 30;
 
     public async Task<PullRequestDetails?> GetPullRequestAsync(
         string owner, string repo, int number, CancellationToken ct)
@@ -132,6 +134,70 @@ internal sealed partial class GitHubClient
         return new RepositoryFile(path, Kind: file.Type ?? "file", Text: text, Size: file.Size, Entries: []);
     }
 
+    public async Task<RepositoryTree?> ListRepositoryFilesAsync(
+        string owner, string repo, string? reference, CancellationToken ct)
+    {
+        var at = reference;
+        if (string.IsNullOrWhiteSpace(at))
+        {
+            var repoDto = await TryGetAsync<RepoInfoDto>($"repos/{owner}/{repo}", ct).ConfigureAwait(false);
+            if (repoDto is null)
+            {
+                return null;
+            }
+
+            at = repoDto.DefaultBranch ?? "main";
+        }
+
+        var tree = await TryGetAsync<TreeDto>(
+            $"repos/{owner}/{repo}/git/trees/{Uri.EscapeDataString(at)}?recursive=1", ct).ConfigureAwait(false);
+        if (tree is null)
+        {
+            return null;
+        }
+
+        var entries = (tree.Tree ?? [])
+            .Where(e => e.Type == "blob" && !string.IsNullOrEmpty(e.Path))
+            .Select(e => new RepositoryEntry(e.Path!, e.Size))
+            .ToList();
+        return new RepositoryTree(at, tree.Truncated, entries);
+    }
+
+    public async Task<CodeSearchResult> SearchCodeAsync(
+        string owner, string repo, string query, string? path, string? extension, CancellationToken ct)
+    {
+        var terms = new List<string> { query.Trim(), $"repo:{owner}/{repo}" };
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            var folder = path.Trim();
+            terms.Add(folder.Any(char.IsWhiteSpace) ? $"path:\"{folder}\"" : $"path:{folder}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(extension))
+        {
+            terms.Add($"extension:{extension.Trim().TrimStart('.')}");
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"search/code?q={Uri.EscapeDataString(string.Join(' ', terms))}&per_page={SearchPage}");
+        request.Headers.Accept.ParseAdd("application/vnd.github.text-match+json");
+        using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw ToApiException(response);
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<SearchDto>(cancellationToken: ct).ConfigureAwait(false)
+            ?? throw new GitHubApiException("GitHub returned an unexpected empty response.");
+        var hits = (result.Items ?? [])
+            .Where(i => !string.IsNullOrEmpty(i.Path))
+            .Select(i => new CodeSearchHit(
+                i.Path!,
+                (i.TextMatches ?? []).Select(m => m.Fragment).OfType<string>().ToList()))
+            .ToList();
+        return new CodeSearchResult(result.TotalCount, hits);
+    }
+
     private static string EscapePath(string path) =>
         string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
@@ -186,6 +252,26 @@ internal sealed partial class GitHubClient
 
     private sealed record LabelDto(
         [property: JsonPropertyName("name")] string? Name);
+
+    private sealed record TreeDto(
+        [property: JsonPropertyName("truncated")] bool Truncated,
+        [property: JsonPropertyName("tree")] List<TreeEntryDto>? Tree);
+
+    private sealed record TreeEntryDto(
+        [property: JsonPropertyName("path")] string? Path,
+        [property: JsonPropertyName("type")] string? Type,
+        [property: JsonPropertyName("size")] long Size);
+
+    private sealed record SearchDto(
+        [property: JsonPropertyName("total_count")] int TotalCount,
+        [property: JsonPropertyName("items")] List<SearchItemDto>? Items);
+
+    private sealed record SearchItemDto(
+        [property: JsonPropertyName("path")] string? Path,
+        [property: JsonPropertyName("text_matches")] List<TextMatchDto>? TextMatches);
+
+    private sealed record TextMatchDto(
+        [property: JsonPropertyName("fragment")] string? Fragment);
 
     private sealed record ContentFileDto(
         [property: JsonPropertyName("type")] string? Type,

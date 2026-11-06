@@ -46,4 +46,33 @@ public sealed class GitHubNamesTests
     [InlineData("a b", false)]
     public void A_Reference_Is_A_Branch_Tag_Or_Commit_Name(string reference, bool valid) =>
         GitHubNames.IsValidReference(reference).ShouldBe(valid);
+
+    [Theory]
+    [InlineData("catch (Exception)", true)]
+    [InlineData("password", true)]
+    [InlineData("username field", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("x repo:octocat/other", false)]
+    [InlineData("repo:evil/one secret", false)]
+    [InlineData("ORG:acme token", false)]
+    [InlineData("key user:bob", false)]
+    public void A_Search_Query_Carries_No_Scope_Qualifier(string query, bool valid) =>
+        GitHubNames.IsValidSearchQuery(query).ShouldBe(valid);
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("cs", true)]
+    [InlineData(".ts", true)]
+    [InlineData("tsx", true)]
+    [InlineData(".", false)]
+    [InlineData("cs ts", false)]
+    [InlineData("c#", false)]
+    [InlineData("abcdefghijklmnopq", false)]
+    public void An_Extension_Is_Letters_Or_Digits_With_An_Optional_Dot(string extension, bool valid) =>
+        GitHubNames.IsValidExtension(extension).ShouldBe(valid);
+
+    [Fact]
+    public void A_Search_Query_Over_Two_Hundred_Characters_Is_Refused() =>
+        GitHubNames.IsValidSearchQuery(new string('q', 201)).ShouldBeFalse();
 }

@@ -35,6 +35,18 @@ public sealed class GitHubDraftStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Two_Saves_Of_The_Same_Document_At_Once_Both_Land()
+    {
+        var store = new GitHubDraftStore(_dir);
+        var now = DateTimeOffset.UtcNow;
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(i => store.SaveAsync(Review("same", now, $"act-{i}"), CancellationToken.None)));
+
+        (await store.FindAsync("same", CancellationToken.None)).ShouldNotBeNull().ActionId.ShouldStartWith("act-");
+        Directory.GetFiles(_dir, "*.tmp").ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Purge_Deletes_Drafts_Older_Than_A_Week_And_Unreadable_Files_And_Keeps_The_Rest()
     {
         var store = new GitHubDraftStore(_dir);
