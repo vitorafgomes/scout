@@ -31,9 +31,9 @@ public sealed class RhubarbLipSyncTests : IDisposable
 
         var lipSync = await Cues(runner);
 
-        var call = runner.Calls.ShouldHaveSingleItem();
-        call.Program.ShouldBe(Rhubarb);
-        call.Arguments.ShouldBe(["-f", "json", "-r", "phonetic", "--extendedShapes", "GHX", "-o", Media("mouth-cues-s1.json"), Media("scene-s1.wav")]);
+        var (program, arguments) = runner.Calls.ShouldHaveSingleItem();
+        program.ShouldBe(Rhubarb);
+        arguments.ShouldBe(["-f", "json", "-r", "phonetic", "--extendedShapes", "GHX", "-o", Media("mouth-cues-s1.json"), Media("scene-s1.wav")]);
         runner.Timeouts.ShouldBe([TimeSpan.FromMinutes(2) + TimeSpan.FromMilliseconds(2 * 3000)]);
         runner.Inputs.ShouldBe([null]);
         lipSync.Failure.ShouldBeNull();

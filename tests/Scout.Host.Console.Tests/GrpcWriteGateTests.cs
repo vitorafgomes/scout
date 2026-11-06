@@ -156,9 +156,9 @@ public sealed class GrpcWriteGateTests
         result.ShouldBe("uploaded");
         probe.Ran.ShouldBeTrue();
         service.Record.ShouldNotBeNull().Outcome.ShouldBe("succeeded");
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldBe("The write gate did not record YouTube.upload_video (RpcException).");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldBe("The write gate did not record YouTube.upload_video (RpcException).");
     }
 
     [Fact]

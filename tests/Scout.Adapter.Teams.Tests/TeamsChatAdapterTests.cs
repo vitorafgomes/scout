@@ -2,7 +2,6 @@ using Microsoft.Bot.Builder;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Scout.Adapter.Teams;
 using Scout.Conversation.Abstractions;
 
 namespace Scout.Adapter.Teams.Tests;

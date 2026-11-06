@@ -68,7 +68,7 @@ public sealed class StreamPump
         // The timeout bounds the whole run, including BeginAsync and the success
         // CompleteAsync, so non-edit platforms whose only write is the terminal
         // call are still guarded. FailAsync deliberately stays on a fresh token.
-        using var linked = LinkTimeout(cancellationToken, caps, out var pumpToken);
+        using var linked = LinkTimeout(caps, cancellationToken, out var pumpToken);
 
         await sink.BeginAsync(pumpToken).ConfigureAwait(false);
 
@@ -171,9 +171,9 @@ public sealed class StreamPump
             .ConfigureAwait(false);
     }
 
-    private IDisposable? LinkTimeout(
-        CancellationToken caller,
+    private CompositeDisposable? LinkTimeout(
         RenderCapabilities caps,
+        CancellationToken caller,
         out CancellationToken pumpToken)
     {
         var timeout = EffectiveTimeout(caps);

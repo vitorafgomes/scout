@@ -70,7 +70,7 @@ internal sealed record FfmpegProbe(FfmpegTools? Tools, string Note);
 /// <see cref="Filters"/> and <c>ffmpeg -demuxers</c> every demuxer in <see cref="Demuxers"/>. A probe that finds the tools
 /// is kept for the life of the process; one that does not is kept for <see cref="RetryAfter"/>, then probed again.
 /// </summary>
-internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMediaOptions> options, TimeProvider time)
+internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMediaOptions> options, TimeProvider time) : IDisposable
 {
     internal static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(30);
 
@@ -98,6 +98,11 @@ internal sealed class FfmpegToolset(IProcessRunner runner, IOptions<OperatorMedi
     private readonly SemaphoreSlim _once = new(1, 1);
     private FfmpegProbe? _probe;
     private DateTimeOffset _probedAt;
+
+    public void Dispose()
+    {
+        _once.Dispose();
+    }
 
     /// <summary>The tools, found once and kept; a failed probe is answered again for two minutes, then repeated.</summary>
     public async Task<FfmpegProbe> ProbeAsync(CancellationToken ct)

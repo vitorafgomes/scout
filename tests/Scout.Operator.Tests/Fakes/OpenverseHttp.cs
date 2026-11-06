@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Microsoft.Extensions.Time.Testing;
@@ -54,7 +55,7 @@ internal sealed class OpenverseHttp : HttpMessageHandler
         string creator = "Thomas Nes Myhre")
         => "{" +
            $"\"title\":\"{title}\",\"url\":\"{url}\",\"creator\":\"{creator}\",\"license\":\"{license}\",\"license_version\":\"2.0\"," +
-           $"\"filetype\":{(filetype is null ? "null" : $"\"{filetype}\"")},\"width\":{(width is null ? "null" : width.ToString())},\"height\":683," +
+           $"\"filetype\":{(filetype is null ? "null" : $"\"{filetype}\"")},\"width\":{(width is null ? "null" : width.Value.ToString(CultureInfo.InvariantCulture))},\"height\":683," +
            $"\"attribution\":{(attribution is null ? "null" : System.Text.Json.JsonSerializer.Serialize(attribution))}" +
            "}";
 

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Scout.Adapter.Discord.Tests;
 
 public sealed class DiscordMessageTranslatorTests
@@ -129,8 +131,8 @@ public sealed class DiscordMessageTranslatorTests
             MentionsSelf: true, Timestamp: FixedTime);
 
         Sut().TryTranslate(inbound, BotUserId, out var chatMessage).ShouldBeTrue();
-        chatMessage!.UserId.ShouldBe(HumanUserId.ToString());
-        chatMessage.ChannelId.ShouldBe(ChannelId.ToString());
+        chatMessage!.UserId.ShouldBe(HumanUserId.ToString(CultureInfo.InvariantCulture));
+        chatMessage.ChannelId.ShouldBe(ChannelId.ToString(CultureInfo.InvariantCulture));
         chatMessage.Timestamp.ShouldBe(FixedTime);
     }
 }

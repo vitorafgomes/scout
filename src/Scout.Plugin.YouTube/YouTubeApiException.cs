@@ -8,17 +8,12 @@ namespace Scout.Plugin.YouTube;
 /// chat; it never carries the API key, the token or the request URL.
 /// <see cref="StatusCode"/> is the originating HTTP status when known.
 /// </summary>
-public sealed class YouTubeApiException : Exception
+/// <remarks>Creates the exception with a user-safe message and optional status.</remarks>
+public sealed class YouTubeApiException(string message, HttpStatusCode? statusCode = null) : Exception(message)
 {
-    /// <summary>Creates the exception with a user-safe message and optional status.</summary>
-    public YouTubeApiException(string message, HttpStatusCode? statusCode = null)
-        : base(message)
-    {
-        StatusCode = statusCode;
-    }
 
     /// <summary>HTTP status that produced the failure, when known.</summary>
-    public HttpStatusCode? StatusCode { get; }
+    public HttpStatusCode? StatusCode { get; } = statusCode;
 
     /// <summary>
     /// True when the same request can succeed later unchanged: YouTube unavailable, a spent quota, a rate limit, or a

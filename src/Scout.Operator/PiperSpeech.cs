@@ -58,7 +58,7 @@ internal sealed partial class PiperSpeech(IProcessRunner runner, IOptions<Operat
     /// <summary>The voice narration uses when the owner chose none: the first Cori voice, else the first voice, else null.</summary>
     internal static PiperVoice? Default(IReadOnlyList<PiperVoice> voices)
         => voices.FirstOrDefault(v => Path.GetFileNameWithoutExtension(v.Model).Contains("cori", StringComparison.OrdinalIgnoreCase))
-            ?? voices.FirstOrDefault();
+            ?? (voices.Count > 0 ? voices[0] : null);
 
     /// <summary>
     /// Make <paramref name="fileName"/> in <paramref name="directory"/> from <paramref name="text"/> in the bundled voice

@@ -63,8 +63,8 @@ The owner wants the chat to see what is being said ("o chat ver o que falamos"),
   - An utterance with fewer than 8 speech frames (160 ms) yields nothing, neither a window nor a final.
   - An utterance that reaches 320,000 samples (20 s) is closed at that frame with `UtteranceEnded` carrying those 20 s, and a new utterance starts at the next frame, so a final never loses the start of a long utterance. The 320,000-sample ring stays as the hard bound.
 - **Windows.** Windows are cumulative: each holds the utterance from its start. The first is ready at 12,000 samples (0.75 s), then one every 9,600 samples (0.6 s) more. A window due during a pause waits until speech resumes, so trailing silence does not hold the model just before the final.
-- **Decoding** (`src/Scout.Transcription.Whisper/WhisperAudioTranscriber.cs:274`):
-  - A partial is greedy, has no previous-text context and is a single segment. Its audio context covers the window and 2 s more, at 20 ms per frame: window samples / 320 + 100, from 384 to 1000 (`:225`). A window under 5.7 s gets 384, a 20 s window 1000.
+- **Decoding** (`src/Scout.Transcription.Whisper/WhisperAudioTranscriber.cs:276`):
+  - A partial is greedy, has no previous-text context and is a single segment. Its audio context covers the window and 2 s more, at 20 ms per frame: window samples / 320 + 100, from 384 to 1000 (`:227`). A window under 5.7 s gets 384, a 20 s window 1000.
   - A final is a beam search of 5 over the whole utterance with full context.
   - A final detects the language, as voice messages do. A partial detects it until the session's first final reports one, and from then on is decoded in that language (`src/Scout.Transcription.Whisper/WhisperLiveTranscriber.cs:85`).
   - Both use half of the processors. A sweep on a 24-thread Ryzen 9 3900 with base found no thread count faster than that half ([[pages/services/transcription-whisper]]).
@@ -106,8 +106,8 @@ The owner wants the chat to see what is being said ("o chat ver o que falamos"),
 ## Amendment - two sessions, 2026-11-04
 
 - **Rule.** The local adapter holds up to two live sessions at once (`MaxLiveSessions`, `src/Scout.Adapter.Local/LocalChatAdapter.cs:54`), each keyed by its `listen` id. This replaces "one session runs at a time" above; the wire shape is unchanged.
-  - `audio` and `stop` reach only the session with their id (`src/Scout.Adapter.Local/LocalChatAdapter.cs:312`, `:315`). Stopping one leaves the other running.
-  - A `listen` whose id is already open, or a third `listen` while two are open, gets the existing "Scout is already listening." and starts nothing (`src/Scout.Adapter.Local/LocalChatAdapter.cs:433`, `:439`).
+  - `audio` and `stop` reach only the session with their id (`src/Scout.Adapter.Local/LocalChatAdapter.cs:312`, `:317`). Stopping one leaves the other running.
+  - A `listen` whose id is already open, or a third `listen` while two are open, gets the existing "Scout is already listening." and starts nothing (`src/Scout.Adapter.Local/LocalChatAdapter.cs:433`, `:441`).
   - `audio` or `stop` for an id that is not open keeps the existing "Scout could not read that request.".
   - A feed that throws ends only its own session with "Scout could not transcribe that; see Scout logs." and frees only its slot (`src/Scout.Adapter.Local/LocalChatAdapter.cs:516`).
   - Log lines carry the id and the number of open sessions, never audio or transcript text.

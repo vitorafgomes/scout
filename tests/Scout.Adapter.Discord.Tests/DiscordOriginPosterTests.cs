@@ -87,9 +87,9 @@ public sealed class DiscordOriginPosterTests
         var posted = await Poster([], logger).PostAsync("3333:42", "Upload finished.", CancellationToken.None);
 
         posted.ShouldBeFalse();
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldNotContain("3333");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldNotContain("3333");
     }
 
     [Fact]
@@ -104,9 +104,9 @@ public sealed class DiscordOriginPosterTests
         var posted = await Poster(new() { [ChannelId] = channel }, logger).PostAsync("3333:42", "Upload finished.", CancellationToken.None);
 
         posted.ShouldBeFalse();
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldNotContain("3333");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldNotContain("3333");
     }
 
     [Fact]
@@ -120,9 +120,9 @@ public sealed class DiscordOriginPosterTests
         var posted = await poster.PostAsync("3333:42", "Upload finished.", CancellationToken.None);
 
         posted.ShouldBeFalse();
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldNotContain("3333");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldNotContain("3333");
     }
 
     [Theory]

@@ -2,7 +2,7 @@ namespace Scout.Transcription.Whisper.Tests;
 
 public sealed class OggOpusDecoderTests
 {
-    private static Stream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
+    private static FileStream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
 
     [Fact]
     public void A_Voice_Message_Decodes_To_16_kHz_Mono_Samples_Of_Its_Length()

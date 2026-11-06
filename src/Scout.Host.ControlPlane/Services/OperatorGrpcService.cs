@@ -16,16 +16,10 @@ namespace Scout.Host.ControlPlane.Services;
 /// proposal decisions and experiments, and the comments: the list, a sync request, the owner's decisions, approved
 /// replies and ideas.
 /// </summary>
-public sealed class OperatorGrpcService : GrpcOperator.OperatorBase
+public sealed class OperatorGrpcService(OperatorService @operator, CommentService comments) : GrpcOperator.OperatorBase
 {
-    private readonly OperatorService _operator;
-    private readonly CommentService _comments;
-
-    public OperatorGrpcService(OperatorService @operator, CommentService comments)
-    {
-        _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
-        _comments = comments ?? throw new ArgumentNullException(nameof(comments));
-    }
+    private readonly OperatorService _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
+    private readonly CommentService _comments = comments ?? throw new ArgumentNullException(nameof(comments));
 
     public override Task<WireMandate> GetMandate(GetMandateRequest request, ServerCallContext context) =>
         OperatorMapping.Guard(async () =>

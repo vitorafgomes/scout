@@ -15,7 +15,7 @@ public sealed class ProjectResolutionService
     private readonly ProjectIndexer _indexer;
     private readonly IProjectKnowledgeStore _store;
     private readonly ILogger<ProjectResolutionService> _logger;
-    private readonly IReadOnlyDictionary<string, ProjectEntry> _entries;
+    private readonly Dictionary<string, ProjectEntry> _entries;
     private readonly IReadOnlyList<string> _names;
 
     /// <summary>Creates the resolution service and builds the merged project map.</summary>

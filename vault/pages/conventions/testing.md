@@ -35,11 +35,13 @@ Versions come from `Directory.Packages.props` (central package management).
 - `AnalysisLevel` latest (`Directory.Build.props:8`) and `EnforceCodeStyleInBuild` true (`:9`): code-style rules run in the build.
 - `Nullable` enabled and target `net10.0` (`Directory.Build.props:5`, `:3`).
 - XML documentation is generated and `CS1591` suppressed for non-test projects only (`Directory.Build.props:10`, `:11`). Test projects set `IsTestProject` (for example `tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj:5`), so they generate no documentation file.
-- Because test projects emit no documentation file, unused-using diagnostics (IDE0005) are not raised by the plain build. `scripts/check-diagnostics.sh:1` forces them on and fails on any remaining diagnostic; run it on a single project for speed.
+- Because test projects emit no documentation file, unused-using diagnostics (IDE0005) are not raised by the plain build. `scripts/check-diagnostics.sh:1` forces them on and fails on any remaining diagnostic; run it on a single project for speed. CI runs it on the whole solution.
+- `AnalysisMode` Recommended (`Directory.Build.props:9`) and fifteen rules raised to warning in the root `.editorconfig` (`.editorconfig:43`), since 2026-11-06; the list, the triage and the gate that keeps them on are on [[pages/conventions/tooling]].
+- `tests/Scout.ArchTests` (2026-11-06) is the suite about the repository itself: the layering of [[pages/architecture/project-map]] as NetArchTest rules (leaves reference no other Scout assembly, `tests/Scout.ArchTests/ArchitectureTests.cs:55`; adapters and plugins reference neither each other nor a host, `:69`; the conversation core reaches only Llm and Skills, `:103`; Operator reaches the control plane only through its own abstraction, `:113`), the analyzer gate, the test-suite health (no skipped test, `tests/Scout.ArchTests/TestSuiteHealthTests.cs:26`; every source project has `tests/<Name>.Tests` except the two the map covers from `Scout.ControlPlane.Tests`, `:15`; every test project is in `Scout.slnx`; no test directory without a project), and three source scanners: a format specifier in an interpolated string names its culture (`tests/Scout.ArchTests/CultureExplicitFormattingTests.cs:74`), a comment never cites a vault path, an ADR number or an issue number (`tests/Scout.ArchTests/CommentReferenceTests.cs:36`; the vault cites code, code does not cite the vault), and every test project asserts with Shouldly and none references FluentAssertions (`tests/Scout.ArchTests/AssertionLibraryTests.cs:12`). The scanners blank string literals and comments before matching, with their own tests in `SourceTextTests.cs`.
 
 ## Layout and counts
 
-One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 936 in the fourteen projects of `Scout.slnx` (recounted 2026-11-02).
+One test project per source project, named `<Project>.Tests`, except the control-plane trio, which share one (`TestSuiteHealthTests.EverySourceProjectHasATestProject` enforces it), plus `Scout.ArchTests` over the repository itself. See [[pages/architecture/project-map]]. Counts are `[Fact]` and `[Theory]` attributes, not executed cases (a theory runs once per data row). Total 936 in the fourteen projects of `Scout.slnx` (recounted 2026-11-02).
 
 | Test project | Attributes | Covers |
 |---|---|---|
@@ -63,8 +65,8 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 ## Patterns in use
 
-- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:118` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
-- **Self-gating tests.** Each optional module has a test for "not configured means not registered" (for example `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24`).
+- **Composition tests.** Build a `ServiceCollection` from an in-memory configuration and resolve the graph. `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:117` builds the full host with a handler that throws on any network call, which proves resolution does no I/O.
+- **Self-gating tests.** Each optional module has a test for "not configured means not registered" (for example `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:22`).
 - **Boundary fakes.** SDK edges are faked: a fake HTTP handler for GitHub (`tests/Scout.Plugin.GitHub.Tests/Fakes/`), a recording sender for Teams (`tests/Scout.Adapter.Teams.Tests/Streaming/RecordingSender.cs`), a recording sink for the conversation core (`tests/Scout.Conversation.Tests/Fakes/RecordingResponseSink.cs`), a fake embedder for skills (`tests/Scout.Skills.Tests/FakeEmbeddingGenerator.cs`).
 - **One failing-call test per external boundary (Rule I).** A failing-call test makes the real client library raise its real exception, by placing a fake `HttpMessageHandler` under the real connector, instead of constructing the exception by hand: `tests/Scout.Llm.Tests/ChatGatewayRateLimitTests.cs:151` drives the real OpenAI connector into a 429, which a hand-made `HttpOperationException` had hidden ([[pages/history/llm]]).
 - **Stdio boundaries.** The local adapter is tested over a real `AnonymousPipeServerStream` for stdin and a capturing `TextWriter` for stdout (`tests/Scout.Adapter.Local.Tests/LineCapture.cs`), so the line splitting, the 20 MB cap and end of file run through the same stream code as production; its wait helper fails with a Shouldly message that names the missing event and prints the captured stdout, never a bare timeout. On the desktop side the supervisor's stdin is a Node `Writable` whose callback fails with EPIPE (`ui/packages/main/test/worker-supervisor.test.ts`).
@@ -74,7 +76,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 ## Running
 
-- All tests: `dotnet test` from the repository root (uses `Scout.slnx`).
+- All tests, one project at a time with a verdict per project: `bash scripts/test-per-project.sh`. A solution-wide `dotnet test` from the root still works but reports one total.
 - One project: `dotnet test tests/Scout.Llm.Tests`.
 - One test: `dotnet test tests/Scout.Llm.Tests --filter "FullyQualifiedName~Unknown_Provider"`.
 - Pinned SDK 10.0.100 with `latestMinor` roll-forward (`global.json`).
@@ -83,12 +85,13 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 `.github/workflows/ci.yml`, triggered on push and pull request to `main`:
 
-1. Hook and vault self-tests, then `scripts/check-vault-refs.sh` (`.github/workflows/ci.yml:17` to `:26`), which resolves every `path:line` citation in `vault/pages`.
-2. Setup .NET from `global.json`, then `dotnet restore` (`.github/workflows/ci.yml:33`).
-3. `dotnet build --configuration Release --no-restore` (`.github/workflows/ci.yml:45`).
-4. `dotnet test --configuration Release --no-build` with the trx logger and XPlat coverage (`.github/workflows/ci.yml:48`).
+1. The seven hook self-tests, the two script self-tests, then `scripts/check-vault-refs.sh` (`.github/workflows/ci.yml:17`), which resolves every `path:line` citation in `vault/pages`.
+2. Setup .NET from `global.json`, then `dotnet restore`.
+3. A second SDK, 10.0.2xx, which `global.json`'s `latestMinor` roll-forward then selects for the rest of the job, and `dotnet format Scout.slnx --verify-no-changes --no-restore` (`.github/workflows/ci.yml:47`): the 10.0.1xx band cannot open the workspace `dotnet format` needs.
+4. One build, through the gate: `scripts/check-diagnostics.sh Scout.slnx info Release` (`.github/workflows/ci.yml:55`) rebuilds the solution in Release with the documentation file and the IDE rules forced on, and fails on any diagnostic at any severity.
+5. `scripts/test-per-project.sh --configuration Release --no-build` with the trx logger and XPlat coverage (`.github/workflows/ci.yml:60`), on the gate's output: one verdict per project, Skipped must be 0.
 
-The format-check step is commented out because `dotnet format --verify-no-changes` times out on SDK 10.0.106; style is enforced by the build properties above (`.github/workflows/ci.yml:36` to `:43`).
+The format check was disabled from 2026-10-21 to 2026-11-06 because `dotnet format --verify-no-changes` times out on the 10.0.1xx SDK; it runs again under 10.0.2xx. Locally, the same SDK from `$HOME/.dotnet` runs it (tooling page); `dotnet format whitespace --folder` is the fallback under the pinned one.
 
 ## UI tests
 

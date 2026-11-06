@@ -80,7 +80,7 @@ Phase 6 of [[pages/roadmap/live-assistant]] makes persistence opt-in: by default
 
 - The store's tests against a real file: the round trip, the newest-first list, the delete that leaves no text in the file or its WAL and an empty free list, delete all, a delete whose caller cancels after the row is gone and a retried delete of a meeting already gone, both still scrubbing, the limits and the unreadable file (`tests/Scout.Meetings.Tests/SqliteMeetingStoreTests.cs:75`, `:110`, `:133`, `:154`, `:173`, `:201`, `:237`, `:260`), and no network assembly (`:281`).
 - The Markdown document (`tests/Scout.Meetings.Tests/MeetingMarkdownTests.cs:10`) and the registration gate (`tests/Scout.Meetings.Tests/MeetingsServiceCollectionExtensionsTests.cs:13`).
-- The adapter's requests and sentences over a fake store, and no meeting text in the log (`tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:779`, `:806`, `:941`); the host composes the store only with the path (`tests/Scout.Host.Console.Tests/HostLocalCompositionTests.cs:299`).
+- The adapter's requests and sentences over a fake store, and no meeting text in the log (`tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:780`, `:807`, `:942`); the host composes the store only with the path (`tests/Scout.Host.Console.Tests/HostLocalCompositionTests.cs:299`).
 - Invariant pages: [[pages/invariants/no-executive-writes]], [[pages/invariants/pluggable-boundaries]], [[pages/invariants/local-first-default]], [[pages/invariants/secrets-never-in-source]].
 
 ## Related

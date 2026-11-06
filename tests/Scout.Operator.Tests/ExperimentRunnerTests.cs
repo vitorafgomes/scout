@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Scout.Llm.Abstractions;
@@ -26,18 +27,18 @@ public sealed class ExperimentRunnerTests
         };
 
     private static OperatorExperimentArm Window(OperatorExperimentArm arm, DateOnly day)
-        => arm with { StartedAt = $"{day:yyyy-MM-dd}T00:00:00Z", EndedAt = $"{day:yyyy-MM-dd}T23:00:00Z" };
+        => arm with { StartedAt = $"{day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}T00:00:00Z", EndedAt = $"{day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}T23:00:00Z" };
 
     private void Reach(params YouTubeReachRow[] rows)
     {
         _reporting.FindReachJobAsync(Arg.Any<CancellationToken>()).Returns("job-reach");
         _reporting.ListReportsAsync("job-reach", Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(
             rows.Select(r => r.Date).Distinct().Select(d => new YouTubeReport(
-                $"r{d:yyyyMMdd}", new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
-                new DateTimeOffset(d.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero), $"https://youtubereporting.googleapis.com/v1/media/{d:yyyyMMdd}")).ToList());
+                $"r{d.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}", new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+                new DateTimeOffset(d.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero), $"https://youtubereporting.googleapis.com/v1/media/{d.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}")).ToList());
         foreach (var day in rows.GroupBy(r => r.Date))
         {
-            _reporting.DownloadReachAsync($"https://youtubereporting.googleapis.com/v1/media/{day.Key:yyyyMMdd}", Arg.Any<CancellationToken>())
+            _reporting.DownloadReachAsync($"https://youtubereporting.googleapis.com/v1/media/{day.Key.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}", Arg.Any<CancellationToken>())
                 .Returns(day.ToList());
         }
     }

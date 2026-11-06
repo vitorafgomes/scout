@@ -13,7 +13,7 @@ public sealed class WhisperAudioTranscriberTests : IDisposable
 
     public void Dispose() => File.Delete(_fakeModel);
 
-    private static Stream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
+    private static FileStream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
 
     [Fact]
     public async Task A_File_That_Is_Not_A_Whisper_Model_Fails_The_Transcription_With_A_Model_Load_Error()

@@ -1,4 +1,3 @@
-using Scout.Plugin.GitHub;
 using Scout.Plugin.GitHub.Abstractions;
 
 namespace Scout.Plugin.GitHub.Tests;

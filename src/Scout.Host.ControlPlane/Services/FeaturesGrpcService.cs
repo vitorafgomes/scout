@@ -17,22 +17,14 @@ namespace Scout.Host.ControlPlane.Services;
 /// exceptions to gRPC status codes; validation failures carry the dotted-path
 /// error map in the status detail.
 /// </summary>
-public sealed class FeaturesGrpcService : GrpcFeatures.FeaturesBase
+public sealed class FeaturesGrpcService(FeaturesService features, IActionQueue actions, IWriteLog writes, OperatorService @operator) : GrpcFeatures.FeaturesBase
 {
     private const int DefaultWritesLimit = 50;
 
-    private readonly FeaturesService _features;
-    private readonly IActionQueue _actions;
-    private readonly IWriteLog _writes;
-    private readonly OperatorService _operator;
-
-    public FeaturesGrpcService(FeaturesService features, IActionQueue actions, IWriteLog writes, OperatorService @operator)
-    {
-        _features = features ?? throw new ArgumentNullException(nameof(features));
-        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
-        _writes = writes ?? throw new ArgumentNullException(nameof(writes));
-        _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
-    }
+    private readonly FeaturesService _features = features ?? throw new ArgumentNullException(nameof(features));
+    private readonly IActionQueue _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+    private readonly IWriteLog _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+    private readonly OperatorService _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
 
     public override async Task<ListFeaturesResponse> ListFeatures(
         ListFeaturesRequest request,

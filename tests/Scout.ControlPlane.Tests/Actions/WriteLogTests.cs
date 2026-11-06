@@ -75,9 +75,9 @@ public sealed class WriteLogTests : IDisposable
         var entries = await log.ListAsync(10, CancellationToken.None);
 
         entries.ShouldBe([Entry(2, "videos.update"), Entry(1, "videos.insert")]);
-        var warning = _logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldContain("Skipped malformed line 2");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldContain("Skipped malformed line 2");
     }
 
     [Theory]

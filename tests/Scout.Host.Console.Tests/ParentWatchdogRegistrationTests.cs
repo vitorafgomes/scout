@@ -13,7 +13,7 @@ namespace Scout.Host.Console.Tests;
 /// </summary>
 public sealed class ParentWatchdogRegistrationTests
 {
-    private static IServiceCollection BuildServices(string? flag)
+    private static ServiceCollection BuildServices(string? flag)
     {
         var services = new ServiceCollection();
         services.AddLogging();

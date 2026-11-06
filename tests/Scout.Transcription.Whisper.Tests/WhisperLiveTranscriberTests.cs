@@ -87,11 +87,13 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
         }
     }
 
-    private sealed class Heard
+    private sealed class Heard : IDisposable
     {
         private readonly object _gate = new();
         private readonly List<LiveTranscript> _events = [];
         private readonly SemaphoreSlim _arrived = new(0);
+
+        public void Dispose() => _arrived.Dispose();
 
         public IReadOnlyList<LiveTranscript> Events
         {
@@ -129,7 +131,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel();
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(1), CancellationToken.None);
@@ -158,7 +160,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel();
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(0.5), CancellationToken.None);
@@ -179,7 +181,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel { Proceed = new SemaphoreSlim(0) };
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(1), CancellationToken.None);
@@ -198,7 +200,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel { PartialLanguage = "en", FinalLanguage = "pt" };
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(1), CancellationToken.None);
@@ -243,7 +245,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel { Proceed = new SemaphoreSlim(0) };
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         var chunk = Speech(0.5).Concat(Silence(1)).Concat(Speech(1)).ToArray();
@@ -261,7 +263,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel { Proceed = new SemaphoreSlim(0) };
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(1), CancellationToken.None);
@@ -286,7 +288,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     {
         var model = new FakeModel();
         using var whisper = model.Transcriber();
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(0.5), CancellationToken.None);
@@ -335,7 +337,7 @@ public sealed class WhisperLiveTranscriberTests : IDisposable
     public async Task A_File_That_Is_Not_A_Whisper_Model_Fails_The_Live_Session_With_A_Model_Load_Error()
     {
         using var whisper = new WhisperAudioTranscriber(_fakeModel);
-        var heard = new Heard();
+        using var heard = new Heard();
         var session = new WhisperLiveTranscriber(whisper).Start(heard.OnEvent, CancellationToken.None);
 
         await session.FeedAsync(Speech(0.5), CancellationToken.None);

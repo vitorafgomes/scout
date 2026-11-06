@@ -42,23 +42,23 @@ Scout is open source and ships to users who have different chat platforms and di
 
 - **Adapters.** `src/Scout.Conversation/Abstractions/IChatAdapter.cs:11` and `src/Scout.Conversation/Abstractions/IResponseSink.cs:17` are the only surface the core sees. Each adapter registers itself as `IChatAdapter` only when its credentials are present: `src/Scout.Adapter.Discord/DiscordServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:37`; the local adapter has no credential and registers only when `Scout:Adapters:Local:Enabled` is true (`src/Scout.Adapter.Local/LocalServiceCollectionExtensions.cs:23`, [[pages/services/adapter-local]]). The host starts whatever set is registered: `src/Scout.Host.Console/ConversationWorker.cs:40`.
 - **LLM providers.** `src/Scout.Llm/Abstractions/ILlmProviderFactory.cs:17` is the contract. `src/Scout.Llm/LlmServiceCollectionExtensions.cs:72` switches on `Scout:Llm:Provider` over ten factories (nine providers, ChatGptPlan among them, and `None`, which answers with a fixed message and calls no model) and fails startup on an unknown name (`:105`). Consumers receive `IChatGateway` (`src/Scout.Llm/Abstractions/IChatGateway.cs:8`), built at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:157`, and a standalone embedding generator (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:154`).
-- **Plugins.** The kernel adds every `KernelPlugin` found in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:124`). GitHub, Kubernetes, Skills and ProjectKnowledge each register one only when enabled: `src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:44`, `src/Scout.Plugin.Kubernetes/KubernetesServiceCollectionExtensions.cs:33`, `src/Scout.Skills/SkillsServiceCollectionExtensions.cs:43`, `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:74`.
+- **Plugins.** The kernel adds every `KernelPlugin` found in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:124`). GitHub, Kubernetes, Skills and ProjectKnowledge each register one only when enabled: `src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:44`, `src/Scout.Plugin.Kubernetes/KubernetesServiceCollectionExtensions.cs:33`, `src/Scout.Skills/SkillsServiceCollectionExtensions.cs:43`, `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:72`.
 
 ## How it is verified
 
 - `tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:39,107,204` resolve the expected factory for Ollama, Gemini and six more providers; `:281` asserts an unknown name throws and lists the supported ones.
 - `tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:299` asserts a registered plugin lands on the kernel.
 - `tests/Scout.Adapter.Discord.Tests/DiscordServiceCollectionExtensionsTests.cs:39`, `tests/Scout.Adapter.Slack.Tests/SlackServiceCollectionExtensionsTests.cs:52` and `tests/Scout.Adapter.Teams.Tests/TeamsServiceCollectionExtensionsTests.cs:39` assert no credentials means no adapter; `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs` asserts the local adapter is absent unless enabled.
-- `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:183` builds the host with no adapter and no project and asserts it still resolves.
-- `tests/Scout.Knowledge.Tests/KnowledgeServiceCollectionExtensionsTests.cs:109` asserts the plugin is absent with no project configured.
+- `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:182` builds the host with no adapter and no project and asserts it still resolves.
+- `tests/Scout.Knowledge.Tests/KnowledgeServiceCollectionExtensionsTests.cs:107` asserts the plugin is absent with no project configured.
 
 ## Known gaps
 
 - **The provider list is closed.** The switch at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:72` has no registry or discovery; a new provider means editing it.
 - **Vendor packages are linked in.** `src/Scout.Llm/Scout.Llm.csproj` references the connectors for all providers, and `Scout.Conversation` and the adapters inherit them through the project reference. `Scout.Host.Console` references all four adapters and the GitHub and Kubernetes plugins at compile time; the `KubernetesClient` package stays inside `Scout.Plugin.Kubernetes`, which exposes only a `KernelPlugin` (`src/Scout.Host.Console/Scout.Host.Console.csproj:21`), so swapping is by configuration, not by deployment.
-- **OpenAI types leak into the core.** `src/Scout.Llm/ChatGateway.cs:356` builds `OpenAIPromptExecutionSettings` for every provider, and so does `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`.
-- **Log label covers three providers.** `src/Scout.Llm/ChatGateway.cs:63` describes Ollama, OpenAI and Gemini; any other provider logs its name with `unknown` endpoint and model.
-- **Teams has no live inbound path.** `TeamsChatAdapter.ProcessActivityAsync` (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:107`) has no production caller; the webhook is deliberately not wired (`src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:18`).
+- **OpenAI types leak into the core.** `src/Scout.Llm/ChatGateway.cs:345` builds `OpenAIPromptExecutionSettings` for every provider, and so does `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`.
+- **Log label covers three providers.** `src/Scout.Llm/ChatGateway.cs:52` describes Ollama, OpenAI and Gemini; any other provider logs its name with `unknown` endpoint and model.
+- **Teams has no live inbound path.** `TeamsChatAdapter.ProcessActivityAsync` (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:106`) has no production caller; the webhook is deliberately not wired (`src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:18`).
 
 ## Related
 

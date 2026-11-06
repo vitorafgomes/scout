@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Scout.ControlPlane.Operator;
 
 namespace Scout.Host.ControlPlane.Services;

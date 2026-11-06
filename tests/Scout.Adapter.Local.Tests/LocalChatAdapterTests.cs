@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
@@ -669,7 +670,7 @@ public sealed class LocalChatAdapterTests
         {
             lock (_gate)
             {
-                var id = $"meeting-{++_next:D2}-aaaaaaaaaaa";
+                var id = $"meeting-{(++_next).ToString("D2", CultureInfo.InvariantCulture)}-aaaaaaaaaaa";
                 _meetings.Add(meeting with { Id = id });
                 return id;
             }

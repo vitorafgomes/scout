@@ -28,7 +28,11 @@ namespace Scout.ControlPlane.Operator;
 /// actions it needs as approved by the owner; the worker claims them one at a time and saves the publication's
 /// progress, never the owner's settings or decisions. The desktop never receives a project's origin reference.
 /// </summary>
-public sealed class OperatorService
+/// <remarks>
+/// Build the service over its store, the write gate that holds the grant check and the approval queue, the
+/// write log, and the logger of a chat change the write log could not record.
+/// </remarks>
+public sealed class OperatorService(JsonFileOperatorStore store, WriteGateService gate, IWriteLog writes, ILogger<OperatorService>? logger = null)
 {
     /// <summary>Status of a project the desktop started and no worker has taken yet.</summary>
     public const string Queued = "queued";
@@ -116,24 +120,11 @@ public sealed class OperatorService
     private static readonly string[] WorkerClaimStatuses = ["pending", "unsupported"];
     private static readonly string[] OwnerClaimStatuses = ["supported", "unsupported", "waived"];
 
-    private readonly JsonFileOperatorStore _store;
-    private readonly WriteGateService _gate;
-    private readonly IWriteLog _writes;
-    private readonly IActionQueue _actions;
-    private readonly ILogger<OperatorService> _logger;
-
-    /// <summary>
-    /// Build the service over its store, the write gate that holds the grant check and the approval queue, the
-    /// write log, and the logger of a chat change the write log could not record.
-    /// </summary>
-    public OperatorService(JsonFileOperatorStore store, WriteGateService gate, IWriteLog writes, ILogger<OperatorService>? logger = null)
-    {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _writes = writes ?? throw new ArgumentNullException(nameof(writes));
-        _actions = gate.Actions;
-        _logger = logger ?? NullLogger<OperatorService>.Instance;
-    }
+    private readonly JsonFileOperatorStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly WriteGateService _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+    private readonly IWriteLog _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+    private readonly IActionQueue _actions = gate.Actions;
+    private readonly ILogger<OperatorService> _logger = logger ?? NullLogger<OperatorService>.Instance;
 
     /// <summary>The saved mandate, or the empty one when the owner has not written it; a default format Scout does not make reads as generated pictures.</summary>
     public async Task<Mandate> GetMandateAsync(CancellationToken ct)

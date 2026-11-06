@@ -62,10 +62,6 @@ public interface IFeatureCredentialValidator
 }
 
 /// <summary>Raised by validators on a structurally invalid credential body.</summary>
-public sealed class FeatureValidationException : Exception
+public sealed class FeatureValidationException(string message) : Exception(message)
 {
-    public FeatureValidationException(string message)
-        : base(message)
-    {
-    }
 }

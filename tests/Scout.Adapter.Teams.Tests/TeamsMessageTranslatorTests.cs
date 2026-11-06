@@ -1,5 +1,4 @@
 using Microsoft.Bot.Schema;
-using Scout.Adapter.Teams;
 
 namespace Scout.Adapter.Teams.Tests;
 

@@ -8,12 +8,10 @@ namespace Scout.Adapter.Teams.Tests.Streaming;
 /// activity and lets a test script per-call behaviour (throw, return an id). No
 /// network, no Azure.
 /// </summary>
-internal sealed class RecordingSender : ITeamsActivitySender
+internal sealed class RecordingSender(Func<Activity, int, string?>? onSend = null) : ITeamsActivitySender
 {
-    private readonly Func<Activity, int, string?>? _onSend;
+    private readonly Func<Activity, int, string?>? _onSend = onSend;
     private int _calls;
-
-    public RecordingSender(Func<Activity, int, string?>? onSend = null) => _onSend = onSend;
 
     public List<Activity> Sent { get; } = [];
 

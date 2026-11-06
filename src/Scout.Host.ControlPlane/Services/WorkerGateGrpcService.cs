@@ -18,18 +18,11 @@ namespace Scout.Host.ControlPlane.Services;
 /// lock, order, production, delegation, a new presenter, a scene's picture prompt and picture) to the chat methods of <see cref="OperatorService"/>, each under the
 /// owner's YouTube grant and logged as done via chat.
 /// </summary>
-public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
+public sealed class WorkerGateGrpcService(WriteGateService gate, OperatorService @operator, CommentService comments) : WorkerGate.WorkerGateBase
 {
-    private readonly WriteGateService _gate;
-    private readonly OperatorService _operator;
-    private readonly CommentService _comments;
-
-    public WorkerGateGrpcService(WriteGateService gate, OperatorService @operator, CommentService comments)
-    {
-        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
-        _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
-        _comments = comments ?? throw new ArgumentNullException(nameof(comments));
-    }
+    private readonly WriteGateService _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+    private readonly OperatorService _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
+    private readonly CommentService _comments = comments ?? throw new ArgumentNullException(nameof(comments));
 
     public override async Task<RequestWriteResponse> RequestWrite(
         RequestWriteRequest request,

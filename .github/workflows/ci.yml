@@ -22,7 +22,10 @@ jobs:
           bash .claude/hooks/session-start.test.sh
           bash .claude/hooks/post-edit-oracle-note.test.sh
           bash .claude/hooks/session-end-metrics.test.sh
+          bash .claude/hooks/post-edit-rule-b.test.sh
+          bash .claude/hooks/prompt-router.test.sh
           bash scripts/check-vault-refs.test.sh
+          bash scripts/test-per-project.test.sh
           bash scripts/check-vault-refs.sh
 
       - name: Setup .NET
@@ -33,17 +36,26 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      # Disabled: re-enable "Format check" (exact step name) when
-      # `dotnet format --verify-no-changes --no-restore` stops timing out
-      # on the MSBuild build-host pipe (.NET 10 SDK 10.0.106 bug).
-      # Code style is still enforced at compile time via
-      # EnforceCodeStyleInBuild=true + TreatWarningsAsErrors=true in
-      # Directory.Build.props.
-      # - name: Format check
-      #   run: dotnet format --verify-no-changes --no-restore
+      # The 10.0.1xx SDK cannot open the MSBuild workspace that `dotnet format` needs (the
+      # build-host pipe bug); the 10.0.2xx band can, and global.json's latestMinor roll-forward
+      # lets the whole job use it.
+      - name: Setup .NET 10.0.2xx for dotnet format
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.2xx
 
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
+      - name: Format check
+        run: dotnet format Scout.slnx --verify-no-changes --no-restore
 
-      - name: Test
-        run: dotnet test --configuration Release --no-build --logger "trx" --collect:"XPlat Code Coverage"
+      # One build, through the diagnostics gate: the IDE rules the root .editorconfig gates (IDE0005
+      # and the rest) are emitted only with a documentation file, which test projects do not generate,
+      # and info-level diagnostics never fail a build; the gate forces both on, rebuilds in Release so
+      # the tests below run on its output, and fails on any diagnostic at any severity. Owner decision
+      # 2026-11-06: in CI as well, so a diagnostic the agent gate missed still fails the PR.
+      - name: Build and diagnostics gate
+        run: scripts/check-diagnostics.sh Scout.slnx info Release
+
+      # One dotnet test per project: a solution-wide run reports one green total, which hides a
+      # project that did not compile and a suite that was skipped entirely.
+      - name: Test, per project
+        run: bash scripts/test-per-project.sh --configuration Release --no-build --logger "trx" --collect:"XPlat Code Coverage"

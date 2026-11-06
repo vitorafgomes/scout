@@ -38,7 +38,7 @@ public sealed class ProjectWatchServiceTests : IDisposable
         return generator;
     }
 
-    private ProjectIndexer Indexer(IEmbeddingGenerator<string, Embedding<float>> generator, IProjectKnowledgeStore store)
+    private static ProjectIndexer Indexer(IEmbeddingGenerator<string, Embedding<float>> generator, IProjectKnowledgeStore store)
         => new(new FileChunker(), generator, store, NullLogger<ProjectIndexer>.Instance);
 
     private ProjectWatchService Service(

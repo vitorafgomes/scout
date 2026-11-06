@@ -43,12 +43,7 @@ public sealed class MistralLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var mistral = options.Value.Mistral;
-        if (mistral is null)
-        {
-            throw new ArgumentException("LlmOptions.Mistral must be configured.", nameof(options));
-        }
-
+        var mistral = options.Value.Mistral ?? throw new ArgumentException("LlmOptions.Mistral must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(mistral.ApiKey))
         {
             throw new ArgumentException(

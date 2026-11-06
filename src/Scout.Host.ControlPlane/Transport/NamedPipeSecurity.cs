@@ -2,8 +2,6 @@ using System.IO.Pipes;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Scout.Host.ControlPlane.Transport;
 

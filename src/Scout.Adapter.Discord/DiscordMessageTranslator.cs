@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Scout.Conversation.Abstractions;
 
@@ -12,19 +13,14 @@ namespace Scout.Adapter.Discord;
 /// becomes a <see cref="ChatMessage"/> with an <see cref="AudioAttachment"/>
 /// whose download runs only when the core asks for it.
 /// </summary>
-public sealed partial class DiscordMessageTranslator
+/// <remarks>
+/// Creates the translator. <paramref name="download"/> opens an attachment URL;
+/// by default an HTTPS GET.
+/// </remarks>
+public sealed partial class DiscordMessageTranslator(Func<string, CancellationToken, Task<Stream>>? download = null)
 {
-    private readonly Func<string, CancellationToken, Task<Stream>> _download;
-
-    /// <summary>
-    /// Creates the translator. <paramref name="download"/> opens an attachment URL;
-    /// by default an HTTPS GET.
-    /// </summary>
-    public DiscordMessageTranslator(Func<string, CancellationToken, Task<Stream>>? download = null)
-    {
-        _download = download
+    private readonly Func<string, CancellationToken, Task<Stream>> _download = download
             ?? ((url, ct) => DiscordAttachmentDownloader.OpenAsync(DiscordAttachmentDownloader.Shared, url, ct));
-    }
 
     // Matches <@ID> and <@!ID> — Discord's two mention syntaxes.
     [GeneratedRegex(@"<@!?(?<id>\d+)>", RegexOptions.CultureInvariant)]
@@ -68,8 +64,8 @@ public sealed partial class DiscordMessageTranslator
         if (inbound.Voice is { } voice)
         {
             chatMessage = new ChatMessage(
-                UserId: inbound.AuthorId.ToString(),
-                ChannelId: inbound.ChannelId.ToString(),
+                UserId: inbound.AuthorId.ToString(CultureInfo.InvariantCulture),
+                ChannelId: inbound.ChannelId.ToString(CultureInfo.InvariantCulture),
                 Text: string.Empty,
                 Timestamp: inbound.Timestamp,
                 Audio: new AudioAttachment(
@@ -90,8 +86,8 @@ public sealed partial class DiscordMessageTranslator
         }
 
         chatMessage = new ChatMessage(
-            UserId: inbound.AuthorId.ToString(),
-            ChannelId: inbound.ChannelId.ToString(),
+            UserId: inbound.AuthorId.ToString(CultureInfo.InvariantCulture),
+            ChannelId: inbound.ChannelId.ToString(CultureInfo.InvariantCulture),
             Text: stripped,
             Timestamp: inbound.Timestamp,
             IsDirectMessage: isDm)
@@ -101,7 +97,7 @@ public sealed partial class DiscordMessageTranslator
 
     private static string StripBotMentions(string content, ulong botUserId)
     {
-        var botIdText = botUserId.ToString();
+        var botIdText = botUserId.ToString(CultureInfo.InvariantCulture);
         var result = MentionPattern().Replace(content, match =>
             match.Groups["id"].Value == botIdText ? string.Empty : match.Value);
         return result.Trim();

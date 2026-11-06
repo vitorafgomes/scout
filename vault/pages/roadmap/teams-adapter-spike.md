@@ -90,11 +90,11 @@ Each finding cites the page it rests on. "Unverified" means no official page con
     - **Wire format:** `typing` activities carry a `streaminfo` entity (`informative` or `streaming`, with `streamSequence` starting at 1). The text must be cumulative. A final `message` with `streamType: final` closes the stream.
     - **Rate and time limits:** 1 request per second, and Microsoft recommends buffering tokens for 1.5 to 2 s. The stream has a hard two-minute limit.
     - **Errors:** `403 ContentStreamNotAllowed` covers several cases: the user pressed Stop, the time was exceeded, "Message size too large", or the stream already completed.
-    - **Fit with the sink:** the sink already follows this shape (`src/Scout.Adapter.Teams/Streaming/TeamsResponseSink.cs:18`). It sends informative, then cumulative streaming, then final, with a 1 s floor (`:104`), and only in one-on-one chats (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:140`).
+    - **Fit with the sink:** the sink already follows this shape (`src/Scout.Adapter.Teams/Streaming/TeamsResponseSink.cs:18`). It sends informative, then cumulative streaming, then final, with a 1 s floor (`:96`), and only in one-on-one chats (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:139`).
     - **Gaps:**
-      - It treats every `ContentStreamNotAllowed` the same way (`:129`). After a timeout or size error, the answer should still go out as a plain message.
+      - It treats every `ContentStreamNotAllowed` the same way (`:128`). After a timeout or size error, the answer should still go out as a plain message.
       - The informative "Working on it..." starts the two-minute clock.
-      - The doc writes `streamInfo` in its table and `streaminfo` in its JSON. The sink uses `streaminfo` (`:49`).
+      - The doc writes `streamInfo` in its table and `streaminfo` in its JSON. The sink uses `streaminfo` (`:48`).
       - Edit-in-place (`UpdateActivity`) is not needed.
 14. **The worker has no HTTP server today.** `Scout.Host.Console` uses `Microsoft.NET.Sdk` and the generic host (`src/Scout.Host.Console/Scout.Host.Console.csproj:1`, `src/Scout.Host.Console/Program.cs:29`). An endpoint means adding Kestrel through a `Microsoft.AspNetCore.App` framework reference. Logs must keep going to stderr so `SCOUT_READY` stays alone on stdout (`src/Scout.Host.Console/Program.cs:39`).
 

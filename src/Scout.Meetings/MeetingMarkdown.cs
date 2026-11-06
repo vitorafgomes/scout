@@ -52,7 +52,7 @@ public static class MeetingMarkdown
             var carried = Carried(turn);
             if (carried.Length > 0)
             {
-                markdown.Append('\n').Append("_With ").Append(carried).Append("_").Append('\n');
+                markdown.Append('\n').Append("_With ").Append(carried).Append('_').Append('\n');
             }
             markdown.Append('\n').Append(turn.Answer.ReplaceLineEndings("\n").TrimEnd('\n')).Append('\n');
         }

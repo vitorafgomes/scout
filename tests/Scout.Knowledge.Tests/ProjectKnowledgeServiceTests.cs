@@ -7,6 +7,9 @@ using Microsoft.Extensions.Options;
 
 public sealed class ProjectKnowledgeServiceTests : IDisposable
 {
+    private static readonly float[] PairVector = [0.1f, 0.2f];
+    private static readonly float[] ZeroVector = [0f];
+
     private readonly string _repo;
 
     public ProjectKnowledgeServiceTests()
@@ -30,7 +33,7 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
         var generated = new GeneratedEmbeddings<Embedding<float>>
         {
-            new Embedding<float>(new float[] { 0.1f, 0.2f }),
+            new Embedding<float>(PairVector),
         };
         embedder
             .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
@@ -77,7 +80,7 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         StartLine = start,
         EndLine = end,
         Content = content,
-        Embedding = new ReadOnlyMemory<float>(new float[] { 0f }),
+        Embedding = new ReadOnlyMemory<float>(ZeroVector),
     };
 
     [Fact]

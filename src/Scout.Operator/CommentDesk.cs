@@ -30,7 +30,7 @@ internal sealed partial class CommentDesk(
     IYouTubeClient youtube,
     IChatCompletionService chat,
     TimeProvider time,
-    ILogger<CommentDesk> logger)
+    ILogger<CommentDesk> logger) : IDisposable
 {
     internal const string TargetPrefix = "comment:";
 
@@ -77,6 +77,12 @@ internal sealed partial class CommentDesk(
 
     private readonly SemaphoreSlim _run = new(1, 1);
     private readonly SemaphoreSlim _save = new(1, 1);
+
+    public void Dispose()
+    {
+        _run.Dispose();
+        _save.Dispose();
+    }
 
     /// <summary>How text written by strangers goes into a prompt: one JSON value, so it cannot pass for the prompt's own lines.</summary>
     internal static readonly JsonSerializerOptions PromptJson = new(JsonSerializerDefaults.Web)

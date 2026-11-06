@@ -1,5 +1,4 @@
 using Microsoft.Bot.Builder;
-using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Scout.Adapter.Teams.Streaming;

@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using Scout.Plugin.GitHub;
 using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.GitHub.Tests.Fakes;
 

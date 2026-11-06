@@ -20,7 +20,7 @@ internal sealed record LipSyncProbe(bool Available, IReadOnlyList<string> Notes)
 /// as <c>mouth-cues-&lt;scene&gt;.json</c> in the media directory, read again while it is newer than the narration; a
 /// failure, a timeout, a cancellation or cues that cannot be read leave no cues file. Nothing goes over the network.
 /// </summary>
-internal sealed class RhubarbLipSync(IProcessRunner runner, FfmpegToolset ffmpeg, IOptions<OperatorMediaOptions> options, TimeProvider time)
+internal sealed class RhubarbLipSync(IProcessRunner runner, FfmpegToolset ffmpeg, IOptions<OperatorMediaOptions> options, TimeProvider time) : IDisposable
 {
     /// <summary>Two minutes, plus two milliseconds per millisecond of narration.</summary>
     internal static TimeSpan TimeoutFor(int narrationMs) => TimeSpan.FromMinutes(2) + TimeSpan.FromMilliseconds(2L * Math.Max(0, narrationMs));
@@ -42,6 +42,11 @@ internal sealed class RhubarbLipSync(IProcessRunner runner, FfmpegToolset ffmpeg
     private readonly SemaphoreSlim _once = new(1, 1);
     private bool? _answers;
     private DateTimeOffset _probedAt;
+
+    public void Dispose()
+    {
+        _once.Dispose();
+    }
 
     /// <summary>Whether the desktop named a rhubarb program or a mouths folder, usable or not.</summary>
     public bool Configured =>

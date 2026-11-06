@@ -9,27 +9,20 @@ namespace Scout.Adapter.Teams.Streaming;
 /// The production sender translates the SDK's <c>ErrorResponseException</c> into
 /// this shape; see <c>TeamsServiceCollectionExtensions</c> notes on live wiring.
 /// </summary>
-public sealed class TeamsTransportException : Exception
+public sealed class TeamsTransportException(
+    int statusCode,
+    string? errorCode = null,
+    string? message = null,
+    Exception? innerException = null) : Exception(message ?? $"Teams transport failed with status {statusCode}.", innerException)
 {
     /// <summary>Teams error code returned when content streaming is rejected.</summary>
     public const string ContentStreamNotAllowed = "ContentStreamNotAllowed";
 
-    public TeamsTransportException(
-        int statusCode,
-        string? errorCode = null,
-        string? message = null,
-        Exception? innerException = null)
-        : base(message ?? $"Teams transport failed with status {statusCode}.", innerException)
-    {
-        StatusCode = statusCode;
-        ErrorCode = errorCode;
-    }
-
     /// <summary>HTTP status the Teams service returned (e.g. 429, 403).</summary>
-    public int StatusCode { get; }
+    public int StatusCode { get; } = statusCode;
 
     /// <summary>Teams error code, when present (e.g. "ContentStreamNotAllowed").</summary>
-    public string? ErrorCode { get; }
+    public string? ErrorCode { get; } = errorCode;
 
     /// <summary>True for 429: the sink backs off and retries once.</summary>
     public bool IsRateLimited => StatusCode == 429;

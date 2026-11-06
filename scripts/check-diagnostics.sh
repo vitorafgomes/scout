@@ -15,6 +15,7 @@ set -u
 
 TARGET="${1:-Scout.slnx}"
 MINSEV="${2:-info}"
+CONFIGURATION="${3:-Debug}"
 
 case "$MINSEV" in
   info|warning|error) ;;
@@ -40,7 +41,7 @@ else
   # without it (dotnet/roslyn#41640), and this repo's Directory.Build.props sets it only for
   # non-test projects. NoWarn=CS1591 keeps the doc file from turning every undocumented public
   # member into a build error under TreatWarningsAsErrors.
-  dotnet build "$TARGET" -t:Rebuild -v detailed \
+  dotnet build "$TARGET" -t:Rebuild -v detailed --configuration "$CONFIGURATION" \
     -p:UseSharedCompilation=false -p:EnforceCodeStyleInBuild=true \
     -p:GenerateDocumentationFile=true -p:NoWarn=CS1591 --nologo >"$LOG" 2>&1
   BUILD_RC=$?

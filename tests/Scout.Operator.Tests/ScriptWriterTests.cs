@@ -55,9 +55,9 @@ public sealed class ScriptWriterTests
 
         await new ScriptWriter(chat).WriteAsync("sourdough", Given.Mandate(language: "Portuguese"), Research, string.Empty, string.Empty, CancellationToken.None);
 
-        var system = chat.Requests.ShouldHaveSingleItem().First();
-        system.Role.ShouldBe(AuthorRole.System);
-        system.Text.ShouldContain("Write every text in Portuguese.");
+        var (role, text) = chat.Requests.ShouldHaveSingleItem()[0];
+        role.ShouldBe(AuthorRole.System);
+        text.ShouldContain("Write every text in Portuguese.");
     }
 
     [Theory]

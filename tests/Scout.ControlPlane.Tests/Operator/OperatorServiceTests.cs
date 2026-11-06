@@ -51,10 +51,10 @@ public sealed partial class OperatorServiceTests : IDisposable
         Directory.Delete(_directory, recursive: true);
     }
 
-    private Task GrantYouTubeAsync() =>
+    private Task<FeatureSnapshot> GrantYouTubeAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
 
-    private Task RevokeYouTubeAsync() =>
+    private Task<FeatureSnapshot> RevokeYouTubeAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: false, confirmWrites: false, CancellationToken.None);
 
     private static Mandate Mandate(
@@ -1811,7 +1811,7 @@ public sealed partial class OperatorServiceTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(media, fileName), "image");
     }
 
-    private Task SetStoredAsync(string id, Func<OperatorProject, OperatorProject> change) =>
+    private Task<int> SetStoredAsync(string id, Func<OperatorProject, OperatorProject> change) =>
         _store.UpdateProjectsAsync(
             projects =>
             {

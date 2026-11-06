@@ -8,7 +8,7 @@ namespace Scout.ControlPlane.Providers;
 /// lifecycle is not under the worker's control. The gRPC service is a thin
 /// adapter over this type.
 /// </summary>
-public sealed class ProvidersService
+public sealed class ProvidersService(OllamaProviderService ollama)
 {
     /// <summary>Canonical id for the Ollama provider.</summary>
     public const string OllamaId = "ollama";
@@ -18,12 +18,7 @@ public sealed class ProvidersService
 
     private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(2);
 
-    private readonly OllamaProviderService _ollama;
-
-    public ProvidersService(OllamaProviderService ollama)
-    {
-        _ollama = ollama ?? throw new ArgumentNullException(nameof(ollama));
-    }
+    private readonly OllamaProviderService _ollama = ollama ?? throw new ArgumentNullException(nameof(ollama));
 
     /// <summary>Snapshot every known provider.</summary>
     public async Task<IReadOnlyList<ProviderStatus>> ListAsync(CancellationToken ct)

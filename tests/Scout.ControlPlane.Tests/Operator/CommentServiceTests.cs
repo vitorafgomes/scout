@@ -53,10 +53,10 @@ public sealed class CommentServiceTests : IDisposable
         Directory.Delete(_directory, recursive: true);
     }
 
-    private Task GrantYouTubeAsync() =>
+    private Task<FeatureSnapshot> GrantYouTubeAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, None);
 
-    private Task RevokeYouTubeAsync() =>
+    private Task<FeatureSnapshot> RevokeYouTubeAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: false, confirmWrites: false, None);
 
     private static AudienceComment Comment(
@@ -72,7 +72,7 @@ public sealed class CommentServiceTests : IDisposable
     private static AudienceIdea Idea(string commentId, string status = "proposed", string text = "How deltas form") =>
         new($"idea-{commentId}", text, commentId, status, null);
 
-    private Task SeedAsync(IReadOnlyList<AudienceComment> comments, IReadOnlyList<AudienceIdea>? ideas = null) =>
+    private Task<CommentsState> SeedAsync(IReadOnlyList<AudienceComment> comments, IReadOnlyList<AudienceIdea>? ideas = null) =>
         _store.UpdateCommentsAsync(_ => new CommentsState(comments, ideas ?? [], null, null, null), None);
 
     private async Task<AudienceComment> StoredAsync(string id) =>

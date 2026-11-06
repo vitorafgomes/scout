@@ -2,7 +2,6 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
-using Scout.Knowledge;
 
 namespace Scout.Knowledge.Tests;
 
@@ -13,6 +12,8 @@ namespace Scout.Knowledge.Tests;
 /// </summary>
 public sealed class ProjectKnowledgePluginTests : IDisposable
 {
+    private static readonly float[] UnitVector = [1f, 0f, 0f];
+
     private readonly string _repo;
 
     public ProjectKnowledgePluginTests()
@@ -52,7 +53,7 @@ public sealed class ProjectKnowledgePluginTests : IDisposable
             NullLogger<ProjectResolutionService>.Instance);
     }
 
-    private ProjectKnowledgeService Service(IProjectKnowledgeStore store, ProjectResolutionService resolution)
+    private static ProjectKnowledgeService Service(IProjectKnowledgeStore store, ProjectResolutionService resolution)
     {
         var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
         embedder.GenerateAsync(
@@ -60,7 +61,7 @@ public sealed class ProjectKnowledgePluginTests : IDisposable
                 Arg.Any<EmbeddingGenerationOptions?>(),
                 Arg.Any<CancellationToken>())
             .Returns(new GeneratedEmbeddings<Embedding<float>>(
-                new[] { new Embedding<float>(new float[] { 1f, 0f, 0f }) }));
+                new[] { new Embedding<float>(UnitVector) }));
         return new ProjectKnowledgeService(embedder, store, resolution, NullLogger<ProjectKnowledgeService>.Instance);
     }
 

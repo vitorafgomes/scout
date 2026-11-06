@@ -1,5 +1,3 @@
-using Scout.Adapter.Teams;
-
 namespace Scout.Adapter.Teams.Tests;
 
 public sealed class TeamsAdapterLifecycleTests

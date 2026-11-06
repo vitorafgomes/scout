@@ -233,10 +233,10 @@ internal sealed class FaceMouth(
     /// </summary>
     internal static (int X, int Y, int Side) Roi((double Left, double Top, double Right, double Bottom) face, int width, int height)
     {
-        var fitted = Fitted(width, height);
-        var (padX, padY) = ((DetectorSize - fitted.Width) / 2, (DetectorSize - fitted.Height) / 2);
-        double X(double fraction) => ((fraction * DetectorSize) - padX) * width / fitted.Width;
-        double Y(double fraction) => ((fraction * DetectorSize) - padY) * height / fitted.Height;
+        var (fittedWidth, fittedHeight) = Fitted(width, height);
+        var (padX, padY) = ((DetectorSize - fittedWidth) / 2, (DetectorSize - fittedHeight) / 2);
+        double X(double fraction) => ((fraction * DetectorSize) - padX) * width / fittedWidth;
+        double Y(double fraction) => ((fraction * DetectorSize) - padY) * height / fittedHeight;
         var (left, top, right, bottom) = (X(face.Left), Y(face.Top), X(face.Right), Y(face.Bottom));
         var side = (int)Math.Min(Math.Max(right - left, bottom - top) * RoiScale, Math.Min(width, height));
         var x = (int)Math.Clamp(((left + right) / 2) - (side / 2.0), 0, width - side);

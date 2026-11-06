@@ -119,7 +119,7 @@ public sealed class ScenePlannerTests
 
         scenes.Count.ShouldBe(3);
         retried.Requests.Count.ShouldBe(2);
-        retried.Requests[1].Last().Text.ShouldBe(ModelJson.Retry);
+        retried.Requests[1][^1].Text.ShouldBe(ModelJson.Retry);
         ex.Message.ShouldBe("The AI model did not return a picture prompt for every scene in the expected form, twice.");
     }
 

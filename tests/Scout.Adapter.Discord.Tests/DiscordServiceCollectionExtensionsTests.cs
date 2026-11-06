@@ -10,7 +10,7 @@ namespace Scout.Adapter.Discord.Tests;
 /// </summary>
 public sealed class DiscordServiceCollectionExtensionsTests
 {
-    private static IServiceProvider Build(string? botToken)
+    private static ServiceProvider Build(string? botToken)
     {
         var settings = new Dictionary<string, string?>();
         if (botToken is not null)

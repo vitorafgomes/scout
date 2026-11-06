@@ -24,6 +24,7 @@ public sealed partial class TeamsMessageTranslator
     public bool TryTranslate(InboundTeamsMessage inbound, out ChatMessage? chatMessage)
         => TryTranslate(inbound, out chatMessage, out _);
 
+#pragma warning disable CA1822 // Instance member: the translator is DI-injected and called through an instance by adapters and tests
     internal bool TryTranslate(
         InboundTeamsMessage inbound,
         out ChatMessage? chatMessage,
@@ -71,6 +72,7 @@ public sealed partial class TeamsMessageTranslator
             Timestamp: inbound.Timestamp);
         return true;
     }
+#pragma warning restore CA1822
 
     private static bool MentionsBot(InboundTeamsMessage inbound)
     {

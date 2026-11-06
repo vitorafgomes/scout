@@ -120,7 +120,7 @@ internal static partial class NativeUnix
     // st_uid at their fixed LP64 offsets.
 
     [LibraryImport("libc", EntryPoint = "stat", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
-    private static partial int LinuxStatNative(string path, byte[] buf);
+    private static partial int LinuxStatNative(string path, [Out] byte[] buf);
 
     private static StatOutcome LinuxStat(string path, out StatInfo info)
     {
@@ -141,7 +141,7 @@ internal static partial class NativeUnix
     }
 
     [LibraryImport("libc", EntryPoint = "stat", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
-    private static partial int MacStatNative(string path, byte[] buf);
+    private static partial int MacStatNative(string path, [Out] byte[] buf);
 
     private static StatOutcome MacStat(string path, out StatInfo info)
     {

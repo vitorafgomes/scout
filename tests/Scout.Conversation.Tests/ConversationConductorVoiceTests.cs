@@ -20,7 +20,7 @@ public sealed class ConversationConductorVoiceTests
     {
         public int Calls { get; private set; }
 
-        public Task<Stream> OpenAsync(CancellationToken cancellationToken)
+        public Task<Stream> OpenAsync()
         {
             Calls++;
             return Task.FromResult(open());
@@ -73,7 +73,7 @@ public sealed class ConversationConductorVoiceTests
             "thread-7",
             string.Empty,
             new DateTimeOffset(2026, 10, 28, 9, 0, 0, TimeSpan.Zero),
-            new AudioAttachment("audio/ogg", sizeBytes, duration ?? TimeSpan.FromSeconds(4), download.OpenAsync));
+            new AudioAttachment("audio/ogg", sizeBytes, duration ?? TimeSpan.FromSeconds(4), _ => download.OpenAsync()));
 
     private static CountingDownload Bytes(int length = 2048) => new(() => new MemoryStream(new byte[length]));
 

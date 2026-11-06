@@ -10,14 +10,9 @@ namespace Scout.Host.ControlPlane.Services;
 /// domain <c>IAsyncEnumerable&lt;PullProgress&gt;</c> onto a server stream,
 /// honouring the call's cancellation token.
 /// </summary>
-public sealed class ModelsGrpcService : GrpcModels.ModelsBase
+public sealed class ModelsGrpcService(ProvidersService providers) : GrpcModels.ModelsBase
 {
-    private readonly ProvidersService _providers;
-
-    public ModelsGrpcService(ProvidersService providers)
-    {
-        _providers = providers ?? throw new ArgumentNullException(nameof(providers));
-    }
+    private readonly ProvidersService _providers = providers ?? throw new ArgumentNullException(nameof(providers));
 
     public override async Task PullModel(
         PullModelRequest request,

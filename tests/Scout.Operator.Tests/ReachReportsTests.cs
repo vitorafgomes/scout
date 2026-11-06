@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Operator.Tests.Fakes;
@@ -14,8 +15,8 @@ public sealed class ReachReportsTests
     private readonly IYouTubeReportingClient _reporting = Substitute.For<IYouTubeReportingClient>();
 
     private static YouTubeReport Report(DateOnly day)
-        => new($"r{day:yyyyMMdd}", new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
-            new DateTimeOffset(day.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero), $"https://youtubereporting.googleapis.com/v1/media/{day:yyyyMMdd}");
+        => new($"r{day.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}", new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+            new DateTimeOffset(day.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero), $"https://youtubereporting.googleapis.com/v1/media/{day.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}");
 
     [Fact]
     public async Task The_Reporting_Job_Is_Created_Once_Through_The_Write_Gate_And_Recorded()

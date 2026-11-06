@@ -101,7 +101,9 @@ public sealed class WhisperAudioTranscriber : IAudioTranscriber, IDisposable
     internal Task? TryDecode(
         Func<float[]> samples, Decoding decoding, Func<string, string?, Task> onText, CancellationToken cancellationToken)
     {
+#pragma warning disable CA2016 // TryDecode never throws: a cancelled session drops the frame instead of raising from a sync path
         if (!_gate.Wait(0))
+#pragma warning restore CA2016
         {
             return null;
         }

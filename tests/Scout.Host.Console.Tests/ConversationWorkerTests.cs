@@ -23,13 +23,15 @@ public sealed class ConversationWorkerTests
         return new ConversationConductor(router, pump);
     }
 
-    private sealed class FakeLifetime : IHostApplicationLifetime
+    private sealed class FakeLifetime : IHostApplicationLifetime, IDisposable
     {
         private readonly CancellationTokenSource _stopping = new();
         public int StopApplicationCalls { get; private set; }
         public CancellationToken ApplicationStarted => CancellationToken.None;
         public CancellationToken ApplicationStopping => _stopping.Token;
         public CancellationToken ApplicationStopped => CancellationToken.None;
+        public void Dispose() => _stopping.Dispose();
+
         public void StopApplication()
         {
             StopApplicationCalls++;

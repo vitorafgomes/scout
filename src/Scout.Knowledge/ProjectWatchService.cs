@@ -11,12 +11,21 @@ namespace Scout.Knowledge;
 /// constructor, so building the DI graph performs no I/O. Per-file failures are logged
 /// and never crash the service.
 /// </summary>
-internal sealed class ProjectWatchService : BackgroundService
+/// <remarks>Initializes the service; stores dependencies only, performs no I/O.</remarks>
+/// <param name="indexer">Per-file record builder.</param>
+/// <param name="store">Knowledge store receiving incremental updates.</param>
+/// <param name="options">Configured projects and watch settings.</param>
+/// <param name="logger">Logger.</param>
+internal sealed class ProjectWatchService(
+    ProjectIndexer indexer,
+    IProjectKnowledgeStore store,
+    IOptions<ProjectsOptions> options,
+    ILogger<ProjectWatchService> logger) : BackgroundService
 {
-    private readonly ProjectIndexer _indexer;
-    private readonly IProjectKnowledgeStore _store;
-    private readonly ProjectsOptions _options;
-    private readonly ILogger<ProjectWatchService> _logger;
+    private readonly ProjectIndexer _indexer = indexer;
+    private readonly IProjectKnowledgeStore _store = store;
+    private readonly ProjectsOptions _options = options.Value;
+    private readonly ILogger<ProjectWatchService> _logger = logger;
 
     private readonly object _gate = new();
     private readonly HashSet<(string Project, string RelativePath)> _pending = new();
@@ -27,23 +36,6 @@ internal sealed class ProjectWatchService : BackgroundService
 
     /// <summary>True once <see cref="ExecuteAsync"/> has armed the watchers; for test synchronization.</summary>
     internal bool IsWatching => _isWatching;
-
-    /// <summary>Initializes the service; stores dependencies only, performs no I/O.</summary>
-    /// <param name="indexer">Per-file record builder.</param>
-    /// <param name="store">Knowledge store receiving incremental updates.</param>
-    /// <param name="options">Configured projects and watch settings.</param>
-    /// <param name="logger">Logger.</param>
-    public ProjectWatchService(
-        ProjectIndexer indexer,
-        IProjectKnowledgeStore store,
-        IOptions<ProjectsOptions> options,
-        ILogger<ProjectWatchService> logger)
-    {
-        _indexer = indexer;
-        _store = store;
-        _options = options.Value;
-        _logger = logger;
-    }
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

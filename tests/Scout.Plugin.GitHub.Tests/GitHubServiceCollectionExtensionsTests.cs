@@ -1,10 +1,8 @@
-using System.Net.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
 using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
-using Scout.Plugin.GitHub;
 using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.GitHub.Tests.Fakes;
 

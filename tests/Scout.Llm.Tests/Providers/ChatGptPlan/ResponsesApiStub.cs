@@ -8,14 +8,9 @@ namespace Scout.Llm.Tests.Providers.ChatGptPlan;
 /// Fake HTTP handler under the real ResponsesClient: records every request
 /// (path, Authorization header, JSON body) and answers each from a script.
 /// </summary>
-internal sealed class ResponsesApiStub : HttpMessageHandler
+internal sealed class ResponsesApiStub(Func<int, RecordedRequest, HttpResponseMessage> script) : HttpMessageHandler
 {
-    private readonly Func<int, RecordedRequest, HttpResponseMessage> _script;
-
-    public ResponsesApiStub(Func<int, RecordedRequest, HttpResponseMessage> script)
-    {
-        _script = script;
-    }
+    private readonly Func<int, RecordedRequest, HttpResponseMessage> _script = script;
 
     public List<RecordedRequest> Requests { get; } = [];
 

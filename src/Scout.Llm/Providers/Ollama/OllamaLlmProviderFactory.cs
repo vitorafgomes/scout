@@ -40,12 +40,7 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var ollama = options.Value.Ollama;
-        if (ollama is null)
-        {
-            throw new ArgumentException("LlmOptions.Ollama must be configured.", nameof(options));
-        }
-
+        var ollama = options.Value.Ollama ?? throw new ArgumentException("LlmOptions.Ollama must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(ollama.Endpoint))
         {
             throw new ArgumentException(
@@ -67,12 +62,8 @@ public sealed class OllamaLlmProviderFactory : ILlmProviderFactory
                 "OllamaOptions.Chat.Model must be non-empty.", nameof(options));
         }
 
-        var embeddings = ollama.Embeddings;
-        if (embeddings is null)
-        {
-            throw new ArgumentException(
+        var embeddings = ollama.Embeddings ?? throw new ArgumentException(
                 "OllamaOptions.Embeddings must be configured.", nameof(options));
-        }
         if (string.IsNullOrWhiteSpace(embeddings.Model))
         {
             throw new ArgumentException(

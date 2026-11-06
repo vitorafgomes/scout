@@ -41,7 +41,7 @@ Discord has no API to create an application or a bot, so the owner still has to 
 - A bot invite of the form `https://discord.com/oauth2/authorize?client_id=<id>&scope=bot&permissions=<int>` needs no `redirect_uri`, no code exchange and no client secret. Adding scopes beyond `bot` and `applications.commands` turns it into a code flow.
 - `GET /users/@me/guilds` with the bot token lists the servers the bot is in. This endpoint was not re-read on the docs in this session; the tests use a fake for it.
 
-The Discord adapter needs the Message Content intent: it requests `GatewayIntents.MessageContent` (`src/Scout.Adapter.Discord/DiscordChatAdapter.cs:72`). Without the application flag, Discord is expected to refuse the gateway connection with a disallowed-intents close. That claim was not re-read on the docs in this session.
+The Discord adapter needs the Message Content intent: it requests `GatewayIntents.MessageContent` (`src/Scout.Adapter.Discord/DiscordChatAdapter.cs:73`). Without the application flag, Discord is expected to refuse the gateway connection with a disallowed-intents close. That claim was not re-read on the docs in this session.
 
 ## Decision
 

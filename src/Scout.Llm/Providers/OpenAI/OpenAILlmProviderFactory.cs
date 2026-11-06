@@ -53,12 +53,7 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var openAI = options.Value.OpenAI;
-        if (openAI is null)
-        {
-            throw new ArgumentException("LlmOptions.OpenAI must be configured.", nameof(options));
-        }
-
+        var openAI = options.Value.OpenAI ?? throw new ArgumentException("LlmOptions.OpenAI must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(openAI.ApiKey))
         {
             throw new ArgumentException(
@@ -72,12 +67,8 @@ public sealed class OpenAILlmProviderFactory : ILlmProviderFactory
                 "OpenAIOptions.Chat.Model must be non-empty.", nameof(options));
         }
 
-        var embeddings = openAI.Embeddings;
-        if (embeddings is null)
-        {
-            throw new ArgumentException(
+        var embeddings = openAI.Embeddings ?? throw new ArgumentException(
                 "OpenAIOptions.Embeddings must be configured.", nameof(options));
-        }
         if (string.IsNullOrWhiteSpace(embeddings.Model))
         {
             throw new ArgumentException(

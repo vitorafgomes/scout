@@ -11,6 +11,7 @@ namespace Scout.Conversation.Tests;
 
 public sealed class LlmStreamingRouterMemoryTests
 {
+    private static readonly string[] ExpectedU1Firstack = ["u1-first", "ack"];
     private static InMemoryConversationMemoryStore NewStore(ConversationMemoryOptions options) =>
         new(Options.Create(options), new FakeTimeProvider(new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero)));
 
@@ -200,7 +201,7 @@ public sealed class LlmStreamingRouterMemoryTests
 
         // u1's third-call history must carry only u1's prior turn, never u2's.
         var u1Second = captured[2];
-        u1Second.History.Select(t => t.Text).ShouldBe(new[] { "u1-first", "ack" });
+        u1Second.History.Select(t => t.Text).ShouldBe(ExpectedU1Firstack);
         u1Second.History.ShouldNotContain(t => t.Text == "u2-first");
     }
 }

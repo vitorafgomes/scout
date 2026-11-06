@@ -39,7 +39,22 @@ namespace Scout.Adapter.Teams.Streaming;
 /// Update, then one terminal Complete/Fail, from one caller), so the stream id
 /// and sequence counter are written/read without synchronization.
 /// </summary>
-public sealed class TeamsResponseSink : IResponseSink
+/// <remarks>
+/// Create a sink for one conversation.
+/// </remarks>
+/// <param name="sender">Transport seam that delivers each activity.</param>
+/// <param name="streamingSupported">
+/// False for group chats / channels, where Teams does not honour streaming
+/// typing activities. The sink then renders final-only: Begin and Update are
+/// no-ops on the wire and the terminal activity carries the whole answer.
+/// </param>
+/// <param name="timeProvider">Clock seam for deterministic backoff in tests.</param>
+/// <param name="logger">Diagnostics for backoff and terminal failures.</param>
+public sealed class TeamsResponseSink(
+    ITeamsActivitySender sender,
+    bool streamingSupported = true,
+    TimeProvider? timeProvider = null,
+    ILogger? logger = null) : IResponseSink
 {
     // Teams message bodies cap well above a typical answer; this bounds the
     // rendered body so the pump truncates before the service rejects an
@@ -58,39 +73,16 @@ public sealed class TeamsResponseSink : IResponseSink
     // 429 with no usable retry hint.
     private static readonly TimeSpan DefaultRateLimitBackoff = TimeSpan.FromSeconds(1);
 
-    private readonly ITeamsActivitySender _sender;
-    private readonly bool _streamingAllowed;
-    private readonly TimeProvider _timeProvider;
-    private readonly ILogger _logger;
+    private readonly ITeamsActivitySender _sender = sender ?? throw new ArgumentNullException(nameof(sender));
+    private readonly bool _streamingAllowed = streamingSupported;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     private bool _begun;
     private bool _terminal;
     private bool _streamCanceled;
     private string? _streamId;
     private int _sequence;
-
-    /// <summary>
-    /// Create a sink for one conversation.
-    /// </summary>
-    /// <param name="sender">Transport seam that delivers each activity.</param>
-    /// <param name="streamingSupported">
-    /// False for group chats / channels, where Teams does not honour streaming
-    /// typing activities. The sink then renders final-only: Begin and Update are
-    /// no-ops on the wire and the terminal activity carries the whole answer.
-    /// </param>
-    /// <param name="timeProvider">Clock seam for deterministic backoff in tests.</param>
-    /// <param name="logger">Diagnostics for backoff and terminal failures.</param>
-    public TeamsResponseSink(
-        ITeamsActivitySender sender,
-        bool streamingSupported = true,
-        TimeProvider? timeProvider = null,
-        ILogger? logger = null)
-    {
-        _sender = sender ?? throw new ArgumentNullException(nameof(sender));
-        _streamingAllowed = streamingSupported;
-        _timeProvider = timeProvider ?? TimeProvider.System;
-        _logger = logger ?? NullLogger.Instance;
-    }
 
     public RenderCapabilities Capabilities { get; } = new()
     {

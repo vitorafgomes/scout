@@ -26,7 +26,7 @@ public sealed class SkillFileLoaderTests : IDisposable
         }
     }
 
-    private SkillFileLoader Loader() => new(NullLogger<SkillFileLoader>.Instance);
+    private static SkillFileLoader Loader() => new(NullLogger<SkillFileLoader>.Instance);
 
     private void WriteSkill(string fileName, string content)
         => File.WriteAllText(Path.Combine(_dir, fileName), content);

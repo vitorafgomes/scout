@@ -12,7 +12,9 @@ namespace Scout.Plugin.YouTube;
 /// non-empty, user-safe string; transport and API failures are caught and surfaced as a clean
 /// error line so a tool call never throws back into the kernel.
 /// </summary>
-public sealed partial class YouTubePlugin
+/// <remarks>Creates the plugin over a read-only YouTube client.</remarks>
+/// <param name="client">The YouTube client. Must be non-null.</param>
+public sealed partial class YouTubePlugin(IYouTubeClient client)
 {
     private const string HandleDescription =
         "Channel handle such as @YouTube. Leave empty for the owner's own channel, which needs the sign-in from the Scout app.";
@@ -21,14 +23,7 @@ public sealed partial class YouTubePlugin
 
     private const int MaxVideos = 50;
 
-    private readonly IYouTubeClient _client;
-
-    /// <summary>Creates the plugin over a read-only YouTube client.</summary>
-    /// <param name="client">The YouTube client. Must be non-null.</param>
-    public YouTubePlugin(IYouTubeClient client)
-    {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-    }
+    private readonly IYouTubeClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     /// <summary>Overview of a channel, the owner's own when no handle is given.</summary>
     /// <param name="handle">Channel handle, or null for the owner's own channel.</param>

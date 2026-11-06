@@ -1,7 +1,5 @@
 using Microsoft.SemanticKernel;
-using Microsoft.SemanticKernel.Agents;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-using Scout.Knowledge;
 
 namespace Scout.Knowledge.Tests;
 
@@ -12,6 +10,9 @@ namespace Scout.Knowledge.Tests;
 /// </summary>
 public sealed class ProjectExpertAgentFactoryTests
 {
+    private static readonly string[] SingleProject = ["messaging-explorer"];
+    private static readonly string[] TwoProjects = ["messaging-explorer", "scout"];
+
     private static Kernel BuildKernel() => Kernel.CreateBuilder().Build();
 
     [Fact]
@@ -98,7 +99,7 @@ public sealed class ProjectExpertAgentFactoryTests
     [Fact]
     public void BuildInstructions_Names_The_Single_Configured_Project()
     {
-        var instructions = ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" });
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(SingleProject);
 
         instructions.ShouldContain("messaging-explorer");
     }
@@ -107,7 +108,7 @@ public sealed class ProjectExpertAgentFactoryTests
     public void BuildInstructions_Names_All_Configured_Projects()
     {
         var instructions = ProjectExpertAgentFactory.BuildInstructions(
-            new[] { "messaging-explorer", "scout" });
+            TwoProjects);
 
         instructions.ShouldContain("messaging-explorer");
         instructions.ShouldContain("scout");
@@ -124,7 +125,7 @@ public sealed class ProjectExpertAgentFactoryTests
     [Fact]
     public void BuildInstructions_Begins_With_The_Base_Instructions()
     {
-        var instructions = ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" });
+        var instructions = ProjectExpertAgentFactory.BuildInstructions(SingleProject);
 
         instructions.ShouldStartWith(ProjectExpertAgentFactory.Instructions);
     }
@@ -132,11 +133,11 @@ public sealed class ProjectExpertAgentFactoryTests
     [Fact]
     public void Create_With_Projects_Sets_Persona_To_Grounded_Instructions()
     {
-        var agent = ProjectExpertAgentFactory.Create(BuildKernel(), new[] { "messaging-explorer" });
+        var agent = ProjectExpertAgentFactory.Create(BuildKernel(), SingleProject);
 
         agent.Arguments.ShouldNotBeNull();
         agent.Arguments!["persona"].ShouldBe(
-            ProjectExpertAgentFactory.BuildInstructions(new[] { "messaging-explorer" }));
+            ProjectExpertAgentFactory.BuildInstructions(SingleProject));
     }
 
     [Fact]

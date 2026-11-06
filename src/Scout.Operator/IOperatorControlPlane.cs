@@ -135,26 +135,18 @@ public sealed record OperatorIdea(string Id, string Text, string CommentId, stri
 /// <summary>
 /// The control plane could not be reached, as opposed to a refusal it worded; the call can succeed later unchanged.
 /// </summary>
-public sealed class ControlPlaneUnavailableException : InvalidOperationException
+/// <remarks>Build the exception with the sentence the owner reads.</remarks>
+public sealed class ControlPlaneUnavailableException(string message, Exception? inner = null) : InvalidOperationException(message, inner)
 {
-    /// <summary>Build the exception with the sentence the owner reads.</summary>
-    public ControlPlaneUnavailableException(string message, Exception? inner = null)
-        : base(message, inner)
-    {
-    }
 }
 
 /// <summary>
 /// The control plane refused to record an action because the owner revoked the feature's writes after approving it; the
 /// control plane logged the write "after revoke" and consumed the action.
 /// </summary>
-public sealed class WriteRevokedException : InvalidOperationException
+/// <remarks>Build the exception with the control plane's words.</remarks>
+public sealed class WriteRevokedException(string message, Exception? inner = null) : InvalidOperationException(message, inner)
 {
-    /// <summary>Build the exception with the control plane's words.</summary>
-    public WriteRevokedException(string message, Exception? inner = null)
-        : base(message, inner)
-    {
-    }
 }
 
 /// <summary>

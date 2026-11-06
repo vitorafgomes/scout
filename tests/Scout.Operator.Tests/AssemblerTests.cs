@@ -3,7 +3,7 @@ using Scout.Operator.Tests.Fakes;
 
 namespace Scout.Operator.Tests;
 
-public sealed class AssemblerTests : IDisposable
+public sealed partial class AssemblerTests : IDisposable
 {
     private readonly string _root = Directory.CreateTempSubdirectory("scout-assembler-").FullName;
     private readonly string _media;
@@ -132,7 +132,7 @@ public sealed class AssemblerTests : IDisposable
         var arguments = global::Scout.Operator.Assembler.SegmentArguments(
             Given.Tools(), Given.Scene("s1", 1, "Feed it."), 0, durationMs, image, null, ["Feed it."], "gentle", "/media/p1/out.mp4");
 
-        Regex.Matches(Graph(arguments), @"fade=t=\w+:st=[\d.]+:d=0\.4").Select(m => m.Value).ShouldBe(fades);
+        FadeOut().Matches(Graph(arguments)).Select(m => m.Value).ShouldBe(fades);
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class AssemblerTests : IDisposable
 
         var graph = Graph(arguments);
         graph.ShouldNotContain("fontfile=/fonts/It's", Case.Sensitive);
-        Regex.Matches(graph, Regex.Escape(@"fontfile=/fonts/It\\\'s a\\:font.ttf:expansion=none")).Count.ShouldBe(2);
+        Regex.Count(graph, Regex.Escape(@"fontfile=/fonts/It\\\'s a\\:font.ttf:expansion=none")).ShouldBe(2);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public sealed class AssemblerTests : IDisposable
         renders.Count.ShouldBe(3);
         renders[0].ShouldContain("color=c=0x14181f:s=1920x1080:r=30");
         renders[1].ShouldContain(Media("scene-s2.png"));
-        Regex.Matches(renders[1].SkipWhile(a => a != "-filter_complex").ElementAt(1), @"text=([^:]+):fontsize=44.*?enable=between\(t\\,([\d.]+)\\,([\d.]+)\)")
+        TextCard().Matches(renders[1].SkipWhile(a => a != "-filter_complex").ElementAt(1))
             .Select(m => (m.Groups[1].Value, m.Groups[2].Value, m.Groups[3].Value))
             .ShouldBe([
                 ("Rivers bend because the water runs faster", "0.000", "2.000"),
@@ -635,7 +635,7 @@ public sealed class AssemblerTests : IDisposable
         builtInGraph.ShouldNotContain("chromakey", Case.Sensitive);
 
         var preview = global::Scout.Operator.Assembler.PresenterArguments(
-            Given.Tools(), Speaking(), 0, 3500, Media("studio.png"), Media(Face), (1024, 1024), false, (Mouth, Media("mouth-track-s1.txt")),
+            Given.Tools(), 0, 3500, Media("studio.png"), Media(Face), (1024, 1024), false, (Mouth, Media("mouth-track-s1.txt")),
             Media("scene-s1.wav"), ["Feed it daily."], "still", "/media/p1/out.mp4", (1280, 720));
         preview.Take(11).ShouldBe(["-hide_banner", "-nostdin", "-y", "-loop", "1", "-framerate", "1", "-t", "3.500", "-i", Media("studio.png")]);
         Graph(preview).ShouldStartWith(
@@ -838,4 +838,10 @@ public sealed class AssemblerTests : IDisposable
         runner.Renders.ShouldBeEmpty();
         Directory.GetFiles(_media).Select(Path.GetFileName).Order(StringComparer.Ordinal).ShouldBe(["mouth-cues-s1.json", Face, "scene-s1.wav"]);
     }
+
+    [GeneratedRegex(@"fade=t=\w+:st=[\d.]+:d=0\.4")]
+    private static partial Regex FadeOut();
+
+    [GeneratedRegex(@"text=([^:]+):fontsize=44.*?enable=between\(t\\,([\d.]+)\\,([\d.]+)\)")]
+    private static partial Regex TextCard();
 }

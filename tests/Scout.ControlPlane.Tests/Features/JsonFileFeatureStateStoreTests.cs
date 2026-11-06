@@ -74,8 +74,8 @@ public sealed class JsonFileFeatureStateStoreTests : IDisposable
 
         state.Enabled.ShouldBeFalse();
         state.Granted.ShouldBeFalse();
-        var warning = _logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldContain("malformed or unreadable");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldContain("malformed or unreadable");
     }
 }

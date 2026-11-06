@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Logging;
-
 namespace Scout.Host.ControlPlane.Security;
 
 /// <summary>

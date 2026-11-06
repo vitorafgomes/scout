@@ -12,23 +12,16 @@ namespace Scout.ControlPlane.Providers;
 /// HttpClient-backed Ollama API client. Owns the <c>/api/tags</c> probe used
 /// by <see cref="OllamaProviderService"/>. Every status-probe failure returns null.
 /// </summary>
-public sealed class OllamaApiClient : IOllamaApiClient
+public sealed class OllamaApiClient(
+    HttpClient http,
+    IOptions<OllamaProviderOptions> options,
+    ILogger<OllamaApiClient> logger) : IOllamaApiClient
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly HttpClient _http;
-    private readonly OllamaProviderOptions _options;
-    private readonly ILogger<OllamaApiClient> _logger;
-
-    public OllamaApiClient(
-        HttpClient http,
-        IOptions<OllamaProviderOptions> options,
-        ILogger<OllamaApiClient> logger)
-    {
-        _http = http ?? throw new ArgumentNullException(nameof(http));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
+    private readonly OllamaProviderOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly ILogger<OllamaApiClient> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public async Task<OllamaTags?> GetTagsAsync(CancellationToken ct)
     {

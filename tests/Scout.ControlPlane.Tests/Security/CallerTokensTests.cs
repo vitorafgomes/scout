@@ -35,9 +35,9 @@ public sealed class CallerTokensTests
 
         tokens.Worker.ShouldBeNull();
         tokens.Desktop.Matches(Desktop).ShouldBeTrue();
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldBe(
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldBe(
             "SCOUT_CONTROLPLANE_WORKER_TOKEN is not set; the WorkerGate service refuses every caller, so the worker cannot request a write.");
     }
 

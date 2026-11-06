@@ -79,13 +79,13 @@ public sealed partial class KubernetesPlugin : IDisposable
     public Task<string> ListNamespacesAsync(
         [Description("Context label from list_contexts. Omit for the default context.")] string? context = null,
         CancellationToken ct = default)
-        => RunAsync(context, "namespaces", ct, async client =>
+        => RunAsync(context, "namespaces", async client =>
         {
             var list = await client.CoreV1.ListNamespaceAsync(limit: MaxLines, cancellationToken: ct).ConfigureAwait(false);
             return list.Items.Count == 0
                 ? "No namespaces."
                 : Paged(list.Items.Select(n => $"{n.Metadata?.Name} ({n.Status?.Phase ?? "Unknown"})"), list.Metadata);
-        });
+        }, ct);
 
     /// <summary>List pods with phase, readiness, restarts and the reason a container is waiting.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
@@ -100,7 +100,7 @@ public sealed partial class KubernetesPlugin : IDisposable
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
-            : RunAsync(context, "pods", ct, async client =>
+            : RunAsync(context, "pods", async client =>
             {
                 var list = string.IsNullOrWhiteSpace(@namespace)
                     ? await client.CoreV1.ListPodForAllNamespacesAsync(limit: MaxLines, cancellationToken: ct).ConfigureAwait(false)
@@ -108,7 +108,7 @@ public sealed partial class KubernetesPlugin : IDisposable
                 return list.Items.Count == 0
                     ? "No pods."
                     : Paged(list.Items.Select(FormatPod), list.Metadata);
-            });
+            }, ct);
 
     /// <summary>Describe one pod: its containers and the last events about it.</summary>
     /// <param name="namespace">The pod's namespace.</param>
@@ -125,7 +125,7 @@ public sealed partial class KubernetesPlugin : IDisposable
         CancellationToken ct = default)
         => (Refusal(@namespace, "namespace", NamespacePattern(), 63) ?? Refusal(name, "pod name", PodNamePattern(), 253)) is { } refusal
             ? Task.FromResult(refusal)
-            : RunAsync(context, $"pod {@namespace}/{name}", ct, async client =>
+            : RunAsync(context, $"pod {@namespace}/{name}", async client =>
             {
                 var pod = await client.CoreV1.ReadNamespacedPodAsync(name, @namespace, cancellationToken: ct).ConfigureAwait(false);
                 var events = await client.CoreV1.ListNamespacedEventAsync(
@@ -139,7 +139,7 @@ public sealed partial class KubernetesPlugin : IDisposable
                 lines.Add(recent.Count == 0 ? "No recent events." : "Events, newest first:");
                 lines.AddRange(recent.Select(FormatEvent));
                 return string.Join("\n", lines);
-            });
+            }, ct);
 
     /// <summary>List deployments with ready and desired replicas.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
@@ -154,7 +154,7 @@ public sealed partial class KubernetesPlugin : IDisposable
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
-            : RunAsync(context, "deployments", ct, async client =>
+            : RunAsync(context, "deployments", async client =>
             {
                 var list = string.IsNullOrWhiteSpace(@namespace)
                     ? await client.AppsV1.ListDeploymentForAllNamespacesAsync(limit: MaxLines, cancellationToken: ct).ConfigureAwait(false)
@@ -165,7 +165,7 @@ public sealed partial class KubernetesPlugin : IDisposable
                         list.Items.Select(d =>
                             $"{d.Metadata?.NamespaceProperty}/{d.Metadata?.Name} ready {d.Status?.ReadyReplicas ?? 0}/{d.Spec?.Replicas ?? 0}"),
                         list.Metadata);
-            });
+            }, ct);
 
     /// <summary>List recent events, warnings first.</summary>
     /// <param name="namespace">Namespace; omitted means all namespaces.</param>
@@ -182,7 +182,7 @@ public sealed partial class KubernetesPlugin : IDisposable
         CancellationToken ct = default)
         => InvalidOptionalNamespace(@namespace) is { } refusal
             ? Task.FromResult(refusal)
-            : RunAsync(context, "events", ct, async client =>
+            : RunAsync(context, "events", async client =>
             {
                 // ponytail: every event the server still keeps (its TTL, one hour by default) is fetched and filtered here; page with limit and continue if a cluster's event volume bites.
                 var list = string.IsNullOrWhiteSpace(@namespace)
@@ -198,7 +198,7 @@ public sealed partial class KubernetesPlugin : IDisposable
                 return recent.Count == 0
                     ? $"No events in the last {minutes} minutes."
                     : Capped(recent.Select(FormatEvent));
-            });
+            }, ct);
 
     /// <summary>Disposes every client built for a context.</summary>
     public void Dispose()
@@ -235,22 +235,22 @@ public sealed partial class KubernetesPlugin : IDisposable
     private async Task<string> RunAsync(
         string? requested,
         string what,
-        CancellationToken ct,
-        Func<IKubernetes, Task<string>> read)
+        Func<IKubernetes, Task<string>> read,
+        CancellationToken ct)
     {
-        var match = string.IsNullOrWhiteSpace(requested)
+        var (label, name) = string.IsNullOrWhiteSpace(requested)
             ? _contexts[0]
             : _contexts.FirstOrDefault(c => string.Equals(c.Label, requested.Trim(), StringComparison.OrdinalIgnoreCase));
-        if (match.Name is null)
+        if (name is null)
         {
             return $"That is not a context Scout may read. Allowed contexts: {string.Join(", ", _contexts.Select(c => c.Label))}.";
         }
 
-        var context = match.Label;
+        var context = label;
         IKubernetes client;
         try
         {
-            client = GetClient(match.Name);
+            client = GetClient(name);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -302,7 +302,7 @@ public sealed partial class KubernetesPlugin : IDisposable
         }
     }
 
-    private IKubernetes BuildClient(string context)
+    private k8s.Kubernetes BuildClient(string context)
     {
         // ponytail: KubernetesClient runs an exec credential command once here and again on the client's first request (ExecTokenProvider starts empty, without a lock); wrap the token provider if double runs matter.
         var config = KubernetesClientConfiguration.BuildConfigFromConfigFile(_kubeconfigPath, context);

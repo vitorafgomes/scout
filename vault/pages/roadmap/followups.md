@@ -28,7 +28,7 @@ reliability: medium
 
 ### The animated character never blinks or turns its head (2026-11-04)
 
-- **Gap:** the assembler lays only the mouth over the presenter picture (`src/Scout.Operator/Assembler.cs:297`), so the face is otherwise frozen for the whole scene ([[pages/services/operator]]).
+- **Gap:** the assembler lays only the mouth over the presenter picture (`src/Scout.Operator/Assembler.cs:298`), so the face is otherwise frozen for the whole scene ([[pages/services/operator]]).
 - **Unblocks with:** an eye box the owner marks beside the mouth box and a closed-eyes picture laid over it for about 150 ms every 3 to 6 seconds, timed by the scene's length so the segment key stays stable, with the overlay asserted in an assembler test; head turns wait for the realistic photo animation spike of phase 8c.
 
 ### Only one mouth style (2026-11-04)
@@ -43,7 +43,7 @@ reliability: medium
 
 ### Rhubarb on macOS is not verified (2026-11-04)
 
-- **Gap:** Rhubarb Lip Sync 1.14.0 publishes a macOS archive, but no run of Scout Desktop's macOS build has shown that the bundled program starts there, signed and outside quarantine, and answers `--version` ([[pages/services/desktop-operator]]); until then the readiness of lip sync on a Mac is unproven (`src/Scout.Operator/RhubarbLipSync.cs:57`).
+- **Gap:** Rhubarb Lip Sync 1.14.0 publishes a macOS archive, but no run of Scout Desktop's macOS build has shown that the bundled program starts there, signed and outside quarantine, and answers `--version` ([[pages/services/desktop-operator]]); until then the readiness of lip sync on a Mac is unproven (`src/Scout.Operator/RhubarbLipSync.cs:62`).
 - **Unblocks with:** one run of the macOS build that reports `lip_sync_available` and renders a presenter scene with its mouth moving, recorded on [[pages/services/desktop-operator]].
 
 ### Regenerate picture is offered while the project runs (2026-11-04)
@@ -58,7 +58,7 @@ reliability: medium
 
 ### A failing rhubarb runs again on every assembly (2026-11-04)
 
-- **Gap:** a rhubarb failure or timeout leaves no cues file, and only a cues file newer than the narration skips the run (`src/Scout.Operator/RhubarbLipSync.cs:90`), so a narration rhubarb cannot read is run again, up to its timeout, on every assembly of the project ([[pages/services/operator]]).
+- **Gap:** a rhubarb failure or timeout leaves no cues file, and only a cues file newer than the narration skips the run (`src/Scout.Operator/RhubarbLipSync.cs:95`), so a narration rhubarb cannot read is run again, up to its timeout, on every assembly of the project ([[pages/services/operator]]).
 - **Unblocks with:** a failure marker beside the cues, `mouth-cues-<scene>.failed`, newer than the narration, read like the cues so the scene is shown still with its note without running rhubarb, and removed when the narration changes; with a test that a second assembly of a failing scene runs rhubarb once.
 
 ### The learning loop's thumbnail prompt repeats the no-real-person clause (2026-11-04)
@@ -390,12 +390,12 @@ reliability: medium
 
 ### Teams allowed-user ids are Bot Framework ids (2026-10-23)
 
-- **Blocker:** none while Teams has no webhook in the shipped host. The Teams translator passes `activity.From.Id` (`src/Scout.Adapter.Teams/TeamsMessageTranslator.cs:122`), a `29:` id Teams does not show to users, not the Microsoft Entra object id; the Settings help says so.
+- **Blocker:** none while Teams has no webhook in the shipped host. The Teams translator passes `activity.From.Id` (`src/Scout.Adapter.Teams/TeamsMessageTranslator.cs:124`), a `29:` id Teams does not show to users, not the Microsoft Entra object id; the Settings help says so.
 - **Fix:** pass `activity.From.AadObjectId` as `UserId` when the Teams webhook lands, and change the Settings help to "the user's Microsoft Entra object ID"; check that a real `29:` or object id fits the 64-character limit of `ui/packages/main/src/ipc/access.ts:16`.
 
 ### Allowed-user ids are not platform-qualified (2026-10-23)
 
-- **Blocker:** none; the desktop app runs Discord only. An id listed for one platform also admits the same string on another (`src/Scout.Conversation/ConversationConductor.cs:342`).
+- **Blocker:** none; the desktop app runs Discord only. An id listed for one platform also admits the same string on another (`src/Scout.Conversation/ConversationConductor.cs:330`).
 - **Fix:** store and compare `Adapter:UserId`, as [[pages/decisions/0014-per-request-identity-gating]] anticipates, when a second adapter ships in the desktop app.
 
 ### The script writer is not told how the bundled voice reads capitals (2026-11-04)

@@ -103,10 +103,10 @@ public sealed class ProductionTests : IDisposable
 
         var saved = await Stored(controlPlane);
         saved.Status.ShouldBe("media_ready");
-        var scene = saved.Scenes.First();
+        var scene = saved.Scenes[0];
         (scene.Narration, scene.Status, scene.AudioSource, scene.AudioFile).ShouldBe(("The owner's new words.", "ready", "generated", "scene-s1.wav"));
         (scene.VisualSource, scene.VisualFile).ShouldBe(("generated", "scene-s1.png"));
-        saved.Scenes.Last().ShouldBe(untouched);
+        saved.Scenes[^1].ShouldBe(untouched);
         runner.Calls.ShouldHaveSingleItem().Arguments[^1].ShouldBe("0");
         runner.Inputs.ShouldHaveSingleItem().ShouldBe("The owner's new words.");
         images.ReceivedCalls().ShouldBeEmpty();

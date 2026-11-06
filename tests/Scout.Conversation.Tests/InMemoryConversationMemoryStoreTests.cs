@@ -7,6 +7,12 @@ namespace Scout.Conversation.Tests;
 
 public sealed class InMemoryConversationMemoryStoreTests
 {
+    private static readonly string[] ExpectedQ1A1Q2A2 = ["q1", "a1", "q2", "a2"];
+    private static readonly string[] ExpectedQ3A3Q4A4 = ["q3", "a3", "q4", "a4"];
+    private static readonly string[] ExpectedCccccddddd = ["ccccc", "ddddd"];
+    private static readonly string[] ExpectedQ2A2 = ["q2", "a2"];
+    private static readonly string[] ExpectedQaaa = ["qa", "aa"];
+    private static readonly string[] ExpectedQbab = ["qb", "ab"];
     private static readonly DateTimeOffset Origin = new(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
 
     private static InMemoryConversationMemoryStore Store(
@@ -70,7 +76,7 @@ public sealed class InMemoryConversationMemoryStoreTests
         store.Append("k", User("q2"), Assistant("a2"));
 
         var history = store.Load("k");
-        history.Select(t => t.Text).ShouldBe(new[] { "q1", "a1", "q2", "a2" });
+        history.Select(t => t.Text).ShouldBe(ExpectedQ1A1Q2A2);
     }
 
     [Fact]
@@ -87,7 +93,7 @@ public sealed class InMemoryConversationMemoryStoreTests
 
         var history = store.Load("k");
         history.Count.ShouldBe(options.MaxTurns * 2);
-        history.Select(t => t.Text).ShouldBe(new[] { "q3", "a3", "q4", "a4" });
+        history.Select(t => t.Text).ShouldBe(ExpectedQ3A3Q4A4);
     }
 
     [Fact]
@@ -101,7 +107,7 @@ public sealed class InMemoryConversationMemoryStoreTests
         store.Append("k", User("ccccc"), Assistant("ddddd"));
 
         var history = store.Load("k");
-        history.Select(t => t.Text).ShouldBe(new[] { "ccccc", "ddddd" });
+        history.Select(t => t.Text).ShouldBe(ExpectedCccccddddd);
     }
 
     [Fact]
@@ -152,7 +158,7 @@ public sealed class InMemoryConversationMemoryStoreTests
         store.Append("k", User("q2"), Assistant("a2"));
 
         var history = store.Load("k");
-        history.Select(t => t.Text).ShouldBe(new[] { "q2", "a2" });
+        history.Select(t => t.Text).ShouldBe(ExpectedQ2A2);
     }
 
     [Fact]
@@ -163,8 +169,8 @@ public sealed class InMemoryConversationMemoryStoreTests
         store.Append("a", User("qa"), Assistant("aa"));
         store.Append("b", User("qb"), Assistant("ab"));
 
-        store.Load("a").Select(t => t.Text).ShouldBe(new[] { "qa", "aa" });
-        store.Load("b").Select(t => t.Text).ShouldBe(new[] { "qb", "ab" });
+        store.Load("a").Select(t => t.Text).ShouldBe(ExpectedQaaa);
+        store.Load("b").Select(t => t.Text).ShouldBe(ExpectedQbab);
     }
 
     [Fact]

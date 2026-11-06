@@ -149,9 +149,9 @@ public sealed class ActionQueueTests : IDisposable
             .ShouldBeInRange(before.UtcDateTime.AddSeconds(-1), DateTime.UtcNow);
         (await File.ReadAllBytesAsync(movedAside)).ShouldBe(corrupt);
         (await queue.ListPendingAsync(CancellationToken.None)).ShouldHaveSingleItem().Target.ShouldBe("a.mp4");
-        var warning = _logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldBe($"Action queue file at {queue.FilePath} is malformed; moved it to {movedAside} and started an empty queue");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldBe($"Action queue file at {queue.FilePath} is malformed; moved it to {movedAside} and started an empty queue");
     }
 
     [Fact]

@@ -1,6 +1,3 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Scout.ControlPlane;
 using Scout.Host.ControlPlane.Security;
 using Scout.Host.ControlPlane.Services;

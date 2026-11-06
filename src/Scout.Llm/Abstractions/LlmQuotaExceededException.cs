@@ -6,14 +6,9 @@ namespace Scout.Llm.Abstractions;
 /// never fixes). <see cref="Code"/> carries the provider's error code; neither it
 /// nor <see cref="System.Exception.Message"/> ever carries a credential.
 /// </summary>
-public sealed class LlmQuotaExceededException : Exception
+public sealed class LlmQuotaExceededException(string code, Exception? inner = null) : Exception($"LLM provider quota or billing limit reached (HTTP 429, code {code}).", inner)
 {
-    public LlmQuotaExceededException(string code, Exception? inner = null)
-        : base($"LLM provider quota or billing limit reached (HTTP 429, code {code}).", inner)
-    {
-        Code = code;
-    }
 
     /// <summary>The provider's error code, for example <c>credit_balance_exhausted</c>.</summary>
-    public string Code { get; }
+    public string Code { get; } = code;
 }
