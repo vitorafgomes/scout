@@ -8,7 +8,9 @@ namespace Scout.Llm.Guard;
 /// The enforcement point for writes: every invocation of a kernel function declared
 /// as a write asks the control plane first, through <see cref="IWriteGate"/>. Allowed
 /// runs the function and records its outcome; queued and refused never run it and
-/// hand the model the reason instead; a gate that cannot answer refuses. The request
+/// hand the model the reason instead; a gate that cannot answer refuses. A function that
+/// throws <see cref="WriteFailedException"/> did not write: its message becomes the
+/// function's answer and its outcome goes to the log after <c>failed:</c>. The request
 /// summary shows the values of the declared summary arguments only. Functions that
 /// are not declared run unchanged.
 /// </summary>
@@ -87,6 +89,11 @@ internal sealed class WriteGateFilter(
         try
         {
             await next(context).ConfigureAwait(false);
+        }
+        catch (WriteFailedException ex)
+        {
+            outcome = $"failed: {ex.Outcome}";
+            context.Result = new FunctionResult(context.Function, ex.Message);
         }
         catch (Exception ex)
         {

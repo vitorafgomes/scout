@@ -244,7 +244,7 @@ describe('control plane over UDS', () => {
       expect([before?.hasCredentials, before?.status]).toEqual([false, 'needs-credentials']);
       expect([saved.hasCredentials, saved.status]).toEqual([true, 'disabled']);
       expect(unconfirmed).toBeInstanceOf(ControlPlaneWriteConfirmationError);
-      expect((unconfirmed as Error).message).toContain('Pull request reviews (irreversible write)');
+      expect((unconfirmed as Error).message).toContain('Pull request reviews (write)');
       expect(enableError).toBeInstanceOf(ControlPlaneNotImplementedError);
     },
     TEST_TIMEOUT_MS,

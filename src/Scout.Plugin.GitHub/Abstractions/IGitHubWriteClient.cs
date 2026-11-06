@@ -1,8 +1,8 @@
 namespace Scout.Plugin.GitHub.Abstractions;
 
 /// <summary>
-/// The two writes GitHub takes from Scout, each only from the executor that runs an action the owner approved:
-/// a review with comments on a pull request, and a new issue. Nothing here merges, pushes, edits or deletes.
+/// The two writes GitHub takes from Scout, each from a declared function the write gate lets through under the
+/// owner's grant: a review with comments on a pull request, and a new issue. Nothing here merges, pushes, edits or deletes.
 /// </summary>
 public interface IGitHubWriteClient
 {

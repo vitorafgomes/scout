@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.SemanticKernel;
 using Scout.Llm;
-using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
 
 namespace Scout.Plugin.GitHub;
@@ -14,8 +13,8 @@ namespace Scout.Plugin.GitHub;
 /// self-gates: when neither a token nor a token file is configured the call is a clean no-op (no client, no plugin),
 /// so an unconfigured host still starts. Otherwise it registers a typed <see cref="IGitHubClient"/> and
 /// <see cref="IGitHubWriteClient"/> over one configured <see cref="HttpClient"/> shape, the <c>GitHub</c> read plugin,
-/// the <c>GitHubActions</c> plugin whose two functions are declared writes into Scout's data folder, and the executor
-/// that posts what the owner approved.
+/// and the <c>GitHubActions</c> plugin with its three declared writes, each on its own row of the <c>github</c>
+/// feature: the review, the issue, and the conventions profile in Scout's data folder. No hosted service.
 /// </summary>
 public static class GitHubServiceCollectionExtensions
 {
@@ -73,33 +72,24 @@ public static class GitHubServiceCollectionExtensions
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new GitHubPlugin(sp.GetRequiredService<IGitHubClient>()), "GitHub"));
 
-        var draftsDirectory = section.GetValue<string>("DraftsDirectory");
         services.TryAddSingleton(TimeProvider.System);
-        services.AddSingleton(new GitHubDraftStore(string.IsNullOrWhiteSpace(draftsDirectory) ? DefaultDraftsDirectory() : draftsDirectory));
         var profilesDirectory = section.GetValue<string>("ProfilesDirectory");
         services.AddSingleton(new GitHubProfileStore(string.IsNullOrWhiteSpace(profilesDirectory) ? DefaultProfilesDirectory() : profilesDirectory));
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             new GitHubActionsPlugin(
                 sp.GetRequiredService<IGitHubClient>(),
-                sp.GetRequiredService<IWriteGate>(),
-                sp.GetRequiredService<GitHubDraftStore>(),
+                sp.GetRequiredService<IGitHubWriteClient>(),
                 sp.GetRequiredService<GitHubProfileStore>(),
                 sp.GetRequiredService<TimeProvider>()),
             GitHubActionsPlugin.PluginName));
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SubmitReview, GitHubActionsPlugin.FeatureId,
-            GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "number"]);
+            GitHubActionsPlugin.ReviewScope, summaryArguments: ["owner", "repo", "number"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.CreateIssue, GitHubActionsPlugin.FeatureId,
-            GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "title"]);
+            GitHubActionsPlugin.IssueScope, summaryArguments: ["owner", "repo", "title"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.RememberConventions, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
-        services.AddHostedService<GitHubActionExecutor>();
-
         return services;
     }
-
-    /// <summary>Scout's data folder for the drafts: <c>Scout/github-drafts</c> under the user's local application data.</summary>
-    internal static string DefaultDraftsDirectory() =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Scout", "github-drafts");
 
     /// <summary>Scout's data folder for the conventions profiles: <c>Scout/github-profiles</c> under the user's local application data.</summary>
     internal static string DefaultProfilesDirectory() =>

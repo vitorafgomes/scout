@@ -2,10 +2,7 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
-using Scout.Conversation.Abstractions;
-using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
-using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -31,10 +28,6 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             })
             .Build();
         var services = new ServiceCollection();
-        var gate = new RecordingWriteGate();
-        services.AddSingleton<IWriteGate>(gate);
-        services.AddSingleton<IApprovedActions>(gate);
-        services.AddSingleton(Substitute.For<IOriginNotifier>());
         services.AddGitHubPlugin(config);
         services.AddHttpClient(nameof(IGitHubClient))
             .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(_requests, r => _respond(r)));
@@ -221,12 +214,14 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_Two_Write_Functions_Themselves_Send_Nothing_To_GitHub_But_Reads_And_Queue_For_The_Owner()
+    public async Task The_Two_Write_Functions_Post_Only_To_Their_Endpoints_With_The_Token_From_The_File_And_Answer_With_The_Url()
     {
-        WriteToken("""{"access_token":"ghu_read_only"}""", new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc));
+        WriteToken("""{"access_token":"ghu_write"}""", new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc));
         _respond = request => request.RequestUri!.AbsolutePath switch
         {
             "/repos/octocat/hello-world/pulls/1/files" => Json("""[{"filename":"a.cs","status":"modified","additions":1,"deletions":0,"patch":"@@ -1 +1 @@\n-x\n+y"}]"""),
+            "/repos/octocat/hello-world/pulls/1/reviews" => Json("""{"id":1,"html_url":"https://github.com/octocat/hello-world/pull/1#pullrequestreview-1"}"""),
+            "/repos/octocat/hello-world/issues" => Json("""{"number":2,"html_url":"https://github.com/octocat/hello-world/issues/2"}"""),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
         using var provider = Compose();
@@ -251,11 +246,13 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
         var reviewAnswer = (await actions["submit_pull_request_review"].InvokeAsync(new Kernel(), review)).ToString();
         var issueAnswer = (await actions["create_issue"].InvokeAsync(new Kernel(), issue)).ToString();
 
-        reviewAnswer.ShouldStartWith("Queued for the owner's approval");
-        issueAnswer.ShouldStartWith("Queued for the owner's approval");
-        _requests.ShouldAllBe(r => r.Method == "GET");
-        _requests.Select(r => r.Path).ShouldBe(["/repos/octocat/hello-world/pulls/1/files"]);
-        provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultDraftsDirectory());
+        reviewAnswer.ShouldBe("Posted a review on octocat/hello-world#1 with 1 comment(s): https://github.com/octocat/hello-world/pull/1#pullrequestreview-1");
+        issueAnswer.ShouldBe("Opened issue #2 on octocat/hello-world: https://github.com/octocat/hello-world/issues/2");
+        _requests.Select(r => (r.Method, r.Path, r.Authorization)).ShouldBe([
+            ("GET", "/repos/octocat/hello-world/pulls/1/files", "Bearer ghu_write"),
+            ("POST", "/repos/octocat/hello-world/pulls/1/reviews", "Bearer ghu_write"),
+            ("POST", "/repos/octocat/hello-world/issues", "Bearer ghu_write"),
+        ]);
     }
 
     private static HttpResponseMessage Json(string body) =>

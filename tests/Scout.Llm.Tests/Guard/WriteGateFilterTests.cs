@@ -14,7 +14,7 @@ public sealed class WriteGateFilterTests
     private bool _uploadRan;
     private bool _readRan;
 
-    private Kernel Kernel(IWriteGate gate, ILogger<WriteGateFilter>? logger = null, bool uploadThrows = false)
+    private Kernel Kernel(IWriteGate gate, ILogger<WriteGateFilter>? logger = null, bool uploadThrows = false, bool uploadFails = false)
     {
         var builder = Microsoft.SemanticKernel.Kernel.CreateBuilder();
         builder.Services.AddSingleton<IFunctionInvocationFilter>(new WriteGateFilter(
@@ -30,7 +30,9 @@ public sealed class WriteGateFilterTests
                 (string title, string description, string accessToken) =>
                 {
                     _uploadRan = true;
-                    return uploadThrows ? throw new InvalidOperationException("quota") : "uploaded";
+                    return uploadThrows
+                        ? throw new InvalidOperationException("quota")
+                        : uploadFails ? throw new WriteFailedException("YouTube refused the upload: quota exceeded.", "youtube 403") : "uploaded";
                 },
                 "upload_video"),
             KernelFunctionFactory.CreateFromMethod(
@@ -64,6 +66,17 @@ public sealed class WriteGateFilterTests
         result.ShouldBe("uploaded");
         _uploadRan.ShouldBeTrue();
         gate.Records.ShouldHaveSingleItem().ShouldBe(("youtube", "videos.insert", "YouTube.upload_video", "succeeded", (string?)null));
+    }
+
+    [Fact]
+    public async Task Allowed_Write_That_Did_Not_Happen_Answers_Its_Sentence_And_Is_Recorded_As_Failed_With_Its_Outcome()
+    {
+        var gate = FakeWriteGate.Answering(WriteGateDecisionKind.Allowed);
+
+        var result = await Upload(Kernel(gate, uploadFails: true));
+
+        result.ShouldBe("YouTube refused the upload: quota exceeded.");
+        gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("failed: youtube 403");
     }
 
     [Fact]

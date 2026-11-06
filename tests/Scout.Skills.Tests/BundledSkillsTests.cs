@@ -33,7 +33,7 @@ public sealed class BundledSkillsTests
         }
 
         skill.Body.ShouldContain("load_skill");
-        skill.Body.ShouldContain("never say", Case.Insensitive);
+        skill.Body.ShouldContain("URL");
         skill.Body.ShouldContain(name == "code-review" ? "submit_pull_request_review" : "create_issue");
         if (name == "code-audit")
         {
@@ -49,6 +49,11 @@ public sealed class BundledSkillsTests
     {
         var names = Bundled().Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
         var body = Bundled().Single(s => s.Name == "code-review").Body;
+
+        foreach (var marker in new[] { "\U0001F534", "\U0001F7E1", "\U0001F7E2" })
+        {
+            body.ShouldContain(marker);
+        }
 
         foreach (var function in new[] { "get_pull_request", "list_pull_request_comments", "get_pull_request_file", "get_file_contents", "submit_pull_request_review", "search_code", "get_project_conventions" })
         {

@@ -46,7 +46,7 @@ public sealed class FeatureWritesGrpcTests
         var github = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
             .Single(f => f.Id == FeatureCatalog.GitHubId);
         github.WriteClass.ShouldBe(2);
-        github.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 1, 2, 2]);
+        github.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 1, 1, 1]);
         var kubernetes = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
             .Single(f => f.Id == FeatureCatalog.KubernetesId);
         kubernetes.WriteClass.ShouldBe(0);

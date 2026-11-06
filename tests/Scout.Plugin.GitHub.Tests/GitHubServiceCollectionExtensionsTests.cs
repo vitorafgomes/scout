@@ -1,10 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
-using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
-using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -24,10 +22,6 @@ public sealed class GitHubServiceCollectionExtensionsTests
     private static ServiceProvider Build(IConfiguration config)
     {
         var services = new ServiceCollection();
-        var gate = new RecordingWriteGate();
-        services.AddSingleton<IWriteGate>(gate);
-        services.AddSingleton<IApprovedActions>(gate);
-        services.AddSingleton(Substitute.For<IOriginNotifier>());
         services.AddGitHubPlugin(config);
         return services.BuildServiceProvider();
     }
@@ -105,7 +99,7 @@ public sealed class GitHubServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void With_Token_Declares_The_Two_Writes_Into_The_Data_Folder_And_Registers_The_Executor()
+    public void With_Token_Declares_Each_Write_On_Its_Own_Row_And_Registers_No_Hosted_Service()
     {
         using var provider = Build(Config(token: "test-token"));
 
@@ -115,27 +109,24 @@ public sealed class GitHubServiceCollectionExtensionsTests
         provider.GetServices<WriteFunctionDeclaration>()
             .Select(d => (d.PluginName, d.FunctionName, d.FeatureId, d.Scope))
             .ShouldBe([
-                ("GitHubActions", "submit_pull_request_review", "github", "Scout's data folder"),
-                ("GitHubActions", "create_issue", "github", "Scout's data folder"),
+                ("GitHubActions", "submit_pull_request_review", "github", "Pull request reviews"),
+                ("GitHubActions", "create_issue", "github", "New issues"),
                 ("GitHubActions", "remember_project_conventions", "github", "Scout's data folder"),
             ]);
         provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultProfilesDirectory());
-        provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldHaveSingleItem().ShouldBeOfType<GitHubActionExecutor>();
-        provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultDraftsDirectory());
+        provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldBeEmpty();
     }
 
     [Fact]
-    public void A_Configured_Drafts_Directory_Is_Used()
+    public void A_Configured_Profiles_Directory_Is_Used()
     {
         var data = new Dictionary<string, string?>
         {
             ["Scout:Plugins:GitHub:Token"] = "test-token",
-            ["Scout:Plugins:GitHub:DraftsDirectory"] = "/tmp/scout-test-drafts",
             ["Scout:Plugins:GitHub:ProfilesDirectory"] = "/tmp/scout-test-profiles",
         };
         using var provider = Build(new ConfigurationBuilder().AddInMemoryCollection(data).Build());
 
-        provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe("/tmp/scout-test-drafts");
         provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe("/tmp/scout-test-profiles");
     }
 }
