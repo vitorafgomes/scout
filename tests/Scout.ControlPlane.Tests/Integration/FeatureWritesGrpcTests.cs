@@ -45,8 +45,11 @@ public sealed class FeatureWritesGrpcTests
         listed.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2]);
         var github = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
             .Single(f => f.Id == FeatureCatalog.GitHubId);
-        github.WriteClass.ShouldBe(0);
-        github.ScopeMatrix.Select(r => r.Access).Distinct().ShouldBe([0]);
+        github.WriteClass.ShouldBe(2);
+        github.ScopeMatrix.Select(r => r.Access).ShouldBe([0, 0, 0, 0, 1, 2, 2]);
+        var kubernetes = (await client.ListFeaturesAsync(new ListFeaturesRequest())).Features
+            .Single(f => f.Id == FeatureCatalog.KubernetesId);
+        kubernetes.WriteClass.ShouldBe(0);
 
         var enabled = await client.EnableAsync(new EnableRequest { Id = FeatureCatalog.YouTubeId, ConfirmWrites = true });
 
@@ -66,7 +69,7 @@ public sealed class FeatureWritesGrpcTests
         var noWrites = await Should.ThrowAsync<RpcException>(() =>
             client.SetWriteGrantAsync(new SetWriteGrantRequest
             {
-                Id = FeatureCatalog.GitHubId,
+                Id = FeatureCatalog.KubernetesId,
                 Granted = true,
                 ConfirmWrites = true,
             }).ResponseAsync);
@@ -81,7 +84,7 @@ public sealed class FeatureWritesGrpcTests
         refused.StatusCode.ShouldBe(StatusCode.FailedPrecondition);
         refused.Status.Detail.ShouldBe("Confirm the writes of youtube before granting them: " + YouTubeWriteRows);
         noWrites.StatusCode.ShouldBe(StatusCode.InvalidArgument);
-        noWrites.Status.Detail.ShouldBe("granted: github declares no writes to grant.");
+        noWrites.Status.Detail.ShouldBe("granted: kubernetes declares no writes to grant.");
         granted.Granted.ShouldBeTrue();
         granted.Enabled.ShouldBeFalse();
         DateTimeOffset.Parse(granted.GrantedAt, System.Globalization.CultureInfo.InvariantCulture)

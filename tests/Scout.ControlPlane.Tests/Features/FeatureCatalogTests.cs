@@ -17,7 +17,7 @@ public sealed class FeatureCatalogTests
             .OfType<string>();
 
     [Fact]
-    public void GitHub_Lists_Only_The_Read_Only_App_Permissions()
+    public void GitHub_Declares_The_Four_App_Permissions_As_Reads_The_Drafts_As_A_Write_And_The_Review_And_The_Issue_As_Irreversible()
     {
         GitHub.ScopeMatrix!.Select(r => (r.Scope, r.Access))
             .ShouldBe([
@@ -25,21 +25,44 @@ public sealed class FeatureCatalogTests
                 ("Contents", ScopeAccess.Read),
                 ("Pull requests", ScopeAccess.Read),
                 ("Issues", ScopeAccess.Read),
+                ("Scout's data folder", ScopeAccess.Write),
+                ("Pull request reviews", ScopeAccess.IrreversibleWrite),
+                ("New issues", ScopeAccess.IrreversibleWrite),
             ]);
-        GitHub.WriteClass.ShouldBe(WriteClass.None);
+        GitHub.WriteClass.ShouldBe(WriteClass.Executive);
+        GitHub.HasWriteRows.ShouldBeTrue();
     }
 
     [Fact]
-    public void GitHub_Text_Promises_No_Keyring_No_Repo_Scope_And_No_Issue_Creation()
+    public void GitHub_Read_Rows_Name_Every_Read_The_Plugin_Performs()
+    {
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Contents").Actions.ShouldBe([
+            "Read the README, languages and top-level files of a repository",
+            "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
+        ]);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull requests").Actions.ShouldBe([
+            "List open pull requests",
+            "Read one pull request with its changed files and their diffs",
+            "Read the comments on a pull request",
+        ]);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Issues").Actions.ShouldBe(["List open issues", "Read one issue"]);
+        GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull request reviews").Actions.Single().ShouldContain("never approves");
+    }
+
+    [Fact]
+    public void GitHub_Text_Promises_No_Keyring_No_Repo_Scope_And_Says_Writes_Wait_For_Approval()
     {
         AllText(GitHub).Count().ShouldBeGreaterThan(8);
         foreach (var text in AllText(GitHub))
         {
             text.ShouldNotContain("keyring", Case.Insensitive);
-            text.ShouldNotContain("Create issues", Case.Insensitive);
             text.ShouldNotContain("scopes=repo", Case.Insensitive);
             text.ShouldNotContain("'repo'", Case.Insensitive);
+            text.ShouldNotContain("never writes to GitHub", Case.Insensitive);
         }
+
+        GitHub.Description.ShouldContain("one action at a time with your approval");
+        GitHub.SetupSteps!.ShouldContain(step => step.Contains("approve each one on the Review screen"));
     }
 
     [Fact]

@@ -3,10 +3,10 @@ using Scout.Llm.Abstractions;
 namespace Scout.Host.Console;
 
 /// <summary>
-/// The <see cref="IWriteGate"/> when the worker runs without Scout Desktop's control
-/// plane: every write is refused.
+/// The <see cref="IWriteGate"/> and <see cref="IApprovedActions"/> when the worker runs without Scout Desktop's control
+/// plane: every write is refused and no action is ever approved.
 /// </summary>
-internal sealed class ClosedWriteGate : IWriteGate
+internal sealed class ClosedWriteGate : IWriteGate, IApprovedActions
 {
     internal const string Reason = "Writes are off: Scout Desktop's control plane is not available.";
 
@@ -26,4 +26,7 @@ internal sealed class ClosedWriteGate : IWriteGate
         string? actionId,
         CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    public Task<ApprovedAction?> ClaimNextAsync(string featureId, CancellationToken cancellationToken)
+        => Task.FromResult<ApprovedAction?>(null);
 }

@@ -82,9 +82,10 @@ public sealed class ControlPlaneUdsIntegrationTests
         var afterCreds = await client.SetCredentialsAsync(setCreds);
         afterCreds.HasCredentials.ShouldBeTrue();
 
-        var enabled = await client.EnableAsync(new EnableRequest { Id = FeatureCatalog.GitHubId });
+        var enabled = await client.EnableAsync(new EnableRequest { Id = FeatureCatalog.GitHubId, ConfirmWrites = true });
         enabled.Enabled.ShouldBeTrue();
         enabled.Status.ShouldBe(FeatureStatus.Enabled);
+        enabled.Granted.ShouldBeTrue();
 
         var disabled = await client.DisableAsync(new DisableRequest { Id = FeatureCatalog.GitHubId });
         disabled.Enabled.ShouldBeFalse();

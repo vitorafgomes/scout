@@ -93,12 +93,15 @@ internal static class HostComposition
         RemoveWorkerGateTokenFromEnvironment();
         if (string.IsNullOrWhiteSpace(socketPath) || string.IsNullOrWhiteSpace(token))
         {
-            services.AddSingleton<Scout.Llm.Abstractions.IWriteGate, ClosedWriteGate>();
+            services.AddSingleton<ClosedWriteGate>();
+            services.AddSingleton<Scout.Llm.Abstractions.IWriteGate>(sp => sp.GetRequiredService<ClosedWriteGate>());
+            services.AddSingleton<Scout.Llm.Abstractions.IApprovedActions>(sp => sp.GetRequiredService<ClosedWriteGate>());
             return false;
         }
 
         services.AddSingleton(_ => new GrpcWriteGate(socketPath, token));
         services.AddSingleton<Scout.Llm.Abstractions.IWriteGate>(sp => sp.GetRequiredService<GrpcWriteGate>());
+        services.AddSingleton<Scout.Llm.Abstractions.IApprovedActions>(sp => sp.GetRequiredService<GrpcWriteGate>());
         return true;
     }
 

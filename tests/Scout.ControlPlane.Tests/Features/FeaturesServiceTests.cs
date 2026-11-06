@@ -97,10 +97,10 @@ public sealed class FeaturesServiceTests
     {
         _credentials.ContainsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
-        _activator.CanActivate(FeatureCatalog.GitHubId).Returns(false);
+        _activator.CanActivate(FeatureCatalog.KubernetesId).Returns(false);
 
         await Should.ThrowAsync<FeatureNotImplementedException>(() =>
-            Build().EnableAsync(FeatureCatalog.GitHubId, confirmWrites: false, CancellationToken.None));
+            Build().EnableAsync(FeatureCatalog.KubernetesId, confirmWrites: false, CancellationToken.None));
     }
 
     [Fact]
@@ -108,13 +108,13 @@ public sealed class FeaturesServiceTests
     {
         _credentials.ContainsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
-        _activator.CanActivate(FeatureCatalog.GitHubId).Returns(true);
+        _activator.CanActivate(FeatureCatalog.KubernetesId).Returns(true);
 
-        await Build().EnableAsync(FeatureCatalog.GitHubId, confirmWrites: false, CancellationToken.None);
+        await Build().EnableAsync(FeatureCatalog.KubernetesId, confirmWrites: false, CancellationToken.None);
 
-        await _activator.Received(1).ActivateAsync(FeatureCatalog.GitHubId, Arg.Any<CancellationToken>());
+        await _activator.Received(1).ActivateAsync(FeatureCatalog.KubernetesId, Arg.Any<CancellationToken>());
         await _store.Received().SetAsync(
-            FeatureCatalog.GitHubId,
+            FeatureCatalog.KubernetesId,
             Arg.Is<FeatureState>(s => s.Enabled && s.LastError == null),
             Arg.Any<CancellationToken>());
     }
@@ -124,15 +124,15 @@ public sealed class FeaturesServiceTests
     {
         _credentials.ContainsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult(true));
-        _activator.CanActivate(FeatureCatalog.GitHubId).Returns(true);
-        _activator.ActivateAsync(FeatureCatalog.GitHubId, Arg.Any<CancellationToken>())
+        _activator.CanActivate(FeatureCatalog.KubernetesId).Returns(true);
+        _activator.ActivateAsync(FeatureCatalog.KubernetesId, Arg.Any<CancellationToken>())
             .Returns<Task>(_ => throw new FeatureActivationException("boom"));
 
         await Should.ThrowAsync<FeatureActivationException>(() =>
-            Build().EnableAsync(FeatureCatalog.GitHubId, confirmWrites: false, CancellationToken.None));
+            Build().EnableAsync(FeatureCatalog.KubernetesId, confirmWrites: false, CancellationToken.None));
 
         await _store.Received().SetAsync(
-            FeatureCatalog.GitHubId,
+            FeatureCatalog.KubernetesId,
             Arg.Is<FeatureState>(s => !s.Enabled && s.LastError == "boom"),
             Arg.Any<CancellationToken>());
     }
@@ -328,9 +328,9 @@ public sealed class FeaturesServiceTests
         WithFileStoreAsync(async (store, service) =>
         {
             var ex = await Should.ThrowAsync<FeatureValidationFailedException>(() =>
-                service.SetWriteGrantAsync(FeatureCatalog.GitHubId, granted: true, confirmWrites: true, CancellationToken.None));
+                service.SetWriteGrantAsync(FeatureCatalog.KubernetesId, granted: true, confirmWrites: true, CancellationToken.None));
 
-            ex.Errors.ShouldBe(new Dictionary<string, string> { ["granted"] = "github declares no writes to grant." });
+            ex.Errors.ShouldBe(new Dictionary<string, string> { ["granted"] = "kubernetes declares no writes to grant." });
             File.Exists(store.FilePath).ShouldBeFalse();
         });
 

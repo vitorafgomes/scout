@@ -41,9 +41,9 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 
 ## Status
 
-- **As of 2026-11-06:** phases 0 and 1 implemented on `feat/code-quality-assistant`: ADR 0038 proposed, the five read functions and the two skills, with tests. Phases 2 and 3 next.
-- **Next milestone:** phase 2, the review posted through the write gate, with the GitHub App's permissions widened.
-- **Blocker:** the owner registers the widened App permissions on github.com before phase 2 can be used end to end (not before it can be merged).
+- **As of 2026-11-06:** phases 0 and 1 on `feat/code-quality-assistant` (PR #91); phases 2 and 3 on `feat/code-quality-assistant-writes`, stacked on it: the two write functions, the drafts, the executor, the feature-scoped claim on the worker gate, the catalog rows, with tests.
+- **Next milestone:** merge, then the owner widens the GitHub App to Pull requests and Issues read & write and grants GitHub writes on the Features screen; first review posted end to end.
+- **Blocker:** the App permissions on github.com are the owner's step; until then the executor's POST answers 403 and the chat is told the write was not performed.
 
 ## Workstreams / phases
 
@@ -58,12 +58,12 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 - **Success criteria:** every request any GitHub function sends is still a GET; a review in chat cites lines that exist in the diff.
 
 ### Phase 2 - Post the review
-- **Status:** not started
+- **Status:** done 2026-11-06 (shape: draft, queued action, executor; see the ADR)
 - **Scope:** `submit_pull_request_review(owner, repo, number, body, comments)` declared with `AddWriteFunction` for the `github` feature, scope row "Post a review with comments on a pull request", `IrreversibleWrite`; one review is one action in the queue; each comment is mapped to a line of the diff on the right side before the action is queued, and a comment that maps to no line is dropped with a note; a failing-call test for the POST (Rule I); the GET-only tests become "every non-GET comes from a declared write function and goes to that endpoint"; the catalog's GitHub entry becomes `WriteClass.Executive`; the desktop's `prepareWriteGrant` for `github` explains the App permissions to approve.
 - **Success criteria:** the owner sees "repo, PR, N comments, first lines" on the Review screen; approving posts the review; the model says "waiting for the owner" until then.
 
 ### Phase 3 - Improvements as issues
-- **Status:** not started
+- **Status:** done 2026-11-06
 - **Scope:** `create_issue(owner, repo, title, body, labels)` declared for the `github` feature, scope row "Open an issue", `IrreversibleWrite`; the body follows Problem, Evidence (`path:line`), Proposed change, Acceptance; the `project-improvements` skill files one issue per item the user picks.
 - **Success criteria:** an issue the owner approved exists with that body; an improvement already tracked is reported with its number instead.
 
@@ -76,4 +76,4 @@ By 2026-11-30, from any connected chat: "review PR 42 in owner/repo" returns fin
 ## Open questions
 
 - Whether the owner widens the App's permissions or prefers a fine-grained token with write access per host (ADR 0038 chose the App; the token path stays for hosts without the desktop).
-- Whether a review with no finding is posted as an approving review or stays in chat (phase 2; leaning: stays in chat, Scout approves nothing).
+- Resolved 2026-11-06: Scout posts commenting reviews only; a review with no finding and no body is refused as nothing to post, and the verdict stays in chat.

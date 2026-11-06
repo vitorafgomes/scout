@@ -18,7 +18,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
-        Description: "Query repositories, issues and pull requests from chat, and read a pull request's diffs, comments and files for a code review.",
+        Description: "Query repositories, issues and pull requests from chat, and read a pull request's diffs, comments and files for a code review. With your write permission it also keeps the reviews and issues it drafts under Scout's folder and, one action at a time with your approval, posts a review with comments on a pull request or opens an issue.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -26,7 +26,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Key: "pat",
                 Kind: "password",
                 Label: "Personal Access Token",
-                HelperText: "Only for a Scout host without the desktop sign-in. Use a fine-grained token with read-only access to Metadata, Contents, Pull requests and Issues.",
+                HelperText: "Only for a Scout host without the desktop sign-in. Use a fine-grained token with read access to Metadata and Contents, and to Pull requests and Issues; give those two read & write only if you will allow Scout to post reviews and open issues.",
                 CreateLinkUrl: null,
                 CreateLinkLabel: null),
         },
@@ -41,7 +41,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 CreateLinkLabel: null,
                 Required: true),
         },
-        WriteClass: WriteClass.None,
+        WriteClass: WriteClass.Executive,
         ScopeMatrix: new[]
         {
             new FeatureScopeRow(
@@ -69,13 +69,25 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Scope: "Issues",
                 Actions: new[] { "List open issues", "Read one issue" },
                 Access: ScopeAccess.Read),
+            new FeatureScopeRow(
+                Scope: "Scout's data folder",
+                Actions: new[] { "Keep a review or an issue drafted from chat until you approve or reject it on the Review screen" },
+                Access: ScopeAccess.Write),
+            new FeatureScopeRow(
+                Scope: "Pull request reviews",
+                Actions: new[] { "Post a review with comments on a pull request; Scout comments, it never approves or requests changes" },
+                Access: ScopeAccess.IrreversibleWrite),
+            new FeatureScopeRow(
+                Scope: "New issues",
+                Actions: new[] { "Open an issue on a repository" },
+                Access: ScopeAccess.IrreversibleWrite),
         },
         SetupSteps: new[]
         {
             "Click 'Connect with GitHub'. Scout shows a one-time code.",
             "Click 'Open GitHub', sign in with your GitHub account and enter the code.",
-            "Approve the Scout GitHub App. It asks for read access only; Scout never writes to GitHub.",
-            "If the card says so, click 'Install Scout on your GitHub account' and pick the repositories Scout may read.",
+            "Approve the Scout GitHub App. It reads your repositories, pull requests and issues; it writes a review or an issue only after you allow the writes here and approve each one on the Review screen.",
+            "If the card says so, click 'Install Scout on your GitHub account' and pick the repositories Scout may use.",
         });
 
     private static readonly FeatureMetadata Kubernetes = new(

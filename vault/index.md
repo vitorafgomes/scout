@@ -129,7 +129,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/decisions/0035-screenshot-attached-to-a-question|ADR 0035 Screenshot attached to a question]] - one JPEG of at most 3 MB on the ask line, sent as an image part when the connected AI source can read images, a plain sentence without a model call otherwise, never stored or logged.
 - [[pages/decisions/0036-text-read-from-a-screenshot-by-a-local-ocr-program|ADR 0036 Text read from a screenshot by a local OCR program]] - the worker runs the bundled tesseract on the JPEG bytes through standard input and output, with the app's locale languages, a 3 s budget and a 5,000-character cap, and registers the reader only when the program and its language data are present; the image and the text are never stored or logged.
 - [[pages/decisions/0037-meetings-kept-locally-in-sqlite|ADR 0037 Meetings kept locally in SQLite]] - a meeting, its lines with their translations and the owner's questions are stored only when the owner chooses Keep this meeting, in one SQLite file under Scout's data folder; listed, exported to Markdown and deleted from the desktop, a delete scrubs the text with secure_delete, VACUUM and a WAL checkpoint, and nothing of it is sent anywhere or logged.
-- [[pages/decisions/0038-code-quality-assistant-on-the-write-gate|ADR 0038 Code quality assistant on the write gate]] - two skills over the GitHub plugin's reads of one pull request, its comments, one issue and one file; a posted review and an opened issue as irreversible writes of the github feature with the App widened to Pull requests and Issues read & write; CodeQA superseded by Knowledge, src/old untouched.
+- [[pages/decisions/0038-code-quality-assistant-on-the-write-gate|ADR 0038 Code quality assistant on the write gate]] - two skills over the GitHub plugin's reads of one pull request, its comments, one issue and one file; a posted review and an opened issue as irreversible writes of the github feature, each a draft on the worker, an action the owner approves and an executor that posts it, with the App widened to Pull requests and Issues read & write; CodeQA superseded by Knowledge, src/old untouched.
 
 ## Domain
 
@@ -159,7 +159,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - [[pages/roadmap/production-screen|Production screen: the owner's working area first]] - Initiative: the Production screen rearranged around the project the owner works on, removable presenter versions, claims at a glance, help marks on every block.
 - [[pages/roadmap/teams-adapter-spike|Teams adapter spike]] - Research: Teams needs a public HTTPS endpoint; options, security and a phased plan.
 - [[pages/roadmap/live-voice-spike|Live voice spike]] - Research: DAVE voice encryption, Discord.Net receive, local STT and TTS; verdict and phased plan.
-- [[pages/roadmap/code-quality-assistant|Code quality assistant]] - Initiative: from chat, review a pull request and post the review on it, or find a project's improvements and open the issues, in any language, under the owner's grant and per-action approval; phases 0 and 1 done 2026-11-06.
+- [[pages/roadmap/code-quality-assistant|Code quality assistant]] - Initiative: from chat, review a pull request and post the review on it, or find a project's improvements and open the issues, in any language, under the owner's grant and per-action approval; phases 0 to 3 done 2026-11-06, the App permissions are the owner's step.
 
 ## History
 

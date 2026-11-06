@@ -110,7 +110,7 @@ public sealed class OperatorService
     private const string SetThumbnail = "thumbnails.set";
 
     private static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan ClaimLease = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan ClaimLease = WriteGateService.ClaimLease;
     private static readonly TimeSpan ResearchKeptFor = TimeSpan.FromDays(30);
     private static readonly string[] WorkerStatuses = [Researching, Scripting, Transcribing, ScriptReady, Producing, MediaReady, Assembling, Assembled, Failed];
     private static readonly string[] WorkerClaimStatuses = ["pending", "unsupported"];

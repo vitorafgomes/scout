@@ -162,7 +162,7 @@ describe('GitHub card', () => {
     await settle(fixture);
 
     expect(help).toBe(
-      'Recommended: a fine-grained token with read-only access (Metadata, Contents, Pull requests, Issues) to the repositories Scout should see.',
+      'Recommended: a fine-grained token with read access to Metadata and Contents and to Pull requests and Issues, read & write on those two only if you will allow Scout to post reviews and open issues, for the repositories Scout should see.',
     );
     expect(bridge.githubSaveToken).toHaveBeenCalledWith({ token: 'github_pat_11ABCDEFG0renderer' });
     expect(el(fixture, 'github-connected')?.textContent?.trim()).toBe('Connected as vitorafgomes');
