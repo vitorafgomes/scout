@@ -20,9 +20,9 @@ public sealed class BundledSkillsTests
     }
 
     [Theory]
-    [InlineData("code-review", "pull request", "review PR", "revisa esse PR", "file and line")]
+    [InlineData("code-review", "pull request", "review PR", "revisa esse PR", "file and line", "no pull request named (code-audit)")]
     [InlineData("project-improvements", "improve", "technical debt", "o que dá para melhorar", "how and where")]
-    [InlineData("code-audit", "audit", "security", "performance", "analisa o código", "padrões não seguidos", "file and line")]
+    [InlineData("code-audit", "audit", "security", "performance", "analisa o código", "padrões não seguidos", "file and line", "review the whole repository", "faz a review do repositório todo")]
     public void The_Code_Quality_Skills_Describe_The_Requests_They_Answer(string name, params string[] phrases)
     {
         var skill = Bundled().SingleOrDefault(s => s.Name == name).ShouldNotBeNull($"skills/{name}.md must load");

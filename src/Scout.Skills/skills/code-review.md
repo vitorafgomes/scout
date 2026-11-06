@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Reviewing a pull request or a diff in any programming language - "review PR 42", "code review", "look at this pull request and tell me what is wrong", "comment on the PR", "revisa esse PR", "faz o code review". Reads the pull request from GitHub, judges correctness, safety, tests, error handling and clarity against the languages the diff touches, and answers with findings anchored to file and line. Not for asking what a repository is about, not for listing pull requests, not for planning improvements to a whole project.
+description: Reviewing a pull request or a diff in any programming language - "review PR 42", "code review", "look at this pull request and tell me what is wrong", "comment on the PR", "revisa esse PR", "faz o code review". Reads the pull request from GitHub, judges correctness, safety, tests, error handling and clarity against the languages the diff touches, and answers with findings anchored to file and line. Not for reviewing a whole repository or project with no pull request named (code-audit), not for asking what a repository is about, not for listing pull requests, not for planning improvements to a whole project.
 ---
 
 # Code review
