@@ -222,7 +222,7 @@ describe('control plane over UDS', () => {
   );
 
   it(
-    'SetCredentials with a pat moves github from needs-credentials to disabled, and Enable says it is not available yet',
+    'SetCredentials with a pat moves github from needs-credentials to disabled, Enable asks to confirm its writes first, then says it is not available yet',
     async () => {
       if (process.platform === 'win32') {
         expect(result.kind).toBe('unsupported');
@@ -232,13 +232,19 @@ describe('control plane over UDS', () => {
       const before = (await client.listFeatures()).find((f) => f.id === 'github');
 
       const saved = await client.setFeatureCredentials('github', { pat: 'ghp_integration' });
-      const enableError = await client.enableFeature('github', false).then(
+      const unconfirmed = await client.enableFeature('github', false).then(
+        () => null,
+        (err: unknown) => err,
+      );
+      const enableError = await client.enableFeature('github', true).then(
         () => null,
         (err: unknown) => err,
       );
 
       expect([before?.hasCredentials, before?.status]).toEqual([false, 'needs-credentials']);
       expect([saved.hasCredentials, saved.status]).toEqual([true, 'disabled']);
+      expect(unconfirmed).toBeInstanceOf(ControlPlaneWriteConfirmationError);
+      expect((unconfirmed as Error).message).toContain('Pull request reviews (irreversible write)');
       expect(enableError).toBeInstanceOf(ControlPlaneNotImplementedError);
     },
     TEST_TIMEOUT_MS,
