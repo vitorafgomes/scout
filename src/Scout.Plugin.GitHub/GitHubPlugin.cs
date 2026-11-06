@@ -5,14 +5,16 @@ using Scout.Plugin.GitHub.Abstractions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// Read-only GitHub plugin exposed to the LLM as Semantic Kernel functions. Each
-/// method is a <see cref="KernelFunctionAttribute"/> the model can invoke by
-/// name through function-calling. Listing only: no create, merge, or push
-/// operations exist by design. Every call returns a non-empty, user-safe string;
+/// GitHub plugin exposed to the LLM as Semantic Kernel functions. Each method is a
+/// <see cref="KernelFunctionAttribute"/> the model can invoke by name through
+/// function-calling. Reads only in this file: listing, a repository overview, and
+/// the single-item reads a code review needs (one pull request with its diffs, its
+/// comments, one issue, one file). Every call returns a non-empty, user-safe string;
 /// transport and API failures are caught and surfaced as a clean error line so a
-/// tool call never throws back into the kernel.
+/// tool call never throws back into the kernel, and every owner, repository, path
+/// and reference the model passes is checked before a URL is built.
 /// </summary>
-public sealed class GitHubPlugin
+public sealed partial class GitHubPlugin
 {
     private readonly IGitHubClient _client;
 
@@ -55,6 +57,11 @@ public sealed class GitHubPlugin
         [Description("Repository name, e.g. hello-world.")] string repo,
         CancellationToken ct)
     {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
         try
         {
             var prs = await _client.ListOpenPullRequestsAsync(owner, repo, ct).ConfigureAwait(false);
@@ -80,6 +87,11 @@ public sealed class GitHubPlugin
         [Description("Repository name.")] string repo,
         CancellationToken ct)
     {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
         try
         {
             var issues = await _client.ListOpenIssuesAsync(owner, repo, ct).ConfigureAwait(false);
@@ -105,6 +117,11 @@ public sealed class GitHubPlugin
         [Description("Repository name, e.g. hello-world.")] string repo,
         CancellationToken ct)
     {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            return GitHubNames.InvalidRepository;
+        }
+
         try
         {
             var info = await _client.GetRepositoryAsync(owner, repo, ct).ConfigureAwait(false);
@@ -159,6 +176,8 @@ public sealed class GitHubPlugin
 
     private static bool IsHandledFailure(Exception ex)
         => ex is GitHubApiException or HttpRequestException or OperationCanceledException;
+
+    internal static string ErrorLineFor(Exception ex) => ErrorLine(ex);
 
     private static string ErrorLine(Exception ex) => ex switch
     {

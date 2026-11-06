@@ -1,8 +1,9 @@
 namespace Scout.Plugin.GitHub.Abstractions;
 
 /// <summary>
-/// Read-only access to GitHub data via the authenticated user's token. Listing
-/// only: no create, merge, push, or comment operations exist by design.
+/// Read access to GitHub data via the authenticated user's token: listing, and reading one
+/// pull request, its comments, one issue and one file. No create, merge, push or comment
+/// operation exists here; a write, when one is added, is a separate declared function.
 /// </summary>
 public interface IGitHubClient
 {
@@ -24,4 +25,38 @@ public interface IGitHubClient
     /// </summary>
     Task<RepositoryInfo?> GetRepositoryAsync(
         string owner, string repo, CancellationToken ct);
+
+    /// <summary>
+    /// Read pull request <paramref name="number"/> with its changed files and their diffs.
+    /// Returns null when the pull request is not found or not accessible.
+    /// </summary>
+    Task<PullRequestDetails?> GetPullRequestAsync(
+        string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// List the first hundred changed files of pull request <paramref name="number"/> with their diffs.
+    /// Returns null when the pull request is not found or not accessible.
+    /// </summary>
+    Task<IReadOnlyList<ChangedFile>?> ListPullRequestFilesAsync(
+        string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// List the review comments and the conversation comments of pull request <paramref name="number"/>, oldest first.
+    /// Returns null when the pull request is not found or not accessible.
+    /// </summary>
+    Task<IReadOnlyList<PullRequestComment>?> ListPullRequestCommentsAsync(
+        string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// Read issue <paramref name="number"/>. Returns null when the issue is not found or not accessible.
+    /// </summary>
+    Task<IssueDetails?> GetIssueAsync(
+        string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>
+    /// Read the file or directory at <paramref name="path"/>, at <paramref name="reference"/> (a branch,
+    /// tag or commit) or the default branch when empty. Returns null when the path is not found.
+    /// </summary>
+    Task<RepositoryFile?> GetFileContentAsync(
+        string owner, string repo, string path, string? reference, CancellationToken ct);
 }

@@ -1,8 +1,9 @@
 ---
 title: "Skills"
-version: "1.1"
+version: "1.2"
 date: 2026-10-21
-changes: "A failed skill index build is retried after one minute instead of cached empty until restart"
+changes: "2026-11-06: the two code-quality skills, code-review and project-improvements, and the test that pins the bundled skills. Earlier: A failed skill index build is retried after one minute instead of cached empty until restart"
+updated: 2026-11-06
 page_type: service
 status: active
 description: "Loads markdown skill files and offers them to the model two ways: embedding-matched injection into the system prompt, and list_skills and load_skill tools."
@@ -47,6 +48,10 @@ flowchart LR
 Loading is lazy and never throws; malformed files are skipped with a warning (`src/Scout.Skills/SkillFileLoader.cs:31`). The catalog depends on the loader only, so the kernel can include the plugin without re-entering the embedder (`src/Scout.Skills/SkillsServiceCollectionExtensions.cs:54`). When disabled, only `NoOpSkillSelector` is registered (`:69`).
 
 The selector builds its index on the first message and caches a successful build, including an empty one when no skill files exist; a build that throws (an embeddings 429, for example) is not cached: that message gets no skills, and the next message builds again once `IndexRetryInterval` (one minute, `src/Scout.Skills/SkillSelector.cs:22`) has passed on the injected `TimeProvider` (`src/Scout.Skills/SkillSelector.cs:98`, `src/Scout.Skills/SkillSelector.cs:147`), so a persistent failure costs one embeddings call per minute, not one per message.
+
+## The code-quality skills (2026-11-06)
+
+`src/Scout.Skills/skills/code-review.md` and `src/Scout.Skills/skills/project-improvements.md` are the first skills written as intentions over functions rather than as advice: each names the GitHub plugin functions to call and in which order ([[pages/services/plugin-github]]), tells the model to `load_skill` the language skill for every extension in the diff or the project (the 24 language skills next to them), carries a language-agnostic rubric, fixes the answer shape (findings as `path:line`, improvements as what, why, how, where) and says what to do when the user asks to post or to file: call `submit_pull_request_review` or `create_issue` ([[pages/services/plugin-github]]), relay that the action waits for the owner on the Review screen, and never say it was posted, because the chat hears from the executor. Their descriptions carry the English and Portuguese phrases users type, because the selector matches on the description alone. `tests/Scout.Skills.Tests/BundledSkillsTests.cs:14` loads every bundled file, `:25` pins the phrases and the honesty clause, `:39` pins that the functions and language skills they name exist. Decision: [[pages/decisions/0038-code-quality-assistant-on-the-write-gate]].
 
 ## Invariants
 

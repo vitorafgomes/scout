@@ -108,7 +108,7 @@ Open as of 2026-10-22. Small deferrals with a known unblock live in [[pages/road
 - [ ] Teams onboarding form (app id / password / tenant); live webhook hosting stays out of this repository.
 
 ### Chatops capability
-- [ ] Decide the retired plugins' fate (CloudStatus, CodeQA, Kubernetes, Help under `src/old`): rebuild on SK or drop. The GitHub issues that tracked them were deleted on 2026-10-22.
+- [x] Decide the retired plugins' fate (CloudStatus, CodeQA, Kubernetes, Help under `src/old`): Kubernetes was rebuilt ([[pages/services/plugin-kubernetes]]); CodeQA, Agent, Chat and Help are superseded by Knowledge, the conversation core's function calling and the skills, and stay under `src/old` as history ([[pages/decisions/0038-code-quality-assistant-on-the-write-gate]], 2026-11-06); CloudStatus is still undecided. The GitHub issues that tracked them were deleted on 2026-10-22.
 - [ ] Bot identity: tighten `Scout:Conversation:SystemPrompt` so a local model answers as Scout.
 
 ### Hardening / release

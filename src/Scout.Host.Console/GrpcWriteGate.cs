@@ -12,7 +12,7 @@ namespace Scout.Host.Console;
 /// Any decision other than <c>allowed</c> or <c>queued</c> is a refusal. Messages up to <see cref="MaxMessageBytes"/> go
 /// either way, so a full comments view, 1000 comments of up to 2000 characters each, fits.
 /// </summary>
-internal sealed class GrpcWriteGate : IWriteGate, IDisposable
+internal sealed class GrpcWriteGate : IWriteGate, IApprovedActions, IDisposable
 {
     internal const string RefusedWithoutReason = "The control plane refused this write.";
 
@@ -102,6 +102,16 @@ internal sealed class GrpcWriteGate : IWriteGate, IDisposable
 
         await _client.RecordWriteAsync(request, _headers, DateTime.UtcNow.Add(_deadline), cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public async Task<ApprovedAction?> ClaimNextAsync(string featureId, CancellationToken cancellationToken)
+    {
+        var reply = await _client.NextApprovedActionAsync(
+            new NextApprovedActionRequest { FeatureId = featureId }, _headers, DateTime.UtcNow.Add(_deadline), cancellationToken)
+            .ConfigureAwait(false);
+        return reply.Action is not { } action
+            ? null
+            : new ApprovedAction(action.Id, action.FeatureId, action.Action, action.Target, action.Summary);
     }
 
     public void Dispose() => _channel.Dispose();

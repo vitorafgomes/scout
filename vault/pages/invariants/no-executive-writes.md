@@ -29,7 +29,7 @@ verified_by:
   - "tests/Scout.Plugin.GitHub.Tests/GitHubTokenFileHandlerTests.cs:140"
   - "tests/Scout.Meetings.Tests/SqliteMeetingStoreTests.cs:281"
   - "tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:779"
-  - "tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:25"
+  - "tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:38"
   - "tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24"
   - "tests/Scout.Llm.Tests/Guard/ReadOnlyGuardChatCompletionServiceTests.cs:79"
   - "tests/Scout.Llm.Tests/Guard/ReadOnlyGuardCompositionTests.cs:111"
@@ -84,9 +84,9 @@ Scout answers questions in shared chat channels. A model that can call a mutatin
 
 ## Where it is held
 
-- `src/Scout.Plugin.GitHub/Abstractions/IGitHubClient.cs:7` declares four read methods and no others; the interface comment says no create, merge, push or comment operation exists by design.
-- `src/Scout.Plugin.GitHub/GitHubClient.cs:140` and `:157` are the only HTTP calls, both `GetAsync`.
-- `src/Scout.Plugin.GitHub/GitHubPlugin.cs:29,51,76,101` expose `list_repositories`, `list_pull_requests`, `list_issues`, `get_repository`.
+- `src/Scout.Plugin.GitHub/Abstractions/IGitHubClient.cs:7` declares nine read methods and no others; the two writes live on `IGitHubWriteClient` (`src/Scout.Plugin.GitHub/Abstractions/IGitHubWriteClient.cs:10`, `:14`), called only by the executor for an action the owner approved, and the `github` feature declares them as rows under `WriteClass.Executive` ([[pages/decisions/0038-code-quality-assistant-on-the-write-gate]]; `src/Scout.ControlPlane/Features/FeatureCatalog.cs:77`, `:81`). The model-callable `submit_pull_request_review` and `create_issue` send nothing to GitHub: they save a draft and queue the action (`tests/Scout.Plugin.GitHub.Tests/GitHubTokenFileHandlerTests.cs:216`).
+- `src/Scout.Plugin.GitHub/GitHubClient.cs:140` and `:157` are the only HTTP calls of the read client, both `GetAsync`; the reads part (`src/Scout.Plugin.GitHub/GitHubClient.Reads.cs:12`) goes through them. The write client's two `POST`s (`src/Scout.Plugin.GitHub/GitHubWriteClient.cs:20`, `:34`) are the only non-GETs (`tests/Scout.Plugin.GitHub.Tests/GitHubTokenFileHandlerTests.cs:194`).
+- `src/Scout.Plugin.GitHub/GitHubPlugin.cs:31,53,83,113` expose `list_repositories`, `list_pull_requests`, `list_issues`, `get_repository`; `src/Scout.Plugin.GitHub/GitHubPlugin.Reads.cs:37,75,131,173,219` expose `get_pull_request`, `get_pull_request_file`, `list_pull_request_comments`, `get_issue`, `get_file_contents`, all reads; `tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:38` pins that exactly these nine exist.
 - `src/Scout.Skills/SkillsPlugin.cs:27,40` (`list_skills`, `load_skill`) and `src/Scout.Knowledge/ProjectKnowledgePlugin.cs:26,41,53` (`search_project`, `find_symbol`, `list_projects`) only read.
 - `src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:44` registers nothing when neither a token nor a token file is set.
 - **Request guard, when a TypeSafe key is set** ([[pages/decisions/0016-jev-read-only-guard]]). `src/Scout.Llm/LlmServiceCollectionExtensions.cs:183` replaces the kernel's chat service with `ReadOnlyGuardChatCompletionService`; `src/Scout.Llm/Guard/ReadOnlyGuardChatCompletionService.cs:89` asks TypeSafe's Jev whether the latest user message, read with up to 12 messages before it, asks for a change and, at or above the threshold, returns a refusal without calling the model (`:76` streaming, `:61` non-streaming). It fails open: a TypeSafe error logs a Warning and the request reaches the model (`:123`). With no key it is not registered. Since [[pages/decisions/0032-per-feature-write-permissions]] the refusal applies only while no feature holds a write grant: the desktop passes the granted feature ids as `SCOUT__FEATURES__GRANTEDWRITES` (empty when none), and with any grant the guard lets the request through without calling TypeSafe ([[pages/services/llm]]). Since 2026-11-02 the guard is a pre-filter: the any-grant pass-through and the fail-open above are bounded by the write gate below, which a declared write cannot pass without the control plane's `allowed`. The guard protects function-calling turns; the live translator offers no function (settings with a 400-token cap and no function choice, no kernel), so it has nothing to reach and bypasses the guard on the provider's own chat service (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:173`, `tests/Scout.Llm.Tests/LiveTranslatorTests.cs:116`).
@@ -104,7 +104,7 @@ Scout answers questions in shared chat channels. A model that can call a mutatin
 
 ## How it is verified
 
-- `tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:25` asserts the four expected functions exist. It does not assert that no other function exists, so adding `create_issue` would not fail it.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubPluginMetadataTests.cs:38` asserts exactly the nine read functions exist, so adding `create_issue` fails it until the test names it as a declared write (2026-11-06; until then the metadata test only asserted the four existed).
 - `tests/Scout.Plugin.GitHub.Tests/GitHubServiceCollectionExtensionsTests.cs:24` asserts no token means no plugin and no client.
 - `tests/Scout.Llm.Tests/Guard/ReadOnlyGuardChatCompletionServiceTests.cs:79` asserts that a request Jev scores at 0.9 is refused with the fixed text and the model is never called; `:108` that a request scored 0.1 reaches the model unchanged; `:126` that a TypeSafe 500 still lets the model answer.
 - `tests/Scout.Llm.Tests/Guard/ReadOnlyGuardCompositionTests.cs:99` and `:110` assert that the composed gateway refuses on the direct chat path and on the Project Expert agent path; `tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:260` that every provider's kernel chat service is the guard when a key is set.

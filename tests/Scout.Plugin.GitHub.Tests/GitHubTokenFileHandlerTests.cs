@@ -2,7 +2,10 @@ using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.SemanticKernel;
+using Scout.Conversation.Abstractions;
+using Scout.Llm.Abstractions;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -28,8 +31,14 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
             })
             .Build();
         var services = new ServiceCollection();
+        var gate = new RecordingWriteGate();
+        services.AddSingleton<IWriteGate>(gate);
+        services.AddSingleton<IApprovedActions>(gate);
+        services.AddSingleton(Substitute.For<IOriginNotifier>());
         services.AddGitHubPlugin(config);
         services.AddHttpClient(nameof(IGitHubClient))
+            .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(_requests, r => _respond(r)));
+        services.AddHttpClient(nameof(IGitHubWriteClient))
             .ConfigurePrimaryHttpMessageHandler(() => new RecordingHandler(_requests, r => _respond(r)));
         return services.BuildServiceProvider();
     }
@@ -59,14 +68,14 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
     {
         using var provider = Compose();
 
-        provider.GetServices<KernelPlugin>().ShouldHaveSingleItem().Name.ShouldBe("GitHub");
+        provider.GetServices<KernelPlugin>().Select(p => p.Name).ShouldBe(["GitHub", "GitHubActions"]);
     }
 
     [Fact]
     public async Task A_Missing_Token_File_Answers_Not_Connected_And_Calls_No_One()
     {
         using var provider = Compose();
-        var plugin = provider.GetServices<KernelPlugin>().Single();
+        var plugin = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHub");
 
         var result = await plugin["list_repositories"].InvokeAsync(new Kernel());
 
@@ -142,29 +151,107 @@ public sealed class GitHubTokenFileHandlerTests : IDisposable
         WriteToken("""{"access_token":"ghu_read_only"}""", new DateTime(2026, 10, 23, 12, 0, 0, DateTimeKind.Utc));
         _respond = request => request.RequestUri!.AbsolutePath switch
         {
-            "/repos/octocat/hello-world" => new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new StringContent("""{"full_name":"octocat/hello-world","private":false}"""),
-            },
+            "/repos/octocat/hello-world" => Json("""{"full_name":"octocat/hello-world","private":false}"""),
+            "/repos/octocat/hello-world/pulls/1" => Json("""{"number":1,"title":"t","user":{"login":"a"},"base":{"ref":"main"},"head":{"ref":"f","sha":"abc"}}"""),
+            "/repos/octocat/hello-world/issues/1" => Json("""{"number":1,"title":"t","user":{"login":"a"},"labels":[]}"""),
+            "/repos/octocat/hello-world/contents/README.md" => Json("""{"type":"file","encoding":"base64","size":0,"content":""}"""),
             "/user/repos" or "/repos/octocat/hello-world/pulls" or "/repos/octocat/hello-world/issues"
-                => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]") },
+                or "/repos/octocat/hello-world/pulls/1/files" or "/repos/octocat/hello-world/pulls/1/comments"
+                or "/repos/octocat/hello-world/issues/1/comments" => Json("[]"),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         };
         using var provider = Compose();
-        var plugin = provider.GetServices<KernelPlugin>().Single();
-        var repo = new KernelArguments { ["owner"] = "octocat", ["repo"] = "hello-world" };
+        var plugin = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHub");
+        var arguments = new KernelArguments
+        {
+            ["owner"] = "octocat",
+            ["repo"] = "hello-world",
+            ["number"] = 1,
+            ["path"] = "README.md",
+            ["reference"] = "",
+        };
 
         foreach (var function in plugin)
         {
-            await function.InvokeAsync(new Kernel(), repo);
+            await function.InvokeAsync(new Kernel(), arguments);
         }
 
-        _requests.Select(r => r.Path).ShouldContain("/user/repos");
-        _requests.Select(r => r.Path).ShouldContain("/repos/octocat/hello-world/pulls");
-        _requests.Select(r => r.Path).ShouldContain("/repos/octocat/hello-world/issues");
-        _requests.Select(r => r.Path).ShouldContain("/repos/octocat/hello-world");
+        var paths = _requests.Select(r => r.Path).ToList();
+        paths.ShouldContain("/user/repos");
+        paths.ShouldContain("/repos/octocat/hello-world/pulls");
+        paths.ShouldContain("/repos/octocat/hello-world/issues");
+        paths.ShouldContain("/repos/octocat/hello-world");
+        paths.ShouldContain("/repos/octocat/hello-world/pulls/1");
+        paths.ShouldContain("/repos/octocat/hello-world/pulls/1/files");
+        paths.ShouldContain("/repos/octocat/hello-world/pulls/1/comments");
+        paths.ShouldContain("/repos/octocat/hello-world/issues/1/comments");
+        paths.ShouldContain("/repos/octocat/hello-world/issues/1");
+        paths.ShouldContain("/repos/octocat/hello-world/contents/README.md");
         _requests.ShouldAllBe(r => r.Method == "GET" && r.Host == "api.github.com");
     }
+
+    [Fact]
+    public async Task The_Only_Requests_That_Are_Not_A_Get_Come_From_The_Write_Client_To_Its_Two_Endpoints_With_The_Token_From_The_File()
+    {
+        WriteToken("""{"access_token":"ghu_write"}""", new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc));
+        _respond = request => request.RequestUri!.AbsolutePath switch
+        {
+            "/repos/octocat/hello-world/pulls/1/reviews" => Json("""{"id":1,"html_url":"u"}"""),
+            "/repos/octocat/hello-world/issues" => Json("""{"number":2,"html_url":"u"}"""),
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        };
+        using var provider = Compose();
+        var writes = provider.GetRequiredService<IGitHubWriteClient>();
+
+        await writes.SubmitReviewAsync("octocat", "hello-world", 1, "b", [], CancellationToken.None);
+        await writes.CreateIssueAsync("octocat", "hello-world", "t", "b", [], CancellationToken.None);
+
+        _requests.Select(r => (r.Method, r.Path, r.Authorization)).ShouldBe([
+            ("POST", "/repos/octocat/hello-world/pulls/1/reviews", "Bearer ghu_write"),
+            ("POST", "/repos/octocat/hello-world/issues", "Bearer ghu_write"),
+        ]);
+    }
+
+    [Fact]
+    public async Task The_Two_Write_Functions_Themselves_Send_Nothing_To_GitHub_But_Reads_And_Queue_For_The_Owner()
+    {
+        WriteToken("""{"access_token":"ghu_read_only"}""", new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc));
+        _respond = request => request.RequestUri!.AbsolutePath switch
+        {
+            "/repos/octocat/hello-world/pulls/1/files" => Json("""[{"filename":"a.cs","status":"modified","additions":1,"deletions":0,"patch":"@@ -1 +1 @@\n-x\n+y"}]"""),
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        };
+        using var provider = Compose();
+        var actions = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHubActions");
+        var review = new KernelArguments
+        {
+            ["owner"] = "octocat",
+            ["repo"] = "hello-world",
+            ["number"] = 1,
+            ["body"] = "b",
+            ["comments"] = """[{"path":"a.cs","line":1,"body":"c"}]""",
+        };
+        var issue = new KernelArguments
+        {
+            ["owner"] = "octocat",
+            ["repo"] = "hello-world",
+            ["title"] = "t",
+            ["body"] = "b",
+            ["labels"] = "",
+        };
+
+        var reviewAnswer = (await actions["submit_pull_request_review"].InvokeAsync(new Kernel(), review)).ToString();
+        var issueAnswer = (await actions["create_issue"].InvokeAsync(new Kernel(), issue)).ToString();
+
+        reviewAnswer.ShouldStartWith("Queued for the owner's approval");
+        issueAnswer.ShouldStartWith("Queued for the owner's approval");
+        _requests.ShouldAllBe(r => r.Method == "GET");
+        _requests.Select(r => r.Path).ShouldBe(["/repos/octocat/hello-world/pulls/1/files"]);
+        provider.GetRequiredService<GitHubDraftStore>().Directory.ShouldBe(GitHubServiceCollectionExtensions.DefaultDraftsDirectory());
+    }
+
+    private static HttpResponseMessage Json(string body) =>
+        new(HttpStatusCode.OK) { Content = new StringContent(body) };
 
     private sealed record RecordedRequest(string Method, string Host, string Path, string? Authorization);
 

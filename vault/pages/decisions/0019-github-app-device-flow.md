@@ -1,9 +1,9 @@
 ---
 title: "ADR 0019 - GitHub through a read-only GitHub App and the device flow"
-version: "1.1"
+version: "1.2"
 date: 2026-10-23
-updated: 2026-10-23
-changes: "Amended 2026-10-23: a pasted token as the second method, with a warning for write-capable classic tokens"
+updated: 2026-11-06
+changes: "Amended 2026-11-06: ADR 0038 widens the App to Pull requests and Issues read & write when its phase 2 lands; read-only then rests on the write gate. Amended 2026-10-23: a pasted token as the second method, with a warning for write-capable classic tokens"
 page_type: adr
 status: accepted
 description: "The desktop connects GitHub through a read-only GitHub App with the device flow, or with a token the owner pastes; one credential at a time, held by main."
@@ -28,6 +28,8 @@ reliability: high
 - [ ] Deprecated / superseded
 
 Updated: 2026-10-23.
+
+> **Amended 2026-11-06 by [[pages/decisions/0038-code-quality-assistant-on-the-write-gate]]:** when its phase 2 lands, the App's repository permissions become Pull requests: read & write and Issues: read & write (Metadata and Contents stay read-only), so the device-flow token can post a review and open an issue. "Scout never writes to GitHub" then becomes "Scout writes to GitHub only through declared functions the owner granted and approved"; the GET-only enforcement below becomes "every non-GET comes from a declared write function". The sign-in, custody, refresh and the pasted-token method are unchanged.
 
 ## Context
 

@@ -1,5 +1,6 @@
 using Grpc.Core;
 using Scout.ControlPlane.Contracts;
+using Scout.ControlPlane.Features;
 using Scout.ControlPlane.Operator;
 using Scout.ControlPlane.WriteGate;
 using WireMandate = Scout.ControlPlane.Contracts.Mandate;
@@ -136,8 +137,19 @@ public sealed class WorkerGateGrpcService : WorkerGate.WorkerGateBase
         NextApprovedActionRequest request,
         ServerCallContext context)
     {
-        var action = await _operator.NextApprovedActionAsync(context.CancellationToken).ConfigureAwait(false);
         var response = new NextApprovedActionResponse();
+        if (!string.IsNullOrWhiteSpace(request.FeatureId) && !string.Equals(request.FeatureId, FeatureCatalog.YouTubeId, StringComparison.Ordinal))
+        {
+            var claimed = await _gate.ClaimNextApprovedAsync(request.FeatureId, context.CancellationToken).ConfigureAwait(false);
+            if (claimed is not null)
+            {
+                response.Action = FeatureMapping.ToWire(claimed);
+            }
+
+            return response;
+        }
+
+        var action = await _operator.NextApprovedActionAsync(context.CancellationToken).ConfigureAwait(false);
         if (action is not null)
         {
             response.Action = FeatureMapping.ToWire(action);

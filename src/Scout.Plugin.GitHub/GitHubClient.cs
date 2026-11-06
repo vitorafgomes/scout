@@ -11,7 +11,7 @@ namespace Scout.Plugin.GitHub;
 /// Non-success responses become a user-safe <see cref="GitHubApiException"/>;
 /// timeouts and transport faults bubble unchanged.
 /// </summary>
-internal sealed class GitHubClient(HttpClient http) : IGitHubClient
+internal sealed partial class GitHubClient(HttpClient http) : IGitHubClient
 {
     private readonly HttpClient _http = http ?? throw new ArgumentNullException(nameof(http));
 
@@ -109,21 +109,28 @@ internal sealed class GitHubClient(HttpClient http) : IGitHubClient
             return null;
         }
 
-        // GitHub returns base64 content with embedded newlines; strip them
-        // before decoding to UTF-8, then truncate to keep the LLM context small.
-        var raw = readme.Content.Replace("\n", string.Empty).Replace("\r", string.Empty);
-        string text;
-        try
-        {
-            text = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(raw));
-        }
-        catch (FormatException)
+        var text = DecodeBase64Content(readme.Content);
+        if (text is null)
         {
             return null;
         }
 
         const int maxLength = 2000;
         return text.Length <= maxLength ? text : text[..maxLength];
+    }
+
+    /// <summary>GitHub returns base64 with embedded newlines; strip them, then decode as UTF-8. Null when the text is not base64.</summary>
+    private static string? DecodeBase64Content(string content)
+    {
+        var raw = content.Replace("\n", string.Empty).Replace("\r", string.Empty);
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(raw));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     private static string? NullIfBlank(string? value)
@@ -166,7 +173,7 @@ internal sealed class GitHubClient(HttpClient http) : IGitHubClient
             "GitHub returned an unexpected empty response.");
     }
 
-    private static GitHubApiException ToApiException(HttpResponseMessage response)
+    internal static GitHubApiException ToApiException(HttpResponseMessage response)
     {
         var status = response.StatusCode;
         switch (status)

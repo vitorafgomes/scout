@@ -96,8 +96,9 @@ const POLL_MS = 3000;
           </button>
           @if (tokenFormOpen()) {
             <p class="help" data-test="github-token-help">
-              Recommended: a fine-grained token with read-only access (Metadata, Contents, Pull
-              requests, Issues) to the repositories Scout should see.
+              Recommended: a fine-grained token with read access to Metadata and Contents and to
+              Pull requests and Issues, read &amp; write on those two only if you will allow Scout to
+              post reviews and open issues, for the repositories Scout should see.
             </p>
             <button
               type="button"

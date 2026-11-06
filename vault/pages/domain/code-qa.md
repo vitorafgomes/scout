@@ -2,8 +2,8 @@
 title: "`Plugin.CodeQA`"
 version: "1.1"
 date: 2026-04-21
-updated: 2026-10-22
-changes: "Archived: describes the retired first cut under src/old"
+updated: 2026-11-06
+changes: "Superseded by ADR 0038 and Knowledge on 2026-11-06. Archived: describes the retired first cut under src/old"
 page_type: knowledge
 status: archived
 description: "Read-only code Q&A plugin. Answers natural-language questions about a configured GitHub repository using retrieval-augmented generation (RAG)."
@@ -14,7 +14,7 @@ reliability: medium
 
 # `Plugin.CodeQA`
 
-> **Archived 2026-10-22.** This page describes `Scout.Plugin.CodeQA` from the retired first cut, which lives under `src/old/` and is not built. Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record.
+> **Archived 2026-10-22.** This page describes `Scout.Plugin.CodeQA` from the retired first cut, which lives under `src/old/` and is not built. Nothing in the current solution implements it; rebuilding it on Semantic Kernel is a backlog item in [[pages/architecture/restructure-architecture]]. Kept as the design record. **Superseded 2026-11-06:** [[pages/decisions/0038-code-quality-assistant-on-the-write-gate]] decided it is not rebuilt; [[pages/services/knowledge]] indexes repositories and answers the questions this plugin answered, and the code quality assistant ([[pages/roadmap/code-quality-assistant]]) reads pull requests through [[pages/services/plugin-github]].
 
 Read-only code Q&A plugin. Answers natural-language questions about a
 configured GitHub repository using retrieval-augmented generation (RAG).

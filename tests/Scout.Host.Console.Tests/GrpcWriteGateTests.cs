@@ -55,6 +55,30 @@ public sealed class GrpcWriteGateTests
     }
 
     [Fact]
+    public async Task A_Feature_Claims_Its_Next_Approved_Action_By_Name_And_Reads_It_Back()
+    {
+        var service = new FakeWorkerGate
+        {
+            ActionReply = new NextApprovedActionResponse
+            {
+                Action = new PendingAction { Id = "act-7", FeatureId = "github", Action = "New issues", Target = "o/r", Summary = "Open an issue on o/r: t" },
+            },
+        };
+        var empty = new FakeWorkerGate();
+        await using var server = await WorkerGateServer.StartAsync(service);
+        await using var emptyServer = await WorkerGateServer.StartAsync(empty);
+        using var gate = new GrpcWriteGate(server.SocketPath, Token);
+        using var emptyGate = new GrpcWriteGate(emptyServer.SocketPath, Token);
+
+        var claimed = await gate.ClaimNextAsync("github", CancellationToken.None);
+        var none = await emptyGate.ClaimNextAsync("github", CancellationToken.None);
+
+        claimed.ShouldBe(new ApprovedAction("act-7", "github", "New issues", "o/r", "Open an issue on o/r: t"));
+        service.ClaimRequest.ShouldNotBeNull().FeatureId.ShouldBe("github");
+        none.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task The_Request_Reaches_The_Control_Plane_With_The_Write_And_The_Bearer_Token()
     {
         var service = new FakeWorkerGate { Reply = new RequestWriteResponse { Decision = "allowed" } };
@@ -217,6 +241,8 @@ public sealed class GrpcWriteGateTests
             return Reply;
         }
 
+        public NextApprovedActionRequest? ClaimRequest { get; private set; }
+
         public override Task<RecordWriteResponse> RecordWrite(RecordWriteRequest request, ServerCallContext context)
         {
             if (OperatorFailure is not null)
@@ -301,6 +327,7 @@ public sealed class GrpcWriteGateTests
         public override Task<NextApprovedActionResponse> NextApprovedAction(NextApprovedActionRequest request, ServerCallContext context)
         {
             Authorizations.Add(context.RequestHeaders.GetValue("authorization"));
+            ClaimRequest = request;
             return OperatorFailure is null ? Task.FromResult(ActionReply) : throw OperatorFailure;
         }
 

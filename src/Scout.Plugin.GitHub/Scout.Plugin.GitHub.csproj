@@ -11,8 +11,12 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.SemanticKernel" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Scout.Conversation\Scout.Conversation.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Scout.Plugin.GitHub.Tests" />
