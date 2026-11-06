@@ -595,6 +595,19 @@ describe('Quick ask', () => {
     expect(controls.map(region)).toEqual(controls.map(() => 'no-drag'));
   });
 
+  it('the question field sits under the turns, so the conversation reads top to bottom into it', async () => {
+    const fixture = await render(makeBridge());
+
+    const main = fixture.nativeElement.querySelector('main') as HTMLElement;
+    const children = Array.from(main.children);
+
+    expect(children[0]).toBe(el(fixture, 'grip'));
+    expect(children.indexOf(el(fixture, 'turns')!)).toBeLessThan(
+      children.indexOf(main.querySelector('form')!),
+    );
+    expect(children[children.length - 1]).toBe(main.querySelector('form'));
+  });
+
   it('hides the window on Escape', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge);
