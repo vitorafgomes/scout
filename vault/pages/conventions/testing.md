@@ -59,7 +59,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
 | `Scout.Meetings.Tests` | 12 | [[pages/services/meetings]] |
 
-`tests/old` holds 653 further attributes for the retired code under `src/old`. It is not in `Scout.slnx`, so CI does not build or run it. Exclude it from any count.
+`tests/old`, the 653 test attributes of the retired first cut, was deleted with it on 2026-11-06; both are in the history before `93da0d4`.
 
 ## Patterns in use
 

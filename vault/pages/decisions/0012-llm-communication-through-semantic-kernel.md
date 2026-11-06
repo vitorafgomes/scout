@@ -146,7 +146,7 @@ split.
 ## References
 
 - First project of the restructure: `src/Scout.Llm` (branch
-  `feat/scout-llm-gateway`); old tree frozen under `src/old/`.
+  `feat/scout-llm-gateway`); old tree frozen under `src/old/` until 2026-11-06, now in the history before `93da0d4`.
 - Supersedes the throwaway-kernel registration hack noted in
   [[pages/decisions/0010-scout-host-kernel-accessor]].
 - Related invariant: [[pages/decisions/0009-descriptive-vs-executive-writes]].

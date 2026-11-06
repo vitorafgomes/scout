@@ -355,7 +355,7 @@ reliability: medium
 
 ### Kubernetes pod logs: owner decision (2026-10-23)
 
-- **Blocker:** an owner decision. The Kubernetes plugin has no log function ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]) because chat output is posted to a shared channel and logs routinely carry credentials and personal data. The retired plugin had `get_pod_logs` with a tail clamp (`src/old/Scout.Plugin.Kubernetes/KubernetesFunctions.cs:125`).
+- **Blocker:** an owner decision. The Kubernetes plugin has no log function ([[pages/decisions/0020-kubernetes-from-local-kubeconfig]]) because chat output is posted to a shared channel and logs routinely carry credentials and personal data. The retired plugin had `get_pod_logs` with a tail clamp (`KubernetesFunctions.cs` of the first cut, in the history before `93da0d4`).
 - **Unblocks when:** the owner decides whether logs may reach a shared channel, and with what redaction or limit; then one GET function and its own consent line on the card.
 
 ### Merged multi-file `KUBECONFIG` (2026-10-23)

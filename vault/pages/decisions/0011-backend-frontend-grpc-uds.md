@@ -156,4 +156,4 @@ the `ui/` rewiring remain a follow-on phase**.
 - Streaming-first mandate: feedback-scout-streaming-first (private note).
 - LLM transport decision: [[pages/decisions/0012-llm-communication-through-semantic-kernel]].
 - Replaces the loopback-HTTP + SSE + hand-written `ipc-contract.ts` approach
-  from the archived `Scout.Host.Worker` (frozen under `src/old/`).
+  from the archived `Scout.Host.Worker` (frozen under `src/old/` until 2026-11-06, now in the history before `93da0d4`).

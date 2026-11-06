@@ -6,7 +6,7 @@ updated: 2026-11-02
 changes: "Backlog re-verified against main on 2026-10-22"
 page_type: longform
 status: active
-description: "Living overview of the ground-up restructure on branch feat/scout-llm-gateway. The previous source tree is archived under src/old/ (frozen reference, not built)."
+description: "Living overview of the ground-up restructure on branch feat/scout-llm-gateway. The previous source tree was archived under src/old/ until 2026-11-06 and lives in the git history."
 source:
   - "obsidian-vault/scout/02-architecture/restructure-architecture.md"
 reliability: medium
@@ -15,7 +15,7 @@ reliability: medium
 # Scout Restructure - Architecture, Status and Backlog
 
 Living overview of the ground-up restructure on branch `feat/scout-llm-gateway`.
-The previous source tree is archived under `src/old/` (frozen reference, not
+The previous source tree was archived under `src/old/` (frozen reference, not
 built). All LLM communication goes through Semantic Kernel; everything is
 streaming-first.
 
@@ -108,7 +108,7 @@ Open as of 2026-10-22. Small deferrals with a known unblock live in [[pages/road
 - [ ] Teams onboarding form (app id / password / tenant); live webhook hosting stays out of this repository.
 
 ### Chatops capability
-- [x] Decide the retired plugins' fate (CloudStatus, CodeQA, Kubernetes, Help under `src/old`): Kubernetes was rebuilt ([[pages/services/plugin-kubernetes]]); CodeQA, Agent, Chat and Help are superseded by Knowledge, the conversation core's function calling and the skills, and stay under `src/old` as history ([[pages/decisions/0038-code-quality-assistant-on-the-write-gate]], 2026-11-06); CloudStatus is still undecided. The GitHub issues that tracked them were deleted on 2026-10-22.
+- [x] Decide the retired plugins' fate (CloudStatus, CodeQA, Kubernetes, Help under `src/old`): Kubernetes was rebuilt ([[pages/services/plugin-kubernetes]]); CodeQA, Agent, Chat and Help are superseded by Knowledge, the conversation core's function calling and the skills ([[pages/decisions/0038-code-quality-assistant-on-the-write-gate]], 2026-11-06). On the owner's word the same day ("se tiver algo no old que nao e' mais necessario, pode deletar") the whole `src/old` and `tests/old` tree was deleted; it is in the history before `93da0d4`. CloudStatus keeps its design record in [[pages/domain/cloud-status]]; rebuilding it is a separate decision. The GitHub issues that tracked them were deleted on 2026-10-22.
 - [ ] Bot identity: tighten `Scout:Conversation:SystemPrompt` so a local model answers as Scout.
 
 ### Hardening / release
