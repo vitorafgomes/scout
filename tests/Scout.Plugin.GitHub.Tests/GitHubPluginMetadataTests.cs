@@ -29,6 +29,7 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_repository_files")]
     [InlineData("search_code")]
     [InlineData("present_review_findings")]
+    [InlineData("present_audit_findings")]
     public void Exposes_Expected_Function(string functionName)
     {
         var plugin = BuildPlugin();
@@ -37,11 +38,11 @@ public sealed class GitHubPluginMetadataTests
     }
 
     [Fact]
-    public void Exposes_Exactly_The_Twelve_Read_Functions() =>
+    public void Exposes_Exactly_The_Thirteen_Read_Functions() =>
         BuildPlugin().Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal).ShouldBe([
             "get_file_contents", "get_issue", "get_pull_request", "get_pull_request_file", "get_repository",
             "list_issues", "list_pull_request_comments", "list_pull_requests", "list_repositories", "list_repository_files",
-            "present_review_findings", "search_code",
+            "present_audit_findings", "present_review_findings", "search_code",
         ]);
 
     [Theory]
@@ -57,6 +58,7 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("list_repository_files")]
     [InlineData("search_code")]
     [InlineData("present_review_findings")]
+    [InlineData("present_audit_findings")]
     public void Function_Has_NonEmpty_Description(string functionName)
     {
         var plugin = BuildPlugin();
@@ -108,6 +110,12 @@ public sealed class GitHubPluginMetadataTests
     [InlineData("present_review_findings", "findings_json")]
     [InlineData("present_review_findings", "commit")]
     [InlineData("present_review_findings", "read")]
+    [InlineData("present_audit_findings", "repository")]
+    [InlineData("present_audit_findings", "verdict")]
+    [InlineData("present_audit_findings", "findings_json")]
+    [InlineData("present_audit_findings", "commit")]
+    [InlineData("present_audit_findings", "read")]
+    [InlineData("present_audit_findings", "known_json")]
     public void Single_Item_Function_Describes_Its_Selector(string functionName, string parameter)
     {
         var plugin = BuildPlugin();

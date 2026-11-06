@@ -6,7 +6,7 @@ using Scout.Llm.Abstractions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// The review's findings handed to Scout as data, so the reply ends with the block the desktop renders as cards
+/// A review's or an audit's findings handed to Scout as data, so the reply ends with the block the desktop renders as cards
 /// whatever the model writes around it. Nothing leaves the process and nothing is written.
 /// </summary>
 internal sealed partial class GitHubPlugin
@@ -21,7 +21,7 @@ internal sealed partial class GitHubPlugin
     /// <param name="repository">The repository as owner/repo.</param>
     /// <param name="number">Pull request number.</param>
     /// <param name="verdict">The one-line verdict.</param>
-    /// <param name="findings_json">JSON array of findings: id, severity, title, path, line, context, why, fix.</param>
+    /// <param name="findings_json">JSON array of findings: id, severity, title, path, line, context, why, fix, rule.</param>
     /// <param name="commit">The head commit reviewed, when known.</param>
     /// <param name="read">What was read, e.g. "6 of 6 files read".</param>
     /// <returns>How many findings were recorded and what to write next, or the first problem with them.</returns>
@@ -31,11 +31,33 @@ internal sealed partial class GitHubPlugin
         [Description("The repository as owner/repo, e.g. octocat/hello-world.")] string repository,
         [Description("Pull request number, e.g. 42.")] int number,
         [Description("The one-line verdict: ready to merge, ready after the blocking findings, or needs rework.")] string verdict,
-        [Description("""JSON array of 1 to 50 findings, e.g. [{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum."}]; severity is block, fix or nit; id is a short slug unique in the list; path and line are the file and the line after the change as the diff shows it; context is empty or where the finding comes from.""")] string findings_json,
+        [Description("""JSON array of 1 to 50 findings, e.g. [{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum."}]; severity is block, fix or nit; id is a short slug unique in the list; path and line are the file and the line after the change as the diff shows it; context is empty or where the finding comes from; rule is optional, the project rule, ADR or convention the finding departs from, 1 to 300 characters.""")] string findings_json,
         [Description("The head commit reviewed, e.g. ec7f951; empty when unknown.")] string? commit = null,
-        [Description("What was read, e.g. 6 of 6 files read.")] string? read = null)
+        [Description("What was read, e.g. 6 of 6 files read.")] string? read = null) =>
+        Present(ReviewFindings.Parse(repository, number, commit, verdict, read, findings_json));
+
+    /// <summary>Record a whole-project audit's findings for the end of this turn's reply.</summary>
+    /// <param name="repository">The repository as owner/repo.</param>
+    /// <param name="verdict">The one-line verdict.</param>
+    /// <param name="findings_json">JSON array of findings: id, severity, title, path, line, context, why, fix, rule.</param>
+    /// <param name="commit">The commit audited, when known.</param>
+    /// <param name="read">What was read, e.g. "the whole repository".</param>
+    /// <param name="known_json">JSON array of the limitations the project already documents.</param>
+    /// <returns>How many findings were recorded and what to write next, or the first problem with them.</returns>
+    [KernelFunction("present_audit_findings")]
+    [Description("Record the findings of a whole-project audit so Scout shows them as cards the user decides on one by one, each one an issue the user may open. Call it once, before the final answer, with every finding the audit reports; a second call replaces the first. Never write a scout-findings block yourself. Nothing is posted to GitHub.")]
+    public static string PresentAuditFindings(
+        [Description("The repository as owner/repo, e.g. octocat/hello-world.")] string repository,
+        [Description("The one-line verdict: sound, sound after the High findings, or needs rework.")] string verdict,
+        [Description("""JSON array of 1 to 50 findings, e.g. [{"id":"swallow","severity":"block","title":"Gateway errors read as no orders","path":"src/orders/Gateway.cs","line":12,"context":"","why":"The catch returns an empty list, so an outage reads as no orders.","fix":"Let it fail, or return a result that says the call failed.","rule":"Defect"}]; severity is block for High, fix for Medium, nit for Low; id is a short slug unique in the list; path and line are the file and the line; context is empty or where the finding comes from; rule is the project rule, ADR, convention or requirement the finding departs from, or the word Defect, 1 to 300 characters.""")] string findings_json,
+        [Description("The commit audited, e.g. ec7f951; empty when unknown.")] string? commit = null,
+        [Description("What was read, e.g. the whole repository, or src/orders and its tests.")] string? read = null,
+        [Description("""JSON array of at most 20 limitations the project already documents, each 1 to 300 characters, e.g. ["No paging on the orders list, noted in the README."]; shown as a note under the cards, never as findings; empty when none.""")] string? known_json = null) =>
+        Present(ReviewFindings.ParseAudit(repository, commit, verdict, read, findings_json, known_json));
+
+    private static string Present((ReviewFindings? Findings, string? Problem) parsed)
     {
-        var (findings, problem) = ReviewFindings.Parse(repository, number, commit, verdict, read, findings_json);
+        var (findings, problem) = parsed;
         if (findings is null)
         {
             return problem!;

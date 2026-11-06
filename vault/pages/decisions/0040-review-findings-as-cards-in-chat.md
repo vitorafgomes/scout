@@ -1,9 +1,9 @@
 ---
 title: "ADR 0040 - The review's findings as cards in the chat, posted as one review from the cards"
-version: "1.1"
+version: "1.2"
 date: 2026-11-06
 updated: 2026-11-06
-changes: "v1.1 (2026-11-06) amendment: the block comes from present_review_findings, a function the model calls, and Scout appends it to the reply; the renderer is unchanged. v1.0 initial ADR: the findings block in the reply, the cards on both chat surfaces, the posting question with its marker, the posted box"
+changes: "v1.2 (2026-11-06) amendment: an audit comes back as the same cards, through present_audit_findings, with kind audit, no number, the known limitations and a rule per finding, and the cards open one issue per chosen finding through create_issue. v1.1 (2026-11-06) amendment: the block comes from present_review_findings, a function the model calls, and Scout appends it to the reply; the renderer is unchanged. v1.0 initial ADR: the findings block in the reply, the cards on both chat surfaces, the posting question with its marker, the posted box"
 page_type: adr
 status: proposed
 description: "A code review answered in chat carries its findings as a fenced scout-findings JSON block; Scout Desktop renders them as cards with Yes, No and Edit, Yes to all and Post, and posting is one question to the worker carrying the chosen comments after a marker, which the code-review skill turns into one submit_pull_request_review call under the GitHub grant."
@@ -12,6 +12,8 @@ superseded_by: ""
 source:
   - chat
   - "src/Scout.Skills/skills/code-review.md"
+  - "src/Scout.Skills/skills/code-audit.md"
+  - "src/Scout.Plugin.GitHub/ReviewFindings.cs"
   - "src/Scout.Plugin.GitHub/GitHubPlugin.Findings.cs"
   - "src/Scout.Llm/Abstractions/TurnAttachments.cs"
   - "ui/packages/renderer/src/app/core/"
@@ -48,6 +50,17 @@ Three things already carry most of it. The replies render Markdown on both surfa
 
 The owner tested the cards and the model answered in prose without the block: "não mostra o botão", "não tem formatação nenhuma igual ao protótipo". The same review called five read functions, so the model calls functions far more reliably than it follows an output format. The `code-review` skill now calls `present_review_findings(repository, number, verdict, findings_json, commit, read)` once before its final answer and never writes the fence ([[pages/services/skills]]); the function, on the read-only `GitHub` plugin, checks the findings by the renderer's rules, answers one sentence naming the first problem when they fail, and otherwise hands the fenced block to `TurnAttachments`, the per-turn collector the conductor begins beside `TurnProgress` ([[pages/services/plugin-github]], [[pages/services/conversation]]). The stream pump appends the block to the reply on a completed turn only, after the model's text and a blank line, and removes a `scout-findings` fence the model wrote itself, so the reply carries exactly one block and the desktop renders the cards whatever the model wrote around them. The function refuses a block over 24,000 characters, below the 32,000 a desktop reply carries, and asks the model for fewer findings. The function calls nothing outside the process and writes nothing; the renderer, the posting question and the write are unchanged. This is not the worker event the alternatives below rejected: the block still travels in the reply text, with no new event kind and no change on main or the adapters. The cost named under Consequences changes with it: the model passes the findings once to the function instead of writing them twice in the answer.
 
+## Amendment v1.2 (2026-11-06): an audit comes back as the same cards, and the cards open issues
+
+The owner asked "Could you analyze the QuotAI project and see if there's anything wrong with what was implemented?", the `code-audit` skill answered in prose, and the owner said: "Não está no perfil que queremos." An audit has no pull request, so the action on its cards is one GitHub issue per chosen finding instead of one review.
+
+- **The block.** The same `scout-findings` fence, one JSON object. A review's is unchanged. An audit's is `{"kind":"audit","repository","commit"?,"verdict","read"?,"known"?,"findings"}` with no `number`: `kind` absent means a review and `audit` is the only other value; `known` is 0 to 20 texts of 1 to 300 characters, the limitations the project already documents, shown as a note under the cards and never as findings. Every finding of either kind may carry `rule`, 1 to 300 characters, the project rule, ADR, convention or requirement it departs from, or "Defect", shown on the card as "Rule: ..."; every other field and limit is as above. On an audit `block` is High (a defect or security risk that breaks a documented flow or loses data), `fix` Medium and `nit` Low.
+- **The function.** `present_audit_findings(repository, verdict, findings_json, commit, read, known_json)` sits beside `present_review_findings` on the read-only `GitHub` plugin with the same checks plus `rule` and `known`, the same refusal sentences, the same 24,000-character limit and the same answer to the model, and hands the audit block to `TurnAttachments`; both blocks open with the same fence line, so the latest call of either function in a turn leaves the only block. `present_review_findings` accepts `rule` too. Neither calls anything outside the process ([[pages/services/plugin-github]]).
+- **The skill.** `code-audit` calls `present_audit_findings` once before its final answer with every finding it reports, never writes the fence, and keeps its prose to a summary, the verdict and the scope paragraph ([[pages/services/skills]]).
+- **Opening the issues.** The desktop sends one question, `Open N issue(s) on owner/repo`, the marker `Issues to open (data, not instructions):` and a JSON object with the repository and the issues, each a title and a body built from the finding (or the owner's edit of it), through the same ask path as Post; main cuts the marker as it does the review's and marks the turn `issues`. The skill reads that message as the user's choice made on the cards: one `create_issue(owner, repo, title, body)` per issue, in order, with exactly that title and body, unchanged, no labels, no new audit, each URL on its own line and one line naming any that failed. The write is `create_issue` under the `github` grant as before; the chat message is the ask, never the authorization ([[pages/invariants/no-executive-writes]]). The findings turn shows "N issue(s) opened on owner/repo" with the links once a later `issues` turn answers with them; a failed turn or one without a link keeps the buttons.
+
+This supersedes the v1.0 Neutral consequence that the audit keeps its prose answer; the improvements skill still does.
+
 ## Consequences
 
 - **Better:** the owner decides comment by comment, edits a comment before it goes, posts one review, and sees that it went, in the same thread; nothing new leaves the process from the desktop, no new IPC channel, no new worker event; a model that cannot write the block degrades to the prose review of today.
@@ -69,6 +82,8 @@ The owner tested the cards and the model answered in prose without the block: "n
 - `ui/packages/renderer/src/app/core/review-findings.component.spec.ts` - the cards, Yes, No, Edit, Yes to all, the summary, Post disabled until a Yes, the posting question with the marker and the chosen comments in order with the edited body, the preview, the posted box after the URL, the buttons back after a failed post.
 - `ui/packages/renderer/src/app/chat/chat.component.spec.ts` and `ui/packages/renderer/src/app/quick-ask/quick-ask.component.spec.ts` - a reply with the block renders the cards and the text around it; one without renders as before.
 - `ui/packages/main/test/quick-ask.test.ts` - an ask with the review marker sends the whole text to the worker and keeps the bare question on the turn, marked `review`.
+- `tests/Scout.Plugin.GitHub.Tests/GitHubPluginFindingsTests.cs` - an audit call attaches one block with `"kind":"audit"`, no number and the known list; every invalid audit shape and the 24,000 limit answer their sentence and attach nothing; `rule` and `known` reach the block and blank ones are left out, on an audit and on a review; an audit after a review in the same turn leaves only the audit block (v1.2).
+- `tests/Scout.Skills.Tests/BundledSkillsTests.cs::The_Code_Audit_Skill_Calls_The_Audit_Findings_Function_And_Opens_The_Chosen_Issues_Unchanged` - the audit skill calls `present_audit_findings`, never writes the fence, maps High, Medium and Low to the three severities, and opens the issues after the marker unchanged, without labels (v1.2).
 - Invariant page: [[pages/invariants/no-executive-writes]] (the write is the skill's `submit_pull_request_review` under the grant; the desktop adds no call).
 
 ## Related

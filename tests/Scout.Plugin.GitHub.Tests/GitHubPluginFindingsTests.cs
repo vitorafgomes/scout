@@ -173,4 +173,147 @@ public sealed partial class GitHubPluginFindingsTests
         review.GetProperty("verdict").GetString().ShouldBe("ready after the fix");
         review.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("id").GetString()).ShouldBe(["only"]);
     }
+
+    private static async Task<string> AuditAsync(
+        string findings, string repository = "octocat/hello", string verdict = "needs rework", string? commit = "ec7f951", string? read = "the whole repository", string? known = null)
+    {
+        var plugin = KernelPluginFactory.CreateFromObject(new GitHubPlugin(Substitute.For<IGitHubClient>()), "GitHub");
+        var arguments = new KernelArguments
+        {
+            ["repository"] = repository,
+            ["verdict"] = verdict,
+            ["findings_json"] = findings,
+        };
+        if (commit is not null)
+        {
+            arguments["commit"] = commit;
+        }
+
+        if (read is not null)
+        {
+            arguments["read"] = read;
+        }
+
+        if (known is not null)
+        {
+            arguments["known_json"] = known;
+        }
+
+        var result = await plugin["present_audit_findings"].InvokeAsync(new Kernel(), arguments);
+        return result.GetValue<string>()!;
+    }
+
+    [Fact]
+    public async Task An_Audit_Call_Attaches_One_Audit_Block_Without_A_Number_And_Answers_The_Recorded_Sentence()
+    {
+        using var turn = TurnAttachments.Begin();
+
+        var answer = await AuditAsync(TwoFindings, known: """["No paging on the orders list, noted in the README."]""");
+
+        answer.ShouldBe(Recorded);
+        var block = TurnAttachments.Take().ShouldHaveSingleItem();
+        block.ShouldStartWith("```scout-findings\n{\"kind\":\"audit\",\"repository\":\"octocat/hello\",");
+        var audit = Review(block);
+        audit.GetProperty("kind").GetString().ShouldBe("audit");
+        audit.TryGetProperty("number", out _).ShouldBeFalse();
+        audit.GetProperty("repository").GetString().ShouldBe("octocat/hello");
+        audit.GetProperty("commit").GetString().ShouldBe("ec7f951");
+        audit.GetProperty("verdict").GetString().ShouldBe("needs rework");
+        audit.GetProperty("read").GetString().ShouldBe("the whole repository");
+        audit.TryGetProperty("known", out var known).ShouldBeTrue();
+        known.EnumerateArray().Select(k => k.GetString()).ShouldBe(["No paging on the orders list, noted in the README."]);
+        var findings = audit.GetProperty("findings").EnumerateArray().ToArray();
+        findings.Select(f => f.GetProperty("id").GetString()).ShouldBe(["total", "swallow"]);
+        findings.Select(f => f.GetProperty("severity").GetString()).ShouldBe(["block", "nit"]);
+        findings.Select(f => f.GetProperty("path").GetString()).ShouldBe(["src/orders/Checkout.cs", "src/orders/Gateway.cs"]);
+        findings.Select(f => f.GetProperty("line").GetInt32()).ShouldBe([88, 12]);
+        findings.Select(f => f.GetProperty("fix").GetString()).ShouldBe(["Apply the discounts before the sum.", "Let it fail."]);
+    }
+
+    public static TheoryData<string, string, string, string?, string> InvalidAuditShapes()
+    {
+        const string Valid = """{"id":"a","severity":"fix","title":"T","path":"src/a.cs","line":3,"why":"W","fix":"F"}""";
+        static string WithRule(string rule) => "[" + Valid.Replace("}", ",\"rule\":" + rule + "}", StringComparison.Ordinal) + "]";
+        static string Known(int count, int length) =>
+            JsonSerializer.Serialize(Enumerable.Range(1, count).Select(i => new string('k', length)).ToArray());
+
+        var tooLong = "[" + string.Join(",", Enumerable.Range(1, 16).Select(i =>
+            $$"""{"id":"f{{i}}","severity":"fix","title":"T","path":"src/a.cs","line":{{i}},"why":"{{new string('w', 1_500)}}","fix":"F"}""")) + "]";
+        return new()
+        {
+            { "octocat", "ok", $"[{Valid}]", null, ReviewFindings.InvalidRepository },
+            { "octocat/hello", " ", $"[{Valid}]", null, ReviewFindings.InvalidVerdict },
+            { "octocat/hello", "ok", "[]", null, ReviewFindings.InvalidFindings },
+            { "octocat/hello", "ok", Valid, null, ReviewFindings.InvalidFindings },
+            { "octocat/hello", "ok", $"[{Valid},{Valid}]", null, "Finding 2 repeats the id a; each id must be unique." },
+            { "octocat/hello", "ok", "[" + Valid.Replace("\"fix\"", "\"major\"", StringComparison.Ordinal) + "]", null, "Finding 1 needs a severity of block, fix or nit." },
+            { "octocat/hello", "ok", "[" + Valid.Replace("src/a.cs", "../a.cs", StringComparison.Ordinal) + "]", null, "Finding 1 needs a path relative to the repository root, without a leading slash or '..'." },
+            { "octocat/hello", "ok", WithRule("\"" + new string('r', 301) + "\""), null, "Finding 1 needs a rule of 1 to 300 characters, or none." },
+            { "octocat/hello", "ok", WithRule("7"), null, "Finding 1 needs a rule of 1 to 300 characters, or none." },
+            { "octocat/hello", "ok", $"[{Valid}]", Known(21, 10), ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", $"[{Valid}]", Known(1, 301), ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", $"[{Valid}]", "[\" \"]", ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", $"[{Valid}]", "[7]", ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", $"[{Valid}]", "\"one limitation\"", ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", $"[{Valid}]", "not json", ReviewFindings.InvalidKnown },
+            { "octocat/hello", "ok", tooLong, null, GitHubPlugin.FindingsTooLong },
+        };
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidAuditShapes))]
+    public async Task Each_Invalid_Audit_Shape_Answers_Its_Sentence_And_Attaches_Nothing(
+        string repository, string verdict, string findings, string? known, string sentence)
+    {
+        using var turn = TurnAttachments.Begin();
+
+        var answer = await AuditAsync(findings, repository, verdict, known: known);
+
+        answer.ShouldBe(sentence);
+        TurnAttachments.Take().ShouldBeEmpty();
+    }
+
+    private static string?[] Rules(JsonElement block) =>
+        block.GetProperty("findings").EnumerateArray().Select(f => f.TryGetProperty("rule", out var rule) ? rule.GetString() : null).ToArray();
+
+    [Fact]
+    public async Task Rule_And_Known_Reach_The_Block_And_Absent_Ones_Are_Left_Out()
+    {
+        using var turn = TurnAttachments.Begin();
+        const string Ruled = """
+            [{"id":"a","severity":"fix","title":"T","path":"src/a.cs","line":3,"why":"W","fix":"F","rule":" ADR 0007: errors are results "},
+             {"id":"b","severity":"nit","title":"T","path":"src/b.cs","line":4,"why":"W","fix":"F","rule":"  "},
+             {"id":"c","severity":"nit","title":"T","path":"src/c.cs","line":5,"why":"W","fix":"F","rule":null},
+             {"id":"d","severity":"nit","title":"T","path":"src/d.cs","line":6,"why":"W","fix":"F"}]
+            """;
+
+        (await AuditAsync(Ruled, known: """[" Retries are documented as missing. ","No paging."]""")).ShouldStartWith("Findings recorded: 4.");
+        var audit = Review(TurnAttachments.Take().ShouldHaveSingleItem());
+        audit.TryGetProperty("known", out var known).ShouldBeTrue();
+        known.EnumerateArray().Select(k => k.GetString()).ShouldBe(["Retries are documented as missing.", "No paging."]);
+        Rules(audit).ShouldBe(["ADR 0007: errors are results", null, null, null]);
+
+        (await AuditAsync(Ruled, commit: null, read: null, known: "[]")).ShouldStartWith("Findings recorded: 4.");
+        var bare = TurnAttachments.Take().ShouldHaveSingleItem();
+        bare.ShouldNotContain("null");
+        Review(bare).TryGetProperty("known", out _).ShouldBeFalse();
+
+        (await PresentAsync(Ruled)).ShouldStartWith("Findings recorded: 4.");
+        var review = Review(TurnAttachments.Take().ShouldHaveSingleItem());
+        review.TryGetProperty("kind", out _).ShouldBeFalse();
+        review.TryGetProperty("known", out _).ShouldBeFalse();
+        review.GetProperty("number").GetInt32().ShouldBe(5);
+        Rules(review).ShouldBe(["ADR 0007: errors are results", null, null, null]);
+    }
+
+    [Fact]
+    public async Task An_Audit_Call_After_A_Review_Call_In_The_Turn_Replaces_The_Review_Block()
+    {
+        using var turn = TurnAttachments.Begin();
+
+        await PresentAsync(TwoFindings);
+        (await AuditAsync(TwoFindings)).ShouldBe(Recorded);
+
+        Review(TurnAttachments.Take().ShouldHaveSingleItem()).GetProperty("kind").GetString().ShouldBe("audit");
+    }
 }

@@ -6,19 +6,27 @@ using System.Text.RegularExpressions;
 namespace Scout.Plugin.GitHub;
 
 /// <summary>
-/// A code review's findings in the shape Scout Desktop renders as cards, validated by the rules the desktop's parser
-/// applies, so a block Scout attaches to a reply is never one the desktop leaves as a code fence.
+/// A code review's or an audit's findings in the shape Scout Desktop renders as cards, validated by the rules the
+/// desktop's parser applies, so a block Scout attaches to a reply is never one the desktop leaves as a code fence. A
+/// review carries no kind and the pull request number; an audit carries the kind <c>audit</c>, no number, and the
+/// limitations the project already documents.
 /// </summary>
 internal sealed partial record ReviewFindings(
+    string? Kind,
     string Repository,
-    int Number,
+    int? Number,
     string? Commit,
     string Verdict,
     string? Read,
+    IReadOnlyList<string>? Known,
     IReadOnlyList<ReviewFinding> Findings)
 {
     internal const int MaxFindings = 50;
     internal const int MaxTitleLength = 200;
+    internal const int MaxRuleLength = 300;
+    internal const int MaxKnown = 20;
+    internal const int MaxKnownLength = 300;
+    internal const string Audit = "audit";
 
     internal const string InvalidRepository =
         "The repository must be given as owner/repo, each part made of letters, digits, dots, hyphens or underscores.";
@@ -26,6 +34,9 @@ internal sealed partial record ReviewFindings(
     internal const string InvalidNumber = "The pull request number must be positive.";
     internal const string InvalidVerdict = "The verdict must not be empty.";
     internal const string InvalidFindings = "The findings must be a JSON array of 1 to 50 findings.";
+
+    internal const string InvalidKnown =
+        "The known limitations must be a JSON array of at most 20 texts, each 1 to 300 characters.";
 
     private static readonly HashSet<string> Severities = new(StringComparer.Ordinal) { "block", "fix", "nit" };
 
@@ -42,11 +53,23 @@ internal sealed partial record ReviewFindings(
     internal string ToBlock() => "```scout-findings\n" + JsonSerializer.Serialize(this, Json) + "\n```";
 
     /// <summary>
-    /// The findings when every value passes the desktop's rules; otherwise null and one sentence naming the first
-    /// problem, safe to show the model and the user.
+    /// A review's findings when every value passes the desktop's rules; otherwise null and one sentence naming the
+    /// first problem, safe to show the model and the user.
     /// </summary>
     internal static (ReviewFindings? Findings, string? Problem) Parse(
-        string? repository, int number, string? commit, string? verdict, string? read, string? findingsJson)
+        string? repository, int number, string? commit, string? verdict, string? read, string? findingsJson) =>
+        Parse(null, repository, number, commit, verdict, read, findingsJson, null);
+
+    /// <summary>
+    /// An audit's findings and the limitations the project already documents when every value passes the desktop's
+    /// rules; otherwise null and one sentence naming the first problem.
+    /// </summary>
+    internal static (ReviewFindings? Findings, string? Problem) ParseAudit(
+        string? repository, string? commit, string? verdict, string? read, string? findingsJson, string? knownJson) =>
+        Parse(Audit, repository, null, commit, verdict, read, findingsJson, knownJson);
+
+    private static (ReviewFindings? Findings, string? Problem) Parse(
+        string? kind, string? repository, int? number, string? commit, string? verdict, string? read, string? findingsJson, string? knownJson)
     {
         var parts = (repository ?? string.Empty).Trim().Split('/');
         if (parts.Length != 2 || !GitHubNames.IsValidRepository(parts[0], parts[1]))
@@ -54,7 +77,7 @@ internal sealed partial record ReviewFindings(
             return (null, InvalidRepository);
         }
 
-        if (number <= 0)
+        if (kind is null && number is not > 0)
         {
             return (null, InvalidNumber);
         }
@@ -98,15 +121,60 @@ internal sealed partial record ReviewFindings(
             findings.Add(finding);
         }
 
+        if (!TryKnown(knownJson, out var known))
+        {
+            return (null, InvalidKnown);
+        }
+
         return (new ReviewFindings(
-            $"{parts[0]}/{parts[1]}", number, Blank(commit), verdict.Trim(), Blank(read), findings), null);
+            kind, $"{parts[0]}/{parts[1]}", number, Blank(commit), verdict.Trim(), Blank(read), known, findings), null);
+    }
+
+    private static bool TryKnown(string? knownJson, out IReadOnlyList<string>? known)
+    {
+        known = null;
+        if (string.IsNullOrWhiteSpace(knownJson))
+        {
+            return true;
+        }
+
+        JsonElement array;
+        try
+        {
+            using var document = JsonDocument.Parse(knownJson);
+            array = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (array.ValueKind != JsonValueKind.Array || array.GetArrayLength() > MaxKnown)
+        {
+            return false;
+        }
+
+        var items = new List<string>();
+        foreach (var element in array.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.String || Blank(element.GetString()) is not { Length: <= MaxKnownLength } item)
+            {
+                return false;
+            }
+
+            items.Add(item);
+        }
+
+        known = items.Count == 0 ? null : items;
+        return true;
     }
 
     private static ReviewFinding? ParseFinding(JsonElement element) =>
         ProblemOf(element) is null
             ? new ReviewFinding(
                 Text(element, "id")!, Text(element, "severity")!, Text(element, "title")!, Text(element, "path")!,
-                element.GetProperty("line").GetInt32(), Blank(Text(element, "context")), Text(element, "why")!, Text(element, "fix")!)
+                element.GetProperty("line").GetInt32(), Blank(Text(element, "context")), Text(element, "why")!, Text(element, "fix")!,
+                Blank(Text(element, "rule")))
             : null;
 
     private static string? ProblemOf(JsonElement element)
@@ -152,7 +220,18 @@ internal sealed partial record ReviewFindings(
             return "needs a why that says what is wrong.";
         }
 
-        return string.IsNullOrWhiteSpace(Text(element, "fix")) ? "needs a fix." : null;
+        if (string.IsNullOrWhiteSpace(Text(element, "fix")))
+        {
+            return "needs a fix.";
+        }
+
+        if (element.TryGetProperty("rule", out var rule)
+            && (rule.ValueKind is not (JsonValueKind.String or JsonValueKind.Null) || (Blank(rule.GetString())?.Length ?? 0) > MaxRuleLength))
+        {
+            return "needs a rule of 1 to 300 characters, or none.";
+        }
+
+        return null;
     }
 
     private static string? Text(JsonElement element, string name) =>
@@ -161,6 +240,9 @@ internal sealed partial record ReviewFindings(
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
-/// <summary>One finding of a review, anchored to a line of the file after the change.</summary>
+/// <summary>
+/// One finding of a review or an audit, anchored to a line of the file, with the project rule it departs from when
+/// one is named.
+/// </summary>
 internal sealed record ReviewFinding(
-    string Id, string Severity, string Title, string Path, int Line, string? Context, string Why, string Fix);
+    string Id, string Severity, string Title, string Path, int Line, string? Context, string Why, string Fix, string? Rule);
