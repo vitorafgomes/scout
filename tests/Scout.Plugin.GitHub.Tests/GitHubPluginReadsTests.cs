@@ -1,5 +1,7 @@
 using System.Globalization;
+using Microsoft.Extensions.Time.Testing;
 using Scout.Plugin.GitHub.Abstractions;
+using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
 
@@ -283,5 +285,49 @@ public sealed class GitHubPluginReadsTests
 
         result.ShouldBeOneOf(GitHubNames.InvalidQuery, GitHubNames.InvalidPath, GitHubNames.InvalidExtension);
         await client.DidNotReceiveWithAnyArgs().SearchCodeAsync(default!, default!, default!, default, default, default);
+    }
+
+    private static async Task<RepositorySnapshotStore> SnapshotOfHello(string dir)
+    {
+        var store = new RepositorySnapshotStore(dir, 0, new FakeTimeProvider());
+        await store.ExtractAsync("octocat", "hello", new RepositoryCommit("main", "abc1234def5678", true), new MemoryStream(TarGzFixture.Build(
+            TarGzFixture.Text("src/Checkout.cs", "class Checkout { decimal Total() => 0; }\n"),
+            TarGzFixture.Text("README.md", "# Hello\n"))), CancellationToken.None);
+        return store;
+    }
+
+    [Fact]
+    public async Task With_A_Snapshot_The_File_The_Listing_And_The_Search_Are_Served_Locally_And_Say_So_While_Another_Reference_Still_Asks_GitHub()
+    {
+        var dir = Directory.CreateTempSubdirectory("scout-reads-snapshot-").FullName;
+        try
+        {
+            var client = Client();
+            client.GetFileContentAsync("octocat", "hello", "src/Checkout.cs", "feat/x", Arg.Any<CancellationToken>())
+                .Returns(new RepositoryFile("src/Checkout.cs", "file", "from GitHub", 11, []));
+            var plugin = new GitHubPlugin(client, await SnapshotOfHello(dir));
+
+            var file = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "", CancellationToken.None);
+            var folder = await plugin.GetFileContentsAsync("octocat", "hello", "src", "main", CancellationToken.None);
+            var listing = await plugin.ListRepositoryFilesAsync("octocat", "hello", "", "", "cs", CancellationToken.None);
+            var search = await plugin.SearchCodeAsync("octocat", "hello", "Total()", "", "", CancellationToken.None);
+            var other = await plugin.GetFileContentsAsync("octocat", "hello", "src/Checkout.cs", "feat/x", CancellationToken.None);
+
+            file.ShouldBe("src/Checkout.cs (41 bytes) at main (local snapshot at abc1234):\nclass Checkout { decimal Total() => 0; }\n");
+            folder.ShouldBe("src is a directory (local snapshot at abc1234):\n  - Checkout.cs");
+            listing.ShouldContain("octocat/hello at main: 2 file(s)");
+            listing.ShouldContain("  src/Checkout.cs (41 bytes)");
+            listing.ShouldEndWith("(from the local snapshot at abc1234)");
+            search.ShouldStartWith("1 file(s) in octocat/hello match \"Total()\"");
+            search.ShouldContain("--- src/Checkout.cs\nclass Checkout { decimal Total() => 0; }");
+            search.ShouldEndWith("(from the local snapshot of main at abc1234, every file searched)");
+            other.ShouldContain("from GitHub");
+            await client.DidNotReceive().ListRepositoryFilesAsync("octocat", "hello", Arg.Any<string?>(), Arg.Any<CancellationToken>());
+            await client.DidNotReceiveWithAnyArgs().SearchCodeAsync(default!, default!, default!, default, default, default);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 }

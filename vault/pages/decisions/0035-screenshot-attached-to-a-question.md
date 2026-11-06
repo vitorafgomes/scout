@@ -56,7 +56,7 @@ The owner asked that Scout "capture what is on the screen" and answer about it, 
 | Gemini, Mistral, HuggingFace, AzureAIInference, None | false | not checked for image parts in this change |
 
 - **Never stored or logged.** The picture lives only in the request's objects: no file, no cache, no memory turn. Log lines say `image=true` or `image=false` and, on the adapter, the byte count; `ChatMessage.ToString` prints `Image = <n> bytes`. The only place the bytes go is the existing chat call to the provider the owner connected, a descriptive call with one more part.
-- **Declared read.** The catalog gains the `desktop` feature, under `WriteClass.None` with no credentials, with the read rows `Screen` and `Microphone` (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:181`), so the Features screen lists what the desktop captures ([[pages/decisions/0032-per-feature-write-permissions]]). It gates nothing: the capture already needs the owner's click and the system picker.
+- **Declared read.** The catalog gains the `desktop` feature, under `WriteClass.None` with no credentials, with the read rows `Screen` and `Microphone` (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:185`), so the Features screen lists what the desktop captures ([[pages/decisions/0032-per-feature-write-permissions]]). It gates nothing: the capture already needs the owner's click and the system picker.
 
 ## Consequences
 

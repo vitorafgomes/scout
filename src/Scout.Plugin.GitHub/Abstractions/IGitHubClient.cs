@@ -74,4 +74,16 @@ public interface IGitHubClient
     /// </summary>
     Task<CodeSearchResult> SearchCodeAsync(
         string owner, string repo, string query, string? path, string? extension, CancellationToken ct);
+
+    /// <summary>
+    /// The commit a branch, a tag, a commit or the default branch (<paramref name="reference"/> empty) points at;
+    /// null when the repository or the reference does not exist or is not accessible.
+    /// </summary>
+    Task<RepositoryCommit?> ResolveCommitAsync(string owner, string repo, string? reference, CancellationToken ct);
+
+    /// <summary>
+    /// Stream the repository's tarball at <paramref name="sha"/> into <paramref name="consume"/>, which reads it
+    /// to the end; false when the repository or the commit does not exist or is not accessible.
+    /// </summary>
+    Task<bool> DownloadTarballAsync(string owner, string repo, string sha, Func<Stream, CancellationToken, Task> consume, CancellationToken ct);
 }

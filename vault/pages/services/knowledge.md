@@ -1,12 +1,12 @@
 ---
 title: "Knowledge"
-version: "1.2"
+version: "1.3"
 date: 2026-10-21
 updated: 2026-11-06
-changes: "v1.2 (2026-11-06) the file filter covers every language the skills cover, the project manifests and the extensionless build files, and never a credentials file. v1.1 added the hot spot that holds Semantic Kernel at 1.78.0"
+changes: "v1.3 (2026-11-06) the plugin always on the kernel and a project registered at run time by the GitHub snapshot (ADR 0039). v1.2 (2026-11-06) the file filter covers every language the skills cover, the project manifests and the extensionless build files, and never a credentials file. v1.1 added the hot spot that holds Semantic Kernel at 1.78.0"
 page_type: service
 status: active
-description: "Indexes configured repositories into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent."
+description: "Indexes configured repositories, and the repository snapshots the GitHub plugin takes from chat, into a local SQLite vector store and answers search_project, find_symbol and list_projects tool calls from it, through a Project Expert chat agent."
 source: ["src/Scout.Knowledge/", "tests/Scout.Knowledge.Tests/"]
 reliability: high
 ---
@@ -31,7 +31,7 @@ Owns discovery, chunking, indexing, the vector store, the optional file watcher,
 
 - **Entry point:** `AddProjectKnowledge(IServiceCollection, IConfiguration)` at `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:30`.
 - **Abstractions:** `IProjectKnowledgeStore` (`src/Scout.Knowledge/IProjectKnowledgeStore.cs:4`) implemented by `SqliteProjectKnowledgeStore` (`src/Scout.Knowledge/SqliteProjectKnowledgeStore.cs:7`); `IChunker` (`src/Scout.Knowledge/IChunker.cs:4`) implemented by `FileChunker`, a Roslyn chunker for C# with a line-window fallback (`src/Scout.Knowledge/FileChunker.cs:7`); `ProjectIndexer.IndexAsync` (`src/Scout.Knowledge/ProjectIndexer.cs:16`); `ProjectKnowledgeService` (`src/Scout.Knowledge/ProjectKnowledgeService.cs:16`); `ProjectResolutionService` (`src/Scout.Knowledge/ProjectResolutionService.cs:13`); `ProjectDiscoveryService` (`src/Scout.Knowledge/ProjectDiscoveryService.cs:12`).
-- **Model tools:** plugin `ProjectKnowledge` with `search_project`, `find_symbol`, `list_projects` (`src/Scout.Knowledge/ProjectKnowledgePlugin.cs:26,41,53`), registered only when a project or root is configured (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:72`).
+- **Model tools:** plugin `ProjectKnowledge` with `search_project`, `find_symbol`, `list_projects` (`src/Scout.Knowledge/ProjectKnowledgePlugin.cs:26,41,53`), always on the kernel since ADR 0039 (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:72`), because a project may arrive at run time: `ProjectResolutionService.Register` (`src/Scout.Knowledge/ProjectResolutionService.cs:83`) adds or replaces an entry and marks it stale, so `ResolveAsync` indexes it on its next use even when the store already holds that name (`:123`); the GitHub snapshot registers `owner/repo` this way through the host ([[pages/services/host-console]], [[pages/decisions/0039-repository-snapshot-under-the-data-folder]]).
 - **Agent:** `ProjectExpertAgentFactory.Create` (`src/Scout.Knowledge/ProjectExpertAgentFactory.cs:57`).
 - **Configuration keys:** `Scout:Projects` with `Items` (`Name`, `RepoPath`), `Roots`, and `Watch` (`Enabled`, `DebounceMilliseconds`) (`src/Scout.Knowledge/ProjectsOptions.cs:7`).
 - **External boundaries:** filesystem read of repository files (`src/Scout.Knowledge/ProjectIndexer.cs:63`) and a `FileSystemWatcher` when enabled (`src/Scout.Knowledge/ProjectWatchService.cs:84`); filesystem write of `project-knowledge.db` under the user's local application data, folder `Scout` (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:100`); embedding calls through `IEmbeddingGenerator`.
@@ -49,7 +49,7 @@ flowchart LR
     w["ProjectWatchService (opt-in)"] --> idx
 ```
 
-Indexing runs from the host command `index <project>` ([[pages/services/host-console]]) or from the watcher. The agent and the plugin are skipped when no project is configured, so the model never sees a tool that would return nothing (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:64`). The watcher is registered only when enabled and at least one item exists (`:92`). Option validation warns and never throws (`src/Scout.Knowledge/ProjectsOptionsValidator.cs:38`).
+Indexing runs from the host command `index <project>` ([[pages/services/host-console]]) or from the watcher. The agent is skipped when no project is configured; the plugin stays, and with nothing registered its functions answer that no project is indexed (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:64`). The watcher is registered only when enabled and at least one item exists (`:92`). Option validation warns and never throws (`src/Scout.Knowledge/ProjectsOptionsValidator.cs:38`).
 
 ## Invariants
 
@@ -66,7 +66,7 @@ Indexing runs from the host command `index <project>` ([[pages/services/host-con
 
 ## Testing footprint
 
-`tests/Scout.Knowledge.Tests` (107 test attributes, 14 files): chunker, filter, indexer, SQLite store against a real file, watcher, option validation, discovery, resolution, plugin output, agent persona, DI gating (`KnowledgeServiceCollectionExtensions` tests), and a retrieval acceptance test (`DeadLetterRetrievalAcceptanceTests.cs`).
+`tests/Scout.Knowledge.Tests` (179 tests on 2026-11-06, 14 files): a project registered at run time and indexed again after it is replaced (`tests/Scout.Knowledge.Tests/ProjectResolutionServiceTests.cs:180`), the plugin present with no project configured; chunker, filter, indexer, SQLite store against a real file, watcher, option validation, discovery, resolution, plugin output, agent persona, DI gating (`KnowledgeServiceCollectionExtensions` tests), and a retrieval acceptance test (`DeadLetterRetrievalAcceptanceTests.cs`).
 
 ## Related
 

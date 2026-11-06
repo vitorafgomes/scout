@@ -299,4 +299,43 @@ public sealed class GitHubClientReadsTests
 
         ex.Message.ShouldBe("GitHub rate limit reached. Try again later.");
     }
+
+    [Fact]
+    public async Task ResolveCommit_Resolves_The_Default_Branch_Then_Its_Commit_Or_The_Named_Reference_Only()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """{"full_name":"octocat/hello","default_branch":"trunk"}""");
+        handler.EnqueueJson(HttpStatusCode.OK, """{"sha":"abc1234def"}""");
+        handler.EnqueueJson(HttpStatusCode.OK, """{"sha":"feat9999"}""");
+        handler.EnqueueJson(HttpStatusCode.NotFound, """{"message":"Not Found"}""");
+
+        var byDefault = await client.ResolveCommitAsync("octocat", "hello", "", CancellationToken.None);
+        var named = await client.ResolveCommitAsync("octocat", "hello", "feat/x", CancellationToken.None);
+        var missing = await client.ResolveCommitAsync("octocat", "hello", "nope", CancellationToken.None);
+
+        byDefault.ShouldBe(new RepositoryCommit("trunk", "abc1234def", true));
+        named.ShouldBe(new RepositoryCommit("feat/x", "feat9999", false));
+        missing.ShouldBeNull();
+        handler.LastRequest!.RequestUri!.AbsoluteUri.ShouldEndWith("repos/octocat/hello/commits/nope");
+    }
+
+    [Fact]
+    public async Task DownloadTarball_Streams_The_Tarball_To_The_Consumer_And_Says_When_There_Is_None()
+    {
+        var (client, handler) = Build();
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        handler.EnqueueJson(HttpStatusCode.OK, "", r => r.Content = new ByteArrayContent(bytes));
+        handler.EnqueueJson(HttpStatusCode.NotFound, "");
+        handler.EnqueueJson(HttpStatusCode.InternalServerError, "");
+        var received = new MemoryStream();
+
+        var found = await client.DownloadTarballAsync("octocat", "hello", "abc1234", async (s, ct) => await s.CopyToAsync(received, ct), CancellationToken.None);
+        var missing = await client.DownloadTarballAsync("octocat", "hello", "nope", (_, _) => Task.CompletedTask, CancellationToken.None);
+
+        found.ShouldBeTrue();
+        received.ToArray().ShouldBe(bytes);
+        missing.ShouldBeFalse();
+        await Should.ThrowAsync<GitHubApiException>(() => client.DownloadTarballAsync("octocat", "hello", "x", (_, _) => Task.CompletedTask, CancellationToken.None));
+        handler.LastRequest!.RequestUri!.AbsoluteUri.ShouldEndWith("repos/octocat/hello/tarball/x");
+    }
 }

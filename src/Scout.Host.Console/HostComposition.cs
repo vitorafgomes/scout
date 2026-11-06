@@ -12,6 +12,7 @@ using Scout.Meetings;
 using Scout.Operator;
 using Scout.Operator.ScreenText;
 using Scout.Plugin.GitHub;
+using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.Kubernetes;
 using Scout.Plugin.YouTube;
 using Scout.Plugin.YouTube.Abstractions;
@@ -64,6 +65,7 @@ internal static class HostComposition
         services.AddTeamsAdapter(configuration);
 
         // Semantic Kernel function-calling plugins. Each self-gates on its own configuration.
+        services.AddSingleton<IRepositoryProjects, KnowledgeRepositoryProjects>();
         services.AddGitHubPlugin(configuration);
         services.AddKubernetesPlugin(configuration);
         services.AddYouTubePlugin(configuration);

@@ -349,7 +349,21 @@ function storedTranslationMode(): LocalTranslationMode {
           <li class="turn">
             @if (!turn.notice) {
               <div class="row user">
-                <span class="avatar user" aria-hidden="true">You</span>
+                <span class="avatar user" aria-hidden="true"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    focusable="false"
+                  >
+                    <circle cx="12" cy="8" r="4"></circle>
+                    <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"></path></svg
+                ></span>
                 <div class="col">
                   <p class="who" data-test="who-user"><span>You</span></p>
                   <p class="asked" data-test="asked" [textContent]="turn.question"></p>
@@ -363,7 +377,23 @@ function storedTranslationMode(): LocalTranslationMode {
               </div>
             }
             <div class="row scout">
-              <span class="avatar scout" aria-hidden="true">S</span>
+              <span class="avatar scout" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  focusable="false"
+                >
+                  <rect x="4" y="8" width="16" height="12" rx="3"></rect>
+                  <circle cx="9" cy="14" r="1.2" fill="currentColor" stroke="none"></circle>
+                  <circle cx="15" cy="14" r="1.2" fill="currentColor" stroke="none"></circle>
+                  <path d="M12 8V4M9 4h6"></path></svg
+              ></span>
               <div class="col">
                 <p class="who" data-test="who-scout"><span>Scout</span></p>
                 @if (turn.state === 'running' && (turn.reply.length === 0 || turn.activity)) {
