@@ -1,3 +1,6 @@
+## [2026-11-06] crystallize | Models → Analysis: the model in use on top, search, one collapsible group per connected source
+The owner on the Models prototype: "não está legal de ver", "deveria mostrar o que está conectado; neste momento não tenho nada local e está me mostrando Local LLM com Qwen", then "Gostei do que foi proposto no Analysis, pode fazer". On feat/models-analysis: the In use strip, the search and chips, the groups with families, tags and Show all, the local group only while a runtime answers; desktop-ui.md updated.
+
 ## [2026-11-06] crystallize | The floating-button chat reads top to bottom, the question line at the bottom
 The owner, shaping the finding cards on the prototype: "com isso ele deveria mudar aonde mandamos as msg de cima para baixo". On feat/quick-ask-composer-bottom the quick-ask page puts the question line under the turn list (grip, tools, turns, question), with the list still the one scrolling region and still scrolled to the newest turn; the same order the Chat screen already has. One spec pins the order.
 

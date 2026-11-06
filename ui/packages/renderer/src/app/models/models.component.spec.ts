@@ -33,10 +33,14 @@ async function setup(opts: { running?: boolean } = {}): Promise<{
       { provide: LogStore, useValue: logStore },
     ],
   });
+  vi.spyOn(TestBed.inject(ScoutBridgeService), 'llmListOllamaModels').mockResolvedValue({
+    models: [],
+  });
   const store = TestBed.inject(LocalModelsStore);
   const fixture = TestBed.createComponent(ModelsComponent);
   fixture.detectChanges();
   await fixture.whenStable();
+  await new Promise((resolve) => setTimeout(resolve, 0));
   fixture.detectChanges();
   return { fixture, store, logStore };
 }
@@ -238,6 +242,9 @@ interface BridgeOptions {
   readonly workerStartError?: unknown;
   readonly failingLists?: readonly string[];
   readonly slowStoreKeys?: readonly string[];
+  readonly localRuntime?: boolean;
+  readonly lmStudioRuntime?: boolean;
+  readonly cloudModels?: Readonly<Record<string, readonly { id: string; displayName: string }[]>>;
 }
 
 const CHATGPT_MODELS = [
@@ -282,7 +289,17 @@ function makeBridge(opts: BridgeOptions = {}) {
     }),
     llmListModels: vi.fn(async (req: { provider: string }) => {
       if (failing.has(req.provider)) throw new Error('[scout:providers/unreachable] down');
-      return { models: CLOUD_MODELS[req.provider] ?? [] };
+      return { models: (opts.cloudModels ?? CLOUD_MODELS)[req.provider] ?? [] };
+    }),
+    llmListOllamaModels: vi.fn(async () => {
+      if (opts.localRuntime !== true)
+        throw new Error('[scout:llm/unreachable] connect ECONNREFUSED');
+      return { models: [] };
+    }),
+    llmListLmStudioModels: vi.fn(async () => {
+      if (opts.lmStudioRuntime !== true)
+        throw new Error('[scout:llm/unreachable] connect ECONNREFUSED');
+      return { models: [] };
     }),
     workerStatus: vi.fn(async () => ({ state: opts.workerState ?? 'idle', restarts: 0 })),
     workerStop: vi.fn(async () => {
@@ -325,6 +342,59 @@ async function openAnalysis(
   fixture.detectChanges();
   await settle(fixture);
   return { fixture, bridge, el: fixture.nativeElement as HTMLElement };
+}
+
+const LONG_OPENAI = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4.1-mini',
+  'gpt-4.1',
+  'o3',
+  'o4-mini',
+  'gpt-5-mini',
+  'gpt-5.1',
+  'chatgpt-4o-latest',
+  'gpt-5-nano',
+].map((id) => ({ id, displayName: id }));
+
+function rowIds(el: HTMLElement, key: string): string[] {
+  return [...el.querySelectorAll(`[data-test^="model-${key}-"]`)].map(
+    (row) => row.getAttribute('data-test')?.slice(`model-${key}-`.length) ?? '',
+  );
+}
+
+function localRowIds(el: HTMLElement): string[] {
+  return [...el.querySelectorAll('[data-test^="option-"]')].map(
+    (row) => row.getAttribute('data-test')?.slice('option-'.length) ?? '',
+  );
+}
+
+function text(el: HTMLElement, dataTest: string): string {
+  const root = el.querySelector(`[data-test="${dataTest}"]`);
+  if (root === null) return '';
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const words: string[] = [];
+  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+    const value = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    if (value !== '') words.push(value);
+  }
+  return words.join(' ');
+}
+
+function isOpen(el: HTMLElement, key: string): boolean | null {
+  const group = el.querySelector(`[data-test="provider-${key}"]`) as HTMLDetailsElement | null;
+  return group === null ? null : group.open;
+}
+
+async function search(
+  fixture: ComponentFixture<ModelsComponent>,
+  el: HTMLElement,
+  query: string,
+): Promise<void> {
+  const input = el.querySelector('[data-test="model-search"]') as HTMLInputElement;
+  input.value = query;
+  input.dispatchEvent(new Event('input'));
+  await settle(fixture);
 }
 
 function click(el: HTMLElement, dataTest: string): void {
@@ -426,6 +496,7 @@ describe('ModelsComponent - Analysis per connected provider', () => {
         chatgptSignedIn: true,
         workerState: 'running',
         publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-6.1-sol' },
+        localRuntime: true,
       },
       (store) => store.markDownloaded('qwen-3-vl-2b'),
     );
@@ -486,6 +557,7 @@ describe('ModelsComponent - Analysis per connected provider', () => {
         workerState: 'running',
         publicValues: { 'llm.provider': 'ChatGptPlan', 'llm.cloud-model': 'gpt-6.1-sol' },
         slowStoreKeys: ['llm.model'],
+        localRuntime: true,
       },
       (store) => store.markDownloaded('qwen-3-vl-2b'),
     );
@@ -533,5 +605,239 @@ describe('ModelsComponent - Analysis per connected provider', () => {
         .querySelector('[data-test="model-gemini-gemini-2.5-flash"]')
         ?.classList.contains('option--selected'),
     ).toBe(true);
+  });
+
+  it('the Analysis tab shows the model in use and its source at the top', async () => {
+    const cloud = await openAnalysis({
+      keys: ['llm.openai.api-key'],
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4.1' },
+    });
+    expect(text(cloud.el, 'in-use')).toBe('In use gpt-4.1 via OpenAI API');
+    expect(cloud.el.querySelector('[data-test="no-active-model-nudge"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const local = await openAnalysis({ localRuntime: true }, (store) =>
+      store.markDownloaded('qwen-3-vl-2b'),
+    );
+    expect(text(local.el, 'in-use')).toBe('In use Qwen 2.5 3B via Ollama');
+
+    TestBed.resetTestingModule();
+    window.localStorage.removeItem(LOCAL_MODELS_STORAGE_KEY);
+    const none = await openAnalysis({ keys: ['llm.gemini.api-key'] });
+    expect(none.el.querySelector('[data-test="in-use"]')).toBeNull();
+    expect(none.el.querySelector('[data-test="no-active-model-nudge"]')).not.toBeNull();
+  });
+
+  it('with no local runtime connected the local models are not listed and a Not connected row points to AI Sources', async () => {
+    const { el, bridge } = await openAnalysis({}, (store) => store.markDownloaded('qwen-3-vl-2b'));
+
+    expect(bridge.llmListOllamaModels).toHaveBeenCalled();
+    expect(el.querySelector('[data-test="provider-ollama"]')).toBeNull();
+    expect(el.querySelector('[data-test="option-qwen-3-vl-2b"]')).toBeNull();
+    expect(el.querySelector('[data-test="in-use"]')).toBeNull();
+    expect(text(el, 'local-not-connected')).toContain('Local LLM');
+    expect(text(el, 'local-not-connected')).toContain('Not connected');
+    expect(el.querySelector('[data-test="local-not-connected"] a')?.getAttribute('href')).toBe(
+      '/sources',
+    );
+  });
+
+  it('a connected local runtime with downloaded models lists them in the local group', async () => {
+    const { el } = await openAnalysis({ localRuntime: true }, (store) => {
+      store.markDownloaded('qwen-2.5-1.5b-instruct');
+      store.markDownloaded('gemma-3-4b');
+    });
+
+    expect(el.querySelector('[data-test="provider-ollama"]')).not.toBeNull();
+    expect(localRowIds(el)).toEqual(['qwen-2.5-1.5b-instruct', 'gemma-3-4b']);
+    expect(el.querySelector('[data-test="local-not-connected"]')).toBeNull();
+  });
+
+  it('a local runtime reached only through LM Studio counts as connected and lists the downloaded models', async () => {
+    const { el } = await openAnalysis({ lmStudioRuntime: true }, (store) =>
+      store.markDownloaded('gemma-3-4b'),
+    );
+
+    expect(localRowIds(el)).toEqual(['gemma-3-4b']);
+    expect(el.querySelector('[data-test="local-not-connected"]')).toBeNull();
+  });
+
+  it('a connected local runtime with no downloaded model keeps the download prompt', async () => {
+    const { el } = await openAnalysis({ localRuntime: true });
+
+    expect(el.querySelector('[data-test="empty-state"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="empty-cta"]')?.getAttribute('href')).toBe(
+      '/sources/local-models',
+    );
+    expect(el.querySelector('[data-test="local-not-connected"]')).toBeNull();
+  });
+
+  it('each connected source is a collapsible group with its selected model and count on the summary, open only for the source in use', async () => {
+    const { fixture, el } = await openAnalysis(
+      {
+        keys: ['llm.openai.api-key', 'llm.gemini.api-key'],
+        chatgptSignedIn: true,
+        localRuntime: true,
+        publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'gpt-4.1' },
+      },
+      (store) => store.markDownloaded('qwen-3-vl-2b'),
+    );
+
+    for (const key of ['openai', 'gemini', 'chatgpt', 'ollama']) {
+      expect(el.querySelector(`[data-test="provider-${key}"]`)?.tagName).toBe('DETAILS');
+      expect(
+        el.querySelector(`[data-test="provider-${key}"] > summary`)?.getAttribute('data-test'),
+      ).toBe(`group-summary-${key}`);
+    }
+    expect(text(el, 'group-summary-openai')).toBe('OpenAI API In use Selected: gpt-4.1 2 models');
+    expect(text(el, 'group-summary-gemini')).toBe('Google Gemini Cloud 1 model');
+    expect(text(el, 'group-summary-chatgpt')).toBe('ChatGPT Plus Plan 2 models');
+    expect(text(el, 'group-summary-ollama')).toBe('Local LLM On device 1 model');
+    expect([
+      isOpen(el, 'openai'),
+      isOpen(el, 'gemini'),
+      isOpen(el, 'chatgpt'),
+      isOpen(el, 'ollama'),
+    ]).toEqual([true, false, false, false]);
+
+    click(el, 'model-gemini-gemini-2.5-flash');
+    await settle(fixture);
+
+    expect(text(el, 'group-summary-gemini')).toBe(
+      'Google Gemini In use Selected: gemini-2.5-flash 1 model',
+    );
+    expect(text(el, 'group-summary-openai')).toBe('OpenAI API Cloud 2 models');
+    expect([isOpen(el, 'openai'), isOpen(el, 'gemini')]).toEqual([false, true]);
+  });
+
+  it('a long list shows the recommended and the first six rows, and Show all reveals the rest', async () => {
+    const { fixture, el } = await openAnalysis({
+      keys: ['llm.openai.api-key'],
+      cloudModels: { OpenAI: LONG_OPENAI },
+    });
+
+    expect(rowIds(el, 'openai')).toEqual([
+      'gpt-5.1',
+      'gpt-5-mini',
+      'gpt-5-nano',
+      'gpt-4.1-mini',
+      'gpt-4.1',
+      'gpt-4o-mini',
+    ]);
+    expect(
+      [...el.querySelectorAll('[data-test="provider-openai"] [data-test="family"]')].map((f) =>
+        f.textContent?.trim(),
+      ),
+    ).toEqual(['GPT-5', 'GPT-4.1', 'GPT-4o']);
+    expect(text(el, 'model-openai-gpt-5.1')).toContain('Recommended');
+    expect(text(el, 'model-openai-gpt-5-mini')).toContain('Fast');
+    expect(text(el, 'model-openai-gpt-5-mini')).not.toContain('Recommended');
+    expect(text(el, 'show-all-openai')).toBe('Show all 10 models');
+
+    click(el, 'show-all-openai');
+    await settle(fixture);
+
+    expect(rowIds(el, 'openai')).toEqual([
+      'gpt-5.1',
+      'gpt-5-mini',
+      'gpt-5-nano',
+      'gpt-4.1-mini',
+      'gpt-4.1',
+      'gpt-4o-mini',
+      'gpt-4o',
+      'o3',
+      'o4-mini',
+      'chatgpt-4o-latest',
+    ]);
+    expect(text(el, 'model-openai-o3')).toContain('Reasoning');
+    expect(el.querySelector('[data-test="show-all-openai"]')).toBeNull();
+
+    TestBed.resetTestingModule();
+    const selectedLate = await openAnalysis({
+      keys: ['llm.openai.api-key'],
+      cloudModels: { OpenAI: LONG_OPENAI },
+      publicValues: { 'llm.provider': 'OpenAI', 'llm.cloud-model': 'chatgpt-4o-latest' },
+    });
+    expect(rowIds(selectedLate.el, 'openai')).toEqual([
+      'gpt-5.1',
+      'gpt-5-mini',
+      'gpt-5-nano',
+      'gpt-4.1-mini',
+      'gpt-4.1',
+      'gpt-4o-mini',
+      'chatgpt-4o-latest',
+    ]);
+  });
+
+  it('the search and the chips narrow the rows of every group and say when nothing matches', async () => {
+    const { fixture, el } = await openAnalysis(
+      {
+        keys: ['llm.openai.api-key', 'llm.gemini.api-key'],
+        localRuntime: true,
+        cloudModels: { ...CLOUD_MODELS, OpenAI: LONG_OPENAI },
+      },
+      (store) => {
+        store.markDownloaded('qwen-3-vl-2b');
+        store.markDownloaded('gemma-3-4b');
+      },
+    );
+
+    await search(fixture, el, 'NANO');
+    expect(rowIds(el, 'openai')).toEqual(['gpt-5-nano']);
+    expect(rowIds(el, 'gemini')).toEqual([]);
+    expect(localRowIds(el)).toEqual([]);
+    expect(text(el, 'no-match-gemini')).toBe('No model matches');
+    expect(text(el, 'no-match-ollama')).toBe('No model matches');
+    expect([isOpen(el, 'openai'), isOpen(el, 'gemini'), isOpen(el, 'ollama')]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+
+    await search(fixture, el, '3b');
+    expect(localRowIds(el)).toEqual(['qwen-3-vl-2b']);
+    expect(rowIds(el, 'openai')).toEqual([]);
+
+    await search(fixture, el, 'gpt');
+    expect(rowIds(el, 'openai')).toHaveLength(8);
+    expect(el.querySelector('[data-test="show-all-openai"]')).toBeNull();
+
+    await search(fixture, el, '');
+    click(el, 'filter-fast');
+    await settle(fixture);
+    expect(el.querySelector('[data-test="filter-fast"]')?.getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(el.querySelector('[data-test="filter-all"]')?.getAttribute('aria-pressed')).toBe(
+      'false',
+    );
+    expect(rowIds(el, 'openai')).toEqual([
+      'gpt-5-mini',
+      'gpt-5-nano',
+      'gpt-4.1-mini',
+      'gpt-4o-mini',
+      'o4-mini',
+    ]);
+    expect(rowIds(el, 'gemini')).toEqual(['gemini-2.5-flash']);
+    expect(text(el, 'no-match-ollama')).toBe('No model matches');
+
+    click(el, 'filter-recommended');
+    await settle(fixture);
+    expect(rowIds(el, 'openai')).toEqual(['gpt-5.1']);
+    expect(rowIds(el, 'gemini')).toEqual(['gemini-2.5-flash']);
+    expect(localRowIds(el)).toEqual(['qwen-3-vl-2b']);
+
+    click(el, 'filter-local');
+    await settle(fixture);
+    expect(rowIds(el, 'openai')).toEqual([]);
+    expect(text(el, 'no-match-openai')).toBe('No model matches');
+    expect(el.querySelector('[data-test="provider-gemini"]')).not.toBeNull();
+    expect(localRowIds(el)).toEqual(['qwen-3-vl-2b', 'gemma-3-4b']);
+
+    click(el, 'filter-all');
+    await settle(fixture);
+    expect(rowIds(el, 'openai')).toHaveLength(6);
+    expect(rowIds(el, 'gemini')).toEqual(['gemini-2.5-flash']);
+    expect(localRowIds(el)).toEqual(['qwen-3-vl-2b', 'gemma-3-4b']);
   });
 });
