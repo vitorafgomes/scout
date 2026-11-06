@@ -116,51 +116,6 @@ function storedTranslationMode(): LocalTranslationMode {
   template: `
     <main class="quick-ask">
       <header class="grip" data-test="grip">Scout</header>
-      <form class="ask" (submit)="$event.preventDefault(); ask()">
-        <input
-          #questionInput
-          type="text"
-          data-test="question"
-          aria-label="Ask Scout"
-          placeholder="Ask Scout, or hold Space to talk"
-          [value]="question()"
-          (input)="question.set($any($event.target).value)"
-        />
-        <button
-          type="button"
-          data-test="mic"
-          [class.recording]="recording()"
-          [attr.aria-pressed]="recording()"
-          [disabled]="listening()"
-          aria-label="Hold to talk"
-          (pointerdown)="startRecording()"
-          (pointerup)="stopRecording()"
-          (pointerleave)="stopRecording()"
-        >
-          {{ recording() ? 'Listening' : 'Mic' }}
-        </button>
-        <button
-          type="button"
-          data-test="listen"
-          [class.recording]="listening()"
-          [attr.aria-pressed]="listening()"
-          [disabled]="recording()"
-          aria-label="Listen and write what you say"
-          (click)="toggleListening()"
-        >
-          {{ listening() ? 'Stop' : 'Listen' }}
-        </button>
-        <button
-          type="button"
-          class="close"
-          data-test="close"
-          aria-label="Close"
-          title="Close (Esc)"
-          (click)="close()"
-        >
-          ×
-        </button>
-      </form>
       <div class="shot">
         @if (meeting() === 'running') {
           <button
@@ -474,6 +429,51 @@ function storedTranslationMode(): LocalTranslationMode {
           </li>
         }
       </ol>
+      <form class="ask" (submit)="$event.preventDefault(); ask()">
+        <input
+          #questionInput
+          type="text"
+          data-test="question"
+          aria-label="Ask Scout"
+          placeholder="Ask Scout, or hold Space to talk"
+          [value]="question()"
+          (input)="question.set($any($event.target).value)"
+        />
+        <button
+          type="button"
+          data-test="mic"
+          [class.recording]="recording()"
+          [attr.aria-pressed]="recording()"
+          [disabled]="listening()"
+          aria-label="Hold to talk"
+          (pointerdown)="startRecording()"
+          (pointerup)="stopRecording()"
+          (pointerleave)="stopRecording()"
+        >
+          {{ recording() ? 'Listening' : 'Mic' }}
+        </button>
+        <button
+          type="button"
+          data-test="listen"
+          [class.recording]="listening()"
+          [attr.aria-pressed]="listening()"
+          [disabled]="recording()"
+          aria-label="Listen and write what you say"
+          (click)="toggleListening()"
+        >
+          {{ listening() ? 'Stop' : 'Listen' }}
+        </button>
+        <button
+          type="button"
+          class="close"
+          data-test="close"
+          aria-label="Close"
+          title="Close (Esc)"
+          (click)="close()"
+        >
+          ×
+        </button>
+      </form>
     </main>
   `,
   styles: [
