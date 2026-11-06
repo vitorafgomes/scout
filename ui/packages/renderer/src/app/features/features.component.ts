@@ -139,8 +139,9 @@ export const NO_ALLOWED_USERS_WARNING =
       }
       .features-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr));
         gap: 16px;
+        align-items: start;
       }
       .notes {
         margin-top: 16px;

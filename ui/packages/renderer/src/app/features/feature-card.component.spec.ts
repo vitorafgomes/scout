@@ -191,6 +191,19 @@ describe('FeatureCardComponent', () => {
     expect(text(granted, 'grant-youtube')).toBe('Write permission: granted on 2026-11-02');
   });
 
+  it('a grant error opens the Permissions block so the error is in sight', () => {
+    const fixture = connectionCard(
+      { ...youtube, lastError: 'GitHub rejected the grant.' },
+      'connected',
+    );
+    const details = fixture.nativeElement.querySelector(
+      '[data-test="permissions-youtube"]',
+    ) as HTMLDetailsElement;
+
+    expect(details.open).toBe(true);
+    expect(text(fixture, 'grant-err-youtube')).toBe('GitHub rejected the grant.');
+  });
+
   it('Allow writes is disabled while YouTube is not connected', () => {
     const disconnected = connectionCard(youtube, 'not-connected');
     const allowWhileDisconnected = disconnected.nativeElement.querySelector(
@@ -238,6 +251,77 @@ describe('FeatureCardComponent', () => {
     expect(writes.textContent).toContain('drafts');
     expect(writes.textContent).toContain('youtube.upload');
     expect(writes.textContent).not.toContain('youtube.readonly');
+  });
+
+  it('Reads and Permissions start closed with their count and the grant state on the summary, and open on a click', () => {
+    const fixture = connectionCard(youtube, 'connected');
+    const reads = fixture.nativeElement.querySelector(
+      '[data-test="reads-youtube"]',
+    ) as HTMLDetailsElement;
+    const permissions = fixture.nativeElement.querySelector(
+      '[data-test="permissions-youtube"]',
+    ) as HTMLDetailsElement;
+    const closedAtFirst = [reads.open, permissions.open];
+    const readsSummary = text(fixture, 'reads-summary-youtube');
+    const permissionsSummary = text(fixture, 'permissions-summary-youtube');
+
+    (
+      fixture.nativeElement.querySelector('[data-test="reads-summary-youtube"]') as HTMLElement
+    ).click();
+    (
+      fixture.nativeElement.querySelector(
+        '[data-test="permissions-summary-youtube"]',
+      ) as HTMLElement
+    ).click();
+
+    expect(closedAtFirst).toEqual([false, false]);
+    expect(readsSummary).toBe('Reads 1');
+    expect(permissionsSummary).toBe('Permissions 2 Writes not allowed');
+    expect([reads.open, permissions.open]).toEqual([true, true]);
+  });
+
+  it('the Permissions summary says since when writes are allowed', () => {
+    const fixture = connectionCard(
+      { ...youtube, granted: true, grantedAt: '2026-11-02T10:00:00Z' },
+      'connected',
+    );
+
+    expect(text(fixture, 'permissions-summary-youtube')).toBe(
+      'Permissions 2 Writes allowed since 2026-11-02',
+    );
+  });
+
+  it('a read is a chip titled with its actions', () => {
+    const fixture = connectionCard(
+      {
+        ...youtube,
+        scopeMatrix: [
+          {
+            scope: 'youtube.readonly',
+            actions: ['Read the channel', 'List the uploads'],
+            access: 'read',
+          },
+        ],
+      },
+      'connected',
+    );
+    const chip = fixture.nativeElement.querySelector(
+      '[data-test="scope-row-youtube.readonly"]',
+    ) as HTMLElement;
+
+    expect(chip.classList.contains('chip')).toBe(true);
+    expect(chip.getAttribute('title')).toBe('Read the channel, List the uploads');
+  });
+
+  it('a permission row shows its access pill and what it allows', () => {
+    const fixture = connectionCard(youtube, 'connected');
+    const pill = (scope: string) =>
+      fixture.nativeElement.querySelector(`[data-test="access-${scope}"]`) as HTMLElement;
+
+    expect(pill('drafts').classList.contains('write')).toBe(true);
+    expect(pill('youtube.upload').classList.contains('irreversible')).toBe(true);
+    expect(text(fixture, 'what-drafts')).toBe('Save scripts and renders');
+    expect(text(fixture, 'what-youtube.upload')).toBe('Upload a video');
   });
 
   it('a read-only feature shows no permissions block', () => {
