@@ -11,16 +11,11 @@ namespace Scout.Skills;
 /// aggregate this plugin without re-entering the embedder. Every call returns a
 /// clean, non-empty string and never throws back into the kernel.
 /// </summary>
-public sealed class SkillsPlugin
+/// <remarks>Creates the plugin over an embedding-free skill catalog.</remarks>
+/// <param name="catalog">The skill catalog. Must be non-null.</param>
+public sealed class SkillsPlugin(ISkillCatalog catalog)
 {
-    private readonly ISkillCatalog _catalog;
-
-    /// <summary>Creates the plugin over an embedding-free skill catalog.</summary>
-    /// <param name="catalog">The skill catalog. Must be non-null.</param>
-    public SkillsPlugin(ISkillCatalog catalog)
-    {
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-    }
+    private readonly ISkillCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
 
     /// <summary>List the available skills by name and when to use each.</summary>
     /// <returns>One <c>name: description</c> line per skill, or a clean message when none.</returns>

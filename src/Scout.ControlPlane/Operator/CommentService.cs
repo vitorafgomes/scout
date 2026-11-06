@@ -9,7 +9,8 @@ namespace Scout.ControlPlane.Operator;
 /// the YouTube feature, each save recorded in the write log, and after a revoke saves only the steps of a reply or
 /// hold it is executing. The worker never approves, decides or drops anything.
 /// </summary>
-public sealed class CommentService
+/// <remarks>Build the service over the operator's store and the operator service that holds the grant, the approvals and the queue.</remarks>
+public sealed class CommentService(JsonFileOperatorStore store, OperatorService @operator)
 {
     private const string Target = "comments";
     private const string Superseded = "superseded by a new reply";
@@ -20,15 +21,8 @@ public sealed class CommentService
     private const int ReplyQuote = 200;
     private const int HoldQuote = 120;
 
-    private readonly JsonFileOperatorStore _store;
-    private readonly OperatorService _operator;
-
-    /// <summary>Build the service over the operator's store and the operator service that holds the grant, the approvals and the queue.</summary>
-    public CommentService(JsonFileOperatorStore store, OperatorService @operator)
-    {
-        _store = store ?? throw new ArgumentNullException(nameof(store));
-        _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
-    }
+    private readonly JsonFileOperatorStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly OperatorService _operator = @operator ?? throw new ArgumentNullException(nameof(@operator));
 
     /// <summary>The stored comments, newest first, with the ideas and the sync's state; it needs no grant.</summary>
     public async Task<CommentsState> ListCommentsAsync(CancellationToken ct) =>
@@ -233,7 +227,7 @@ public sealed class CommentService
         return Newest(saved);
     }
 
-    private static bool OnlyExecution(CommentsState stored, CommentsState merged, IReadOnlySet<string> executing)
+    private static bool OnlyExecution(CommentsState stored, CommentsState merged, HashSet<string> executing)
     {
         var before = stored.Comments.ToDictionary(c => c.Id, StringComparer.Ordinal);
         return merged.Comments.Count == stored.Comments.Count
@@ -245,7 +239,7 @@ public sealed class CommentService
             && string.Equals(merged.SyncError, stored.SyncError, StringComparison.Ordinal);
     }
 
-    private static void RefuseDismiss(AudienceComment comment, IReadOnlySet<string> live)
+    private static void RefuseDismiss(AudienceComment comment, HashSet<string> live)
     {
         if (comment.Status == CommentRules.Replying && live.Contains(CommentRules.TargetOf(comment.Id)))
         {
@@ -253,7 +247,7 @@ public sealed class CommentService
         }
     }
 
-    private static void RefuseReply(AudienceComment comment, IReadOnlySet<string> live)
+    private static void RefuseReply(AudienceComment comment, HashSet<string> live)
     {
         if (comment.Status is CommentRules.Quarantined or CommentRules.HoldApproved or CommentRules.Held)
         {

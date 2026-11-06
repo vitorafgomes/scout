@@ -25,7 +25,13 @@ namespace Scout.Llm;
 /// <see cref="ChatCompletionAgent"/> is supplied, the stream is routed through it
 /// so its instructions and tools apply; the yielded contract is unchanged.
 /// </summary>
-internal sealed class ChatGateway : IChatGateway
+internal sealed class ChatGateway(
+    IChatCompletionService chat,
+    Kernel? kernel = null,
+    IOptions<LlmOptions>? options = null,
+    ILogger<ChatGateway>? logger = null,
+    ChatCompletionAgent? agent = null,
+    MediaCapabilities? media = null) : IChatGateway
 {
     private static readonly HashSet<string> QuotaErrorCodes = new(StringComparer.Ordinal)
     {
@@ -36,29 +42,12 @@ internal sealed class ChatGateway : IChatGateway
         "subscription_sharing_usage_limit_exceeded",
     };
 
-    private readonly IChatCompletionService _chat;
-    private readonly Kernel? _kernel;
-    private readonly ChatCompletionAgent? _agent;
-    private readonly ILogger<ChatGateway> _logger;
-    private readonly string _target;
-    private readonly bool _vision;
-
-    public ChatGateway(
-        IChatCompletionService chat,
-        Kernel? kernel = null,
-        IOptions<LlmOptions>? options = null,
-        ILogger<ChatGateway>? logger = null,
-        ChatCompletionAgent? agent = null,
-        MediaCapabilities? media = null)
-    {
-        _chat = chat ?? throw new ArgumentNullException(nameof(chat));
-        _kernel = kernel;
-        _agent = agent;
-        _logger = logger ?? NullLogger<ChatGateway>.Instance;
-        _vision = media?.Vision ?? false;
-
-        _target = DescribeTarget(options?.Value);
-    }
+    private readonly IChatCompletionService _chat = chat ?? throw new ArgumentNullException(nameof(chat));
+    private readonly Kernel? _kernel = kernel;
+    private readonly ChatCompletionAgent? _agent = agent;
+    private readonly ILogger<ChatGateway> _logger = logger ?? NullLogger<ChatGateway>.Instance;
+    private readonly string _target = DescribeTarget(options?.Value);
+    private readonly bool _vision = media?.Vision ?? false;
 
     private static string DescribeTarget(LlmOptions? llm)
     {

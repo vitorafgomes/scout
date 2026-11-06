@@ -7,22 +7,16 @@ namespace Scout.Skills.Tests;
 /// counts batch (<see cref="GenerateAsync"/>) invocations so tests can assert
 /// the skill index is embedded exactly once and lazily.
 /// </summary>
-internal sealed class FakeEmbeddingGenerator : IEmbeddingGenerator<string, Embedding<float>>
+internal sealed class FakeEmbeddingGenerator(
+    IReadOnlyDictionary<string, float[]> vectors,
+    bool throwOnGenerate = false) : IEmbeddingGenerator<string, Embedding<float>>
 {
-    private readonly IReadOnlyDictionary<string, float[]> _vectors;
-    private readonly bool _throwOnGenerate;
+    private readonly IReadOnlyDictionary<string, float[]> _vectors = vectors;
+    private readonly bool _throwOnGenerate = throwOnGenerate;
     private readonly TaskCompletionSource _indexBatchEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _batchCallCount;
     private int _indexBatchCallCount;
     private int _indexFailuresRemaining;
-
-    public FakeEmbeddingGenerator(
-        IReadOnlyDictionary<string, float[]> vectors,
-        bool throwOnGenerate = false)
-    {
-        _vectors = vectors;
-        _throwOnGenerate = throwOnGenerate;
-    }
 
     /// <summary>Number of times the batch <see cref="GenerateAsync"/> was invoked.</summary>
     public int BatchCallCount => Volatile.Read(ref _batchCallCount);

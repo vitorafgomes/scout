@@ -26,7 +26,15 @@ namespace Scout.Conversation;
 /// Failures surface through the sink's <see cref="IResponseSink.FailAsync"/> and
 /// never crash the host.
 /// </summary>
-public sealed partial class ConversationConductor
+public sealed partial class ConversationConductor(
+    IConversationRouter router,
+    StreamPump pump,
+    ILogger<ConversationConductor>? logger,
+    AccessPolicy? access,
+    IAudioTranscriber? transcriber = null,
+    IPairingSignal? pairingSignal = null,
+    TimeProvider? timeProvider = null,
+    IConversationKeyProvider? keyProvider = null)
 {
     private const string NotAllowedReply = "Scout only answers its configured users.";
     private const string NoAllowedUsersReply =
@@ -49,39 +57,19 @@ public sealed partial class ConversationConductor
     private const int QuotedTranscriptLength = 200;
     private static readonly TimeSpan DefaultAudioDownloadTimeout = TimeSpan.FromSeconds(30);
 
-    private readonly IConversationRouter _router;
-    private readonly StreamPump _pump;
-    private readonly ILogger<ConversationConductor> _logger;
-    private readonly AccessPolicy _access;
-    private readonly IAudioTranscriber? _transcriber;
-    private readonly IPairingSignal? _pairingSignal;
-    private readonly TimeProvider _time;
-    private readonly IConversationKeyProvider _keyProvider;
+    private readonly IConversationRouter _router = router ?? throw new ArgumentNullException(nameof(router));
+    private readonly StreamPump _pump = pump ?? throw new ArgumentNullException(nameof(pump));
+    private readonly ILogger<ConversationConductor> _logger = logger ?? NullLogger<ConversationConductor>.Instance;
+    private readonly AccessPolicy _access = access ?? new AccessPolicy(new AccessOptions());
+    private readonly IAudioTranscriber? _transcriber = transcriber;
+    private readonly IPairingSignal? _pairingSignal = pairingSignal;
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly IConversationKeyProvider _keyProvider = keyProvider ?? new ConversationKeyProvider();
     private int _pairingUsed;
     private int _failedPairingAttempts;
 
     /// <summary>Ceiling on downloading one voice message, body included.</summary>
     internal TimeSpan AudioDownloadTimeout { get; init; } = DefaultAudioDownloadTimeout;
-
-    public ConversationConductor(
-        IConversationRouter router,
-        StreamPump pump,
-        ILogger<ConversationConductor>? logger,
-        AccessPolicy? access,
-        IAudioTranscriber? transcriber = null,
-        IPairingSignal? pairingSignal = null,
-        TimeProvider? timeProvider = null,
-        IConversationKeyProvider? keyProvider = null)
-    {
-        _router = router ?? throw new ArgumentNullException(nameof(router));
-        _pump = pump ?? throw new ArgumentNullException(nameof(pump));
-        _logger = logger ?? NullLogger<ConversationConductor>.Instance;
-        _access = access ?? new AccessPolicy(new AccessOptions());
-        _transcriber = transcriber;
-        _pairingSignal = pairingSignal;
-        _time = timeProvider ?? TimeProvider.System;
-        _keyProvider = keyProvider ?? new ConversationKeyProvider();
-    }
 
     /// <summary>
     /// Builds the conductor from bound <see cref="AccessOptions"/>, without voice

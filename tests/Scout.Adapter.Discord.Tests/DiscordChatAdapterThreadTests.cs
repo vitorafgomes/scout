@@ -1,3 +1,4 @@
+using System.Globalization;
 using Discord;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -89,7 +90,7 @@ public sealed class DiscordChatAdapterThreadTests
             Arg.Any<ThreadArchiveDuration>(),
             Arg.Is<IMessage>(m => m.Id == 42UL),
             Arg.Any<bool?>(), Arg.Any<int?>(), Arg.Any<RequestOptions>());
-        message.ChannelId.ShouldBe(ThreadId.ToString(), "memory is kept per thread");
+        message.ChannelId.ShouldBe(ThreadId.ToString(CultureInfo.InvariantCulture), "memory is kept per thread");
         await AnyPost(thread);
         await NoPost(channel);
     }
@@ -112,7 +113,7 @@ public sealed class DiscordChatAdapterThreadTests
 
         var message = await RunAsync(channel, GuildId);
 
-        message.ChannelId.ShouldBe(ChannelId.ToString());
+        message.ChannelId.ShouldBe(ChannelId.ToString(CultureInfo.InvariantCulture));
         references.ShouldHaveSingleItem().ShouldNotBeNull().MessageId.Value.ShouldBe(42UL);
     }
 
@@ -124,7 +125,7 @@ public sealed class DiscordChatAdapterThreadTests
 
         var message = await RunAsync(dm, guildId: null);
 
-        message.ChannelId.ShouldBe(ChannelId.ToString());
+        message.ChannelId.ShouldBe(ChannelId.ToString(CultureInfo.InvariantCulture));
         await AnyPost(dm);
     }
 
@@ -137,7 +138,7 @@ public sealed class DiscordChatAdapterThreadTests
         var message = await RunAsync(thread, GuildId);
 
         await thread.DidNotReceiveWithAnyArgs().CreateThreadAsync(default!, default, default, default, default, default, default);
-        message.ChannelId.ShouldBe(ThreadId.ToString());
+        message.ChannelId.ShouldBe(ThreadId.ToString(CultureInfo.InvariantCulture));
         await AnyPost(thread);
     }
 
@@ -149,7 +150,7 @@ public sealed class DiscordChatAdapterThreadTests
         var message = await RunAsync(channel, GuildId, replyInThreads: false);
 
         await channel.DidNotReceiveWithAnyArgs().CreateThreadAsync(default!, default, default, default, default, default, default);
-        message.ChannelId.ShouldBe(ChannelId.ToString());
+        message.ChannelId.ShouldBe(ChannelId.ToString(CultureInfo.InvariantCulture));
         await AnyPost(channel);
     }
 
@@ -169,7 +170,7 @@ public sealed class DiscordChatAdapterThreadTests
 
         await channel.DidNotReceiveWithAnyArgs().CreateThreadAsync(default!, default, default, default, default, default, default);
         await NoPost(thread);
-        message.ChannelId.ShouldBe(ChannelId.ToString());
+        message.ChannelId.ShouldBe(ChannelId.ToString(CultureInfo.InvariantCulture));
         references.ShouldHaveSingleItem().ShouldNotBeNull().MessageId.Value.ShouldBe(42UL);
     }
 
@@ -180,7 +181,7 @@ public sealed class DiscordChatAdapterThreadTests
 
         var message = await RunAsync(channel, GuildId, access: new AccessOptions { AllowedUserIds = ["2222"] });
 
-        message.ChannelId.ShouldBe(ThreadId.ToString());
+        message.ChannelId.ShouldBe(ThreadId.ToString(CultureInfo.InvariantCulture));
         await AnyPost(thread);
         await NoPost(channel);
     }

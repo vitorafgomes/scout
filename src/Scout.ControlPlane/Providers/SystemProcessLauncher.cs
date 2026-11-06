@@ -10,14 +10,9 @@ namespace Scout.ControlPlane.Providers;
 /// stdout/stderr from the child are forwarded to the logger at debug level
 /// so a noisy daemon does not pollute the worker's info stream.
 /// </summary>
-public sealed class SystemProcessLauncher : IProcessLauncher
+public sealed class SystemProcessLauncher(ILoggerFactory loggerFactory) : IProcessLauncher
 {
-    private readonly ILoggerFactory _loggerFactory;
-
-    public SystemProcessLauncher(ILoggerFactory loggerFactory)
-    {
-        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-    }
+    private readonly ILoggerFactory _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 
     public ILaunchedProcess Launch(ProcessLaunchRequest request)
     {
@@ -118,19 +113,12 @@ public sealed class SystemProcessLauncher : IProcessLauncher
         return new LaunchedProcess(process, jobHandle, logger);
     }
 
-    private sealed class LaunchedProcess : ILaunchedProcess
+    private sealed class LaunchedProcess(Process process, SystemProcessLauncher.JobObjectHandle? jobHandle, ILogger logger) : ILaunchedProcess
     {
-        private readonly Process _process;
-        private readonly JobObjectHandle? _jobHandle;
-        private readonly ILogger _logger;
+        private readonly Process _process = process;
+        private readonly JobObjectHandle? _jobHandle = jobHandle;
+        private readonly ILogger _logger = logger;
         private int _disposed;
-
-        public LaunchedProcess(Process process, JobObjectHandle? jobHandle, ILogger logger)
-        {
-            _process = process;
-            _jobHandle = jobHandle;
-            _logger = logger;
-        }
 
         public int Pid => _process.Id;
 

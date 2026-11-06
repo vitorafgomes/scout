@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using Discord;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Scout.Conversation.Abstractions;
 using Scout.Conversation.Access;
 
 namespace Scout.Adapter.Discord.Tests;

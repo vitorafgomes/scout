@@ -1,6 +1,5 @@
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 using Scout.Operator.Tests.Fakes;
 
 namespace Scout.Operator.Tests;

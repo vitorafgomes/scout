@@ -80,7 +80,7 @@ Phase 5 of [[pages/roadmap/live-assistant]] asks that the owner, after capturing
 
 - `tests/Scout.Operator.Tests/ScreenText/TesseractScreenReaderTests.cs:32` (the command line, psm 6, the bytes on standard input, 3 s, the trimmed text), `:52` (languages by locale), `:63` (control characters and the 5,000 cut), `:78` (slow, failing and silent programs throw), `:97` (no file, no path argument but the language data folder), `:118` (registered only with both paths), `:129` (the configured locale reaches the registered reader).
 - `tests/Scout.Operator.Tests/ProcessRunnerTests.cs:102` (bytes reach a real program's standard input).
-- `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:556` (the text event), `:573` (no reader), `:590` (the image rule), `:605` (a reader failure), `:618` (never logged); `tests/Scout.Adapter.Local.Tests/LocalLiveSessionTests.cs:381` (a read beside an open ask and listen).
+- `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs:557` (the text event), `:574` (no reader), `:591` (the image rule), `:606` (a reader failure), `:619` (never logged); `tests/Scout.Adapter.Local.Tests/LocalLiveSessionTests.cs:380` (a read beside an open ask and listen).
 - `tests/Scout.Host.Console.Tests/HostLocalCompositionTests.cs:198` (the composed local adapter gets the reader only with both paths).
 - Invariants: [[pages/invariants/no-executive-writes]], [[pages/invariants/pluggable-boundaries]], [[pages/invariants/local-first-default]].
 

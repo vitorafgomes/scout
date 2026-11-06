@@ -44,12 +44,7 @@ public sealed class HuggingFaceLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var huggingFace = options.Value.HuggingFace;
-        if (huggingFace is null)
-        {
-            throw new ArgumentException("LlmOptions.HuggingFace must be configured.", nameof(options));
-        }
-
+        var huggingFace = options.Value.HuggingFace ?? throw new ArgumentException("LlmOptions.HuggingFace must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(huggingFace.ApiKey))
         {
             throw new ArgumentException(

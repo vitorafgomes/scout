@@ -38,10 +38,6 @@ public sealed class NullFeatureActivator : IFeatureActivator
 }
 
 /// <summary>Raised when activation fails (plugin construction, kernel wiring).</summary>
-public sealed class FeatureActivationException : Exception
+public sealed class FeatureActivationException(string message) : Exception(message)
 {
-    public FeatureActivationException(string message)
-        : base(message)
-    {
-    }
 }

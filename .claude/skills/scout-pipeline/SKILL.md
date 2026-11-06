@@ -14,6 +14,14 @@ Scope: an open-source, read-only chatops assistant. The manager (the session thr
 reads the vault, states the plan, dispatches `scout-implementer` with it and checks the result
 against the plan line by line, reporting any departure to the owner instead of patching it silently.
 
+## 0. The tree right now
+
+Classification starts from the real diff, not from memory of what was touched: run
+`git status --porcelain` and `git diff HEAD --stat` first and classify from what they list. As an
+instruction, never as a dynamic shell block (an exclamation mark before a backticked command) in
+this file: a skill that shells out while loading fails to load wherever Bash is denied, and then
+nothing below this line is read.
+
 ## 1. Classify and announce
 
 Classify **Feature / Bug / Refactor / Investigate**, then pick the shape:
@@ -24,7 +32,7 @@ Classify **Feature / Bug / Refactor / Investigate**, then pick the shape:
 | **Full pipeline** | Everything else, however small the diff looks. | Vault, six-part plan, `scout-implementer`, conformance check, every hard gate below. |
 
 - **Never fast path, whatever the extension:** `.editorconfig`, `Directory.Build.props`,
-  `Directory.Packages.props`, `global.json`, `.github/workflows/**`, `appsettings*.json`,
+  `Directory.Packages.props`, `global.json`, `Scout.slnx`, `.github/workflows/**`, `appsettings*.json`,
   `.claude/**`, `scripts/**`, `ui/package.json`, `ui/bun.lock`, `ui/build/**`.
 - **Never trivial:** anything that adds or changes a call leaving the process (an SDK call, an HTTP
   or gRPC call, a filesystem write), a function or tool the LLM can invoke, a plugin operation, a
@@ -112,8 +120,9 @@ means re-grepping the repo was stated too fast: fix the plan.
    | `src/Scout.ControlPlane.Contracts` or anything three or more projects reference | every test project under `tests/` (not `tests/old`) |
    | `src/Scout.Host.*` or DI registration | the host's test project + every adapter and plugin test project |
    | `ui/**` | in `ui/`: `bun run typecheck`, `bun run lint`, `bun run format`, `bun run test` (per package counts) |
-   | `.claude/hooks/**` | every `.claude/hooks/*.test.sh` (`pre-git-guard`, `stop-review-gate`, `session-start`, `post-edit-oracle-note`, `session-end-metrics`; each must print `ALL CASES PASS`; CI runs all five) and a run of any other touched hook |
-   | `scripts/check-vault-refs.sh` | `bash scripts/check-vault-refs.test.sh` (`ALL CASES PASS`) and a run on the real vault |
+   | `.claude/hooks/**` | every `.claude/hooks/*.test.sh` (`pre-git-guard`, `stop-review-gate`, `session-start`, `post-edit-oracle-note`, `session-end-metrics`, `post-edit-rule-b`, `prompt-router`; each must print `ALL CASES PASS`; CI runs all seven) and a run of any other touched hook |
+   | `scripts/*.sh` | the script's `.test.sh` (`ALL CASES PASS`; `check-vault-refs` and `test-per-project` have one) and a run of the script itself on the real tree |
+   | `.editorconfig`, `Directory.Build.props`, `Directory.Packages.props`, `Scout.slnx`, anything under `tests/` | `dotnet test tests/Scout.ArchTests` (the layering rules, the analyzer gate, the test-suite health, the source scanners) on top of the row the code change matches |
    | `.claude/skills/scout-pipeline/**` | `claude plugin eval .claude/skills/scout-pipeline` passes every case under `evals/`; a lane or SKILL.md edit that changes what a grader asserts updates the eval in the same diff |
    | contract/config/doc text only (`vault/**`, `*.md`, and `.claude/**` paths no row above matches) | no executable surface - record gates 3-4 as N/A and say why |
 

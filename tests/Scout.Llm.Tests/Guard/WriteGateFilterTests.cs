@@ -111,10 +111,10 @@ public sealed class WriteGateFilterTests
 
         _uploadRan.ShouldBeFalse();
         result.ShouldBe("Scout could not reach its control plane, so this write was not performed.");
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldNotContain(AccessToken);
-        warning.Message.ShouldNotContain("Launch day");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldNotContain(AccessToken);
+        message.ShouldNotContain("Launch day");
     }
 
     [Fact]
@@ -137,11 +137,11 @@ public sealed class WriteGateFilterTests
 
         await Upload(Kernel(gate), UploadArguments(longDescription));
 
-        var request = gate.Requests.ShouldHaveSingleItem();
-        request.FeatureId.ShouldBe("youtube");
-        request.Scope.ShouldBe("videos.insert");
-        request.Target.ShouldBe("YouTube.upload_video");
-        request.Summary.ShouldBe($"upload_video(accessToken, description={new string('d', 200)}, title=Launch day)");
+        var (featureId, scope, target, summary) = gate.Requests.ShouldHaveSingleItem();
+        featureId.ShouldBe("youtube");
+        scope.ShouldBe("videos.insert");
+        target.ShouldBe("YouTube.upload_video");
+        summary.ShouldBe($"upload_video(accessToken, description={new string('d', 200)}, title=Launch day)");
     }
 
     [Fact]
@@ -155,13 +155,13 @@ public sealed class WriteGateFilterTests
 
         await Upload(Kernel(gate), arguments);
 
-        var request = gate.Requests.ShouldHaveSingleItem();
-        request.Summary.ShouldBe(
+        var (_, _, target, summary) = gate.Requests.ShouldHaveSingleItem();
+        summary.ShouldBe(
             "upload_video(accessToken, authorization, body, description=a short description, headers, title=Launch day)");
         foreach (var leaked in new[] { AccessToken, "leaked-bearer-credential", "leaked-body-credential", "leaked-header-credential" })
         {
-            request.Summary.ShouldNotContain(leaked);
-            request.Target.ShouldNotContain(leaked);
+            summary.ShouldNotContain(leaked);
+            target.ShouldNotContain(leaked);
         }
     }
 
@@ -177,9 +177,9 @@ public sealed class WriteGateFilterTests
 
         result.ShouldBe("uploaded");
         _uploadRan.ShouldBeTrue();
-        var warning = logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldBe("The write gate did not record YouTube.upload_video (HttpRequestException).");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldBe("The write gate did not record YouTube.upload_video (HttpRequestException).");
     }
 
     private sealed class RecordingLogger : ILogger<WriteGateFilter>

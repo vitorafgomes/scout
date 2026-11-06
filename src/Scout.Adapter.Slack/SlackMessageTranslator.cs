@@ -22,6 +22,7 @@ public sealed partial class SlackMessageTranslator
         out ChatMessage? chatMessage)
         => TryTranslate(inbound, botUserId, out chatMessage, out _);
 
+#pragma warning disable CA1822 // Instance member: the translator is DI-injected and called through an instance by adapters and tests
     internal bool TryTranslate(
         InboundSlackMessage inbound,
         string botUserId,
@@ -85,6 +86,7 @@ public sealed partial class SlackMessageTranslator
             IsDirectMessage: isDm);
         return true;
     }
+#pragma warning restore CA1822
 
     private static bool MentionsUser(string content, string botUserId)
         => MentionPattern().Matches(content)

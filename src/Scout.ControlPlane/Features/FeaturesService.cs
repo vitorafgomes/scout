@@ -6,27 +6,18 @@ namespace Scout.ControlPlane.Features;
 /// credential persistence, settings merge, enable/disable activation and the
 /// merged-snapshot build. The gRPC service is a thin adapter over this type.
 /// </summary>
-public sealed class FeaturesService
+public sealed class FeaturesService(
+    IFeatureCatalog catalog,
+    IFeatureStateStore stateStore,
+    ICredentialStore credentials,
+    IFeatureActivator activator,
+    IEnumerable<IFeatureCredentialValidator> validators)
 {
-    private readonly IFeatureCatalog _catalog;
-    private readonly IFeatureStateStore _stateStore;
-    private readonly ICredentialStore _credentials;
-    private readonly IFeatureActivator _activator;
-    private readonly IReadOnlyList<IFeatureCredentialValidator> _validators;
-
-    public FeaturesService(
-        IFeatureCatalog catalog,
-        IFeatureStateStore stateStore,
-        ICredentialStore credentials,
-        IFeatureActivator activator,
-        IEnumerable<IFeatureCredentialValidator> validators)
-    {
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
-        _credentials = credentials ?? throw new ArgumentNullException(nameof(credentials));
-        _activator = activator ?? throw new ArgumentNullException(nameof(activator));
-        _validators = (validators ?? throw new ArgumentNullException(nameof(validators))).ToArray();
-    }
+    private readonly IFeatureCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IFeatureStateStore _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
+    private readonly ICredentialStore _credentials = credentials ?? throw new ArgumentNullException(nameof(credentials));
+    private readonly IFeatureActivator _activator = activator ?? throw new ArgumentNullException(nameof(activator));
+    private readonly IReadOnlyList<IFeatureCredentialValidator> _validators = (validators ?? throw new ArgumentNullException(nameof(validators))).ToArray();
 
     /// <summary>Return the merged snapshot for every catalog feature.</summary>
     public async Task<IReadOnlyList<FeatureSnapshot>> ListAsync(CancellationToken ct)

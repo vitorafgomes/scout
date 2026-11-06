@@ -11,14 +11,9 @@ namespace Scout.Host.ControlPlane.Services;
 /// domain ids, domain results to wire messages, and domain exceptions to
 /// gRPC status codes. Streaming honours the call's cancellation token.
 /// </summary>
-public sealed class ProvidersGrpcService : GrpcProviders.ProvidersBase
+public sealed class ProvidersGrpcService(ProvidersService providers) : GrpcProviders.ProvidersBase
 {
-    private readonly ProvidersService _providers;
-
-    public ProvidersGrpcService(ProvidersService providers)
-    {
-        _providers = providers ?? throw new ArgumentNullException(nameof(providers));
-    }
+    private readonly ProvidersService _providers = providers ?? throw new ArgumentNullException(nameof(providers));
 
     public override async Task<ListProvidersResponse> ListProviders(
         ListProvidersRequest request,

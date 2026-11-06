@@ -20,13 +20,9 @@ public enum WriteDecisionKind
 public sealed record WriteDecision(WriteDecisionKind Kind, string Reason, string? ActionId = null);
 
 /// <summary>Thrown when a write cannot be recorded because it was not permitted.</summary>
-public sealed class WriteNotRecordableException : Exception
+/// <remarks>Build the exception with the reason the record was refused.</remarks>
+public sealed class WriteNotRecordableException(string message) : Exception(message)
 {
-    /// <summary>Build the exception with the reason the record was refused.</summary>
-    public WriteNotRecordableException(string message)
-        : base(message)
-    {
-    }
 }
 
 /// <summary>
@@ -36,7 +32,12 @@ public sealed class WriteNotRecordableException : Exception
 /// grant is read from the state store on every request. The gate never grants and
 /// never decides an action.
 /// </summary>
-public sealed class WriteGateService
+/// <remarks>Build the gate over the catalog, the feature state, the queue and the log.</remarks>
+public sealed class WriteGateService(
+    IFeatureCatalog catalog,
+    IFeatureStateStore states,
+    IActionQueue actions,
+    IWriteLog writes)
 {
     /// <summary>
     /// Outcome of the write-log entry that records the owner's approval of an action made in the desktop; it is not
@@ -46,23 +47,10 @@ public sealed class WriteGateService
 
     private const string Waiting = "Waiting for the owner's approval on the Review screen of Scout Desktop.";
 
-    private readonly IFeatureCatalog _catalog;
-    private readonly IFeatureStateStore _states;
-    private readonly IActionQueue _actions;
-    private readonly IWriteLog _writes;
-
-    /// <summary>Build the gate over the catalog, the feature state, the queue and the log.</summary>
-    public WriteGateService(
-        IFeatureCatalog catalog,
-        IFeatureStateStore states,
-        IActionQueue actions,
-        IWriteLog writes)
-    {
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _states = states ?? throw new ArgumentNullException(nameof(states));
-        _actions = actions ?? throw new ArgumentNullException(nameof(actions));
-        _writes = writes ?? throw new ArgumentNullException(nameof(writes));
-    }
+    private readonly IFeatureCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+    private readonly IFeatureStateStore _states = states ?? throw new ArgumentNullException(nameof(states));
+    private readonly IActionQueue _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+    private readonly IWriteLog _writes = writes ?? throw new ArgumentNullException(nameof(writes));
 
     /// <summary>The approval queue the gate records against.</summary>
     internal IActionQueue Actions => _actions;

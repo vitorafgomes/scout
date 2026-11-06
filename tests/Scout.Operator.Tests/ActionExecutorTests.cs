@@ -12,6 +12,7 @@ public sealed class ActionExecutorTests : IDisposable
 {
     private const string Uploaded = "newVideo001";
 
+    private static readonly string[] BreadTags = ["bread", "sourdough"];
     private readonly string _media = Directory.CreateTempSubdirectory("scout-publish-").FullName;
     private readonly FakeTimeProvider _time = new(Given.Now);
     private readonly IYouTubeWriteClient _youtube = Substitute.For<IYouTubeWriteClient>();
@@ -87,7 +88,7 @@ public sealed class ActionExecutorTests : IDisposable
         await _youtube.Received(1).UploadVideoAsync(
             Path.Combine(_media, "video.mp4"),
             Arg.Is<YouTubeUpload>(u => u.Title == "Bread in ten minutes" && u.Description == "How to bake."
-                && u.Tags.SequenceEqual(new[] { "bread", "sourdough" }) && u.CategoryId == "26" && u.DefaultLanguage == "en"
+                && u.Tags.SequenceEqual(BreadTags) && u.CategoryId == "26" && u.DefaultLanguage == "en"
                 && u.PrivacyStatus == "unlisted" && u.PublishAt == null && !u.MadeForKids && u.SyntheticMedia), Arg.Any<UploadSession>(),
             Arg.Any<CancellationToken>());
         controlPlane.Saves.Select(s => s.Project.Publication!.Status).ShouldBe(["uploading", "uploaded"]);

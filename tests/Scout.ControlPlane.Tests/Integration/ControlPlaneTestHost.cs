@@ -186,11 +186,9 @@ internal sealed class ControlPlaneTestHost : IAsyncDisposable
         }
     }
 
-    private sealed class FakeBinaryLocator : IBinaryLocator
+    private sealed class FakeBinaryLocator(string? path) : IBinaryLocator
     {
-        private readonly string? _path;
-
-        public FakeBinaryLocator(string? path) => _path = path;
+        private readonly string? _path = path;
 
         public Task<string?> FindOnPathAsync(string binaryName, CancellationToken ct) =>
             Task.FromResult(_path);

@@ -11,7 +11,7 @@ namespace Scout.Adapter.Slack.Tests;
 /// </summary>
 public sealed class SlackServiceCollectionExtensionsTests
 {
-    private static IServiceProvider Build(string? botToken, string? appLevelToken)
+    private static ServiceProvider Build(string? botToken, string? appLevelToken)
     {
         var settings = new Dictionary<string, string?>();
         if (botToken is not null)

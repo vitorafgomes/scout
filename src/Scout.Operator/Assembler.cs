@@ -156,7 +156,8 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
                 arguments = SegmentArguments(tools, scene, position, duration, image, audio, captions, motion, string.Empty);
             }
 
-            var segment = $"segment-{Key(tools, arguments, character ? (string?[])[image, face, audio] : [image, audio], identity)}.mp4";
+            string?[] inputs = character ? [image, face, audio] : [image, audio];
+            var segment = $"segment-{Key(tools, arguments, inputs, identity)}.mp4";
             if (!MediaFiles.Exists(directory, segment))
             {
                 var mouthTrack = cues is null ? null : await MouthTrack.WriteAsync(directory, scene.Id, cues, lipSync.MouthsPath, ct).ConfigureAwait(false);
@@ -319,7 +320,6 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
     /// </summary>
     internal static List<string> PresenterArguments(
         FfmpegTools tools,
-        OperatorScene scene,
         int position,
         int durationMs,
         string? backdrop,
@@ -366,12 +366,12 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         if (mouth is (var box, var track))
         {
             arguments.AddRange(["-f", "concat", "-safe", "0", "-i", track]);
-            var placed = (
-                X: left + (int)Math.Round(box.X * placedWidth),
-                Y: top + (int)Math.Round(box.Y * placedHeight),
-                Width: Math.Max(2, (int)Math.Round(box.Width * placedWidth)),
-                Height: Math.Max(2, (int)Math.Round(box.Height * placedHeight)));
-            graph.Append(CultureInfo.InvariantCulture, $"[body];[2:v]scale={placed.Width}:{placed.Height}[mouth];[body][mouth]overlay={placed.X}:{placed.Y}");
+            var (x, y, mouthWidth, mouthHeight) = (
+                left + (int)Math.Round(box.X * placedWidth),
+                top + (int)Math.Round(box.Y * placedHeight),
+                Math.Max(2, (int)Math.Round(box.Width * placedWidth)),
+                Math.Max(2, (int)Math.Round(box.Height * placedHeight)));
+            graph.Append(CultureInfo.InvariantCulture, $"[body];[2:v]scale={mouthWidth}:{mouthHeight}[mouth];[body][mouth]overlay={x}:{y}");
         }
 
         var captionStyle = ((int)Math.Round(44.0 * height / Frame.Height), (int)Math.Round(940.0 * height / Frame.Height), (int?)marginX);
@@ -402,9 +402,9 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
         Func<Task<LipSyncProbe>> lips,
         CancellationToken ct)
     {
-        string? note = null;
         IReadOnlyList<MouthCue>? cues = null;
         var mouthBox = presenter.MouthBox;
+        string? note;
         if (mouthBox is null)
         {
             note = NoMouthBox;
@@ -430,7 +430,7 @@ internal sealed class Assembler(FfmpegToolset ffmpeg, MediaProbe probe, RhubarbL
 
         (OperatorMouthBox, string)? mouth = cues is null ? null : (mouthBox!, MediaFiles.PathFor(directory, MouthTrack.FileName(scene.Id)));
         var arguments = PresenterArguments(
-            tools, scene, position, durationMs, backdrop, face, size, presenter.Source == OperatorPipeline.Generated, mouth, audio, captions, motion, string.Empty, frame);
+            tools, position, durationMs, backdrop, face, size, presenter.Source == OperatorPipeline.Generated, mouth, audio, captions, motion, string.Empty, frame);
         return (arguments, PresenterIdentity(mouthBox, cues, lipSync.MouthsPath), cues, note);
     }
 

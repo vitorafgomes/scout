@@ -45,12 +45,7 @@ public sealed class AzureOpenAILlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var azure = options.Value.AzureOpenAI;
-        if (azure is null)
-        {
-            throw new ArgumentException("LlmOptions.AzureOpenAI must be configured.", nameof(options));
-        }
-
+        var azure = options.Value.AzureOpenAI ?? throw new ArgumentException("LlmOptions.AzureOpenAI must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(azure.ApiKey))
         {
             throw new ArgumentException(

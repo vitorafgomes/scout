@@ -11,19 +11,13 @@ namespace Scout.Llm.Providers.ChatGptPlan;
 /// restart. A missing, unreadable or expired file, or an HTTP 401, fails with
 /// <see cref="LlmSignInRequiredException"/>; no message ever carries the token or the file contents.
 /// </summary>
-internal sealed class ChatGptPlanTokenPolicy : AuthenticationPolicy
+internal sealed class ChatGptPlanTokenPolicy(string tokenFile, Func<string, string>? readAllText = null) : AuthenticationPolicy
 {
     private static readonly TimeSpan ReadAheadOfExpiry = TimeSpan.FromSeconds(60);
 
-    private readonly string _tokenFile;
-    private readonly Func<string, string> _readAllText;
+    private readonly string _tokenFile = tokenFile;
+    private readonly Func<string, string> _readAllText = readAllText ?? File.ReadAllText;
     private volatile CachedToken? _cached;
-
-    public ChatGptPlanTokenPolicy(string tokenFile, Func<string, string>? readAllText = null)
-    {
-        _tokenFile = tokenFile;
-        _readAllText = readAllText ?? File.ReadAllText;
-    }
 
     public override void Process(
         PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)

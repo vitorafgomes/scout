@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace Scout.Knowledge.Tests;
 
-public class ProjectResolutionServiceTests : IDisposable
+public sealed class ProjectResolutionServiceTests : IDisposable
 {
     private readonly string _root;
 

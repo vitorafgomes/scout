@@ -49,7 +49,7 @@ public sealed class WriteGateServiceTests : IDisposable
 
     private WriteGateService Gate() => new(new FeatureCatalog(), _states, _actions, _writes);
 
-    private Task GrantYouTubeAsync() =>
+    private Task<FeatureSnapshot> GrantYouTubeAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.YouTubeId, granted: true, confirmWrites: true, CancellationToken.None);
 
     [Theory]
@@ -352,7 +352,7 @@ public sealed class WriteGateServiceTests : IDisposable
             .ShouldBe(PendingActionStatus.Executed);
     }
 
-    private Task GrantGitHubAsync() =>
+    private Task<FeatureSnapshot> GrantGitHubAsync() =>
         _features.SetWriteGrantAsync(FeatureCatalog.GitHubId, granted: true, confirmWrites: true, CancellationToken.None);
 
     [Fact]

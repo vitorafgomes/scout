@@ -147,14 +147,14 @@ internal sealed class ExperimentRunner(
         {
             var start = new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
             var end = start.AddDays(1);
-            var best = live
+            var (id, _) = live
                 .Select(a => (a.Id, Hours: (Min(a.To, end) - Max(a.From, start)).TotalHours))
                 .Where(a => a.Hours > 0)
                 .OrderByDescending(a => a.Hours)
                 .FirstOrDefault();
-            if (best.Id is not null)
+            if (id is not null)
             {
-                days[best.Id].Add(day);
+                days[id].Add(day);
             }
         }
 

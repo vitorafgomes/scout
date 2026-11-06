@@ -10,7 +10,7 @@ namespace Scout.Adapter.Teams.Tests;
 /// </summary>
 public sealed class TeamsServiceCollectionExtensionsTests
 {
-    private static IServiceProvider Build(string? appId)
+    private static ServiceProvider Build(string? appId)
     {
         var settings = new Dictionary<string, string?>();
         if (appId is not null)

@@ -88,9 +88,9 @@ public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
         chunks[0].Role.ShouldBe(AuthorRole.Assistant);
         chunks[0].Content.ShouldBe(RefusalText);
         _inner.ReceivedCalls().ShouldBeEmpty();
-        var info = _logger.Entries.ShouldHaveSingleItem();
-        info.Level.ShouldBe(LogLevel.Information);
-        info.Message.ShouldBe("Read-only guard refused a request (p=0.90)");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Information);
+        message.ShouldBe("Read-only guard refused a request (p=0.90)");
     }
 
     [Fact]
@@ -132,10 +132,10 @@ public sealed class ReadOnlyGuardChatCompletionServiceTests : IDisposable
             History("is the build green?"), kernel: null));
 
         chunks.ShouldBe(expected);
-        var warning = _logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldContain("status=500");
-        warning.Message.ShouldNotContain("ts-key");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldContain("status=500");
+        message.ShouldNotContain("ts-key");
     }
 
     [Fact]

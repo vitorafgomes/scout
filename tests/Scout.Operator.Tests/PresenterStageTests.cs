@@ -74,7 +74,7 @@ public sealed class PresenterStageTests : IDisposable
     private static string Prompt(ITextToImageService images)
         => images.ReceivedCalls().ShouldHaveSingleItem().GetArguments()[0].ShouldBeOfType<TextContent>().Text!;
 
-    private Task<OperatorProjectState> Stored(RecordingControlPlane controlPlane) => controlPlane.GetProjectAsync("p1", CancellationToken.None);
+    private static Task<OperatorProjectState> Stored(RecordingControlPlane controlPlane) => controlPlane.GetProjectAsync("p1", CancellationToken.None);
 
     [Fact]
     public async Task The_First_Presenter_Is_Made_From_The_Topic_Alone_With_The_Safety_Tail_And_Its_Preview()

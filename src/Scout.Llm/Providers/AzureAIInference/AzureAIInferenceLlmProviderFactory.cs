@@ -44,13 +44,8 @@ public sealed class AzureAIInferenceLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var inference = options.Value.AzureAIInference;
-        if (inference is null)
-        {
-            throw new ArgumentException(
+        var inference = options.Value.AzureAIInference ?? throw new ArgumentException(
                 "LlmOptions.AzureAIInference must be configured.", nameof(options));
-        }
-
         if (string.IsNullOrWhiteSpace(inference.ApiKey))
         {
             throw new ArgumentException(

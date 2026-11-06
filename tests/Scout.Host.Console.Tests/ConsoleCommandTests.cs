@@ -1,4 +1,3 @@
-using Scout.Host.Console;
 using Shouldly;
 using Xunit;
 

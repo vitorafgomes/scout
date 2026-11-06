@@ -9,7 +9,15 @@ namespace Scout.ControlPlane.Providers;
 /// <see cref="ILocalRuntimeConfigStore"/> to expose the live status plus
 /// start/restart lifecycle for the local Ollama runtime.
 /// </summary>
-public sealed class OllamaProviderService
+public sealed class OllamaProviderService(
+    IBinaryLocator locator,
+    IOllamaApiClient api,
+    IProcessLauncher launcher,
+    ILocalRuntimeRegistry registry,
+    ILocalRuntimeConfigStore configStore,
+    IOptions<OllamaProviderOptions> options,
+    IOllamaReadinessProbe probe,
+    ILogger<OllamaProviderService> logger) : IDisposable
 {
     public const string ProviderId = "ollama";
     private const string BinaryName = "ollama";
@@ -26,41 +34,25 @@ public sealed class OllamaProviderService
     private static readonly TimeSpan RestartGrace = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ExternalStopMaxWait = TimeSpan.FromSeconds(10);
 
-    private readonly IBinaryLocator _locator;
-    private readonly IOllamaApiClient _api;
-    private readonly IProcessLauncher _launcher;
-    private readonly ILocalRuntimeRegistry _registry;
-    private readonly ILocalRuntimeConfigStore _configStore;
-    private readonly OllamaProviderOptions _options;
-    private readonly IOllamaReadinessProbe _probe;
-    private readonly ILogger<OllamaProviderService> _logger;
+    private readonly IBinaryLocator _locator = locator ?? throw new ArgumentNullException(nameof(locator));
+    private readonly IOllamaApiClient _api = api ?? throw new ArgumentNullException(nameof(api));
+    private readonly IProcessLauncher _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
+    private readonly ILocalRuntimeRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+    private readonly ILocalRuntimeConfigStore _configStore = configStore ?? throw new ArgumentNullException(nameof(configStore));
+    private readonly OllamaProviderOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly IOllamaReadinessProbe _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+    private readonly ILogger<OllamaProviderService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+    private static readonly string[] ServeArguments = ["serve"];
 
     private readonly SemaphoreSlim _startGate = new(1, 1);
 
-    public OllamaProviderService(
-        IBinaryLocator locator,
-        IOllamaApiClient api,
-        IProcessLauncher launcher,
-        ILocalRuntimeRegistry registry,
-        ILocalRuntimeConfigStore configStore,
-        IOptions<OllamaProviderOptions> options,
-        IOllamaReadinessProbe probe,
-        ILogger<OllamaProviderService> logger)
-    {
-        _locator = locator ?? throw new ArgumentNullException(nameof(locator));
-        _api = api ?? throw new ArgumentNullException(nameof(api));
-        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-        _configStore = configStore ?? throw new ArgumentNullException(nameof(configStore));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _probe = probe ?? throw new ArgumentNullException(nameof(probe));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
+    public void Dispose() => _startGate.Dispose();
 
     public Task<ProviderStatus> GetStatusAsync(CancellationToken ct) =>
-        GetStatusInternalAsync(ct, awaitReadiness: true);
+        GetStatusInternalAsync(awaitReadiness: true, ct);
 
-    internal async Task<ProviderStatus> GetStatusInternalAsync(CancellationToken ct, bool awaitReadiness)
+    internal async Task<ProviderStatus> GetStatusInternalAsync(bool awaitReadiness, CancellationToken ct)
     {
         var managed = _registry.GetOwned(ProviderId) is not null;
         var autostart = await _configStore.GetAutostartAsync(ProviderId, ct).ConfigureAwait(false);
@@ -128,7 +120,7 @@ public sealed class OllamaProviderService
 
         try
         {
-            var status = await StartInternalAsync(ct, skipReadinessCheck: true).ConfigureAwait(false);
+            var status = await StartInternalAsync(skipReadinessCheck: true, ct).ConfigureAwait(false);
             _probe.MarkReady();
             return status;
         }
@@ -139,7 +131,7 @@ public sealed class OllamaProviderService
         }
     }
 
-    internal async Task<ProviderStatus> StartInternalAsync(CancellationToken ct, bool skipReadinessCheck)
+    internal async Task<ProviderStatus> StartInternalAsync(bool skipReadinessCheck, CancellationToken ct)
     {
         if (!skipReadinessCheck)
         {
@@ -157,7 +149,7 @@ public sealed class OllamaProviderService
 
     private async Task<ProviderStatus> StartCoreAsync(CancellationToken ct)
     {
-        var status = await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+        var status = await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
         if (!status.Installed)
         {
             return status;
@@ -172,7 +164,7 @@ public sealed class OllamaProviderService
         {
             // Re-check inside the critical section in case a concurrent caller
             // already brought the daemon up.
-            status = await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+            status = await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
             if (status.Running)
             {
                 return status;
@@ -186,12 +178,12 @@ public sealed class OllamaProviderService
             if (binaryPath is null)
             {
                 // Lost the race: binary disappeared between status check and now.
-                return await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+                return await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
             }
 
             var request = new ProcessLaunchRequest(
                 FileName: binaryPath,
-                Arguments: new[] { "serve" },
+                Arguments: ServeArguments,
                 // Scrub the control-plane session token so it is not inherited
                 // by the daemon (visible via /proc/<pid>/environ). Null value
                 // tells the launcher to remove the variable from the child env.
@@ -233,7 +225,7 @@ public sealed class OllamaProviderService
                 throw;
             }
 
-            return await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+            return await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -256,7 +248,7 @@ public sealed class OllamaProviderService
 
     private async Task<ProviderStatus> StopCoreAsync(CancellationToken ct)
     {
-        var status = await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+        var status = await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
         if (!status.Running)
         {
             return status;
@@ -306,7 +298,7 @@ public sealed class OllamaProviderService
             var tags = await _api.GetTagsAsync(ct).ConfigureAwait(false);
             if (tags is null)
             {
-                return await GetStatusInternalAsync(ct, awaitReadiness: false).ConfigureAwait(false);
+                return await GetStatusInternalAsync(awaitReadiness: false, ct).ConfigureAwait(false);
             }
             await Task.Delay(ReadinessPollInterval, ct).ConfigureAwait(false);
         }

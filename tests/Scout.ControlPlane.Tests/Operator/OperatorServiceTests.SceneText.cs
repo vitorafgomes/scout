@@ -156,11 +156,11 @@ public sealed partial class OperatorServiceTests
 
         regenerated.Status.ShouldBe("production_queued");
         var stored = await StoredAsync(project.Id);
-        var scene = stored.Scenes.First();
+        var scene = stored.Scenes[0];
         longText.Length.ShouldBeGreaterThan(700);
         scene.Narration.ShouldBe(longText);
         NarrationOf(scene).ShouldBe(("planned", (string?)null, "none", (string?)null, 0));
         PictureOf(scene).ShouldBe(PictureOf(OwnersScene));
-        stored.Scenes.Last().ShouldBe(StockPictureScene);
+        stored.Scenes[^1].ShouldBe(StockPictureScene);
     }
 }

@@ -13,7 +13,7 @@ public sealed class ReadinessReporterTests : IDisposable
 
     public void Dispose() => Directory.Delete(_folder, recursive: true);
 
-    private ReadinessReporter Reporter(
+    private static ReadinessReporter Reporter(
         MediaCapabilities media,
         RecordingControlPlane? controlPlane = null,
         string tokenFile = "",

@@ -154,7 +154,7 @@ public sealed class PackageChecksTests
         PackageChecks.Run(new AssembledVideo("video.mp4", 90_000, Cuts(), []), -14, "Why Rivers Bend", "0:00 Intro", ["rivers"], "rivers", Given.Mandate())
             .Select(c => c.Name).ShouldBe(["duration", "loudness", "captions", "placeholders", "metadata", "discoverability"]);
         PackageChecks.Run(new AssembledVideo("video.mp4", 3000, [Spoken("s1", 1, Assembler.NoMouthBox)], []), -14, "Hello", "Hi", [], "hello", Given.Mandate())
-            .Last().ShouldBe(new OperatorCheck("presenter", "warn", "Scenes 1: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
+            [^1].ShouldBe(new OperatorCheck("presenter", "warn", "Scenes 1: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
     }
 
     [Fact]

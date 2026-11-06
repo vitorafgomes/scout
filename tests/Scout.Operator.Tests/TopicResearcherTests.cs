@@ -49,7 +49,7 @@ public sealed class TopicResearcherTests
             .ResearchAsync("sourdough", Given.Mandate(), CancellationToken.None);
 
         await youtube.DidNotReceive().SearchVideosAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
-        chat.Requests.ShouldHaveSingleItem().Last().Text.ShouldContain(SearchBudget.Spent);
+        chat.Requests.ShouldHaveSingleItem()[^1].Text.ShouldContain(SearchBudget.Spent);
         research.Candidates.ShouldNotBeEmpty();
     }
 
@@ -77,7 +77,7 @@ public sealed class TopicResearcherTests
             .ResearchAsync("sourdough", Given.Mandate(), CancellationToken.None);
 
         chat.Requests.Count.ShouldBe(2);
-        chat.Requests[1].Last().ShouldBe((AuthorRole.User, ModelJson.Retry));
+        chat.Requests[1][^1].ShouldBe((AuthorRole.User, ModelJson.Retry));
         research.Candidates.Select(c => c.Title).ShouldBe(["Sourdough basics"]);
     }
 
@@ -146,7 +146,7 @@ public sealed class TopicResearcherTests
 
         research.Candidates.Select(c => c.Title).ShouldBe(["Sourdough basics"]);
         research.Sources.Select(s => s.Url).ShouldBe(["https://www.youtube.com/watch?v=found000001"]);
-        chat.Requests.ShouldHaveSingleItem().Last().Text.ShouldContain(TopicResearcher.NoChannelHistory);
+        chat.Requests.ShouldHaveSingleItem()[^1].Text.ShouldContain(TopicResearcher.NoChannelHistory);
         await youtube.DidNotReceive().ListUploadsAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 

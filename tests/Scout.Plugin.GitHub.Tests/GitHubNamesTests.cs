@@ -1,5 +1,3 @@
-using Scout.Plugin.GitHub;
-
 namespace Scout.Plugin.GitHub.Tests;
 
 public sealed class GitHubNamesTests

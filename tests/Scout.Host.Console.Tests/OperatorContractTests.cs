@@ -217,12 +217,16 @@ public sealed class OperatorContractTests : IDisposable
         ActionExecutor.FeatureId.ShouldBe(FeatureCatalog.YouTubeId);
     }
 
+    private static readonly string[] RiversTags = ["rivers"];
+    private static readonly string[] FourTags = ["rivers", "river bends", "oxbow lakes", "geography"];
+    private static readonly string[] BlankTags = ["a b c d", " ", "x"];
+
     public static TheoryData<string[]> TagSets() => new()
     {
         Array.Empty<string>(),
-        new[] { "rivers" },
-        new[] { "rivers", "river bends", "oxbow lakes", "geography" },
-        new[] { "a b c d", " ", "x" },
+        RiversTags,
+        FourTags,
+        BlankTags,
         Enumerable.Range(0, 30).Select(i => $"tag {i} with spaces").ToArray(),
     };
 

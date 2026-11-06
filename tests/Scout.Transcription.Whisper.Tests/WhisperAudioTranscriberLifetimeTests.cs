@@ -6,7 +6,7 @@ namespace Scout.Transcription.Whisper.Tests;
 
 public sealed class WhisperAudioTranscriberLifetimeTests
 {
-    private static Stream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
+    private static FileStream Fixture() => File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "tone-440hz-1500ms.ogg"));
 
     private sealed class Handle(Action onDispose) : IDisposable
     {

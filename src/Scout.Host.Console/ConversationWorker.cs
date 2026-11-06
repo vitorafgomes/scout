@@ -18,7 +18,7 @@ internal sealed class ConversationWorker(
     IReadinessSignal readiness,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
-    private readonly IReadOnlyList<IChatAdapter> _adapters = adapters.ToList();
+    private readonly List<IChatAdapter> _adapters = adapters.ToList();
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {

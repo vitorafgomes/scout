@@ -144,9 +144,9 @@ public sealed class JsonFileOperatorStoreTests : IDisposable
         var movedAside = Directory.GetFiles(_directory, name + ".corrupt-*").ShouldHaveSingleItem();
         (await File.ReadAllBytesAsync(movedAside)).ShouldBe(corrupt);
         File.Exists(path).ShouldBeFalse();
-        var warning = _logger.Entries.ShouldHaveSingleItem();
-        warning.Level.ShouldBe(LogLevel.Warning);
-        warning.Message.ShouldBe($"Operator file at {path} is malformed; moved it to {movedAside} and started empty");
+        var (level, message) = _logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Warning);
+        message.ShouldBe($"Operator file at {path} is malformed; moved it to {movedAside} and started empty");
     }
 
     [Fact]

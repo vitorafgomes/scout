@@ -8,7 +8,8 @@ namespace Scout.Knowledge;
 /// or a recognizable project marker. Reads directory listings only; never
 /// inspects file contents and never writes.
 /// </summary>
-public sealed class ProjectDiscoveryService
+/// <remarks>Creates the discovery service.</remarks>
+public sealed class ProjectDiscoveryService(ILogger<ProjectDiscoveryService> logger)
 {
     private static readonly string[] MarkerFiles =
     {
@@ -20,13 +21,7 @@ public sealed class ProjectDiscoveryService
         "*.sln", "*.slnx", "*.csproj",
     };
 
-    private readonly ILogger<ProjectDiscoveryService> _logger;
-
-    /// <summary>Creates the discovery service.</summary>
-    public ProjectDiscoveryService(ILogger<ProjectDiscoveryService> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<ProjectDiscoveryService> _logger = logger;
 
     /// <summary>
     /// Enumerates repositories directly under <paramref name="rootPath"/>.

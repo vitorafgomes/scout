@@ -117,7 +117,7 @@ public sealed class AssemblyTests : IDisposable
         var save = controlPlane.Saves.ShouldHaveSingleItem().Project;
         save.Status.ShouldBe("assembled");
         runner.Renders[0].ShouldContain(Path.Combine(_media, "presenter-0a1b2c3d4e5f.png"));
-        save.Package.ShouldNotBeNull().Checks.Last().ShouldBe(new OperatorCheck(
+        save.Package.ShouldNotBeNull().Checks[^1].ShouldBe(new OperatorCheck(
             "presenter", "warn", "Scenes 1: Mark the mouth on the presenter picture in Scout Desktop, Production, so the character speaks."));
     }
 

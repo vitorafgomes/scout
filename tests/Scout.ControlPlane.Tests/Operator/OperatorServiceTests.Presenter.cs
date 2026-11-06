@@ -13,8 +13,8 @@ public sealed partial class OperatorServiceTests
 {
     private const string FirstRequest = "first";
     private const string Fox = "presenter-builtin-fox.png";
-    private const string RunningRefusal =
-        "A presenter can be asked for on a project whose script or media is ready, one queued for production or assembly, an assembled or approved one, or a failed one with a script; this one is {0}.";
+    private static readonly System.Text.CompositeFormat RunningRefusal = System.Text.CompositeFormat.Parse(
+        "A presenter can be asked for on a project whose script or media is ready, one queued for production or assembly, an assembled or approved one, or a failed one with a script; this one is {0}.");
     private const string MakingPresenter = "The project is making its presenter; wait for it to finish.";
     private const string NoGeneratedPicture = "This format has no generated picture.";
 

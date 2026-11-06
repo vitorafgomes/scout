@@ -70,7 +70,7 @@ public sealed class FeatureCatalogTests
     [Fact]
     public void GitHub_Setup_Steps_Walk_Through_Connect_With_GitHub()
     {
-        GitHub.SetupSteps!.First().ShouldContain("Connect with GitHub");
+        GitHub.SetupSteps![0].ShouldContain("Connect with GitHub");
         GitHub.SetupSteps!.ShouldContain(step => step.Contains("Open GitHub") && step.Contains("code"));
     }
 

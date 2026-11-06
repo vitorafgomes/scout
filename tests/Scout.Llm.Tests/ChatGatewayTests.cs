@@ -95,7 +95,7 @@ public sealed class ChatGatewayTests
                 Arg.Any<PromptExecutionSettings?>(),
                 Arg.Any<Kernel?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(call => CancelAfterFirst((CancellationToken)call[3], cts));
+            .Returns(call => CancelAfterFirst(cts, (CancellationToken)call[3]));
         var gateway = Gateway(chat);
 
         var delivered = new List<string>();
@@ -112,8 +112,8 @@ public sealed class ChatGatewayTests
     }
 
     private static async IAsyncEnumerable<StreamingChatMessageContent> CancelAfterFirst(
-        [EnumeratorCancellation] CancellationToken cancellationToken,
-        CancellationTokenSource cts)
+        CancellationTokenSource cts,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         yield return Chunk("first");

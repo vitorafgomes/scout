@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Scout.Knowledge.Tests;
 
-public class ProjectDiscoveryServiceTests : IDisposable
+public sealed class ProjectDiscoveryServiceTests : IDisposable
 {
     private readonly string _root;
 

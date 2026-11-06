@@ -29,12 +29,12 @@ Owns discovery, chunking, indexing, the vector store, the optional file watcher,
 
 ## Public contract
 
-- **Entry point:** `AddProjectKnowledge(IServiceCollection, IConfiguration)` at `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:32`.
-- **Abstractions:** `IProjectKnowledgeStore` (`src/Scout.Knowledge/IProjectKnowledgeStore.cs:4`) implemented by `SqliteProjectKnowledgeStore` (`src/Scout.Knowledge/SqliteProjectKnowledgeStore.cs:7`); `IChunker` (`src/Scout.Knowledge/IChunker.cs:4`) implemented by `FileChunker`, a Roslyn chunker for C# with a line-window fallback (`src/Scout.Knowledge/FileChunker.cs:7`); `ProjectIndexer.IndexAsync` (`src/Scout.Knowledge/ProjectIndexer.cs:16`); `ProjectKnowledgeService` (`src/Scout.Knowledge/ProjectKnowledgeService.cs:9`); `ProjectResolutionService` (`src/Scout.Knowledge/ProjectResolutionService.cs:13`); `ProjectDiscoveryService` (`src/Scout.Knowledge/ProjectDiscoveryService.cs:11`).
-- **Model tools:** plugin `ProjectKnowledge` with `search_project`, `find_symbol`, `list_projects` (`src/Scout.Knowledge/ProjectKnowledgePlugin.cs:26,41,53`), registered only when a project or root is configured (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:74`).
+- **Entry point:** `AddProjectKnowledge(IServiceCollection, IConfiguration)` at `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:30`.
+- **Abstractions:** `IProjectKnowledgeStore` (`src/Scout.Knowledge/IProjectKnowledgeStore.cs:4`) implemented by `SqliteProjectKnowledgeStore` (`src/Scout.Knowledge/SqliteProjectKnowledgeStore.cs:7`); `IChunker` (`src/Scout.Knowledge/IChunker.cs:4`) implemented by `FileChunker`, a Roslyn chunker for C# with a line-window fallback (`src/Scout.Knowledge/FileChunker.cs:7`); `ProjectIndexer.IndexAsync` (`src/Scout.Knowledge/ProjectIndexer.cs:16`); `ProjectKnowledgeService` (`src/Scout.Knowledge/ProjectKnowledgeService.cs:16`); `ProjectResolutionService` (`src/Scout.Knowledge/ProjectResolutionService.cs:13`); `ProjectDiscoveryService` (`src/Scout.Knowledge/ProjectDiscoveryService.cs:12`).
+- **Model tools:** plugin `ProjectKnowledge` with `search_project`, `find_symbol`, `list_projects` (`src/Scout.Knowledge/ProjectKnowledgePlugin.cs:26,41,53`), registered only when a project or root is configured (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:72`).
 - **Agent:** `ProjectExpertAgentFactory.Create` (`src/Scout.Knowledge/ProjectExpertAgentFactory.cs:57`).
 - **Configuration keys:** `Scout:Projects` with `Items` (`Name`, `RepoPath`), `Roots`, and `Watch` (`Enabled`, `DebounceMilliseconds`) (`src/Scout.Knowledge/ProjectsOptions.cs:7`).
-- **External boundaries:** filesystem read of repository files (`src/Scout.Knowledge/ProjectIndexer.cs:63`) and a `FileSystemWatcher` when enabled (`src/Scout.Knowledge/ProjectWatchService.cs:92`); filesystem write of `project-knowledge.db` under the user's local application data, folder `Scout` (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:102`); embedding calls through `IEmbeddingGenerator`.
+- **External boundaries:** filesystem read of repository files (`src/Scout.Knowledge/ProjectIndexer.cs:63`) and a `FileSystemWatcher` when enabled (`src/Scout.Knowledge/ProjectWatchService.cs:84`); filesystem write of `project-knowledge.db` under the user's local application data, folder `Scout` (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:100`); embedding calls through `IEmbeddingGenerator`.
 
 ## How it works
 
@@ -49,7 +49,7 @@ flowchart LR
     w["ProjectWatchService (opt-in)"] --> idx
 ```
 
-Indexing runs from the host command `index <project>` ([[pages/services/host-console]]) or from the watcher. The agent and the plugin are skipped when no project is configured, so the model never sees a tool that would return nothing (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:66`). The watcher is registered only when enabled and at least one item exists (`:94`). Option validation warns and never throws (`src/Scout.Knowledge/ProjectsOptionsValidator.cs:38`).
+Indexing runs from the host command `index <project>` ([[pages/services/host-console]]) or from the watcher. The agent and the plugin are skipped when no project is configured, so the model never sees a tool that would return nothing (`src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:64`). The watcher is registered only when enabled and at least one item exists (`:92`). Option validation warns and never throws (`src/Scout.Knowledge/ProjectsOptionsValidator.cs:38`).
 
 ## Invariants
 
@@ -61,7 +61,7 @@ Indexing runs from the host command `index <project>` ([[pages/services/host-con
 
 - `src/Scout.Knowledge/ProjectFileFilter.cs:50`: the only allow-list for what enters the index: the source of the 24 languages the bundled skills cover, the manifests (`*.csproj`, `go.mod` by extension, `Cargo.toml`, `pom.xml`, `build.gradle`), the extensionless build files (`Dockerfile`, `Makefile`, `Jenkinsfile`, `Gemfile`, `Rakefile`, `Procfile`, `CMakeLists.txt`), `.md`, `.txt`, `.rst` and `.adoc` as docs; skipped: `bin`, `obj`, `.git`, `node_modules`, `dist`, `.vs`, `vendor`, `.idea`, `__pycache__`, `.venv`, `venv`, and `target/` at the repository root only (a nested `target/` or `build/` is as likely source as output: Scout's own `ui/build/` holds the packaging configuration). A committed `.env.example`, `.env.sample` or `.env.template` is indexed; `.env` and `.env.<stage>` are not. Anything that is not C# is chunked by a 100-line window.
 - `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`: OpenAI-typed execution settings in a provider-neutral project.
-- `src/Scout.Knowledge/ProjectWatchService.cs:14`: debounce and re-index on file events.
+- `src/Scout.Knowledge/ProjectWatchService.cs:19`: debounce and re-index on file events.
 - The SqliteVec connector holds the whole Semantic Kernel family at 1.78.0 ([[pages/roadmap/followups]]).
 
 ## Testing footprint

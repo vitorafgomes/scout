@@ -315,14 +315,13 @@ public sealed class DiscordResponseSink : IResponseSink, IDisposable
 
     internal static string BuildCitationFooter(IReadOnlyList<Citation> citations)
     {
-        const string nl = "\n";
         var sb = new StringBuilder();
-        sb.Append(nl);
-        sb.Append(nl);
-        sb.Append("Sources:").Append(nl);
+        sb.Append('\n');
+        sb.Append('\n');
+        sb.Append("Sources:").Append('\n');
         foreach (var citation in citations)
         {
-            sb.Append("- ").Append(citation.ToString()).Append(nl);
+            sb.Append("- ").Append(citation.ToString()).Append('\n');
         }
         return sb.ToString().TrimEnd();
     }

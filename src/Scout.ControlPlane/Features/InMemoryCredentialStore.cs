@@ -8,24 +8,19 @@ namespace Scout.ControlPlane.Features;
 /// false so endpoints can warn the user instead of silently persisting
 /// secrets only for the lifetime of the process.
 /// </summary>
-public sealed class InMemoryCredentialStore : ICredentialStore
+/// <remarks>
+/// Test-only ctor: lets the test harness flip <c>IsAvailable</c> to
+/// true so the operation contract can be exercised end-to-end.
+/// </remarks>
+public sealed class InMemoryCredentialStore(bool isAvailable) : ICredentialStore
 {
     private readonly ConcurrentDictionary<string, string> _entries = new(StringComparer.Ordinal);
-    private readonly bool _isAvailable;
+    private readonly bool _isAvailable = isAvailable;
 
     /// <summary>Default ctor; reports the store as unavailable.</summary>
     public InMemoryCredentialStore()
         : this(isAvailable: false)
     {
-    }
-
-    /// <summary>
-    /// Test-only ctor: lets the test harness flip <c>IsAvailable</c> to
-    /// true so the operation contract can be exercised end-to-end.
-    /// </summary>
-    public InMemoryCredentialStore(bool isAvailable)
-    {
-        _isAvailable = isAvailable;
     }
 
     /// <inheritdoc/>

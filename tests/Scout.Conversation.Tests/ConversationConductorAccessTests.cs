@@ -128,9 +128,9 @@ public sealed class ConversationConductorAccessTests
         await conductor.HandleAsync(
             new ChatMessage("222", "chan-42", text), new RecordingResponseSink(FineGrained), CancellationToken.None);
 
-        var info = logger.Entries.ShouldHaveSingleItem();
-        info.Level.ShouldBe(LogLevel.Information);
-        info.Message.ShouldContain("chan-42");
+        var (level, message) = logger.Entries.ShouldHaveSingleItem();
+        level.ShouldBe(LogLevel.Information);
+        message.ShouldContain("chan-42");
         logger.Entries.ShouldAllBe(e => !e.Message.Contains("zq-7731") && !e.Message.Contains("222"));
     }
 

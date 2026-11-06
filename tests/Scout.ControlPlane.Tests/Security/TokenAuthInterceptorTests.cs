@@ -17,7 +17,7 @@ public sealed class TokenAuthInterceptorTests
     private const string RequestWrite = "/scout.controlplane.v1.WorkerGate/RequestWrite";
     private const string RecordWrite = "/scout.controlplane.v1.WorkerGate/RecordWrite";
 
-    private static ServerCallContext Context(Metadata headers, string method = ListFeatures) =>
+    private static FakeServerCallContext Context(Metadata headers, string method = ListFeatures) =>
         new FakeServerCallContext(headers, method);
 
     private static TokenAuthInterceptor Interceptor(string? workerToken = WorkerToken) =>
@@ -238,16 +238,10 @@ public sealed class TokenAuthInterceptorTests
         public Task WriteAsync(T message) => Task.CompletedTask;
     }
 
-    private sealed class FakeServerCallContext : ServerCallContext
+    private sealed class FakeServerCallContext(Metadata headers, string method) : ServerCallContext
     {
-        private readonly Metadata _headers;
-        private readonly string _method;
-
-        public FakeServerCallContext(Metadata headers, string method)
-        {
-            _headers = headers;
-            _method = method;
-        }
+        private readonly Metadata _headers = headers;
+        private readonly string _method = method;
 
         protected override string MethodCore => _method;
         protected override string HostCore => string.Empty;

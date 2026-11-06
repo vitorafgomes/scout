@@ -233,7 +233,8 @@ internal sealed class OperatorScheduler(
 
         try
         {
-            var project = (await controlPlane.ListRecentAsync(1, ct).ConfigureAwait(false)).FirstOrDefault();
+            var recent = await controlPlane.ListRecentAsync(1, ct).ConfigureAwait(false);
+            var project = recent.Count > 0 ? recent[0] : null;
             if (project is null)
             {
                 return null;

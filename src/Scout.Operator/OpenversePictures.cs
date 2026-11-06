@@ -17,7 +17,7 @@ internal sealed record StockPicture(string? File, string? Credit, string Note);
 /// midnight Pacific time, and starts at least <see cref="Interval"/> after the previous search, a 429 with a Retry-After waiting that long, at most <see cref="MaxRetryAfter"/>, before one retry; the download, from another host, is neither paced nor counted.
 /// Each request, headers and body, ends after <see cref="SearchDeadline"/> for the search and <see cref="DownloadDeadline"/> for the picture. Every failure gives no picture and a note; nothing throws but a cancellation.
 /// </summary>
-internal sealed class OpenversePictures(IHttpClientFactory http, TimeProvider time)
+internal sealed class OpenversePictures(IHttpClientFactory http, TimeProvider time) : IDisposable
 {
     internal const string ClientName = "openverse";
 
@@ -70,6 +70,11 @@ internal sealed class OpenversePictures(IHttpClientFactory http, TimeProvider ti
     private readonly SearchBudget _today = new(time, PerDay);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    public void Dispose()
+    {
+        _gate.Dispose();
+    }
 
     private DateTimeOffset _next = DateTimeOffset.MinValue;
 

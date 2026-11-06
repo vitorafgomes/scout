@@ -36,5 +36,6 @@
     <Project Path="tests/Scout.Transcription.Whisper.Tests/Scout.Transcription.Whisper.Tests.csproj" />
     <Project Path="tests/Scout.Adapter.Local.Tests/Scout.Adapter.Local.Tests.csproj" />
     <Project Path="tests/Scout.Meetings.Tests/Scout.Meetings.Tests.csproj" />
+    <Project Path="tests/Scout.ArchTests/Scout.ArchTests.csproj" />
   </Folder>
 </Solution>

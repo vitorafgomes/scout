@@ -86,7 +86,7 @@ internal sealed partial class GitHubClient(HttpClient http) : IGitHubClient
             TopLevelEntries: MapEntries(contents));
     }
 
-    private static IReadOnlyList<LanguageUsage> MapLanguages(Dictionary<string, long>? languages)
+    private static List<LanguageUsage> MapLanguages(Dictionary<string, long>? languages)
         => languages is null
             ? []
             : languages
@@ -94,7 +94,7 @@ internal sealed partial class GitHubClient(HttpClient http) : IGitHubClient
                 .Select(kvp => new LanguageUsage(kvp.Key, kvp.Value))
                 .ToList();
 
-    private static IReadOnlyList<string> MapEntries(List<ContentEntryDto>? contents)
+    private static List<string> MapEntries(List<ContentEntryDto>? contents)
         => contents is null
             ? []
             : contents

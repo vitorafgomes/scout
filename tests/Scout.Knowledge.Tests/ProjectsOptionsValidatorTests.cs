@@ -1,6 +1,4 @@
 using Microsoft.Extensions.Logging;
-using NSubstitute;
-using Scout.Knowledge;
 
 namespace Scout.Knowledge.Tests;
 

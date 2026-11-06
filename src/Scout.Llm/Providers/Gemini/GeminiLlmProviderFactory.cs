@@ -44,12 +44,7 @@ public sealed class GeminiLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var gemini = options.Value.Gemini;
-        if (gemini is null)
-        {
-            throw new ArgumentException("LlmOptions.Gemini must be configured.", nameof(options));
-        }
-
+        var gemini = options.Value.Gemini ?? throw new ArgumentException("LlmOptions.Gemini must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(gemini.ApiKey))
         {
             throw new ArgumentException(
@@ -63,12 +58,8 @@ public sealed class GeminiLlmProviderFactory : ILlmProviderFactory
                 "GeminiOptions.Chat.Model must be non-empty.", nameof(options));
         }
 
-        var embeddings = gemini.Embeddings;
-        if (embeddings is null)
-        {
-            throw new ArgumentException(
+        var embeddings = gemini.Embeddings ?? throw new ArgumentException(
                 "GeminiOptions.Embeddings must be configured.", nameof(options));
-        }
         if (string.IsNullOrWhiteSpace(embeddings.Model))
         {
             throw new ArgumentException(

@@ -51,12 +51,7 @@ public sealed class OpenRouterLlmProviderFactory : ILlmProviderFactory
             throw new ArgumentException("LlmOptions must be configured.", nameof(options));
         }
 
-        var openRouter = options.Value.OpenRouter;
-        if (openRouter is null)
-        {
-            throw new ArgumentException("LlmOptions.OpenRouter must be configured.", nameof(options));
-        }
-
+        var openRouter = options.Value.OpenRouter ?? throw new ArgumentException("LlmOptions.OpenRouter must be configured.", nameof(options));
         if (string.IsNullOrWhiteSpace(openRouter.ApiKey))
         {
             throw new ArgumentException(
@@ -70,12 +65,8 @@ public sealed class OpenRouterLlmProviderFactory : ILlmProviderFactory
                 "OpenRouterOptions.Chat.Model must be non-empty.", nameof(options));
         }
 
-        var embeddings = openRouter.Embeddings;
-        if (embeddings is null)
-        {
-            throw new ArgumentException(
+        var embeddings = openRouter.Embeddings ?? throw new ArgumentException(
                 "OpenRouterOptions.Embeddings must be configured.", nameof(options));
-        }
         if (string.IsNullOrWhiteSpace(embeddings.Model))
         {
             throw new ArgumentException(

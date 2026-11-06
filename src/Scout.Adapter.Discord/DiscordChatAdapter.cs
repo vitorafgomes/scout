@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Discord;
 using Discord.WebSocket;
 using Microsoft.Extensions.Logging;
@@ -230,7 +231,7 @@ public sealed class DiscordChatAdapter : IChatAdapter, IAsyncDisposable
             var message = thread is null
                 ? chatMessage
                 : new ChatMessage(
-                    chatMessage.UserId, thread.Id.ToString(), chatMessage.Text, chatMessage.Timestamp, chatMessage.Audio)
+                    chatMessage.UserId, thread.Id.ToString(CultureInfo.InvariantCulture), chatMessage.Text, chatMessage.Timestamp, chatMessage.Audio)
                 { OriginReference = DiscordOriginPoster.Reference(thread.Id) };
             var replyTo = thread is null
                 ? new MessageReference(messageId, inbound.ChannelId, inbound.GuildId, failIfNotExists: false)

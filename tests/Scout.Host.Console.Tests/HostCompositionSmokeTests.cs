@@ -7,7 +7,6 @@ using Microsoft.SemanticKernel;
 using Scout.Conversation;
 using Scout.Conversation.Abstractions;
 using Scout.Conversation.Access;
-using Scout.Llm;
 using Scout.Llm.Abstractions;
 using Scout.Llm.Configuration;
 using Scout.Llm.Providers.Ollama;

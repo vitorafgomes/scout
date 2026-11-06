@@ -6,35 +6,27 @@ using Microsoft.Extensions.Logging;
 /// <summary>
 /// Turns a project question into a citation-tagged context string for the language model.
 /// </summary>
-public sealed class ProjectKnowledgeService
+/// <remarks>
+/// Initializes a new instance of the <see cref="ProjectKnowledgeService"/> class.
+/// </remarks>
+/// <param name="embedder">The embedding generator.</param>
+/// <param name="store">The knowledge store.</param>
+/// <param name="resolution">Resolves a project name and lazily indexes it on first use.</param>
+/// <param name="logger">The logger.</param>
+public sealed class ProjectKnowledgeService(
+    IEmbeddingGenerator<string, Embedding<float>> embedder,
+    IProjectKnowledgeStore store,
+    ProjectResolutionService resolution,
+    ILogger<ProjectKnowledgeService> logger)
 {
     private const int TopResults = 5;
     private const int FindSymbolTopResults = 10;
     private const string NoEmbeddingsMessage = "Project search is not available with the current AI provider.";
 
-    private readonly IEmbeddingGenerator<string, Embedding<float>> embedder;
-    private readonly IProjectKnowledgeStore store;
-    private readonly ProjectResolutionService resolution;
-    private readonly ILogger<ProjectKnowledgeService> logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ProjectKnowledgeService"/> class.
-    /// </summary>
-    /// <param name="embedder">The embedding generator.</param>
-    /// <param name="store">The knowledge store.</param>
-    /// <param name="resolution">Resolves a project name and lazily indexes it on first use.</param>
-    /// <param name="logger">The logger.</param>
-    public ProjectKnowledgeService(
-        IEmbeddingGenerator<string, Embedding<float>> embedder,
-        IProjectKnowledgeStore store,
-        ProjectResolutionService resolution,
-        ILogger<ProjectKnowledgeService> logger)
-    {
-        this.embedder = embedder;
-        this.store = store;
-        this.resolution = resolution;
-        this.logger = logger;
-    }
+    private readonly IEmbeddingGenerator<string, Embedding<float>> embedder = embedder;
+    private readonly IProjectKnowledgeStore store = store;
+    private readonly ProjectResolutionService resolution = resolution;
+    private readonly ILogger<ProjectKnowledgeService> logger = logger;
 
     /// <summary>
     /// Searches the project for content relevant to the question and returns a cited context string.

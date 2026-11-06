@@ -39,3 +39,47 @@ csharp_style_var_when_type_is_apparent = true:suggestion
 dotnet_diagnostic.CS8600.severity = warning
 dotnet_diagnostic.CS8602.severity = warning
 dotnet_diagnostic.CS8603.severity = warning
+
+# --- Gated rules, raised from suggestion or info so the CLI sees them at all ---
+# EnforceCodeStyleInBuild=true, so these fire in every build and become errors under
+# TreatWarningsAsErrors; AnalyzerGateTests fails when a nested .editorconfig, a .csproj or a bare
+# #pragma lowers one. Ported from quotai (itself from WayUp_Backend) on 2026-11-06.
+# Unused using.
+dotnet_diagnostic.IDE0005.severity = warning
+# Dead code: unused private member, written-never-read member, assigned-never-read value, unused parameter.
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+dotnet_diagnostic.IDE0059.severity = warning
+dotnet_diagnostic.IDE0060.severity = warning
+# A tuple read through .Item1 instead of its name.
+dotnet_diagnostic.IDE0042.severity = warning
+# A namespace matches its folder.
+dotnet_diagnostic.IDE0130.severity = warning
+# A null check whose only job is to throw is one expression (ArgumentNullException.ThrowIfNull, ??).
+dotnet_diagnostic.IDE0270.severity = warning
+# A constructor that only captures its parameters is a primary constructor.
+dotnet_diagnostic.IDE0290.severity = warning
+# Formatting and parsing state their culture.
+dotnet_diagnostic.CA1305.severity = warning
+# Allocation-free overloads; no interface-typed private member when the concrete type is known.
+dotnet_diagnostic.CA1826.severity = warning
+dotnet_diagnostic.CA1859.severity = warning
+dotnet_diagnostic.CA1865.severity = warning
+# The CancellationToken is forwarded to every call that accepts one.
+dotnet_diagnostic.CA2016.severity = warning
+# Regex is source-generated.
+dotnet_diagnostic.SYSLIB1045.severity = warning
+
+# --- Triaged off, each with its reason; a rule leaves this list in the change that fixes its sites ---
+# LoggerMessage source generation and its companion: every structured log call boxes an int or a bool,
+# and Scout logs nowhere hot enough for the delegate cache to matter (243 + 76 sites on 2026-11-06).
+dotnet_diagnostic.CA1848.severity = none
+dotnet_diagnostic.CA1873.severity = none
+# Identifier suffixes reserved by the framework (Collection, Permission, Stream) are domain names here.
+dotnet_diagnostic.CA1711.severity = none
+# Scout.Operator is the product's name for the feature; a namespace is not renamed for Visual Basic.
+dotnet_diagnostic.CA1716.severity = none
+
+# Test method names use underscores to read as sentences.
+[tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none

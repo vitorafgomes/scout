@@ -8,18 +8,12 @@ namespace Scout.Knowledge;
 /// configured projects surface as warnings before any indexing or chat begins.
 /// Does no I/O beyond the validator's existence checks and never throws.
 /// </summary>
-internal sealed class ProjectsOptionsValidationStartup : IHostedService
+internal sealed class ProjectsOptionsValidationStartup(
+    ProjectsOptionsValidator validator,
+    IOptions<ProjectsOptions> options) : IHostedService
 {
-    private readonly ProjectsOptionsValidator validator;
-    private readonly IOptions<ProjectsOptions> options;
-
-    public ProjectsOptionsValidationStartup(
-        ProjectsOptionsValidator validator,
-        IOptions<ProjectsOptions> options)
-    {
-        this.validator = validator;
-        this.options = options;
-    }
+    private readonly ProjectsOptionsValidator validator = validator;
+    private readonly IOptions<ProjectsOptions> options = options;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {

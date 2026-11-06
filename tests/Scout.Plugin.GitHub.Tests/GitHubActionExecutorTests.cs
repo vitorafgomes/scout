@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Scout.Conversation.Abstractions;
 using Scout.Llm.Abstractions;
-using Scout.Plugin.GitHub;
 using Scout.Plugin.GitHub.Abstractions;
 using Scout.Plugin.GitHub.Tests.Fakes;
 

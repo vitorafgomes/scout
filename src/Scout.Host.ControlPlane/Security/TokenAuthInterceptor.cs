@@ -14,7 +14,7 @@ namespace Scout.Host.ControlPlane.Security;
 /// or the <c>x-scout-token</c> header. Absent or mismatched tokens fail with
 /// <see cref="StatusCode.Unauthenticated"/>.
 /// </summary>
-public sealed class TokenAuthInterceptor : Interceptor
+public sealed class TokenAuthInterceptor(CallerTokens tokens) : Interceptor
 {
     private const string AuthorizationHeader = "authorization";
     private const string ScoutTokenHeader = "x-scout-token";
@@ -30,12 +30,7 @@ public sealed class TokenAuthInterceptor : Interceptor
 
     private static readonly string[] WorkerServices = [Prefix(WorkerGate.Descriptor)];
 
-    private readonly CallerTokens _tokens;
-
-    public TokenAuthInterceptor(CallerTokens tokens)
-    {
-        _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
-    }
+    private readonly CallerTokens _tokens = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     public override Task<TResponse> UnaryServerHandler<TRequest, TResponse>(
         TRequest request,

@@ -1,5 +1,3 @@
-using Scout.Knowledge;
-
 namespace Scout.Knowledge.Tests;
 
 public sealed class ProjectsOptionsTests

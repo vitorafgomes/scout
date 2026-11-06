@@ -66,10 +66,10 @@ public sealed class FaceMouthTests : IDisposable
         return [.. boxes, .. scores];
     }
 
-    private static IReadOnlyDictionary<string, float[]> Detector(float[] both)
+    private static Dictionary<string, float[]> Detector(float[] both)
         => new Dictionary<string, float[]> { ["regressors"] = both[..(896 * 16)], ["classificators"] = both[(896 * 16)..] };
 
-    private static IReadOnlyDictionary<string, float[]> Mesh(float presence = 3f)
+    private static Dictionary<string, float[]> Mesh(float presence = 3f)
     {
         var points = Enumerable.Repeat(128f, 1434).ToArray();
         int[] upper = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291];

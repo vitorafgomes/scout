@@ -67,7 +67,7 @@ public sealed class SlackMessageTranslatorTests
     {
         var inbound = Channel("<@UBOT> joined", subtype: "channel_join");
 
-        Sut().TryTranslate(inbound, BotUserId, out var chatMessage, out var reason).ShouldBeFalse();
+        Sut().TryTranslate(inbound, BotUserId, out _, out var reason).ShouldBeFalse();
         reason.ShouldBe("subtype");
     }
 

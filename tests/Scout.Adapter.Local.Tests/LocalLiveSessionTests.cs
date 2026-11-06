@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
 using Scout.Conversation.Abstractions;
-using Scout.Llm.Abstractions;
 using static Scout.Adapter.Local.Tests.LiveTranslationQueueTests;
 
 namespace Scout.Adapter.Local.Tests;

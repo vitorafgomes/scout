@@ -9,18 +9,15 @@ namespace Scout.Skills;
 /// closing <c>---</c> fence, then a non-empty body. Malformed files are skipped
 /// with a warning; loading never throws.
 /// </summary>
-public sealed class SkillFileLoader
+/// <remarks>
+/// Initializes a new instance of the <see cref="SkillFileLoader"/> class.
+/// </remarks>
+/// <param name="logger">The logger.</param>
+public sealed class SkillFileLoader(ILogger<SkillFileLoader> logger)
 {
     private const string Fence = "---";
 
-    private readonly ILogger<SkillFileLoader> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SkillFileLoader"/> class.
-    /// </summary>
-    /// <param name="logger">The logger.</param>
-    public SkillFileLoader(ILogger<SkillFileLoader> logger)
-        => _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<SkillFileLoader> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Loads all valid skills from the given directory. Returns an empty list

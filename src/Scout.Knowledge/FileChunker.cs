@@ -12,7 +12,7 @@ public sealed class FileChunker : IChunker
     public IReadOnlyList<Chunk> Chunk(string path, string text)
         => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ? ChunkCSharp(text) : ChunkLines(text);
 
-    private static IReadOnlyList<Chunk> ChunkCSharp(string text)
+    private static List<Chunk> ChunkCSharp(string text)
     {
         var root = CSharpSyntaxTree.ParseText(text).GetRoot();
         var chunks = new List<Chunk>();
@@ -41,7 +41,7 @@ public sealed class FileChunker : IChunker
         return chunks.Count > 0 ? chunks : ChunkLines(text);
     }
 
-    private static IReadOnlyList<Chunk> ChunkLines(string text)
+    private static List<Chunk> ChunkLines(string text)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
         var chunks = new List<Chunk>();

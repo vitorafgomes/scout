@@ -62,6 +62,7 @@ public sealed record ChatMessage
     /// <summary>A picture the owner attached to this message, sent to the model with its text.</summary>
     public ImageAttachment? Image { get; init; }
 
+#pragma warning disable IDE0051 // the record's synthesized ToString calls PrintMembers; the analyzer does not see that call
     private bool PrintMembers(System.Text.StringBuilder builder)
     {
         builder.Append("UserId = ").Append(UserId)
@@ -74,4 +75,5 @@ public sealed record ChatMessage
             .Append(", Image = ").Append(Image is { } image ? $"{image.Bytes.Length} bytes" : "null");
         return true;
     }
+#pragma warning restore IDE0051
 }

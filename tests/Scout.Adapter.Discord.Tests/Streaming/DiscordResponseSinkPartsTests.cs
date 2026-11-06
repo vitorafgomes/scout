@@ -1,6 +1,5 @@
 using Discord;
 using Scout.Adapter.Discord.Streaming;
-using Scout.Conversation.Abstractions;
 
 namespace Scout.Adapter.Discord.Tests.Streaming;
 

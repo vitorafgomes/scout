@@ -123,7 +123,7 @@ internal sealed class LearningLoop(
 
         await ProposeOnLatestAsync(
             projects,
-            $"topic-{LondonDay(now):yyyy-MM-dd}",
+            $"topic-{LondonDay(now).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
             "topic",
             "Propose the next video topic for the channel, one proposal of kind \"topic\".",
             mandate,
@@ -137,7 +137,7 @@ internal sealed class LearningLoop(
         var projects = await controlPlane.ListRecentAsync(ProjectLimit, ct).ConfigureAwait(false);
         await ProposeOnLatestAsync(
             projects,
-            $"strategy-{LondonDay(time.GetUtcNow()):yyyy-MM-dd}",
+            $"strategy-{LondonDay(time.GetUtcNow()).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}",
             "strategy",
             "Review the channel's week in one proposal of kind \"strategy\": what worked, what did not, and what to do next, in at most 120 words.",
             mandate,
@@ -255,7 +255,7 @@ internal sealed class LearningLoop(
             {ask}
             """;
         var answered = await AskAsync(request, mandate, ct).ConfigureAwait(false);
-        if (answered.FirstOrDefault() is { } first)
+        if (answered.Count > 0 && answered[0] is { } first)
         {
             await SaveProposalsAsync(latest.Id, [new OperatorProposal(id, kind, first.Text!.Trim(), (first.Reason ?? string.Empty).Trim(), Proposed, null)], ct)
                 .ConfigureAwait(false);
@@ -303,7 +303,7 @@ internal sealed class LearningLoop(
         }
     }
 
-    private async Task SaveProposalsAsync(string projectId, IReadOnlyList<OperatorProposal> proposals, CancellationToken ct)
+    private async Task SaveProposalsAsync(string projectId, List<OperatorProposal> proposals, CancellationToken ct)
     {
         if (proposals.Count == 0)
         {

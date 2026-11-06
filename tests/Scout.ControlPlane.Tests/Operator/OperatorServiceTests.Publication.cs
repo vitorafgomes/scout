@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Scout.ControlPlane.Actions;
@@ -112,7 +113,7 @@ public sealed partial class OperatorServiceTests
             ("youtube", "thumbnails.set", approved.Id, PendingActionStatus.Approved),
         ]);
         actions[0].Summary.ShouldBe(
-            $"Upload \"Why rivers bend\" to YouTube as private, made public at {Tomorrow.UtcDateTime:yyyy-MM-dd HH:mm} UTC.");
+            $"Upload \"Why rivers bend\" to YouTube as private, made public at {Tomorrow.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC.");
         (await OwnerApprovalsAsync()).Select(e => (e.Action, e.Target, e.ApprovedBy, e.ActionId))
             .ShouldBe(actions.Select(a => (a.Action, a.Target, (string?)"owner", (string?)a.Id)));
     }

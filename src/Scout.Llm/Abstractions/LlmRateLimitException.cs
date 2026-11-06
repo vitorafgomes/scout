@@ -6,10 +6,6 @@ namespace Scout.Llm.Abstractions;
 /// <see cref="System.Exception.Message"/> carries a terse internal reason for
 /// logging only and is never shown to the user.
 /// </summary>
-public sealed class LlmRateLimitException : Exception
+public sealed class LlmRateLimitException(string message, Exception? inner = null) : Exception(message, inner)
 {
-    public LlmRateLimitException(string message, Exception? inner = null)
-        : base(message, inner)
-    {
-    }
 }

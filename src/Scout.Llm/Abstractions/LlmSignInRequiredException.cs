@@ -6,10 +6,6 @@ namespace Scout.Llm.Abstractions;
 /// <see cref="System.Exception.Message"/> nor the inner exception ever carries
 /// the credential or the contents of the file holding it.
 /// </summary>
-public sealed class LlmSignInRequiredException : Exception
+public sealed class LlmSignInRequiredException(Exception? inner = null) : Exception("ChatGPT sign-in is missing or expired; sign in again on the AI Sources screen.", inner)
 {
-    public LlmSignInRequiredException(Exception? inner = null)
-        : base("ChatGPT sign-in is missing or expired; sign in again on the AI Sources screen.", inner)
-    {
-    }
 }

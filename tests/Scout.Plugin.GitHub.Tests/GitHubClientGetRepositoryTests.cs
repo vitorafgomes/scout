@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text;
-using Scout.Plugin.GitHub;
 using Scout.Plugin.GitHub.Tests.Fakes;
 
 namespace Scout.Plugin.GitHub.Tests;
@@ -13,6 +12,10 @@ namespace Scout.Plugin.GitHub.Tests;
 /// </summary>
 public sealed class GitHubClientGetRepositoryTests
 {
+    private static readonly string[] ExpectedTopics = ["dotnet", "messaging", "cli"];
+
+    private static readonly string[] ExpectedEntries = ["src (dir)", "tests (dir)", ".github (dir)", "README.md (file)"];
+
     private static (GitHubClient client, StubHttpMessageHandler handler) Build()
     {
         var handler = new StubHttpMessageHandler();
@@ -85,7 +88,7 @@ public sealed class GitHubClientGetRepositoryTests
         info.StarCount.ShouldBe(5);
         info.ForkCount.ShouldBe(2);
         info.HtmlUrl.ShouldBe("https://github.com/vitorafgomes/messaging-explorer");
-        info.Topics.ShouldBe(new[] { "dotnet", "messaging", "cli" });
+        info.Topics.ShouldBe(ExpectedTopics);
     }
 
     [Fact]
@@ -127,13 +130,7 @@ public sealed class GitHubClientGetRepositoryTests
         var info = await client.GetRepositoryAsync(
             "vitorafgomes", "messaging-explorer", CancellationToken.None);
 
-        info!.TopLevelEntries.ShouldBe(new[]
-        {
-            "src (dir)",
-            "tests (dir)",
-            ".github (dir)",
-            "README.md (file)",
-        });
+        info!.TopLevelEntries.ShouldBe(ExpectedEntries);
     }
 
     [Fact]

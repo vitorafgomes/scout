@@ -1,5 +1,4 @@
 using System.Runtime.Versioning;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace Scout.Host.ControlPlane.Transport;

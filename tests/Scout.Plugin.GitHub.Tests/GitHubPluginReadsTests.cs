@@ -1,4 +1,4 @@
-using Scout.Plugin.GitHub;
+using System.Globalization;
 using Scout.Plugin.GitHub.Abstractions;
 
 namespace Scout.Plugin.GitHub.Tests;
@@ -241,7 +241,7 @@ public sealed class GitHubPluginReadsTests
     public async Task ListRepositoryFiles_Cuts_The_Listing_At_The_Cap_And_Says_So()
     {
         var client = Client();
-        var entries = Enumerable.Range(1, GitHubPlugin.ListedPathsCap + 25).Select(i => new RepositoryEntry($"src/f{i:D4}.cs", i)).ToList();
+        var entries = Enumerable.Range(1, GitHubPlugin.ListedPathsCap + 25).Select(i => new RepositoryEntry($"src/f{i.ToString("D4", CultureInfo.InvariantCulture)}.cs", i)).ToList();
         client.ListRepositoryFilesAsync("octocat", "hello", "", Arg.Any<CancellationToken>()).Returns(new RepositoryTree("main", true, entries));
 
         var result = await new GitHubPlugin(client).ListRepositoryFilesAsync("octocat", "hello", "", "", "", CancellationToken.None);

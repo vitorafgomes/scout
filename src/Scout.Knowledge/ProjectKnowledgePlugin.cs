@@ -4,19 +4,13 @@ using Microsoft.SemanticKernel;
 namespace Scout.Knowledge;
 
 /// <summary>SK plugin exposing project code/doc retrieval to the LLM.</summary>
-public sealed class ProjectKnowledgePlugin
+/// <remarks>Creates the plugin over the retrieval and resolution services.</remarks>
+/// <param name="service">The retrieval service. Must be non-null.</param>
+/// <param name="resolution">Resolves project names for listing. Must be non-null.</param>
+public sealed class ProjectKnowledgePlugin(ProjectKnowledgeService service, ProjectResolutionService resolution)
 {
-    private readonly ProjectKnowledgeService service;
-    private readonly ProjectResolutionService resolution;
-
-    /// <summary>Creates the plugin over the retrieval and resolution services.</summary>
-    /// <param name="service">The retrieval service. Must be non-null.</param>
-    /// <param name="resolution">Resolves project names for listing. Must be non-null.</param>
-    public ProjectKnowledgePlugin(ProjectKnowledgeService service, ProjectResolutionService resolution)
-    {
-        this.service = service ?? throw new ArgumentNullException(nameof(service));
-        this.resolution = resolution ?? throw new ArgumentNullException(nameof(resolution));
-    }
+    private readonly ProjectKnowledgeService service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly ProjectResolutionService resolution = resolution ?? throw new ArgumentNullException(nameof(resolution));
 
     /// <summary>Search a configured project's code and docs for context.</summary>
     /// <param name="project">Configured project name.</param>
