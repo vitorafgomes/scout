@@ -18,7 +18,7 @@ public sealed class FeatureCatalog : IFeatureCatalog
     private static readonly FeatureMetadata GitHub = new(
         Id: GitHubId,
         DisplayName: "GitHub",
-        Description: "Query repositories, issues and pull requests from chat.",
+        Description: "Query repositories, issues and pull requests from chat, and read a pull request's diffs, comments and files for a code review.",
         RequiresCredentials: true,
         CredentialFields: new[]
         {
@@ -50,15 +50,24 @@ public sealed class FeatureCatalog : IFeatureCatalog
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Contents",
-                Actions: new[] { "Read the README, languages and top-level files of a repository" },
+                Actions: new[]
+                {
+                    "Read the README, languages and top-level files of a repository",
+                    "Read one file or list one directory of a repository, at a branch, tag or commit, for a code review",
+                },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Pull requests",
-                Actions: new[] { "List open pull requests" },
+                Actions: new[]
+                {
+                    "List open pull requests",
+                    "Read one pull request with its changed files and their diffs",
+                    "Read the comments on a pull request",
+                },
                 Access: ScopeAccess.Read),
             new FeatureScopeRow(
                 Scope: "Issues",
-                Actions: new[] { "List open issues" },
+                Actions: new[] { "List open issues", "Read one issue" },
                 Access: ScopeAccess.Read),
         },
         SetupSteps: new[]

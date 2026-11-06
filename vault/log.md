@@ -1,3 +1,6 @@
+## [2026-11-06] crystallize | Code quality assistant: ADR 0038, the pull request reads and the two skills
+The owner asked for code review and project improvements from chat, for every language, with the comments on the pull request and the improvements as issues. Analysis against src/old: CodeQA is superseded by Knowledge and stays; the routing is the skill selector; the write contract of ADR 0032 carries the writes. Phase 0 and 1 on feat/code-quality-assistant: ADR 0038 (proposed), initiative page, five GET functions on the GitHub plugin with bounded diffs and a name grammar on every request path, the code-review and project-improvements skills, the github catalog rows naming every read (a Rule A finding of the review), 147 + 42 tests. Phases 2 and 3 (the posted review, the opened issue) follow.
+
 ## [2026-11-05] integrate | Production screen: the owner's working area first
 New initiative page pages/roadmap/production-screen.md (the owner's decisions of 2026-11-05 from the mockups: channel folded, one-line start, list beside detail, title-row actions and close, block order, two-column Presenter with removable versions, scene card, claims redesign, help marks, the one new rpc RemovePresenterVersion); indexed; linked from desktop-operator.md and control-plane.md.
 
