@@ -44,6 +44,11 @@ export class LocalConversation {
     }));
   }
 
+  /** Sends a typed question under the id the caller picked, so it can follow that turn; resolves as `ask` does. */
+  askAs(id: string, text: string): Promise<string | null> {
+    return this.send(() => ({ id, text }));
+  }
+
   askByVoice(wav: Uint8Array, image?: LocalImage): Promise<string | null> {
     const base64 = toBase64(wav);
     return this.send((id) => ({

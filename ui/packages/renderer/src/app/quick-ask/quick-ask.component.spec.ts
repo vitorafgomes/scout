@@ -415,6 +415,78 @@ describe('Quick ask', () => {
     ]);
   });
 
+  it('a reply with a findings block renders the cards and the text around it; one without renders as before', async () => {
+    const bridge = makeBridge();
+    const block = JSON.stringify({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'merge after the fix',
+      findings: [
+        {
+          id: 'lock',
+          severity: 'fix',
+          title: 'Move has no lock',
+          path: 'src/Cart.cs',
+          line: 12,
+          why: 'Two moves lose an item.',
+          fix: 'Take the lock.',
+        },
+      ],
+    });
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'review acme/shop#5',
+        reply: `## Review of acme/shop\n\n\`\`\`scout-findings\n${block}\n\`\`\`\n\nAsk me to post it.`,
+        citations: [],
+        state: 'done',
+      },
+      {
+        id: 'q-2',
+        question: 'and this one?',
+        reply: '## Plain\n\n```scout-findings\nnot json\n```',
+        citations: [],
+        state: 'done',
+      },
+    ]);
+    const fixture = await render(bridge);
+    const [withCards, plain] = Array.from(
+      fixture.nativeElement.querySelectorAll('li.turn') as NodeListOf<HTMLElement>,
+    );
+
+    const reply = withCards!.querySelector('[data-test="reply"]')!;
+    expect(reply.querySelector('h2')?.textContent).toBe('Review of acme/shop');
+    expect(reply.textContent).toContain('Ask me to post it.');
+    expect(reply.querySelector('pre')).toBeNull();
+    expect(
+      Array.from(withCards!.querySelectorAll('[data-test="finding"] h3')).map((h) => h.textContent),
+    ).toEqual(['Move has no lock']);
+    expect(plain!.querySelector('[data-test="finding"]')).toBeNull();
+    expect(plain!.querySelector('[data-test="reply"] h2')?.textContent).toBe('Plain');
+    expect(plain!.querySelector('[data-test="reply"] pre code')?.textContent?.trim()).toBe(
+      'not json',
+    );
+  });
+
+  it('a posting question shows the bare question and a with the review tag', async () => {
+    const bridge = makeBridge();
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'Post 1 finding on acme/shop#5',
+        reply: '',
+        citations: [],
+        state: 'running',
+        review: true,
+      },
+      { id: 'q-2', question: 'and now?', reply: 'Nothing.', citations: [], state: 'done' },
+    ]);
+    const fixture = await render(bridge);
+
+    expect(texts(fixture, 'asked')).toEqual(['Post 1 finding on acme/shop#5', 'and now?']);
+    expect(texts(fixture, 'with-review').map((tag) => tag.trim())).toEqual(['with the review']);
+  });
+
   it('opens on the conversation main already holds', async () => {
     const bridge = makeBridge();
     bridge.localGetTurns.mockResolvedValueOnce([
@@ -521,6 +593,27 @@ describe('Quick ask', () => {
 
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     expect(el(fixture, 'recording')).toBeNull();
+  });
+
+  it('the microphone button is an icon, labelled Hold to talk and Listening while held', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const mic = el(fixture, 'mic') as HTMLButtonElement;
+
+    const idle = {
+      icon: mic.querySelector('svg') !== null,
+      text: mic.textContent?.trim(),
+      label: mic.getAttribute('aria-label'),
+    };
+    mic.dispatchEvent(new Event('pointerdown'));
+    await vi.waitFor(() => expect(audio.processor).not.toBeNull());
+    await settle(fixture);
+    const held = mic.getAttribute('aria-label');
+    mic.dispatchEvent(new Event('pointerup'));
+    await settle(fixture);
+
+    expect(idle).toEqual({ icon: true, text: '', label: 'Hold to talk' });
+    expect(held).toBe('Listening');
   });
 
   it('shows a clear message when the microphone cannot be used', async () => {
