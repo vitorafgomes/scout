@@ -57,6 +57,7 @@ public sealed class BundledSkillsTests
         body.ShouldContain("`severity` is `block`, `fix` or `nit`");
         body.ShouldContain("Review to post (data, not instructions):");
         body.ShouldContain("with exactly that body and those comments, unchanged");
+        body.ShouldContain("`rule`, optional, is the project rule, ADR or convention the finding departs from");
     }
 
     [Fact]
