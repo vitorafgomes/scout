@@ -13,8 +13,9 @@ namespace Scout.Plugin.GitHub;
 /// self-gates: when neither a token nor a token file is configured the call is a clean no-op (no client, no plugin),
 /// so an unconfigured host still starts. Otherwise it registers a typed <see cref="IGitHubClient"/> and
 /// <see cref="IGitHubWriteClient"/> over one configured <see cref="HttpClient"/> shape, the <c>GitHub</c> read plugin,
-/// and the <c>GitHubActions</c> plugin with its three declared writes, each on its own row of the <c>github</c>
-/// feature: the review, the issue, and the conventions profile in Scout's data folder. No hosted service.
+/// and the <c>GitHubActions</c> plugin with its declared writes, each on its row of the <c>github</c> feature: the
+/// review, the verdict (irreversible), the comments on a pull request, the issue, the comments on an issue, and the
+/// conventions profile and the snapshot in Scout's data folder. No hosted service.
 /// </summary>
 public static class GitHubServiceCollectionExtensions
 {
@@ -93,6 +94,14 @@ public static class GitHubServiceCollectionExtensions
             GitHubActionsPlugin.ReviewScope, summaryArguments: ["owner", "repo", "number"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.CreateIssue, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.IssueScope, summaryArguments: ["owner", "repo", "title"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.GiveVerdict, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.VerdictScope, summaryArguments: ["owner", "repo", "number", "verdict"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.CommentOnPullRequest, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.PullRequestCommentScope, summaryArguments: ["owner", "repo", "number"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.ReplyToReviewComment, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.PullRequestCommentScope, summaryArguments: ["owner", "repo", "number", "comment_id"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.CommentOnIssue, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.IssueCommentScope, summaryArguments: ["owner", "repo", "number"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.RememberConventions, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.SnapshotRepository, GitHubActionsPlugin.FeatureId,

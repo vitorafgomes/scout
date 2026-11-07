@@ -42,6 +42,15 @@ internal sealed partial class GitHubClient
             Files: files);
     }
 
+    public async Task<PullRequestHead?> GetPullRequestHeadAsync(string owner, string repo, int number, CancellationToken ct)
+    {
+        var pr = await TryGetAsync<PullDetailsDto>($"repos/{owner}/{repo}/pulls/{number}", ct).ConfigureAwait(false);
+        return pr is null ? null : new PullRequestHead(pr.Head?.Sha ?? string.Empty, Login(pr.User));
+    }
+
+    public async Task<string> GetSignedInLoginAsync(CancellationToken ct) =>
+        Login(await GetAsync<UserDto>("user", ct).ConfigureAwait(false));
+
     public async Task<IReadOnlyList<ChangedFile>?> ListPullRequestFilesAsync(
         string owner, string repo, int number, CancellationToken ct)
     {

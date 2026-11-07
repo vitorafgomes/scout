@@ -45,3 +45,8 @@ public sealed record PullRequestDetails(
 /// <param name="Deletions">Lines deleted in this file.</param>
 /// <param name="Patch">The unified diff, or null when GitHub omitted it (binary or too large).</param>
 public sealed record ChangedFile(string Path, string Status, int Additions, int Deletions, string? Patch);
+
+/// <summary>The head commit of a pull request and who opened it.</summary>
+/// <param name="Sha">The commit the pull request's branch points at.</param>
+/// <param name="AuthorLogin">Login of the author, or "unknown" when absent.</param>
+public sealed record PullRequestHead(string Sha, string AuthorLogin);
