@@ -38,6 +38,7 @@ import {
   type LocalReadTextResponse,
   type LocalShortcut,
   type LocalTranscriptEvent,
+  type LocalFindingDecision,
   type LocalTurn,
   type WorkerEvent,
 } from '@scout/shared';
@@ -93,6 +94,12 @@ const MAX_SCREEN_TEXT_EXTRA_CHARS = 5_200;
 const MAX_LAST_ANSWER_EXTRA_CHARS = 4_200;
 const MAX_REVIEW_EXTRA_CHARS = 120_000;
 const TRANSCRIPT_MARKERS = MEETING_WINDOWS.map(transcriptMarker);
+const CONTEXT_MARKERS = [...TRANSCRIPT_MARKERS, SCREEN_TEXT_MARKER, LAST_ANSWER_MARKER];
+const FINDINGS_FENCE = '```scout-findings';
+const FINDING_ID_PATTERN = /^[A-Za-z0-9-]{1,40}$/;
+const MAX_DECISIONS = 50;
+const MAX_DECISION_TEXT_CHARS = 8_000;
+const DECISIONS_REFUSED = 'Scout could not read those decisions.';
 const MEETING_TIMEOUT_MS = 30_000;
 const MAX_MEETING_LINES = 5_000;
 const MAX_MEETING_LINE_CHARS = 2_000;
@@ -318,7 +325,21 @@ function toWorkerRequest(req: unknown): {
   const screenshot = image.image !== undefined;
 
   if (typeof r['text'] === 'string') {
-    const text = r['text'].trim();
+    const sent = r['context'];
+    if (sent !== undefined && typeof sent !== 'string') {
+      fail('local/invalid-request', 'The context sent with the question is not text.');
+    }
+    if (
+      typeof sent === 'string' &&
+      sent.length > 0 &&
+      !CONTEXT_MARKERS.some((contextMarker) => sent.startsWith(contextMarker))
+    ) {
+      fail(
+        'local/invalid-request',
+        'The context must start with a transcript, screen text or last answer block.',
+      );
+    }
+    const text = (r['text'].trim() + (sent ?? '')).trim();
     const marker = firstAt(text, TRANSCRIPT_MARKERS);
     const screenMarker = text.indexOf(SCREEN_TEXT_MARKER);
     const lastAnswer = text.indexOf(LAST_ANSWER_MARKER);
@@ -386,6 +407,40 @@ function toWorkerRequest(req: unknown): {
     review: false,
     issues: false,
   };
+}
+
+function toDecision(raw: unknown): LocalFindingDecision {
+  const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const pick = r['pick'];
+  const dismissed = r['dismissed'];
+  if ((pick !== 'yes' && pick !== 'no' && pick !== null) || typeof dismissed !== 'boolean') {
+    fail('local/invalid-request', DECISIONS_REFUSED);
+  }
+  if (r['edited'] === undefined) return { pick, dismissed };
+  const edited = (
+    typeof r['edited'] === 'object' && r['edited'] !== null ? r['edited'] : {}
+  ) as Record<string, unknown>;
+  const { why, fix } = edited;
+  if (
+    typeof why !== 'string' ||
+    typeof fix !== 'string' ||
+    why.length > MAX_DECISION_TEXT_CHARS ||
+    fix.length > MAX_DECISION_TEXT_CHARS
+  ) {
+    fail('local/invalid-request', DECISIONS_REFUSED);
+  }
+  return { pick, dismissed, edited: { why, fix } };
+}
+
+function toDecisions(raw: unknown): Record<string, LocalFindingDecision> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    fail('local/invalid-request', DECISIONS_REFUSED);
+  }
+  const entries = Object.entries(raw);
+  if (entries.length > MAX_DECISIONS || entries.some(([id]) => !FINDING_ID_PATTERN.test(id))) {
+    fail('local/invalid-request', DECISIONS_REFUSED);
+  }
+  return Object.fromEntries(entries.map(([id, decision]) => [id, toDecision(decision)]));
 }
 
 function firstAt(text: string, markers: readonly string[]): number {
@@ -617,6 +672,17 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
 
   function isRunning(id: string): boolean {
     return turns.some((turn) => turn.id === id && turn.state === 'running');
+  }
+
+  function setDecisions(req: unknown): void {
+    const r = (typeof req === 'object' && req !== null ? req : {}) as Record<string, unknown>;
+    const index = turns.findIndex((turn) => turn.id === r['turnId']);
+    const turn = turns[index];
+    if (turn === undefined || turn.state !== 'done' || !turn.reply.includes(FINDINGS_FENCE)) {
+      fail('local/invalid-request', 'That turn has no findings to decide on.');
+    }
+    turns[index] = { ...turn, decisions: toDecisions(r['decisions']) };
+    broadcast();
   }
 
   function reshape(id: string, change: (turn: LocalTurn) => LocalTurn): void {
@@ -1211,6 +1277,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
   ipcMain.handle(CHANNEL.localCancel, (_event, req: unknown) => cancel(req));
   ipcMain.handle(CHANNEL.localGetTurns, () => [...turns]);
   ipcMain.handle(CHANNEL.localClearTurns, () => clearTurns());
+  ipcMain.handle(CHANNEL.localSetDecisions, (_event, req: unknown) => setDecisions(req));
   ipcMain.handle(CHANNEL.localHide, () => hide());
   ipcMain.handle(CHANNEL.localGetShortcut, () => shortcutStatus());
   ipcMain.handle(CHANNEL.localSetShortcut, (_event, req: unknown) => setShortcut(req));
@@ -1294,6 +1361,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         CHANNEL.localCancel,
         CHANNEL.localGetTurns,
         CHANNEL.localClearTurns,
+        CHANNEL.localSetDecisions,
         CHANNEL.localHide,
         CHANNEL.localGetShortcut,
         CHANNEL.localSetShortcut,

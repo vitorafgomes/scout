@@ -1,6 +1,7 @@
 import {
   CHANNEL,
   type LocalTranscriptEvent,
+  type GitHubVerdictStatus,
   type LocalTurn,
   type ScoutBridge,
   type UpdateNotice,
@@ -525,6 +526,24 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     githubBotRemove() {
       return ipc.invoke(CHANNEL.githubBotRemove) as ReturnType<ScoutBridge['githubBotRemove']>;
     },
+    githubGiveVerdict(req) {
+      return ipc.invoke(CHANNEL.githubGiveVerdict, req) as ReturnType<
+        ScoutBridge['githubGiveVerdict']
+      >;
+    },
+    githubVerdictStatus(req) {
+      return ipc.invoke(CHANNEL.githubVerdictStatus, req) as ReturnType<
+        ScoutBridge['githubVerdictStatus']
+      >;
+    },
+    onGitHubVerdict(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as GitHubVerdictStatus);
+      ipc.on(CHANNEL.githubVerdict, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.githubVerdict, handler);
+      };
+    },
     githubBotSetWrites(req) {
       return ipc.invoke(CHANNEL.githubBotSetWrites, req) as ReturnType<
         ScoutBridge['githubBotSetWrites']
@@ -641,6 +660,11 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
 
     localClearTurns() {
       return ipc.invoke(CHANNEL.localClearTurns) as ReturnType<ScoutBridge['localClearTurns']>;
+    },
+    localSetDecisions(req) {
+      return ipc.invoke(CHANNEL.localSetDecisions, req) as ReturnType<
+        ScoutBridge['localSetDecisions']
+      >;
     },
 
     onLocalTurns(listener) {

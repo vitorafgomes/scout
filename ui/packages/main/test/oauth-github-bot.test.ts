@@ -409,6 +409,35 @@ describe('GitHubBot: the installation token', () => {
     expect((await fake.bot.status()).state).toBe('installed');
   });
 
+  it('at launch a worker built while the first token is minted waits for it and is not restarted', async () => {
+    const fake = makeBotFake();
+    fake.vault.set(
+      'github.bot',
+      JSON.stringify({
+        appId: 4242,
+        clientId: 'Iv23liBotClientId',
+        slug: 'scout-octocat',
+        account: 'octocat',
+        accountType: 'user',
+        privateKey: PRIVATE_KEY,
+        writes: ['review', 'verdict', 'comment', 'issue'],
+      }),
+    );
+    installed(fake);
+
+    const starting = fake.bot.start();
+    const config = await fake.bot.workerConfig();
+    await starting;
+    fake.bot.stop();
+
+    expect(config).toEqual({
+      tokenFile: BOT_TOKEN_FILE,
+      writes: ['review', 'verdict', 'comment', 'issue'],
+      login: 'scout-octocat[bot]',
+    });
+    expect(fake.changes).toBe(0);
+  });
+
   it('removes the token file and restarts the worker on the owner identity when the App is uninstalled', async () => {
     const fake = makeBotFake();
     reply(fake, CONVERSIONS_URL, conversion());

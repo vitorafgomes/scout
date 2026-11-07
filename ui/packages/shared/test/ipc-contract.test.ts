@@ -71,6 +71,9 @@ describe('CHANNEL constant', () => {
         'githubBotCancel',
         'githubBotRemove',
         'githubBotSetWrites',
+        'githubGiveVerdict',
+        'githubVerdictStatus',
+        'githubVerdict',
         'githubSignIn',
         'githubSignOut',
         'githubStatus',
@@ -82,6 +85,7 @@ describe('CHANNEL constant', () => {
         'localAudio',
         'localCancel',
         'localClearTurns',
+        'localSetDecisions',
         'localGetBubble',
         'localGetShortcut',
         'localGetTurns',
@@ -272,6 +276,7 @@ describe('screenshot on a question', () => {
       review: true,
       issues: true,
       failure: true,
+      decisions: true,
     };
     const imageTypes: Record<LocalImage['contentType'], true> = { 'image/jpeg': true };
 
@@ -631,6 +636,10 @@ describe('ChannelName type', () => {
       'scout:github.bot.cancel': true,
       'scout:github.bot.remove': true,
       'scout:github.bot.setWrites': true,
+      'scout:github.giveVerdict': true,
+      'scout:github.verdictStatus': true,
+      'scout:github.verdict': true,
+      'scout:local.setDecisions': true,
       'scout:youtube.signIn': true,
       'scout:youtube.status': true,
       'scout:youtube.cancelSignIn': true,

@@ -95,10 +95,15 @@ export class GitHubBot {
   private timer: ReturnType<typeof setInterval> | null = null;
   private unsubscribeResume: (() => void) | null = null;
   private flow: Promise<void> = Promise.resolve();
+  private ready: Promise<void> = Promise.resolve();
+  private starting = false;
 
   constructor(private readonly deps: GitHubBotDeps) {}
 
-  /** Mints the installation token when the bot exists, then keeps it fresh every minute and on wake. */
+  /**
+   * Mints the installation token when the bot exists, then keeps it fresh every minute and on wake. A worker built
+   * meanwhile waits for this first token instead of being restarted when it arrives.
+   */
   async start(): Promise<void> {
     const check = (): Promise<void> =>
       this.refreshIfDue().catch((err: unknown) => {
@@ -107,7 +112,11 @@ export class GitHubBot {
     this.timer = setInterval(check, REFRESH_CHECK_MS);
     this.timer.unref();
     this.unsubscribeResume = this.deps.onResume(check);
-    await check();
+    this.starting = true;
+    this.ready = check().finally(() => {
+      this.starting = false;
+    });
+    await this.ready;
   }
 
   stop(): void {
@@ -120,6 +129,7 @@ export class GitHubBot {
 
   /** The bot's token file, writes and login for the worker, or null while there is no installation token. */
   async workerConfig(): Promise<GitHubBotWorkerConfig | null> {
+    await this.ready;
     const bot = await this.load();
     if (bot === null || this.token === null) return null;
     return { tokenFile: this.deps.tokenFilePath, writes: bot.writes, login: botLogin(bot) };
@@ -350,7 +360,7 @@ export class GitHubBot {
       deps.logger.info('github-bot: installation token refreshed', {
         repositories: this.repositories.length,
       });
-      if (!hadToken) deps.onChanged();
+      if (!hadToken && !this.starting) deps.onChanged();
     } catch (err: unknown) {
       this.lastError =
         err instanceof ScoutError
