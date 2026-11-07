@@ -445,6 +445,31 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
     };
 
     [Fact]
+    public async Task SearchTextAsync_ReadsWhileAnotherConnectionHoldsAnOpenWriteTransaction()
+    {
+        var store = new SqliteProjectKnowledgeStore($"{ConnectionString};Default Timeout=2");
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { TextChunk("alpha", "ledger", "ledger entry", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+
+        await using var writer = new SqliteConnection(ConnectionString);
+        await writer.OpenAsync();
+        await using (var write = writer.CreateCommand())
+        {
+            write.CommandText = "BEGIN EXCLUSIVE; DELETE FROM chunk_fts WHERE project = 'beta';";
+            await write.ExecuteNonQueryAsync();
+        }
+
+        IReadOnlyList<ChunkRecord> hits = Array.Empty<ChunkRecord>();
+        await Should.NotThrowAsync(async () =>
+            hits = await store.SearchTextAsync("alpha", "ledger", top: 5, CancellationToken.None));
+
+        hits.ShouldHaveSingleItem().Id.ShouldBe("alpha:ledger");
+    }
+
+    [Fact]
     public async Task InitializeAsync_CreatesTheFullTextTable()
     {
         var store = new SqliteProjectKnowledgeStore(ConnectionString);
@@ -554,6 +579,21 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
         hits.Select(h => h.Id).ShouldBe(["alpha:strong", "alpha:weak", "alpha:none"]);
         hits[0].Content.ShouldBe("invoice total applies the discount to every invoice line");
         hits[0].Embedding.Length.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SearchTextAsync_WithOnlyTwoLetterWords_ReturnsNothing()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { TextChunk("alpha", "notes", "it is up to us to do so", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+
+        var hits = await store.SearchTextAsync("alpha", "Is it up to us?", top: 5, CancellationToken.None);
+
+        hits.ShouldBeEmpty();
     }
 
     [Fact]
@@ -675,9 +715,12 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
 
     public void Dispose()
     {
-        if (File.Exists(_dbPath))
+        foreach (var path in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
-            File.Delete(_dbPath);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 }

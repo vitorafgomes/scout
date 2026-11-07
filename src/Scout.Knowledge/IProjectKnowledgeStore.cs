@@ -47,7 +47,7 @@ public interface IProjectKnowledgeStore
 
     /// <summary>
     /// Full-text search restricted to one project, with no embedding: the words of <paramref name="text"/>
-    /// (two characters or more, at most twelve) are matched as plain terms, never as query operators.
+    /// (three characters or more, at most twelve) are matched as plain terms, never as query operators.
     /// </summary>
     /// <param name="project">Project name to restrict the search to.</param>
     /// <param name="text">The question in the user's words.</param>

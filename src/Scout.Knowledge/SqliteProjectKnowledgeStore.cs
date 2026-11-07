@@ -9,7 +9,9 @@ namespace Scout.Knowledge;
 /// SQLite backed <see cref="IProjectKnowledgeStore"/>: a sqlite-vec collection for the chunks that carry a vector,
 /// and an FTS5 table <c>chunk_fts</c> in the same file for every chunk, which answers existence, symbol lookup and
 /// text search with or without embeddings. A replace writes the vectors first and the text rows last, so a failed
-/// vector write never leaves a project that looks indexed. Local file, no service.
+/// vector write never leaves a project that looks indexed. A project found only in the vector collection (a database
+/// written before the text table existed) has its text rows filled from the stored chunks on the first existence check,
+/// with no embedding call. The file runs in WAL mode, so a read never waits for a write. Local file, no service.
 /// </summary>
 public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
 {
@@ -20,6 +22,7 @@ public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     private const int MaxSearchTerms = 12;
 
     private const string TextSchema = """
+        PRAGMA journal_mode = WAL;
         CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
             id UNINDEXED,
             project UNINDEXED,
@@ -58,10 +61,32 @@ public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     /// <inheritdoc />
     public async Task<bool> HasProjectAsync(string project, CancellationToken ct)
     {
-        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        await using var command = Command(connection, "SELECT 1 FROM chunk_fts WHERE project = $project LIMIT 1;");
-        command.Parameters.AddWithValue("$project", project);
-        return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null;
+        await using (var connection = await OpenAsync(ct).ConfigureAwait(false))
+        {
+            await using var command = Command(connection, "SELECT 1 FROM chunk_fts WHERE project = $project LIMIT 1;");
+            command.Parameters.AddWithValue("$project", project);
+            if (await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is not null)
+            {
+                return true;
+            }
+        }
+
+        await _collection.EnsureCollectionExistsAsync(ct).ConfigureAwait(false);
+        var vectorOnly = new List<ChunkRecord>();
+        await foreach (var record in _collection
+                           .GetAsync(r => r.Project == project, MaxProjectChunks, options: null!, ct)
+                           .ConfigureAwait(false))
+        {
+            vectorOnly.Add(record);
+        }
+
+        if (vectorOnly.Count == 0)
+        {
+            return false;
+        }
+
+        await ReplaceTextRowsAsync(project, relativePath: null, vectorOnly, ct).ConfigureAwait(false);
+        return true;
     }
 
     /// <inheritdoc />
@@ -120,23 +145,22 @@ public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
     /// <inheritdoc />
     public async Task<IReadOnlyList<ChunkRecord>> FindSymbolAsync(string project, string symbol, string? kind, int top, CancellationToken ct)
     {
-        List<ChunkRecord> candidates;
-        await using (var connection = await OpenAsync(ct).ConfigureAwait(false))
-        {
-            await using var command = Command(
-                connection,
-                $"SELECT {TextColumns} FROM chunk_fts WHERE project = $project AND symbol <> '' AND symbol LIKE $pattern ESCAPE '\\';");
-            command.Parameters.AddWithValue("$project", project);
-            command.Parameters.AddWithValue("$pattern", "%" + EscapeLike(symbol) + "%");
-            candidates = await ReadAsync(command, ct).ConfigureAwait(false);
-        }
-
-        return candidates
-            .Where(r => string.IsNullOrEmpty(kind) || string.Equals(r.Kind, kind, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(r => string.Equals(r.Symbol, symbol, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .DistinctBy(r => r.Id, StringComparer.Ordinal)
-            .Take(top > 0 ? top : int.MaxValue)
-            .ToList();
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var command = Command(
+            connection,
+            $"""
+            SELECT {TextColumns} FROM chunk_fts
+            WHERE project = $project AND symbol <> '' AND symbol LIKE $pattern ESCAPE '\'
+              AND ($kind IS NULL OR kind = $kind COLLATE NOCASE)
+            ORDER BY (symbol = $symbol COLLATE NOCASE) DESC, rowid
+            LIMIT $top;
+            """);
+        command.Parameters.AddWithValue("$project", project);
+        command.Parameters.AddWithValue("$pattern", "%" + EscapeLike(symbol) + "%");
+        command.Parameters.AddWithValue("$kind", string.IsNullOrEmpty(kind) ? DBNull.Value : kind);
+        command.Parameters.AddWithValue("$symbol", symbol);
+        command.Parameters.AddWithValue("$top", top > 0 ? top : -1);
+        return await ReadAsync(command, ct).ConfigureAwait(false);
     }
 
     private async Task ReplaceTextRowsAsync(string project, string? relativePath, IReadOnlyList<ChunkRecord> chunks, CancellationToken ct)
@@ -205,9 +229,19 @@ public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
         }
 
         var withVectors = chunks.Where(c => c.Embedding.Length > 0).ToList();
-        if (withVectors.Count > 0)
+        if (withVectors.Count == 0)
+        {
+            return;
+        }
+
+        try
         {
             await _collection.UpsertAsync(withVectors, ct).ConfigureAwait(false);
+        }
+        catch (VectorStoreException)
+        {
+            await _collection.DeleteAsync(withVectors.Select(c => c.Id), CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
     }
 
@@ -264,6 +298,6 @@ public sealed partial class SqliteProjectKnowledgeStore : IProjectKnowledgeStore
 
     private static string Quote(string term) => "\"" + term.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
 
-    [GeneratedRegex(@"[\p{L}\p{N}]{2,}")]
+    [GeneratedRegex(@"[\p{L}\p{N}]{3,}")]
     private static partial Regex Words();
 }

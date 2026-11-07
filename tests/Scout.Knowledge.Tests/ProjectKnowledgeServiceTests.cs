@@ -28,9 +28,12 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
             Directory.Delete(_repo, recursive: true);
         }
 
-        if (File.Exists(_dbPath))
+        foreach (var path in new[] { _dbPath, _dbPath + "-wal", _dbPath + "-shm" })
         {
-            File.Delete(_dbPath);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
     }
 
@@ -285,22 +288,45 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         logger.Exceptions.ShouldBeEmpty();
     }
 
+    private ProjectKnowledgeService ServiceOverAnUnopenableDatabase(RecordingLogger<ProjectKnowledgeService> logger)
+    {
+        var unopenable = new SqliteProjectKnowledgeStore($"Data Source={_repo}");
+        var embedder = NoEmbeddingsEmbedder();
+        var resolution = new ProjectResolutionService(
+            Options.Create(new ProjectsOptions { Items = { new ProjectEntry { Name = "proj", RepoPath = _repo } } }),
+            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
+            new ProjectIndexer(new FileChunker(), embedder, unopenable, NullLogger<ProjectIndexer>.Instance),
+            unopenable,
+            NullLogger<ProjectResolutionService>.Instance);
+        return new ProjectKnowledgeService(embedder, unopenable, resolution, logger);
+    }
+
     [Fact]
-    public async Task SearchAsync_WithoutEmbeddings_WhenSqliteCannotOpen_AnswersCleanlyAndWarnsOnce()
+    public async Task SearchAsync_WhenTheDatabaseCannotOpen_AnswersCleanlyAndWarnsOnce()
     {
         var logger = new RecordingLogger<ProjectKnowledgeService>();
-        var unopenable = new SqliteProjectKnowledgeStore($"Data Source={_repo}");
-        var service = new ProjectKnowledgeService(
-            NoEmbeddingsEmbedder(),
-            unopenable,
-            Resolution(Substitute.For<IProjectKnowledgeStore>()),
-            logger);
+        var service = ServiceOverAnUnopenableDatabase(logger);
 
         var result = string.Empty;
         await Should.NotThrowAsync(async () =>
             result = await service.SearchAsync("proj", "Where is the invoice total?", CancellationToken.None));
 
         result.ShouldBe("Could not search project 'proj' right now.");
+        logger.Levels.ShouldBe([LogLevel.Warning]);
+        logger.Exceptions.ShouldHaveSingleItem().ShouldBeOfType<SqliteException>();
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_WhenTheDatabaseCannotOpen_AnswersCleanlyAndWarnsOnce()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var service = ServiceOverAnUnopenableDatabase(logger);
+
+        var result = string.Empty;
+        await Should.NotThrowAsync(async () =>
+            result = await service.FindSymbolAsync("proj", "InvoiceCalculator", kind: null, CancellationToken.None));
+
+        result.ShouldBe("Could not find symbol 'InvoiceCalculator' in project 'proj' right now.");
         logger.Levels.ShouldBe([LogLevel.Warning]);
         logger.Exceptions.ShouldHaveSingleItem().ShouldBeOfType<SqliteException>();
     }

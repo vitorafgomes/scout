@@ -47,15 +47,14 @@ public sealed class ProjectKnowledgeService(
             return "Provide a project and a question.";
         }
 
-        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
-
-        if (entry is null)
-        {
-            return $"Unknown project '{project}'.";
-        }
-
         try
         {
+            var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+            if (entry is null)
+            {
+                return $"Unknown project '{project}'.";
+            }
+
             var vector = await this.VectorOrNullAsync(question, cancellationToken);
             if (vector is not { } query)
             {
@@ -109,17 +108,16 @@ public sealed class ProjectKnowledgeService(
             return "Provide a project and a symbol.";
         }
 
-        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
-
-        if (entry is null)
-        {
-            return $"Unknown project '{project}'.";
-        }
-
         var limit = top > 0 ? top : FindSymbolTopResults;
 
         try
         {
+            var entry = await this.resolution.ResolveAsync(project, cancellationToken);
+            if (entry is null)
+            {
+                return $"Unknown project '{project}'.";
+            }
+
             var hits = await this.store.FindSymbolAsync(entry.Name, symbol, kind, limit, cancellationToken);
 
             if (hits.Count == 0)

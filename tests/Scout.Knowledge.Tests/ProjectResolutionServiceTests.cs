@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel.Connectors.SqliteVec;
 
 namespace Scout.Knowledge.Tests;
 
@@ -186,6 +187,48 @@ public sealed class ProjectResolutionServiceTests : IDisposable
         second.ShouldBeNull();
         (await store.HasProjectAsync("half", CancellationToken.None)).ShouldBeFalse();
         await embedder.Received(2).GenerateAsync(
+            Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ResolveAsync_OnADatabaseWithVectorsOnly_FillsTheTextIndexWithoutEmbedding()
+    {
+        var repo = MakeRepo("legacy");
+        File.WriteAllText(Path.Combine(repo, "README.md"), "Shipping labels are printed by the warehouse.");
+        var connectionString = $"Data Source={Path.Combine(_root, "legacy.db")}";
+        var vector = new float[768];
+        vector[0] = 1f;
+        var legacy = new SqliteVectorStore(connectionString).GetCollection<string, ChunkRecord>("project_chunks");
+        await legacy.EnsureCollectionExistsAsync();
+        await legacy.UpsertAsync(new ChunkRecord
+        {
+            Id = "legacy:Ledger.cs:3",
+            Project = "legacy",
+            Path = "Ledger.cs",
+            Kind = "code",
+            Symbol = "PostEntries",
+            StartLine = 3,
+            EndLine = 9,
+            Content = "Ledger entries are posted nightly.",
+            Embedding = vector,
+        });
+        var store = new SqliteProjectKnowledgeStore(connectionString);
+        var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        var service = NewService(
+            new ProjectsOptions { Items = { new ProjectEntry { Name = "legacy", RepoPath = repo } } },
+            store,
+            new ProjectIndexer(new FileChunker(), embedder, store, NullLogger<ProjectIndexer>.Instance));
+
+        var entry = await service.ResolveAsync("legacy");
+
+        entry.ShouldNotBeNull().Name.ShouldBe("legacy");
+        var hit = (await store.SearchTextAsync("legacy", "ledger entries", top: 5, CancellationToken.None)).ShouldHaveSingleItem();
+        hit.Id.ShouldBe("legacy:Ledger.cs:3");
+        hit.Symbol.ShouldBe("PostEntries");
+        hit.StartLine.ShouldBe(3);
+        (await store.FindSymbolAsync("legacy", "PostEntries", kind: "code", top: 5, CancellationToken.None))
+            .ShouldHaveSingleItem().Path.ShouldBe("Ledger.cs");
+        await embedder.DidNotReceive().GenerateAsync(
             Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
     }
 
