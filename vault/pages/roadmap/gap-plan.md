@@ -25,7 +25,7 @@ This page lists only what is broken or missing today. What widens Scout lives on
 On 2026-11-07 the owner audited a real repository from the floating chat and got two findings before the audit stopped; asking Scout to continue started from nothing. The reasons are in the design, not in the model:
 
 - The audit is one answer. The `code-audit` skill audits six dimensions in one turn and, on a large repository, tells the model to stop and ask the user for an area; every provider's function loop caps the calls in a turn (40 by default on the Microsoft.Extensions.AI path, `src/Scout.Llm/Providers/ChatGptPlan/ChatGptPlanLlmProviderFactory.cs:106`; Semantic Kernel's own cap on the other paths, [[pages/services/llm]]) and the model stops well before that.
-- With a provider that has no embedding generator (the ChatGPT plan today; any provider the owner connects tomorrow) `search_project` and `find_symbol` answer that project search is not available ([[pages/services/knowledge]], `src/Scout.Knowledge/ProjectKnowledgeService.cs:24`); the model is left with listing files, reading whole files and GitHub code search.
+- Since G3 (2026-11-07) a provider with no embedding generator (the ChatGPT plan today; any provider the owner connects tomorrow) still has project search: `search_project` and `find_symbol` answer through the full-text index ([[pages/services/knowledge]], `src/Scout.Knowledge/ProjectKnowledgeService.cs:62`).
 - The conversation memory keeps only text: the last six turns, 8,000 characters replayed, in the worker's RAM, expiring after 30 idle minutes ([[pages/services/conversation]], `src/Scout.Conversation/Memory/ConversationMemoryOptions.cs:22`). The files read and the findings are not in it, and the audit's reply is short by design because the cards carry the details ([[pages/decisions/0040-review-findings-as-cards-in-chat]]).
 
 Two process rules apply from this date, independent of any item below:
@@ -44,8 +44,8 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 ## Status
 
-- **As of 2026-11-07:** G1 merged (PR #113); G2 merged (PR #108, PR #109); G3 built on `feat/knowledge-fulltext-search`, in review; G4 to G6 not started; G7 waits for the owner's word.
-- **Next milestone:** G3 reviewed, tested and merged; then G8, the verdict on a pull request (ADR 0043) acting as Scout's own GitHub identity (ADR 0044). ADR 0042 for G4 is drafted and waits for the owner; G4 comes after G8.
+- **As of 2026-11-07:** the owner's decision: the whole plan ships as one pull request from `feat/gap-plan`, opened only when everything is done, one commit per step and per review fix ("um PR com tudo isso"). G1 merged (PR #113); G2 merged (PR #108, PR #109); G3 committed on the bundle; G8 lanes A to D committed at their first checkpoint; G4, G5 and the rest of G8 in progress; G7 waits for the owner's word.
+- **Next milestone:** the verdict's executor (the card click as the owner's approval), the G3 performance fixes, G5's shared picks, then G4; then one integration AppImage, the expected-behaviour table, and the single pull request.
 - **Blocker:** none.
 
 ## Items
@@ -54,7 +54,7 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 |---|---|---|---|
 | G1 | Floating chat (`feat/quick-ask-redesign`, 2026-11-07): the approved layout (mic inside the field, Send becomes Stop, tools collapsed, one scroll), no send while a reply runs, Space and Escape only in the question box, a partial reply kept on failure, the text and screenshot kept on a refusal, scroll only when at the bottom, No collapses the card and hides the footer when nothing is left, matrix specs | in progress | 1 |
 | G2 | An empty reply logged with its reason and the ChatGPT plan's usage limit said in the chat (PR #108); the skill catalog in the prompt when the provider has no embeddings (PR #109) | PRs open | merge |
-| G3 | Full-text search (SQLite FTS5) over the existing chunk index, so `search_project` and `find_symbol` answer on every provider, with or without embeddings; the semantic search stays on top when embeddings exist | not started | 2 |
+| G3 | Full-text search (SQLite FTS5) over the existing chunk index, so `search_project` and `find_symbol` answer on every provider, with or without embeddings; the semantic search stays on top when embeddings exist | committed on `feat/gap-plan` (2026-11-07) | 2 |
 | G4 | After G8. The audit as a job with saved progress: Scout builds the coverage plan from the snapshot's folder structure ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]), each batch is one turn with a closed scope, after each batch Scout records the files read, the findings and what is left in SQLite ([[pages/decisions/0037-meetings-kept-locally-in-sqlite]] is the precedent), the next batch starts on its own, a partial result is kept, findings are merged by path and title across batches and the cards accumulate them; needs an ADR | not started | 4 |
 | G5 | Picks on the findings cards shared between the main window and the floating chat, so a review posted in one does not ask for approval in the other | not started | 5 |
 | G6 | Clear on the Chat screen also resets the worker's memory for the local channel, and the transcript sent with a question stays out of the stored turn ([[pages/roadmap/followups]], entries of 2026-10-30 and 2026-11-04) | not started | 6 |

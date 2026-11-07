@@ -25,7 +25,7 @@ From the floating chat the owner asked for an audit of a real repository with ma
 ## Diagnosis
 
 - **One answer per audit.** `src/Scout.Skills/skills/code-audit.md` audits six dimensions in one turn and tells the model, on a large repository, to stop and ask for an area. Every provider's function loop caps the calls in a turn (40 by default on the Microsoft.Extensions.AI path, Semantic Kernel's own cap on the others, [[pages/services/llm]]) and the model stops well before.
-- **No search without embeddings.** `search_project` and `find_symbol` answer that project search is not available when the provider has no embedding generator ([[pages/services/knowledge]]), which is the case on the ChatGPT plan today and may be the case on any provider the owner connects; whole-file reads exhaust the context.
+- **Search without embeddings.** Since G3 (2026-11-07) `search_project` and `find_symbol` answer through the full-text index when the provider has no embedding generator ([[pages/services/knowledge]], [[pages/roadmap/gap-plan]]), so whole-file reads are no longer the only way to find code on the ChatGPT plan or any provider the owner connects.
 - **Text-only memory.** The conversation memory stores the question and the reply text, in RAM, 6 turns, 8,000 characters, 30 idle minutes ([[pages/services/conversation]]); the files read, the search results and the findings are not in it, and the audit's reply is short by design because the cards carry the details ([[pages/decisions/0040-review-findings-as-cards-in-chat]]).
 
 ## Survey, in mechanism terms

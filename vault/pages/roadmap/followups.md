@@ -21,6 +21,12 @@ reliability: medium
 - **Out of scope:** initiatives with phases (they get their own page under `pages/roadmap/`).
 
 ## Entries
+### Code identifiers are one token in the full-text index (2026-11-07)
+
+- **Blocker:** deferred by the owner on 2026-11-07; G3 shipped with the default tokenizer ([[pages/roadmap/gap-plan]]).
+- **Evidence:** `chunk_fts` uses the `unicode61` tokenizer (`src/Scout.Knowledge/SqliteProjectKnowledgeStore.cs:23`), which splits on non-alphanumerics only, so `ApplyDiscount` is one token and a question with "discount" does not rank the method that applies it when the provider has no embeddings ([[pages/services/knowledge]]).
+- **Unblocks with:** a second indexed column holding each chunk's identifiers split at case changes and digits (`ApplyDiscount` as `apply discount`), written by `ReplaceTextRowsAsync`, with a ranking test that "discount" finds `ApplyDiscount`; measured on a real repository against today's ranking before it ships.
+
 ### A structural graph over a repository snapshot (2026-11-06)
 
 - **Gap:** a review reads a snapshot file by file and searches it by text or by embedding ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]); "who calls this", "what breaks if this changes" and "where are the hubs" still cost many reads. The owner asked on 2026-11-06 whether a graphify-style graph (AST nodes and edges, god nodes, blast radius) should be a third toolset.

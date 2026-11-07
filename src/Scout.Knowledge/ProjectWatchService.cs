@@ -32,7 +32,6 @@ internal sealed class ProjectWatchService(
     private readonly List<FileSystemWatcher> _watchers = new();
 
     private volatile bool _isWatching;
-    private bool _reindexOffLogged;
 
     /// <summary>True once <see cref="ExecuteAsync"/> has armed the watchers; for test synchronization.</summary>
     internal bool IsWatching => _isWatching;
@@ -167,14 +166,6 @@ internal sealed class ProjectWatchService(
             catch (OperationCanceledException)
             {
                 throw;
-            }
-            catch (NotSupportedException)
-            {
-                if (!_reindexOffLogged)
-                {
-                    _reindexOffLogged = true;
-                    _logger.LogInformation("Project re-indexing is off: the AI provider has no embeddings.");
-                }
             }
             catch (Exception ex)
             {

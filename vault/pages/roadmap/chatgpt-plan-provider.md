@@ -33,7 +33,7 @@ The owner asked for it twice on 2026-10-22. [[pages/decisions/0015-cloud-llm-pro
 ## Decisions (owner, 2026-10-22)
 
 1. **Only the owner is answered** while the ChatGPT provider is active; other users are told to use an API-key provider. OpenAI's pages do not say whether one plan may serve several people; this keeps Scout inside the personal-use model they describe. Implemented on 2026-10-23 as the allowed-users list of [[pages/decisions/0021-allowed-users]], which answers the listed ids rather than only the owner and does not point refused users to an API-key provider.
-2. ~~**Embeddings come from local Ollama.**~~ Superseded on 2026-10-23 by the owner's principle "I choose what to connect and Scout stays with only that provider": with the ChatGPT plan there are no embeddings at all, skill auto-selection and project search are off quietly, and skills stay reachable through `list_skills` and `load_skill`.
+2. ~~**Embeddings come from local Ollama.**~~ Superseded on 2026-10-23 by the owner's principle "I choose what to connect and Scout stays with only that provider": with the ChatGPT plan there are no embeddings at all, skill auto-selection is off quietly and skills stay reachable through `list_skills` and `load_skill`; since G3 (2026-11-07) project search works through the full-text index ([[pages/services/knowledge]]).
 3. **Spike before building** (done, below).
 
 ## Spike results (2026-10-22)

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Scout.Knowledge.Tests;
@@ -118,6 +119,50 @@ public sealed class ProjectIndexerTests : IDisposable
         records.ShouldNotBeNull();
         records!.ShouldContain(r => r.Path == "README.md");
         records.ShouldNotContain(r => r.Path == "Foo.cs");
+    }
+
+    [Fact]
+    public async Task IndexAsync_WithoutEmbeddings_StoresEveryChunkWithoutAVector()
+    {
+        var store = CaptureStore(out var captured);
+        var generator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        generator
+            .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns<GeneratedEmbeddings<Embedding<float>>>(_ => throw new NotSupportedException("Embeddings are not available."));
+        var logger = new RecordingLogger();
+        var indexer = new ProjectIndexer(new FileChunker(), generator, store, logger);
+
+        await indexer.IndexAsync(new ProjectEntry { Name = "proj", RepoPath = _repoPath }, CancellationToken.None);
+
+        var records = captured().ShouldNotBeNull();
+        records.Select(r => r.Id).ShouldBe(["proj:Foo.cs:1", "proj:Foo.cs:2", "proj:README.md:1"], ignoreOrder: true);
+        records.ShouldContain(r => r.Symbol == "Bar" && r.Content.Contains("return 1;", StringComparison.Ordinal));
+        records.ShouldAllBe(r => r.Embedding.Length == 0);
+        await generator.Received(1).GenerateAsync(
+            Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
+        logger.Entries.Where(e => e.Message.Contains("without embeddings", StringComparison.Ordinal))
+            .ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Information);
+        logger.Entries.ShouldAllBe(e => e.Exception == null);
+    }
+
+    private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
+
+    private sealed class RecordingLogger : ILogger<ProjectIndexer>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Entries.Add(new LogEntry(logLevel, formatter(state, exception), exception));
     }
 
     public void Dispose()

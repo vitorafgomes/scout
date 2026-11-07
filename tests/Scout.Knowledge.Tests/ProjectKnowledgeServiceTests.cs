@@ -1,5 +1,6 @@
 namespace Scout.Knowledge.Tests;
 
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +13,8 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
 
     private readonly string _repo;
 
+    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"scout-knowledge-service-{Guid.NewGuid():N}.db");
+
     public ProjectKnowledgeServiceTests()
     {
         _repo = Path.Combine(Path.GetTempPath(), "scout-knowledge-service-" + Guid.NewGuid().ToString("N"));
@@ -23,6 +26,11 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         if (Directory.Exists(_repo))
         {
             Directory.Delete(_repo, recursive: true);
+        }
+
+        if (File.Exists(_dbPath))
+        {
+            File.Delete(_dbPath);
         }
     }
 
@@ -198,8 +206,6 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         result.ShouldBe("Could not search project 'proj' right now.");
     }
 
-    private const string NoEmbeddingsMessage = "Project search is not available with the current AI provider.";
-
     private static IEmbeddingGenerator<string, Embedding<float>> NoEmbeddingsEmbedder()
     {
         var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
@@ -209,73 +215,113 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
         return embedder;
     }
 
-    [Fact]
-    public async Task SearchAsync_says_project_search_is_unavailable_when_the_provider_has_no_embeddings()
+    private static IEmbeddingGenerator<string, Embedding<float>> WorkingEmbedder()
     {
-        var store = Substitute.For<IProjectKnowledgeStore>();
-        var logger = new RecordingLogger<ProjectKnowledgeService>();
-        var service = new ProjectKnowledgeService(NoEmbeddingsEmbedder(), store, Resolution(store), logger);
-
-        var result = await service.SearchAsync("proj", "anything", CancellationToken.None);
-
-        result.ShouldBe(NoEmbeddingsMessage);
-        logger.Exceptions.ShouldBeEmpty();
+        var vector = new float[768];
+        vector[0] = 1f;
+        var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        embedder
+            .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => new GeneratedEmbeddings<Embedding<float>> { new Embedding<float>(vector) });
+        return embedder;
     }
 
-    [Fact]
-    public async Task SearchAsync_on_an_unindexed_project_without_embeddings_stops_indexing_and_says_search_is_unavailable()
+    private ProjectKnowledgeService ServiceWithoutEmbeddingsOverTheRepo(RecordingLogger<ProjectKnowledgeService> logger)
+        => ServiceOverTheRepo(NoEmbeddingsEmbedder(), logger);
+
+    private ProjectKnowledgeService ServiceOverTheRepo(
+        IEmbeddingGenerator<string, Embedding<float>> embedder,
+        RecordingLogger<ProjectKnowledgeService> logger)
     {
-        File.WriteAllText(Path.Combine(_repo, "a.md"), "first file");
-        File.WriteAllText(Path.Combine(_repo, "b.md"), "second file");
-        var embedder = NoEmbeddingsEmbedder();
-        var store = Substitute.For<IProjectKnowledgeStore>();
-        store.HasProjectAsync("proj", Arg.Any<CancellationToken>()).Returns(false);
-        var indexerLogger = new RecordingLogger<ProjectIndexer>();
-        var resolutionLogger = new RecordingLogger<ProjectResolutionService>();
-        var serviceLogger = new RecordingLogger<ProjectKnowledgeService>();
-        var resolution = new ProjectResolutionService(
-            Options.Create(new ProjectsOptions { Items = { new ProjectEntry { Name = "proj", RepoPath = _repo } } }),
-            new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
-            new ProjectIndexer(new FileChunker(), embedder, store, indexerLogger),
-            store,
-            resolutionLogger);
-        var service = new ProjectKnowledgeService(embedder, store, resolution, serviceLogger);
-
-        var result = await service.SearchAsync("proj", "anything", CancellationToken.None);
-
-        result.ShouldBe(NoEmbeddingsMessage);
-        await embedder.Received(1).GenerateAsync(
-            Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
-        await store.DidNotReceive().ReplaceProjectAsync(
-            Arg.Any<string>(), Arg.Any<IReadOnlyList<ChunkRecord>>(), Arg.Any<CancellationToken>());
-        indexerLogger.Exceptions.ShouldBeEmpty();
-        resolutionLogger.Exceptions.ShouldBeEmpty();
-        serviceLogger.Exceptions.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task FindSymbolAsync_on_an_unindexed_project_without_embeddings_says_search_is_unavailable()
-    {
-        File.WriteAllText(Path.Combine(_repo, "a.md"), "first file");
-        var embedder = NoEmbeddingsEmbedder();
-        var store = Substitute.For<IProjectKnowledgeStore>();
-        store.HasProjectAsync("proj", Arg.Any<CancellationToken>()).Returns(false);
+        File.WriteAllText(
+            Path.Combine(_repo, "Billing.cs"),
+            "public class InvoiceCalculator\n{\n    public decimal ApplyDiscount(decimal total) => total * 0.9m;\n}\n");
+        File.WriteAllText(Path.Combine(_repo, "billing.md"), "The discount is applied to the invoice total before tax.");
+        File.WriteAllText(Path.Combine(_repo, "shipping.md"), "Shipping labels are printed by the warehouse.");
+        var store = new SqliteProjectKnowledgeStore($"Data Source={_dbPath}");
         var resolution = new ProjectResolutionService(
             Options.Create(new ProjectsOptions { Items = { new ProjectEntry { Name = "proj", RepoPath = _repo } } }),
             new ProjectDiscoveryService(NullLogger<ProjectDiscoveryService>.Instance),
             new ProjectIndexer(new FileChunker(), embedder, store, NullLogger<ProjectIndexer>.Instance),
             store,
             NullLogger<ProjectResolutionService>.Instance);
-        var service = new ProjectKnowledgeService(embedder, store, resolution, NullLogger<ProjectKnowledgeService>.Instance);
+        return new ProjectKnowledgeService(embedder, store, resolution, logger);
+    }
 
-        var result = await service.FindSymbolAsync("proj", "Anything", kind: null, CancellationToken.None);
+    [Fact]
+    public async Task SearchAsync_WithoutEmbeddings_AnswersTheTextHitsWithCitations()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var service = ServiceWithoutEmbeddingsOverTheRepo(logger);
 
-        result.ShouldBe(NoEmbeddingsMessage);
+        var result = await service.SearchAsync("proj", "Where is the discount applied to the invoice total?", CancellationToken.None);
+
+        result.ShouldStartWith("[billing.md:1-1]\nThe discount is applied to the invoice total before tax.\n\n");
+        logger.Exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithoutEmbeddings_AndNoMatch_SaysNothingMatchesWithoutAskingToReindex()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var service = ServiceWithoutEmbeddingsOverTheRepo(logger);
+
+        var result = await service.SearchAsync("proj", "kubernetes helm chart", CancellationToken.None);
+
+        result.ShouldBe("No content in project 'proj' matches the question.");
+        logger.Exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithEmbeddings_OnAProjectIndexedWithoutVectors_AnswersTheTextHits()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        await ServiceWithoutEmbeddingsOverTheRepo(logger).FindSymbolAsync("proj", "InvoiceCalculator", kind: null, CancellationToken.None);
+        var service = ServiceOverTheRepo(WorkingEmbedder(), logger);
+
+        var result = await service.SearchAsync("proj", "Where is the discount applied to the invoice total?", CancellationToken.None);
+
+        result.ShouldStartWith("[billing.md:1-1]\nThe discount is applied to the invoice total before tax.\n\n");
+        logger.Exceptions.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchAsync_WithoutEmbeddings_WhenSqliteCannotOpen_AnswersCleanlyAndWarnsOnce()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var unopenable = new SqliteProjectKnowledgeStore($"Data Source={_repo}");
+        var service = new ProjectKnowledgeService(
+            NoEmbeddingsEmbedder(),
+            unopenable,
+            Resolution(Substitute.For<IProjectKnowledgeStore>()),
+            logger);
+
+        var result = string.Empty;
+        await Should.NotThrowAsync(async () =>
+            result = await service.SearchAsync("proj", "Where is the invoice total?", CancellationToken.None));
+
+        result.ShouldBe("Could not search project 'proj' right now.");
+        logger.Levels.ShouldBe([LogLevel.Warning]);
+        logger.Exceptions.ShouldHaveSingleItem().ShouldBeOfType<SqliteException>();
+    }
+
+    [Fact]
+    public async Task FindSymbolAsync_WithoutEmbeddings_AnswersTheSymbolHits()
+    {
+        var logger = new RecordingLogger<ProjectKnowledgeService>();
+        var service = ServiceWithoutEmbeddingsOverTheRepo(logger);
+
+        var result = await service.FindSymbolAsync("proj", "InvoiceCalculator", kind: null, CancellationToken.None);
+
+        result.ShouldStartWith("[Billing.cs:1-4 InvoiceCalculator]\npublic class InvoiceCalculator");
+        logger.Exceptions.ShouldBeEmpty();
     }
 
     private sealed class RecordingLogger<T> : ILogger<T>
     {
         public List<Exception> Exceptions { get; } = [];
+
+        public List<LogLevel> Levels { get; } = [];
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => null;
@@ -289,6 +335,7 @@ public sealed class ProjectKnowledgeServiceTests : IDisposable
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
+            Levels.Add(logLevel);
             if (exception is not null)
             {
                 Exceptions.Add(exception);
