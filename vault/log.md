@@ -1,3 +1,6 @@
+## [2026-11-07] crystallize | Comments on pull requests and issues, and replies to review comments (ADR 0043, G8)
+The owner, on finding that Scout cannot comment on an issue, on a pull request's conversation or reply to a review comment: "esses pontos que estão não, ele tem que permitir". ADR 0043 gains comment_on_pull_request, comment_on_issue and reply_to_review_comment as declared Write functions under the feature's grant (editable on GitHub, so no per-action approval), on two new catalog rows.
+
 ## [2026-11-07] crystallize | Scout's own GitHub identity, optional (ADR 0044, in G8)
 The owner: "registrar o Scout no GitHub como um agente, assim todas as ações dele não mostram como fui eu que fiz", "isso tem que ser opcional", "temos que entregar com tudo isso". ADR 0044 proposed: each owner creates their own App with the manifest flow (a shared App's key cannot ship in an open-source desktop), the private key in the safeStorage vault, installation tokens for the writes the owner switches to the bot, the owner's sign-in stays the default; the bot can approve the owner's own pull requests. ADR 0019 amended with a pointer; G8 gains it. ADR 0043 and G8 land in main here, their first PR having merged before that commit.
 
