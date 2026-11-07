@@ -61,6 +61,7 @@ import {
   restartWorkerIfRunning,
 } from './ipc/github.js';
 import { GitHubBot } from './oauth/github-bot.js';
+import { registerGitHubVerdictHandlers } from './ipc/github-verdict.js';
 import {
   registerYouTubeHandlers,
   deleteYouTubeData,
@@ -217,6 +218,7 @@ let unregisterSlack: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
 let gitHubBot: GitHubBot | null = null;
 let unregisterGitHubBot: (() => void) | null = null;
+let unregisterGitHubVerdict: (() => void) | null = null;
 let unregisterYouTube: (() => void) | null = null;
 let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
@@ -256,6 +258,7 @@ function disposeAll(): void {
   unregisterAccess?.();
   unregisterSlack?.();
   unregisterFeatures?.();
+  unregisterGitHubVerdict?.();
   unregisterOperator?.();
   unregisterProviders?.();
   unregisterWhisper?.();
@@ -669,6 +672,17 @@ app
           deleteYouTubeData(youTubeControlPlane, youTubeLogger),
         ),
       },
+    );
+    const verdictLogger = logger.child({ module: 'github-verdict' });
+    unregisterGitHubVerdict = registerGitHubVerdictHandlers(
+      ipcMain,
+      () => connection.client,
+      (status) => {
+        for (const target of BrowserWindow.getAllWindows()) {
+          if (!target.isDestroyed()) target.webContents.send(CHANNEL.githubVerdict, status);
+        }
+      },
+      verdictLogger,
     );
     unregisterOperator = registerOperatorHandlers(
       ipcMain,

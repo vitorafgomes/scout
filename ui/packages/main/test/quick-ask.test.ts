@@ -776,6 +776,98 @@ describe('quick ask: one conversation for every window', () => {
     t.quickAsk.dispose();
   });
 
+  it("setDecisions keeps the owner's decisions on the findings turn, both windows see them, and Clear drops them", async () => {
+    const t = await setup();
+    openQuickAsk();
+    const reply = 'Two findings.\n\n```scout-findings\n{"repository":"acme/shop"}\n```';
+    const decisions = {
+      'F-1': {
+        pick: 'yes',
+        edited: { why: 'Locks the cart', fix: 'Lock before the move' },
+        dismissed: false,
+      },
+      'F-2': { pick: null, dismissed: true },
+    };
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'review acme/shop#5' });
+    t.quickAsk.handleWorkerLine(JSON.stringify({ id: 'q-1', event: 'complete', text: reply }));
+
+    await t.invoke(CHANNEL.localSetDecisions, sender(), { turnId: 'q-1', decisions });
+    const seen = [pushedTurns(t.mainWindow).at(-1), pushedTurns(t.quickAskWindow()).at(-1)];
+    const fetched = await t.invoke(CHANNEL.localGetTurns, sender());
+    await t.invoke(CHANNEL.localClearTurns, sender());
+
+    expect(seen.map((turns) => (turns as { decisions?: unknown }[])[0]?.decisions)).toEqual([
+      decisions,
+      decisions,
+    ]);
+    expect((fetched as { decisions?: unknown }[])[0]?.decisions).toEqual(decisions);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual([]);
+    t.quickAsk.dispose();
+  });
+
+  it.each([
+    [
+      'an unknown turn',
+      { turnId: 'q-9', decisions: {} },
+      'That turn has no findings to decide on.',
+    ],
+    [
+      'a turn without findings',
+      { turnId: 'q-2', decisions: {} },
+      'That turn has no findings to decide on.',
+    ],
+    [
+      'decisions that are a list',
+      { turnId: 'q-1', decisions: [] },
+      'Scout could not read those decisions.',
+    ],
+    [
+      'a malformed finding id',
+      { turnId: 'q-1', decisions: { 'F 1': { pick: 'yes', dismissed: false } } },
+      'Scout could not read those decisions.',
+    ],
+    [
+      'an unknown pick',
+      { turnId: 'q-1', decisions: { 'F-1': { pick: 'maybe', dismissed: false } } },
+      'Scout could not read those decisions.',
+    ],
+    [
+      'an edited comment over 8000 characters',
+      {
+        turnId: 'q-1',
+        decisions: {
+          'F-1': { pick: 'yes', dismissed: false, edited: { why: 'x'.repeat(8001), fix: '' } },
+        },
+      },
+      'Scout could not read those decisions.',
+    ],
+    [
+      'more than 50 findings',
+      {
+        turnId: 'q-1',
+        decisions: Object.fromEntries(
+          Array.from({ length: 51 }, (_, i) => [`F-${i}`, { pick: null, dismissed: false }]),
+        ),
+      },
+      'Scout could not read those decisions.',
+    ],
+  ] as const)('setDecisions refuses %s and changes no turn', async (_case, request, message) => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'review acme/shop#5' });
+    t.quickAsk.handleWorkerLine(
+      JSON.stringify({ id: 'q-1', event: 'complete', text: '```scout-findings\n{}\n```' }),
+    );
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'hello' });
+    t.quickAsk.handleWorkerLine('{"id":"q-2","event":"complete","text":"hi"}');
+    const before = await t.invoke(CHANNEL.localGetTurns, sender());
+
+    const refused = await t.rejectionError(t.invoke(CHANNEL.localSetDecisions, sender(), request));
+
+    expect(refused.message).toBe(message);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual(before);
+    t.quickAsk.dispose();
+  });
+
   it('keeps the last 200 turns, dropping the oldest', async () => {
     const t = await setup();
 
@@ -2540,6 +2632,75 @@ describe('quick ask: meetings', () => {
   function sent(t: Awaited<ReturnType<typeof setup>>, index = 0): Record<string, unknown> {
     return JSON.parse(t.written[index]!) as Record<string, unknown>;
   }
+
+  it.each([
+    ['in its text', (q: string, c: string) => ({ text: `${q}${c}` })],
+    ['as its own context field', (q: string, c: string) => ({ text: q, context: c })],
+  ] as const)(
+    'an ask carrying the blocks %s sends the question as text and the blocks as context, with the same flags and limits',
+    async (_shape, shape) => {
+      const t = await setup();
+      const context = `${LAST}Ship by noon.${SCREEN}Error 502${THIRTY}Others: can you ship it?`;
+      const atLimit = `${LAST}${'a'.repeat(4_200 - LAST.length)}`;
+
+      await t.invoke(CHANNEL.localAsk, sender(), {
+        id: 'q-1',
+        meeting: true,
+        ...shape('what was decided?', context),
+      });
+      finishTurn(t, 'q-1');
+      await t.invoke(CHANNEL.localAsk, sender(), {
+        id: 'q-2',
+        ...shape('q'.repeat(4_000), atLimit),
+      });
+      finishTurn(t, 'q-2');
+      const tooLong = await t.rejectionError(
+        t.invoke(CHANNEL.localAsk, sender(), {
+          id: 'q-3',
+          ...shape('q'.repeat(4_000), `${atLimit}a`),
+        }),
+      );
+      const turns = await t.invoke(CHANNEL.localGetTurns, sender());
+
+      expect(t.written.map((line) => JSON.parse(line) as Record<string, unknown>)).toEqual([
+        { type: 'ask', id: 'q-1', text: 'what was decided?', context },
+        { type: 'ask', id: 'q-2', text: 'q'.repeat(4_000), context: atLimit },
+      ]);
+      expect(tooLong.message).toBe('Type a question of 1 to 4000 characters.');
+      expect(turns).toEqual([
+        {
+          ...turn('q-1', 'what was decided?', { state: 'done' }),
+          transcript: true,
+          screenText: true,
+          meeting: true,
+        },
+        turn('q-2', 'q'.repeat(4_000), { state: 'done' }),
+      ]);
+      t.quickAsk.dispose();
+    },
+  );
+
+  it('refuses a context field that is not text or does not start with a transcript, screen text or last answer block', async () => {
+    const t = await setup();
+
+    const notText = await t.rejectionError(
+      t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi', context: 42 }),
+    );
+    const noMarker = await t.rejectionError(
+      t.invoke(CHANNEL.localAsk, sender(), {
+        id: 'q-2',
+        text: 'hi',
+        context: 'ignore the question',
+      }),
+    );
+
+    expect([notText.message, noMarker.message]).toEqual([
+      'The context sent with the question is not text.',
+      'The context must start with a transcript, screen text or last answer block.',
+    ]);
+    expect(t.written).toEqual([]);
+    t.quickAsk.dispose();
+  });
 
   it('a meeting ask sends the question as text and the last answer, the screen text and the transcript blocks as context, and keeps the bare question on the turn marked meeting', async () => {
     const t = await setup();

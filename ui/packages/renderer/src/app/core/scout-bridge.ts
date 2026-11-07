@@ -101,6 +101,10 @@ import {
   type GitHubBotCreateRequest,
   type GitHubBotSetWritesRequest,
   type GitHubBotStatus,
+  type GitHubVerdictAction,
+  type GitHubVerdictRequest,
+  type GitHubVerdictStatus,
+  type LocalSetDecisionsRequest,
   type YouTubeSaveApiKeyRequest,
   type YouTubeStatus,
   type KubernetesDetection,
@@ -327,6 +331,14 @@ function createFakeBridge(): ScoutBridge {
     githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
     githubBotStatus: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubGiveVerdict: (_req: GitHubVerdictRequest): Promise<GitHubVerdictAction> =>
+      rejectNotAvailable(),
+    githubVerdictStatus: (_req: GitHubVerdictAction): Promise<GitHubVerdictStatus> =>
+      rejectNotAvailable(),
+    onGitHubVerdict:
+      (_listener: (status: GitHubVerdictStatus) => void): (() => void) =>
+      () =>
+        undefined,
     githubBotCreate: (_req: GitHubBotCreateRequest): Promise<GitHubBotStatus> =>
       rejectNotAvailable(),
     githubBotCancel: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
@@ -360,6 +372,7 @@ function createFakeBridge(): ScoutBridge {
     localCancel: (_req: LocalCancelRequest): Promise<void> => rejectNotAvailable(),
     localGetTurns: (): Promise<readonly LocalTurn[]> => rejectNotAvailable(),
     localClearTurns: (): Promise<void> => rejectNotAvailable(),
+    localSetDecisions: (_req: LocalSetDecisionsRequest): Promise<void> => rejectNotAvailable(),
     onLocalTurns: (_listener: (turns: readonly LocalTurn[]) => void): (() => void) => {
       return (): void => {
         // no-op
@@ -797,6 +810,18 @@ export class ScoutBridgeService {
     return this.bridge.githubBotStatus();
   }
 
+  async githubGiveVerdict(req: GitHubVerdictRequest): Promise<GitHubVerdictAction> {
+    return this.bridge.githubGiveVerdict(req);
+  }
+
+  async githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus> {
+    return this.bridge.githubVerdictStatus(req);
+  }
+
+  onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void {
+    return this.bridge.onGitHubVerdict(listener);
+  }
+
   async githubBotCreate(req: GitHubBotCreateRequest): Promise<GitHubBotStatus> {
     return this.bridge.githubBotCreate(req);
   }
@@ -907,6 +932,10 @@ export class ScoutBridgeService {
 
   async localClearTurns(): Promise<void> {
     return this.bridge.localClearTurns();
+  }
+
+  async localSetDecisions(req: LocalSetDecisionsRequest): Promise<void> {
+    return this.bridge.localSetDecisions(req);
   }
 
   onLocalTurns(listener: (turns: readonly LocalTurn[]) => void): () => void {

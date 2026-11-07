@@ -105,6 +105,9 @@ export const CHANNEL = {
   githubBotCancel: 'scout:github.bot.cancel',
   githubBotRemove: 'scout:github.bot.remove',
   githubBotSetWrites: 'scout:github.bot.setWrites',
+  githubGiveVerdict: 'scout:github.giveVerdict',
+  githubVerdictStatus: 'scout:github.verdictStatus',
+  githubVerdict: 'scout:github.verdict',
   youtubeSignIn: 'scout:youtube.signIn',
   youtubeStatus: 'scout:youtube.status',
   youtubeCancelSignIn: 'scout:youtube.cancelSignIn',
@@ -129,6 +132,7 @@ export const CHANNEL = {
   localCancel: 'scout:local.cancel',
   localGetTurns: 'scout:local.getTurns',
   localClearTurns: 'scout:local.clearTurns',
+  localSetDecisions: 'scout:local.setDecisions',
   localTurns: 'scout:local.turns',
   localHide: 'scout:local.hide',
   localGetShortcut: 'scout:local.getShortcut',
@@ -1159,6 +1163,39 @@ export interface GitHubBotSetWritesRequest {
   readonly writes: readonly GitHubBotWrite[];
 }
 
+/** One line comment of a verdict, as the review's comments carry it. */
+export interface GitHubVerdictComment {
+  readonly path: string;
+  readonly line: number;
+  readonly body: string;
+}
+
+/**
+ * The verdict the owner gives on the card: the click is the owner's approval of this one action, pinned to the
+ * reviewed commit; the tests line is posted as a comment after the verdict.
+ */
+export interface GitHubVerdictRequest {
+  readonly repository: string;
+  readonly number: number;
+  readonly verdict: 'approve' | 'request_changes';
+  readonly body: string;
+  readonly comments: readonly GitHubVerdictComment[];
+  readonly commit: string;
+  readonly testsLine: string;
+}
+
+export interface GitHubVerdictAction {
+  readonly actionId: string;
+}
+
+/** Where a verdict's action stands: the review's link once given, or why it failed. */
+export interface GitHubVerdictStatus {
+  readonly actionId: string;
+  readonly state: 'queued' | 'running' | 'given' | 'failed';
+  readonly url: string | null;
+  readonly reason: string | null;
+}
+
 /** The YouTube connection as the renderer sees it; never carries a token, the key or the OAuth client. */
 export interface YouTubeStatus {
   readonly configured: boolean;
@@ -1336,6 +1373,21 @@ export interface LocalTurn {
   readonly issues?: true;
   /** Why a turn that had already streamed part of its reply ended early; the partial reply stays in `reply`. */
   readonly failure?: string;
+  /** On a findings turn, the owner's decision per finding id; kept in memory with the turn, never on disk. */
+  readonly decisions?: Readonly<Record<string, LocalFindingDecision>>;
+}
+
+/** The owner's decision on one finding: the pick, an edited comment, and whether it was dismissed. */
+export interface LocalFindingDecision {
+  readonly pick: 'yes' | 'no' | null;
+  readonly edited?: { readonly why: string; readonly fix: string };
+  readonly dismissed: boolean;
+}
+
+/** Replaces the decisions on one findings turn, shared by every window. */
+export interface LocalSetDecisionsRequest {
+  readonly turnId: string;
+  readonly decisions: Readonly<Record<string, LocalFindingDecision>>;
 }
 
 /** The sentence the worker ends a cancelled turn with; a surface shows it as Interrupted under a partial reply. */
@@ -1719,6 +1771,9 @@ export interface ScoutBridge {
   githubBotCancel(): Promise<GitHubBotStatus>;
   githubBotRemove(): Promise<GitHubBotStatus>;
   githubBotSetWrites(req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus>;
+  githubGiveVerdict(req: GitHubVerdictRequest): Promise<GitHubVerdictAction>;
+  githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus>;
+  onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void;
   youtubeSignIn(): Promise<YouTubeStatus>;
   youtubeStatus(): Promise<YouTubeStatus>;
   youtubeCancelSignIn(): Promise<void>;
@@ -1743,6 +1798,7 @@ export interface ScoutBridge {
   localCancel(req: LocalCancelRequest): Promise<void>;
   localGetTurns(): Promise<readonly LocalTurn[]>;
   localClearTurns(): Promise<void>;
+  localSetDecisions(req: LocalSetDecisionsRequest): Promise<void>;
   onLocalTurns(listener: (turns: readonly LocalTurn[]) => void): () => void;
   localHide(): Promise<void>;
   localGetShortcut(): Promise<LocalShortcut>;

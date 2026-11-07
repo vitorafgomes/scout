@@ -156,6 +156,7 @@ reliability: medium
 
 - **Gap:** the quick-ask window appends the last 10 minutes of the transcript (up to 24,000 characters) to the question text, and the worker stores the whole text as the turn, so every follow-up turn replays it to the provider ([[pages/services/desktop-quick-ask]], [[pages/services/adapter-local]], [[pages/decisions/0034-live-transcription-on-the-local-adapter]]).
 - **Unblocks with:** a `context` field on the ask line that the adapter passes to the model request and leaves out of the stored turn, with a test that a follow-up turn's history holds the bare question.
+- **Done (2026-11-07):** the ask line carries `context` apart from `text`, and the conversation memory stores only the question (gap plan G6; [[pages/services/adapter-local]], [[pages/services/conversation]]).
 
 ### Live sessions are not stopped when the local adapter shuts down (2026-11-04)
 
@@ -287,6 +288,7 @@ reliability: medium
 
 - **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:860`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
 - **Fix:** let Clear also reset the worker's memory for the local channel, for example a `reset` request on the quick-ask stdin protocol that the local adapter turns into a memory reset; it touches only Scout's own state.
+- **Done (2026-11-07):** Clear writes `{"type":"reset"}` to the worker, which clears the `local` conversation's memory (gap plan G6; [[pages/services/adapter-local]]).
 
 ### Provisioning pages still describe the old Discord flow (2026-10-28)
 

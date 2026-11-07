@@ -16,6 +16,9 @@ import {
   type FeatureSettingFieldDto,
   type FeatureStatus,
   type FeatureWriteClass,
+  type GitHubVerdictAction,
+  type GitHubVerdictRequest,
+  type GitHubVerdictStatus,
   type ClaimStatus,
   type CommentDecision,
   type CommentsViewDto,
@@ -72,6 +75,10 @@ export interface ControlPlaneClient {
   listPendingActions(): Promise<PendingActionDto[]>;
   approveAction(id: string, reason?: string): Promise<PendingActionDto>;
   rejectAction(id: string, reason?: string): Promise<PendingActionDto>;
+  /** Enqueues the verdict the owner clicked on the card as an approved action; only the desktop's token may call it. */
+  giveVerdict(request: GitHubVerdictRequest): Promise<GitHubVerdictAction>;
+  /** Where a verdict's action stands. */
+  getVerdict(actionId: string): Promise<GitHubVerdictStatus>;
   listWrites(limit: number): Promise<WriteLogEntryDto[]>;
   getMandate(): Promise<MandateDto | null>;
   saveMandate(mandate: MandateSaveRequest): Promise<MandateDto>;
@@ -787,6 +794,13 @@ function toWriteLogEntry(message: WriteLogEntryMessage): WriteLogEntryDto {
  * gRPC client for Scout.Host.ControlPlane over its Unix socket. Every call carries the
  * session token as metadata and is bounded by a deadline.
  */
+const VERDICT_STATES: readonly GitHubVerdictStatus['state'][] = [
+  'queued',
+  'running',
+  'given',
+  'failed',
+];
+
 export function createControlPlaneClient(options: ControlPlaneClientOptions): ControlPlaneClient {
   const { socketPath, token, protoDir, deadlineMs = 10_000, platform = process.platform } = options;
 
@@ -856,7 +870,11 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     await waitForReady(client, deadline);
     const metadata = new grpc.Metadata();
     metadata.set(TOKEN_HEADER, token);
-    const unary = (client as unknown as Record<string, UnaryMethod>)[method]!.bind(client);
+    const unaryMethod = (client as unknown as Record<string, UnaryMethod | undefined>)[method];
+    if (unaryMethod === undefined) {
+      throw new ControlPlaneNotImplementedError(`The control plane does not offer ${method} yet.`);
+    }
+    const unary = unaryMethod.bind(client);
     return new Promise((resolve, reject) => {
       unary(request, metadata, { deadline }, (err, response) => {
         if (err != null) reject(mapCallError(err));
@@ -937,6 +955,29 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     },
     approveAction: (id, reason) => decide('ApproveAction', id, reason),
     rejectAction: (id, reason) => decide('RejectAction', id, reason),
+    async giveVerdict(request): Promise<GitHubVerdictAction> {
+      const { comments, ...rest } = request;
+      const response = await call<{ actionId: string }>(features, 'GiveVerdict', {
+        ...rest,
+        commentsJson: JSON.stringify(comments),
+      });
+      return { actionId: response.actionId };
+    },
+    async getVerdict(actionId): Promise<GitHubVerdictStatus> {
+      const response = await call<{ state: string; url: string; reason: string }>(
+        features,
+        'GetVerdict',
+        { actionId },
+      );
+      return {
+        actionId,
+        state: VERDICT_STATES.includes(response.state as GitHubVerdictStatus['state'])
+          ? (response.state as GitHubVerdictStatus['state'])
+          : 'failed',
+        url: response.url.length > 0 ? response.url : null,
+        reason: response.reason.length > 0 ? response.reason : null,
+      };
+    },
     async listWrites(limit): Promise<WriteLogEntryDto[]> {
       const response = await call<{ entries: WriteLogEntryMessage[] }>(features, 'ListWrites', {
         limit,
