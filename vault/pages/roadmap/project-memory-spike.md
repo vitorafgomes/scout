@@ -41,7 +41,7 @@ Two outside projects were read on 2026-11-07. Neither lends code; the mechanisms
 - Ideation runs one read-only agent per dimension (code improvements, quality, documentation, performance, security, UI) with a fixed input (a deterministic project index, what exists and is planned, the memory's file map and patterns) and a fixed output (id, title, description, rationale, affected files, effort, approach, what it builds upon), deduplicated against the roadmap; a roadmap has a discovery agent and a features agent; an idea becomes a task with one click. Adopted as F2, with issues instead of tasks.
 - A code graph from a parser per language with a closure table answers "what breaks if I change X". Deferred to F7.
 
-**A commercial security audit agent.** Builds a threat model of the code first; a deep scan is several independent scans with workers that stop when nothing new appears or on a time limit, keeping partial results; each finding carries a validation status (from the source, or reproduced at run time), a root cause and an attack path; findings persist across scans and a dismissal keeps a written reason. Adopted as F6; the stop rule and the partial result enter G4.
+**A commercial security audit agent.** Builds a threat model of the code first; a deep scan is several independent scans with workers that stop when nothing new appears or on a time limit, keeping partial results; each finding carries a validation status (from the source, or reproduced at run time), a root cause and an attack path; findings persist across scans and a dismissal keeps a written reason. Adopted as F6 without the run-time reproduction, because Scout never runs or edits the project's code; the stop rule and the partial result enter G4.
 
 ## The design both plans adopt
 

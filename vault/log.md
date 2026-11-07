@@ -1,3 +1,6 @@
+## [2026-11-07] crystallize | Scout's purpose in the owner's words
+The owner: "o Scout não tem o objetivo de programar, mas sim criar informações nos repositórios reportando problemas tanto como issues tanto validando PRs". vision.md v1.1 and the root CLAUDE.md snapshot carry it; F6 loses the run-time reproduction; every limit is stated for any provider, the ChatGPT plan as today's case.
+
 ## [2026-11-07] integrate | ADR 0042 The audit as a job with saved progress (proposed)
 Drafted for gap-plan G4 on the owner's "quais os próximos passos?": a worker drives the audit in deterministic batches from the snapshot, one closed-scope model turn per batch, rows in audit.db under the data folder, cards posted into the originating conversation and merged by id; start declared on the github feature's data-folder row like the snapshot. Waits for the owner's approval before code.
 
