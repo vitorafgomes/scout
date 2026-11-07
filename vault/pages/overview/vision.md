@@ -9,6 +9,7 @@ status: stub
 description: "Scout vision: a chatops assistant answering recurring operational and business questions in chat for engineering teams."
 source:
   - "obsidian-vault/scout/01-overview/vision.md"
+  - chat
 reliability: medium
 ---
 
