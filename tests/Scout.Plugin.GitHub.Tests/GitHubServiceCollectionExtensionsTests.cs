@@ -105,12 +105,19 @@ public sealed class GitHubServiceCollectionExtensionsTests
 
         var actions = provider.GetServices<KernelPlugin>().Single(p => p.Name == "GitHubActions");
         actions.Select(f => f.Name).OrderBy(n => n, StringComparer.Ordinal)
-            .ShouldBe(["create_issue", "get_project_conventions", "remember_project_conventions", "snapshot_repository", "submit_pull_request_review"]);
+            .ShouldBe([
+                "comment_on_issue", "comment_on_pull_request", "create_issue", "get_project_conventions", "give_pull_request_verdict",
+                "remember_project_conventions", "reply_to_review_comment", "snapshot_repository", "submit_pull_request_review",
+            ]);
         provider.GetServices<WriteFunctionDeclaration>()
             .Select(d => (d.PluginName, d.FunctionName, d.FeatureId, d.Scope))
             .ShouldBe([
                 ("GitHubActions", "submit_pull_request_review", "github", "Pull request reviews"),
                 ("GitHubActions", "create_issue", "github", "New issues"),
+                ("GitHubActions", "give_pull_request_verdict", "github", "Pull request verdicts"),
+                ("GitHubActions", "comment_on_pull_request", "github", "Pull request comments"),
+                ("GitHubActions", "reply_to_review_comment", "github", "Pull request comments"),
+                ("GitHubActions", "comment_on_issue", "github", "Issue comments"),
                 ("GitHubActions", "remember_project_conventions", "github", "Scout's data folder"),
                 ("GitHubActions", "snapshot_repository", "github", "Scout's data folder"),
             ]);
@@ -135,5 +142,18 @@ public sealed class GitHubServiceCollectionExtensionsTests
         provider.GetRequiredService<GitHubProfileStore>().Directory.ShouldBe("/tmp/scout-test-profiles");
         provider.GetRequiredService<RepositorySnapshotStore>().Directory.ShouldBe("/tmp/scout-test-snapshots");
         provider.GetRequiredService<RepositorySnapshotStore>().MaxBytes.ShouldBe(1024);
+    }
+
+    [Fact]
+    public void The_Owner_Sees_Which_Pull_Request_A_Verdict_Or_A_Comment_Acts_On_And_Which_Verdict_Before_Approving_It()
+    {
+        using var provider = Build(Config(token: "test-token"));
+
+        var shown = provider.GetServices<WriteFunctionDeclaration>().ToDictionary(d => d.FunctionName, d => d.SummaryArguments);
+
+        shown["give_pull_request_verdict"].ShouldBe(["owner", "repo", "number", "verdict"]);
+        shown["comment_on_pull_request"].ShouldBe(["owner", "repo", "number"]);
+        shown["comment_on_issue"].ShouldBe(["owner", "repo", "number"]);
+        shown["reply_to_review_comment"].ShouldBe(["owner", "repo", "number", "comment_id"]);
     }
 }

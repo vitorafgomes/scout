@@ -34,6 +34,15 @@ public interface IGitHubClient
         string owner, string repo, int number, CancellationToken ct);
 
     /// <summary>
+    /// The head commit and the author of pull request <paramref name="number"/>, in one read without its files.
+    /// Returns null when the pull request is not found or not accessible.
+    /// </summary>
+    Task<PullRequestHead?> GetPullRequestHeadAsync(string owner, string repo, int number, CancellationToken ct);
+
+    /// <summary>The login of the account the token signs in as.</summary>
+    Task<string> GetSignedInLoginAsync(CancellationToken ct);
+
+    /// <summary>
     /// List the first hundred changed files of pull request <paramref name="number"/> with their diffs.
     /// Returns null when the pull request is not found or not accessible.
     /// </summary>

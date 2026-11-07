@@ -11,9 +11,12 @@ namespace Scout.Plugin.GitHub;
 
 /// <summary>
 /// The writes the model may ask for around GitHub, each declared on its own row of the <c>github</c> feature and run
-/// only under the owner's grant: <c>submit_pull_request_review</c> posts a commenting review on a pull request and
-/// <c>create_issue</c> opens an issue, both at once, the answer carrying the URL GitHub gave; the write gate refuses
-/// either before anything is sent while the owner has not allowed GitHub writes, and records every run.
+/// only under the owner's grant: <c>submit_pull_request_review</c> posts a commenting review on a pull request,
+/// <c>create_issue</c> opens an issue, <c>comment_on_pull_request</c> and <c>comment_on_issue</c> comment on a
+/// conversation and <c>reply_to_review_comment</c> answers a review comment, each at once, the answer carrying the URL
+/// GitHub gave; <c>give_pull_request_verdict</c> approves a pull request or requests changes, an irreversible write the
+/// gate queues for the owner's approval of that one action. The write gate refuses any of them before anything is sent
+/// while the owner has not allowed GitHub writes, and records every run.
 /// <c>remember_project_conventions</c> is a write into Scout's data folder: the conventions profile of a repository
 /// an audit judges the code against, read back with <c>get_project_conventions</c>; <c>snapshot_repository</c> is
 /// another: the repository at one commit, extracted under that folder so every read of it is local and the Knowledge
@@ -35,6 +38,10 @@ internal sealed class GitHubActionsPlugin(
     internal const string RememberConventions = "remember_project_conventions";
     internal const string GetConventions = "get_project_conventions";
     internal const string SnapshotRepository = "snapshot_repository";
+    internal const string GiveVerdict = "give_pull_request_verdict";
+    internal const string CommentOnPullRequest = "comment_on_pull_request";
+    internal const string CommentOnIssue = "comment_on_issue";
+    internal const string ReplyToReviewComment = "reply_to_review_comment";
 
     internal const int MaxConventionsLength = 20_000;
     internal const int MinConventionsLength = 40;
@@ -50,6 +57,21 @@ internal sealed class GitHubActionsPlugin(
 
     /// <summary>The catalog row an opened issue performs.</summary>
     internal const string IssueScope = "New issues";
+
+    /// <summary>The catalog row an approval or a request for changes performs; irreversible, so each waits for the owner.</summary>
+    internal const string VerdictScope = "Pull request verdicts";
+
+    /// <summary>The catalog row a comment on a pull request's conversation, or a reply to a review comment, performs.</summary>
+    internal const string PullRequestCommentScope = "Pull request comments";
+
+    /// <summary>The catalog row a comment on an issue performs.</summary>
+    internal const string IssueCommentScope = "Issue comments";
+
+    internal const int MaxConversationCommentLength = 65_000;
+    internal const string EmptyComment = "The comment is empty.";
+    internal const string CommentTooLong = "The comment is over 65,000 characters.";
+    internal const string InvalidVerdict = "The verdict must be approve or request_changes; a review that only comments is submit_pull_request_review.";
+    internal const string SelfApproval = "GitHub does not let the author approve their own pull request; request changes or comment instead.";
 
     internal const int MaxComments = 50;
     internal const int MaxBodyLength = 10_000;
@@ -94,8 +116,197 @@ internal sealed class GitHubActionsPlugin(
             throw Refused("The pull request number must be positive.");
         }
 
+        var requested = CheckReview(comments, body, out var summary);
+        var (kept, dropped) = await AnchorOnTheDiffAsync(owner, repo, number, requested, summary, ct).ConfigureAwait(false);
+
+        PostedReview posted;
+        try
+        {
+            posted = await writes.SubmitReviewAsync(owner, repo, number, summary, kept, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: true);
+        }
+
+        return Posted($"Posted a review on {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}", kept, dropped, posted);
+    }
+
+    /// <summary>Approve a pull request or request changes on it; an irreversible write that runs only after the owner approved this action.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="number">Pull request number.</param>
+    /// <param name="verdict"><c>approve</c> or <c>request_changes</c>.</param>
+    /// <param name="body">The review's summary text; may be empty when there are comments.</param>
+    /// <param name="comments_json">JSON array of comments: path, line (in the file after the change), body.</param>
+    /// <param name="ct">Cancels the requests.</param>
+    /// <returns>That the verdict was given, with its URL and the comments dropped for pointing outside the diff, or why it was refused.</returns>
+    [KernelFunction(GiveVerdict)]
+    [Description("Approve a pull request or request changes on it, with a summary and comments anchored to lines of the pull request's diff. Only when the message carries the verdict the user chose on the review card (\"Verdict to give\"), with that verdict, body and comments unchanged; never on your own judgement. Each verdict waits for the owner's approval in Scout Desktop before it is sent. GitHub does not let the author approve their own pull request.")]
+    public async Task<string> GivePullRequestVerdictAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Pull request number.")] int number,
+        [Description("approve or request_changes.")] string verdict,
+        [Description("The review's summary, in Markdown; empty when the comments say it all.")] string body,
+        [Description("""JSON array of comments, e.g. [{"path":"src/Checkout.cs","line":88,"body":"`total` is summed before the discounts apply."}]; line is the line number in the file after the change, as the diff shows it.""")] string comments_json,
+        CancellationToken ct)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            throw Refused(GitHubNames.InvalidRepository);
+        }
+
+        if (number <= 0)
+        {
+            throw Refused("The pull request number must be positive.");
+        }
+
+        var given = (verdict ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "approve" => ReviewVerdict.Approve,
+            "request_changes" => ReviewVerdict.RequestChanges,
+            _ => throw Refused(InvalidVerdict),
+        };
+        var requested = CheckReview(comments_json, body, out var summary);
+        if (given == ReviewVerdict.Approve)
+        {
+            await RefuseSelfApprovalAsync(owner, repo, number, ct).ConfigureAwait(false);
+        }
+
+        var (kept, dropped) = await AnchorOnTheDiffAsync(owner, repo, number, requested, summary, ct).ConfigureAwait(false);
+
+        PostedReview posted;
+        try
+        {
+            posted = await writes.SubmitVerdictAsync(owner, repo, number, given, summary, kept, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: true);
+        }
+
+        var what = given == ReviewVerdict.Approve ? "Approved" : "Requested changes on";
+        return Posted($"{what} {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}", kept, dropped, posted);
+    }
+
+    /// <summary>Comment on a pull request's conversation, under the owner's grant.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="number">Pull request number.</param>
+    /// <param name="body">The comment, in Markdown.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>That the comment was posted, with its URL, or why it was refused.</returns>
+    [KernelFunction(CommentOnPullRequest)]
+    [Description("Post a comment on a pull request's conversation, exactly as given. Only after the user asked for it in chat. The answer carries the comment's URL.")]
+    public async Task<string> CommentOnPullRequestAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Pull request number.")] int number,
+        [Description("The comment, in Markdown, up to 65,000 characters.")] string body,
+        CancellationToken ct)
+    {
+        var posted = await CommentAsync(owner, repo, number, body, "pull request", ct).ConfigureAwait(false);
+        return $"Commented on pull request {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}: {posted.HtmlUrl}";
+    }
+
+    /// <summary>Comment on an existing issue, under the owner's grant.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="number">Issue number.</param>
+    /// <param name="body">The comment, in Markdown.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>That the comment was posted, with its URL, or why it was refused.</returns>
+    [KernelFunction(CommentOnIssue)]
+    [Description("Post a comment on an existing issue, exactly as given. Only after the user asked for it in chat. The answer carries the comment's URL.")]
+    public async Task<string> CommentOnIssueAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Issue number.")] int number,
+        [Description("The comment, in Markdown, up to 65,000 characters.")] string body,
+        CancellationToken ct)
+    {
+        var posted = await CommentAsync(owner, repo, number, body, "issue", ct).ConfigureAwait(false);
+        return $"Commented on issue {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}: {posted.HtmlUrl}";
+    }
+
+    /// <summary>Reply to a review comment on a pull request, under the owner's grant.</summary>
+    /// <param name="owner">Repository owner or organization login.</param>
+    /// <param name="repo">Repository name.</param>
+    /// <param name="number">Pull request number.</param>
+    /// <param name="comment_id">The id of the review comment to reply to.</param>
+    /// <param name="body">The reply, in Markdown.</param>
+    /// <param name="ct">Cancels the request.</param>
+    /// <returns>That the reply was posted, with its URL, or why it was refused.</returns>
+    [KernelFunction(ReplyToReviewComment)]
+    [Description("Reply to a review comment on a pull request, in its thread, exactly as given. Only after the user asked for it in chat. The answer carries the reply's URL.")]
+    public async Task<string> ReplyToReviewCommentAsync(
+        [Description("Repository owner or organization login.")] string owner,
+        [Description("Repository name.")] string repo,
+        [Description("Pull request number.")] int number,
+        [Description("The id of the review comment to reply to, a positive number.")] long comment_id,
+        [Description("The reply, in Markdown, up to 65,000 characters.")] string body,
+        CancellationToken ct)
+    {
+        CheckComment(owner, repo, number, body, "pull request");
+        if (comment_id <= 0)
+        {
+            throw Refused("The review comment id must be positive.");
+        }
+
+        PostedComment posted;
+        try
+        {
+            posted = await writes.ReplyToReviewCommentAsync(owner, repo, number, comment_id, body, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: true);
+        }
+
+        return $"Replied to review comment {comment_id.ToString(CultureInfo.InvariantCulture)} on {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}: {posted.HtmlUrl}";
+    }
+
+    private async Task<PostedComment> CommentAsync(string owner, string repo, int number, string body, string what, CancellationToken ct)
+    {
+        CheckComment(owner, repo, number, body, what);
+        try
+        {
+            return await writes.CommentOnIssueAsync(owner, repo, number, body, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: true);
+        }
+    }
+
+    private static void CheckComment(string owner, string repo, int number, string? body, string what)
+    {
+        if (!GitHubNames.IsValidRepository(owner, repo))
+        {
+            throw Refused(GitHubNames.InvalidRepository);
+        }
+
+        if (number <= 0)
+        {
+            throw Refused($"The {what} number must be positive.");
+        }
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            throw Refused(EmptyComment);
+        }
+
+        if (body.Length > MaxConversationCommentLength)
+        {
+            throw Refused(CommentTooLong);
+        }
+    }
+
+    private static IReadOnlyList<ReviewComment> CheckReview(string? comments, string? body, out string summary)
+    {
         var requested = ParseComments(comments) ?? throw Refused(InvalidComments);
-        var summary = (body ?? string.Empty).Trim();
+        summary = (body ?? string.Empty).Trim();
         if (summary.Length > MaxBodyLength)
         {
             throw Refused($"The review body is over {MaxBodyLength} characters; shorten it.");
@@ -111,6 +322,12 @@ internal sealed class GitHubActionsPlugin(
             throw Refused($"A comment is over {MaxCommentLength} characters; shorten it.");
         }
 
+        return requested;
+    }
+
+    private async Task<(IReadOnlyList<ReviewComment> Kept, IReadOnlyList<string> Dropped)> AnchorOnTheDiffAsync(
+        string owner, string repo, int number, IReadOnlyList<ReviewComment> requested, string summary, CancellationToken ct)
+    {
         IReadOnlyList<ChangedFile>? files;
         try
         {
@@ -123,26 +340,49 @@ internal sealed class GitHubActionsPlugin(
 
         if (files is null)
         {
-            throw Refused($"Pull request #{number.ToString(CultureInfo.InvariantCulture)} not found in {owner}/{repo} or not accessible.");
+            throw Refused(NotFound(owner, repo, number));
         }
 
-        var (kept, dropped) = Anchor(requested, files);
-        if (kept.Count == 0 && summary.Length == 0)
+        var anchored = Anchor(requested, files);
+        if (anchored.Kept.Count == 0 && summary.Length == 0)
         {
             throw Refused(NothingToPost);
         }
 
-        PostedReview posted;
+        return anchored;
+    }
+
+    private async Task RefuseSelfApprovalAsync(string owner, string repo, int number, CancellationToken ct)
+    {
+        PullRequestHead? head;
+        string signer;
         try
         {
-            posted = await writes.SubmitReviewAsync(owner, repo, number, summary, kept, ct).ConfigureAwait(false);
+            head = await reads.GetPullRequestHeadAsync(owner, repo, number, ct).ConfigureAwait(false);
+            signer = await reads.GetSignedInLoginAsync(ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
         {
-            throw Failed(ex, posted: true);
+            throw Failed(ex, posted: false);
         }
 
-        var answer = $"Posted a review on {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)} with {kept.Count} comment(s): {posted.HtmlUrl}";
+        if (head is null)
+        {
+            throw Refused(NotFound(owner, repo, number));
+        }
+
+        if (string.Equals(head.AuthorLogin, signer, StringComparison.OrdinalIgnoreCase))
+        {
+            throw Refused(SelfApproval);
+        }
+    }
+
+    private static string NotFound(string owner, string repo, int number) =>
+        $"Pull request #{number.ToString(CultureInfo.InvariantCulture)} not found in {owner}/{repo} or not accessible.";
+
+    private static string Posted(string what, IReadOnlyList<ReviewComment> kept, IReadOnlyList<string> dropped, PostedReview posted)
+    {
+        var answer = $"{what} with {kept.Count} comment(s): {posted.HtmlUrl}";
         return dropped.Count == 0
             ? answer
             : answer + " Dropped, not on a line of the diff: " + string.Join(", ", dropped) + ".";

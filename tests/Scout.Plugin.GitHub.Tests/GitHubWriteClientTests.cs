@@ -84,4 +84,20 @@ public sealed class GitHubWriteClientTests
         ex.Message.ShouldBe("GitHub is currently unavailable. Try again later.");
         await Should.ThrowAsync<TaskCanceledException>(() => client.CreateIssueAsync("octocat", "hello", "t", "b", [], CancellationToken.None));
     }
+
+    [Theory]
+    [InlineData("""{"message":"Unprocessable Entity","errors":["Can not approve your own pull request"]}""", "GitHub rejected the write: Can not approve your own pull request.")]
+    [InlineData("""{"message":"Validation Failed"}""", "GitHub rejected the write: Validation Failed.")]
+    [InlineData("", "GitHub rejected the write: the request was not valid.")]
+    [InlineData("<html>", "GitHub rejected the write: the request was not valid.")]
+    public async Task A_422_Whose_Errors_Are_Texts_Or_Missing_Still_Names_What_GitHub_Rejected(string reply, string message)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.UnprocessableEntity, reply);
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.SubmitVerdictAsync("octocat", "hello", 42, ReviewVerdict.Approve, "b", [], CancellationToken.None));
+
+        ex.Message.ShouldBe(message);
+        ex.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
 }

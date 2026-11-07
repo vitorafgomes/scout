@@ -27,7 +27,10 @@ public sealed class FeatureCatalogTests
                 ("Issues", ScopeAccess.Read),
                 ("Scout's data folder", ScopeAccess.Write),
                 ("Pull request reviews", ScopeAccess.Write),
+                ("Pull request verdicts", ScopeAccess.IrreversibleWrite),
+                ("Pull request comments", ScopeAccess.Write),
                 ("New issues", ScopeAccess.Write),
+                ("Issue comments", ScopeAccess.Write),
             ]);
         GitHub.WriteClass.ShouldBe(WriteClass.Executive);
         GitHub.HasWriteRows.ShouldBeTrue();
@@ -46,6 +49,7 @@ public sealed class FeatureCatalogTests
             "List open pull requests",
             "Read one pull request with its changed files and their diffs",
             "Read the comments on a pull request",
+            "Read which account Scout signs in as, so it never approves a pull request that account opened",
         ]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Issues").Actions.ShouldBe(["List open issues", "Read one issue"]);
         GitHub.ScopeMatrix!.Single(r => r.Scope == "Pull request reviews").Actions.Single().ShouldContain("never approves");
