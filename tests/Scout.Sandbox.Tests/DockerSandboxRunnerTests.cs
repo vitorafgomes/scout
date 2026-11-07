@@ -368,8 +368,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         await Should.NotThrowAsync(async () => outcome = await Run());
         var result = outcome.ShouldNotBeNull();
 
-        result.Ran.ShouldBeFalse();
-        result.Reason.ShouldBe("Docker is not installed or not running.");
+        result.ShouldBe(new SandboxResult(false, "Docker is not installed or not running.", null, null, null, 0, string.Empty));
         _processes.Calls.Count.ShouldBe(1);
         Directory.Exists(WorkRoot).ShouldBeFalse();
     }
@@ -381,8 +380,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
         var result = await Run();
 
-        result.Ran.ShouldBeFalse();
-        result.Reason.ShouldBe("Docker is not installed or not running.");
+        result.ShouldBe(new SandboxResult(false, "Docker is not installed or not running.", null, null, null, 0, string.Empty));
         _processes.Runs.ShouldBeEmpty();
         Directory.Exists(WorkRoot).ShouldBeFalse();
     }
@@ -438,6 +436,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
         result.Ran.ShouldBeFalse();
         result.Reason.ShouldBe("The tests ran past the 20-minute limit.");
+        result.Image.ShouldBe(SandboxImages.Node);
         result.Command.ShouldBe("npm test");
         _processes.Calls[^1].Arguments.ShouldBe(["kill", FakeProcessRunner.Name(_processes.Test)]);
         RunFoldersLeft().ShouldBeEmpty();
@@ -471,8 +470,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
         var result = await Run();
 
-        result.Ran.ShouldBeFalse();
-        result.Reason.ShouldBe("No .NET, Node, Python or Go project was found at the repository's root.");
+        result.ShouldBe(new SandboxResult(false, "No .NET, Node, Python or Go project was found at the repository's root.", null, null, null, 0, string.Empty));
         _processes.Calls.ShouldBeEmpty();
     }
 
@@ -498,8 +496,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         await Should.NotThrowAsync(async () => outcome = await runner.RunTestsAsync(new SandboxRequest(Snapshot), CancellationToken.None));
         var result = outcome.ShouldNotBeNull();
 
-        result.Ran.ShouldBeFalse();
-        result.Reason.ShouldBe("Docker is not installed or not running.");
+        result.ShouldBe(new SandboxResult(false, "Docker is not installed or not running.", null, null, null, 0, string.Empty));
         Directory.Exists(WorkRoot).ShouldBeFalse();
     }
 
@@ -514,8 +511,7 @@ public sealed class DockerSandboxRunnerTests : IDisposable
 
         var result = await runner.RunTestsAsync(new SandboxRequest(Snapshot + Path.DirectorySeparatorChar), CancellationToken.None);
 
-        result.Ran.ShouldBeFalse();
-        result.Reason.ShouldBe("The sandbox folder is inside the repository snapshot, so the copy would never end.");
+        result.ShouldBe(new SandboxResult(false, "The sandbox folder is inside the repository snapshot, so the copy would never end.", null, null, null, 0, string.Empty));
         _processes.Calls.ShouldBeEmpty();
         Directory.Exists(Path.Combine(Snapshot, "work")).ShouldBeFalse();
     }

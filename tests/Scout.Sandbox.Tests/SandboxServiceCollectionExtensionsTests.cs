@@ -46,7 +46,8 @@ public sealed class SandboxServiceCollectionExtensionsTests
             File.Exists(marker).ShouldBeTrue("the runner did not call the configured DockerPath");
             File.ReadAllText(marker).Trim().ShouldBe("version --format {{.Server.Version}}");
             result.Reason.ShouldBe("Docker is not installed or not running.");
-            result.Image.ShouldBe(SandboxImages.Go);
+            result.Image.ShouldBeNull();
+            result.Command.ShouldBeNull();
         }
         finally
         {

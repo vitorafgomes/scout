@@ -69,13 +69,13 @@ public sealed class DockerSandboxRunner
         ArgumentNullException.ThrowIfNull(request);
         if (string.IsNullOrWhiteSpace(request.SnapshotRoot) || !Directory.Exists(request.SnapshotRoot))
         {
-            return NotRun(SnapshotMissingReason, null, null);
+            return NotRun(SnapshotMissingReason);
         }
 
         var stack = SandboxStacks.Detect(request.SnapshotRoot, request.StackHint, out var reason);
         if (stack is null)
         {
-            return NotRun(reason, null, null);
+            return NotRun(reason);
         }
 
         var testCommand = string.IsNullOrWhiteSpace(request.Command) ? stack.TestCommand : request.Command.Trim();
@@ -83,7 +83,7 @@ public sealed class DockerSandboxRunner
         var snapshot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(request.SnapshotRoot)) + Path.DirectorySeparatorChar;
         if ((root + Path.DirectorySeparatorChar).StartsWith(snapshot, StringComparison.Ordinal))
         {
-            return NotRun(WorkInsideSnapshotReason, stack.Image, testCommand);
+            return NotRun(WorkInsideSnapshotReason);
         }
 
         var id = $"{Guid.NewGuid():N}";
@@ -99,7 +99,7 @@ public sealed class DockerSandboxRunner
         {
             if (!await DockerAnswersAsync(linked.Token).ConfigureAwait(false))
             {
-                return NotRun(DockerMissingReason, stack.Image, testCommand);
+                return NotRun(DockerMissingReason);
             }
 
             Directory.CreateDirectory(Path.Combine(runFolder, "cache", "home"));
@@ -122,7 +122,7 @@ public sealed class DockerSandboxRunner
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && deadline.IsCancellationRequested)
         {
             await KillAsync(container).ConfigureAwait(false);
-            return NotRun(TimeLimitReason, stack.Image, command) with { DurationSeconds = Seconds(started), Output = Last(output), Note = stack.Note };
+            return new SandboxResult(false, TimeLimitReason, stack.Image, command, null, Seconds(started), Last(output), stack.Note);
         }
         catch (OperationCanceledException)
         {
@@ -227,8 +227,7 @@ public sealed class DockerSandboxRunner
 
     private double Seconds(long started) => Math.Round(_time.GetElapsedTime(started).TotalSeconds, 1);
 
-    private static SandboxResult NotRun(string reason, string? image, string? command) =>
-        new(false, reason, image, command, null, 0, string.Empty);
+    private static SandboxResult NotRun(string reason) => new(false, reason, null, null, null, 0, string.Empty);
 
     private static string Last(OutputTail output)
     {
