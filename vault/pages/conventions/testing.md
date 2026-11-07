@@ -1,9 +1,9 @@
 ---
 title: "Testing"
-version: "1.11"
+version: "1.12"
 date: 2026-10-21
-updated: 2026-11-05
-changes: "Line endings: LF on every checkout for the source-text ui tests, and a relative fixture that stays relative on Windows"
+updated: 2026-11-07
+changes: "Scout.Sandbox.Tests and its Docker end-to-end tests: filtered out by test-per-project.sh when no daemon answers, run by a CI step of their own; ArchitectureTests citations re-pointed. Earlier: line endings: LF on every checkout for the source-text ui tests, and a relative fixture that stays relative on Windows"
 page_type: convention
 status: active
 description: "How Scout is tested: xUnit with Shouldly and NSubstitute, one test project per source project, warnings as errors, and the CI steps that run them."
@@ -37,7 +37,7 @@ Versions come from `Directory.Packages.props` (central package management).
 - XML documentation is generated and `CS1591` suppressed for non-test projects only (`Directory.Build.props:10`, `:11`). Test projects set `IsTestProject` (for example `tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj:5`), so they generate no documentation file.
 - Because test projects emit no documentation file, unused-using diagnostics (IDE0005) are not raised by the plain build. `scripts/check-diagnostics.sh:1` forces them on and fails on any remaining diagnostic; run it on a single project for speed. CI runs it on the whole solution.
 - `AnalysisMode` Recommended (`Directory.Build.props:9`) and fifteen rules raised to warning in the root `.editorconfig` (`.editorconfig:43`), since 2026-11-06; the list, the triage and the gate that keeps them on are on [[pages/conventions/tooling]].
-- `tests/Scout.ArchTests` (2026-11-06) is the suite about the repository itself: the layering of [[pages/architecture/project-map]] as NetArchTest rules (leaves reference no other Scout assembly, `tests/Scout.ArchTests/ArchitectureTests.cs:55`; adapters and plugins reference neither each other nor a host, `:69`; the conversation core reaches only Llm and Skills, `:103`; Operator reaches the control plane only through its own abstraction, `:113`), the analyzer gate, the test-suite health (no skipped test, `tests/Scout.ArchTests/TestSuiteHealthTests.cs:26`; every source project has `tests/<Name>.Tests` except the two the map covers from `Scout.ControlPlane.Tests`, `:15`; every test project is in `Scout.slnx`; no test directory without a project), and three source scanners: a format specifier in an interpolated string names its culture (`tests/Scout.ArchTests/CultureExplicitFormattingTests.cs:74`), a comment never cites a vault path, an ADR number or an issue number (`tests/Scout.ArchTests/CommentReferenceTests.cs:36`; the vault cites code, code does not cite the vault), and every test project asserts with Shouldly and none references FluentAssertions (`tests/Scout.ArchTests/AssertionLibraryTests.cs:12`). The scanners blank string literals and comments before matching, with their own tests in `SourceTextTests.cs`.
+- `tests/Scout.ArchTests` (2026-11-06) is the suite about the repository itself: the layering of [[pages/architecture/project-map]] as NetArchTest rules (leaves reference no other Scout assembly, `tests/Scout.ArchTests/ArchitectureTests.cs:56`; adapters and plugins reference neither each other nor a host, `:70`; the conversation core reaches only Llm and Skills, `:104`; Operator reaches the control plane only through its own abstraction, `:114`), the analyzer gate, the test-suite health (no skipped test, `tests/Scout.ArchTests/TestSuiteHealthTests.cs:26`; every source project has `tests/<Name>.Tests` except the two the map covers from `Scout.ControlPlane.Tests`, `:15`; every test project is in `Scout.slnx`; no test directory without a project), and three source scanners: a format specifier in an interpolated string names its culture (`tests/Scout.ArchTests/CultureExplicitFormattingTests.cs:74`), a comment never cites a vault path, an ADR number or an issue number (`tests/Scout.ArchTests/CommentReferenceTests.cs:36`; the vault cites code, code does not cite the vault), and every test project asserts with Shouldly and none references FluentAssertions (`tests/Scout.ArchTests/AssertionLibraryTests.cs:12`). The scanners blank string literals and comments before matching, with their own tests in `SourceTextTests.cs`.
 
 ## Layout and counts
 
@@ -60,6 +60,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 | `Scout.Adapter.Local.Tests` | 16 | [[pages/services/adapter-local]] |
 | `Scout.Transcription.Whisper.Tests` | 15 | [[pages/services/transcription-whisper]] |
 | `Scout.Meetings.Tests` | 12 | [[pages/services/meetings]] |
+| `Scout.Sandbox.Tests` | 56 (72 cases; 3 need Docker) | [[pages/services/sandbox]] |
 
 `tests/old`, the 653 test attributes of the retired first cut, was deleted with it on 2026-11-06; both are in the history before `93da0d4`.
 
@@ -76,7 +77,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 ## Running
 
-- All tests, one project at a time with a verdict per project: `bash scripts/test-per-project.sh`. A solution-wide `dotnet test` from the root still works but reports one total.
+- All tests, one project at a time with a verdict per project: `bash scripts/test-per-project.sh`. A solution-wide `dotnet test` from the root still works but reports one total. When `docker version` gets no answer from a daemon, the script runs `Scout.Sandbox.Tests` with `--filter Category!=Docker` and prints "Docker is not reachable; the Docker end-to-end tests did not run." (`scripts/test-per-project.sh:17`); those tests never pass without Docker, they fail with a sentence naming that filter. On the owner's machine the selected Docker context may be a stopped Docker Desktop; `DOCKER_CONTEXT=default` reaches the native engine.
 - One project: `dotnet test tests/Scout.Llm.Tests`.
 - One test: `dotnet test tests/Scout.Llm.Tests --filter "FullyQualifiedName~Unknown_Provider"`.
 - Pinned SDK 10.0.100 with `latestMinor` roll-forward (`global.json`).
@@ -90,6 +91,7 @@ One test project per source project, named `<Project>.Tests`, except the control
 3. A second SDK, 10.0.2xx, which `global.json`'s `latestMinor` roll-forward then selects for the rest of the job, and `dotnet format Scout.slnx --verify-no-changes --no-restore` (`.github/workflows/ci.yml:47`): the 10.0.1xx band cannot open the workspace `dotnet format` needs.
 4. One build, through the gate: `scripts/check-diagnostics.sh Scout.slnx info Release` (`.github/workflows/ci.yml:55`) rebuilds the solution in Release with the documentation file and the IDE rules forced on, and fails on any diagnostic at any severity.
 5. `scripts/test-per-project.sh --configuration Release --no-build` with the trx logger and XPlat coverage (`.github/workflows/ci.yml:60`), on the gate's output: one verdict per project, Skipped must be 0.
+6. The `Category=Docker` tests of `Scout.Sandbox.Tests` again, on their own (`.github/workflows/ci.yml:65`): the script above leaves them out when no daemon answers, and ubuntu runners have one, so a missing daemon fails the job instead of thinning the suite.
 
 The format check was disabled from 2026-10-21 to 2026-11-06 because `dotnet format --verify-no-changes` times out on the 10.0.1xx SDK; it runs again under 10.0.2xx. Locally, the same SDK from `$HOME/.dotnet` runs it (tooling page); `dotnet format whitespace --folder` is the fallback under the pinned one.
 

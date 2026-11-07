@@ -25,6 +25,33 @@ public sealed class DockerEndToEndTests : IDisposable
         test('reaches the network', async () => { await fetch('https://example.com'); });
         """;
 
+    private const string BunPackageJson = """{"name":"fixture","version":"1.0.0","private":true,"scripts":{"test":"bun test"},"dependencies":{"local":"file:./local"}}""";
+
+    private const string BunLock = """
+        {
+          "lockfileVersion": 2,
+          "configVersion": 1,
+          "workspaces": {
+            "": {
+              "name": "fixture",
+              "dependencies": {
+                "local": "file:./local",
+              },
+            },
+          },
+          "packages": {
+            "local": ["local@file:local", {}],
+          }
+        }
+        """;
+
+    private const string BunTests = """
+        import { test, expect } from "bun:test";
+        import { answer } from "local";
+        test("the restored dependency resolves", () => expect(answer).toBe(42));
+        test("runs as the unprivileged user", () => expect(process.getuid()).not.toBe(0));
+        """;
+
     private readonly string _base = Directory.CreateTempSubdirectory("scout-sandbox-e2e-").FullName;
 
     public void Dispose() => Directory.Delete(_base, recursive: true);
@@ -82,6 +109,29 @@ public sealed class DockerEndToEndTests : IDisposable
         result.Command.ShouldBe("npm test");
         result.Output.ShouldContain("# pass 5");
         result.Output.ShouldNotContain(SecretValue);
+        Directory.GetDirectories(Path.Combine(_base, "work")).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_bun_project_restores_and_runs_green_in_the_pinned_bun_image()
+    {
+        await RequireDocker();
+        var root = Path.Combine(_base, "bun");
+        Directory.CreateDirectory(Path.Combine(root, "local"));
+        File.WriteAllText(Path.Combine(root, "package.json"), BunPackageJson);
+        File.WriteAllText(Path.Combine(root, "bun.lock"), BunLock);
+        File.WriteAllText(Path.Combine(root, "fixture.test.ts"), BunTests);
+        File.WriteAllText(Path.Combine(root, "local", "package.json"), """{"name":"local","version":"1.0.0","main":"index.js"}""");
+        File.WriteAllText(Path.Combine(root, "local", "index.js"), "exports.answer = 42;");
+
+        var result = await Runner().RunTestsAsync(new SandboxRequest(root), CancellationToken.None);
+
+        result.Ran.ShouldBeTrue(result.Output);
+        result.ExitCode.ShouldBe(0, result.Output);
+        result.Image.ShouldBe(SandboxImages.Bun);
+        result.Command.ShouldBe("bun run test");
+        result.Output.ShouldContain("2 pass");
+        result.Output.ShouldContain("0 fail");
         Directory.GetDirectories(Path.Combine(_base, "work")).ShouldBeEmpty();
     }
 

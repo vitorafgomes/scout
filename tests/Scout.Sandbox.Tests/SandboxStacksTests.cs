@@ -71,15 +71,36 @@ public sealed class SandboxStacksTests : IDisposable
     }
 
     [Theory]
-    [InlineData("bun.lock")]
-    [InlineData("bun.lockb")]
-    public void A_bun_lockfile_alone_does_not_run_because_the_node_image_carries_no_bun(string lockfile)
+    [InlineData("bun.lock", "{\"scripts\":{\"test\":\"vitest run\"}}", "bun run test")]
+    [InlineData("bun.lockb", "{\"scripts\":{\"test\":\"vitest run\"}}", "bun run test")]
+    [InlineData("bun.lock", "{\"scripts\":{\"build\":\"tsc\"}}", "bun test")]
+    [InlineData("bun.lock", "{}", "bun test")]
+    [InlineData("bun.lock", "not json", "bun test")]
+    public void A_bun_lockfile_runs_in_the_pinned_bun_image_with_its_test_script_or_bun_test(string lockfile, string packageJson, string test)
     {
-        Files("package.json", lockfile);
+        Files(lockfile);
+        File.WriteAllText(Path.Combine(_root, "package.json"), packageJson);
 
-        SandboxStacks.Detect(_root, null, out var reason).ShouldBeNull();
+        var stack = SandboxStacks.Detect(_root, null, out _).ShouldNotBeNull();
 
-        reason.ShouldBe("The repository uses Bun, which the pinned Node image does not carry; its tests did not run.");
+        stack.Name.ShouldBe("node");
+        stack.Image.ShouldBe(SandboxImages.Bun);
+        stack.RestoreCommand.ShouldBe("bun install --frozen-lockfile");
+        stack.TestCommand.ShouldBe(test);
+        stack.Environment["BUN_INSTALL_CACHE_DIR"].ShouldBe("/work/cache/bun");
+        stack.Environment["HOME"].ShouldBe("/work/cache/home");
+        stack.Note.ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_bun_lockfile_beside_a_package_lock_runs_with_npm_in_the_node_image()
+    {
+        Files("package.json", "bun.lock", "package-lock.json");
+
+        var stack = SandboxStacks.Detect(_root, null, out _).ShouldNotBeNull();
+
+        stack.Image.ShouldBe(SandboxImages.Node);
+        stack.RestoreCommand.ShouldBe("npm ci");
     }
 
     [Theory]
@@ -127,6 +148,17 @@ public sealed class SandboxStacksTests : IDisposable
         environment["HOME"].ShouldBe("/work/cache/home");
         environment["DOTNET_CLI_HOME"].ShouldBe("/work/cache/home");
         environment["NUGET_PACKAGES"].ShouldBe("/work/cache/nuget");
+    }
+
+    [Fact]
+    public void Dotnet_rolls_forward_onto_the_net_10_sdk_and_says_so()
+    {
+        Files("App.csproj");
+
+        var stack = SandboxStacks.Detect(_root, null, out _).ShouldNotBeNull();
+
+        stack.Environment["DOTNET_ROLL_FORWARD"].ShouldBe("Major");
+        stack.Note.ShouldBe("Ran on the .NET 10 SDK with roll-forward.");
     }
 
     [Fact]
@@ -187,10 +219,10 @@ public sealed class SandboxStacksTests : IDisposable
     [Fact]
     public void Every_allowlisted_image_is_an_official_image_pinned_by_its_sha256_digest()
     {
-        SandboxImages.All.Count.ShouldBe(4);
+        SandboxImages.All.Count.ShouldBe(5);
         foreach (var image in SandboxImages.All)
         {
-            image.ShouldMatch("^(mcr\\.microsoft\\.com/dotnet/sdk|node|python|golang):[0-9.]+@sha256:[0-9a-f]{64}$");
+            image.ShouldMatch("^(mcr\\.microsoft\\.com/dotnet/sdk|node|python|golang|oven/bun):[0-9.]+@sha256:[0-9a-f]{64}$");
         }
 
         SandboxImages.All.ShouldBe([
@@ -198,6 +230,7 @@ public sealed class SandboxStacksTests : IDisposable
             "node:22@sha256:7702d8aa4d5910871692af4480eb3ba86f23047a6417a44d857d06c95d060d3f",
             "python:3.13@sha256:ecbe213fb818d557fd19db4078244339e2e2e52874f9c81052d3094ea114d797",
             "golang:1.25@sha256:699337d620559a59b4a2bb298ad59611e535d2ee755a34cf2d2a98f37578dc80",
+            "oven/bun:1@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d",
         ]);
     }
 }

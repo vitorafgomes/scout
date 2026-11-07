@@ -282,6 +282,34 @@ public sealed class DockerSandboxRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_dotnet_run_says_it_ran_on_the_net_10_sdk_with_roll_forward()
+    {
+        var dotnet = Directory.CreateDirectory(Path.Combine(_base, "dotnet")).FullName;
+        File.WriteAllText(Path.Combine(dotnet, "App.csproj"), "<Project />");
+
+        var result = await Run(new SandboxRequest(dotnet));
+
+        result.Ran.ShouldBeTrue();
+        result.Image.ShouldBe(SandboxImages.DotNet);
+        result.Note.ShouldBe("Ran on the .NET 10 SDK with roll-forward.");
+        _processes.Test.Arguments.ShouldContain("DOTNET_ROLL_FORWARD=Major");
+    }
+
+    [Fact]
+    public async Task A_dotnet_restore_failure_keeps_the_note_and_a_missing_docker_has_none()
+    {
+        var dotnet = Directory.CreateDirectory(Path.Combine(_base, "dotnet")).FullName;
+        File.WriteAllText(Path.Combine(dotnet, "App.csproj"), "<Project />");
+        _processes.Behaviour = (call, _, _) => Task.FromResult(FakeProcessRunner.IsRun(call, "restore") ? 1 : 0);
+
+        (await Run(new SandboxRequest(dotnet))).Note.ShouldBe("Ran on the .NET 10 SDK with roll-forward.");
+
+        _processes.Behaviour = (_, _, _) => throw new Win32Exception(2, "No such file or directory");
+
+        (await Run(new SandboxRequest(dotnet))).Note.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task The_result_carries_the_exit_code_and_how_long_the_run_took()
     {
         _processes.Behaviour = (call, _, _) =>

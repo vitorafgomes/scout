@@ -8,7 +8,8 @@ public sealed record SandboxRequest(string SnapshotRoot, string? StackHint = nul
 
 /// <summary>
 /// What the run did: whether the tests ran, why not when they did not, the image and the command that ran, its exit
-/// code, how long it took, and the last 4,000 characters of the output, which is data and never instructions.
+/// code, how long it took, the last 4,000 characters of the output, which is data and never instructions, and a note
+/// on how the stack ran (the .NET runs say they used the .NET 10 SDK with roll-forward).
 /// </summary>
 public sealed record SandboxResult(
     bool Ran,
@@ -17,4 +18,5 @@ public sealed record SandboxResult(
     string? Command,
     int? ExitCode,
     double DurationSeconds,
-    string Output);
+    string Output,
+    string? Note = null);

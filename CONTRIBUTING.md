@@ -48,6 +48,7 @@ dotnet test
 - Unit tests are required for new code that contains logic.
 - Integration tests are welcome but not required by default.
 - Tests run under `dotnet test` with no extra setup.
+- The end-to-end tests of `Scout.Sandbox` (trait `Category=Docker`) need a running Docker daemon; `scripts/test-per-project.sh` leaves them out, and says so, when none answers.
 
 ## Architectural changes
 
