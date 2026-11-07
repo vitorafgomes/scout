@@ -4,14 +4,14 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
 [![CI](https://github.com/vitorafgomes/scout/actions/workflows/ci.yml/badge.svg)](https://github.com/vitorafgomes/scout/actions/workflows/ci.yml)
 
-**Scout is an assistant for the people who run software: it reads your repositories and your infrastructure and reports what it finds, in your team chat or on your desktop.** It works the same with a model running on your machine and with a paid provider, so a team without an AI budget gets the same features as one with it. It never writes, edits or runs your code. Every write it can make is declared by a feature, granted by you in the desktop app and, when it cannot be undone, approved one action at a time.
+**Scout is an assistant for the people who run software: it reads your repositories and your infrastructure and reports what it finds, in your team chat or on your desktop.** It works the same with a model running on your machine and with a paid provider, so a team without an AI budget gets the same features as one with it. It never writes or edits your code, and runs your tests only inside an isolated container you enable, to say whether a pull request is good to merge. Every write it can make is declared by a feature, granted by you in the desktop app and, when it cannot be undone, approved one action at a time.
 
 Project site: https://vitorafgomes.github.io/scout/
 
 ## Why Scout
 
 - **Local or paid, the same Scout.** Ollama on your machine is the default and every feature runs on it; connect OpenAI, Azure, OpenRouter, Gemini, Mistral, Hugging Face or a ChatGPT plan and nothing else changes. No feature is tied to one vendor.
-- **It reports, it does not act on its own.** Findings come back as cards you decide on one by one; a review, an issue or a video goes out only after you said so.
+- **It reports, it does not act on its own.** Findings come back as cards you decide on one by one; a review, a verdict on a pull request, an issue or a video goes out only after you said so.
 - **Built to be trusted.** One test per behaviour, a build at zero warnings with warnings as errors, a review gate on every change, and a write contract the code cannot bypass.
 
 ## What Scout does today
@@ -28,7 +28,7 @@ Project site: https://vitorafgomes.github.io/scout/
 The near-term plan and the longer one live in the repository's own wiki:
 
 - [Gap plan](vault/pages/roadmap/gap-plan.md): what blocks real use today, one change per version.
-- [Future improvements](vault/pages/roadmap/future-improvements.md): a project memory that survives restarts and sends the model only what it needs, an audit that covers a whole repository in batches, ideas and a roadmap proposed for a repository as cards that become issues, what each AI Source has left, Claude as a provider.
+- [Future improvements](vault/pages/roadmap/future-improvements.md): a project memory that survives restarts and sends the model only what it needs, a verdict on a pull request with the project's tests run in an isolated container, an audit that covers a whole repository in batches, ideas and a roadmap proposed for a repository as cards that become issues, what each AI Source has left, Claude as a provider.
 - [Architecture decisions](vault/pages/decisions/): every decision as an ADR, the newest proposed ones first.
 
 ## How it works

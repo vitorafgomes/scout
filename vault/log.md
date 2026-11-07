@@ -1,3 +1,6 @@
+## [2026-11-07] crystallize | The verdict on a pull request, with the project's tests in an isolated container (G8, ADR 0043)
+The owner: "o Scout tem que poder aprovar um PR ou rejeitar, esse é o objetivo, validar tudo", "tem que executar os testes necessários", "o usuário ter um docker onde o Scout execute tudo isolado", then "nosso próximo entregável tem que fazer tudo isso". Gap plan G8 as the next deliverable after G3 (G4 to G6 shift one version); ADR 0043 proposed (the verdict as a declared per-action write; check runs first, then the project's own test command in a disposable container with no owner secret, no network after restore, unprivileged, read-only, capped); vision.md v1.2, README and the root CLAUDE.md say "runs tests only in isolation" instead of "never runs code".
+
 ## [2026-11-07] crystallize | Scout's purpose in the owner's words
 The owner: "o Scout não tem o objetivo de programar, mas sim criar informações nos repositórios reportando problemas tanto como issues tanto validando PRs". vision.md v1.1 and the root CLAUDE.md snapshot carry it; F6 loses the run-time reproduction; every limit is stated for any provider, the ChatGPT plan as today's case.
 
