@@ -184,6 +184,35 @@ public sealed class LlmStreamingRouterTests
     }
 
     [Fact]
+    public async Task Without_Auto_Selection_The_System_Prompt_Carries_The_Skill_Catalog_For_The_Model()
+    {
+        var gateway = Substitute.For<IChatGateway>();
+        ChatRequest? captured = null;
+        gateway.StreamAsync(Arg.Any<ChatRequest>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                captured = (ChatRequest)call[0];
+                return Tokens("ok");
+            });
+        var selector = NoSkills();
+        selector.ModelChoiceCatalog.Returns(
+        [
+            new Skill("code-audit", "Auditing a whole software project - \"audit\".", "audit body", "/code-audit.md"),
+            new Skill("code-review", "Reviewing a pull request - \"review PR 42\".", "review body", "/code-review.md"),
+        ]);
+
+        var response = Router(gateway, selector).Route(new ChatMessage("u1", "c1", "faz a review do repositório todo"));
+
+        await foreach (var _ in response.Tokens)
+        {
+        }
+
+        captured.ShouldNotBeNull();
+        captured!.SystemPrompt.ShouldStartWith("sys\n\n# Skills\nBefore answering, if the request matches one of these skills, call load_skill with its name and follow it;");
+        captured.SystemPrompt.ShouldEndWith("\n- code-audit: Auditing a whole software project\n- code-review: Reviewing a pull request");
+    }
+
+    [Fact]
     public void Route_Does_Not_Invoke_Gateway_Until_Enumerated()
     {
         var gateway = Substitute.For<IChatGateway>();

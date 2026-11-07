@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
@@ -98,5 +99,53 @@ public sealed class BundledSkillsTests
         body.ShouldContain("call `create_issue(owner, repo, title, body)` once per issue, in order, with exactly that title and body, unchanged, no labels, and do not audit again.");
         body.ShouldContain("Answer each issue's URL on its own line, then one line naming any that failed.");
         body.ShouldNotContain("labels)");
+    }
+
+    private static async Task<string> PromptWithoutEmbeddings(string message)
+    {
+        var embedder = new FakeEmbeddingGenerator(new Dictionary<string, float[]>())
+        {
+            IndexFailure = new NotSupportedException("Embeddings are not available."),
+            IndexFailuresRemaining = 100,
+        };
+        var selector = new SkillSelector(
+            new SkillFileLoader(NullLogger<SkillFileLoader>.Instance),
+            embedder,
+            Options.Create(new SkillsOptions()),
+            NullLogger<SkillSelector>.Instance);
+
+        var selected = await selector.SelectAsync(message, default);
+        return SkillPromptComposer.Compose("base", selected, selector.ModelChoiceCatalog);
+    }
+
+    [Fact]
+    public async Task Without_Embeddings_The_System_Prompt_Routes_A_Review_To_Code_Review_And_A_Whole_Repository_To_Code_Audit()
+    {
+        var prompt = await PromptWithoutEmbeddings("Could you analyze the QuotAI project and see if there's anything wrong with what was implemented?");
+
+        prompt.ShouldContain("\n\n# Skills\nBefore answering, if the request matches one of these skills, call load_skill with its name and follow it; for a code review of a pull request use code-review, for a review or audit of a whole repository or project use code-audit.\n");
+        prompt.ShouldContain("\n- code-review: Reviewing a pull request or a diff in any programming language\n");
+        prompt.ShouldContain("\n- code-audit: Auditing a whole software project from chat, with or without a pull request, in any programming language\n");
+    }
+
+    [Fact]
+    public async Task The_Skills_Section_Lists_Every_Bundled_Skill_Once_With_A_Short_Summary_Under_12000_Characters()
+    {
+        var prompt = await PromptWithoutEmbeddings("hello");
+        var start = prompt.IndexOf("\n\n# Skills\n", StringComparison.Ordinal);
+        start.ShouldBeGreaterThan(0, "without embeddings the system prompt carries the Skills section");
+        var section = prompt[(start + 2)..];
+        var lines = section.Split('\n').Where(l => l.StartsWith("- ", StringComparison.Ordinal)).ToList();
+
+        lines.Select(l => l[2..l.IndexOf(": ", StringComparison.Ordinal)])
+            .ShouldBe(Bundled().Select(s => s.Name), ignoreOrder: true);
+        foreach (var line in lines)
+        {
+            var summary = line[(line.IndexOf(": ", StringComparison.Ordinal) + 2)..];
+            summary.ShouldNotBeNullOrWhiteSpace(line);
+            summary.Length.ShouldBeLessThanOrEqualTo(160, line);
+        }
+
+        section.Length.ShouldBeLessThan(12_000);
     }
 }

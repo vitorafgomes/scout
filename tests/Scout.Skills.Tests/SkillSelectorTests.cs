@@ -82,7 +82,7 @@ public sealed class SkillSelectorTests : IDisposable
     }
 
     [Fact]
-    public async Task No_Embeddings_Turns_Auto_Selection_Off_With_One_Information_Line_And_No_Retry()
+    public async Task No_Embeddings_Selects_Nothing_Puts_The_Catalog_In_The_Prompt_With_One_Information_Line_And_No_Retry()
     {
         var embedder = TwoSkillEmbedder();
         embedder.IndexFailure = new NotSupportedException("Embeddings are not available.");
@@ -97,12 +97,28 @@ public sealed class SkillSelectorTests : IDisposable
             clock.Advance(SkillSelector.IndexRetryInterval + TimeSpan.FromSeconds(1));
         }
 
+        selector.ModelChoiceCatalog.Select(s => s.Name).ShouldBe(["alpha", "beta"]);
         embedder.IndexBatchCallCount.ShouldBe(1);
         var entry = logger.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Information);
         entry.Message.ShouldBe(
-            "Skill auto-selection is off: the AI provider has no embeddings; skills stay available through list_skills and load_skill.");
+            "Skill auto-selection uses the model: the AI provider has no embeddings; the skill catalog is in the prompt and the model loads the matching skill.");
         entry.Exception.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task With_Embeddings_The_Prompt_Carries_The_Selected_Skill_And_No_Skills_Section()
+    {
+        var selector = Selector(TwoSkillEmbedder(), threshold: 0.0);
+
+        var selected = await selector.SelectAsync("query", default);
+
+        var prompt = SkillPromptComposer.Compose("base", selected, selector.ModelChoiceCatalog);
+
+        selected.Select(s => s.Name).ShouldBe(["alpha"]);
+        selector.ModelChoiceCatalog.ShouldBeEmpty();
+        prompt.ShouldNotContain("# Skills");
+        prompt.ShouldBe("base\n\n# Relevant skill: alpha\nalpha body");
     }
 
     [Fact]

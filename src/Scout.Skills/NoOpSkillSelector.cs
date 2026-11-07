@@ -9,4 +9,7 @@ public sealed class NoOpSkillSelector : ISkillSelector
     /// <inheritdoc />
     public Task<IReadOnlyList<Skill>> SelectAsync(string message, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Skill>>([]);
+
+    /// <inheritdoc />
+    public IReadOnlyList<Skill> ModelChoiceCatalog => [];
 }

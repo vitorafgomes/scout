@@ -13,7 +13,8 @@ namespace Scout.Conversation.Routing;
 /// whose tokens come from <see cref="IChatGateway.StreamAsync"/>. Consumes the
 /// gateway, never the raw chat-completion service. Per turn it selects the most
 /// relevant skill via <see cref="ISkillSelector"/> and injects it into the
-/// system prompt. When conversation memory is enabled it replays prior turns
+/// system prompt, or, when the selector cannot select, lists the skill catalog
+/// there so the model loads the matching skill itself. When conversation memory is enabled it replays prior turns
 /// into the request and writes the completed user/assistant pair back on clean
 /// stream completion.
 /// </summary>
@@ -73,7 +74,8 @@ public sealed class LlmStreamingRouter : IConversationRouter
         var userMessage = message.Text;
         var skills = await _skillSelector.SelectAsync(userMessage, cancellationToken)
             .ConfigureAwait(false);
-        var systemPrompt = SkillPromptComposer.Compose(_options.SystemPrompt, skills);
+        var systemPrompt = SkillPromptComposer.Compose(
+            _options.SystemPrompt, skills, _skillSelector.ModelChoiceCatalog);
 
         var request = new ChatRequest
         {
