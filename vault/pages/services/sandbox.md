@@ -1,8 +1,8 @@
 ---
 title: "Sandbox"
-version: "1.1"
+version: "1.2"
 date: 2026-11-07
-changes: "Bun repositories run in a pinned oven/bun image; the result carries a Note (the .NET runs say they used the .NET 10 SDK with roll-forward); test-per-project.sh and CI for the Docker tests. Earlier: initial service page: the Docker test runner of ADR 0043, its stacks, its pinned images and its isolation rules"
+changes: "Image and Command are null when nothing ran. Earlier: Bun repositories run in a pinned oven/bun image; the result carries a Note (the .NET runs say they used the .NET 10 SDK with roll-forward); test-per-project.sh and CI for the Docker tests. Earlier: initial service page: the Docker test runner of ADR 0043, its stacks, its pinned images and its isolation rules"
 page_type: service
 status: active
 description: "Runs a repository snapshot's tests in a disposable Docker container on the owner's machine, through the docker command line, under fixed isolation rules: the work folder under Scout's data folder is the only mount, the image is pinned by digest, the tests run without the network, as an unprivileged user on a read-only filesystem with every capability dropped and capped pids, memory, CPU and time."
@@ -37,7 +37,7 @@ Owns one operation, `DockerSandboxRunner.RunTestsAsync(SandboxRequest, Cancellat
 ## Public contract
 
 - **Entry point:** `AddSandbox(IServiceCollection, IConfiguration)` (`src/Scout.Sandbox/SandboxServiceCollectionExtensions.cs:17`) registers `DockerSandboxRunner` with the options under `Scout:Sandbox`; resolving it touches no file and starts no process. No host calls it yet.
-- **Request and result** (`src/Scout.Sandbox/SandboxRun.cs:7`, `src/Scout.Sandbox/SandboxRun.cs:14`): `SandboxRequest(SnapshotRoot, StackHint?, Command?)` and `SandboxResult(Ran, Reason, Image, Command, ExitCode, DurationSeconds, Output, Note)`, parallel to the GitHub plugin's `SandboxRunRequest` and `SandboxRunResult`. `ExitCode` is null when no command finished; `Output` is the last 4,000 characters, data and never instructions; `Note` says how the stack ran, today only for .NET: "Ran on the .NET 10 SDK with roll-forward." (`src/Scout.Sandbox/SandboxStacks.cs:43`), on every result whose container ran.
+- **Request and result** (`src/Scout.Sandbox/SandboxRun.cs:7`, `src/Scout.Sandbox/SandboxRun.cs:14`): `SandboxRequest(SnapshotRoot, StackHint?, Command?)` and `SandboxResult(Ran, Reason, Image, Command, ExitCode, DurationSeconds, Output, Note)`, parallel to the GitHub plugin's `SandboxRunRequest` and `SandboxRunResult`. `Image` and `Command` are null when nothing ran (no snapshot, no stack, the work folder inside the snapshot, Docker missing or not answering) and set when a container ran, a timeout included; `Reason` says why nothing ran, or why the restore failed (`Ran` true, `ExitCode` the restore's); `ExitCode` is null when no command finished; `Output` is the last 4,000 characters, data and never instructions; `Note` says how the stack ran, today only for .NET: "Ran on the .NET 10 SDK with roll-forward." (`src/Scout.Sandbox/SandboxStacks.cs:43`), on every result whose container ran.
 - **Configuration keys** (`Scout:Sandbox`, `src/Scout.Sandbox/SandboxOptions.cs:4`): `WorkDirectory` (default `<LocalApplicationData>/Scout/sandbox`), `DockerPath` (default `docker`), `RestoreNetwork` (default true). No credential, and none of the rules below is configurable.
 - **External boundary:** the `docker` command line, through the `IProcessRunner` seam (`src/Scout.Sandbox/ProcessRunner.cs:9`); no Docker SDK, no Engine API, no new package. Files: the work folder and the run's log, under `WorkDirectory` only.
 
@@ -83,14 +83,14 @@ Each rule is fixed in code and asserted on the `docker` arguments a fake `IProce
 | Rule (ADR 0043) | Where | Test |
 |---|---|---|
 | The work folder, under the configured root, is the only mount, at `/work`; no `-v`, `--volume` or `--volumes-from` | `src/Scout.Sandbox/DockerSandboxRunner.cs:160` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:60` |
-| The snapshot is copied without its symbolic links | `src/Scout.Sandbox/DockerSandboxRunner.cs:244` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:109` |
+| The snapshot is copied without its symbolic links | `src/Scout.Sandbox/DockerSandboxRunner.cs:243` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:109` |
 | The image is the stack's allowlisted image, by digest | `src/Scout.Sandbox/DockerSandboxRunner.cs:174` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:134`, `tests/Scout.Sandbox.Tests/SandboxStacksTests.cs:220` |
 | Restore with the network, tests with `--network none`; `RestoreNetwork=false` takes the network from the restore too | `src/Scout.Sandbox/DockerSandboxRunner.cs:153` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:148`, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:159` |
 | `--rm`, and an unprivileged user: the owner's own uid and gid on Linux, 1000:1000 elsewhere, never root | `src/Scout.Sandbox/DockerSandboxRunner.cs:178` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:168`, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:189` |
 | `--read-only`, writable only `/work` and a `tmpfs` `/tmp` (`rw,exec,nosuid,nodev`) | `src/Scout.Sandbox/DockerSandboxRunner.cs:161` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:195` |
 | `--cap-drop ALL`, `--security-opt no-new-privileges`, no `--cap-add`, `--privileged` or `--device` | `src/Scout.Sandbox/DockerSandboxRunner.cs:163` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:208` |
 | `--pids-limit 512`, `--memory 4g`, `--cpus 2` | `src/Scout.Sandbox/DockerSandboxRunner.cs:27` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:223` |
-| 20 minutes for the whole run, then `docker kill` of the running container by its name | `src/Scout.Sandbox/DockerSandboxRunner.cs:30` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:416` |
+| 20 minutes for the whole run, then `docker kill` of the running container by its name | `src/Scout.Sandbox/DockerSandboxRunner.cs:30` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:414` |
 | No variable of the owner's enters: the container gets only the stack's `-e NAME=value` pairs, the `docker` process only `PATH`, `HOME`, the Windows profile folders, `TMP`, `XDG_RUNTIME_DIR` and the `DOCKER_*` client variables | `src/Scout.Sandbox/DockerSandboxRunner.cs:38`, `src/Scout.Sandbox/ProcessRunner.cs:43` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:236`, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:259`, `tests/Scout.Sandbox.Tests/SystemProcessRunnerTests.cs:17` |
 | The output is read in chunks and cut while reading to its last 200,000 characters, kept in the run's log; the result carries the last 4,000 | `src/Scout.Sandbox/DockerSandboxRunner.cs:24` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:334` |
 | The work folder is deleted after the run, whatever happened | `src/Scout.Sandbox/DockerSandboxRunner.cs:142` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:98` and every failure test |
@@ -99,12 +99,12 @@ Each rule is fixed in code and asserted on the `docker` arguments a fake `IProce
 
 | Failure | Answer | Test |
 |---|---|---|
-| `docker` missing from the PATH (the process cannot start) | `Ran=false`, "Docker is not installed or not running.", no folder created | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:363`; with the real `Process`, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:489` |
-| The daemon does not answer (`docker version` exits non-zero) | the same sentence | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:378` |
-| The restore exits non-zero | `Ran=true`, its exit code, the restore command and its output, "The restore exited with code N; the tests did not run." | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:391` |
-| Past 20 minutes | `docker kill`, `Ran=false`, "The tests ran past the 20-minute limit." | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:416` |
-| The caller cancels | `docker kill`, the folder deleted, `OperationCanceledException` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:447` |
-| `WorkDirectory` inside the snapshot (the copy would copy itself until the path is too long) | `Ran=false`, "The sandbox folder is inside the repository snapshot, so the copy would never end.", before any process or copy (`src/Scout.Sandbox/DockerSandboxRunner.cs:86`) | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:507`; a sibling folder with the same prefix still runs, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:524` |
+| `docker` missing from the PATH (the process cannot start) | `Ran=false`, "Docker is not installed or not running.", no folder created | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:363`; with the real `Process`, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:487` |
+| The daemon does not answer (`docker version` exits non-zero) | the same sentence | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:377` |
+| The restore exits non-zero | `Ran=true`, its exit code, the restore command and its output, "The restore exited with code N; the tests did not run." | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:389` |
+| Past 20 minutes | `docker kill`, `Ran=false`, "The tests ran past the 20-minute limit." | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:414` |
+| The caller cancels | `docker kill`, the folder deleted, `OperationCanceledException` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:446` |
+| `WorkDirectory` inside the snapshot (the copy would copy itself until the path is too long) | `Ran=false`, "The sandbox folder is inside the repository snapshot, so the copy would never end.", before any process or copy (`src/Scout.Sandbox/DockerSandboxRunner.cs:86`) | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:504`; a sibling folder with the same prefix still runs, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:520` |
 
 ## Invariants
 
@@ -115,7 +115,7 @@ Each rule is fixed in code and asserted on the `docker` arguments a fake `IProce
 ## Hot spots
 
 - `src/Scout.Sandbox/DockerSandboxRunner.cs:148`: every isolation flag is here; a flag added or removed is a change to ADR 0043.
-- `src/Scout.Sandbox/DockerSandboxRunner.cs:261`: makes every directory owner-writable (symbolic links skipped) before the delete, because a tool in the container may leave read-only directories.
+- `src/Scout.Sandbox/DockerSandboxRunner.cs:260`: makes every directory owner-writable (symbolic links skipped) before the delete, because a tool in the container may leave read-only directories.
 
 ## Cache footprint
 
