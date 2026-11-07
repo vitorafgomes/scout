@@ -1,9 +1,9 @@
 ---
 title: "ADR 0028 - Quick ask: talk to Scout from the operating system, over the worker's stdio"
-version: "1.6"
+version: "1.7"
 date: 2026-10-31
-updated: 2026-11-05
-changes: "Merge of the channel operator and the live assistant. Channel operator: Phase 8c-A: references re-pointed by content. The LocalTurn reference re-pointed by content. Live assistant: Live transcription requests and events on the same transport (ADR 0034)."
+updated: 2026-11-07
+changes: "v1.7 (2026-11-07) cancel comes only from Stop; a running turn refuses a new ask with local/busy. Merge of the channel operator and the live assistant. Channel operator: Phase 8c-A: references re-pointed by content. The LocalTurn reference re-pointed by content. Live assistant: Live transcription requests and events on the same transport (ADR 0034)."
 page_type: adr
 status: accepted
 description: "A global shortcut opens a small desktop window where the owner types or holds Space to talk; main writes one JSON request per line to the worker's stdin and reads the reply as SCOUT_LOCAL lines on stdout, and the conversation core trusts that message as the local owner."
@@ -66,7 +66,7 @@ The owner asked for "something that stays directly in the operating system" and 
   - A handler that throws unexpectedly still ends its reply with `fail` "Scout could not answer that; see Scout logs.", so the window never waits forever.
   - The recording's base64 is decoded by `System.Text.Json` straight into bytes; an invalid one makes the line malformed. After a line longer than 64K characters the reader drops its buffer instead of keeping it.
   - Main validates each request before it is written: an id of 1 to 64 letters, digits and hyphens, text of 1 to 4,000 characters, `audio/wav` base64 of at most 14,000,000 characters (`ui/packages/main/src/quick-ask/quick-ask.ts:292`).
-  - `cancel` cancels the running request. The turn ends with the `fail` "Cancelled." and no `complete`. The quick-ask window sends it for a question still being answered when the owner asks the next one.
+  - `cancel` cancels the running request. The turn ends with the `fail` "Cancelled." and no `complete`. Amended 2026-11-07: the quick-ask window sends it only from its Stop button; while a turn runs, main refuses a new ask from either window with `local/busy`, so a question never cancels another, and a Post or Open issues turn is never cancelled by a question ([[pages/services/desktop-quick-ask]]).
 - **Local-owner trust.** `ChatMessage.IsLocalOwner` defaults to false and only `LocalChatAdapter` sets it (`src/Scout.Conversation/Abstractions/ChatMessage.cs:54`, `src/Scout.Adapter.Local/LocalChatAdapter.cs:366`). The conductor never treats a local-owner message as a pairing attempt and lets it skip the allow-list (`src/Scout.Conversation/ConversationConductor.cs:110`, `:125`). The flag survives the voice rewrite (`:147`).
   - Trust comes from the transport, not from an id: only a process that holds the write end of the worker's stdin, which is the desktop app that spawned it, can send a local message.
   - A Discord, Slack or Teams message with the user id `local-owner` is still refused, and the translators never set the flag.

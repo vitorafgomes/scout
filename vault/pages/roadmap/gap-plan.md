@@ -44,7 +44,7 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 ## Status
 
-- **As of 2026-11-07:** G1 in progress on `feat/quick-ask-redesign`; G2 merged (PR #108, PR #109); G3 to G6 not started; G7 waits for the owner's word.
+- **As of 2026-11-07:** G1 built and reviewed on `feat/quick-ask-redesign`, its AppImage with the owner; G2 merged (PR #108, PR #109); G3 to G6 not started; G7 waits for the owner's word.
 - **Next milestone:** G1 reviewed, its expected-behaviour table confirmed by the owner, an AppImage built; then G3. ADR 0042 for G4 is drafted and waits for the owner.
 - **Blocker:** none.
 
@@ -52,7 +52,7 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 | # | Item | State | Version |
 |---|---|---|---|
-| G1 | Floating chat: the approved layout (mic inside the field, Send becomes Stop, tools collapsed, one scroll), no send while a reply runs, Space and Escape only in the question box, a partial reply kept on failure, the text and screenshot kept on a refusal, scroll only when at the bottom, No collapses the card and hides the footer when nothing is left, matrix specs | in progress | 1 |
+| G1 | Floating chat (`feat/quick-ask-redesign`, 2026-11-07): the approved layout (mic inside the field, Send becomes Stop, tools collapsed, one scroll), no send while a reply runs, Space and Escape only in the question box, a partial reply kept on failure, the text and screenshot kept on a refusal, scroll only when at the bottom, No collapses the card and hides the footer when nothing is left, matrix specs | in progress | 1 |
 | G2 | An empty reply logged with its reason and the ChatGPT plan's usage limit said in the chat (PR #108); the skill catalog in the prompt when the provider has no embeddings (PR #109) | PRs open | merge |
 | G3 | Full-text search (SQLite FTS5) over the existing chunk index, so `search_project` and `find_symbol` answer on every provider, with or without embeddings; the semantic search stays on top when embeddings exist | not started | 2 |
 | G4 | The audit as a job with saved progress: Scout builds the coverage plan from the snapshot's folder structure ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]), each batch is one turn with a closed scope, after each batch Scout records the files read, the findings and what is left in SQLite ([[pages/decisions/0037-meetings-kept-locally-in-sqlite]] is the precedent), the next batch starts on its own, a partial result is kept, findings are merged by path and title across batches and the cards accumulate them; needs an ADR | not started | 3 |

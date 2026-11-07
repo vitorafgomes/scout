@@ -9,9 +9,9 @@ import {
 
 import { DatePipe } from '@angular/common';
 
-import { readIpcError } from '@scout/shared';
+import { LOCAL_CANCELLED_REPLY, readIpcError } from '@scout/shared';
 
-import { LocalConversation } from '../core/local-conversation';
+import { LocalConversation, POSTING_CANNOT_STOP } from '../core/local-conversation';
 import { MarkdownPipe } from '../core/markdown.pipe';
 import { replyLinkTarget } from '../core/reply-links';
 import { REPLY_STYLES } from '../core/reply-styles';
@@ -121,6 +121,11 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
                   [innerHTML]="findings?.markdown ?? turn.reply | markdown"
                   (click)="onReplyClick($event)"
                 ></div>
+                @if (turn.failure; as failure) {
+                  <p class="failure" data-test="failure">
+                    {{ failure === cancelledReply ? 'Interrupted' : failure }}
+                  </p>
+                }
                 @if (findings) {
                   <sc-review-findings [turnId]="turn.id" [review]="findings.review" />
                 }
@@ -158,42 +163,53 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
         <p class="error" role="alert" data-test="error">{{ message }}</p>
       }
       <form class="ask" (submit)="$event.preventDefault(); send()">
-        <textarea
-          data-test="input"
-          aria-label="Ask Scout"
-          rows="2"
-          placeholder="Ask Scout. Enter sends, Shift+Enter adds a line."
-          [value]="draft()"
-          (input)="draft.set($any($event.target).value)"
-          (keydown.enter)="onEnter($any($event))"
-        ></textarea>
-        <button
-          type="button"
-          data-test="mic"
-          [disabled]="busy()"
-          [class.recording]="recording()"
-          [attr.aria-pressed]="recording()"
-          [attr.aria-label]="recording() ? 'Listening' : 'Hold to talk'"
-          [title]="recording() ? 'Listening' : 'Hold to talk'"
-          (pointerdown)="startRecording()"
-          (pointerup)="stopRecording()"
-          (pointerleave)="stopRecording()"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
+        <div class="field" data-test="field">
+          <textarea
+            data-test="input"
+            aria-label="Ask Scout"
+            rows="1"
+            placeholder="Ask Scout. Enter sends, Shift+Enter adds a line."
+            [value]="draft()"
+            (input)="draft.set($any($event.target).value)"
+            (keydown.enter)="onEnter($any($event))"
+          ></textarea>
+          <button
+            type="button"
+            class="in"
+            data-test="mic"
+            [disabled]="busy()"
+            [class.recording]="recording()"
+            [attr.aria-pressed]="recording()"
+            [attr.aria-label]="recording() ? 'Listening' : 'Hold to talk'"
+            [title]="recording() ? 'Listening' : 'Hold to talk'"
+            (pointerdown)="startRecording()"
+            (pointerup)="stopRecording()"
+            (pointerleave)="stopRecording()"
           >
-            <rect x="9" y="3" width="6" height="11" rx="3"></rect>
-            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>
-          </svg>
-        </button>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path>
+            </svg>
+          </button>
+        </div>
         @if (busy()) {
-          <button type="button" data-test="stop" (click)="store.stop()">Stop</button>
+          <button
+            type="button"
+            data-test="stop"
+            [disabled]="store.posting()"
+            [title]="store.posting() ? postingCannotStop : 'Stop the answer'"
+            (click)="store.stop()"
+          >
+            Stop
+          </button>
         } @else {
           <button type="submit" data-test="send">Send</button>
         }
@@ -258,16 +274,46 @@ import { WavRecorder } from '../quick-ask/wav-recorder';
         display: flex;
         gap: 8px;
       }
+      .field {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+      }
       .ask textarea {
         flex: 1;
+        min-width: 0;
         resize: none;
+        field-sizing: content;
+        max-height: calc(6lh + 20px);
+        overflow-y: auto;
+        line-height: 1.4;
         background: #171b26;
         border: 1px solid #252b3b;
         border-radius: 8px;
         color: #e4e8f0;
-        padding: 10px 12px;
+        padding: 10px 48px 10px 12px;
         font: inherit;
         font-size: 14px;
+      }
+      button.in {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-color: transparent;
+        background: transparent;
+      }
+      .failure {
+        margin: 0;
+        font-size: 12px;
+        font-style: italic;
+        color: #7b8299;
       }
       button {
         background: #171b26;
@@ -299,6 +345,8 @@ export class ChatComponent {
   readonly recording = signal(false);
   readonly error = signal<string | null>(null);
   readonly startedFor = signal<string | null>(null);
+  protected readonly cancelledReply = LOCAL_CANCELLED_REPLY;
+  protected readonly postingCannotStop = POSTING_CANNOT_STOP;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.discardRecording());

@@ -221,7 +221,7 @@ describe('review findings cards', () => {
     });
   });
 
-  it('Yes and No mark the card and the summary counts them, Yes to all marks every card', async () => {
+  it('Yes and No mark the card and the summary counts the findings not dismissed, Yes to all marks every undecided card', async () => {
     const fixture = await render(makeBridge());
     expect(text(el(fixture, 'summary'))).toBe(
       'Nothing selected yet. Decide item by item, or Yes to all.',
@@ -238,17 +238,86 @@ describe('review findings cards', () => {
       [false, false],
     ]);
     expect(el(fixture, 'yes', card(fixture, 0))!.getAttribute('aria-pressed')).toBe('true');
-    expect(el(fixture, 'yes', card(fixture, 1))!.getAttribute('aria-pressed')).toBe('false');
-    expect(text(el(fixture, 'summary'))).toBe('1 of 3 selected · 1 undecided');
+    expect(el(fixture, 'yes', card(fixture, 2))!.getAttribute('aria-pressed')).toBe('false');
+    expect(el(fixture, 'dismissed', card(fixture, 1))).not.toBeNull();
+    expect(text(el(fixture, 'summary'))).toBe('1 of 2 selected · 1 undecided');
 
     await click(fixture, el(fixture, 'yes-all'));
 
     expect(all(fixture, 'finding').map((c) => c.classList.contains('yes'))).toEqual([
       true,
-      true,
+      false,
       true,
     ]);
-    expect(text(el(fixture, 'summary'))).toBe('3 of 3 selected');
+    expect(text(el(fixture, 'summary'))).toBe('2 of 2 selected');
+  });
+
+  it('No collapses the card to a dismissed line with Undo, and Undo brings it back', async () => {
+    const fixture = await render(makeBridge());
+
+    await click(fixture, el(fixture, 'no', card(fixture, 1)));
+    const dismissed = {
+      line: text(el(fixture, 'dismissed', card(fixture, 1))),
+      buttons: ['yes', 'no', 'edit'].map((test) => el(fixture, test, card(fixture, 1))),
+      body: card(fixture, 1).querySelector('.body'),
+      others: [0, 2].map((i) => el(fixture, 'dismissed', card(fixture, i))),
+    };
+    await click(fixture, el(fixture, 'undo', card(fixture, 1)));
+
+    expect(dismissed).toEqual({
+      line: 'Dismissed: Move has no lock Undo',
+      buttons: [null, null, null],
+      body: null,
+      others: [null, null],
+    });
+    expect(el(fixture, 'dismissed')).toBeNull();
+    expect(text(card(fixture, 1).querySelector('h3'))).toBe('Move has no lock');
+    expect(el(fixture, 'yes', card(fixture, 1))!.getAttribute('aria-pressed')).toBe('false');
+    expect(el(fixture, 'no', card(fixture, 1))!.getAttribute('aria-pressed')).toBe('false');
+    expect(text(el(fixture, 'summary'))).toBe(
+      'Nothing selected yet. Decide item by item, or Yes to all.',
+    );
+  });
+
+  it.each([
+    ['a review', review, 'Nothing to post; every finding was dismissed.'],
+    ['an audit', audit, 'Nothing to open; every finding was dismissed.'],
+  ])(
+    'when every finding is dismissed the footer is replaced by the nothing-to-post line, for %s',
+    async (_label, findings, sentence) => {
+      const fixture = await render(makeBridge(), findings);
+
+      for (const i of [0, 1, 2]) await click(fixture, el(fixture, 'no', card(fixture, i)));
+      const footer = ['summary', 'yes-all', 'post', 'toggle-preview', 'preview'].map((test) =>
+        el(fixture, test),
+      );
+      const line = text(el(fixture, 'all-dismissed'));
+      await click(fixture, el(fixture, 'undo', card(fixture, 2)));
+
+      expect(footer).toEqual([null, null, null, null, null]);
+      expect(line).toBe(sentence);
+      expect(el(fixture, 'all-dismissed')).toBeNull();
+      expect(text(el(fixture, 'summary'))).toBe('0 of 1 selected · 1 undecided');
+      expect(el(fixture, 'post')).not.toBeNull();
+    },
+  );
+
+  it('Yes to all leaves dismissed findings dismissed', async () => {
+    const fixture = await render(makeBridge());
+    await click(fixture, el(fixture, 'no', card(fixture, 1)));
+
+    await click(fixture, el(fixture, 'yes-all'));
+
+    expect(all(fixture, 'finding').map((c) => c.classList.contains('yes'))).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    expect(text(el(fixture, 'dismissed', card(fixture, 1)))).toBe(
+      'Dismissed: Move has no lock Undo',
+    );
+    expect(text(el(fixture, 'summary'))).toBe('2 of 2 selected');
+    expect(text(el(fixture, 'post'))).toBe('Post 2 on PR #5');
   });
 
   it('Edit shows the comment body, Use this text keeps the edited body and marks Yes', async () => {
@@ -322,7 +391,8 @@ describe('review findings cards', () => {
 
     expect(el(fixture, 'posted')).toBeNull();
     expect((el(fixture, 'post') as HTMLButtonElement).disabled).toBe(false);
-    expect(all(fixture, 'yes')).toHaveLength(3);
+    expect(all(fixture, 'yes')).toHaveLength(2);
+    expect(all(fixture, 'undo')).toHaveLength(1);
 
     await click(fixture, el(fixture, 'post'));
     const postedId = (bridge.localAsk.mock.calls[1]![0] as { id: string }).id;
@@ -342,6 +412,8 @@ describe('review findings cards', () => {
     expect(all(fixture, 'no')).toEqual([]);
     expect(all(fixture, 'edit')).toEqual([]);
     expect(card(fixture, 1).classList.contains('no')).toBe(true);
+    expect(text(el(fixture, 'dismissed', card(fixture, 1)))).toBe('Dismissed: Move has no lock');
+    expect(all(fixture, 'undo')).toEqual([]);
 
     await click(fixture, posted.querySelector('a'));
     expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: URL });
@@ -379,6 +451,30 @@ describe('review findings cards', () => {
     );
     expect(text(el(fixture, 'posted')?.querySelector('a') ?? null)).toBe(URL);
     expect(el(fixture, 'post')).toBeNull();
+  });
+
+  it("a review posted from the other window counts the comments that window posted, not this window's picks", async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const findingsTurn = (await bridge.localGetTurns())[0]!;
+    await click(fixture, el(fixture, 'yes-all'));
+
+    bridge.push([
+      findingsTurn,
+      {
+        id: 'p-elsewhere',
+        question: 'Post 2 findings on acme/shop#5',
+        reply: `Posted the review: [PR #5](${URL}).`,
+        citations: [],
+        state: 'done',
+        review: true,
+      },
+    ]);
+    await settle(fixture);
+
+    expect(text(el(fixture, 'posted')?.querySelector('.posted-line') ?? null)).toBe(
+      '2 comments in one review, without approval or request for changes. The items with No stayed here in the chat.',
+    );
   });
 
   it('a review asked after an earlier post of the same pull request starts open, with its Post button', async () => {

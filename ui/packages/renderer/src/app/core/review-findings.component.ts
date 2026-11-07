@@ -60,89 +60,109 @@ export class ReviewFindingsPipe implements PipeTransform {
           [class.yes]="state().picks[finding.id] === 'yes'"
           [class.no]="state().picks[finding.id] === 'no'"
         >
-          <div class="head">
-            <span [class]="'pill ' + finding.severity" data-test="severity">{{
-              severityLabel(finding)
-            }}</span>
-            <h3>{{ finding.title }}</h3>
-          </div>
-          <a
-            class="path"
-            href="#"
-            data-test="path"
-            (click)="$event.preventDefault(); open(pathUrl(finding))"
-            >{{ finding.path }}:{{ finding.line }}</a
-          >
-          <div class="body" [innerHTML]="details(finding) | markdown"></div>
-          @if (finding.rule) {
-            <p class="rule" data-test="rule">Rule: {{ finding.rule }}</p>
-          }
-          @if (!posted()) {
-            <div class="actions">
-              <button
-                type="button"
-                data-test="yes"
-                class="yes-btn"
-                [class.on]="state().picks[finding.id] === 'yes'"
-                [attr.aria-pressed]="state().picks[finding.id] === 'yes'"
-                (click)="store.pick(turnId(), finding.id, 'yes')"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-                <span class="lbl">{{ audit() ? 'Yes, open an issue' : 'Yes, add to the PR' }}</span>
-              </button>
-              <button
-                type="button"
-                data-test="no"
-                class="no-btn"
-                [class.on]="state().picks[finding.id] === 'no'"
-                [attr.aria-pressed]="state().picks[finding.id] === 'no'"
-                (click)="store.pick(turnId(), finding.id, 'no')"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M18 6 6 18M6 6l12 12"></path>
-                </svg>
-                <span class="lbl">No</span>
-              </button>
-              <button
-                type="button"
-                data-test="edit"
-                [attr.aria-expanded]="state().editing === finding.id"
-                (click)="toggleEditor(finding)"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 20h9"></path>
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-                </svg>
-                <span class="lbl">{{
-                  state().editing === finding.id ? 'Close editor' : 'Edit'
-                }}</span>
-              </button>
+          @if (state().picks[finding.id] === 'no') {
+            <p class="dismissed" data-test="dismissed">
+              <span class="dismissed-title">Dismissed: {{ finding.title }}</span>
+              @if (!posted()) {
+                <button
+                  type="button"
+                  class="small"
+                  data-test="undo"
+                  (click)="store.undo(turnId(), finding.id)"
+                >
+                  Undo
+                </button>
+              }
+            </p>
+          } @else {
+            <div class="head">
+              <span [class]="'pill ' + finding.severity" data-test="severity">{{
+                severityLabel(finding)
+              }}</span>
+              <h3>{{ finding.title }}</h3>
             </div>
-            @if (state().editing === finding.id) {
-              <div class="editor" data-test="editor">
-                <textarea
-                  data-test="comment-text"
-                  [attr.aria-label]="audit() ? 'Issue text' : 'Comment text'"
-                  [attr.maxlength]="maxChars"
-                  [value]="draft()"
-                  (input)="draft.set($any($event.target).value)"
-                ></textarea>
-                <div class="editor-row">
-                  <span class="counter">{{ draft().length }} / {{ maxChars }}</span>
-                  <button
-                    type="button"
-                    class="small"
-                    data-test="use-text"
-                    [disabled]="draft().trim().length === 0"
-                    (click)="store.useText(turnId(), finding.id, draft())"
-                  >
-                    Use this text and mark Yes
-                  </button>
-                  <button type="button" class="small" (click)="store.cancelEdit(turnId())">
-                    Cancel
-                  </button>
-                </div>
+            <a
+              class="path"
+              href="#"
+              data-test="path"
+              (click)="$event.preventDefault(); open(pathUrl(finding))"
+              >{{ finding.path }}:{{ finding.line }}</a
+            >
+            <div class="body" [innerHTML]="details(finding) | markdown"></div>
+            @if (finding.rule) {
+              <p class="rule" data-test="rule">Rule: {{ finding.rule }}</p>
+            }
+            @if (!posted()) {
+              <div class="actions">
+                <button
+                  type="button"
+                  data-test="yes"
+                  class="yes-btn"
+                  [class.on]="state().picks[finding.id] === 'yes'"
+                  [attr.aria-pressed]="state().picks[finding.id] === 'yes'"
+                  (click)="store.pick(turnId(), finding.id, 'yes')"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5"></path>
+                  </svg>
+                  <span class="lbl">{{
+                    audit() ? 'Yes, open an issue' : 'Yes, add to the PR'
+                  }}</span>
+                </button>
+                <button
+                  type="button"
+                  data-test="no"
+                  class="no-btn"
+                  [class.on]="state().picks[finding.id] === 'no'"
+                  [attr.aria-pressed]="state().picks[finding.id] === 'no'"
+                  (click)="store.pick(turnId(), finding.id, 'no')"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18 6 6 18M6 6l12 12"></path>
+                  </svg>
+                  <span class="lbl">No</span>
+                </button>
+                <button
+                  type="button"
+                  data-test="edit"
+                  [attr.aria-expanded]="state().editing === finding.id"
+                  (click)="toggleEditor(finding)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 20h9"></path>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                  </svg>
+                  <span class="lbl">{{
+                    state().editing === finding.id ? 'Close editor' : 'Edit'
+                  }}</span>
+                </button>
               </div>
+              @if (state().editing === finding.id) {
+                <div class="editor" data-test="editor">
+                  <textarea
+                    data-test="comment-text"
+                    [attr.aria-label]="audit() ? 'Issue text' : 'Comment text'"
+                    [attr.maxlength]="maxChars"
+                    [value]="draft()"
+                    (input)="draft.set($any($event.target).value)"
+                  ></textarea>
+                  <div class="editor-row">
+                    <span class="counter">{{ draft().length }} / {{ maxChars }}</span>
+                    <button
+                      type="button"
+                      class="small"
+                      data-test="use-text"
+                      [disabled]="draft().trim().length === 0"
+                      (click)="store.useText(turnId(), finding.id, draft())"
+                    >
+                      Use this text and mark Yes
+                    </button>
+                    <button type="button" class="small" (click)="store.cancelEdit(turnId())">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              }
             }
           }
         </article>
@@ -169,16 +189,24 @@ export class ReviewFindingsPipe implements PipeTransform {
           >
         } @else {
           <strong>Review posted on PR #{{ review().number }}</strong>
+          @let comments = done.comments ?? selected().length;
           <span class="posted-line"
-            >{{ selected().length }} {{ selected().length === 1 ? 'comment' : 'comments' }} in one
-            review, without approval or request for changes. The items with No stayed here in the
-            chat.</span
+            >{{ comments }} {{ comments === 1 ? 'comment' : 'comments' }} in one review, without
+            approval or request for changes. The items with No stayed here in the chat.</span
           >
         }
         @for (url of done.urls; track url) {
           <a href="#" (click)="$event.preventDefault(); open(url)">{{ url }}</a>
         }
       </div>
+    } @else if (allDismissed()) {
+      <p class="all-dismissed" data-test="all-dismissed">
+        {{
+          audit()
+            ? 'Nothing to open; every finding was dismissed.'
+            : 'Nothing to post; every finding was dismissed.'
+        }}
+      </p>
     } @else {
       <div class="footer">
         <span class="summary" data-test="summary">{{ summary() }}</span>
@@ -354,7 +382,28 @@ export class ReviewFindingsPipe implements PipeTransform {
       border-color: var(--rf-yes-line);
     }
     .card.no {
-      opacity: 0.55;
+      padding: 6px 12px 6px 18px;
+    }
+    .dismissed {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--rf-muted);
+      font-size: 13px;
+    }
+    .dismissed-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.75;
+    }
+    .all-dismissed {
+      margin: 0;
+      color: var(--rf-muted);
+      font-size: 13px;
     }
     .head {
       display: flex;
@@ -743,14 +792,19 @@ export class ReviewFindingsComponent {
       .findings.filter((f) => picks[f.id] === 'yes')
       .map((finding) => ({ finding, body: this.bodyOf(finding, edited[finding.id]) }));
   });
+  readonly allDismissed = computed(() => {
+    const picks = this.state().picks;
+    return this.review().findings.every((f) => picks[f.id] === 'no');
+  });
   readonly summary = computed(() => {
     const picks = this.state().picks;
     const findings = this.review().findings;
     const decided = findings.filter((f) => picks[f.id] !== undefined).length;
     if (decided === 0) return 'Nothing selected yet. Decide item by item, or Yes to all.';
+    const kept = findings.filter((f) => picks[f.id] !== 'no').length;
     const undecided = findings.length - decided;
     const rest = undecided > 0 ? ` · ${undecided} undecided` : '';
-    return `${this.selected().length} of ${findings.length} selected${rest}`;
+    return `${this.selected().length} of ${kept} selected${rest}`;
   });
   readonly postLabel = computed(() => {
     const n = this.selected().length;

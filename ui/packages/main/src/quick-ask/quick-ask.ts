@@ -50,6 +50,7 @@ import { placeInCorner } from './placement.js';
 export const DEFAULT_QUICK_ASK_SHORTCUT = 'CommandOrControl+Alt+Space';
 export const NOT_RUNNING_MESSAGE = 'Scout is not running. Start it from the tray or the app.';
 export const STOPPED_REPLY = 'Scout stopped before it finished answering.';
+export const BUSY_REPLY = 'Scout is still answering; wait or press Stop.';
 export const LISTENING_STOPPED_REPLY = 'Scout stopped listening.';
 export const SYSTEM_AUDIO_UNAVAILABLE =
   'System audio capture is not available on this platform yet.';
@@ -617,9 +618,15 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     broadcast();
   }
 
+  function failed(turn: LocalTurn, text: string): LocalTurn {
+    return turn.reply.length > 0
+      ? { ...turn, failure: text, state: 'failed' }
+      : { ...turn, reply: text, state: 'failed' };
+  }
+
   function failRunning(text: string): void {
     for (const turn of turns.filter((t) => t.state === 'running')) {
-      reshape(turn.id, (t) => ({ ...t, reply: text, state: 'failed' }));
+      reshape(turn.id, (t) => failed(t, text));
     }
   }
 
@@ -837,6 +844,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     if (turns.some((turn) => turn.id === id)) {
       fail('local/invalid-request', 'That question is already running.');
     }
+    if (turns.some((turn) => turn.state === 'running')) fail('local/busy', BUSY_REPLY);
 
     append({
       id,
@@ -1256,12 +1264,16 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         if (activity.length > 0) reshape(event.id, (turn) => ({ ...turn, activity }));
         return;
       }
-      reshape(event.id, ({ activity: _cleared, ...turn }) => ({
-        ...turn,
-        reply: event.text ?? turn.reply,
-        citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
-        state: event.event === 'complete' ? 'done' : event.event === 'fail' ? 'failed' : 'running',
-      }));
+      reshape(event.id, ({ activity: _cleared, ...turn }) =>
+        event.event === 'fail'
+          ? failed(turn, event.text ?? turn.reply)
+          : {
+              ...turn,
+              reply: event.text ?? turn.reply,
+              citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
+              state: event.event === 'complete' ? 'done' : 'running',
+            },
+      );
     },
     dispose(): void {
       openCurrent = null;

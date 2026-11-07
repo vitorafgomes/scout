@@ -1297,7 +1297,12 @@ export interface LocalTurn {
   readonly review?: true;
   /** True when the question carried issues to open on a repository; the issues themselves are never kept on the turn. */
   readonly issues?: true;
+  /** Why a turn that had already streamed part of its reply ended early; the partial reply stays in `reply`. */
+  readonly failure?: string;
 }
+
+/** The sentence the worker ends a cancelled turn with; a surface shows it as Interrupted under a partial reply. */
+export const LOCAL_CANCELLED_REPLY = 'Cancelled.';
 
 /** Whose voice a live listening session hears: `me` is the owner's microphone, `others` the system audio. */
 export type LocalListenLane = 'me' | 'others';
