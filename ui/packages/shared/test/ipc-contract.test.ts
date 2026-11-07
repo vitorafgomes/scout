@@ -260,6 +260,7 @@ describe('screenshot on a question', () => {
       screenText: true,
       meeting: true,
       review: true,
+      issues: true,
     };
     const imageTypes: Record<LocalImage['contentType'], true> = { 'image/jpeg': true };
 

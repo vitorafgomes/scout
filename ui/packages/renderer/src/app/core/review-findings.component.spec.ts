@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ISSUES_MARKER,
   REVIEW_MARKER,
   type LocalAskRequest,
   type LocalEvent,
@@ -11,7 +12,7 @@ import {
   type ReviewFindings,
 } from '@scout/shared';
 
-import { commentBody, reviewBody } from './review-findings';
+import { commentBody, issueBody, reviewBody } from './review-findings';
 import { ReviewFindingsComponent } from './review-findings.component';
 import { ScoutBridgeService } from './scout-bridge';
 
@@ -51,6 +52,21 @@ const review: ReviewFindings = {
   findings: [total, lock, naming],
 };
 const URL = 'https://github.com/acme/shop/pull/5#pullrequestreview-77';
+const audit: ReviewFindings = {
+  kind: 'audit',
+  repository: 'acme/shop',
+  commit: 'ec7f951',
+  verdict: 'two defects to fix before the release',
+  read: '41 of 41 files read',
+  known: ['Refunds are manual until v2, as the README says.', 'There is no dark mode yet.'],
+  findings: [
+    { ...total, rule: 'ADR 0007: totals are computed after discounts' },
+    lock,
+    { ...naming, rule: 'Defect' },
+  ],
+};
+const ISSUE_12 = 'https://github.com/acme/shop/issues/12';
+const ISSUE_13 = 'https://github.com/Acme/Shop/issues/13';
 
 function makeBridge() {
   let turns: readonly LocalTurn[] = [
@@ -70,15 +86,18 @@ function makeBridge() {
   const localAsk = vi.fn(async (req: LocalAskRequest): Promise<void> => {
     const text = 'text' in req ? req.text : '';
     const at = text.indexOf(REVIEW_MARKER);
+    const issuesAt = text.indexOf(ISSUES_MARKER);
+    const cut = at === -1 ? issuesAt : at;
     push([
       ...turns,
       {
         id: req.id,
-        question: at === -1 ? text : text.slice(0, at),
+        question: cut === -1 ? text : text.slice(0, cut),
         reply: '',
         citations: [],
         state: 'running',
         ...(at === -1 ? {} : { review: true as const }),
+        ...(issuesAt === -1 ? {} : { issues: true as const }),
       },
     ]);
   });
@@ -110,7 +129,10 @@ function makeBridge() {
 
 type Fixture = ComponentFixture<ReviewFindingsComponent>;
 
-async function render(bridge: ReturnType<typeof makeBridge>): Promise<Fixture> {
+async function render(
+  bridge: ReturnType<typeof makeBridge>,
+  findings: ReviewFindings = review,
+): Promise<Fixture> {
   TestBed.configureTestingModule({
     providers: [
       provideZonelessChangeDetection(),
@@ -119,7 +141,7 @@ async function render(bridge: ReturnType<typeof makeBridge>): Promise<Fixture> {
   });
   const fixture = TestBed.createComponent(ReviewFindingsComponent);
   fixture.componentRef.setInput('turnId', 'f-1');
-  fixture.componentRef.setInput('review', review);
+  fixture.componentRef.setInput('review', findings);
   await settle(fixture);
   return fixture;
 }
@@ -457,5 +479,207 @@ describe('review findings cards', () => {
     expect(comments[0]!.querySelector('strong')?.textContent).toBe('Fix:');
     expect(text(comments[0]!.querySelector('p'))).toContain('Discounts applied after the sum');
     expect(text(comments[1]!.querySelector('p'))).toContain('Name says the wrong thing');
+  });
+
+  it('a review card shows its rule line when the finding has one, and none otherwise', async () => {
+    const fixture = await render(makeBridge(), {
+      ...review,
+      findings: [{ ...total, rule: 'Defect' }, lock],
+    });
+
+    expect(text(el(fixture, 'rule', card(fixture, 0)))).toBe('Rule: Defect');
+    expect(el(fixture, 'rule', card(fixture, 1))).toBeNull();
+    expect(el(fixture, 'known')).toBeNull();
+    expect(text(el(fixture, 'yes', card(fixture, 0)))).toBe('Yes, add to the PR');
+  });
+
+  it('an audit block renders the cards with the rule line and the already-documented note', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, audit);
+
+    const cards = all(fixture, 'finding');
+    expect(cards.map((c) => text(c.querySelector('h3')))).toEqual([
+      'Discounts applied after the sum',
+      'Move has no lock',
+      'Name says the wrong thing',
+    ]);
+    expect(cards.map((c) => text(el(fixture, 'severity', c)))).toEqual([
+      'Blocking',
+      'Fix',
+      'Suggestion',
+    ]);
+    expect(cards.map((c) => el(fixture, 'rule', c)?.textContent ?? null)).toEqual([
+      'Rule: ADR 0007: totals are computed after discounts',
+      null,
+      'Rule: Defect',
+    ]);
+    const known = el(fixture, 'known');
+    expect(text(known?.querySelector('h4') ?? null)).toBe('Already documented, not raised again');
+    expect(cards.some((c) => c.contains(known))).toBe(false);
+    expect(Array.from(known?.querySelectorAll('li') ?? []).map(text)).toEqual([
+      'Refunds are manual until v2, as the README says.',
+      'There is no dark mode yet.',
+    ]);
+    expect(text(el(fixture, 'yes', cards[0]))).toBe('Yes, open an issue');
+    expect(text(el(fixture, 'post'))).toBe('Open issues on acme/shop');
+
+    await click(fixture, el(fixture, 'path', cards[1]));
+    expect(bridge.appOpenExternal).toHaveBeenLastCalledWith({
+      url: 'https://github.com/acme/shop/blob/ec7f951/src/orders/Cart.cs#L12',
+    });
+    const { commit: _commit, ...atHead } = audit;
+    fixture.componentRef.setInput('review', atHead);
+    await settle(fixture);
+    await click(fixture, el(fixture, 'path', card(fixture, 0)));
+    expect(bridge.appOpenExternal).toHaveBeenLastCalledWith({
+      url: 'https://github.com/acme/shop/blob/HEAD/src/orders/Checkout.cs#L88',
+    });
+  });
+
+  it('Open issues is disabled until a Yes and then asks the worker with the bare question, the issues marker and one issue per chosen finding in order with the edited body', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, audit);
+    const post = () => el(fixture, 'post') as HTMLButtonElement;
+    expect(post().disabled).toBe(true);
+
+    await click(fixture, el(fixture, 'yes', card(fixture, 2)));
+    await click(fixture, el(fixture, 'edit', card(fixture, 0)));
+    const area = el(fixture, 'comment-text', card(fixture, 0)) as HTMLTextAreaElement;
+    expect(area.value).toBe(issueBody(audit, audit.findings[0]!));
+    expect(area.getAttribute('aria-label')).toBe('Issue text');
+    area.value = 'Edited: sum after the discounts.';
+    area.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    await click(fixture, el(fixture, 'use-text', card(fixture, 0)));
+
+    expect(post().disabled).toBe(false);
+    expect(text(post())).toBe('Open 2 issues on acme/shop');
+    expect(post().getAttribute('aria-label')).toBe('Open 2 issues on acme/shop');
+    await click(fixture, post());
+
+    expect(bridge.localAsk).toHaveBeenCalledTimes(1);
+    const sent = bridge.localAsk.mock.calls[0]![0] as { text: string };
+    expect(sent.text).not.toContain(REVIEW_MARKER);
+    const [question, json] = sent.text.split(ISSUES_MARKER);
+    expect(question).toBe('Open 2 issues on acme/shop');
+    expect(JSON.parse(json!)).toEqual({
+      repository: 'acme/shop',
+      issues: [
+        { title: 'Discounts applied after the sum', body: 'Edited: sum after the discounts.' },
+        { title: 'Name says the wrong thing', body: issueBody(audit, audit.findings[2]!) },
+      ],
+    });
+  });
+
+  it('the audit preview shows each chosen issue with its title and its body', async () => {
+    const fixture = await render(makeBridge(), audit);
+    expect(text(el(fixture, 'toggle-preview'))).toBe('See how the issues read');
+
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'yes', card(fixture, 1)));
+    await click(fixture, el(fixture, 'toggle-preview'));
+
+    const preview = el(fixture, 'preview')!;
+    expect(Array.from(preview.querySelectorAll('.gh-title')).map(text)).toEqual([
+      'Discounts applied after the sum',
+      'Move has no lock',
+    ]);
+    const bodies = Array.from(preview.querySelectorAll('.gh-body'));
+    expect(Array.from(bodies[0]!.querySelectorAll('h2')).map(text)).toEqual([
+      'Problem',
+      'Evidence',
+      'Proposed change',
+    ]);
+    expect(text(bodies[0]!)).toContain('Rule: ADR 0007: totals are computed after discounts');
+    expect(text(bodies[1]!)).toContain('Drafted by Scout from an audit of acme/shop at ec7f951.');
+    expect(preview.querySelector('.gh-review')).toBeNull();
+  });
+
+  it('once the issues turn completes with the issue links the cards show them opened, in this window or the other; a failed turn keeps the buttons', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, audit);
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'yes', card(fixture, 2)));
+    const lastId = () => (bridge.localAsk.mock.lastCall![0] as { id: string }).id;
+
+    await click(fixture, el(fixture, 'post'));
+    bridge.emit({ id: lastId(), event: 'fail', text: 'GitHub refused the issue.' });
+    await settle(fixture);
+    const buttons = () => [
+      el(fixture, 'posted'),
+      (el(fixture, 'post') as HTMLButtonElement | null)?.disabled ?? null,
+    ];
+    expect(buttons()).toEqual([null, false]);
+
+    await click(fixture, el(fixture, 'post'));
+    bridge.emit({
+      id: lastId(),
+      event: 'complete',
+      text: 'GitHub writes are not allowed on https://github.com/acme/shop; allow them first.',
+    });
+    await settle(fixture);
+    expect(buttons()).toEqual([null, false]);
+
+    await click(fixture, el(fixture, 'post'));
+    bridge.emit({
+      id: lastId(),
+      event: 'complete',
+      text: `[${ISSUE_12}](${ISSUE_12})\n${ISSUE_13}.\nhttps://github.com/acme/other/issues/9`,
+    });
+    await settle(fixture);
+
+    const posted = el(fixture, 'posted')!;
+    expect(text(posted.querySelector('strong'))).toBe('2 issues opened on acme/shop');
+    expect(Array.from(posted.querySelectorAll('a')).map(text)).toEqual([ISSUE_12, ISSUE_13]);
+    expect(el(fixture, 'post')).toBeNull();
+    expect(all(fixture, 'yes')).toEqual([]);
+    await click(fixture, posted.querySelectorAll('a')[1]);
+    expect(bridge.appOpenExternal).toHaveBeenLastCalledWith({ url: ISSUE_13 });
+
+    TestBed.resetTestingModule();
+    const other = makeBridge();
+    const elsewhere = await render(other, audit);
+    const findingsTurn = (await other.localGetTurns())[0]!;
+    const issuesFrom = (id: string, repository: string, reply: string): LocalTurn => ({
+      id,
+      question: `Open 1 issue on ${repository}`,
+      reply,
+      citations: [],
+      state: 'done',
+      issues: true,
+    });
+    other.push([
+      findingsTurn,
+      issuesFrom('i-other', 'acme/other', 'https://github.com/acme/other/issues/9'),
+    ]);
+    await settle(elsewhere);
+    const stillOpen = el(elsewhere, 'post') !== null && el(elsewhere, 'posted') === null;
+    other.push([findingsTurn, issuesFrom('i-elsewhere', 'acme/shop', `Opened ${ISSUE_12}`)]);
+    await settle(elsewhere);
+
+    expect(stillOpen).toBe(true);
+    expect(text(el(elsewhere, 'posted')?.querySelector('strong') ?? null)).toBe(
+      '1 issue opened on acme/shop',
+    );
+    expect(all(elsewhere, 'posted')[0]!.querySelectorAll('a')).toHaveLength(1);
+    expect(el(elsewhere, 'post')).toBeNull();
+  });
+
+  it('an audit asked after earlier issues on the same repository starts open', async () => {
+    const bridge = makeBridge();
+    const findingsTurn = (await bridge.localGetTurns())[0]!;
+    const earlierIssues: LocalTurn = {
+      id: 'i-earlier',
+      question: 'Open 2 issues on acme/shop',
+      reply: `${ISSUE_12}\n${ISSUE_13}`,
+      citations: [],
+      state: 'done',
+      issues: true,
+    };
+    bridge.push([earlierIssues, findingsTurn]);
+    const fixture = await render(bridge, audit);
+
+    expect(el(fixture, 'posted')).toBeNull();
+    expect(el(fixture, 'post')).not.toBeNull();
   });
 });

@@ -498,6 +498,27 @@ describe('Chat screen', () => {
     expect(texts(fixture, 'with-review').map((tag) => tag.trim())).toEqual(['with the review']);
   });
 
+  it('an issues question shows the bare question and a with the issues tag', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    bridge.push([
+      {
+        id: 'q-1',
+        question: 'Open 2 issues on acme/shop',
+        reply: '',
+        citations: [],
+        state: 'running',
+        issues: true,
+      },
+      { id: 'q-2', question: 'and now?', reply: 'Nothing.', citations: [], state: 'done' },
+    ]);
+    const fixture = await open();
+
+    expect(texts(fixture, 'question')).toEqual(['Open 2 issues on acme/shop', 'and now?']);
+    expect(texts(fixture, 'with-issues').map((tag) => tag.trim())).toEqual(['with the issues']);
+    expect(texts(fixture, 'with-review')).toEqual([]);
+  });
+
   it('Clear empties the conversation', async () => {
     const bridge = makeBridge();
     configure(bridge);

@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: Reviewing a pull request or a diff in any programming language - "review PR 42", "code review", "look at this pull request and tell me what is wrong", "comment on the PR", "revisa esse PR", "faz o code review". Reads the pull request from GitHub, judges correctness, safety, tests, error handling and clarity against the languages the diff touches, and answers with findings anchored to file and line. Not for asking what a repository is about, not for listing pull requests, not for planning improvements to a whole project.
+description: Reviewing a pull request or a diff in any programming language - "review PR 42", "code review", "look at this pull request and tell me what is wrong", "comment on the PR", "revisa esse PR", "faz o code review". Reads the pull request from GitHub, judges correctness, safety, tests, error handling and clarity against the languages the diff touches, and answers with findings anchored to file and line. Not for reviewing a whole repository or project with no pull request named (code-audit), not for asking what a repository is about, not for listing pull requests, not for planning improvements to a whole project.
 ---
 
 # Code review
@@ -58,7 +58,7 @@ Before the final answer, call `present_review_findings(repository, number, verdi
 [{"id":"total","severity":"block","title":"Discounts applied after the sum","path":"src/orders/Checkout.cs","line":88,"context":"","why":"`total` is summed before the discount loop runs, so a discounted order is charged full price.","fix":"Apply the discounts before the sum, or sum inside the loop."}]
 ```
 
-`severity` is `block`, `fix` or `nit`, in the order of the findings above; `id` is a short slug unique in the list; `path` and `line` are the file and the line after the change as the diff shows it, the same anchor as the finding; `title` names the thing in a few words; `context` is empty or the sentence that says where the finding comes from (not from this PR, only visible here, cheap to act on now); `why` is what is wrong and why, in concrete terms; `fix` is the concrete fix. Write them in the language of the request, as the comment below is written. At most 50 findings. When the function answers with a problem, fix that finding and call it again; a second call replaces the first. Then end the answer with the verdict.
+`severity` is `block`, `fix` or `nit`, in the order of the findings above; `id` is a short slug unique in the list; `path` and `line` are the file and the line after the change as the diff shows it, the same anchor as the finding; `title` names the thing in a few words; `context` is empty or the sentence that says where the finding comes from (not from this PR, only visible here, cheap to act on now); `why` is what is wrong and why, in concrete terms; `fix` is the concrete fix; `rule`, optional, is the project rule, ADR or convention the finding departs from, by its own name. Write them in the language of the request, as the comment below is written. At most 50 findings. When the function answers with a problem, fix that finding and call it again; a second call replaces the first. Then end the answer with the verdict.
 
 ## Posting the review
 

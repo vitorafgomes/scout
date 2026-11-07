@@ -52,6 +52,7 @@ export {
   SCREEN_TEXT_MARKER,
   LAST_ANSWER_MARKER,
   REVIEW_MARKER,
+  ISSUES_MARKER,
   MEETING_WINDOWS,
   transcriptMarker,
   type ChannelName,

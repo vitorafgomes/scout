@@ -14,7 +14,14 @@ import type { ReviewFinding, ReviewFindings } from '@scout/shared';
 
 import { LocalConversation } from './local-conversation';
 import { MarkdownPipe } from './markdown.pipe';
-import { commentBody, parseReviewFindings, postingAsk, reviewBody } from './review-findings';
+import {
+  commentBody,
+  issueBody,
+  issuesAsk,
+  parseReviewFindings,
+  postingAsk,
+  reviewBody,
+} from './review-findings';
 import { ReviewFindingsStore } from './review-findings.store';
 import { ScoutBridgeService } from './scout-bridge';
 
@@ -34,9 +41,10 @@ export class ReviewFindingsPipe implements PipeTransform {
 }
 
 /**
- * The findings of a code review as cards the owner decides on one by one, Yes, No or an edited
- * comment, with a preview of how the review reads on the pull request; Post asks Scout to post the
- * chosen comments as one review, and once its reply carries the review's link the cards say so.
+ * The findings of a code review or an audit as cards the owner decides on one by one, Yes, No or an
+ * edited text, with a preview of how they read on GitHub; for a review, Post asks Scout to post the
+ * chosen comments as one review, for an audit, to open one issue per chosen finding, and once the
+ * reply carries the links the cards say so.
  */
 @Component({
   selector: 'sc-review-findings',
@@ -62,10 +70,13 @@ export class ReviewFindingsPipe implements PipeTransform {
             class="path"
             href="#"
             data-test="path"
-            (click)="$event.preventDefault(); open(filesUrl())"
+            (click)="$event.preventDefault(); open(pathUrl(finding))"
             >{{ finding.path }}:{{ finding.line }}</a
           >
           <div class="body" [innerHTML]="details(finding) | markdown"></div>
+          @if (finding.rule) {
+            <p class="rule" data-test="rule">Rule: {{ finding.rule }}</p>
+          }
           @if (!posted()) {
             <div class="actions">
               <button
@@ -77,7 +88,7 @@ export class ReviewFindingsPipe implements PipeTransform {
                 (click)="store.pick(turnId(), finding.id, 'yes')"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
-                <span class="lbl">Yes, add to the PR</span>
+                <span class="lbl">{{ audit() ? 'Yes, open an issue' : 'Yes, add to the PR' }}</span>
               </button>
               <button
                 type="button"
@@ -111,7 +122,7 @@ export class ReviewFindingsPipe implements PipeTransform {
               <div class="editor" data-test="editor">
                 <textarea
                   data-test="comment-text"
-                  aria-label="Comment text"
+                  [attr.aria-label]="audit() ? 'Issue text' : 'Comment text'"
                   [attr.maxlength]="maxChars"
                   [value]="draft()"
                   (input)="draft.set($any($event.target).value)"
@@ -137,15 +148,36 @@ export class ReviewFindingsPipe implements PipeTransform {
         </article>
       }
     </div>
+    @if (review().known; as known) {
+      @if (known.length > 0) {
+        <section class="known" data-test="known">
+          <h4>Already documented, not raised again</h4>
+          <ul>
+            @for (item of known; track $index) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </section>
+      }
+    }
     @if (posted(); as done) {
       <div class="posted" data-test="posted" role="status">
-        <strong>Review posted on PR #{{ review().number }}</strong>
-        <span class="posted-line"
-          >{{ selected().length }} {{ selected().length === 1 ? 'comment' : 'comments' }} in one
-          review, without approval or request for changes. The items with No stayed here in the
-          chat.</span
-        >
-        <a href="#" (click)="$event.preventDefault(); open(done.url)">{{ done.url }}</a>
+        @if (audit()) {
+          <strong
+            >{{ done.urls.length }} {{ done.urls.length === 1 ? 'issue' : 'issues' }} opened on
+            {{ review().repository }}</strong
+          >
+        } @else {
+          <strong>Review posted on PR #{{ review().number }}</strong>
+          <span class="posted-line"
+            >{{ selected().length }} {{ selected().length === 1 ? 'comment' : 'comments' }} in one
+            review, without approval or request for changes. The items with No stayed here in the
+            chat.</span
+          >
+        }
+        @for (url of done.urls; track url) {
+          <a href="#" (click)="$event.preventDefault(); open(url)">{{ url }}</a>
+        }
       </div>
     } @else {
       <div class="footer">
@@ -190,15 +222,34 @@ export class ReviewFindingsPipe implements PipeTransform {
             <circle cx="12" cy="12" r="3"></circle>
           </svg>
           <span class="lbl">{{
-            state().preview ? 'Hide the preview' : 'See how it reads on the PR'
+            state().preview
+              ? 'Hide the preview'
+              : audit()
+                ? 'See how the issues read'
+                : 'See how it reads on the PR'
           }}</span>
         </button>
-        <span class="note"
-          >The same finding, as the PR author reads it on GitHub: a Comment review with the comment
-          on the line.</span
-        >
+        @if (audit()) {
+          <span class="note"
+            >Each chosen finding as its own issue on GitHub, in the card order.</span
+          >
+        } @else {
+          <span class="note"
+            >The same finding, as the PR author reads it on GitHub: a Comment review with the
+            comment on the line.</span
+          >
+        }
       </div>
-      @if (state().preview) {
+      @if (state().preview && audit()) {
+        <div class="gh" data-test="preview">
+          @for (item of selected(); track item.finding.id) {
+            <div class="gh-issue">
+              <div class="gh-title">{{ item.finding.title }}</div>
+              <div class="gh-body" [innerHTML]="item.body | markdown"></div>
+            </div>
+          }
+        </div>
+      } @else if (state().preview) {
         <div class="gh" data-test="preview">
           @for (item of selected(); track item.finding.id) {
             <div class="gh-file">{{ item.finding.path }}</div>
@@ -361,6 +412,27 @@ export class ReviewFindingsPipe implements PipeTransform {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 12.5px;
     }
+    .rule {
+      margin: 0;
+      font-size: 13px;
+      color: var(--rf-muted);
+    }
+    .known {
+      border: 1px dashed var(--rf-line);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--rf-fg-2);
+    }
+    .known h4 {
+      margin: 0 0 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .known ul {
+      margin: 0;
+      padding-left: 20px;
+    }
     .actions {
       display: flex;
       flex-wrap: wrap;
@@ -495,6 +567,24 @@ export class ReviewFindingsPipe implements PipeTransform {
       overflow: hidden;
       font-family: -apple-system, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
       font-size: 14px;
+    }
+    .gh-issue {
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gh-issue + .gh-issue {
+      border-top: 1px solid #d1d9e0;
+    }
+    .gh-title {
+      font-size: 16px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .gh-body h2 {
+      margin: 0;
+      font-size: 15px;
     }
     .gh-review {
       padding: 12px 14px;
@@ -645,15 +735,13 @@ export class ReviewFindingsComponent {
   readonly posted = computed(() => this.state().posted ?? null);
   readonly posting = computed(() => this.state().postTurnId !== undefined);
   readonly busy = computed(() => this.conversation.running() !== null);
+  readonly audit = computed(() => this.review().kind === 'audit');
   readonly findingIds = computed(() => this.review().findings.map((f) => f.id));
-  readonly filesUrl = computed(
-    () => `https://github.com/${this.review().repository}/pull/${this.review().number}/files`,
-  );
   readonly selected = computed(() => {
     const { picks, edited } = this.state();
     return this.review()
       .findings.filter((f) => picks[f.id] === 'yes')
-      .map((finding) => ({ finding, body: edited[finding.id] ?? commentBody(finding) }));
+      .map((finding) => ({ finding, body: this.bodyOf(finding, edited[finding.id]) }));
   });
   readonly summary = computed(() => {
     const picks = this.state().picks;
@@ -666,6 +754,10 @@ export class ReviewFindingsComponent {
   });
   readonly postLabel = computed(() => {
     const n = this.selected().length;
+    if (this.audit()) {
+      const on = `on ${this.review().repository}`;
+      return n === 0 ? `Open issues ${on}` : `Open ${n} issue${n === 1 ? '' : 's'} ${on}`;
+    }
     return n === 0
       ? `Post on PR #${this.review().number}`
       : `Post ${n} on PR #${this.review().number}`;
@@ -681,6 +773,13 @@ export class ReviewFindingsComponent {
     return SEVERITY_LABELS[finding.severity];
   }
 
+  pathUrl(finding: ReviewFinding): string {
+    const { repository, number, commit } = this.review();
+    return this.audit()
+      ? `https://github.com/${repository}/blob/${commit ?? 'HEAD'}/${finding.path}#L${finding.line}`
+      : `https://github.com/${repository}/pull/${number}/files`;
+  }
+
   details(finding: ReviewFinding): string {
     const context = finding.context ? `${finding.context}\n\n` : '';
     return `${context}${finding.why}\n\n**Fix:** ${finding.fix}`;
@@ -688,7 +787,7 @@ export class ReviewFindingsComponent {
 
   toggleEditor(finding: ReviewFinding): void {
     if (this.state().editing !== finding.id) {
-      this.draft.set(this.state().edited[finding.id] ?? commentBody(finding));
+      this.draft.set(this.bodyOf(finding, this.state().edited[finding.id]));
     }
     this.store.edit(this.turnId(), finding.id);
   }
@@ -700,11 +799,20 @@ export class ReviewFindingsComponent {
     const id = crypto.randomUUID();
     this.error.set(null);
     this.store.markPosting(turnId, id);
-    const refusal = await this.conversation.askAs(id, postingAsk(this.review(), selected));
+    const ask = this.audit()
+      ? issuesAsk(this.review(), selected)
+      : postingAsk(this.review(), selected);
+    const refusal = await this.conversation.askAs(id, ask);
     if (refusal !== null) {
       this.store.markPosting(turnId, undefined);
       this.error.set(refusal);
     }
+  }
+
+  private bodyOf(finding: ReviewFinding, edited: string | undefined): string {
+    return this.audit()
+      ? issueBody(this.review(), finding, edited)
+      : (edited ?? commentBody(finding));
   }
 
   open(url: string): void {
