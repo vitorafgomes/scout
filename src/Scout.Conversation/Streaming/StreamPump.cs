@@ -127,9 +127,12 @@ public sealed class StreamPump
             _options.Logger?.LogWarning(
                 "StreamPump stopped: the AI provider refused the request for quota or billing (code {ProviderCode}); finalizing with a user-facing message.",
                 ex.Code);
+            var sentence = string.Equals(ex.Code, "subscription_sharing_usage_limit_exceeded", StringComparison.Ordinal)
+                ? _options.PlanUsageLimitMessage
+                : _options.QuotaExceededMessage;
             var body = buffer.Length == 0
-                ? _options.QuotaExceededMessage
-                : Truncate(buffer.ToString(), maxLength) + "\n\n" + _options.QuotaExceededMessage;
+                ? sentence
+                : Truncate(buffer.ToString(), maxLength) + "\n\n" + sentence;
             await sink.CompleteAsync(body, response.Citations, CancellationToken.None)
                 .ConfigureAwait(false);
             return;

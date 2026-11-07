@@ -56,7 +56,7 @@ Scout is open source and ships to users who have different chat platforms and di
 
 - **The provider list is closed.** The switch at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:72` has no registry or discovery; a new provider means editing it.
 - **Vendor packages are linked in.** `src/Scout.Llm/Scout.Llm.csproj` references the connectors for all providers, and `Scout.Conversation` and the adapters inherit them through the project reference. `Scout.Host.Console` references all four adapters and the GitHub and Kubernetes plugins at compile time; the `KubernetesClient` package stays inside `Scout.Plugin.Kubernetes`, which exposes only a `KernelPlugin` (`src/Scout.Host.Console/Scout.Host.Console.csproj:21`), so swapping is by configuration, not by deployment.
-- **OpenAI types leak into the core.** `src/Scout.Llm/ChatGateway.cs:345` builds `OpenAIPromptExecutionSettings` for every provider, and so does `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`.
+- **OpenAI types leak into the core.** `src/Scout.Llm/ChatGateway.cs:377` builds `OpenAIPromptExecutionSettings` for every provider, and so does `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:82`.
 - **Log label covers three providers.** `src/Scout.Llm/ChatGateway.cs:52` describes Ollama, OpenAI and Gemini; any other provider logs its name with `unknown` endpoint and model.
 - **Teams has no live inbound path.** `TeamsChatAdapter.ProcessActivityAsync` (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:106`) has no production caller; the webhook is deliberately not wired (`src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:18`).
 

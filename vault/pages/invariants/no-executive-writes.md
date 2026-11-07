@@ -69,7 +69,7 @@ reliability: high
 
 ## The gap
 
-Nothing in code stops a plugin from exposing a write function. The kernel takes every `KernelPlugin` registered in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:126`) and offers all of their functions to the model with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:349`, `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:84`). There is no allow-list, no read-only marker on a function, and no test that fails when a write function appears. Read-only holds today because the write methods do not exist. The optional request guard below judges what the user asks for, not what a function can do, so it does not close this gap.
+Nothing in code stops a plugin from exposing a write function. The kernel takes every `KernelPlugin` registered in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:126`) and offers all of their functions to the model with `FunctionChoiceBehavior.Auto()` (`src/Scout.Llm/ChatGateway.cs:381`, `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:84`). There is no allow-list, no read-only marker on a function, and no test that fails when a write function appears. Read-only holds today because the write methods do not exist. The optional request guard below judges what the user asks for, not what a function can do, so it does not close this gap.
 
 Since 2026-11-02 a function declared with `AddWriteFunction` is gated at the call by the control plane (the write gate below); an undeclared function is still not gated, so the gap remains for any write function nobody declares.
 
