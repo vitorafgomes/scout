@@ -34,13 +34,13 @@ A chat bot that:
 2. Accepts natural-language or slash-command queries.
 3. Reads from integrated systems (cloud providers, GitHub, Azure DevOps) to answer.
 4. Uses an LLM — local (Ollama) or hosted (Azure OpenAI / OpenAI) — to compose answers when retrieval is involved.
-5. **Creates information in repositories, never code.** Scout's purpose (the owner, 2026-11-07) is to report problems as issues and to validate pull requests with reviews. It writes only what a feature declares and the owner grants ([[pages/decisions/0032-per-feature-write-permissions]]): a review on a pull request, an issue on a repository, a snapshot under its own data folder. It never edits a file, never opens a pull request with code, never runs the project's code.
+5. **Creates information in repositories, never code.** Scout's purpose (the owner, 2026-11-07) is to report problems as issues and to validate pull requests with reviews. It writes only what a feature declares and the owner grants ([[pages/decisions/0032-per-feature-write-permissions]]): a review on a pull request, an issue on a repository, a snapshot under its own data folder. It never edits a file and never opens a pull request with code. It runs a project's own tests only inside a disposable, isolated container the owner enables, never on the host, to give a verdict on a pull request ([[pages/roadmap/future-improvements]] F10); the owner's intent (2026-11-07): "o Scout tem que poder aprovar um PR ou rejeitar, esse é o objetivo, validar tudo".
 
 ## What Scout is not
 
 - Not a ticketing bot for people. It opens issues only for the problems it found, each one chosen by the owner on the cards; it does not send emails or page anyone.
 - Not an incident-response tool. It does not page, escalate, or trigger runbooks.
-- Not a code-generation bot. It answers questions about code and reports what it finds; it does not modify code and it does not run it.
+- Not a code-generation bot. It answers questions about code and reports what it finds; it does not modify code, and it runs a project's tests only in isolation, for a verdict.
 - Not a LLM wrapper. The LLM is an optional composition layer; several plugins work without one.
 
 ## Target users
