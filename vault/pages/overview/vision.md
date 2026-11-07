@@ -1,9 +1,9 @@
 ---
 title: "Vision"
-version: "1.1"
+version: "1.2"
 date: 2026-04-21
 updated: 2026-11-07
-changes: "v1.1 (2026-11-07) the purpose in the owner's words: information in repositories (issues, pull request reviews), never code; the read-only line superseded by ADR 0032. Migrated from the Obsidian notes on 2026-10-21"
+changes: "v1.2 (2026-11-07) a project's tests run only in an isolated container, for the verdict on a pull request. v1.1 (2026-11-07) the purpose in the owner's words: information in repositories (issues, pull request reviews), never code; the read-only line superseded by ADR 0032. Migrated from the Obsidian notes on 2026-10-21"
 page_type: overview
 status: stub
 description: "Scout vision: a chatops assistant answering recurring operational and business questions in chat for engineering teams."
