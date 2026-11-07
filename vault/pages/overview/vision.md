@@ -3,7 +3,7 @@ title: "Vision"
 version: "1.1"
 date: 2026-04-21
 updated: 2026-11-07
-changes: "v1.1 (2026-11-07) the purpose in the owner's words: information in repositories (issues, pull request reviews), never code; the read-only line superseded by ADR 0032. Migrated from the Obsidian notes on 2026-10-21"
+changes: "v1.1 (2026-11-07) the purpose in the owner's words: information in repositories (issues, pull request reviews), never code; the read-only line superseded by ADR 0032; the same features on a local or a paid model. Migrated from the Obsidian notes on 2026-10-21"
 page_type: overview
 status: stub
 description: "Scout vision: a chatops assistant answering recurring operational and business questions in chat for engineering teams."
@@ -33,7 +33,7 @@ A chat bot that:
 1. Runs inside the team's existing chat platform (Slack, Discord, or Teams — one at a time, any combination over time).
 2. Accepts natural-language or slash-command queries.
 3. Reads from integrated systems (cloud providers, GitHub, Azure DevOps) to answer.
-4. Uses an LLM — local (Ollama) or hosted (Azure OpenAI / OpenAI) — to compose answers when retrieval is involved.
+4. Uses an LLM to compose answers when retrieval is involved, and gives the same features with a model on the user's machine (Ollama, the default) as with a paid provider; the owner's intent (2026-11-07): "facilitar os usuários que tenham o mesmo resultado usando um LLM local tanto um LLM pago". No feature is tied to one vendor ([[pages/invariants/pluggable-boundaries]], [[pages/invariants/local-first-default]]).
 5. **Creates information in repositories, never code.** Scout's purpose (the owner, 2026-11-07) is to report problems as issues and to validate pull requests with reviews. It writes only what a feature declares and the owner grants ([[pages/decisions/0032-per-feature-write-permissions]]): a review on a pull request, an issue on a repository, a snapshot under its own data folder. It never edits a file, never opens a pull request with code, never runs the project's code.
 
 ## What Scout is not
