@@ -1,3 +1,6 @@
+## [2026-11-07] crystallize | Two plans: the gap plan and the future improvements
+The owner, after an audit of a real repository stopped at two findings and "continue" started from nothing: "temos que criar dois planos, primeiro para melhorar nos gaps e outro para melhorias futuras", and "não reaproveitamos código, tudo aqui é feito por nós". Three roadmap pages: project-memory-spike (the diagnosis, the survey in mechanism terms, the design), gap-plan (G1 to G7, the harness-before-AppImage and matrix-spec process rules) and future-improvements (F1 to F9, with the two outside projects that lent ideas recorded in mechanism terms only). conversation.md v1.12, knowledge.md v1.4 and llm.md v2.12 carry the facts the diagnosis cites; root CLAUDE.md gains the no-code-from-other-projects rule.
+
 ## [2026-11-06] crystallize | Models → Analysis: the model in use on top, search, one collapsible group per connected source
 The owner on the Models prototype: "não está legal de ver", "deveria mostrar o que está conectado; neste momento não tenho nada local e está me mostrando Local LLM com Qwen", then "Gostei do que foi proposto no Analysis, pode fazer". On feat/models-analysis: the In use strip, the search and chips, the groups with families, tags and Show all, the local group only while a runtime answers; desktop-ui.md updated.
 
