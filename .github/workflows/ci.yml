@@ -59,3 +59,8 @@ jobs:
       # project that did not compile and a suite that was skipped entirely.
       - name: Test, per project
         run: bash scripts/test-per-project.sh --configuration Release --no-build --logger "trx" --collect:"XPlat Code Coverage"
+
+      # The Docker end-to-end tests of Scout.Sandbox, on their own: test-per-project.sh leaves them out
+      # when no Docker daemon answers, and ubuntu runners have one, so here a missing daemon fails the job.
+      - name: Test, Docker end-to-end (Scout.Sandbox)
+        run: dotnet test tests/Scout.Sandbox.Tests --configuration Release --no-build --filter "Category=Docker"

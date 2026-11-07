@@ -1,8 +1,11 @@
+using System.Text.Json;
+
 namespace Scout.Sandbox;
 
 /// <summary>
 /// A stack Scout knows how to test: the pinned image it runs in, the restore command (run with the network), the
-/// test command (run without it), and the variables that keep every cache under <c>/work</c>.
+/// test command (run without it), the variables that keep every cache under <c>/work</c>, and what the result should
+/// say about how it ran.
 /// </summary>
 internal sealed record SandboxStack(
     string Name,
@@ -10,7 +13,8 @@ internal sealed record SandboxStack(
     string RestoreCommand,
     string TestCommand,
     IReadOnlyDictionary<string, string> Environment,
-    IReadOnlyDictionary<string, string> OfflineEnvironment);
+    IReadOnlyDictionary<string, string> OfflineEnvironment,
+    string? Note = null);
 
 /// <summary>The images a run may use, official ones pinned by their multi-architecture index digest.</summary>
 internal static class SandboxImages
@@ -19,8 +23,9 @@ internal static class SandboxImages
     public const string Node = "node:22@sha256:7702d8aa4d5910871692af4480eb3ba86f23047a6417a44d857d06c95d060d3f";
     public const string Python = "python:3.13@sha256:ecbe213fb818d557fd19db4078244339e2e2e52874f9c81052d3094ea114d797";
     public const string Go = "golang:1.25@sha256:699337d620559a59b4a2bb298ad59611e535d2ee755a34cf2d2a98f37578dc80";
+    public const string Bun = "oven/bun:1@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d";
 
-    public static readonly IReadOnlyList<string> All = [DotNet, Node, Python, Go];
+    public static readonly IReadOnlyList<string> All = [DotNet, Node, Python, Go, Bun];
 }
 
 /// <summary>
@@ -35,7 +40,7 @@ internal static class SandboxStacks
     public const string Go = "go";
 
     public const string NoStackReason = "No .NET, Node, Python or Go project was found at the repository's root.";
-    public const string BunReason = "The repository uses Bun, which the pinned Node image does not carry; its tests did not run.";
+    public const string DotNetNote = "Ran on the .NET 10 SDK with roll-forward.";
 
     private const string Home = "/work/cache/home";
     private const string Venv = "/work/cache/venv";
@@ -63,12 +68,6 @@ internal static class SandboxStacks
 
         foreach (var name in candidates)
         {
-            if (name == Node && IsBun(root))
-            {
-                reason = BunReason;
-                return null;
-            }
-
             var stack = name switch
             {
                 DotNet => ForDotNet(root),
@@ -130,7 +129,8 @@ internal static class SandboxStacks
                 ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
                 ["DOTNET_ROLL_FORWARD"] = "Major",
             },
-            new Dictionary<string, string>(StringComparer.Ordinal));
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            DotNetNote);
     }
 
     private static SandboxStack? ForNode(string root)
@@ -138,6 +138,11 @@ internal static class SandboxStacks
         if (!Has(root, "package.json"))
         {
             return null;
+        }
+
+        if (IsBun(root))
+        {
+            return ForBun(root);
         }
 
         var (restore, test) =
@@ -160,6 +165,37 @@ internal static class SandboxStacks
                 ["COREPACK_ENABLE_DOWNLOAD_PROMPT"] = "0",
             },
             new Dictionary<string, string>(StringComparer.Ordinal) { ["npm_config_offline"] = "true" });
+    }
+
+    private static SandboxStack ForBun(string root) =>
+        new(
+            Node,
+            SandboxImages.Bun,
+            "bun install --frozen-lockfile",
+            HasTestScript(root) ? "bun run test" : "bun test",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["HOME"] = Home,
+                ["BUN_INSTALL_CACHE_DIR"] = "/work/cache/bun",
+                ["DO_NOT_TRACK"] = "1",
+            },
+            new Dictionary<string, string>(StringComparer.Ordinal));
+
+    private static bool HasTestScript(string root)
+    {
+        try
+        {
+            using var package = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "package.json")));
+            return package.RootElement.ValueKind == JsonValueKind.Object
+                && package.RootElement.TryGetProperty("scripts", out var scripts)
+                && scripts.ValueKind == JsonValueKind.Object
+                && scripts.TryGetProperty("test", out var test)
+                && test.ValueKind == JsonValueKind.String;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static SandboxStack? ForPython(string root)

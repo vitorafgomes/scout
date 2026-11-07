@@ -110,19 +110,19 @@ public sealed class DockerSandboxRunner
             container = null;
             if (restoreExit != 0)
             {
-                return new SandboxResult(true, $"The restore exited with code {restoreExit}; the tests did not run.", stack.Image, command, restoreExit, Seconds(started), Last(output));
+                return new SandboxResult(true, $"The restore exited with code {restoreExit}; the tests did not run.", stack.Image, command, restoreExit, Seconds(started), Last(output), stack.Note);
             }
 
             command = testCommand;
             container = $"scout-sandbox-{id}-test";
             var exit = await RunAsync(container, runFolder, stack, command, network: false, offline: true, output, linked.Token).ConfigureAwait(false);
             container = null;
-            return new SandboxResult(true, null, stack.Image, command, exit, Seconds(started), Last(output));
+            return new SandboxResult(true, null, stack.Image, command, exit, Seconds(started), Last(output), stack.Note);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && deadline.IsCancellationRequested)
         {
             await KillAsync(container).ConfigureAwait(false);
-            return NotRun(TimeLimitReason, stack.Image, command) with { DurationSeconds = Seconds(started), Output = Last(output) };
+            return NotRun(TimeLimitReason, stack.Image, command) with { DurationSeconds = Seconds(started), Output = Last(output), Note = stack.Note };
         }
         catch (OperationCanceledException)
         {
