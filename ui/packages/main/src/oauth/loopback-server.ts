@@ -22,6 +22,8 @@ export interface LoopbackOptions {
   timeoutMs: number;
   logger: Logger;
   callbackPath?: string;
+  /** HTML pages served at their paths while waiting, such as one that sends the browser on to the provider. */
+  pages?: Readonly<Record<string, string>>;
   signal?: AbortSignal;
   httpFactory?: (listener: RequestListener) => Server;
 }
@@ -65,6 +67,16 @@ export async function awaitCallback(opts: LoopbackOptions): Promise<LoopbackResu
     const server = factory((req: IncomingMessage, res: ServerResponse) => {
       const raw = req.url ?? '/';
       const parsed = new URL(raw, `http://${hostname}:${port}`);
+
+      const page = opts.pages?.[parsed.pathname];
+      if (page !== undefined) {
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        });
+        res.end(page);
+        return;
+      }
 
       if (parsed.pathname !== callbackPath) {
         res.writeHead(404, { 'Content-Type': 'text/html' });

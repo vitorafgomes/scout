@@ -158,4 +158,23 @@ public sealed class ConversationConductorLocalOwnerTests
         image.ContentType.ShouldBe("image/jpeg");
         image.Bytes.ToArray().ShouldBe(screenshot);
     }
+
+    [Fact]
+    public async Task A_Transcribed_Voice_Message_Keeps_The_Context_Sent_With_It()
+    {
+        var router = AnsweringRouter();
+        var transcriber = Substitute.For<IAudioTranscriber>();
+        transcriber.TranscribeAsync(Arg.Any<Stream>(), "audio/wav", Arg.Any<CancellationToken>())
+            .Returns("what did they decide");
+        var conductor = Conductor(router, new AccessOptions { RequireAllowList = true }, transcriber);
+        var audio = new AudioAttachment(
+            "audio/wav", 64, TimeSpan.FromSeconds(2), _ => Task.FromResult<Stream>(new MemoryStream(new byte[64])));
+        var message = Local(string.Empty, audio) with { Context = "\n\nTranscript:\nwe ship on Friday" };
+
+        await conductor.HandleAsync(message, new RecordingResponseSink(FineGrained), CancellationToken.None);
+
+        var routed = router.ReceivedCalls().ShouldHaveSingleItem().GetArguments()[0].ShouldBeOfType<ChatMessage>();
+        routed.Text.ShouldBe("what did they decide");
+        routed.Context.ShouldBe("\n\nTranscript:\nwe ship on Friday");
+    }
 }

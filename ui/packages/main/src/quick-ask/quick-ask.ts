@@ -328,6 +328,14 @@ function toWorkerRequest(req: unknown): {
       (at) => at !== -1,
     );
     const question = markers.length === 0 ? text : text.slice(0, Math.min(...markers));
+    const contextAt = [marker, screenMarker, lastAnswer].filter((at) => at !== -1);
+    const split =
+      contextAt.length === 0
+        ? { text }
+        : {
+            text: text.slice(0, Math.min(...contextAt)),
+            context: text.slice(Math.min(...contextAt)),
+          };
     const limit =
       (marker === -1 ? MAX_TEXT_CHARS : MAX_TRANSCRIPT_ASK_CHARS) +
       (screenMarker === -1 ? 0 : MAX_SCREEN_TEXT_EXTRA_CHARS) +
@@ -339,7 +347,7 @@ function toWorkerRequest(req: unknown): {
     return {
       id,
       question: question.trim(),
-      line: JSON.stringify({ type: 'ask', id, text, ...image }),
+      line: JSON.stringify({ type: 'ask', id, ...split, ...image }),
       screenshot,
       transcript: marker !== -1,
       screenText: screenMarker !== -1,
@@ -885,6 +893,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     if (turns.some((turn) => turn.state === 'running')) return;
     turns.length = 0;
     broadcast();
+    supervisor.writeStdin(JSON.stringify({ type: 'reset' }), () => {});
   }
 
   function pushTranscript(event: LocalTranscriptEvent): void {

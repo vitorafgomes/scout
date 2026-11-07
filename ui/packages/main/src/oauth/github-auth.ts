@@ -133,6 +133,11 @@ export class GitHubAuth {
     return stored === null ? {} : { SCOUT__PLUGINS__GITHUB__TOKEN: stored.token };
   }
 
+  /** The login of the connected account, by either method, or null when GitHub is not connected. */
+  async login(): Promise<string | null> {
+    return (await this.loadSession())?.login ?? (await this.loadToken())?.login ?? null;
+  }
+
   async status(): Promise<GitHubStatus> {
     const session = await this.loadSession();
     if (session !== null) {

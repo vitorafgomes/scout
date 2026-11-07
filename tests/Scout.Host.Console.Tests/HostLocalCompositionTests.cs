@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using Scout.Adapter.Local;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Memory;
 using Scout.Llm.Abstractions;
 using Scout.Meetings;
 using Scout.Operator;
@@ -69,6 +70,16 @@ public sealed class HostLocalCompositionTests
         {
             File.Delete(model);
         }
+    }
+
+    [Fact]
+    public void The_Local_Adapter_Receives_The_Conversation_Memory_So_A_Reset_Clears_What_The_Router_Replays()
+    {
+        using var host = Build("true", "/nonexistent/scout-test/ggml-base.bin");
+
+        var adapter = host.Services.GetRequiredService<LocalChatAdapter>();
+        adapter.MemoryStore.ShouldNotBeNull().ShouldBeSameAs(host.Services.GetRequiredService<IConversationMemoryStore>());
+        adapter.KeyProvider.ShouldNotBeNull().ShouldBeSameAs(host.Services.GetRequiredService<IConversationKeyProvider>());
     }
 
     [Fact]

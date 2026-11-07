@@ -471,6 +471,44 @@ describe('buildEnv', () => {
     expect(Object.keys(env).filter((key) => key.startsWith('SCOUT__PLUGINS__GITHUB'))).toEqual([]);
   });
 
+  it("gives the worker the Scout bot's token file, the writes switched to it and its login when the bot has a token", async () => {
+    const env = await buildEnv({
+      vaultGet: makeVault({}),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+      gitHubBot: {
+        tokenFile: '/user-data/github-bot-token.json',
+        writes: ['review', 'verdict', 'issue'],
+        login: 'scout-octocat[bot]',
+      },
+    });
+
+    expect(
+      Object.fromEntries(
+        Object.entries(env).filter(([key]) => key.startsWith('SCOUT__PLUGINS__GITHUB')),
+      ),
+    ).toEqual({
+      SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json',
+      SCOUT__PLUGINS__GITHUB__BOTTOKENFILE: '/user-data/github-bot-token.json',
+      SCOUT__PLUGINS__GITHUB__BOTWRITES: 'review,verdict,issue',
+      SCOUT__PLUGINS__GITHUB__BOTLOGIN: 'scout-octocat[bot]',
+    });
+  });
+
+  it('with no Scout bot the worker gets exactly the variables it got before the bot existed', async () => {
+    const deps = {
+      vaultGet: makeVault({ 'discord.bot-token': 'tok' }),
+      gitHubEnv: { SCOUT__PLUGINS__GITHUB__TOKENFILE: '/user-data/github-token.json' },
+    };
+
+    const withoutBot = await buildEnv(deps);
+    const nullBot = await buildEnv({ ...deps, gitHubBot: null });
+
+    expect(nullBot).toEqual(withoutBot);
+    expect(Object.keys(withoutBot).filter((key) => key.includes('__BOT'))).toEqual([
+      'SCOUT__ADAPTERS__DISCORD__BOTTOKEN',
+    ]);
+  });
+
   it('gives the worker the kubeconfig path and a NAME and LABEL pair per allowed context', async () => {
     const env = await buildEnv({
       vaultGet: makeVault({ 'discord.bot-token': 'tok' }),

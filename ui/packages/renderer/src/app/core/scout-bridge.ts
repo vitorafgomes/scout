@@ -98,6 +98,9 @@ import {
   type GitHubPendingSignIn,
   type GitHubSaveTokenRequest,
   type GitHubStatus,
+  type GitHubBotCreateRequest,
+  type GitHubBotSetWritesRequest,
+  type GitHubBotStatus,
   type YouTubeSaveApiKeyRequest,
   type YouTubeStatus,
   type KubernetesDetection,
@@ -323,6 +326,13 @@ function createFakeBridge(): ScoutBridge {
     githubCancel: (): Promise<void> => rejectNotAvailable(),
     githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
     githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubBotStatus: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubBotCreate: (_req: GitHubBotCreateRequest): Promise<GitHubBotStatus> =>
+      rejectNotAvailable(),
+    githubBotCancel: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubBotRemove: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubBotSetWrites: (_req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus> =>
+      rejectNotAvailable(),
     youtubeSignIn: (): Promise<YouTubeStatus> => rejectNotAvailable(),
     youtubeStatus: (): Promise<YouTubeStatus> => rejectNotAvailable(),
     youtubeCancelSignIn: (): Promise<void> => rejectNotAvailable(),
@@ -781,6 +791,26 @@ export class ScoutBridgeService {
 
   async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
     return this.bridge.githubSaveToken(req);
+  }
+
+  async githubBotStatus(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotStatus();
+  }
+
+  async githubBotCreate(req: GitHubBotCreateRequest): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotCreate(req);
+  }
+
+  async githubBotCancel(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotCancel();
+  }
+
+  async githubBotRemove(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotRemove();
+  }
+
+  async githubBotSetWrites(req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotSetWrites(req);
   }
 
   async youtubeSignIn(): Promise<YouTubeStatus> {

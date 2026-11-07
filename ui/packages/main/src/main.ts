@@ -55,7 +55,12 @@ import {
 import { registerProviderKeyHandlers, registerProviderModelHandlers } from './ipc/provider-keys.js';
 import { registerChatGptHandlers } from './ipc/chatgpt.js';
 import { ChatGptAuth } from './oauth/chatgpt-auth.js';
-import { registerGitHubHandlers, restartWorkerIfRunning } from './ipc/github.js';
+import {
+  registerGitHubBotHandlers,
+  registerGitHubHandlers,
+  restartWorkerIfRunning,
+} from './ipc/github.js';
+import { GitHubBot } from './oauth/github-bot.js';
 import {
   registerYouTubeHandlers,
   deleteYouTubeData,
@@ -210,6 +215,8 @@ let unregisterKubernetes: (() => void) | null = null;
 let unregisterAccess: (() => void) | null = null;
 let unregisterSlack: (() => void) | null = null;
 let gitHubAuth: GitHubAuth | null = null;
+let gitHubBot: GitHubBot | null = null;
+let unregisterGitHubBot: (() => void) | null = null;
 let unregisterYouTube: (() => void) | null = null;
 let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
@@ -241,6 +248,8 @@ function disposeAll(): void {
   controlPlane?.dispose();
   gitHubAuth?.stop();
   unregisterGitHub?.();
+  gitHubBot?.stop();
+  unregisterGitHubBot?.();
   googleAuth?.stop();
   unregisterYouTube?.();
   unregisterKubernetes?.();
@@ -389,6 +398,31 @@ app
     auth.start().catch((err: unknown) => {
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
+    const botLogger = logger.child({ module: 'github-bot' });
+    const bot = new GitHubBot({
+      fetch: globalThis.fetch,
+      vault,
+      tokenFilePath: path.join(app.getPath('userData'), 'github-bot-token.json'),
+      fs: { writeFile: fsWriteFile, rename: fsRename, rm: fsRm },
+      now: () => Date.now(),
+      awaitCallback,
+      findFreePort,
+      openExternal: (url) => shell.openExternal(url),
+      ownerLogin: () => auth.login(),
+      onChanged: () => {
+        if (supervisor !== null) void restartWorkerIfRunning(supervisor, botLogger);
+      },
+      onResume: (listener) => {
+        powerMonitor.on('resume', listener);
+        return () => powerMonitor.removeListener('resume', listener);
+      },
+      logger: botLogger,
+    });
+    gitHubBot = bot;
+    unregisterGitHubBot = registerGitHubBotHandlers(ipcMain, bot, botLogger);
+    bot.start().catch((err: unknown) => {
+      botLogger.warn('github-bot: start failed', { err: String(err) });
+    });
 
     const binaryDeps = {
       app,
@@ -507,6 +541,7 @@ app
           vaultGet: (key) => vault.get(key),
           chatGptTokenFile,
           gitHubEnv: await auth.workerEnv(),
+          gitHubBot: await bot.workerConfig(),
           youTubeEnv: await google.workerEnv(),
           kubernetesSelection: await readKubernetesSelection(vault),
           allowedUserIds: await readAllowedUserIds(vault),

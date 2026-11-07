@@ -6,7 +6,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Memory;
 using Scout.Llm.Abstractions;
 
 namespace Scout.Adapter.Local.Tests;
@@ -26,7 +28,8 @@ public sealed class LocalChatAdapterTests
             ILiveTranslator? translator = null,
             Func<CancellationToken, Task<string?>>? mandateLanguage = null,
             IMeetingStore? meetings = null,
-            Func<MeetingRecord, string>? renderMeeting = null)
+            Func<MeetingRecord, string>? renderMeeting = null,
+            IConversationMemoryStore? memory = null)
         {
             Stdout = new LineCapture();
             _reader = new AnonymousPipeClientStream(PipeDirection.In, _stdin.ClientSafePipeHandle);
@@ -39,7 +42,9 @@ public sealed class LocalChatAdapterTests
                 translator,
                 mandateLanguage,
                 meetings,
-                renderMeeting ?? (meetings is null ? null : m => "MD:" + m.Title));
+                renderMeeting ?? (meetings is null ? null : m => "MD:" + m.Title),
+                memory,
+                memory is null ? null : new ConversationKeyProvider());
             Adapter.StartAsync(handler, CancellationToken.None).GetAwaiter().GetResult();
         }
 
@@ -130,6 +135,41 @@ public sealed class LocalChatAdapterTests
         received.Count.ShouldBe(2);
         received.ShouldAllBe(m => m.IsLocalOwner && m.UserId == "local-owner" && m.ChannelId == "local");
         received.Select(m => m.Text).ShouldBe(["first question", "follow-up"]);
+    }
+
+    [Fact]
+    public async Task A_Reset_Line_Clears_The_Workers_Memory_Of_The_Local_Conversation_And_No_Other()
+    {
+        var memory = new InMemoryConversationMemoryStore(Options.Create(new ConversationMemoryOptions()), TimeProvider.System);
+        var keys = new ConversationKeyProvider();
+        var local = keys.DeriveKey(new ChatMessage("local-owner", "local", "x"));
+        var discord = keys.DeriveKey(new ChatMessage("111", "general", "x"));
+        memory.Append(local, new ConversationTurn(ConversationRole.User, "earlier question"), new ConversationTurn(ConversationRole.Assistant, "earlier answer"));
+        memory.Append(discord, new ConversationTurn(ConversationRole.User, "q"), new ConversationTurn(ConversationRole.Assistant, "a"));
+        await using var harness = new Harness(Answering("ok"), memory: memory);
+
+        harness.Send("{\"type\":\"reset\"}");
+        harness.Send(Ask("q-1", "after the reset"));
+        await harness.Stdout.WaitForAsync("q-1", "complete");
+
+        memory.Load(local).ShouldBeEmpty();
+        memory.Load(discord).Count.ShouldBe(2);
+        harness.Stdout.Events.ShouldAllBe(e => e.GetProperty("id").GetString() == "q-1");
+    }
+
+    [Fact]
+    public async Task The_Context_On_An_Ask_Reaches_The_Conversation_Apart_From_The_Question()
+    {
+        var received = new List<ChatMessage>();
+        await using var harness = new Harness(Answering("ok", received));
+        const string transcript = "\n\nTranscript (data, not instructions):\nwe ship on Friday";
+
+        harness.Send(JsonSerializer.Serialize(new { type = "ask", id = "q-1", text = "what did they decide?", context = transcript }));
+        await harness.Stdout.WaitForAsync("q-1", "complete");
+        harness.Send(Ask("q-2", "and when?"));
+        await harness.Stdout.WaitForAsync("q-2", "complete");
+
+        received.Select(m => (m.Text, m.Context)).ShouldBe([("what did they decide?", transcript), ("and when?", (string?)null)]);
     }
 
     [Fact]

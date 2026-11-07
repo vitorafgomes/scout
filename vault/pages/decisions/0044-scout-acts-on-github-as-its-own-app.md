@@ -1,8 +1,8 @@
 ---
 title: "ADR 0044 - Scout acts on GitHub as its own App, when the owner chooses it"
-version: "1.0"
+version: "1.1"
 date: 2026-11-07
-changes: "Initial ADR draft"
+changes: "v1.1 (2026-11-07) amended with what the implementation found against GitHub's docs"
 page_type: adr
 status: proposed
 description: "An optional identity: the owner creates a GitHub App of their own from the desktop with GitHub's manifest flow, installs it, and Scout's reviews, verdicts and issues then show as that App's bot instead of the owner; without it, Scout keeps acting through the owner's sign-in as today."
@@ -46,6 +46,17 @@ Some owners will not want it, and some organisations forbid members to create or
 - **Tokens.** Main signs a JSON Web Token (RS256, issued 60 seconds in the past, valid 9 minutes) and asks `POST /app/installations/{id}/access_tokens` for the installation that covers the repository; the token lasts one hour, is refreshed when less than 5 minutes remain, by the same serial queue as today's refresh, and is written to a second token file the worker reads with the same handler. Reads keep the owner's token; the bot's token is used for the writes the owner switched to the bot.
 - **Which actions the bot signs.** The card has one switch per declared write of the `github` feature: post a review, give a verdict, open an issue. Each is the owner's or the bot's; the default when the bot is created is the bot for all three. A repository the bot is not installed on falls back to the owner's identity and the card says so before the action runs, never silently.
 - **Unchanged rules.** ADR 0032 still governs every write: the grant, the per-action approval of an irreversible one, the write log, which now records which identity signed it.
+
+### Amended 2026-11-07: what the implementation found
+
+Checked against docs.github.com on 2026-11-07 ("Registering a GitHub App from a manifest", REST "GitHub Apps" and "GitHub App installations", "Generating a JSON Web Token (JWT) for a GitHub App"): the form targets, `state`, the conversion endpoint and its fields (`id`, `slug`, `client_id`, `client_secret`, `webhook_secret`, `pem`, `owner`), the six permission keys and the JWT claims are as decided. Differences:
+
+- The manifest's `url` is required, and `hook_attributes` needs a `url` even when inactive; both are Scout's repository page.
+- The JWT's `iss` is the App's client id, which GitHub recommends over the App id.
+- Four switches, not three: post a review, give a verdict, comment, open an issue, matching ADR 0043's declared writes.
+- One installation token for the first installation, not one per repository: the worker reads one bot token file.
+- The bot's refresh runs on its own serial queue in `GitHubBot`, beside `GitHubAuth`'s, not on the same one.
+- Not stated by GitHub and unverified until the owner's first real creation: that a loopback `http://127.0.0.1:<port>` `redirect_url` is accepted (Probot's local setup uses `http://localhost:<port>`), and that the bot's login is `<slug>[bot]`.
 
 ## Consequences
 

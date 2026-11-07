@@ -100,6 +100,11 @@ export const CHANNEL = {
   githubCancel: 'scout:github.cancel',
   githubSignOut: 'scout:github.signOut',
   githubSaveToken: 'scout:github.saveToken',
+  githubBotStatus: 'scout:github.bot.status',
+  githubBotCreate: 'scout:github.bot.create',
+  githubBotCancel: 'scout:github.bot.cancel',
+  githubBotRemove: 'scout:github.bot.remove',
+  githubBotSetWrites: 'scout:github.bot.setWrites',
   youtubeSignIn: 'scout:youtube.signIn',
   youtubeStatus: 'scout:youtube.status',
   youtubeCancelSignIn: 'scout:youtube.cancelSignIn',
@@ -1128,6 +1133,32 @@ export interface GitHubSaveTokenRequest {
   readonly token: string;
 }
 
+/** The GitHub writes the owner may switch from their own identity to the Scout bot. */
+export const GITHUB_BOT_WRITES = ['review', 'verdict', 'comment', 'issue'] as const;
+export type GitHubBotWrite = (typeof GITHUB_BOT_WRITES)[number];
+
+/**
+ * The optional Scout bot, the owner's own GitHub App, as the renderer sees it; never carries its private key or a
+ * token. `created` means the App exists and is not installed anywhere yet.
+ */
+export interface GitHubBotStatus {
+  readonly state: 'none' | 'creating' | 'created' | 'installed';
+  readonly login: string | null;
+  readonly installUrl: string | null;
+  readonly settingsUrl: string | null;
+  readonly repositories: readonly string[];
+  readonly writes: readonly GitHubBotWrite[];
+  readonly error: { readonly code: string; readonly message: string } | null;
+}
+
+/** Where the owner creates the App: their own account, or an organization they administer. */
+export type GitHubBotCreateRequest =
+  { readonly target: 'user' } | { readonly target: 'org'; readonly org: string };
+
+export interface GitHubBotSetWritesRequest {
+  readonly writes: readonly GitHubBotWrite[];
+}
+
 /** The YouTube connection as the renderer sees it; never carries a token, the key or the OAuth client. */
 export interface YouTubeStatus {
   readonly configured: boolean;
@@ -1649,6 +1680,11 @@ export interface ScoutBridge {
   githubCancel(): Promise<void>;
   githubSignOut(): Promise<GitHubStatus>;
   githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus>;
+  githubBotStatus(): Promise<GitHubBotStatus>;
+  githubBotCreate(req: GitHubBotCreateRequest): Promise<GitHubBotStatus>;
+  githubBotCancel(): Promise<GitHubBotStatus>;
+  githubBotRemove(): Promise<GitHubBotStatus>;
+  githubBotSetWrites(req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus>;
   youtubeSignIn(): Promise<YouTubeStatus>;
   youtubeStatus(): Promise<YouTubeStatus>;
   youtubeCancelSignIn(): Promise<void>;

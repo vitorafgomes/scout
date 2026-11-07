@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { FeatureDto, GitHubStatus } from '@scout/shared';
+import type { FeatureDto, GitHubBotStatus, GitHubStatus } from '@scout/shared';
 
 import { FeaturesStore } from '../core/features.store';
 import { ScoutBridgeService } from '../core/scout-bridge';
@@ -55,9 +55,75 @@ const connected: GitHubStatus = {
   installed: true,
 };
 
-function makeBridge(first: GitHubStatus, allowedUserIds: readonly string[] = []) {
+const ALL_WRITES = ['review', 'verdict', 'comment', 'issue'] as const;
+const BOT_INSTALL_URL = 'https://github.com/apps/scout-octocat/installations/new';
+const BOT_SETTINGS_URL = 'https://github.com/settings/apps/scout-octocat';
+
+const botNone: GitHubBotStatus = {
+  state: 'none',
+  login: null,
+  installUrl: null,
+  settingsUrl: null,
+  repositories: [],
+  writes: [],
+  error: null,
+};
+
+const botStates: Readonly<Record<string, GitHubBotStatus>> = {
+  none: botNone,
+  creating: { ...botNone, state: 'creating' },
+  'created-not-installed': {
+    ...botNone,
+    state: 'created',
+    login: 'scout-octocat[bot]',
+    installUrl: BOT_INSTALL_URL,
+    settingsUrl: BOT_SETTINGS_URL,
+    writes: ALL_WRITES,
+  },
+  installed: {
+    ...botNone,
+    state: 'installed',
+    login: 'scout-octocat[bot]',
+    installUrl: BOT_INSTALL_URL,
+    settingsUrl: BOT_SETTINGS_URL,
+    repositories: ['octocat/shop', 'octocat/api'],
+    writes: ALL_WRITES,
+  },
+  error: {
+    ...botNone,
+    error: {
+      code: 'github-bot/timeout',
+      message:
+        'GitHub did not send the new App back within 5 minutes, so Scout saved nothing. Try again.',
+    },
+  },
+};
+
+function makeBridge(
+  first: GitHubStatus,
+  allowedUserIds: readonly string[] = [],
+  firstBot: GitHubBotStatus = botNone,
+) {
   let current = first;
+  let bot = firstBot;
   return {
+    githubBotStatus: vi.fn(async () => bot),
+    githubBotCreate: vi.fn(async (_req: unknown) => {
+      bot = botStates['creating']!;
+      return bot;
+    }),
+    githubBotCancel: vi.fn(async () => {
+      bot = botNone;
+      return bot;
+    }),
+    githubBotRemove: vi.fn(async () => {
+      bot = botNone;
+      return bot;
+    }),
+    githubBotSetWrites: vi.fn(async (req: { writes: readonly string[] }) => {
+      bot = { ...bot, writes: req.writes as GitHubBotStatus['writes'] };
+      return bot;
+    }),
     accessGet: vi.fn(async () => ({ userIds: allowedUserIds })),
     setStatus(next: GitHubStatus): void {
       current = next;
@@ -108,7 +174,7 @@ async function render(
 }
 
 async function settle(fixture: ComponentFixture<FeaturesComponent>): Promise<void> {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     fixture.detectChanges();
     await fixture.whenStable();
   }
@@ -327,5 +393,183 @@ describe('GitHub card', () => {
 
       expect(bridge.githubStatus).toHaveBeenCalledTimes(1);
     });
+  });
+
+  describe('Scout bot (optional)', () => {
+    const visibility: ReadonlyArray<[string, readonly string[], readonly string[]]> = [
+      [
+        'none',
+        ['github-bot-help', 'github-bot-target', 'github-bot-create'],
+        ['github-bot-creating', 'github-bot-install', 'github-bot-remove', 'github-bot-error'],
+      ],
+      [
+        'creating',
+        ['github-bot-creating', 'github-bot-cancel'],
+        ['github-bot-create', 'github-bot-install', 'github-bot-remove'],
+      ],
+      [
+        'created-not-installed',
+        ['github-bot-created', 'github-bot-install', 'github-bot-remove'],
+        ['github-bot-create', 'github-bot-cancel', 'github-bot-write-review'],
+      ],
+      [
+        'installed',
+        [
+          'github-bot-installed',
+          'github-bot-repos',
+          'github-bot-install',
+          'github-bot-remove',
+          ...ALL_WRITES.map((w) => `github-bot-write-${w}`),
+        ],
+        ['github-bot-create', 'github-bot-cancel', 'github-bot-created'],
+      ],
+      ['error', ['github-bot-error', 'github-bot-create'], ['github-bot-install']],
+    ];
+
+    it.each(visibility)('state %s shows exactly its controls', async (state, shown, hidden) => {
+      const fixture = await render(makeBridge(connected, [], botStates[state]));
+
+      expect(shown.filter((t) => el(fixture, t) === null)).toEqual([]);
+      expect(hidden.filter((t) => el(fixture, t) !== null)).toEqual([]);
+    });
+
+    it.each(Object.keys(botStates))(
+      'state %s: the section is hidden until GitHub is connected',
+      async (state) => {
+        const fixture = await render(makeBridge(notConnected, [], botStates[state]));
+
+        expect(el(fixture, 'github-bot-section')).toBeNull();
+      },
+    );
+
+    it('state error says why the last creation failed', async () => {
+      const fixture = await render(makeBridge(connected, [], botStates['error']));
+
+      expect(el(fixture, 'github-bot-error')?.textContent?.trim()).toBe(
+        'GitHub did not send the new App back within 5 minutes, so Scout saved nothing. Try again.',
+      );
+    });
+
+    it('state installed lists the repositories the bot can act on', async () => {
+      const fixture = await render(makeBridge(connected, [], botStates['installed']));
+
+      const repos = [...el(fixture, 'github-bot-repos')!.querySelectorAll('li')].map((li) =>
+        li.textContent?.trim(),
+      );
+      expect(repos).toEqual(['octocat/shop', 'octocat/api']);
+    });
+
+    it('state none x create on my account asks main to create it on the user account', async () => {
+      const bridge = makeBridge(connected, [], botNone);
+      const fixture = await render(bridge);
+
+      el(fixture, 'github-bot-create')!.click();
+      await settle(fixture);
+
+      expect(bridge.githubBotCreate).toHaveBeenCalledWith({ target: 'user' });
+      expect(el(fixture, 'github-bot-creating')).not.toBeNull();
+    });
+
+    it('state none x create on an organization asks main to create it on that organization', async () => {
+      const bridge = makeBridge(connected, [], botNone);
+      const fixture = await render(bridge);
+
+      const target = el(fixture, 'github-bot-target') as HTMLSelectElement;
+      target.value = 'org';
+      target.dispatchEvent(new Event('change'));
+      await settle(fixture);
+      (el(fixture, 'github-bot-org') as HTMLInputElement).value = 'acme';
+      el(fixture, 'github-bot-create')!.click();
+      await settle(fixture);
+
+      expect(bridge.githubBotCreate).toHaveBeenCalledWith({ target: 'org', org: 'acme' });
+    });
+
+    it('state creating x cancel stops the creation', async () => {
+      const bridge = makeBridge(connected, [], botStates['creating']);
+      const fixture = await render(bridge);
+
+      el(fixture, 'github-bot-cancel')!.click();
+      await settle(fixture);
+
+      expect(bridge.githubBotCancel).toHaveBeenCalledTimes(1);
+      expect(el(fixture, 'github-bot-create')).not.toBeNull();
+    });
+
+    it.each(['created-not-installed', 'installed'])(
+      'state %s x install opens the page that installs the bot',
+      async (state) => {
+        const bridge = makeBridge(connected, [], botStates[state]);
+        const fixture = await render(bridge);
+
+        el(fixture, 'github-bot-install')!.click();
+        await settle(fixture);
+
+        expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: BOT_INSTALL_URL });
+      },
+    );
+
+    it.each(['created-not-installed', 'installed'])(
+      "state %s x remove forgets the bot and links to the App's settings on GitHub",
+      async (state) => {
+        const bridge = makeBridge(connected, [], botStates[state]);
+        const fixture = await render(bridge);
+
+        el(fixture, 'github-bot-remove')!.click();
+        await settle(fixture);
+        el(fixture, 'github-bot-settings')!.click();
+        await settle(fixture);
+
+        expect(bridge.githubBotRemove).toHaveBeenCalledTimes(1);
+        expect(el(fixture, 'github-bot-removed')?.textContent?.trim()).toBe(
+          'Scout no longer uses the bot. The App stays on GitHub until you delete it there.',
+        );
+        expect(bridge.appOpenExternal).toHaveBeenCalledWith({ url: BOT_SETTINGS_URL });
+        expect(el(fixture, 'github-bot-create')).not.toBeNull();
+      },
+    );
+
+    it.each([
+      ['review', true, ['verdict', 'comment', 'issue']],
+      ['verdict', true, ['review', 'comment', 'issue']],
+      ['comment', true, ['review', 'verdict', 'issue']],
+      ['issue', true, ['review', 'verdict', 'comment']],
+      ['verdict', false, ['review', 'verdict', 'comment', 'issue']],
+    ] as const)(
+      'state installed x switch %s (on: %s) sends the writes the bot signs afterwards',
+      async (write, on, after) => {
+        const writes = on ? ALL_WRITES : ALL_WRITES.filter((w) => w !== write);
+        const bridge = makeBridge(connected, [], { ...botStates['installed']!, writes });
+        const fixture = await render(bridge);
+
+        const box = el(fixture, `github-bot-write-${write}`) as HTMLInputElement;
+        const checkedBefore = box.checked;
+        box.click();
+        await settle(fixture);
+
+        expect(checkedBefore).toBe(on);
+        expect(bridge.githubBotSetWrites).toHaveBeenCalledWith({ writes: after });
+        expect((el(fixture, `github-bot-write-${write}`) as HTMLInputElement).checked).toBe(!on);
+      },
+    );
+
+    it.each([
+      ['creating', 2],
+      ['created-not-installed', 2],
+      ['installed', 1],
+      ['none', 1],
+    ] as const)(
+      'state %s polls for a change only while waiting for GitHub (%d status reads in 3 seconds)',
+      async (state, reads) => {
+        const bridge = makeBridge(connected, [], botStates[state]);
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const fixture = await render(bridge);
+
+        await vi.advanceTimersByTimeAsync(3000);
+        fixture.destroy();
+
+        expect(bridge.githubBotStatus).toHaveBeenCalledTimes(reads);
+      },
+    );
   });
 });

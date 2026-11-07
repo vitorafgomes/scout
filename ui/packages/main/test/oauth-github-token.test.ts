@@ -143,3 +143,20 @@ describe('GitHubAuth with a pasted token', () => {
     expect(everything).not.toContain(PASTED);
   });
 });
+
+describe('GitHubAuth login', () => {
+  it('names the connected account for the browser sign-in and for a pasted token, and is null when disconnected', async () => {
+    const browser = makeGitHubFake();
+    const pasted = makeGitHubFake();
+    const none = makeGitHubFake();
+
+    await connect(browser);
+    await pasted.auth.saveToken(PASTED);
+
+    expect([
+      await browser.auth.login(),
+      await pasted.auth.login(),
+      await none.auth.login(),
+    ]).toEqual(['vitorafgomes', 'vitorafgomes', null]);
+  });
+});

@@ -2,7 +2,7 @@
 title: "ADR 0019 - GitHub through a read-only GitHub App and the device flow"
 version: "1.2"
 date: 2026-10-23
-updated: 2026-11-06
+updated: 2026-11-07
 changes: "Amended 2026-11-06: ADR 0038 widens the App to Pull requests and Issues read & write when its phase 2 lands; read-only then rests on the write gate. Amended 2026-10-23: a pasted token as the second method, with a warning for write-capable classic tokens"
 page_type: adr
 status: accepted
@@ -48,7 +48,7 @@ A GitHub App user access token reaches only what both the user and the App can r
 - **Write-capable tokens.** A pasted token is capped by what it was granted, not by the App. A classic token answers with an `X-OAuth-Scopes` header (GitHub docs, "Scopes for OAuth apps"); when it lists `repo`, `public_repo`, `delete_repo`, `workflow`, or any `write:` or `admin:` scope, Scout keeps the token but the card warns "This token can write to your repositories. A read-only fine-grained token is safer." (`ui/packages/main/src/oauth/github-auth.ts:23`). Fine-grained tokens send no such header, so no warning appears for them; the helper text recommends one with read-only Metadata, Contents, Pull requests and Issues, and links to `https://github.com/settings/personal-access-tokens/new` (the page GitHub's personal access token docs link to). Read-only then rests on Scout's GET-only client for that method, not on GitHub.
 - **Configuration.** The App's client id and slug are public identifiers, not secrets. Main reads `SCOUT_GITHUB_APP_CLIENT_ID` and `SCOUT_GITHUB_APP_SLUG`, then falls back to constants that are empty until the App is registered (`ui/packages/main/src/oauth/github-auth.ts:6`); with no client id the card says "The Scout GitHub App is not configured yet." and Connect is disabled.
 
-Amended 2026-11-07: the identity described here stays the default; an optional second identity, the owner's own App acting as its bot, is [[pages/decisions/0044-scout-acts-on-github-as-its-own-app]].
+Amended 2026-11-07: the identity described here stays the default; an optional second identity, the owner's own App acting as its bot, is [[pages/decisions/0044-scout-acts-on-github-as-its-own-app]]. With the bot, main also POSTs to `https://api.github.com/app-manifests/{code}/conversions` once per creation and to `https://api.github.com/app/installations/{id}/access_tokens` per token, from `GitHubBot` (`ui/packages/main/src/oauth/github-bot.ts:89`); the GET-only test below covers `GitHubAuth` only, and the bot's calls are pinned by `ui/packages/main/test/oauth-github-bot.test.ts:80` and `:243`.
 
 ### GitHub App registration (done once by the owner)
 

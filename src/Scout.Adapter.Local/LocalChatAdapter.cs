@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Scout.Conversation.Abstractions;
+using Scout.Conversation.Memory;
 using Scout.Llm.Abstractions;
 
 namespace Scout.Adapter.Local;
@@ -19,7 +20,8 @@ namespace Scout.Adapter.Local;
 /// <c>partial</c> and numbered <c>final</c> text, a <c>translation</c> of each final when the listen asks for one,
 /// and a <c>complete</c> after the stop. <c>keep</c>, <c>meetings</c>, <c>export</c> and <c>delete</c> store, list,
 /// render as Markdown and delete the meetings the owner chose to keep, each on its own. Every request is a message from the local owner in one stable
-/// channel, so memory continues across quick asks. A malformed or oversized line
+/// channel, so memory continues across quick asks until a <c>reset</c> line clears it. An ask's optional <c>context</c> goes to the
+/// model after the question and stays out of that memory. A malformed or oversized line
 /// gets a <c>fail</c> event and the reader moves on to the next one.
 /// <see cref="InputClosed"/> completes when stdin reaches end of file, which
 /// means the desktop app is gone.
@@ -68,6 +70,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
     private readonly Func<CancellationToken, Task<string?>>? _mandateLanguage;
     private readonly IMeetingStore? _meetings;
     private readonly Func<MeetingRecord, string>? _renderMeeting;
+    private readonly IConversationMemoryStore? _memory;
+    private readonly IConversationKeyProvider? _keys;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _inFlight = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<long, Task> _conversations = new();
     private readonly ConcurrentDictionary<string, Listening> _sessions = new(StringComparer.Ordinal);
@@ -82,6 +86,7 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
     /// for a translation is transcribed untranslated. <paramref name="mandateLanguage"/> answers the channel
     /// mandate's language for a listen that asks for <c>auto</c>, and without <paramref name="meetings"/> and
     /// <paramref name="renderMeeting"/>, which writes a kept meeting as Markdown, every meeting request is refused.
+    /// A <c>reset</c> clears the local conversation in <paramref name="memory"/> under the key <paramref name="keys"/> derives.
     /// </summary>
     public LocalChatAdapter(
         ILogger<LocalChatAdapter> logger,
@@ -90,8 +95,10 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         ILiveTranslator? translator = null,
         Func<CancellationToken, Task<string?>>? mandateLanguage = null,
         IMeetingStore? meetings = null,
-        Func<MeetingRecord, string>? renderMeeting = null)
-        : this(Console.OpenStandardInput, Console.Out, logger, live, reader, translator, mandateLanguage, meetings, renderMeeting)
+        Func<MeetingRecord, string>? renderMeeting = null,
+        IConversationMemoryStore? memory = null,
+        IConversationKeyProvider? keys = null)
+        : this(Console.OpenStandardInput, Console.Out, logger, live, reader, translator, mandateLanguage, meetings, renderMeeting, memory, keys)
     {
     }
 
@@ -104,7 +111,9 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         ILiveTranslator? translator = null,
         Func<CancellationToken, Task<string?>>? mandateLanguage = null,
         IMeetingStore? meetings = null,
-        Func<MeetingRecord, string>? renderMeeting = null)
+        Func<MeetingRecord, string>? renderMeeting = null,
+        IConversationMemoryStore? memory = null,
+        IConversationKeyProvider? keys = null)
     {
         _openInput = openInput ?? throw new ArgumentNullException(nameof(openInput));
         _writer = new LocalEventWriter(output ?? throw new ArgumentNullException(nameof(output)));
@@ -115,6 +124,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         _mandateLanguage = mandateLanguage;
         _meetings = meetings;
         _renderMeeting = renderMeeting;
+        _memory = memory;
+        _keys = keys;
     }
 
     /// <inheritdoc />
@@ -280,6 +291,12 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
             request = null;
         }
 
+        if (request is { Type: "reset" })
+        {
+            Reset();
+            return;
+        }
+
         if (request?.Id is not { } id || !IdPattern().IsMatch(id))
         {
             _logger.LogWarning("Refused a local request that is not valid JSON or has no valid id.");
@@ -347,6 +364,18 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         }
     }
 
+    private void Reset()
+    {
+        if (_memory is null || _keys is null)
+        {
+            _logger.LogInformation("Local reset ignored: no conversation memory is configured.");
+            return;
+        }
+
+        _memory.Clear(_keys.DeriveKey(new ChatMessage(OwnerUserId, ChannelId, "reset")));
+        _logger.LogInformation("Local conversation memory cleared.");
+    }
+
     private void Refuse(string? id, string text)
     {
         try
@@ -387,7 +416,12 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
 
         return string.IsNullOrWhiteSpace(request.Text)
             ? null
-            : new ChatMessage(OwnerUserId, ChannelId, request.Text) { IsLocalOwner = true, OriginReference = LocalOriginPoster.Reference };
+            : new ChatMessage(OwnerUserId, ChannelId, request.Text)
+            {
+                IsLocalOwner = true,
+                OriginReference = LocalOriginPoster.Reference,
+                Context = string.IsNullOrEmpty(request.Context) ? null : request.Context,
+            };
     }
 
     private void Start(
@@ -787,6 +821,10 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
 
     internal Func<MeetingRecord, string>? MeetingRenderer => _renderMeeting;
 
+    internal IConversationMemoryStore? MemoryStore => _memory;
+
+    internal IConversationKeyProvider? KeyProvider => _keys;
+
     private sealed record LocalRequest(
         string? Type,
         string? Id,
@@ -798,7 +836,8 @@ public sealed partial class LocalChatAdapter : IChatAdapter, IAsyncDisposable
         LocalMeeting? Meeting = null,
         string? MeetingId = null,
         bool? All = null,
-        int? Limit = null);
+        int? Limit = null,
+        string? Context = null);
 
     private sealed record LocalMeeting(
         DateTimeOffset? StartedAt,
