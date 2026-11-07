@@ -40,6 +40,14 @@ function progressed(
     : { ...turn, activity: next };
 }
 
+function sent(bridge: { localAsk: { mock: { calls: [LocalAskRequest][] } } }) {
+  return bridge.localAsk.mock.calls.map(([req]) =>
+    'text' in req
+      ? { text: req.text, ...(req.context === undefined ? {} : { context: req.context }) }
+      : {},
+  );
+}
+
 function makeBridge() {
   let turns: readonly LocalTurn[] = [];
   const listeners: ((turns: readonly LocalTurn[]) => void)[] = [];
@@ -48,7 +56,7 @@ function makeBridge() {
     listeners.forEach((listener) => listener(turns));
   };
   const append = (req: LocalAskRequest, changes: Partial<LocalTurn> = {}) => {
-    const text = 'text' in req ? req.text.trim() : '';
+    const text = 'text' in req ? req.text.trim() + (req.context ?? '') : '';
     const marker = Math.min(
       ...[5, 10, 30]
         .map((minutes) => text.indexOf(transcriptMarker(minutes)))
@@ -488,6 +496,31 @@ describe('Quick ask', () => {
     expect(cancelledWhilePosting).toBe(0);
     expect(plainStop).toEqual({ disabled: false, title: 'Stop the answer' });
     expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id: plain.id });
+  });
+
+  it('a verdict cannot be cancelled: Stop is disabled with its reason while an Approve or Request changes turn runs', async () => {
+    const bridge = makeBridge();
+    const verdict = (id: string, question: string): LocalTurn => ({
+      id,
+      question,
+      reply: '',
+      citations: [],
+      state: 'running',
+    });
+    bridge.push([verdict('approve-1', 'Approve acme/shop#5')]);
+    const fixture = await render(bridge);
+    const stop = () => el(fixture, 'stop') as HTMLButtonElement;
+    const approve = { disabled: stop().disabled, title: stop().title };
+    fixture.componentInstance.stop();
+    bridge.push([verdict('changes-1', 'Request changes on acme/shop#5')]);
+    await settle(fixture);
+    const changes = { disabled: stop().disabled, title: stop().title };
+    fixture.componentInstance.stop();
+    await settle(fixture);
+
+    expect(approve).toEqual({ disabled: true, title: 'Posting to GitHub; cannot be stopped.' });
+    expect(changes).toEqual({ disabled: true, title: 'Posting to GitHub; cannot be stopped.' });
+    expect(bridge.localCancel).not.toHaveBeenCalled();
   });
 
   it('a stop after part of the reply keeps it and shows Interrupted under it; another failure shows its sentence', async () => {
@@ -1700,9 +1733,12 @@ describe('Quick ask: system audio and transcript', () => {
     expect(partial).toBe('Others and the');
     expect(toggle.checked).toBe(true);
     expect(texts(fixture, 'transcript-line')).toEqual([]);
-    expect(bridge.localAsk.mock.calls.map(([req]) => (req as { text: string }).text)).toEqual([
-      `what did they ask me?${MARKER}Others: Can you ship it today?\nYou: Yes, by noon.`,
-      'and now?',
+    expect(sent(bridge)).toEqual([
+      {
+        text: 'what did they ask me?',
+        context: `${MARKER}Others: Can you ship it today?\nYou: Yes, by noon.`,
+      },
+      { text: 'and now?' },
     ]);
   });
 
@@ -1717,9 +1753,7 @@ describe('Quick ask: system audio and transcript', () => {
     await settle(fixture);
     await askTyped(fixture, 'what did they ask me?');
 
-    expect(bridge.localAsk.mock.calls.map(([req]) => (req as { text: string }).text)).toEqual([
-      'what did they ask me?',
-    ]);
+    expect(sent(bridge)).toEqual([{ text: 'what did they ask me?' }]);
   });
 
   it('a turn that carried the transcript shows only the question and a with transcript tag', async () => {
@@ -1942,9 +1976,10 @@ describe('Quick ask: system audio and transcript', () => {
       [null, 'Translation skipped'],
       [null, failed],
     ]);
-    expect((bridge.localAsk.mock.calls[0]![0] as { text: string }).text).toBe(
-      `what did they say?${MARKER}Others: Bom dia.\nOthers: Tudo bem?\nOthers: Vamos lá.`,
-    );
+    expect(sent(bridge)[0]).toEqual({
+      text: 'what did they say?',
+      context: `${MARKER}Others: Bom dia.\nOthers: Tudo bem?\nOthers: Vamos lá.`,
+    });
   });
 
   it('a seq 0 note shows once and clears on the next translation or on Clear', async () => {
@@ -2179,7 +2214,7 @@ describe('Quick ask: text from the screen', () => {
     expect(el(fixture, 'screenshot-preview')).not.toBeNull();
   });
 
-  it('the ask carries the transcript block then the screen text block after their markers', async () => {
+  it('the ask carries the transcript block then the screen text block after their markers as its context, apart from the question text', async () => {
     const bridge = makeBridge();
     bridge.localReadText.mockResolvedValueOnce({ text: 'Error 502' });
     const fixture = await withScreenshot(bridge);
@@ -2193,9 +2228,12 @@ describe('Quick ask: text from the screen', () => {
     const blockAfterAsk = el(fixture, 'screen-text');
     await askTyped(fixture, 'and now?');
 
-    expect(bridge.localAsk.mock.calls.map(([req]) => (req as { text: string }).text)).toEqual([
-      `what is wrong?${TRANSCRIPT_MARKER}Others: Can you ship it today?${SCREEN_TEXT_MARKER}Error 502 Bad gateway`,
-      `and now?${TRANSCRIPT_MARKER}Others: Can you ship it today?`,
+    expect(sent(bridge)).toEqual([
+      {
+        text: 'what is wrong?',
+        context: `${TRANSCRIPT_MARKER}Others: Can you ship it today?${SCREEN_TEXT_MARKER}Error 502 Bad gateway`,
+      },
+      { text: 'and now?', context: `${TRANSCRIPT_MARKER}Others: Can you ship it today?` },
     ]);
     expect(blockAfterAsk).toBeNull();
   });
@@ -2216,8 +2254,8 @@ describe('Quick ask: text from the screen', () => {
     accept();
     await settle(fixture);
 
-    expect(bridge.localAsk.mock.calls.map(([req]) => (req as { text: string }).text)).toEqual([
-      `what is wrong?${SCREEN_TEXT_MARKER}Error 502`,
+    expect(sent(bridge)).toEqual([
+      { text: 'what is wrong?', context: `${SCREEN_TEXT_MARKER}Error 502` },
     ]);
     expect((el(fixture, 'screen-text') as HTMLTextAreaElement | null)?.value).toBe(
       'Error 503 Service unavailable',
@@ -2242,9 +2280,9 @@ describe('Quick ask: text from the screen', () => {
 
     expect(kept).toBe('Error 502');
     expect(el(fixture, 'screen-text')).toBeNull();
-    expect(bridge.localAsk.mock.calls.map(([req]) => (req as { text: string }).text)).toEqual([
-      `what is wrong?${SCREEN_TEXT_MARKER}Error 502`,
-      'and now?',
+    expect(sent(bridge)).toEqual([
+      { text: 'what is wrong?', context: `${SCREEN_TEXT_MARKER}Error 502` },
+      { text: 'and now?' },
     ]);
   });
 
@@ -2368,7 +2406,7 @@ describe('Quick ask: meeting', () => {
     );
   });
 
-  it('a meeting question carries the last answer block before the screen text and transcript blocks', async () => {
+  it('a meeting question carries the last answer block before the screen text and transcript blocks, as its context apart from the question text', async () => {
     const bridge = lanesBridge();
     const fixture = await render(bridge);
     await askTyped(fixture, 'before the meeting');
@@ -2403,12 +2441,14 @@ describe('Quick ask: meeting', () => {
       { id: expect.any(String), text: 'before the meeting' },
       {
         id: expect.any(String),
-        text: `what did they ask me?${transcriptMarker(10)}${heard}`,
+        text: 'what did they ask me?',
+        context: `${transcriptMarker(10)}${heard}`,
         meeting: true,
       },
       {
         id: expect.any(String),
-        text: `What was decided?${LAST_ANSWER_MARKER}${'A'.repeat(4_000)}${SCREEN_TEXT_MARKER}Error 502${transcriptMarker(30)}${heard}`,
+        text: 'What was decided?',
+        context: `${LAST_ANSWER_MARKER}${'A'.repeat(4_000)}${SCREEN_TEXT_MARKER}Error 502${transcriptMarker(30)}${heard}`,
         meeting: true,
       },
     ]);

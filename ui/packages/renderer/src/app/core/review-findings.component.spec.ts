@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ISSUES_MARKER,
   REVIEW_MARKER,
+  VERDICT_MARKER,
   type LocalAskRequest,
   type LocalEvent,
   type LocalTurn,
@@ -87,7 +88,8 @@ function makeBridge() {
     const text = 'text' in req ? req.text : '';
     const at = text.indexOf(REVIEW_MARKER);
     const issuesAt = text.indexOf(ISSUES_MARKER);
-    const cut = at === -1 ? issuesAt : at;
+    const verdictAt = text.indexOf(VERDICT_MARKER);
+    const cut = [at, issuesAt, verdictAt].find((index) => index !== -1) ?? -1;
     push([
       ...turns,
       {
@@ -777,5 +779,243 @@ describe('review findings cards', () => {
 
     expect(el(fixture, 'posted')).toBeNull();
     expect(el(fixture, 'post')).not.toBeNull();
+  });
+
+  it('the tests line shows each check with its passed, failed or pending mark and its link when it has one, then the container run that passed with its time and command; nothing when the review carries neither', async () => {
+    const bridge = makeBridge();
+    const checks = [
+      {
+        name: 'build',
+        status: 'completed',
+        conclusion: 'success',
+        url: 'https://github.com/acme/shop/runs/1',
+      },
+      {
+        name: 'lint',
+        status: 'completed',
+        conclusion: 'failure',
+        url: 'https://github.com/acme/shop/runs/2',
+      },
+      {
+        name: 'docs',
+        status: 'completed',
+        conclusion: 'skipped',
+        url: 'https://github.com/acme/shop/runs/3',
+      },
+      {
+        name: 'e2e',
+        status: 'completed',
+        conclusion: 'timed_out',
+        url: 'https://github.com/acme/shop/runs/4',
+      },
+      { name: 'deploy', status: 'in_progress', conclusion: null, url: 'https://ci.example.com/7' },
+      { name: 'ci/legacy', status: 'completed', conclusion: 'failure', url: '' },
+    ];
+    const fixture = await render(bridge, {
+      ...review,
+      checks,
+      tests: { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: 41.6 },
+    });
+    const rows = all(fixture, 'check').map((row) => ({
+      mark: text(el(fixture, 'check-mark', row)),
+      name: text(el(fixture, 'check-name', row)),
+      links: all(fixture, 'check-link', row).length,
+    }));
+    await click(fixture, all(fixture, 'check-link')[1]);
+    const run = text(el(fixture, 'tests-run'));
+    const output = el(fixture, 'tests-output');
+    TestBed.resetTestingModule();
+    const bare = await render(makeBridge());
+
+    expect(rows).toEqual([
+      { mark: 'Passed', name: 'build', links: 1 },
+      { mark: 'Failed', name: 'lint', links: 1 },
+      { mark: 'Passed', name: 'docs', links: 1 },
+      { mark: 'Failed', name: 'e2e', links: 1 },
+      { mark: 'Pending', name: 'deploy', links: 1 },
+      { mark: 'Failed', name: 'ci/legacy', links: 0 },
+    ]);
+    expect(bridge.appOpenExternal).toHaveBeenCalledExactlyOnceWith({
+      url: 'https://github.com/acme/shop/runs/2',
+    });
+    expect(run).toBe('Tests passed in 42s (dotnet test)');
+    expect(output).toBeNull();
+    expect(el(bare, 'tests')).toBeNull();
+  });
+
+  it('a container run that failed shows its exit code and the last output behind Last output, as text; one that did not run says why', async () => {
+    const failed = await render(makeBridge(), {
+      ...review,
+      tests: {
+        ran: true,
+        command: 'npm test',
+        exitCode: 2,
+        durationSeconds: 9,
+        output: '<img src=x onerror=alert(1)> 3 failing',
+      },
+    });
+    const failure = {
+      run: text(el(failed, 'tests-run')),
+      summary: text(el(failed, 'tests-output')!.querySelector('summary')),
+      output: el(failed, 'tests-output')!.querySelector('pre')!.textContent,
+      images: el(failed, 'tests-output')!.querySelectorAll('img').length,
+      checks: all(failed, 'check').length,
+    };
+    TestBed.resetTestingModule();
+    const skipped = await render(makeBridge(), {
+      ...review,
+      tests: { ran: false, reason: 'Docker is not installed.' },
+    });
+
+    expect(failure).toEqual({
+      run: 'Tests failed (exit 2)',
+      summary: 'Last output',
+      output: '<img src=x onerror=alert(1)> 3 failing',
+      images: 0,
+      checks: 0,
+    });
+    expect(text(el(skipped, 'tests-run'))).toBe('Tests did not run: Docker is not installed.');
+    expect(el(skipped, 'tests-output')).toBeNull();
+  });
+
+  it('Approve and Request changes sit beside Post on a review and never on an audit; Approve is hidden when the owner wrote the pull request', async () => {
+    const buttons = (fixture: Fixture) =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.footer .group button'),
+      ).map((button) => button.getAttribute('data-test'));
+
+    const onReview = buttons(await render(makeBridge()));
+    TestBed.resetTestingModule();
+    const own = buttons(await render(makeBridge(), { ...review, selfAuthored: true }));
+    TestBed.resetTestingModule();
+    const onAudit = buttons(await render(makeBridge(), audit));
+
+    expect(onReview).toEqual(['yes-all', 'approve', 'request-changes', 'post']);
+    expect(own).toEqual(['yes-all', 'request-changes', 'post']);
+    expect(onAudit).toEqual(['yes-all', 'post']);
+  });
+
+  it('Approve sends Approve acme/shop#5, the verdict marker and the verdict with the review body and the chosen findings as comments; Request changes sends its own sentence; no verdict goes before a click', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...review, verdict: 'approve' });
+    await click(fixture, el(fixture, 'yes', card(fixture, 1)));
+    await click(fixture, el(fixture, 'no', card(fixture, 0)));
+    await click(fixture, el(fixture, 'yes-all'));
+    await click(fixture, el(fixture, 'toggle-preview'));
+    const beforeClick = bridge.localAsk.mock.calls.length;
+
+    await click(fixture, el(fixture, 'approve'));
+    const approve = (bridge.localAsk.mock.lastCall![0] as { text: string }).text;
+    bridge.emit({ id: bridge.localAsk.mock.lastCall![0].id, event: 'fail', text: 'Refused.' });
+    await settle(fixture);
+    await click(fixture, el(fixture, 'request-changes'));
+    const changes = (bridge.localAsk.mock.lastCall![0] as { text: string }).text;
+
+    const [approveQuestion, approveJson] = approve.split(VERDICT_MARKER);
+    expect(beforeClick).toBe(0);
+    expect(approveQuestion).toBe('Approve acme/shop#5');
+    expect(JSON.parse(approveJson!)).toEqual({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'approve',
+      body: reviewBody({ ...review, verdict: 'approve' }, [lock, naming]),
+      comments: [
+        { path: 'src/orders/Cart.cs', line: 12, body: commentBody(lock) },
+        { path: 'src/orders/Cart.cs', line: 30, body: commentBody(naming) },
+      ],
+    });
+    expect(changes.split(VERDICT_MARKER)[0]).toBe('Request changes on acme/shop#5');
+    expect(JSON.parse(changes.split(VERDICT_MARKER)[1]!).verdict).toBe('request_changes');
+    expect(bridge.localAsk).toHaveBeenCalledTimes(2);
+  });
+
+  it('while a verdict turn runs Approve, Request changes and Post are disabled; once it completes with the link the card says Approved on PR #5 with the link and loses its buttons', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    await click(fixture, el(fixture, 'approve'));
+    const id = bridge.localAsk.mock.lastCall![0].id;
+    const giving = ['approve', 'request-changes', 'post'].map(
+      (test) => (el(fixture, test) as HTMLButtonElement).disabled,
+    );
+
+    bridge.emit({ id, event: 'complete', text: `Approved: ${URL}.` });
+    await settle(fixture);
+    const given = el(fixture, 'verdict-given');
+
+    expect(giving).toEqual([true, true, true]);
+    expect({
+      title: text(given?.querySelector('strong') ?? null),
+      link: text(given?.querySelector('a') ?? null),
+      posted: el(fixture, 'posted'),
+      footer: ['approve', 'request-changes', 'post', 'yes', 'no', 'edit', 'toggle-preview'].map(
+        (test) => all(fixture, test).length,
+      ),
+    }).toEqual({
+      title: 'Approved on PR #5',
+      link: URL,
+      posted: null,
+      footer: [0, 0, 0, 0, 0, 0, 0],
+    });
+  });
+
+  it('changes requested from the other window show here as Changes requested on PR #5, not as Review posted; a failed verdict brings the buttons back', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const verdictTurn = (state: LocalTurn['state'], reply: string): LocalTurn => ({
+      id: 'elsewhere',
+      question: 'Request changes on acme/shop#5',
+      reply,
+      citations: [],
+      state,
+      review: true,
+    });
+    bridge.push([
+      {
+        id: 'f-1',
+        question: 'review acme/shop#5',
+        reply: 'the review',
+        citations: [],
+        state: 'done',
+      },
+      verdictTurn('failed', 'GitHub refused it.'),
+    ]);
+    await settle(fixture);
+    const afterFailure = (el(fixture, 'request-changes') as HTMLButtonElement).disabled;
+
+    bridge.push([
+      {
+        id: 'f-1',
+        question: 'review acme/shop#5',
+        reply: 'the review',
+        citations: [],
+        state: 'done',
+      },
+      verdictTurn('done', `Done: ${URL}`),
+    ]);
+    await settle(fixture);
+
+    expect(afterFailure).toBe(false);
+    expect(text(el(fixture, 'verdict-given')?.querySelector('strong') ?? null)).toBe(
+      'Changes requested on PR #5',
+    );
+    expect(el(fixture, 'posted')).toBeNull();
+  });
+
+  it('when every finding is dismissed a review still offers Approve and Request changes beside the nothing-to-post line', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    for (const index of [0, 1, 2]) await click(fixture, el(fixture, 'no', card(fixture, index)));
+
+    await click(fixture, el(fixture, 'approve'));
+    const [question, json] = (bridge.localAsk.mock.lastCall![0] as { text: string }).text.split(
+      VERDICT_MARKER,
+    );
+
+    expect(text(el(fixture, 'all-dismissed'))).toBe(
+      'Nothing to post; every finding was dismissed.',
+    );
+    expect(question).toBe('Approve acme/shop#5');
+    expect(JSON.parse(json!).comments).toEqual([]);
   });
 });

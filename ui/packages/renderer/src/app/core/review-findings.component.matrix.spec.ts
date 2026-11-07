@@ -5,10 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ISSUES_MARKER,
   REVIEW_MARKER,
+  VERDICT_MARKER,
   type LocalAskRequest,
   type LocalTurn,
+  type ReviewCheck,
   type ReviewFinding,
   type ReviewFindings,
+  type ReviewTests,
 } from '@scout/shared';
 
 import { ReviewFindingsComponent } from './review-findings.component';
@@ -181,7 +184,8 @@ function makeBridge() {
       const text = 'text' in req ? req.text : '';
       const review = text.indexOf(REVIEW_MARKER);
       const issues = text.indexOf(ISSUES_MARKER);
-      const cut = review === -1 ? issues : review;
+      const verdict = text.indexOf(VERDICT_MARKER);
+      const cut = [review, issues, verdict].find((at) => at !== -1) ?? -1;
       push([
         ...turns,
         {
@@ -381,5 +385,213 @@ describe(`review findings matrix (${ROWS.length} rows)`, () => {
     } else {
       expect(sent).toEqual([]);
     }
+  });
+});
+
+type ChecksCase = 'absent' | 'all pass' | 'one failing' | 'pending';
+type TestsCase = 'absent' | 'ran pass' | 'ran fail' | 'not ran';
+type VerdictPhase = 'none' | 'giving' | 'given' | 'failed';
+type VerdictButton = 'Approve' | 'Request changes';
+
+const CHECKS_CASES: readonly ChecksCase[] = ['absent', 'all pass', 'one failing', 'pending'];
+const TESTS_CASES: readonly TestsCase[] = ['absent', 'ran pass', 'ran fail', 'not ran'];
+const VERDICT_PHASES: readonly VerdictPhase[] = ['none', 'giving', 'given', 'failed'];
+const VERDICT_BUTTONS: readonly VerdictButton[] = ['Approve', 'Request changes'];
+
+const BUILD: ReviewCheck = {
+  name: 'build',
+  status: 'completed',
+  conclusion: 'success',
+  url: 'https://github.com/acme/shop/runs/1',
+};
+const CHECKS: Readonly<Record<ChecksCase, readonly ReviewCheck[] | undefined>> = {
+  absent: undefined,
+  'all pass': [BUILD, { ...BUILD, name: 'lint' }],
+  'one failing': [BUILD, { ...BUILD, name: 'lint', conclusion: 'failure' }],
+  pending: [BUILD, { ...BUILD, name: 'lint', status: 'in_progress', conclusion: null }],
+};
+const MARKS: Readonly<Record<ChecksCase, readonly string[]>> = {
+  absent: [],
+  'all pass': ['Passed', 'Passed'],
+  'one failing': ['Passed', 'Failed'],
+  pending: ['Passed', 'Pending'],
+};
+const TESTS: Readonly<Record<TestsCase, ReviewTests | undefined>> = {
+  absent: undefined,
+  'ran pass': { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: 42 },
+  'ran fail': {
+    ran: true,
+    command: 'dotnet test',
+    exitCode: 1,
+    durationSeconds: 42,
+    output: '1 failing',
+  },
+  'not ran': { ran: false, reason: 'Docker is not installed.' },
+};
+const RUN_LINE: Readonly<Record<TestsCase, string | null>> = {
+  absent: null,
+  'ran pass': 'Tests passed in 42s (dotnet test)',
+  'ran fail': 'Tests failed (exit 1)',
+  'not ran': 'Tests did not run: Docker is not installed.',
+};
+const QUESTION: Readonly<Record<VerdictButton, string>> = {
+  Approve: 'Approve acme/shop#5',
+  'Request changes': 'Request changes on acme/shop#5',
+};
+const GIVEN_TITLE: Readonly<Record<VerdictButton, string>> = {
+  Approve: 'Approved on PR #5',
+  'Request changes': 'Changes requested on PR #5',
+};
+const BUTTON_TEST: Readonly<Record<VerdictButton, string>> = {
+  Approve: 'approve',
+  'Request changes': 'request-changes',
+};
+
+interface VerdictRow {
+  readonly kind: Kind;
+  readonly checks: ChecksCase;
+  readonly tests: TestsCase;
+  readonly phase: VerdictPhase;
+  readonly button: VerdictButton;
+  readonly selfAuthored: boolean;
+  readonly window: Window;
+}
+
+function possibleVerdict(row: VerdictRow): boolean {
+  if (row.kind === 'audit') {
+    return (
+      row.checks === 'absent' &&
+      row.tests === 'absent' &&
+      row.phase === 'none' &&
+      !row.selfAuthored &&
+      row.button === 'Approve' &&
+      row.window === 'this window'
+    );
+  }
+  if (row.phase === 'none') return row.window === 'this window' && row.button === 'Approve';
+  return !(row.selfAuthored && row.button === 'Approve');
+}
+
+const VERDICT_ROWS: readonly VerdictRow[] = KINDS.flatMap((kind) =>
+  CHECKS_CASES.flatMap((checks) =>
+    TESTS_CASES.flatMap((tests) =>
+      VERDICT_PHASES.flatMap((phase) =>
+        VERDICT_BUTTONS.flatMap((button) =>
+          [false, true].flatMap((selfAuthored) =>
+            WINDOWS.map((window) => ({
+              kind,
+              checks,
+              tests,
+              phase,
+              button,
+              selfAuthored,
+              window,
+            })),
+          ),
+        ),
+      ),
+    ),
+  ),
+).filter(possibleVerdict);
+
+function verdictFindings(row: VerdictRow): ReviewFindings {
+  const base = findingsOf(row.kind, 3);
+  const checks = CHECKS[row.checks];
+  const tests = TESTS[row.tests];
+  return {
+    ...base,
+    ...(checks === undefined ? {} : { checks }),
+    ...(tests === undefined ? {} : { tests }),
+    ...(row.selfAuthored ? { selfAuthored: true } : {}),
+  };
+}
+
+describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} rows)`, () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it.each(
+    VERDICT_ROWS.map(
+      (row) =>
+        [
+          `${row.kind}, checks ${row.checks}, tests ${row.tests}, ${row.selfAuthored ? 'own pull request' : "someone else's pull request"}, verdict ${row.phase === 'none' ? 'none' : `${row.button} ${row.phase} in ${row.window}`}`,
+          row,
+        ] as const,
+    ),
+  )('%s', async (_name, row) => {
+    const bridge = makeBridge();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+      ],
+    });
+    const fixture = TestBed.createComponent(ReviewFindingsComponent);
+    fixture.componentRef.setInput('turnId', 'f-1');
+    fixture.componentRef.setInput('review', verdictFindings(row));
+    await settle(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+    await click(fixture, all(all(root, 'finding')[0]!, 'yes')[0]);
+    const verdictsBeforeClick = bridge.localAsk.mock.calls.length;
+
+    if (row.phase !== 'none') {
+      const reply =
+        row.phase === 'given'
+          ? `Done: ${PR_URL}`
+          : row.phase === 'failed'
+            ? 'GitHub refused it.'
+            : '';
+      const state = row.phase === 'giving' ? 'running' : row.phase === 'failed' ? 'failed' : 'done';
+      if (row.window === 'this window') {
+        await click(fixture, all(root, BUTTON_TEST[row.button])[0]);
+        const id = (bridge.localAsk.mock.lastCall![0] as { id: string }).id;
+        if (state !== 'running') bridge.end(id, state, reply);
+      } else {
+        bridge.push([
+          ...bridge.turns(),
+          { id: 'elsewhere', question: QUESTION[row.button], reply, citations: [], state },
+        ]);
+      }
+      await settle(fixture);
+    }
+
+    const review = row.kind === 'review';
+    const open = review && row.phase !== 'given';
+    const given = all(root, 'verdict-given')[0];
+    const enabled = (test: string) =>
+      all(root, test).map((button) => !(button as HTMLButtonElement).disabled);
+    const sent = bridge.localAsk.mock.calls.map(([req]) => ('text' in req ? req.text : ''));
+
+    expect({
+      tests: all(root, 'tests').length,
+      marks: all(root, 'check-mark').map((mark) => text(mark)),
+      run: text(all(root, 'tests-run')[0]),
+      output: all(root, 'tests-output').length,
+    }).toEqual({
+      tests: row.checks === 'absent' && row.tests === 'absent' ? 0 : 1,
+      marks: MARKS[row.checks],
+      run: RUN_LINE[row.tests],
+      output: row.tests === 'ran fail' ? 1 : 0,
+    });
+    expect({
+      approve: enabled('approve'),
+      requestChanges: enabled('request-changes'),
+      post: enabled('post'),
+      given: text(given?.querySelector('strong')),
+      link: text(given?.querySelector('a')),
+      posted: all(root, 'posted').length,
+      cardButtons: all(root, 'yes').length > 0,
+    }).toEqual({
+      approve: open && !row.selfAuthored ? [row.phase !== 'giving'] : [],
+      requestChanges: open ? [row.phase !== 'giving'] : [],
+      post: row.phase === 'given' ? [] : [row.phase !== 'giving'],
+      given: row.phase === 'given' ? GIVEN_TITLE[row.button] : null,
+      link: row.phase === 'given' ? PR_URL : null,
+      posted: 0,
+      cardButtons: row.phase !== 'given',
+    });
+    expect(verdictsBeforeClick).toBe(0);
+    expect(sent.map((ask) => ask.split(VERDICT_MARKER)[0])).toEqual(
+      row.window === 'this window' && row.phase !== 'none' ? [QUESTION[row.button]] : [],
+    );
   });
 });

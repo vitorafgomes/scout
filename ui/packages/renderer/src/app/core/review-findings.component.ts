@@ -10,7 +10,7 @@ import {
   type PipeTransform,
 } from '@angular/core';
 
-import type { ReviewFinding, ReviewFindings } from '@scout/shared';
+import type { ReviewCheck, ReviewFinding, ReviewFindings, ReviewTests } from '@scout/shared';
 
 import { LocalConversation } from './local-conversation';
 import { MarkdownPipe } from './markdown.pipe';
@@ -21,6 +21,9 @@ import {
   parseReviewFindings,
   postingAsk,
   reviewBody,
+  verdictAsk,
+  verdictOf,
+  type VerdictKind,
 } from './review-findings';
 import { ReviewFindingsStore } from './review-findings.store';
 import { ScoutBridgeService } from './scout-bridge';
@@ -31,6 +34,24 @@ const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   nit: 'Suggestion',
 };
 const MAX_COMMENT_CHARS = 2000;
+const PASSING_CONCLUSIONS: ReadonlySet<string | null> = new Set(['success', 'neutral', 'skipped']);
+
+/** How a check reads on the card: passed, failed, or still pending. */
+export type CheckMark = 'Passed' | 'Failed' | 'Pending';
+
+/** A check is pending until GitHub completes it; then success, neutral and skipped pass and every other conclusion fails. */
+export function checkMark(check: ReviewCheck): CheckMark {
+  if (check.status !== 'completed' || check.conclusion === null) return 'Pending';
+  return PASSING_CONCLUSIONS.has(check.conclusion) ? 'Passed' : 'Failed';
+}
+
+/** The line the container run reads as: passed with its time and command, failed with its exit code, or why it did not run. */
+export function testsLine(tests: ReviewTests): string {
+  if (!tests.ran) return `Tests did not run: ${tests.reason}`;
+  return tests.exitCode === 0
+    ? `Tests passed in ${Math.round(tests.durationSeconds ?? 0)}s (${tests.command})`
+    : `Tests failed (exit ${tests.exitCode})`;
+}
 
 /** `reply | reviewFindings`: the reply's findings block and the text around it, parsed once per reply. */
 @Pipe({ name: 'reviewFindings', standalone: true, pure: true })
@@ -52,6 +73,38 @@ export class ReviewFindingsPipe implements PipeTransform {
   imports: [MarkdownPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (review().checks || review().tests) {
+      <section class="tests" data-test="tests" aria-label="Tests">
+        @if (review().checks; as checks) {
+          <ul class="checks">
+            @for (check of checks; track $index) {
+              @let mark = checkMark(check);
+              <li data-test="check" [class]="'check ' + mark.toLowerCase()">
+                <span class="mark" data-test="check-mark">{{ mark }}</span>
+                <span class="check-name" data-test="check-name">{{ check.name }}</span>
+                @if (check.url) {
+                  <a
+                    href="#"
+                    data-test="check-link"
+                    (click)="$event.preventDefault(); open(check.url)"
+                    >Details</a
+                  >
+                }
+              </li>
+            }
+          </ul>
+        }
+        @if (review().tests; as tests) {
+          <p class="run" data-test="tests-run">{{ testsLine(tests) }}</p>
+          @if (tests.ran && tests.exitCode !== 0 && tests.output) {
+            <details class="output" data-test="tests-output">
+              <summary>Last output</summary>
+              <pre>{{ tests.output }}</pre>
+            </details>
+          }
+        }
+      </section>
+    }
     <div class="cards">
       @for (finding of review().findings; track finding.id) {
         <article
@@ -63,7 +116,7 @@ export class ReviewFindingsPipe implements PipeTransform {
           @if (state().picks[finding.id] === 'no') {
             <p class="dismissed" data-test="dismissed">
               <span class="dismissed-title">Dismissed: {{ finding.title }}</span>
-              @if (!posted()) {
+              @if (!closed()) {
                 <button
                   type="button"
                   class="small"
@@ -92,7 +145,7 @@ export class ReviewFindingsPipe implements PipeTransform {
             @if (finding.rule) {
               <p class="rule" data-test="rule">Rule: {{ finding.rule }}</p>
             }
-            @if (!posted()) {
+            @if (!closed()) {
               <div class="actions">
                 <button
                   type="button"
@@ -199,44 +252,95 @@ export class ReviewFindingsPipe implements PipeTransform {
           <a href="#" (click)="$event.preventDefault(); open(url)">{{ url }}</a>
         }
       </div>
-    } @else if (allDismissed()) {
+    } @else if (given(); as done) {
+      <div class="posted" data-test="verdict-given" role="status">
+        <strong>{{
+          done.verdict === 'approve'
+            ? 'Approved on PR #' + review().number
+            : 'Changes requested on PR #' + review().number
+        }}</strong>
+        <a href="#" (click)="$event.preventDefault(); open(done.url!)">{{ done.url }}</a>
+      </div>
+    } @else if (allDismissed() && audit()) {
       <p class="all-dismissed" data-test="all-dismissed">
-        {{
-          audit()
-            ? 'Nothing to open; every finding was dismissed.'
-            : 'Nothing to post; every finding was dismissed.'
-        }}
+        Nothing to open; every finding was dismissed.
       </p>
     } @else {
       <div class="footer">
-        <span class="summary" data-test="summary">{{ summary() }}</span>
+        @if (allDismissed()) {
+          <p class="all-dismissed" data-test="all-dismissed">
+            Nothing to post; every finding was dismissed.
+          </p>
+        } @else {
+          <span class="summary" data-test="summary">{{ summary() }}</span>
+        }
         <div class="group">
-          <button type="button" data-test="yes-all" (click)="store.yesAll(turnId(), findingIds())">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M18 6 7 17l-5-5"></path>
-              <path d="m22 10-7.5 7.5L13 16"></path>
-            </svg>
-            <span class="lbl">Yes to all</span>
-          </button>
-          <button
-            type="button"
-            class="primary"
-            data-test="post"
-            [disabled]="selected().length === 0 || posting() || busy()"
-            [attr.aria-label]="postLabel()"
-            (click)="post()"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M22 2 11 13"></path>
-              <path d="M22 2 15 22l-4-9-9-4Z"></path>
-            </svg>
-            <span class="lbl">{{ postLabel() }}</span>
-          </button>
+          @if (!allDismissed()) {
+            <button
+              type="button"
+              data-test="yes-all"
+              (click)="store.yesAll(turnId(), findingIds())"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 6 7 17l-5-5"></path>
+                <path d="m22 10-7.5 7.5L13 16"></path>
+              </svg>
+              <span class="lbl">Yes to all</span>
+            </button>
+          }
+          @if (!audit()) {
+            @if (review().selfAuthored !== true) {
+              <button
+                type="button"
+                class="approve"
+                data-test="approve"
+                [disabled]="writing()"
+                (click)="giveVerdict('approve')"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+                <span class="lbl">Approve</span>
+              </button>
+            }
+            <button
+              type="button"
+              class="request-changes"
+              data-test="request-changes"
+              [disabled]="writing()"
+              (click)="giveVerdict('request_changes')"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 8v5"></path>
+                <path d="M12 16.5v.5"></path>
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+              <span class="lbl">Request changes</span>
+            </button>
+          }
+          @if (!allDismissed()) {
+            <button
+              type="button"
+              class="primary"
+              data-test="post"
+              [disabled]="selected().length === 0 || writing()"
+              [attr.aria-label]="postLabel()"
+              (click)="post()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M22 2 11 13"></path>
+                <path d="M22 2 15 22l-4-9-9-4Z"></path>
+              </svg>
+              <span class="lbl">{{ postLabel() }}</span>
+            </button>
+          }
         </div>
       </div>
       @if (error(); as message) {
         <p class="error" role="alert" data-test="post-error">{{ message }}</p>
       }
+    }
+    @if (!posted() && !given() && !allDismissed()) {
       <div class="preview-row">
         <button
           type="button"
@@ -533,6 +637,70 @@ export class ReviewFindingsPipe implements PipeTransform {
       border-color: var(--rf-no-line);
       color: var(--rf-no-fg);
     }
+    .approve {
+      border-color: var(--rf-yes-line);
+      color: var(--rf-yes-fg);
+    }
+    .request-changes {
+      border-color: var(--rf-no-line);
+      color: var(--rf-no-fg);
+    }
+    .tests {
+      border: 1px solid var(--rf-line);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--rf-fg-2);
+    }
+    .checks {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .check .mark {
+      font-weight: 600;
+      min-width: 56px;
+    }
+    .check.passed .mark {
+      color: var(--rf-nit-fg);
+    }
+    .check.failed .mark {
+      color: var(--rf-block-fg);
+    }
+    .check.pending .mark {
+      color: var(--rf-fix-fg);
+    }
+    .check-name {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .check a {
+      color: var(--rf-accent);
+    }
+    .run {
+      margin: 0;
+    }
+    .output pre {
+      margin: 6px 0 0;
+      max-height: 240px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
     .primary {
       background: var(--rf-accent-strong);
       border-color: var(--rf-accent-strong);
@@ -784,6 +952,16 @@ export class ReviewFindingsComponent {
   readonly posted = computed(() => this.state().posted ?? null);
   readonly posting = computed(() => this.state().postTurnId !== undefined);
   readonly busy = computed(() => this.conversation.running() !== null);
+  readonly verdict = computed(() =>
+    verdictOf(this.conversation.turns(), this.turnId(), this.review()),
+  );
+  readonly given = computed(() => {
+    const verdict = this.verdict();
+    return verdict?.phase === 'given' ? verdict : null;
+  });
+  readonly closed = computed(() => this.posted() !== null || this.given() !== null);
+  private readonly sending = signal(false);
+  readonly writing = computed(() => this.posting() || this.busy() || this.sending());
   readonly audit = computed(() => this.review().kind === 'audit');
   readonly findingIds = computed(() => this.review().findings.map((f) => f.id));
   readonly selected = computed(() => {
@@ -823,6 +1001,9 @@ export class ReviewFindingsComponent {
     ),
   );
 
+  protected readonly checkMark = checkMark;
+  protected readonly testsLine = testsLine;
+
   severityLabel(finding: ReviewFinding): string {
     return SEVERITY_LABELS[finding.severity];
   }
@@ -848,7 +1029,7 @@ export class ReviewFindingsComponent {
 
   async post(): Promise<void> {
     const selected = this.selected();
-    if (selected.length === 0 || this.posting() || this.busy()) return;
+    if (selected.length === 0 || this.writing()) return;
     const turnId = this.turnId();
     const id = crypto.randomUUID();
     this.error.set(null);
@@ -860,6 +1041,23 @@ export class ReviewFindingsComponent {
     if (refusal !== null) {
       this.store.markPosting(turnId, undefined);
       this.error.set(refusal);
+    }
+  }
+
+  /** Sends the owner's verdict with the chosen findings as its comments; only this click gives one. */
+  async giveVerdict(verdict: VerdictKind): Promise<void> {
+    if (this.audit() || this.closed() || this.writing()) return;
+    if (verdict === 'approve' && this.review().selfAuthored === true) return;
+    this.error.set(null);
+    this.sending.set(true);
+    try {
+      const refusal = await this.conversation.askAs(
+        crypto.randomUUID(),
+        verdictAsk(this.review(), this.selected(), verdict),
+      );
+      this.error.set(refusal);
+    } finally {
+      this.sending.set(false);
     }
   }
 
