@@ -1,9 +1,9 @@
 ---
 title: "Project map"
-version: "1.7"
+version: "1.8"
 date: 2026-10-21
-updated: 2026-11-06
-changes: "Plugin.GitHub references Conversation for the writes of ADR 0038 (2026-11-06). Earlier: Scout.Meetings, the kept meetings over SQLite, referenced by Host.Console. Earlier: Host.Console.Tests references Host.ControlPlane"
+updated: 2026-11-07
+changes: "Scout.Sandbox, the container test runner, a leaf no project references yet (2026-11-07). Earlier: Plugin.GitHub references Conversation for the writes of ADR 0038 (2026-11-06). Earlier: Scout.Meetings, the kept meetings over SQLite, referenced by Host.Console. Earlier: Host.Console.Tests references Host.ControlPlane"
 page_type: longform
 status: active
 description: "Every project under src/ with its kind, its ProjectReference dependencies and the test project that covers it."
@@ -13,7 +13,7 @@ reliability: high
 
 # Project map
 
-> Eighteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. The retired first cut under `src/old` and `tests/old` was deleted on 2026-11-06 (in the history before `93da0d4`).
+> Nineteen source projects in `Scout.slnx`; the dependency graph is shallow and acyclic. The retired first cut under `src/old` and `tests/old` was deleted on 2026-11-06 (in the history before `93da0d4`).
 
 Derived from the `ProjectReference` items in each `.csproj`. Package references are listed on the service pages.
 
@@ -32,13 +32,14 @@ Derived from the `ProjectReference` items in each `.csproj`. Package references 
 | [[pages/services/plugin-youtube]] | plugin | none | `Scout.Plugin.YouTube.Tests` |
 | [[pages/services/transcription-whisper]] | library | Conversation | `Scout.Transcription.Whisper.Tests` |
 | [[pages/services/meetings]] | library | Conversation | `Scout.Meetings.Tests` |
+| [[pages/services/sandbox]] | library | none | `Scout.Sandbox.Tests` |
 | [[pages/services/operator]] | library | Llm, Conversation, Plugin.YouTube | `Scout.Operator.Tests` |
 | [[pages/services/control-plane-contracts]] | contracts | none | none of its own (`Scout.ControlPlane.Tests`) |
 | [[pages/services/control-plane]] | library | none | `Scout.ControlPlane.Tests` |
 | [[pages/services/host-console]] | host | Llm, Conversation, Knowledge, four adapters, Plugin.GitHub, Plugin.Kubernetes, Plugin.YouTube, Operator, Transcription.Whisper, Meetings, ControlPlane.Contracts | `Scout.Host.Console.Tests` (also references ControlPlane, for the feature catalog, and Host.ControlPlane, so one test carries a comments view over 4 MB between the worker and the real control-plane host) |
 | [[pages/services/host-control-plane]] | host | Contracts, ControlPlane | none of its own (`Scout.ControlPlane.Tests`) |
 
-The graph is enforced: `tests/Scout.ArchTests/ArchitectureTests.cs:55` fails when a leaf references another Scout assembly, an adapter or a plugin references a sibling or a host, Conversation reaches past Llm and Skills, or Operator touches the control plane directly; a ProjectReference that changes this table changes those rules in the same diff. `Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.Kubernetes` and `Scout.Plugin.YouTube` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:47` to `:73`). `Scout.Plugin.GitHub` references `Scout.Conversation` since 2026-11-06 for the origin notifier and the chat origin, and through it `Scout.Llm` for `IWriteGate`, `IApprovedActions` and `AddWriteFunction`. `Scout.Operator` references `Scout.Llm` only for `AddWriteFunction`, and reaches the control plane through its own `IOperatorControlPlane`, which the host implements over the `WorkerGate` client; it references no Contracts or gRPC package.
+The graph is enforced: `tests/Scout.ArchTests/ArchitectureTests.cs:56` fails when a leaf references another Scout assembly, an adapter or a plugin references a sibling or a host, Conversation reaches past Llm and Skills, or Operator touches the control plane directly; a ProjectReference that changes this table changes those rules in the same diff. `Scout.Host.Console` reaches Skills through Conversation. `Scout.Knowledge`, `Scout.Skills`, `Scout.Plugin.Kubernetes` and `Scout.Plugin.YouTube` do not reference `Scout.Llm`; they meet it at run time through Semantic Kernel types (`Kernel`, `KernelPlugin`, `IEmbeddingGenerator`) that the host wires together (`src/Scout.Host.Console/HostComposition.cs:47` to `:73`). `Scout.Plugin.GitHub` references `Scout.Conversation` since 2026-11-06 for the origin notifier and the chat origin, and through it `Scout.Llm` for `IWriteGate`, `IApprovedActions` and `AddWriteFunction`. `Scout.Operator` references `Scout.Llm` only for `AddWriteFunction`, and reaches the control plane through its own `IOperatorControlPlane`, which the host implements over the `WorkerGate` client; it references no Contracts or gRPC package. `Scout.Sandbox` is a leaf on the `Leaves` list (`tests/Scout.ArchTests/ArchitectureTests.cs:40`) and no project references it yet: the host adapts it to the GitHub plugin's sandbox seam ([[pages/decisions/0043-the-verdict-on-a-pull-request]]), so the plugin never references it.
 
 ```mermaid
 flowchart TD
@@ -70,6 +71,7 @@ flowchart TD
     Local --> Conversation
     HCP[Host.ControlPlane] --> Contracts[ControlPlane.Contracts]
     HCP --> CP[ControlPlane]
+    SB[Sandbox]
 ```
 
 ## Two processes

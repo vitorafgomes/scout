@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\Scout.Plugin.YouTube\Scout.Plugin.YouTube.csproj" />
     <ProjectReference Include="..\..\src\Scout.Transcription.Whisper\Scout.Transcription.Whisper.csproj" />
     <ProjectReference Include="..\..\src\Scout.Meetings\Scout.Meetings.csproj" />
+    <ProjectReference Include="..\..\src\Scout.Sandbox\Scout.Sandbox.csproj" />
     <ProjectReference Include="..\..\src\Scout.Operator\Scout.Operator.csproj" />
     <ProjectReference Include="..\..\src\Scout.ControlPlane.Contracts\Scout.ControlPlane.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Scout.ControlPlane\Scout.ControlPlane.csproj" />
