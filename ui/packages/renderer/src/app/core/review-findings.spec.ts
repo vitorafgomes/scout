@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ISSUES_MARKER,
   REVIEW_MARKER,
+  VERDICT_MARKER,
+  type LocalTurn,
+  type ReviewCheck,
   type ReviewFinding,
   type ReviewFindings,
 } from '@scout/shared';
@@ -14,6 +17,8 @@ import {
   parseReviewFindings,
   postingAsk,
   reviewBody,
+  verdictAsk,
+  verdictOf,
 } from './review-findings';
 
 const RED = '\u{1F534}';
@@ -216,5 +221,170 @@ describe('review findings', () => {
     expect(issuesAsk(audit, [{ finding: naming, body: 'x' }]).split(ISSUES_MARKER)[0]).toBe(
       'Open 1 issue on acme/shop',
     );
+  });
+
+  it('parseReviewFindings keeps the checks, the container run and selfAuthored of a review, keeps a check without an https link but not the link, and drops a malformed value without refusing the review', () => {
+    const passed: ReviewCheck = {
+      name: 'build',
+      status: 'completed',
+      conclusion: 'success',
+      url: 'https://github.com/acme/shop/runs/1',
+    };
+    const pending: ReviewCheck = {
+      name: 'deploy-preview',
+      status: 'in_progress',
+      conclusion: null,
+      url: 'https://ci.example.com/7',
+    };
+    const ran = {
+      ran: true,
+      image: 'mcr.microsoft.com/dotnet/sdk@sha256:ab',
+      command: 'dotnet test',
+      exitCode: 1,
+      durationSeconds: 42.4,
+      output: 'x'.repeat(4_100),
+    };
+    const kept = parseReviewFindings(
+      reply({
+        ...review,
+        checks: [
+          passed,
+          { ...passed, name: 'status-a', conclusion: 'failure', url: 'javascript:alert(1)' },
+          { ...passed, name: 'status-b', url: null },
+          { ...passed, name: '' },
+          { ...passed, conclusion: 7 },
+          'build',
+          pending,
+        ],
+        tests: ran,
+        selfAuthored: true,
+      }),
+    )?.review;
+    const dropped = [
+      { checks: 'all green' },
+      { checks: [{ ...passed, status: '' }] },
+      { tests: { ran: true, command: 'dotnet test', durationSeconds: 3 } },
+      { tests: { ran: true, command: '', exitCode: 0, durationSeconds: 3 } },
+      { tests: { ran: true, command: 'dotnet test', exitCode: 0, durationSeconds: -1 } },
+      { tests: { ran: false } },
+      { tests: { ran: 'yes', reason: 'Docker is not installed.' } },
+      { selfAuthored: 'true' },
+    ].map((extra) => parseReviewFindings(reply({ ...review, ...extra }))?.review);
+
+    expect(kept).toEqual({
+      ...review,
+      checks: [
+        passed,
+        { ...passed, name: 'status-a', conclusion: 'failure', url: '' },
+        { ...passed, name: 'status-b', url: '' },
+        pending,
+      ],
+      tests: { ...ran, output: 'x'.repeat(4_000) },
+      selfAuthored: true,
+    });
+    expect(dropped).toEqual(dropped.map(() => review));
+    expect(
+      parseReviewFindings(
+        reply({
+          ...review,
+          tests: { ran: false, reason: 'Docker is not installed.', exitCode: 3 },
+        }),
+      )?.review.tests,
+    ).toEqual({ ran: false, reason: 'Docker is not installed.' });
+  });
+
+  it('verdictAsk is the verdict sentence, the verdict marker and the JSON of the verdict with the review body and the chosen comments in order', () => {
+    const chosen = [
+      { finding: naming, body: 'Edited by the owner' },
+      { finding: total, body: commentBody(total) },
+    ];
+
+    const [approveQuestion, approveJson] = verdictAsk(review, chosen, 'approve').split(
+      VERDICT_MARKER,
+    );
+    const [changesQuestion, changesJson] = verdictAsk(review, [], 'request_changes').split(
+      VERDICT_MARKER,
+    );
+
+    expect(approveQuestion).toBe('Approve acme/shop#5');
+    expect(JSON.parse(approveJson!)).toEqual({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'approve',
+      body: reviewBody(review, [naming, total]),
+      comments: [
+        { path: 'src/orders/Cart.cs', line: 12, body: 'Edited by the owner' },
+        { path: 'src/orders/Checkout.cs', line: 88, body: commentBody(total) },
+      ],
+    });
+    expect(changesQuestion).toBe('Request changes on acme/shop#5');
+    expect(JSON.parse(changesJson!)).toEqual({
+      repository: 'acme/shop',
+      number: 5,
+      verdict: 'request_changes',
+      body: reviewBody(review, []),
+      comments: [],
+    });
+  });
+
+  it('verdictOf reads the verdict from the shared turns: giving while it runs, given with the link, failed after a failure or an answer without a link, nothing for another pull request, an earlier turn or an audit', () => {
+    const turn = (
+      id: string,
+      question: string,
+      state: LocalTurn['state'],
+      reply = '',
+    ): LocalTurn => ({ id, question, reply, citations: [], state });
+    const findings = turn('f-1', 'review acme/shop#5', 'done');
+    const link = 'https://github.com/acme/shop/pull/5#pullrequestreview-9';
+
+    expect({
+      none: verdictOf([findings], 'f-1', review),
+      giving: verdictOf([findings, turn('v', 'Approve acme/shop#5', 'running')], 'f-1', review),
+      given: verdictOf(
+        [findings, turn('v', 'Request changes on acme/shop#5', 'done', `Done: ${link}.`)],
+        'f-1',
+        review,
+      ),
+      failed: verdictOf(
+        [findings, turn('v', 'Approve acme/shop#5', 'failed', `GitHub refused ${link}`)],
+        'f-1',
+        review,
+      ),
+      withoutLink: verdictOf(
+        [findings, turn('v', 'Approve acme/shop#5', 'done', 'Writes are not allowed.')],
+        'f-1',
+        review,
+      ),
+      givenThenFailedAgain: verdictOf(
+        [
+          findings,
+          turn('v', 'Approve acme/shop#5', 'done', link),
+          turn('w', 'Approve acme/shop#5', 'failed'),
+        ],
+        'f-1',
+        review,
+      ),
+      otherPullRequest: verdictOf(
+        [findings, turn('v', 'Approve acme/shop#6', 'done', link)],
+        'f-1',
+        review,
+      ),
+      beforeTheFindings: verdictOf(
+        [turn('v', 'Approve acme/shop#5', 'done', link), findings],
+        'f-1',
+        review,
+      ),
+      audit: verdictOf([findings, turn('v', 'Approve acme/shop#5', 'done', link)], 'f-1', audit),
+    }).toEqual({
+      none: null,
+      giving: { verdict: 'approve', phase: 'giving' },
+      given: { verdict: 'request_changes', phase: 'given', url: link },
+      failed: { verdict: 'approve', phase: 'failed' },
+      withoutLink: { verdict: 'approve', phase: 'failed' },
+      givenThenFailedAgain: { verdict: 'approve', phase: 'given', url: link },
+      otherPullRequest: null,
+      beforeTheFindings: null,
+      audit: null,
+    });
   });
 });

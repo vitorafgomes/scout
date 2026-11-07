@@ -23,7 +23,7 @@ export interface Posted {
 
 const EMPTY: ReviewState = { picks: {}, edited: {}, editing: null, preview: false };
 const GITHUB_URL = /https:\/\/github\.com\/[^\s)\]>"'<]+/;
-const POST_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/;
+const POST_TARGET = /^Post \d+ findings? on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/;
 const ISSUES_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/;
 const POSTED_COMMENTS = /^Post (\d+) findings? on /;
 const ISSUE_URL = /https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/\d+/g;

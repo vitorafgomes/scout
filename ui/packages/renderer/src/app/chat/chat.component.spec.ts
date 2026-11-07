@@ -522,7 +522,7 @@ describe('Chat screen', () => {
     expect(texts(fixture, 'with-review')).toEqual([]);
   });
 
-  it('Clear empties the conversation', async () => {
+  it("Clear empties the conversation through main's clear, the one request main also turns into the reset of the worker's memory for the local channel", async () => {
     const bridge = makeBridge();
     configure(bridge);
     const fixture = await open();
@@ -536,6 +536,7 @@ describe('Chat screen', () => {
     await settle(fixture);
 
     expect(before).toEqual(['Hello.']);
+    expect(bridge.localClearTurns).toHaveBeenCalledExactlyOnceWith();
     expect(texts(fixture, 'question')).toEqual([]);
     expect(texts(fixture, 'reply')).toEqual([]);
   });
@@ -591,6 +592,27 @@ describe('Chat screen', () => {
     expect(cancelledWhilePosting).toBe(0);
     expect(plain).toEqual({ disabled: false, title: 'Stop the answer' });
     expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id });
+  });
+
+  it('a verdict cannot be cancelled: Stop is disabled with its reason while an Approve or Request changes turn runs', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    const stop = () => el(fixture, 'stop') as HTMLButtonElement;
+    const states = [];
+    for (const question of ['Approve acme/shop#5', 'Request changes on acme/shop#5']) {
+      bridge.push([{ id: 'v-1', question, reply: '', citations: [], state: 'running' }]);
+      await settle(fixture);
+      states.push({ disabled: stop().disabled, title: stop().title });
+      stop().click();
+      await settle(fixture);
+    }
+
+    expect(states).toEqual([
+      { disabled: true, title: 'Posting to GitHub; cannot be stopped.' },
+      { disabled: true, title: 'Posting to GitHub; cannot be stopped.' },
+    ]);
+    expect(bridge.localCancel).not.toHaveBeenCalled();
   });
 
   it('Stop after part of the reply keeps it and shows Interrupted under it', async () => {

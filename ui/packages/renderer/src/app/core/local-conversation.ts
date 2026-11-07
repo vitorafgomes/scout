@@ -2,10 +2,11 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { readIpcError, type LocalAskRequest, type LocalImage, type LocalTurn } from '@scout/shared';
 
+import { isVerdictQuestion } from './review-findings';
 import { ScoutBridgeService } from './scout-bridge';
 import { toBase64 } from '../quick-ask/wav-recorder';
 
-/** Why Stop is off while Scout posts a review or opens issues: a cancel mid-write, then a second click, could write twice. */
+/** Why Stop is off while Scout posts a review, opens issues or gives a verdict: a cancel mid-write, then a second click, could write twice. */
 export const POSTING_CANNOT_STOP = 'Posting to GitHub; cannot be stopped.';
 
 /**
@@ -20,10 +21,10 @@ export class LocalConversation {
 
   readonly turns = this._turns.asReadonly();
   readonly running = computed(() => this._turns().find((turn) => turn.state === 'running') ?? null);
-  /** True while the running turn posts a review or opens issues on GitHub; such a turn is never cancelled. */
+  /** True while the running turn posts a review, opens issues or gives a verdict on GitHub; such a turn is never cancelled. */
   readonly posting = computed(() => {
     const turn = this.running();
-    return turn !== null && (turn.review === true || turn.issues === true);
+    return turn !== null && writesToGitHub(turn);
   });
 
   constructor() {
@@ -41,14 +42,16 @@ export class LocalConversation {
 
   /**
    * Sends a typed question, with a screenshot when one is given, marked as asked during a meeting when
-   * `meeting` is true; resolves to the refusal to show when the question never became a turn, or null.
+   * `meeting` is true, and the data sent with it as `context` apart from the text; resolves to the refusal
+   * to show when the question never became a turn, or null.
    */
-  ask(text: string, image?: LocalImage, meeting = false): Promise<string | null> {
+  ask(text: string, image?: LocalImage, meeting = false, context = ''): Promise<string | null> {
     return this.send((id) => ({
       id,
       text,
       ...(image !== undefined ? { image } : {}),
       ...(meeting ? { meeting: true as const } : {}),
+      ...(context.length > 0 ? { context } : {}),
     }));
   }
 
@@ -66,10 +69,10 @@ export class LocalConversation {
     }));
   }
 
-  /** Cancels the running turn, unless it is posting to GitHub. */
+  /** Cancels the running turn, unless it is writing to GitHub. */
   stop(): void {
     for (const turn of this._turns()) {
-      if (turn.state === 'running' && !turn.review && !turn.issues) {
+      if (turn.state === 'running' && !writesToGitHub(turn)) {
         void this.bridge.localCancel({ id: turn.id }).catch(() => undefined);
       }
     }
@@ -88,4 +91,8 @@ export class LocalConversation {
       return code === 'local/not-running' ? null : message;
     }
   }
+}
+
+function writesToGitHub(turn: LocalTurn): boolean {
+  return turn.review === true || turn.issues === true || isVerdictQuestion(turn.question);
 }

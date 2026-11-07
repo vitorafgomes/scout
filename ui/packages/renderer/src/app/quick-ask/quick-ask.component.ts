@@ -1518,12 +1518,9 @@ export class QuickAskComponent {
     const read = (block ?? '').trim();
     const screenBlock = read.length > 0 ? `${SCREEN_TEXT_MARKER}${read}` : '';
     const last = inMeeting ? this.lastAnswer() : '';
-    const text = inMeeting
-      ? question +
-        (last.length > 0 ? `${LAST_ANSWER_MARKER}${last}` : '') +
-        screenBlock +
-        transcriptBlock
-      : question + transcriptBlock + screenBlock;
+    const context = inMeeting
+      ? (last.length > 0 ? `${LAST_ANSWER_MARKER}${last}` : '') + screenBlock + transcriptBlock
+      : transcriptBlock + screenBlock;
     const shot = this.screenshot();
     const mine = ++this.asks;
     this.error.set(null);
@@ -1531,7 +1528,7 @@ export class QuickAskComponent {
     this.follow = true;
     let refusal: string | null;
     try {
-      refusal = await this.conversation.ask(text, this.image(shot), inMeeting);
+      refusal = await this.conversation.ask(question, this.image(shot), inMeeting, context);
     } finally {
       this.sending.set(false);
     }
