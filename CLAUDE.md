@@ -39,7 +39,7 @@ The letters are stable; hooks, skills and the vault reference them by letter. A 
 - **I - One failing-call test per external boundary.** A change that adds or alters a call across HTTP, gRPC, a chat SDK, a provider, the filesystem or a subprocess ships one test where that call fails (timeout, 5xx, reset) and asserts what the caller does. `vault/pages/conventions/testing.md`.
 - **J - Documentation lives in the vault.** English only, no emojis, no AI-attribution comments or headers. A `<summary>` on a public type or member is fine; no narration inside a member, no reference to an ADR, a page or an issue in code; the one exception is a `ponytail:` deferral line.
 
-Also mandatory: identifiers and comments in English; the retired first cut is read from the git history, never restored into the tree.
+Also mandatory: identifiers and comments in English; the retired first cut is read from the git history, never restored into the tree; no code is taken from another project, whatever its licence, and everything here is written by the team, another project may lend an idea, recorded in the vault in mechanism terms and never by that project's name.
 
 ## When working here
 

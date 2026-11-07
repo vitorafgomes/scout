@@ -152,6 +152,9 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Roadmap
 
+- [[pages/roadmap/gap-plan|Gap plan: what blocks real use today]] - Ordered defects and missing pieces that stop real use today; one change per version.
+- [[pages/roadmap/future-improvements|Future improvements: what widens Scout]] - Ordered improvements after the gap plan: project memory, ideas and roadmap, AI Sources usage, Claude, Material screens.
+- [[pages/roadmap/project-memory-spike|Project memory spike]] - Research: why an audit stops early and forgets, two outside projects' mechanisms, the SQLite project-memory design behind both plans.
 - [[pages/roadmap/followups|Follow-ups]] - Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it.
 - [[pages/roadmap/chatgpt-plan-provider|ChatGPT plan provider]] - Initiative: answer through the owner's ChatGPT plan via the official browser sign-in.
 - [[pages/roadmap/control-plane-client|Control plane client]] - Initiative: gRPC client in the Electron app so the Providers, Features and Models screens run through Scout.Host.ControlPlane.
