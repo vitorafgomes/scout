@@ -10,15 +10,22 @@ export interface ReviewState {
   readonly edited: Readonly<Record<string, string>>;
   readonly editing: string | null;
   readonly postTurnId?: string;
-  readonly posted?: { readonly urls: readonly string[] };
+  readonly posted?: Posted;
   readonly target?: string;
   readonly preview: boolean;
+}
+
+/** Where the findings went: the links, and for a review the number of comments the posting question carried. */
+export interface Posted {
+  readonly urls: readonly string[];
+  readonly comments?: number;
 }
 
 const EMPTY: ReviewState = { picks: {}, edited: {}, editing: null, preview: false };
 const GITHUB_URL = /https:\/\/github\.com\/[^\s)\]>"'<]+/;
 const POST_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d+)$/;
 const ISSUES_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/;
+const POSTED_COMMENTS = /^Post (\d+) findings? on /;
 const ISSUE_URL = /https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/\d+/g;
 
 /**
@@ -56,11 +63,25 @@ export class ReviewFindingsStore {
     this.update(turnId, (s) => ({ ...s, picks: { ...s.picks, [id]: choice } }));
   }
 
+  /** Marks Yes on every finding still undecided or Yes; a dismissed finding stays dismissed. */
   yesAll(turnId: string, ids: readonly string[]): void {
     this.update(turnId, (s) => ({
       ...s,
-      picks: { ...s.picks, ...Object.fromEntries(ids.map((id) => [id, 'yes' as const])) },
+      picks: {
+        ...s.picks,
+        ...Object.fromEntries(
+          ids.filter((id) => s.picks[id] !== 'no').map((id) => [id, 'yes' as const]),
+        ),
+      },
     }));
+  }
+
+  /** Takes back the pick on one finding, so it is undecided again. */
+  undo(turnId: string, id: string): void {
+    this.update(turnId, (s) => {
+      const { [id]: _taken, ...picks } = s.picks;
+      return { ...s, picks };
+    });
   }
 
   edit(turnId: string, id: string): void {
@@ -92,7 +113,7 @@ export class ReviewFindingsStore {
 
   observe(turns: readonly LocalTurn[], prune = true): void {
     const byId = new Map(turns.map((turn) => [turn.id, turn]));
-    const postedBy = new Map<string, { readonly urls: readonly string[]; readonly at: number }>();
+    const postedBy = new Map<string, Posted & { readonly at: number }>();
     turns.forEach((turn, at) => {
       if (turn.state !== 'done') return;
       const target = turn.review
@@ -101,20 +122,22 @@ export class ReviewFindingsStore {
           ? ISSUES_TARGET.exec(turn.question)?.[1]?.toLowerCase()
           : undefined;
       const urls = target === undefined ? [] : links(target, turn.reply);
-      if (target !== undefined && urls.length > 0) postedBy.set(target, { urls, at });
+      if (target !== undefined && urls.length > 0) {
+        postedBy.set(target, { ...posted(turn, urls), at });
+      }
     });
     const next: Record<string, ReviewState> = {};
     for (const [turnId, state] of Object.entries(this.states())) {
       if (prune && !byId.has(turnId)) continue;
-      const elsewhere: { readonly urls: readonly string[]; readonly at: number } | undefined =
-        state.target === undefined ? undefined : postedBy.get(state.target);
+      const elsewhere = state.target === undefined ? undefined : postedBy.get(state.target);
       if (
         state.posted === undefined &&
         elsewhere !== undefined &&
         turns.findIndex((turn) => turn.id === turnId) < elsewhere.at
       ) {
         const { postTurnId: _pending, ...rest } = state;
-        next[turnId] = { ...rest, posted: { urls: elsewhere.urls } };
+        const { at: _at, ...where } = elsewhere;
+        next[turnId] = { ...rest, posted: where };
         continue;
       }
       const post = state.postTurnId === undefined ? undefined : byId.get(state.postTurnId);
@@ -124,7 +147,7 @@ export class ReviewFindingsStore {
       }
       const urls = post.state === 'done' ? links(state.target, post.reply) : [];
       const { postTurnId: _done, ...rest } = state;
-      next[turnId] = urls.length === 0 ? rest : { ...state, posted: { urls } };
+      next[turnId] = urls.length === 0 ? rest : { ...state, posted: posted(post, urls) };
     }
     this.states.set(next);
   }
@@ -132,6 +155,11 @@ export class ReviewFindingsStore {
   private update(turnId: string, change: (state: ReviewState) => ReviewState): void {
     this.states.update((states) => ({ ...states, [turnId]: change(states[turnId] ?? EMPTY) }));
   }
+}
+
+function posted(turn: LocalTurn, urls: readonly string[]): Posted {
+  const comments = POSTED_COMMENTS.exec(turn.question)?.[1];
+  return comments === undefined ? { urls } : { urls, comments: Number(comments) };
 }
 
 function links(target: string | undefined, reply: string): readonly string[] {

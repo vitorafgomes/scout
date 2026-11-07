@@ -51,17 +51,20 @@ function makeBridge() {
             ? { ...turn, ...(activity === undefined ? {} : { activity }) }
             : event.event === 'progress'
               ? progressed(turn, activity, event.text)
-              : {
-                  ...turn,
-                  reply: event.text ?? turn.reply,
-                  citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
-                  state:
-                    event.event === 'complete'
-                      ? 'done'
-                      : event.event === 'fail'
-                        ? 'failed'
-                        : 'running',
-                },
+              : event.event === 'fail' && turn.reply.length > 0
+                ? { ...turn, failure: event.text ?? '', state: 'failed' as const }
+                : {
+                    ...turn,
+                    reply: event.text ?? turn.reply,
+                    citations:
+                      event.event === 'complete' ? (event.citations ?? []) : turn.citations,
+                    state:
+                      event.event === 'complete'
+                        ? 'done'
+                        : event.event === 'fail'
+                          ? 'failed'
+                          : 'running',
+                  },
         ),
       ),
     refuseNextAsNotRunning: () =>
@@ -552,6 +555,97 @@ describe('Chat screen', () => {
     expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id });
     expect(texts(fixture, 'reply')).toEqual(['Cancelled.']);
     expect(el(fixture, 'send')).not.toBeNull();
+  });
+
+  it('a card post cannot be cancelled: Stop is disabled with its reason while a Post or Open issues turn runs, and a plain question can still be stopped', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    bridge.push([
+      {
+        id: 'post-1',
+        question: 'Post 1 finding on acme/shop#5',
+        reply: '',
+        citations: [],
+        state: 'running',
+        review: true,
+      },
+    ]);
+    await settle(fixture);
+    const stop = () => el(fixture, 'stop') as HTMLButtonElement;
+    const posting = { disabled: stop().disabled, title: stop().title };
+    stop().click();
+    await settle(fixture);
+    const cancelledWhilePosting = bridge.localCancel.mock.calls.length;
+
+    bridge.push([]);
+    await settle(fixture);
+    await type(fixture, 'summarise every repo');
+    await press(fixture, {});
+    const id = lastId(bridge);
+    const plain = { disabled: stop().disabled, title: stop().title };
+    stop().click();
+    await settle(fixture);
+
+    expect(posting).toEqual({ disabled: true, title: 'Posting to GitHub; cannot be stopped.' });
+    expect(cancelledWhilePosting).toBe(0);
+    expect(plain).toEqual({ disabled: false, title: 'Stop the answer' });
+    expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id });
+  });
+
+  it('Stop after part of the reply keeps it and shows Interrupted under it', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    await type(fixture, 'summarise every repo');
+    await press(fixture, {});
+    const id = lastId(bridge);
+    bridge.emit({ id, event: 'update', text: 'Three repos so far' });
+
+    el(fixture, 'stop')!.click();
+    bridge.emit({ id, event: 'fail', text: 'Cancelled.' });
+    await settle(fixture);
+
+    expect(texts(fixture, 'reply')).toEqual(['Three repos so far']);
+    expect(texts(fixture, 'failure').map((t) => t.trim())).toEqual(['Interrupted']);
+  });
+
+  it('the question box starts at one row and grows with the text up to six rows', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    const box = el(fixture, 'input') as HTMLTextAreaElement;
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector]) =>
+        selector!.split(',').some((one) => {
+          try {
+            return box.matches(one.trim());
+          } catch {
+            return false;
+          }
+        }),
+      )
+      .map(([, , body]) => body!)
+      .join(';');
+
+    expect(box.rows).toBe(1);
+    expect(rules).toMatch(/field-sizing:\s*content/);
+    expect(rules).toMatch(/max-height:\s*calc\(6lh \+ 20px\)/);
+  });
+
+  it('the microphone sits inside the question field, with Send or Stop beside it', async () => {
+    const bridge = makeBridge();
+    configure(bridge);
+    const fixture = await open();
+    const field = el(fixture, 'field')!;
+
+    expect(field.contains(el(fixture, 'input'))).toBe(true);
+    expect(el(fixture, 'mic')!.parentElement).toBe(field);
+    expect(field.contains(el(fixture, 'send'))).toBe(false);
+    expect(el(fixture, 'send')!.parentElement).toBe(field.parentElement);
   });
 
   it('the microphone button is an icon, labelled Hold to talk and Listening while held', async () => {

@@ -5,6 +5,9 @@ import { readIpcError, type LocalAskRequest, type LocalImage, type LocalTurn } f
 import { ScoutBridgeService } from './scout-bridge';
 import { toBase64 } from '../quick-ask/wav-recorder';
 
+/** Why Stop is off while Scout posts a review or opens issues: a cancel mid-write, then a second click, could write twice. */
+export const POSTING_CANNOT_STOP = 'Posting to GitHub; cannot be stopped.';
+
 /**
  * The conversation with Scout on this computer, held by main and shared by the quick-ask window and
  * the Chat screen: this store mirrors main's list and sends questions, cancels and clears through it.
@@ -17,6 +20,11 @@ export class LocalConversation {
 
   readonly turns = this._turns.asReadonly();
   readonly running = computed(() => this._turns().find((turn) => turn.state === 'running') ?? null);
+  /** True while the running turn posts a review or opens issues on GitHub; such a turn is never cancelled. */
+  readonly posting = computed(() => {
+    const turn = this.running();
+    return turn !== null && (turn.review === true || turn.issues === true);
+  });
 
   constructor() {
     this.bridge.onLocalTurns((turns) => {
@@ -58,9 +66,10 @@ export class LocalConversation {
     }));
   }
 
+  /** Cancels the running turn, unless it is posting to GitHub. */
   stop(): void {
     for (const turn of this._turns()) {
-      if (turn.state === 'running') {
+      if (turn.state === 'running' && !turn.review && !turn.issues) {
         void this.bridge.localCancel({ id: turn.id }).catch(() => undefined);
       }
     }

@@ -314,6 +314,10 @@ async function setup(
   };
 }
 
+function finishTurn(t: { quickAsk: { handleWorkerLine(json: string): void } }, id: string): void {
+  t.quickAsk.handleWorkerLine(JSON.stringify({ id, event: 'complete', text: '' }));
+}
+
 function pushedTurns(window: FakeWindow): unknown[] {
   return window.webContents.sent
     .filter((s) => s.channel === CHANNEL.localTurns)
@@ -329,6 +333,7 @@ function turn(
     state: string;
     notRunning: boolean;
     activity: string;
+    failure: string;
   }> = {},
 ) {
   return {
@@ -413,6 +418,50 @@ describe('quick ask: questions to the worker', () => {
     t.quickAsk.dispose();
   });
 
+  it.each([
+    ['the same window', 'same'],
+    ['the other window', 'other'],
+  ] as const)(
+    'an ask while a turn runs is refused with local/busy from %s, and nothing reaches the worker',
+    async (_label, from) => {
+      const t = await setup();
+      openQuickAsk();
+      const asker = t.quickAskWindow().webContents;
+      await t.invoke(CHANNEL.localAsk, asker, { id: 'q-1', text: 'first' });
+      const second = from === 'same' ? asker : t.mainWindow.webContents;
+
+      const refusal = await t.rejectionError(
+        t.invoke(CHANNEL.localAsk, second, { id: 'q-2', text: 'second' }),
+      );
+      const voice = await t.rejectionError(
+        t.invoke(CHANNEL.localAsk, second, {
+          id: 'v-2',
+          audio: { contentType: 'audio/wav', base64: 'UklGRg==' },
+        }),
+      );
+
+      expect(refusal).toEqual({
+        code: 'local/busy',
+        message: 'Scout is still answering; wait or press Stop.',
+      });
+      expect(voice.code).toBe('local/busy');
+      expect(t.written).toEqual(['{"type":"ask","id":"q-1","text":"first"}']);
+      expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual([turn('q-1', 'first')]);
+      t.quickAsk.dispose();
+    },
+  );
+
+  it('an ask after the running turn ended is accepted again', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'first' });
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"fail","text":"Cancelled."}');
+
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'second' });
+
+    expect(t.written.at(-1)).toBe('{"type":"ask","id":"q-2","text":"second"}');
+    t.quickAsk.dispose();
+  });
+
   it('writes a cancel line only for a question that is still running', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'hi' });
@@ -459,7 +508,6 @@ describe('quick ask: one conversation for every window', () => {
   it('update streams the reply, complete adds the citations and ends the turn, fail ends it as failed', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'first' });
-    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'second' });
 
     t.quickAsk.handleWorkerLine('{"id":"q-1","event":"begin"}');
     t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"Gr"}');
@@ -467,9 +515,10 @@ describe('quick ask: one conversation for every window', () => {
     t.quickAsk.handleWorkerLine(
       '{"id":"q-1","event":"complete","text":"Green.","citations":[{"label":"run 42","url":"https://github.com/acme/ci/actions/runs/42"}]}',
     );
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'second' });
     t.quickAsk.handleWorkerLine('{"id":"q-2","event":"fail","text":"Cancelled."}');
 
-    expect(streaming).toEqual([turn('q-1', 'first', { reply: 'Gr' }), turn('q-2', 'second')]);
+    expect(streaming).toEqual([turn('q-1', 'first', { reply: 'Gr' })]);
     expect(pushedTurns(t.mainWindow).at(-1)).toEqual([
       turn('q-1', 'first', {
         reply: 'Green.',
@@ -477,6 +526,42 @@ describe('quick ask: one conversation for every window', () => {
         state: 'done',
       }),
       turn('q-2', 'second', { reply: 'Cancelled.', state: 'failed' }),
+    ]);
+    t.quickAsk.dispose();
+  });
+
+  it('a fail after a partial reply keeps the reply and sets failure; a fail before any reply is the reply', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'first' });
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"Half of the answer"}');
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"fail","text":"Cancelled."}');
+    const interrupted = pushedTurns(t.mainWindow).at(-1);
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'second' });
+    t.quickAsk.handleWorkerLine('{"id":"q-2","event":"fail","text":"Cancelled."}');
+
+    expect(interrupted).toEqual([
+      turn('q-1', 'first', { reply: 'Half of the answer', failure: 'Cancelled.', state: 'failed' }),
+    ]);
+    expect(pushedTurns(t.mainWindow).at(-1)).toEqual([
+      turn('q-1', 'first', { reply: 'Half of the answer', failure: 'Cancelled.', state: 'failed' }),
+      turn('q-2', 'second', { reply: 'Cancelled.', state: 'failed' }),
+    ]);
+    t.quickAsk.dispose();
+  });
+
+  it('a worker exit after a partial reply keeps the reply and sets the stopped sentence as failure', async () => {
+    const t = await setup();
+    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'first' });
+    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"Half"}');
+
+    t.emitWorker({ kind: 'exit', code: 137, signal: 'SIGKILL' });
+
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual([
+      turn('q-1', 'first', {
+        reply: 'Half',
+        failure: 'Scout stopped before it finished answering.',
+        state: 'failed',
+      }),
     ]);
     t.quickAsk.dispose();
   });
@@ -647,18 +732,15 @@ describe('quick ask: one conversation for every window', () => {
     t.quickAsk.dispose();
   });
 
-  it('a worker exit mid-answer ends every running turn and later events are dropped', async () => {
+  it('a worker exit before any reply ends the running turn and later events are dropped', async () => {
     const t = await setup();
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'one' });
-    await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: 'two' });
-    t.quickAsk.handleWorkerLine('{"id":"q-1","event":"update","text":"Half"}');
 
     t.emitWorker({ kind: 'exit', code: 137, signal: 'SIGKILL' });
     t.quickAsk.handleWorkerLine('{"id":"q-1","event":"complete","text":"too late"}');
 
     expect(await t.invoke(CHANNEL.localGetTurns, sender())).toEqual([
       turn('q-1', 'one', { reply: 'Scout stopped before it finished answering.', state: 'failed' }),
-      turn('q-2', 'two', { reply: 'Scout stopped before it finished answering.', state: 'failed' }),
     ]);
     t.quickAsk.dispose();
   });
@@ -2029,6 +2111,7 @@ describe('quick ask: screen capture', () => {
     const image = { contentType: 'image/jpeg', base64: JPEG };
 
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: 'what is this?', image });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), {
       id: 'v-1',
       audio: { contentType: 'audio/wav', base64: 'UklGRg==' },
@@ -2261,6 +2344,7 @@ describe('quick ask: reading the text on a screenshot', () => {
     const both = `and now?${TRANSCRIPT}Others: is it down?${SCREEN}Error 502`;
 
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text: screen });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: both });
     const turns = await t.invoke(CHANNEL.localGetTurns, sender());
 
@@ -2269,7 +2353,7 @@ describe('quick ask: reading the text on a screenshot', () => {
       both,
     ]);
     expect(turns).toEqual([
-      { ...turn('q-1', 'what does this error mean?'), screenText: true },
+      { ...turn('q-1', 'what does this error mean?', { state: 'done' }), screenText: true },
       { ...turn('q-2', 'and now?'), transcript: true, screenText: true },
     ]);
     const pushed = JSON.stringify(pushedTurns(t.mainWindow));
@@ -2288,6 +2372,7 @@ describe('quick ask: reading the text on a screenshot', () => {
       id: 'q-1',
       text: `${question}${SCREEN}${screen}`,
     });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), {
       id: 'q-2',
       text: `${question}${TRANSCRIPT}${transcript}${SCREEN}${screen}`,
@@ -2430,7 +2515,9 @@ describe('quick ask: meetings', () => {
     const room = `${'q'.repeat(4_000)}${LAST}${'a'.repeat(4_200 - LAST.length)}`;
 
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text, meeting: true });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: room, meeting: true });
+    finishTurn(t, 'q-2');
     const tooLong = await t.rejectionError(
       t.invoke(CHANNEL.localAsk, sender(), { id: 'q-3', text: `${room}a`, meeting: true }),
     );
@@ -2445,12 +2532,12 @@ describe('quick ask: meetings', () => {
     expect(tooLong.message).toBe('Type a question of 1 to 4000 characters.');
     expect(turns).toEqual([
       {
-        ...turn('q-1', 'what was decided?'),
+        ...turn('q-1', 'what was decided?', { state: 'done' }),
         transcript: true,
         screenText: true,
         meeting: true,
       },
-      { ...turn('q-2', 'q'.repeat(4_000)), meeting: true },
+      { ...turn('q-2', 'q'.repeat(4_000), { state: 'done' }), meeting: true },
       turn('q-4', 'plain'),
     ]);
     const pushed = JSON.stringify(pushedTurns(t.mainWindow));
@@ -2472,6 +2559,7 @@ describe('quick ask: meetings', () => {
     const room = `${'q'.repeat(4_000)}${REVIEW}${'r'.repeat(120_000 - REVIEW.length)}`;
 
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: room });
     const tooLong = await t.rejectionError(
       t.invoke(CHANNEL.localAsk, sender(), { id: 'q-3', text: `${room}r` }),
@@ -2484,7 +2572,7 @@ describe('quick ask: meetings', () => {
     ]);
     expect(tooLong.message).toBe('Type a question of 1 to 4000 characters.');
     expect(turns).toEqual([
-      { ...turn('q-1', 'Post 1 finding on acme/shop#5'), review: true },
+      { ...turn('q-1', 'Post 1 finding on acme/shop#5', { state: 'done' }), review: true },
       { ...turn('q-2', 'q'.repeat(4_000)), review: true },
     ]);
     const pushed = JSON.stringify(pushedTurns(t.mainWindow));
@@ -2506,6 +2594,7 @@ describe('quick ask: meetings', () => {
     const room = `${'q'.repeat(4_000)}${ISSUES}${'r'.repeat(120_000 - ISSUES.length)}`;
 
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-1', text });
+    finishTurn(t, 'q-1');
     await t.invoke(CHANNEL.localAsk, sender(), { id: 'q-2', text: room });
     const tooLong = await t.rejectionError(
       t.invoke(CHANNEL.localAsk, sender(), { id: 'q-3', text: `${room}r` }),
@@ -2518,7 +2607,7 @@ describe('quick ask: meetings', () => {
     ]);
     expect(tooLong.message).toBe('Type a question of 1 to 4000 characters.');
     expect(turns).toEqual([
-      { ...turn('q-1', 'Open 1 issue on acme/shop'), issues: true },
+      { ...turn('q-1', 'Open 1 issue on acme/shop', { state: 'done' }), issues: true },
       { ...turn('q-2', 'q'.repeat(4_000)), issues: true },
     ]);
     const pushed = JSON.stringify(pushedTurns(t.mainWindow));

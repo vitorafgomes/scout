@@ -54,6 +54,21 @@ async function setup(bridge?: ScoutBridgeService): Promise<{
   return { fixture, router: TestBed.inject(Router) };
 }
 
+function declared(node: Element, property: string): string | null {
+  const css = Array.from(document.querySelectorAll('style'))
+    .map((style) => style.textContent ?? '')
+    .join('\n');
+  const pattern = new RegExp(`(?:^|[;\\s])${property}:\\s*([^;]+)`);
+  let value: string | null = null;
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const found = pattern.exec(body!)?.[1]?.trim();
+    if (found !== undefined && selector!.split(',').some((one) => node.matches(one.trim()))) {
+      value = found;
+    }
+  }
+  return value;
+}
+
 describe('PostConnectShellComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -179,6 +194,17 @@ describe('PostConnectShellComponent', () => {
 
     active = fixture.nativeElement.querySelector('.nav-link--active');
     expect(active?.getAttribute('data-test')).toBe('nav-settings');
+  });
+
+  it('one scroll: the shell is fixed to the window, so only the main area scrolls and the page never does', async () => {
+    const { fixture } = await setup();
+    const host = fixture.nativeElement as HTMLElement;
+    const shell = host.querySelector('.shell')!;
+
+    expect(declared(host, 'position')).toBe('fixed');
+    expect(declared(host, 'inset')).toBe('0');
+    expect(declared(host, 'height')).toBeNull();
+    expect(declared(shell, 'height')).toBe('100%');
   });
 
   it('renders the Scout brand', async () => {

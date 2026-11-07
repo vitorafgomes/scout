@@ -261,6 +261,7 @@ describe('screenshot on a question', () => {
       meeting: true,
       review: true,
       issues: true,
+      failure: true,
     };
     const imageTypes: Record<LocalImage['contentType'], true> = { 'image/jpeg': true };
 

@@ -112,7 +112,8 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
     `
       :host {
         display: block;
-        height: 100vh;
+        position: fixed;
+        inset: 0;
         overflow: hidden;
         background: #0f1117;
         color: #e4e8f0;
@@ -120,7 +121,7 @@ const NAV_ITEMS: readonly NavItem[] = Object.freeze([
       .shell {
         display: grid;
         grid-template-columns: 240px 1fr;
-        height: 100vh;
+        height: 100%;
       }
       .rail {
         background: #171b26;

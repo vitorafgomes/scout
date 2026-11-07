@@ -26,6 +26,7 @@ import {
 import { TranscriptStore } from './transcript-store';
 
 const NOT_RUNNING = 'Scout is not running. Start it from the tray or the app.';
+const BUSY = 'Scout is still answering; wait or press Stop.';
 
 /** Main's rule for a progress event: the latest activity, trimmed and cut to 200 characters; a blank one changes nothing. */
 function progressed(
@@ -102,19 +103,28 @@ function makeBridge() {
             ? { ...turn, ...(activity === undefined ? {} : { activity }) }
             : event.event === 'progress'
               ? progressed(turn, activity, event.text)
-              : {
-                  ...turn,
-                  reply: event.text ?? turn.reply,
-                  citations: event.event === 'complete' ? (event.citations ?? []) : turn.citations,
-                  state:
-                    event.event === 'complete'
-                      ? 'done'
-                      : event.event === 'fail'
-                        ? 'failed'
-                        : 'running',
-                },
+              : event.event === 'fail' && turn.reply.length > 0
+                ? { ...turn, failure: event.text ?? '', state: 'failed' as const }
+                : {
+                    ...turn,
+                    reply: event.text ?? turn.reply,
+                    citations:
+                      event.event === 'complete' ? (event.citations ?? []) : turn.citations,
+                    state:
+                      event.event === 'complete'
+                        ? 'done'
+                        : event.event === 'fail'
+                          ? 'failed'
+                          : 'running',
+                  },
         ),
       ),
+    finish: () =>
+      push(turns.map((t) => (t.state === 'running' ? { ...t, state: 'done' as const } : t))),
+    refuseNextAsBusy: () =>
+      localAsk.mockImplementationOnce(async () => {
+        throw new Error(`[scout:local/busy] ${BUSY}`);
+      }),
     refuseNextAsNotRunning: () =>
       localAsk.mockImplementationOnce(async (req: LocalAskRequest) => {
         append(req, { reply: NOT_RUNNING, state: 'failed', notRunning: true });
@@ -223,6 +233,27 @@ function region(node: Element): string | null {
   return value;
 }
 
+function declared(node: Element, property: string): string | null {
+  const css = Array.from(document.querySelectorAll('style'))
+    .map((style) => style.textContent ?? '')
+    .join('\n');
+  const pattern = new RegExp(`(?:^|[;\\s])${property}:\\s*([^;]+)`);
+  let value: string | null = null;
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const found = pattern.exec(body!)?.[1]?.trim();
+    if (found === undefined) continue;
+    const matches = selector!.split(',').some((one) => {
+      try {
+        return node.matches(one.trim());
+      } catch {
+        return false;
+      }
+    });
+    if (matches) value = found;
+  }
+  return value;
+}
+
 function texts(fixture: ComponentFixture<QuickAskComponent>, test: string): string[] {
   return Array.from(
     fixture.nativeElement.querySelectorAll(`[data-test="${test}"]`) as NodeListOf<HTMLElement>,
@@ -326,15 +357,260 @@ describe('Quick ask', () => {
     });
   });
 
-  it('cancels a question still being answered when the next one is asked', async () => {
+  it('while Scout answers the field, the mic and Space are disabled, Send is Stop, and a second question is not sent', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge);
+    const idleSend = el(fixture, 'send');
     await askTyped(fixture, 'first question');
     const first = bridge.localAsk.mock.calls[0]![0] as { id: string };
 
+    const input = el(fixture, 'question') as HTMLInputElement;
+    const mic = el(fixture, 'mic') as HTMLButtonElement;
+    const answering = {
+      field: input.disabled,
+      mic: mic.disabled,
+      send: el(fixture, 'send'),
+      stop: el(fixture, 'stop')?.getAttribute('aria-label'),
+    };
+    await key(fixture, 'keydown', { key: ' ', code: 'Space' });
+    mic.dispatchEvent(new Event('pointerdown'));
+    await settle(fixture);
     await askTyped(fixture, 'second question');
 
+    expect(idleSend).not.toBeNull();
+    expect(answering).toEqual({ field: true, mic: true, send: null, stop: 'Stop the answer' });
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    expect(el(fixture, 'recording')).toBeNull();
+    expect(bridge.localAsk).toHaveBeenCalledTimes(1);
+    expect(bridge.localCancel).not.toHaveBeenCalled();
+
+    el(fixture, 'stop')!.click();
+    await settle(fixture);
     expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id: first.id });
+  });
+
+  it('a card post cannot be cancelled by a question', async () => {
+    const bridge = makeBridge();
+    bridge.push([
+      {
+        id: 'post-1',
+        question: 'Post 1 finding on acme/shop#5',
+        reply: '',
+        citations: [],
+        state: 'running',
+        review: true,
+      },
+    ]);
+    const fixture = await render(bridge);
+
+    await askTyped(fixture, 'is prod green?');
+    await fixture.componentInstance.ask();
+    await settle(fixture);
+
+    expect(bridge.localAsk).not.toHaveBeenCalled();
+    expect(bridge.localCancel).not.toHaveBeenCalled();
+    expect(texts(fixture, 'asked')).toEqual(['Post 1 finding on acme/shop#5']);
+  });
+
+  it('Space acts only from the question field; Escape closes from the field or a button and only leaves another text field; the hint says so', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const select = el(fixture, 'translation-mode') as HTMLSelectElement;
+    const press = async (target: HTMLElement, code: string, key: string) => {
+      target.focus();
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }),
+      );
+      await settle(fixture);
+    };
+
+    await press(select, 'Space', ' ');
+    const recordingFromSelect = el(fixture, 'recording');
+    await press(el(fixture, 'tools-toggle')!, 'Space', ' ');
+    const recordingFromButton = el(fixture, 'recording');
+    await press(select, 'Escape', 'Escape');
+    const focusAfterEscape = document.activeElement;
+    const hiddenFromSelect = bridge.localHide.mock.calls.length;
+    await press(el(fixture, 'tools-toggle')!, 'Escape', 'Escape');
+    const hiddenFromButton = bridge.localHide.mock.calls.length;
+    await press(el(fixture, 'question')!, 'Space', ' ');
+    const recordingFromQuestion = el(fixture, 'recording')?.textContent?.trim();
+    await press(el(fixture, 'question')!, 'Escape', 'Escape');
+
+    expect(recordingFromSelect).toBeNull();
+    expect(recordingFromButton).toBeNull();
+    expect(focusAfterEscape).not.toBe(select);
+    expect(hiddenFromSelect).toBe(0);
+    expect(hiddenFromButton).toBe(1);
+    expect(recordingFromQuestion).toBe('Listening. Release to send.');
+    expect(bridge.localHide).toHaveBeenCalledTimes(2);
+    expect(el(fixture, 'composer-hint')?.textContent?.trim()).toBe(
+      'Enter sends · Shift+Enter for a new line · Esc closes',
+    );
+    expect(el(fixture, 'mic')?.title).toBe('Hold to talk, or hold Space with the box empty');
+  });
+
+  it('a card post cannot be cancelled: Stop is disabled with its reason while a Post or Open issues turn runs, and a plain question can still be stopped', async () => {
+    const bridge = makeBridge();
+    const posting = (id: string, kind: 'review' | 'issues'): LocalTurn => ({
+      id,
+      question: kind === 'review' ? 'Post 1 finding on acme/shop#5' : 'Open 1 issue on acme/shop',
+      reply: '',
+      citations: [],
+      state: 'running',
+      [kind]: true,
+    });
+    bridge.push([posting('post-1', 'review')]);
+    const fixture = await render(bridge);
+    const stop = () => el(fixture, 'stop') as HTMLButtonElement;
+    const review = { disabled: stop().disabled, title: stop().title };
+    stop().click();
+    fixture.componentInstance.stop();
+    await key(fixture, 'keydown', { key: ' ', code: 'Space' });
+    await settle(fixture);
+    bridge.push([posting('issues-1', 'issues')]);
+    await settle(fixture);
+    const issues = { disabled: stop().disabled, title: stop().title };
+    stop().click();
+    await settle(fixture);
+    const cancelledWhilePosting = bridge.localCancel.mock.calls.length;
+
+    bridge.finish();
+    await settle(fixture);
+    await askTyped(fixture, 'is prod green?');
+    const plain = bridge.localAsk.mock.calls[0]![0] as { id: string };
+    const plainStop = { disabled: stop().disabled, title: stop().title };
+    stop().click();
+    await settle(fixture);
+
+    expect(review).toEqual({ disabled: true, title: 'Posting to GitHub; cannot be stopped.' });
+    expect(issues).toEqual({ disabled: true, title: 'Posting to GitHub; cannot be stopped.' });
+    expect(cancelledWhilePosting).toBe(0);
+    expect(plainStop).toEqual({ disabled: false, title: 'Stop the answer' });
+    expect(bridge.localCancel).toHaveBeenCalledExactlyOnceWith({ id: plain.id });
+  });
+
+  it('a stop after part of the reply keeps it and shows Interrupted under it; another failure shows its sentence', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    await askTyped(fixture, 'summarise the incident');
+    const first = bridge.localAsk.mock.calls[0]![0] as { id: string };
+    bridge.emit({ id: first.id, event: 'update', text: 'The outage began at 09:12' });
+    bridge.emit({ id: first.id, event: 'fail', text: 'Cancelled.' });
+    await settle(fixture);
+    const interrupted = {
+      reply: texts(fixture, 'reply'),
+      failure: texts(fixture, 'failure').map((t) => t.trim()),
+    };
+
+    await askTyped(fixture, 'and the cause?');
+    const second = bridge.localAsk.mock.calls[1]![0] as { id: string };
+    bridge.emit({ id: second.id, event: 'update', text: 'A full disk' });
+    bridge.emit({
+      id: second.id,
+      event: 'fail',
+      text: 'Scout stopped before it finished answering.',
+    });
+    await settle(fixture);
+
+    expect(interrupted).toEqual({
+      reply: ['The outage began at 09:12'],
+      failure: ['Interrupted'],
+    });
+    expect(texts(fixture, 'reply')).toEqual(['The outage began at 09:12', 'A full disk']);
+    expect(texts(fixture, 'failure').map((t) => t.trim())).toEqual([
+      'Interrupted',
+      'Scout stopped before it finished answering.',
+    ]);
+  });
+
+  it('the conversation stays where the reader scrolled up to, and follows the newest at the bottom or after asking here', async () => {
+    const bridge = makeBridge();
+    bridge.push([
+      { id: 'q-0', question: 'earlier', reply: 'answer', citations: [], state: 'done' },
+    ]);
+    const fixture = await render(bridge);
+    const list = el(fixture, 'turns')!;
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 1000 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 200 });
+    const turnArrives = async (id: string) => {
+      bridge.push([
+        ...(await bridge.localGetTurns()),
+        { id, question: id, reply: 'r', citations: [], state: 'done' },
+      ]);
+      await settle(fixture);
+    };
+
+    list.scrollTop = 100;
+    list.dispatchEvent(new Event('scroll'));
+    await turnArrives('from-chat-1');
+    const scrolledUp = list.scrollTop;
+    list.scrollTop = 760;
+    list.dispatchEvent(new Event('scroll'));
+    await turnArrives('from-chat-2');
+    const nearBottom = list.scrollTop;
+    list.scrollTop = 100;
+    list.dispatchEvent(new Event('scroll'));
+    await askTyped(fixture, 'asked here');
+
+    expect(scrolledUp).toBe(100);
+    expect(nearBottom).toBe(1000);
+    expect(list.scrollTop).toBe(1000);
+  });
+
+  it('one scroll: the window is fixed to the viewport, so the page itself never scrolls', async () => {
+    const fixture = await render(makeBridge());
+
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(declared(host, 'position')).toBe('fixed');
+    expect(declared(host, 'inset')).toBe('0');
+    expect(declared(host, 'height')).toBeNull();
+    expect(declared(host, 'overflow')).toBe('hidden');
+  });
+
+  it('focus returns to the question box each time the window is shown again', async () => {
+    const fixture = await render(makeBridge());
+    el(fixture, 'close')!.focus();
+    const before = document.activeElement;
+
+    window.dispatchEvent(new Event('focus'));
+    await settle(fixture);
+
+    expect(before).toBe(el(fixture, 'close'));
+    expect(document.activeElement).toBe(el(fixture, 'question'));
+  });
+
+  it('a slow refusal of an earlier question does not overwrite the error line of a later one', async () => {
+    const bridge = makeBridge();
+    let refuseTyped: (err: Error) => void = () => undefined;
+    bridge.localAsk
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            refuseTyped = reject;
+          }),
+      )
+      .mockImplementationOnce(async () => {
+        throw new Error(
+          '[scout:local/invalid-request] The recording must be a WAV of at most 5 minutes.',
+        );
+      });
+    const fixture = await render(bridge);
+    (el(fixture, 'mic') as HTMLButtonElement).dispatchEvent(new Event('pointerdown'));
+    await settle(fixture);
+    audio.processor!.hear([0.5, -0.5]);
+    await askTyped(fixture, 'typed while holding the mic');
+
+    (el(fixture, 'mic') as HTMLButtonElement).dispatchEvent(new Event('pointerup'));
+    await vi.waitFor(() => expect(bridge.localAsk).toHaveBeenCalledTimes(2));
+    await settle(fixture);
+    refuseTyped(new Error(`[scout:local/busy] ${BUSY}`));
+    await settle(fixture);
+
+    expect(el(fixture, 'error')?.textContent?.trim()).toBe(
+      'The recording must be a WAV of at most 5 minutes.',
+    );
   });
 
   it('does not cancel a question that already completed', async () => {
@@ -700,10 +976,12 @@ describe('Quick ask', () => {
 
     const grip = el(fixture, 'grip');
 
-    expect(grip?.textContent?.trim()).toBe('Scout');
+    expect(grip?.querySelector('b')?.textContent?.trim()).toBe('Scout');
     expect(region(grip!)).toBe('drag');
     const controls = Array.from(
-      fixture.nativeElement.querySelectorAll('input, button') as NodeListOf<HTMLElement>,
+      fixture.nativeElement.querySelectorAll(
+        'input, button, select, textarea',
+      ) as NodeListOf<HTMLElement>,
     );
     expect(controls.map(region)).toEqual(controls.map(() => 'no-drag'));
   });
@@ -719,6 +997,188 @@ describe('Quick ask', () => {
       children.indexOf(main.querySelector('form')!),
     );
     expect(children[children.length - 1]).toBe(main.querySelector('form'));
+  });
+
+  it('the header is the drag strip with the mark, the status, the tools toggle, Clear and Close; the status reads Answering… while Scout answers', async () => {
+    const bridge = makeBridge();
+    bridge.push([
+      { id: 'q-0', question: 'earlier', reply: 'answer', citations: [], state: 'done' },
+    ]);
+    const fixture = await render(bridge);
+    const header = el(fixture, 'grip')!;
+    const idle = {
+      controls: Array.from(header.querySelectorAll('button')).map((b) => b.dataset['test']),
+      status: el(fixture, 'status')?.textContent?.trim(),
+    };
+
+    el(fixture, 'clear-conversation')!.click();
+    await settle(fixture);
+    bridge.push([]);
+    await settle(fixture);
+    await askTyped(fixture, 'is prod green?');
+    const answering = {
+      status: el(fixture, 'status')?.textContent?.trim(),
+      clear: (el(fixture, 'clear-conversation') as HTMLButtonElement).disabled,
+    };
+
+    expect(idle).toEqual({
+      controls: ['tools-toggle', 'clear-conversation', 'close'],
+      status: 'Ready',
+    });
+    expect(bridge.localClearTurns).toHaveBeenCalledTimes(1);
+    expect(answering).toEqual({ status: 'Answering…', clear: true });
+  });
+
+  it('the tools tray is closed by default, opens on the toggle, holds every tool, and the tools inside it work', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const tray = el(fixture, 'tools-tray')!;
+    const toggle = el(fixture, 'tools-toggle')!;
+    const closed = { hidden: tray.hidden, pressed: toggle.getAttribute('aria-pressed') };
+
+    toggle.click();
+    await settle(fixture);
+    const opened = { hidden: tray.hidden, pressed: toggle.getAttribute('aria-pressed') };
+    const inside = [
+      'attach-screenshot',
+      'read-text',
+      'listen',
+      'listen-others',
+      'meeting-start',
+      'translation-mode',
+    ].filter((test) => tray.contains(el(fixture, test)));
+    el(fixture, 'listen')!.click();
+    await settle(fixture);
+    toggle.click();
+    await settle(fixture);
+    const whileListening = tray.hidden;
+
+    expect(closed).toEqual({ hidden: true, pressed: 'false' });
+    expect(opened).toEqual({ hidden: false, pressed: 'true' });
+    expect(inside).toEqual([
+      'attach-screenshot',
+      'read-text',
+      'listen',
+      'listen-others',
+      'meeting-start',
+      'translation-mode',
+    ]);
+    expect(declared(tray, 'display')).toBe('flex');
+    expect(bridge.localListen).toHaveBeenCalledExactlyOnceWith({ lane: 'me' });
+    expect(whileListening).toBe(false);
+  });
+
+  it('a closed tray is not displayed: the hidden rule wins over the tray flex rule', async () => {
+    const fixture = await render(makeBridge());
+    const tray = el(fixture, 'tools-tray')!;
+
+    expect(tray.hidden).toBe(true);
+    expect(declared(tray, 'display')).toBe('none');
+  });
+
+  it('the microphone sits inside the question field, and Send turns into a red Stop while Scout answers and back after', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const field = el(fixture, 'field')!;
+    const idle = {
+      send: el(fixture, 'send')?.getAttribute('aria-label'),
+      stop: el(fixture, 'stop'),
+    };
+
+    await askTyped(fixture, 'is prod green?');
+    const stop = el(fixture, 'stop')!;
+    const answering = { send: el(fixture, 'send'), red: stop.classList.contains('stop') };
+    bridge.finish();
+    await settle(fixture);
+
+    expect(field.contains(el(fixture, 'question'))).toBe(true);
+    expect(el(fixture, 'mic')!.parentElement).toBe(field);
+    expect(idle).toEqual({ send: 'Send', stop: null });
+    expect(answering).toEqual({ send: null, red: true });
+    expect(el(fixture, 'stop')).toBeNull();
+    expect(el(fixture, 'send')).not.toBeNull();
+  });
+
+  it('the question box is a textarea that starts at one row and grows with the text up to six rows, at most 4000 characters', async () => {
+    const fixture = await render(makeBridge());
+    const box = el(fixture, 'question') as HTMLTextAreaElement;
+
+    expect(box.tagName).toBe('TEXTAREA');
+    expect(box.rows).toBe(1);
+    expect(box.maxLength).toBe(4000);
+    expect(declared(box, 'field-sizing')).toBe('content');
+    expect(declared(box, 'max-height')).toBe('calc(6lh + 16px)');
+    expect(declared(box, 'overflow-y')).toBe('auto');
+  });
+
+  it('Enter sends the question and Shift+Enter inserts a line break without sending', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    const box = el(fixture, 'question') as HTMLTextAreaElement;
+    box.value = 'first line';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    const enter = (shiftKey: boolean) => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        shiftKey,
+        bubbles: true,
+        cancelable: true,
+      });
+      box.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+
+    const shiftPrevented = enter(true);
+    await settle(fixture);
+    const sentOnShift = bridge.localAsk.mock.calls.length;
+    box.value = 'first line\nsecond line';
+    box.dispatchEvent(new Event('input'));
+    await settle(fixture);
+    const enterPrevented = enter(false);
+    await settle(fixture);
+
+    expect({ shiftPrevented, sentOnShift }).toEqual({ shiftPrevented: false, sentOnShift: 0 });
+    expect(enterPrevented).toBe(true);
+    expect(bridge.localAsk.mock.calls.map(([req]) => req)).toEqual([
+      { id: expect.any(String), text: 'first line\nsecond line' },
+    ]);
+  });
+
+  it('the composer is never clipped at the 240 px minimum: it never shrinks, and the tools area with every block open shrinks and scrolls', async () => {
+    const fixture = await render(makeBridge());
+    const quickAsk = fixture.componentInstance;
+    quickAsk.meeting.set('running');
+    quickAsk.screenText.set('Error 502');
+    quickAsk.error.set('Scout could not use the microphone.');
+    el(fixture, 'tools-toggle')!.click();
+    await settle(fixture);
+    const tools = el(fixture, 'tools')!;
+    const composer = fixture.nativeElement.querySelector('form') as HTMLElement;
+
+    const blocks = [
+      'tools-tray',
+      'meeting-indicator',
+      'meeting-tools',
+      'screen-text',
+      'error',
+      'transcript',
+    ].filter((test) => tools.contains(el(fixture, test)));
+
+    expect(blocks).toEqual([
+      'tools-tray',
+      'meeting-indicator',
+      'meeting-tools',
+      'screen-text',
+      'error',
+      'transcript',
+    ]);
+    expect(declared(composer, 'flex')).toBe('none');
+    expect(declared(tools, 'overflow-y')).toBe('auto');
+    expect(declared(tools, 'min-height')).toBe('0');
+    expect(declared(tools, 'max-height')).toBe('40%');
+    expect(declared(el(fixture, 'turns')!, 'min-height')).toBe('0');
   });
 
   it('hides the window on Escape', async () => {
@@ -997,6 +1457,7 @@ describe('Quick ask: screenshot', () => {
     await attach(fixture);
 
     await askTyped(fixture, 'what is this error?');
+    bridge.finish();
     await askTyped(fixture, 'and now?');
 
     expect(bridge.localAsk.mock.calls.map(([req]) => req)).toEqual([
@@ -1007,6 +1468,40 @@ describe('Quick ask: screenshot', () => {
       },
       { id: expect.any(String), text: 'and now?' },
     ]);
+    expect(el(fixture, 'screenshot-preview')).toBeNull();
+  });
+
+  it('a refused question keeps the typed text and the screenshot for the next try', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+    await attach(fixture);
+    bridge.refuseNextAsBusy();
+
+    await askTyped(fixture, 'what is this error?');
+    const refused = {
+      error: el(fixture, 'error')?.textContent?.trim(),
+      field: (el(fixture, 'question') as HTMLInputElement).value,
+      preview: el(fixture, 'screenshot-preview') !== null,
+    };
+    (fixture.nativeElement.querySelector('form') as HTMLFormElement).dispatchEvent(
+      new Event('submit', { cancelable: true }),
+    );
+    await settle(fixture);
+
+    expect(refused).toEqual({ error: BUSY, field: 'what is this error?', preview: true });
+    expect(bridge.localAsk.mock.calls.map(([req]) => req)).toEqual([
+      {
+        id: expect.any(String),
+        text: 'what is this error?',
+        image: { contentType: 'image/jpeg', base64: 'U0hPVA==' },
+      },
+      {
+        id: expect.any(String),
+        text: 'what is this error?',
+        image: { contentType: 'image/jpeg', base64: 'U0hPVA==' },
+      },
+    ]);
+    expect((el(fixture, 'question') as HTMLInputElement).value).toBe('');
     expect(el(fixture, 'screenshot-preview')).toBeNull();
   });
 
@@ -1025,7 +1520,10 @@ describe('Quick ask: screenshot', () => {
     };
     expect(request.audio.contentType).toBe('audio/wav');
     expect(request.image).toEqual({ contentType: 'image/jpeg', base64: 'U0hPVA==' });
-    expect(el(fixture, 'screenshot-preview')).toBeNull();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(el(fixture, 'screenshot-preview')).toBeNull();
+    });
   });
 
   it('Remove drops the screenshot and sends text only', async () => {
@@ -1193,6 +1691,7 @@ describe('Quick ask: system audio and transcript', () => {
     const toggle = el(fixture, 'include-transcript') as HTMLInputElement;
     const partial = el(fixture, 'transcript-partial')?.textContent?.trim();
     await askTyped(fixture, 'what did they ask me?');
+    bridge.finish();
     el(fixture, 'clear-transcript')!.click();
     await settle(fixture);
     await askTyped(fixture, 'and now?');
@@ -1231,6 +1730,7 @@ describe('Quick ask: system audio and transcript', () => {
     await settle(fixture);
 
     await askTyped(fixture, 'what did they ask me?');
+    bridge.finish();
     el(fixture, 'include-transcript')!.click();
     await settle(fixture);
     await askTyped(fixture, 'and now?');
@@ -1689,6 +2189,7 @@ describe('Quick ask: text from the screen', () => {
     await type(fixture, 'screen-text', 'Error 502 Bad gateway');
 
     await askTyped(fixture, 'what is wrong?');
+    bridge.finish();
     const blockAfterAsk = el(fixture, 'screen-text');
     await askTyped(fixture, 'and now?');
 
@@ -1755,6 +2256,7 @@ describe('Quick ask: text from the screen', () => {
     await settle(fixture);
 
     await askTyped(fixture, 'what is wrong?');
+    bridge.finish();
     await askTyped(fixture, 'and now?');
 
     expect(texts(fixture, 'asked')).toEqual(['what is wrong?', 'and now?']);
