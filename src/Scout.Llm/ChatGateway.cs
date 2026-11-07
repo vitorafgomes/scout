@@ -84,9 +84,10 @@ internal sealed class ChatGateway(
             _target, request.UserMessage.Length, request.Image is null ? "false" : "true");
 
         var outputChars = 0;
+        var trace = new StreamTrace();
         if (_agent is not null)
         {
-            await foreach (var content in StreamAgentAsync(request, cancellationToken)
+            await foreach (var content in StreamAgentAsync(request, trace, cancellationToken)
                 .ConfigureAwait(false))
             {
                 outputChars += content.Length;
@@ -95,7 +96,7 @@ internal sealed class ChatGateway(
         }
         else
         {
-            await foreach (var content in StreamChatAsync(request, cancellationToken)
+            await foreach (var content in StreamChatAsync(request, trace, cancellationToken)
                 .ConfigureAwait(false))
             {
                 outputChars += content.Length;
@@ -106,10 +107,38 @@ internal sealed class ChatGateway(
         _logger.LogInformation(
             "LLM response complete <- {Target} (outputChars={OutputChars}).",
             _target, outputChars);
+        if (outputChars == 0)
+        {
+            _logger.LogWarning(
+                "LLM response empty <- {Target} (updates={Updates}, finish={Finish}, functionCalls={FunctionCalls}).",
+                _target, trace.Updates, trace.Finish ?? "unknown", trace.FunctionCalls.Count == 0 ? "none" : string.Join(",", trace.FunctionCalls));
+            if (trace.Failure is { } failure)
+            {
+                throw TerminalFailure(failure);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The exception for a stream the provider ended with a failure code and no text: a usage limit or quota is
+    /// <see cref="LlmQuotaExceededException"/>, a rate limit is <see cref="LlmRateLimitException"/>, and any other code
+    /// is an error naming the code. Only the code is used, never the provider's message.
+    /// </summary>
+    internal static Exception TerminalFailure(string code)
+    {
+        if (code.Contains("usage_limit", StringComparison.Ordinal) || code.Contains("quota", StringComparison.Ordinal))
+        {
+            return new LlmQuotaExceededException(code);
+        }
+
+        return code.Contains("rate_limit", StringComparison.Ordinal)
+            ? new LlmRateLimitException($"LLM rate limit ({code}).")
+            : new InvalidOperationException($"The AI provider ended the answer with an error ({code}).");
     }
 
     private async IAsyncEnumerable<string> StreamChatAsync(
         ChatRequest request,
+        StreamTrace trace,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var history = new ChatHistory();
@@ -158,6 +187,7 @@ internal sealed class ChatGateway(
                     break;
                 }
 
+                trace.Observe(e.Current);
                 content = e.Current.Content;
             }
             catch (Exception ex) when (TranslateTooManyRequests(ex) is { } translated)
@@ -180,6 +210,7 @@ internal sealed class ChatGateway(
     // applies. Only non-empty content is yielded.
     private async IAsyncEnumerable<string> StreamAgentAsync(
         ChatRequest request,
+        StreamTrace trace,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var message = UserMessage(request);
@@ -235,6 +266,7 @@ internal sealed class ChatGateway(
                     break;
                 }
 
+                trace.Observe(e.Current.Message);
                 content = e.Current.Message.Content;
             }
             catch (Exception ex) when (TranslateTooManyRequests(ex) is { } translated)
@@ -359,5 +391,53 @@ internal sealed class ChatGateway(
         }
 
         return settings;
+    }
+
+    /// <summary>
+    /// What a stream reported besides its text: how many updates arrived, the last finish reason or status a
+    /// provider gave, and the names of the functions the model called. Never the text or the arguments.
+    /// </summary>
+    private sealed class StreamTrace
+    {
+        public int Updates { get; private set; }
+
+        public string? Finish { get; private set; }
+
+        public List<string> FunctionCalls { get; } = [];
+
+        public string? Failure { get; private set; }
+
+        public void Observe(StreamingChatMessageContent update)
+        {
+            Updates++;
+            Finish = FinishOf(update) ?? Finish;
+            Failure = FailureOf(update.InnerContent) ?? Failure;
+            foreach (var call in update.Items.OfType<StreamingFunctionCallUpdateContent>())
+            {
+                if (!string.IsNullOrEmpty(call.Name) && !FunctionCalls.Contains(call.Name))
+                {
+                    FunctionCalls.Add(call.Name);
+                }
+            }
+        }
+
+#pragma warning disable OPENAI001
+        private static string? FinishOf(StreamingChatMessageContent update) => update.InnerContent switch
+        {
+            OpenAI.Responses.StreamingResponseIncompleteUpdate incomplete => $"incomplete ({incomplete.Response?.IncompleteStatusDetails?.Reason})",
+            OpenAI.Responses.StreamingResponseFailedUpdate failed => $"failed ({failed.Response?.Error?.Code})",
+            OpenAI.Responses.StreamingResponseErrorUpdate error => $"error ({error.Code})",
+            OpenAI.Responses.StreamingResponseRefusalDoneUpdate => "refusal",
+            OpenAI.Responses.StreamingResponseCompletedUpdate completed => completed.Response?.Status?.ToString(),
+            _ => update.Metadata is { } metadata && metadata.TryGetValue("FinishReason", out var reason) ? reason?.ToString() : null,
+        };
+
+        private static string? FailureOf(object? inner) => inner switch
+        {
+            OpenAI.Responses.StreamingResponseFailedUpdate failed => failed.Response?.Error?.Code.ToString() ?? "unknown",
+            OpenAI.Responses.StreamingResponseErrorUpdate error => string.IsNullOrEmpty(error.Code) ? "unknown" : error.Code,
+            _ => null,
+        };
+#pragma warning restore OPENAI001
     }
 }

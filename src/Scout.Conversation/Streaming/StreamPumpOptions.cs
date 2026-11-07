@@ -50,6 +50,13 @@ public sealed record StreamPumpOptions
         "The AI provider rejected the request: the account has no credit left or reached its spending limit. Add credit with the provider or choose another one on the AI Sources screen in Scout.";
 
     /// <summary>
+    /// User-facing text appended instead of <see cref="QuotaExceededMessage"/> when the ChatGPT plan refuses with
+    /// <c>subscription_sharing_usage_limit_exceeded</c>, its usage limit for apps like Scout.
+    /// </summary>
+    public string PlanUsageLimitMessage { get; init; } =
+        "The ChatGPT plan reached its usage limit for apps like Scout; try again later, or choose another AI Source in Scout Desktop.";
+
+    /// <summary>
     /// User-facing text appended when the provider needs the user to sign in
     /// again. Rendered verbatim via the terminal Complete call.
     /// </summary>
