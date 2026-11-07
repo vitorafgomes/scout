@@ -3,7 +3,7 @@ namespace Scout.Knowledge;
 /// <summary>Persistence + similarity search over indexed project chunks.</summary>
 public interface IProjectKnowledgeStore
 {
-    /// <summary>Ensure the backing collection exists.</summary>
+    /// <summary>Ensure the backing collection and the full-text table exist.</summary>
     /// <param name="ct">Cancellation token.</param>
     Task InitializeAsync(CancellationToken ct);
 
@@ -44,4 +44,15 @@ public interface IProjectKnowledgeStore
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Matching chunks, exact matches before partial matches, capped at <paramref name="top"/>.</returns>
     Task<IReadOnlyList<ChunkRecord>> FindSymbolAsync(string project, string symbol, string? kind, int top, CancellationToken ct);
+
+    /// <summary>
+    /// Full-text search restricted to one project, with no embedding: the words of <paramref name="text"/>
+    /// (two characters or more, at most twelve) are matched as plain terms, never as query operators.
+    /// </summary>
+    /// <param name="project">Project name to restrict the search to.</param>
+    /// <param name="text">The question in the user's words.</param>
+    /// <param name="top">Maximum number of results to return.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Matching chunks without vectors, best match first; empty when the text has no words.</returns>
+    Task<IReadOnlyList<ChunkRecord>> SearchTextAsync(string project, string text, int top, CancellationToken ct);
 }

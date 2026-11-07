@@ -1,7 +1,12 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.VectorData;
+
 namespace Scout.Knowledge.Tests;
 
 public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
 {
+    private static readonly float[] WrongSizeVector = [1f, 2f, 3f];
+
     private const int Dimensions = 768;
 
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"scout-knowledge-{Guid.NewGuid():N}.db");
@@ -424,6 +429,248 @@ public sealed class SqliteProjectKnowledgeStoreTests : IDisposable
         var has = await store.HasProjectAsync("alpha", CancellationToken.None);
 
         has.ShouldBeTrue();
+    }
+
+    private static ChunkRecord TextChunk(string project, string id, string content, ReadOnlyMemory<float> embedding) => new()
+    {
+        Id = $"{project}:{id}",
+        Project = project,
+        Path = $"{id}.cs",
+        Kind = "code",
+        Symbol = string.Empty,
+        StartLine = 1,
+        EndLine = 10,
+        Content = content,
+        Embedding = embedding,
+    };
+
+    [Fact]
+    public async Task InitializeAsync_CreatesTheFullTextTable()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+
+        await store.InitializeAsync(CancellationToken.None);
+
+        await using var connection = new SqliteConnection(ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT sql FROM sqlite_master WHERE name = 'chunk_fts';";
+        var sql = (string?)await command.ExecuteScalarAsync();
+        sql.ShouldNotBeNull().ShouldContain("fts5", Case.Insensitive);
+    }
+
+    [Fact]
+    public async Task HasProjectAsync_IsTrueForAProjectIndexedWithoutVectors()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "owner/repo",
+            new[] { TextChunk("owner/repo", "only", "public class Invoice { }", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+
+        var has = await store.HasProjectAsync("owner/repo", CancellationToken.None);
+
+        has.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ReplaceProjectAsync_WritesVectorlessChunksToTheTextTableOnly()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await Should.NotThrowAsync(() => store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                TextChunk("alpha", "vector", "ledger entry", Vector((0, 1f))),
+                TextChunk("alpha", "vectorless", "ledger posting", ReadOnlyMemory<float>.Empty),
+            },
+            CancellationToken.None));
+
+        var vectorHits = await store.SearchAsync("alpha", Vector((0, 1f)), top: 10, CancellationToken.None);
+        vectorHits.ShouldHaveSingleItem().Id.ShouldBe("alpha:vector");
+
+        var textHits = await store.SearchTextAsync("alpha", "posting", top: 10, CancellationToken.None);
+        textHits.ShouldHaveSingleItem().Id.ShouldBe("alpha:vectorless");
+    }
+
+    [Fact]
+    public async Task ReplaceProjectAsync_WhenTheVectorWriteFails_LeavesTheProjectUnindexedAndThrows()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await Should.ThrowAsync<VectorStoreException>(() => store.ReplaceProjectAsync(
+            "alpha",
+            new[] { TextChunk("alpha", "wrong-size", "ledger entry", WrongSizeVector) },
+            CancellationToken.None));
+
+        (await store.HasProjectAsync("alpha", CancellationToken.None)).ShouldBeFalse();
+        (await store.SearchTextAsync("alpha", "ledger", top: 5, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ReplaceFileAsync_WhenTheVectorWriteFails_KeepsTheTextRowsItHad()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { FileChunk("alpha", "Foo.cs", "old", Vector((0, 1f))) },
+            CancellationToken.None);
+
+        await Should.ThrowAsync<VectorStoreException>(() => store.ReplaceFileAsync(
+            "alpha",
+            "Foo.cs",
+            new[] { FileChunk("alpha", "Foo.cs", "new", WrongSizeVector) },
+            CancellationToken.None));
+
+        (await store.FindSymbolAsync("alpha", "old", kind: null, top: 5, CancellationToken.None))
+            .ShouldHaveSingleItem().Id.ShouldBe("alpha:Foo.cs:old");
+        (await store.FindSymbolAsync("alpha", "new", kind: null, top: 5, CancellationToken.None)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchTextAsync_RanksTheChunkWithTheQuestionsWordsFirst()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                TextChunk("alpha", "weak", "the invoice header and the customer address", ReadOnlyMemory<float>.Empty),
+                TextChunk("alpha", "strong", "invoice total applies the discount to every invoice line", ReadOnlyMemory<float>.Empty),
+                TextChunk("alpha", "none", "the shipping label printer", ReadOnlyMemory<float>.Empty),
+            },
+            CancellationToken.None);
+
+        var hits = await store.SearchTextAsync("alpha", "How is the invoice total discount computed?", top: 5, CancellationToken.None);
+
+        hits.Select(h => h.Id).ShouldBe(["alpha:strong", "alpha:weak", "alpha:none"]);
+        hits[0].Content.ShouldBe("invoice total applies the discount to every invoice line");
+        hits[0].Embedding.Length.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task SearchTextAsync_NeverReturnsAnotherProjectsChunks()
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { TextChunk("alpha", "mine", "refund policy", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "beta",
+            new[] { TextChunk("beta", "theirs", "refund policy refund refund", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+
+        var hits = await store.SearchTextAsync("alpha", "refund policy", top: 10, CancellationToken.None);
+
+        hits.ShouldHaveSingleItem().Id.ShouldBe("alpha:mine");
+    }
+
+    [Theory]
+    [InlineData("\"invoice", 1)]
+    [InlineData("(invoice)", 1)]
+    [InlineData("invoice AND", 1)]
+    [InlineData("NEAR(invoice total)", 1)]
+    [InlineData("invoice*", 1)]
+    [InlineData("path:invoice", 1)]
+    [InlineData("NOT invoice", 1)]
+    [InlineData("AND OR NOT", 0)]
+    [InlineData("*", 0)]
+    [InlineData("\"", 0)]
+    [InlineData(":", 0)]
+    [InlineData("", 0)]
+    public async Task SearchTextAsync_QuotesOperatorsAndNeverThrows(string text, int expected)
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { TextChunk("alpha", "billing", "invoice total", ReadOnlyMemory<float>.Empty) },
+            CancellationToken.None);
+
+        IReadOnlyList<ChunkRecord> hits = Array.Empty<ChunkRecord>();
+        await Should.NotThrowAsync(async () =>
+            hits = await store.SearchTextAsync("alpha", text, top: 5, CancellationToken.None));
+
+        hits.Count.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("Async", "SearchAsync")]
+    [InlineData("Symbol", "FindSymbolAsync")]
+    public async Task FindSymbolAsync_FindsTheNameInsideTheSymbol(string name, string expected)
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "SearchAsync", "code"),
+                SymbolChunk("alpha", "b", "FindSymbolAsync", "code"),
+                SymbolChunk("alpha", "c", "Unrelated", "code"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", name, kind: null, top: 10, CancellationToken.None);
+
+        results.Select(r => r.Symbol).ShouldContain(expected);
+        results.ShouldNotContain(r => r.Symbol == "Unrelated");
+    }
+
+    [Theory]
+    [InlineData("my_func", "my_func")]
+    [InlineData("100%", "100%done")]
+    [InlineData("a\\b", "a\\b")]
+    public async Task FindSymbolAsync_MatchesPercentUnderscoreAndBackslashLiterally(string name, string expected)
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[]
+            {
+                SymbolChunk("alpha", "a", "my_func", "code"),
+                SymbolChunk("alpha", "b", "myXfunc", "code"),
+                SymbolChunk("alpha", "c", "100%done", "code"),
+                SymbolChunk("alpha", "d", "100Xdone", "code"),
+                SymbolChunk("alpha", "e", "a\\b", "code"),
+                SymbolChunk("alpha", "f", "ab", "code"),
+            },
+            CancellationToken.None);
+
+        var results = await store.FindSymbolAsync("alpha", name, kind: null, top: 10, CancellationToken.None);
+
+        results.ShouldHaveSingleItem().Symbol.ShouldBe(expected);
+    }
+
+    [Theory]
+    [InlineData("\"*")]
+    [InlineData("Handler\" OR symbol:*")]
+    public async Task FindSymbolAsync_WithOperatorsInTheName_ReturnsEmptyWithoutThrowing(string name)
+    {
+        var store = new SqliteProjectKnowledgeStore(ConnectionString);
+        await store.InitializeAsync(CancellationToken.None);
+        await store.ReplaceProjectAsync(
+            "alpha",
+            new[] { SymbolChunk("alpha", "a", "Handler", "code") },
+            CancellationToken.None);
+
+        IReadOnlyList<ChunkRecord> results = Array.Empty<ChunkRecord>();
+        await Should.NotThrowAsync(async () =>
+            results = await store.FindSymbolAsync("alpha", name, kind: null, top: 5, CancellationToken.None));
+
+        results.ShouldBeEmpty();
     }
 
     public void Dispose()

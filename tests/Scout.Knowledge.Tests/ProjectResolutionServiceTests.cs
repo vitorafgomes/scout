@@ -6,6 +6,8 @@ namespace Scout.Knowledge.Tests;
 
 public sealed class ProjectResolutionServiceTests : IDisposable
 {
+    private static readonly float[] WrongSizeVector = [1f, 2f, 3f];
+
     private readonly string _root;
 
     public ProjectResolutionServiceTests()
@@ -158,6 +160,33 @@ public sealed class ProjectResolutionServiceTests : IDisposable
         var entry = await NewService(options, store).ResolveAsync("boom");
 
         entry.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WhenTheVectorWriteFails_ReturnsNullAndIndexesAgainOnTheNextUse()
+    {
+        var repo = MakeRepo("half");
+        File.WriteAllText(Path.Combine(repo, "README.md"), "Ledger entries are posted nightly.");
+        var dbPath = Path.Combine(_root, "half.db");
+        var store = new SqliteProjectKnowledgeStore($"Data Source={dbPath}");
+        var embedder = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        embedder
+            .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(_ => new GeneratedEmbeddings<Embedding<float>> { new Embedding<float>(WrongSizeVector) });
+        var indexer = new ProjectIndexer(new FileChunker(), embedder, store, NullLogger<ProjectIndexer>.Instance);
+        var service = NewService(
+            new ProjectsOptions { Items = { new ProjectEntry { Name = "half", RepoPath = repo } } },
+            store,
+            indexer);
+
+        var first = await service.ResolveAsync("half");
+        var second = await service.ResolveAsync("half");
+
+        first.ShouldBeNull();
+        second.ShouldBeNull();
+        (await store.HasProjectAsync("half", CancellationToken.None)).ShouldBeFalse();
+        await embedder.Received(2).GenerateAsync(
+            Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

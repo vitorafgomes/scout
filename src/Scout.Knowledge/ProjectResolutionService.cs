@@ -105,8 +105,8 @@ public sealed class ProjectResolutionService
     /// <summary>
     /// Resolves a project name to its entry, indexing it on first use.
     /// Returns null when the project is unknown or when first-use indexing
-    /// fails; never throws for those cases. A <see cref="NotSupportedException"/>
-    /// from a provider without embeddings propagates.
+    /// fails; never throws for those cases. A provider without embeddings still
+    /// indexes the project, without vectors.
     /// </summary>
     public async Task<ProjectEntry?> ResolveAsync(string projectName, CancellationToken ct = default)
     {
@@ -136,7 +136,7 @@ public sealed class ProjectResolutionService
                 _stale.Remove(entry.Name);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException and not NotSupportedException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "Lazy indexing failed for project {Project}", entry.Name);
             return null;

@@ -21,7 +21,6 @@ public sealed class ProjectKnowledgeService(
 {
     private const int TopResults = 5;
     private const int FindSymbolTopResults = 10;
-    private const string NoEmbeddingsMessage = "Project search is not available with the current AI provider.";
 
     private readonly IEmbeddingGenerator<string, Embedding<float>> embedder = embedder;
     private readonly IProjectKnowledgeStore store = store;
@@ -29,7 +28,9 @@ public sealed class ProjectKnowledgeService(
     private readonly ILogger<ProjectKnowledgeService> logger = logger;
 
     /// <summary>
-    /// Searches the project for content relevant to the question and returns a cited context string.
+    /// Searches the project for content relevant to the question and returns a cited context string:
+    /// by vector similarity, or by full-text search when the AI provider has no embeddings or the
+    /// vector search finds nothing (a project indexed without vectors).
     /// Never throws: returns a clean message on empty input, no results, or failure.
     /// </summary>
     /// <param name="project">The project identifier.</param>
@@ -46,15 +47,7 @@ public sealed class ProjectKnowledgeService(
             return "Provide a project and a question.";
         }
 
-        ProjectEntry? entry;
-        try
-        {
-            entry = await this.resolution.ResolveAsync(project, cancellationToken);
-        }
-        catch (NotSupportedException)
-        {
-            return this.NoEmbeddings(project);
-        }
+        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
 
         if (entry is null)
         {
@@ -63,11 +56,20 @@ public sealed class ProjectKnowledgeService(
 
         try
         {
-            var vector = await this.embedder.GenerateVectorAsync(
-                question,
-                cancellationToken: cancellationToken);
+            var vector = await this.VectorOrNullAsync(question, cancellationToken);
+            if (vector is not { } query)
+            {
+                var textHits = await this.store.SearchTextAsync(entry.Name, question, TopResults, cancellationToken);
+                return textHits.Count == 0
+                    ? $"No content in project '{project}' matches the question."
+                    : string.Join("\n\n", textHits.Select(FormatHit));
+            }
 
-            var hits = await this.store.SearchAsync(entry.Name, vector, TopResults, cancellationToken);
+            var hits = await this.store.SearchAsync(entry.Name, query, TopResults, cancellationToken);
+            if (hits.Count == 0)
+            {
+                hits = await this.store.SearchTextAsync(entry.Name, question, TopResults, cancellationToken);
+            }
 
             if (hits.Count == 0)
             {
@@ -76,10 +78,6 @@ public sealed class ProjectKnowledgeService(
 
             var blocks = hits.Select(FormatHit);
             return string.Join("\n\n", blocks);
-        }
-        catch (NotSupportedException)
-        {
-            return this.NoEmbeddings(project);
         }
         catch (Exception ex)
         {
@@ -111,15 +109,7 @@ public sealed class ProjectKnowledgeService(
             return "Provide a project and a symbol.";
         }
 
-        ProjectEntry? entry;
-        try
-        {
-            entry = await this.resolution.ResolveAsync(project, cancellationToken);
-        }
-        catch (NotSupportedException)
-        {
-            return this.NoEmbeddings(project);
-        }
+        var entry = await this.resolution.ResolveAsync(project, cancellationToken);
 
         if (entry is null)
         {
@@ -130,7 +120,6 @@ public sealed class ProjectKnowledgeService(
 
         try
         {
-            // Metadata-only path: the embedder is intentionally not invoked here.
             var hits = await this.store.FindSymbolAsync(entry.Name, symbol, kind, limit, cancellationToken);
 
             if (hits.Count == 0)
@@ -148,10 +137,16 @@ public sealed class ProjectKnowledgeService(
         }
     }
 
-    private string NoEmbeddings(string project)
+    private async Task<ReadOnlyMemory<float>?> VectorOrNullAsync(string question, CancellationToken cancellationToken)
     {
-        this.logger.LogInformation("Project search for {Project} skipped: the AI provider has no embeddings.", project);
-        return NoEmbeddingsMessage;
+        try
+        {
+            return await this.embedder.GenerateVectorAsync(question, cancellationToken: cancellationToken);
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
     }
 
     private static string FormatHit(ChunkRecord record)

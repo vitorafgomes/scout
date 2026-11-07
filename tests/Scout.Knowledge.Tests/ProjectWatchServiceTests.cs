@@ -109,27 +109,27 @@ public sealed class ProjectWatchServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Changes_Without_Embeddings_Log_Reindexing_Off_Once_Without_Stack()
+    public async Task Changes_Without_Embeddings_Reindex_The_File_Without_Vectors()
     {
         var generator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
         generator
             .GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
             .Returns<GeneratedEmbeddings<Embedding<float>>>(_ => throw new NotSupportedException("Embeddings are not available."));
+        var store = Substitute.For<IProjectKnowledgeStore>();
         var logger = new RecordingLogger();
-        using var service = Service(Substitute.For<IProjectKnowledgeStore>(), generator, logger: logger);
+        using var service = Service(store, generator, logger: logger);
         await StartAndWaitReadyAsync(service);
-        logger.Entries.Clear();
 
         File.WriteAllText(Path.Combine(_repoPath, "Foo.cs"), "public class Foo { }\n");
-        await PollUntilAsync(() => generator.ReceivedCalls().Any());
-        File.WriteAllText(Path.Combine(_repoPath, "Bar.cs"), "public class Bar { }\n");
-        await PollUntilAsync(() => generator.ReceivedCalls().Count() >= 2);
+        await PollUntilAsync(() => ReceivedReplaceFile(store, "Foo.cs"));
         await service.StopAsync(CancellationToken.None);
 
-        var entry = logger.Entries.ShouldHaveSingleItem();
-        entry.Level.ShouldBe(LogLevel.Information);
-        entry.Message.ShouldBe("Project re-indexing is off: the AI provider has no embeddings.");
-        entry.Exception.ShouldBeNull();
+        await store.Received().ReplaceFileAsync(
+            "proj",
+            "Foo.cs",
+            Arg.Is<IReadOnlyList<ChunkRecord>>(r => r.Count > 0 && r.All(c => c.Embedding.Length == 0 && c.Symbol == "Foo")),
+            Arg.Any<CancellationToken>());
+        logger.Entries.ShouldAllBe(e => e.Exception == null);
     }
 
     private sealed record LogEntry(LogLevel Level, string Message, Exception? Exception);
