@@ -1,19 +1,34 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   EventEmitter,
   OnDestroy,
   Output,
   OnInit,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 
-import { readIpcError, type GitHubStatus } from '@scout/shared';
+import {
+  GITHUB_BOT_WRITES,
+  readIpcError,
+  type GitHubBotStatus,
+  type GitHubBotWrite,
+  type GitHubStatus,
+} from '@scout/shared';
 
 import { ScoutBridgeService } from '../core/scout-bridge';
 
 const POLL_MS = 3000;
+
+const BOT_WRITE_LABELS: Readonly<Record<GitHubBotWrite, string>> = {
+  review: 'Post reviews',
+  verdict: 'Give verdicts (approve or request changes)',
+  comment: 'Comment on pull requests and issues',
+  issue: 'Open issues',
+};
 
 @Component({
   selector: 'sc-github-connect',
@@ -48,6 +63,150 @@ const POLL_MS = 3000;
               Disconnect
             </button>
           </div>
+          @if (bot(); as b) {
+            <section class="bot" data-test="github-bot-section">
+              <p class="note"><strong>Use a Scout bot on GitHub (optional)</strong></p>
+              @switch (b.state) {
+                @case ('none') {
+                  <p class="help" data-test="github-bot-help">
+                    Reviews, verdicts, comments and issues Scout posts show as the bot instead of
+                    you. GitHub creates an App that you own; Scout keeps its key on this computer.
+                  </p>
+                  <div class="row">
+                    <select
+                      class="input"
+                      aria-label="Create the bot on"
+                      data-test="github-bot-target"
+                      (change)="botTarget.set(targetOf($event))"
+                    >
+                      <option value="user">My account</option>
+                      <option value="org">An organization</option>
+                    </select>
+                    @if (botTarget() === 'org') {
+                      <input
+                        #orgInput
+                        type="text"
+                        class="input"
+                        aria-label="Organization"
+                        placeholder="organization"
+                        data-test="github-bot-org"
+                      />
+                    }
+                    <button
+                      type="button"
+                      class="btn btn--primary"
+                      data-test="github-bot-create"
+                      [disabled]="busy()"
+                      (click)="createBot(orgValue())"
+                    >
+                      Create the bot on GitHub
+                    </button>
+                  </div>
+                }
+                @case ('creating') {
+                  <p class="note" data-test="github-bot-creating">
+                    Finish creating the App on GitHub in your browser.
+                  </p>
+                  <div class="row">
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      data-test="github-bot-cancel"
+                      [disabled]="busy()"
+                      (click)="cancelBot()"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                }
+                @case ('created') {
+                  <p class="note" data-test="github-bot-created">
+                    {{ b.login }} exists. Install it on the repositories it may act on; until then
+                    Scout acts as you.
+                  </p>
+                  <div class="row">
+                    @if (b.installUrl !== null) {
+                      <button
+                        type="button"
+                        class="btn btn--primary"
+                        data-test="github-bot-install"
+                        (click)="open(b.installUrl)"
+                      >
+                        Install the bot
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      data-test="github-bot-remove"
+                      [disabled]="busy()"
+                      (click)="removeBot(b)"
+                    >
+                      Remove the bot
+                    </button>
+                  </div>
+                }
+                @case ('installed') {
+                  <p class="note" data-test="github-bot-installed">{{ b.login }} can act on:</p>
+                  <ul class="repos" data-test="github-bot-repos">
+                    @for (repo of b.repositories; track repo) {
+                      <li>{{ repo }}</li>
+                    }
+                  </ul>
+                  <p class="help">Signed by the bot; an action switched off is signed as you.</p>
+                  @for (w of writes; track w) {
+                    <label class="switch">
+                      <input
+                        type="checkbox"
+                        [attr.data-test]="'github-bot-write-' + w"
+                        [checked]="b.writes.includes(w)"
+                        [disabled]="busy()"
+                        (change)="switchWrite(b, w)"
+                      />
+                      {{ writeLabels[w] }}
+                    </label>
+                  }
+                  <div class="row">
+                    @if (b.installUrl !== null) {
+                      <button
+                        type="button"
+                        class="btn btn--secondary"
+                        data-test="github-bot-install"
+                        (click)="open(b.installUrl)"
+                      >
+                        Change repositories
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="btn btn--secondary"
+                      data-test="github-bot-remove"
+                      [disabled]="busy()"
+                      (click)="removeBot(b)"
+                    >
+                      Remove the bot
+                    </button>
+                  </div>
+                }
+              }
+              @if (b.error !== null) {
+                <p class="err" data-test="github-bot-error">{{ b.error.message }}</p>
+              }
+              @if (removedSettingsUrl(); as url) {
+                <p class="help" data-test="github-bot-removed">
+                  Scout no longer uses the bot. The App stays on GitHub until you delete it there.
+                </p>
+                <button
+                  type="button"
+                  class="link"
+                  data-test="github-bot-settings"
+                  (click)="open(url)"
+                >
+                  Open the App's settings on GitHub
+                </button>
+              }
+            </section>
+          }
         } @else if (s.pending !== null) {
           <p class="note">Enter this code on GitHub:</p>
           <code class="code" data-test="github-user-code">{{ s.pending.userCode }}</code>
@@ -146,10 +305,29 @@ const POLL_MS = 3000;
   `,
   styles: [
     `
-      .connect {
+      .connect,
+      .bot {
         display: flex;
         flex-direction: column;
         gap: 8px;
+      }
+      .bot {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #252b3b;
+      }
+      .repos {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 12px;
+        color: #e4e8f0;
+      }
+      .switch {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 12px;
+        color: #e4e8f0;
       }
       .row {
         display: flex;
@@ -234,6 +412,12 @@ export class GitHubConnectComponent implements OnInit, OnDestroy {
   readonly actionError = signal<string | null>(null);
   readonly tokenFormOpen = signal(false);
   readonly createTokenUrl = 'https://github.com/settings/personal-access-tokens/new';
+  readonly bot = signal<GitHubBotStatus | null>(null);
+  readonly botTarget = signal<'user' | 'org'>('user');
+  readonly removedSettingsUrl = signal<string | null>(null);
+  readonly writes = GITHUB_BOT_WRITES;
+  readonly writeLabels = BOT_WRITE_LABELS;
+  private readonly orgInput = viewChild<ElementRef<HTMLInputElement>>('orgInput');
 
   @Output() readonly connectedChange = new EventEmitter<boolean>();
 
@@ -269,6 +453,45 @@ export class GitHubConnectComponent implements OnInit, OnDestroy {
       await this.bridge.githubSaveToken({ token });
       this.tokenFormOpen.set(false);
     });
+  }
+
+  async createBot(org: string): Promise<void> {
+    this.removedSettingsUrl.set(null);
+    await this.run(async () => {
+      await this.bridge.githubBotCreate(
+        this.botTarget() === 'org' ? { target: 'org', org } : { target: 'user' },
+      );
+    });
+  }
+
+  async cancelBot(): Promise<void> {
+    await this.run(async () => {
+      await this.bridge.githubBotCancel();
+    });
+  }
+
+  async removeBot(current: GitHubBotStatus): Promise<void> {
+    await this.run(async () => {
+      await this.bridge.githubBotRemove();
+      this.removedSettingsUrl.set(current.settingsUrl);
+    });
+  }
+
+  async switchWrite(current: GitHubBotStatus, write: GitHubBotWrite): Promise<void> {
+    const writes = current.writes.includes(write)
+      ? current.writes.filter((w) => w !== write)
+      : GITHUB_BOT_WRITES.filter((w) => w === write || current.writes.includes(w));
+    await this.run(async () => {
+      await this.bridge.githubBotSetWrites({ writes });
+    });
+  }
+
+  targetOf(event: Event): 'user' | 'org' {
+    return (event.target as HTMLSelectElement).value === 'org' ? 'org' : 'user';
+  }
+
+  orgValue(): string {
+    return this.orgInput()?.nativeElement.value ?? '';
   }
 
   async open(url: string): Promise<void> {
@@ -313,14 +536,27 @@ export class GitHubConnectComponent implements OnInit, OnDestroy {
       if (this.destroyed) return;
       this.status.set(status);
       this.connectedChange.emit(status.connected);
+      const bot = status.connected ? await this.loadBot() : null;
+      if (this.destroyed) return;
+      this.bot.set(bot);
       const waitingForInstall =
         status.method === 'browser' && !status.installed && status.installUrl !== null;
-      if (status.pending !== null || waitingForInstall) {
+      const waitingForBot = bot?.state === 'creating' || bot?.state === 'created';
+      if (status.pending !== null || waitingForInstall || waitingForBot) {
         this.timer = setTimeout(() => void this.refresh(), POLL_MS);
       }
     } catch (err: unknown) {
       if (this.destroyed) return;
       this.actionError.set(readIpcError(err).message);
+    }
+  }
+
+  private async loadBot(): Promise<GitHubBotStatus | null> {
+    try {
+      return await this.bridge.githubBotStatus();
+    } catch (err: unknown) {
+      this.actionError.set(readIpcError(err).message);
+      return null;
     }
   }
 

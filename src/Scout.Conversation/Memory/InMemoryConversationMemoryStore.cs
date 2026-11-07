@@ -94,6 +94,13 @@ public sealed class InMemoryConversationMemoryStore : IConversationMemoryStore
         SweepExpired();
     }
 
+    /// <inheritdoc />
+    public void Clear(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        _entries.TryRemove(key, out _);
+    }
+
     internal int Count => _entries.Count;
 
     private void SweepExpired()

@@ -53,6 +53,27 @@ describe('awaitCallback', () => {
     expect(result.state).toBe('mystate');
   });
 
+  it('serves a page at its path while waiting, and the callback still resolves', async () => {
+    const page = '<!DOCTYPE html><html><body><form></form></body></html>';
+    const callbackPromise = awaitCallback({
+      expectedState: 'mystate',
+      port,
+      hostname: '127.0.0.1',
+      timeoutMs: 5000,
+      logger,
+      pages: { '/': page },
+    });
+
+    await new Promise<void>((r) => setTimeout(r, 30));
+
+    const served = await fetch(`http://127.0.0.1:${port}/`);
+    const body = await served.text();
+    await fetch(`http://127.0.0.1:${port}/callback?code=authcode&state=mystate`);
+
+    expect([served.status, body]).toEqual([200, page]);
+    expect((await callbackPromise).code).toBe('authcode');
+  });
+
   it('server closes within 100ms after valid callback', async () => {
     const callbackPromise = awaitCallback({
       expectedState: 'st',

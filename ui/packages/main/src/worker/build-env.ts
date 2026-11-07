@@ -12,11 +12,14 @@ import type { WorkerGateAccess } from '../control-plane/launcher.js';
 import type { Logger } from '../util/logger.js';
 import path from 'node:path';
 import type { MediaToolPaths } from './resolve-binary.js';
+import type { GitHubBotWorkerConfig } from '../oauth/github-bot.js';
 
 export interface BuildEnvDeps {
   vaultGet: (key: VaultKey) => Promise<string | null>;
   chatGptTokenFile?: string;
   gitHubEnv?: Readonly<Record<string, string>>;
+  /** The Scout bot's token file, the writes switched to it and its login; absent while there is no bot token. */
+  gitHubBot?: GitHubBotWorkerConfig | null;
   youTubeEnv?: Readonly<Record<string, string>>;
   kubernetesSelection?: KubernetesSelection | null;
   allowedUserIds?: readonly string[];
@@ -74,6 +77,11 @@ export async function buildEnv(deps: BuildEnvDeps): Promise<Record<string, strin
     env['SCOUT__ADAPTERS__SLACK__APPLEVELTOKEN'] = slack.appToken;
   }
   Object.assign(env, deps.gitHubEnv, deps.youTubeEnv);
+  if (deps.gitHubBot != null) {
+    env['SCOUT__PLUGINS__GITHUB__BOTTOKENFILE'] = deps.gitHubBot.tokenFile;
+    env['SCOUT__PLUGINS__GITHUB__BOTWRITES'] = deps.gitHubBot.writes.join(',');
+    env['SCOUT__PLUGINS__GITHUB__BOTLOGIN'] = deps.gitHubBot.login;
+  }
   if (deps.kubernetesSelection != null) {
     env['SCOUT__PLUGINS__KUBERNETES__KUBECONFIGPATH'] = deps.kubernetesSelection.path;
     deps.kubernetesSelection.contexts.forEach((context, i) => {

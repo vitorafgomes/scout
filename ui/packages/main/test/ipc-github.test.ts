@@ -2,7 +2,23 @@ import { describe, it, expect } from 'bun:test';
 import { CHANNEL, readIpcError, type WorkerStatus } from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
-import { registerGitHubHandlers, restartWorkerIfRunning } from '../src/ipc/github.js';
+import {
+  registerGitHubBotHandlers,
+  registerGitHubHandlers,
+  restartWorkerIfRunning,
+} from '../src/ipc/github.js';
+import {
+  ACCESS_TOKENS_URL,
+  CONVERSIONS_URL,
+  INSTALLATIONS_URL,
+  PRIVATE_KEY,
+  REPOSITORIES_URL,
+  conversion,
+  createBot,
+  installationToken,
+  makeBotFake,
+  reply,
+} from './github-bot-fakes.js';
 import { TOKEN_FILE, connect, makeGitHubFake } from './github-fakes.js';
 
 type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
@@ -165,5 +181,41 @@ describe('restartWorkerIfRunning', () => {
     await restartWorkerIfRunning(worker, makeGitHubFake().deps.logger);
 
     expect(worker.calls).toEqual([]);
+  });
+});
+
+describe('GitHub bot IPC', () => {
+  it("sends the renderer the bot's status, never its private key or its installation token", async () => {
+    const fake = makeBotFake();
+    const ipc = makeFakeIpcMain();
+    registerGitHubBotHandlers(ipc, fake.bot, fake.deps.logger);
+    reply(fake, CONVERSIONS_URL, conversion());
+    reply(fake, INSTALLATIONS_URL, { status: 200, body: [{ id: 77 }] });
+    reply(fake, ACCESS_TOKENS_URL, installationToken('2026-11-07T13:00:00Z'));
+    reply(fake, REPOSITORIES_URL, {
+      status: 200,
+      body: { repositories: [{ full_name: 'octocat/shop' }] },
+    });
+
+    await createBot(fake);
+    const status = await invoke(ipc, CHANNEL.githubBotStatus);
+
+    expect(status).toMatchObject({ state: 'installed', repositories: ['octocat/shop'] });
+    const payload = JSON.stringify(status);
+    expect(payload).not.toContain(PRIVATE_KEY.split('\n')[1]!);
+    expect(payload).not.toContain('ghs_');
+  });
+
+  it('refuses a malformed switch request from the renderer with the unknown-action message', async () => {
+    const fake = makeBotFake();
+    const ipc = makeFakeIpcMain();
+    registerGitHubBotHandlers(ipc, fake.bot, fake.deps.logger);
+    const handler = ipc.handlers.get(CHANNEL.githubBotSetWrites)!;
+
+    const refused = await Promise.resolve(handler(NULL_EVENT, { writes: 'review' })).catch(
+      (err: unknown) => readIpcError(err).message,
+    );
+
+    expect(refused).toBe('Scout does not know one of those actions.');
   });
 });

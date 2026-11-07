@@ -62,6 +62,12 @@ public sealed record ChatMessage
     /// <summary>A picture the owner attached to this message, sent to the model with its text.</summary>
     public ImageAttachment? Image { get; init; }
 
+    /// <summary>
+    /// Material sent with the question, such as a transcript or the text on the screen: the model reads it after
+    /// <see cref="Text"/>, and the conversation's memory keeps only <see cref="Text"/>.
+    /// </summary>
+    public string? Context { get; init; }
+
 #pragma warning disable IDE0051 // the record's synthesized ToString calls PrintMembers; the analyzer does not see that call
     private bool PrintMembers(System.Text.StringBuilder builder)
     {

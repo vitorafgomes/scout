@@ -66,6 +66,11 @@ describe('CHANNEL constant', () => {
         'featuresList',
         'githubCancel',
         'githubSaveToken',
+        'githubBotStatus',
+        'githubBotCreate',
+        'githubBotCancel',
+        'githubBotRemove',
+        'githubBotSetWrites',
         'githubSignIn',
         'githubSignOut',
         'githubStatus',
@@ -621,6 +626,11 @@ describe('ChannelName type', () => {
       'scout:github.cancel': true,
       'scout:github.signOut': true,
       'scout:github.saveToken': true,
+      'scout:github.bot.status': true,
+      'scout:github.bot.create': true,
+      'scout:github.bot.cancel': true,
+      'scout:github.bot.remove': true,
+      'scout:github.bot.setWrites': true,
       'scout:youtube.signIn': true,
       'scout:youtube.status': true,
       'scout:youtube.cancelSignIn': true,
@@ -716,6 +726,8 @@ describe('no-external-write sanity scan', () => {
     'scout:writes.list',
     'scout:features.writeGrant',
     'scout:local.deleteMeetings',
+    'scout:github.bot.create',
+    'scout:github.bot.setWrites',
   ];
 
   // Verbs that typically imply mutation against an external system. If a new

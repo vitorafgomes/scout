@@ -27,4 +27,10 @@ public interface IConversationMemoryStore
     /// <param name="user">The user turn.</param>
     /// <param name="assistant">The assistant turn.</param>
     void Append(string key, ConversationTurn user, ConversationTurn assistant);
+
+    /// <summary>
+    /// Forgets every stored turn of the conversation, so its next request starts with an empty history.
+    /// </summary>
+    /// <param name="key">The conversation key. Must be non-null.</param>
+    void Clear(string key);
 }

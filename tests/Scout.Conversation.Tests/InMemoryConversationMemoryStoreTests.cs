@@ -174,6 +174,20 @@ public sealed class InMemoryConversationMemoryStoreTests
     }
 
     [Fact]
+    public void Clear_Forgets_Every_Turn_Of_That_Conversation_And_Leaves_The_Others()
+    {
+        var store = Store(null, out _);
+        store.Append("a", User("qa"), Assistant("aa"));
+        store.Append("b", User("qb"), Assistant("ab"));
+
+        store.Clear("a");
+        store.Clear("never-stored");
+
+        store.Load("a").ShouldBeEmpty();
+        store.Load("b").Select(t => t.Text).ShouldBe(ExpectedQbab);
+    }
+
+    [Fact]
     public async Task Concurrent_Same_Key_Appends_Are_Atomic_And_Bounded()
     {
         var options = new ConversationMemoryOptions { MaxTurns = 6, MaxReplayedChars = int.MaxValue };

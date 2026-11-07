@@ -71,7 +71,7 @@ public sealed class LlmStreamingRouter : IConversationRouter
         [System.Runtime.CompilerServices.EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        var userMessage = message.Text;
+        var userMessage = message.Context is { Length: > 0 } context ? message.Text + context : message.Text;
         var skills = await _skillSelector.SelectAsync(userMessage, cancellationToken)
             .ConfigureAwait(false);
         var systemPrompt = SkillPromptComposer.Compose(
@@ -107,7 +107,7 @@ public sealed class LlmStreamingRouter : IConversationRouter
         {
             _memoryStore.Append(
                 key,
-                new ConversationTurn(ConversationRole.User, userMessage),
+                new ConversationTurn(ConversationRole.User, message.Text),
                 new ConversationTurn(ConversationRole.Assistant, assembled.ToString()));
         }
     }

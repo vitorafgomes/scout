@@ -513,6 +513,23 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
     githubSaveToken(req) {
       return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
     },
+    githubBotStatus() {
+      return ipc.invoke(CHANNEL.githubBotStatus) as ReturnType<ScoutBridge['githubBotStatus']>;
+    },
+    githubBotCreate(req) {
+      return ipc.invoke(CHANNEL.githubBotCreate, req) as ReturnType<ScoutBridge['githubBotCreate']>;
+    },
+    githubBotCancel() {
+      return ipc.invoke(CHANNEL.githubBotCancel) as ReturnType<ScoutBridge['githubBotCancel']>;
+    },
+    githubBotRemove() {
+      return ipc.invoke(CHANNEL.githubBotRemove) as ReturnType<ScoutBridge['githubBotRemove']>;
+    },
+    githubBotSetWrites(req) {
+      return ipc.invoke(CHANNEL.githubBotSetWrites, req) as ReturnType<
+        ScoutBridge['githubBotSetWrites']
+      >;
+    },
 
     youtubeSignIn() {
       return ipc.invoke(CHANNEL.youtubeSignIn) as ReturnType<ScoutBridge['youtubeSignIn']>;
