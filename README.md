@@ -4,13 +4,19 @@
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
 [![CI](https://github.com/vitorafgomes/scout/actions/workflows/ci.yml/badge.svg)](https://github.com/vitorafgomes/scout/actions/workflows/ci.yml)
 
-**Scout reads your repositories and your infrastructure and reports what it finds: answers in your team chat, code reviews posted on pull requests, audits that open issues.** It never writes, edits or runs your code. Every write it can make is declared by a feature, granted by you in the desktop app and, when it cannot be undone, approved one action at a time.
+**Scout is an assistant for the people who run software: it reads your repositories and your infrastructure and reports what it finds, in your team chat or on your desktop.** It works the same with a model running on your machine and with a paid provider, so a team without an AI budget gets the same features as one with it. It never writes, edits or runs your code. Every write it can make is declared by a feature, granted by you in the desktop app and, when it cannot be undone, approved one action at a time.
 
 Project site: https://vitorafgomes.github.io/scout/
 
+## Why Scout
+
+- **Local or paid, the same Scout.** Ollama on your machine is the default and every feature runs on it; connect OpenAI, Azure, OpenRouter, Gemini, Mistral, Hugging Face or a ChatGPT plan and nothing else changes. No feature is tied to one vendor.
+- **It reports, it does not act on its own.** Findings come back as cards you decide on one by one; a review, an issue or a video goes out only after you said so.
+- **Built to be trusted.** One test per behaviour, a build at zero warnings with warnings as errors, a review gate on every change, and a write contract the code cannot bypass.
+
 ## What Scout does today
 
-- **Answers in chat.** Ask in Discord, Slack or Teams, or in the desktop's floating chat, about a repository, a pull request, a Kubernetes cluster. Scout reads and answers with citations.
+- **Answers in chat.** Ask in Discord, Slack or Teams, or in the desktop's floating chat, about a repository, a pull request, a Kubernetes cluster, or a meeting it transcribed. Scout reads and answers with citations.
 - **Reviews a pull request.** The findings come back as cards; you choose, edit or dismiss each one, and Scout posts the chosen ones as one review with comments on the lines.
 - **Audits a whole repository.** Against the project's own conventions, which Scout learns from the project's files. Each finding you choose becomes one issue, with what, why, where and the smallest fix.
 - **Keeps a local snapshot of a repository** under its own data folder and indexes it, so reads and searches do not depend on the GitHub rate limit.
@@ -35,7 +41,7 @@ Two processes on your machine, one repository:
 Pluggable by configuration, never by code:
 
 - **Chat adapters:** Discord, Slack, Teams (Bot Framework; needs a public HTTPS endpoint), and the desktop's local channel.
-- **AI Sources:** Ollama on your machine by default, so Scout runs without paid credentials; OpenAI, Azure OpenAI, Azure AI Inference, OpenRouter, Gemini, Mistral, Hugging Face, and a ChatGPT plan through the official sign-in.
+- **AI Sources:** Ollama on your machine by default, so Scout runs without paid credentials; OpenAI, Azure OpenAI, Azure AI Inference, OpenRouter, Gemini, Mistral, Hugging Face, and a ChatGPT plan through the official sign-in. The same features on every one of them.
 - **Features:** GitHub, Kubernetes, YouTube, and the desktop's own, each declaring the reads and writes it performs.
 
 Secrets never live in source: User Secrets in development, environment variables in production; `appsettings*.json` ships with names and no values.
