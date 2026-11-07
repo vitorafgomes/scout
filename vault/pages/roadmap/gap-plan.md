@@ -44,8 +44,8 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 ## Status
 
-- **As of 2026-11-07:** G1 in progress on `feat/quick-ask-redesign`; G2 open as PR #108 and PR #109; G3 to G6 not started; G7 waits for the owner's word.
-- **Next milestone:** G1 reviewed, its expected-behaviour table confirmed by the owner, an AppImage built; then G3.
+- **As of 2026-11-07:** G1 in progress on `feat/quick-ask-redesign`; G2 merged (PR #108, PR #109); G3 to G6 not started; G7 waits for the owner's word.
+- **Next milestone:** G1 reviewed, its expected-behaviour table confirmed by the owner, an AppImage built; then G3. ADR 0042 for G4 is drafted and waits for the owner.
 - **Blocker:** none.
 
 ## Items
@@ -62,7 +62,7 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 ## Decisions pending
 
-- An ADR for G4 (the audit job, its tables and the batch flow), to be written before any code; it also fixes the minimum memory the future plan builds on.
+- [[pages/decisions/0042-audit-as-a-job-with-saved-progress]] for G4 (the audit job, its tables and the batch flow), *status: proposed* on 2026-11-07; it also fixes the minimum memory the future plan builds on.
 
 ## Services affected
 

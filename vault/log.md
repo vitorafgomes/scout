@@ -1,3 +1,6 @@
+## [2026-11-07] integrate | ADR 0042 The audit as a job with saved progress (proposed)
+Drafted for gap-plan G4 on the owner's "quais os próximos passos?": a worker drives the audit in deterministic batches from the snapshot, one closed-scope model turn per batch, rows in audit.db under the data folder, cards posted into the originating conversation and merged by id; start declared on the github feature's data-folder row like the snapshot. Waits for the owner's approval before code.
+
 ## [2026-11-07] crystallize | Two plans: the gap plan and the future improvements
 The owner, after an audit of a real repository stopped at two findings and "continue" started from nothing: "temos que criar dois planos, primeiro para melhorar nos gaps e outro para melhorias futuras", and "não reaproveitamos código, tudo aqui é feito por nós". Three roadmap pages: project-memory-spike (the diagnosis, the survey in mechanism terms, the design), gap-plan (G1 to G7, the harness-before-AppImage and matrix-spec process rules) and future-improvements (F1 to F9, with the two outside projects that lent ideas recorded in mechanism terms only). conversation.md v1.12, knowledge.md v1.4 and llm.md v2.12 carry the facts the diagnosis cites; root CLAUDE.md gains the no-code-from-other-projects rule.
 
