@@ -18,6 +18,7 @@
     <Project Path="src/Scout.Transcription.Whisper/Scout.Transcription.Whisper.csproj" />
     <Project Path="src/Scout.Adapter.Local/Scout.Adapter.Local.csproj" />
     <Project Path="src/Scout.Meetings/Scout.Meetings.csproj" />
+    <Project Path="src/Scout.Sandbox/Scout.Sandbox.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />
@@ -36,6 +37,7 @@
     <Project Path="tests/Scout.Transcription.Whisper.Tests/Scout.Transcription.Whisper.Tests.csproj" />
     <Project Path="tests/Scout.Adapter.Local.Tests/Scout.Adapter.Local.Tests.csproj" />
     <Project Path="tests/Scout.Meetings.Tests/Scout.Meetings.Tests.csproj" />
+    <Project Path="tests/Scout.Sandbox.Tests/Scout.Sandbox.Tests.csproj" />
     <Project Path="tests/Scout.ArchTests/Scout.ArchTests.csproj" />
   </Folder>
 </Solution>

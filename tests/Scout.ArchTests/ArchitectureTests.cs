@@ -37,6 +37,7 @@ public class ArchitectureTests
         typeof(Scout.Plugin.Kubernetes.KubernetesOptions).Assembly,
         typeof(Scout.Plugin.YouTube.YouTubeOptions).Assembly,
         typeof(Scout.ControlPlane.Features.FeatureCatalog).Assembly,
+        typeof(Scout.Sandbox.DockerSandboxRunner).Assembly,
     ];
 
     private static readonly Assembly Conversation = typeof(Scout.Conversation.OriginNotifier).Assembly;
