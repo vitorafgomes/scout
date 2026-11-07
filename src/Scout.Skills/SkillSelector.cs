@@ -11,8 +11,9 @@ namespace Scout.Skills;
 /// file I/O, embedding, or network work. A successful build is cached for the
 /// process lifetime; a failed build is not, and is attempted again on a later
 /// call once <see cref="IndexRetryInterval"/> has passed. When the provider has no
-/// embeddings (<see cref="NotSupportedException"/>), auto-selection stays off for
-/// the process and is never retried.
+/// embeddings (<see cref="NotSupportedException"/>), it selects nothing for the
+/// process, never retries, and offers the loaded skills as
+/// <see cref="ModelChoiceCatalog"/> so the model chooses one itself.
 /// Never throws: returns an empty list on any failure.
 /// </summary>
 public sealed class SkillSelector : ISkillSelector
@@ -30,6 +31,7 @@ public sealed class SkillSelector : ISkillSelector
     private Task<IReadOnlyList<IndexedSkill>?>? _index;
     private DateTimeOffset _retryAfter;
     private bool _buildFailureLogged;
+    private IReadOnlyList<Skill> _modelChoiceCatalog = [];
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SkillSelector"/> class.
@@ -54,6 +56,9 @@ public sealed class SkillSelector : ISkillSelector
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Skill> ModelChoiceCatalog => Volatile.Read(ref _modelChoiceCatalog);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<Skill>> SelectAsync(
@@ -111,10 +116,11 @@ public sealed class SkillSelector : ISkillSelector
 
     private async Task<IReadOnlyList<IndexedSkill>?> BuildIndexAsync()
     {
+        IReadOnlyList<Skill> skills = [];
         try
         {
             var directory = ResolveDirectory(_options.Directory);
-            var skills = _loader.Load(directory);
+            skills = _loader.Load(directory);
             if (skills.Count == 0)
             {
                 _logger.LogInformation("No skills found in {Directory}.", directory);
@@ -138,8 +144,9 @@ public sealed class SkillSelector : ISkillSelector
         catch (NotSupportedException)
         {
             _retryAfter = DateTimeOffset.MaxValue;
+            Volatile.Write(ref _modelChoiceCatalog, skills);
             _logger.LogInformation(
-                "Skill auto-selection is off: the AI provider has no embeddings; skills stay available through list_skills and load_skill.");
+                "Skill auto-selection uses the model: the AI provider has no embeddings; the skill catalog is in the prompt and the model loads the matching skill.");
             return null;
         }
         catch (Exception ex)

@@ -15,4 +15,12 @@ public interface ISkillSelector
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>The selected skills, possibly empty.</returns>
     Task<IReadOnlyList<Skill>> SelectAsync(string message, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The skills the model chooses from itself because this selector cannot select
+    /// them (the AI provider has no embeddings); empty while auto-selection works.
+    /// Known once a <see cref="SelectAsync"/> call with a non-blank message has completed;
+    /// a blank message returns before the selector learns whether embeddings exist.
+    /// </summary>
+    IReadOnlyList<Skill> ModelChoiceCatalog { get; }
 }
