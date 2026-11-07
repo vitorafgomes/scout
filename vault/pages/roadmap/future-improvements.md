@@ -45,7 +45,7 @@ By 2027-02-28: a question about a project the owner worked on last week is answe
 | F3 | AI Sources cards with credits, plan window and Scout's usage per source, in three phases (the approved prototype; no existing function lost) | none |
 | F4 | Claude as a provider through the API, and a spike on the owner's Claude subscription | F3 |
 | F5 | The screens migrated to Angular Material one per version ([[pages/decisions/0041-angular-material-in-the-renderer]]) | none |
-| F6 | The audit with validated findings: a threat model of the repository first, dimensions run as independent jobs that stop when nothing new appears, a validation status per finding (from the source, or reproduced), root cause and path, findings persisted across audits, a dismissal with its reason | G4 |
+| F6 | The audit with validated findings: a threat model of the repository first, dimensions run as independent jobs that stop when nothing new appears, a validation status per finding, always from reading the source since Scout never runs the project's code, root cause and path, findings persisted across audits, a dismissal with its reason | G4 |
 | F7 | A code graph over the snapshot for "what breaks if I change X": Roslyn for C#, a parser per other language, a closure table in SQLite | G3 |
 | F8 | Feature credentials in the system keyring instead of memory ([[pages/roadmap/followups]], entry of 2026-10-23) | none |
 | F9 | The YouTube channel operator's presenter: generated inside the scene with character consistency, then a dialogue with two presenters ([[pages/roadmap/youtube-channel-operator]]) | none |

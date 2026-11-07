@@ -24,8 +24,8 @@ From the floating chat the owner asked for an audit of a real repository with ma
 
 ## Diagnosis
 
-- **One answer per audit.** `src/Scout.Skills/skills/code-audit.md` audits six dimensions in one turn and tells the model, on a large repository, to stop and ask for an area. On the ChatGPT plan path the function loop allows 40 calls per turn ([[pages/services/llm]]) and the model stops well before.
-- **No search without embeddings.** `search_project` and `find_symbol` answer that project search is not available when the provider has no embedding generator ([[pages/services/knowledge]]), which is the case on the ChatGPT plan; whole-file reads exhaust the context.
+- **One answer per audit.** `src/Scout.Skills/skills/code-audit.md` audits six dimensions in one turn and tells the model, on a large repository, to stop and ask for an area. Every provider's function loop caps the calls in a turn (40 by default on the Microsoft.Extensions.AI path, Semantic Kernel's own cap on the others, [[pages/services/llm]]) and the model stops well before.
+- **No search without embeddings.** `search_project` and `find_symbol` answer that project search is not available when the provider has no embedding generator ([[pages/services/knowledge]]), which is the case on the ChatGPT plan today and may be the case on any provider the owner connects; whole-file reads exhaust the context.
 - **Text-only memory.** The conversation memory stores the question and the reply text, in RAM, 6 turns, 8,000 characters, 30 idle minutes ([[pages/services/conversation]]); the files read, the search results and the findings are not in it, and the audit's reply is short by design because the cards carry the details ([[pages/decisions/0040-review-findings-as-cards-in-chat]]).
 
 ## Survey, in mechanism terms
@@ -41,7 +41,7 @@ Two outside projects were read on 2026-11-07. Neither lends code; the mechanisms
 - Ideation runs one read-only agent per dimension (code improvements, quality, documentation, performance, security, UI) with a fixed input (a deterministic project index, what exists and is planned, the memory's file map and patterns) and a fixed output (id, title, description, rationale, affected files, effort, approach, what it builds upon), deduplicated against the roadmap; a roadmap has a discovery agent and a features agent; an idea becomes a task with one click. Adopted as F2, with issues instead of tasks.
 - A code graph from a parser per language with a closure table answers "what breaks if I change X". Deferred to F7.
 
-**A commercial security audit agent.** Builds a threat model of the code first; a deep scan is several independent scans with workers that stop when nothing new appears or on a time limit, keeping partial results; each finding carries a validation status (from the source, or reproduced at run time), a root cause and an attack path; findings persist across scans and a dismissal keeps a written reason. Adopted as F6; the stop rule and the partial result enter G4.
+**A commercial security audit agent.** Builds a threat model of the code first; a deep scan is several independent scans with workers that stop when nothing new appears or on a time limit, keeping partial results; each finding carries a validation status (from the source, or reproduced at run time), a root cause and an attack path; findings persist across scans and a dismissal keeps a written reason. Adopted as F6 without the run-time reproduction, because Scout never runs or edits the project's code; the stop rule and the partial result enter G4.
 
 ## The design both plans adopt
 
