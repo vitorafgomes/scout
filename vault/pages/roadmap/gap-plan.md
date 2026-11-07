@@ -44,8 +44,8 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 
 ## Status
 
-- **As of 2026-11-07:** G1 built and reviewed on `feat/quick-ask-redesign`, its AppImage with the owner; G2 merged (PR #108, PR #109); G3 to G6 not started; G7 waits for the owner's word.
-- **Next milestone:** G1 reviewed, its expected-behaviour table confirmed by the owner, an AppImage built; then G3. ADR 0042 for G4 is drafted and waits for the owner.
+- **As of 2026-11-07:** G1 merged (PR #113); G2 merged (PR #108, PR #109); G3 built on `feat/knowledge-fulltext-search`, in review; G4 to G6 not started; G7 waits for the owner's word.
+- **Next milestone:** G3 reviewed, tested and merged; then G8, the verdict on a pull request (ADR 0043) acting as Scout's own GitHub identity (ADR 0044). ADR 0042 for G4 is drafted and waits for the owner; G4 comes after G8.
 - **Blocker:** none.
 
 ## Items
@@ -55,13 +55,15 @@ By 2026-12-15 the owner runs an audit of a repository with more than 500 files f
 | G1 | Floating chat (`feat/quick-ask-redesign`, 2026-11-07): the approved layout (mic inside the field, Send becomes Stop, tools collapsed, one scroll), no send while a reply runs, Space and Escape only in the question box, a partial reply kept on failure, the text and screenshot kept on a refusal, scroll only when at the bottom, No collapses the card and hides the footer when nothing is left, matrix specs | in progress | 1 |
 | G2 | An empty reply logged with its reason and the ChatGPT plan's usage limit said in the chat (PR #108); the skill catalog in the prompt when the provider has no embeddings (PR #109) | PRs open | merge |
 | G3 | Full-text search (SQLite FTS5) over the existing chunk index, so `search_project` and `find_symbol` answer on every provider, with or without embeddings; the semantic search stays on top when embeddings exist | not started | 2 |
-| G4 | The audit as a job with saved progress: Scout builds the coverage plan from the snapshot's folder structure ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]), each batch is one turn with a closed scope, after each batch Scout records the files read, the findings and what is left in SQLite ([[pages/decisions/0037-meetings-kept-locally-in-sqlite]] is the precedent), the next batch starts on its own, a partial result is kept, findings are merged by path and title across batches and the cards accumulate them; needs an ADR | not started | 3 |
-| G5 | Picks on the findings cards shared between the main window and the floating chat, so a review posted in one does not ask for approval in the other | not started | 4 |
-| G6 | Clear on the Chat screen also resets the worker's memory for the local channel, and the transcript sent with a question stays out of the stored turn ([[pages/roadmap/followups]], entries of 2026-10-30 and 2026-11-04) | not started | 5 |
+| G4 | After G8. The audit as a job with saved progress: Scout builds the coverage plan from the snapshot's folder structure ([[pages/decisions/0039-repository-snapshot-under-the-data-folder]]), each batch is one turn with a closed scope, after each batch Scout records the files read, the findings and what is left in SQLite ([[pages/decisions/0037-meetings-kept-locally-in-sqlite]] is the precedent), the next batch starts on its own, a partial result is kept, findings are merged by path and title across batches and the cards accumulate them; needs an ADR | not started | 4 |
+| G5 | Picks on the findings cards shared between the main window and the floating chat, so a review posted in one does not ask for approval in the other | not started | 5 |
+| G6 | Clear on the Chat screen also resets the worker's memory for the local channel, and the transcript sent with a question stays out of the stored turn ([[pages/roadmap/followups]], entries of 2026-10-30 and 2026-11-04) | not started | 6 |
 | G7 | The Production screen with the project detail below and the operator podcast lane, both built and waiting for the owner's word to open the PRs | ready | merge |
+| G8 | **The next deliverable after G3** (the owner, 2026-11-07: "nosso próximo entregável tem que fazer tudo isso"): the verdict on a pull request, approve or request changes, as a declared write approved per action, with the project's tests as part of it: the pull request's check runs read first; then, for a repository whose CI does not run them or when the review asks for one more check, the project's own test command run inside a disposable, isolated container on the owner's machine; the review card shows the tests line and the two verdict buttons. Design and the container's rules: [[pages/decisions/0043-the-verdict-on-a-pull-request]] | ADR drafted | 3 |
 
 ## Decisions pending
 
+- [[pages/decisions/0043-the-verdict-on-a-pull-request]] for G8, *status: proposed* on 2026-11-07; the container's rules are the security boundary and are decided there before code.
 - [[pages/decisions/0042-audit-as-a-job-with-saved-progress]] for G4 (the audit job, its tables and the batch flow), *status: proposed* on 2026-11-07; it also fixes the minimum memory the future plan builds on.
 
 ## Services affected
