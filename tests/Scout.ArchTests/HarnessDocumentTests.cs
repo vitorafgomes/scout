@@ -266,4 +266,19 @@ public partial class HarnessDocumentTests
         selfTests.Where(test => !ciRuns.Contains($"bash {test}")).ShouldBeEmpty(
             "a self-test under .claude/hooks or .claude/workflows is not run by .github/workflows/ci.yml, so a regression in it reaches main");
     }
+
+    [GeneratedRegex(@"^permissions:[ \t]*\r?\n[ \t]+contents:[ \t]*read[ \t]*\r?$", RegexOptions.Multiline)]
+    private static partial Regex TopLevelReadOnlyToken();
+
+    [Fact]
+    public void EveryWorkflowDeclaresATopLevelReadOnlyToken()
+    {
+        var workflows = Directory.EnumerateFiles(Path.Combine(Root, ".github", "workflows"), "*.yml")
+            .Select(path => Path.GetRelativePath(Root, path).Replace('\\', '/'))
+            .ToList();
+
+        workflows.ShouldNotBeEmpty("no workflow found under .github/workflows");
+        workflows.Where(workflow => !TopLevelReadOnlyToken().IsMatch(Read(workflow))).ShouldBeEmpty(
+            "a workflow without a top-level permissions: contents: read runs with the repository's default GITHUB_TOKEN, which may write to the public repository");
+    }
 }

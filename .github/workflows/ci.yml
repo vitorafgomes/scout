@@ -76,3 +76,6 @@ jobs:
       # when no Docker daemon answers, and ubuntu runners have one, so here a missing daemon fails the job.
       - name: Test, Docker end-to-end (Scout.Sandbox)
         run: dotnet test tests/Scout.Sandbox.Tests --configuration Release --no-build --filter "Category=Docker"
+
+permissions:
+  contents: read
