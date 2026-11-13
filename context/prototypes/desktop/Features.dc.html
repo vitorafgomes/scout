@@ -1,0 +1,1536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: Features</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+@keyframes sc-panel-in{0%{transform:translateX(100%)}100%{transform:translateX(0)}}
+.sc-panel{animation:sc-panel-in .2s ease-out}
+@media (prefers-reduced-motion: reduce){.sc-panel{animation:none}}
+</style>
+</helmet>
+<div style="position: relative; min-height: 900px; overflow: hidden; display: flex; flex-wrap: wrap; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; max-width: 220px; min-width: 180px; background: {{t.surface}}; border-right: 1px solid {{t.line}}; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<span style="font-weight: 600; font-size: 15px">Scout</span>
+</div>
+<sc-for list="{{nav}}" as="item" hint-placeholder-count="11">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 7px; border-left: 3px solid {{item.bar}}; border-radius: 8px; text-decoration: none; color: {{item.color}}; background: {{item.bg}}; font-weight: {{item.weight}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>{{item.label}}</a>
+</sc-for>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; position: relative">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0">
+<span style="font-weight: 600; font-size: 16px">Features</span>
+<span style="font-size: 12px; color: {{t.muted}}">ChatGPT plan · gpt-5.6-luna</span>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.bg}}; color: {{t.muted}}; min-width: 200px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<input type="search" aria-label="Search" placeholder="Search screens, repositories, meetings" style="border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit; width: 220px">
+</label>
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" title="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></button>
+<button aria-label="Dark theme" title="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></button>
+<button aria-label="Follow the system theme" title="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg></button>
+</div>
+<button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
+<span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
+</sc-if>
+</button>
+
+<sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
+<section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">Notifications</span>
+<button onClick="{{bellMarkAllRead}}" style="border: 0; background: transparent; color: {{t.accent}}; font-size: 13px; padding: 4px 6px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Mark all as read</button>
+</div>
+<div role="tablist" aria-label="Filter notifications" style="display: flex; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid {{t.line}}">
+<sc-for list="{{bellTabs}}" as="bt" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{bt.selected}}" onClick="{{bt.pick}}" style="border: 1px solid {{bt.border}}; background: {{bt.bg}}; color: {{bt.fg}}; border-radius: 14px; padding: 5px 12px; font-size: 13px">{{bt.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-y: auto; display: flex; flex-direction: column">
+<sc-for list="{{bellShown}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.line}}; background: {{n.rowBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700"><sc-if value="{{n.hasPath}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.path}}"></path></svg></sc-if>{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: {{n.weight}}; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<sc-if value="{{n.hasControls}}" hint-placeholder-val="{{false}}">
+<span style="align-self: center; flex: 0 0 auto; display: flex; gap: 4px">
+<sc-for list="{{n.controls}}" as="c" hint-placeholder-count="2">
+<button type="button" aria-label="{{c.label}}" title="{{c.label}}" aria-disabled="{{n.controlsOff}}" onClick="{{c.act}}" style="width: 28px; height: 28px; padding: 0; border-radius: 14px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{n.controlsOpacity}}; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.path}}"></path></svg></button>
+</sc-for>
+</span>
+</sc-if>
+<sc-if value="{{n.hasStatus}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.status}}</span>
+</sc-if>
+<sc-if value="{{n.showWhen}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</sc-if>
+</div>
+<sc-if value="{{n.hasDetail}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+</sc-if>
+<sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{true}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="b" hint-placeholder-count="2">
+<button onClick="{{b.act}}" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{b.path}}"></path></svg>{{b.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{bellEmpty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 16px; font-size: 12px; color: {{t.muted}}">Nothing here yet.</p>
+</sc-if>
+</div>
+<sc-if value="{{bellRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 16px; font-size: 13px; color: {{t.err}}">Scout could not tell which pull request this entry is about.</p>
+</sc-if>
+<div style="padding: 10px 16px; font-size: 12px; color: {{t.muted}}">GitHub mentions and comments are read every 5 minutes, only while the GitHub feature is connected.</div>
+</section>
+</sc-if>
+</header>
+
+<main style="flex: 1; padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; box-sizing: border-box">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600">Features</h1>
+<p style="margin: 0; color: {{t.muted}}">Connect Scout to your tools. A feature that writes asks for your permission first; actions that cannot be undone wait for you in <a href="Review.dc.html" style="color: {{t.accent}}">Approvals</a>.</p>
+</div>
+<button onClick="{{reload}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Refresh</button>
+</div>
+
+<div role="group" aria-label="Preview state" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: {{t.muted}}">
+<span>Preview state</span>
+<div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px dashed {{t.line}}; border-radius: 16px">
+<sc-for list="{{previews}}" as="p" hint-placeholder-count="5">
+<button aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="border: 0; border-radius: 12px; padding: 4px 10px; font-size: 12px; background: {{p.bg}}; color: {{p.fg}}">{{p.label}}</button>
+</sc-for>
+</div>
+<button role="switch" aria-checked="{{ytChecked}}" onClick="{{toggleYoutube}}" style="display: flex; align-items: center; gap: 8px; border: 1px dashed {{t.line}}; border-radius: 16px; padding: 4px 10px; font-size: 12px; background: transparent; color: {{t.fg2}}"><span aria-hidden="true" style="width: 28px; height: 16px; border-radius: 8px; background: {{ytTrack}}; display: flex; align-items: center; justify-content: {{ytKnob}}; padding: 2px; box-sizing: border-box"><span style="width: 12px; height: 12px; border-radius: 6px; background: #ffffff"></span></span>Preview: YouTube connected</button>
+<span id="pv-docker">Docker:</span>
+<div role="group" aria-labelledby="pv-docker" style="display: flex; gap: 2px">
+<sc-for list="{{dockerPreviews}}" as="dp" hint-placeholder-count="3">
+<button aria-pressed="{{dp.pressed}}" onClick="{{dp.pick}}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 14px; font-size: 12px; background: {{dp.bg}}; color: {{dp.fg}}">{{dp.label}}</button>
+</sc-for>
+</div>
+<span id="pv-repos">Repositories:</span>
+<div role="group" aria-labelledby="pv-repos" style="display: flex; gap: 2px">
+<sc-for list="{{repoPreviews}}" as="rq" hint-placeholder-count="2">
+<button aria-pressed="{{rq.pressed}}" onClick="{{rq.pick}}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 14px; font-size: 12px; background: {{rq.bg}}; color: {{rq.fg}}">{{rq.label}}</button>
+</sc-for>
+</div>
+<span id="pv-voice">Voice model:</span>
+<div role="group" aria-labelledby="pv-voice" style="display: flex; gap: 2px">
+<sc-for list="{{voicePreviews}}" as="vp" hint-placeholder-count="4">
+<button aria-pressed="{{vp.pressed}}" onClick="{{vp.pick}}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 14px; font-size: 12px; background: {{vp.bg}}; color: {{vp.fg}}">{{vp.label}}</button>
+</sc-for>
+</div>
+<button role="switch" aria-checked="{{hintChecked}}" onClick="{{toggleHint}}" style="display: flex; align-items: center; gap: 8px; border: 1px dashed {{t.line}}; border-radius: 16px; padding: 4px 10px; font-size: 12px; background: transparent; color: {{t.fg2}}"><span aria-hidden="true" style="width: 28px; height: 16px; border-radius: 8px; background: {{hintTrack}}; display: flex; align-items: center; justify-content: {{hintKnob}}; padding: 2px; box-sizing: border-box"><span style="width: 12px; height: 12px; border-radius: 6px; background: #ffffff"></span></span>Preview: GitHub hint</button>
+</div>
+
+<sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid {{t.err}}; background: {{t.errBg}}">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.err}}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg>
+<span style="margin-right: auto">The Scout control plane is not running, so the features cannot be shown.</span>
+<button onClick="{{reload}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Try again</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isUnreadable}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid {{t.err}}; background: {{t.errBg}}">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.err}}" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg>
+<span style="margin-right: auto">The features could not be read: the Scout control plane refused this window's session.</span>
+<button onClick="{{reload}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Try again</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+<div role="status" aria-label="Loading the features" style="display: flex; flex-direction: column; gap: 12px">
+<div role="progressbar" aria-label="Loading the features" style="height: 4px; border-radius: 2px; background: {{t.surface2}}; overflow: hidden"><div style="height: 4px; width: 40%; background: {{t.accent}}"></div></div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); grid-auto-rows: 200px; gap: 16px">
+<sc-for list="{{skeletons}}" as="s" hint-placeholder-count="5">
+<div style="border: 1px solid {{t.line}}; border-radius: 14px; background: {{t.surface}}; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="height: 16px; width: 35%; border-radius: 8px; background: {{t.surface2}}"></div>
+<div style="height: 12px; width: 90%; border-radius: 6px; background: {{t.surface2}}"></div>
+<div style="height: 12px; width: 70%; border-radius: 6px; background: {{t.surface2}}"></div>
+<div style="margin-top: auto; height: 36px; width: 140px; border-radius: 18px; background: {{t.surface2}}"></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isReady}}" hint-placeholder-val="{{true}}">
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); grid-auto-rows: 200px; gap: 16px">
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="5">
+<article id="{{c.cardId}}" aria-labelledby="{{c.titleId}}" style="height: 100%; min-width: 0; overflow: hidden; border: 1px solid {{c.border}}; box-shadow: 0 0 0 {{c.ringWidth}} {{c.ring}}; border-radius: 14px; background: {{t.surface}}; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box">
+<div style="display: flex; gap: 12px; align-items: flex-start; min-width: 0">
+<div aria-hidden="true" style="flex: 0 0 40px; height: 40px; border-radius: 10px; background: {{t.surface2}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{c.icon}}"></path></svg></div>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; flex: 1">
+<h2 id="{{c.titleId}}" style="margin: 0; max-width: 100%; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.name}}</h2>
+<span style="display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; background: {{c.chipBg}}; color: {{c.chipFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 13px"><path d="{{c.chipIcon}}"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis">{{c.chip}}</span></span>
+</div>
+</div>
+<p title="{{c.fact}}" style="margin: 0; font-size: 13px; color: {{c.factColor}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.fact}}</p>
+<ul aria-label="{{c.permsLabel}}" style="list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap">
+<sc-for list="{{c.perms}}" as="pc" hint-placeholder-count="3">
+<li style="flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: {{pc.bg}}; color: {{pc.fg}}">{{pc.label}}</li>
+</sc-for>
+<sc-if value="{{c.noPerms}}" hint-placeholder-val="{{false}}">
+<li style="min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: {{t.muted}}">{{c.noPermsText}}</li>
+</sc-if>
+</ul>
+<div style="margin-top: auto; display: flex; align-items: center; gap: 8px; min-width: 0">
+<sc-if value="{{c.hasButton}}" hint-placeholder-val="{{true}}">
+<button onClick="{{c.act}}" aria-describedby="{{c.titleId}}" style="min-width: 0; height: 36px; padding: 0 12px; border-radius: 18px; border: {{c.actBorder}}; background: {{c.actBg}}; color: {{c.actFg}}; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="{{c.actIcon}}"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis">{{c.actLabel}}</span></button>
+</sc-if>
+<sc-if value="{{c.hasLink}}" hint-placeholder-val="{{false}}">
+<a href="https://docs.docker.com/get-started/get-docker/" target="_blank" rel="noopener" style="min-width: 0; height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid {{t.line}}; color: {{t.fg}}; text-decoration: none; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; box-sizing: border-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis">How to install Docker</span></a>
+</sc-if>
+<button onClick="{{c.openDetails}}" aria-label="{{c.detailsLabel}}" aria-haspopup="dialog" aria-expanded="{{c.detailsExpanded}}" style="margin-left: auto; flex: 0 0 auto; height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M14 4v16M17 9h1M17 12h1"></path></svg>Details</button>
+</div>
+</article>
+</sc-for>
+</div>
+</sc-if>
+
+</main>
+</div>
+<sc-if value="{{panelOpen}}" hint-placeholder-val="{{false}}">
+<div aria-hidden="true" onClick="{{closePanel}}" style="position: absolute; inset: 0; background: {{t.scrim}}; z-index: 10"></div>
+<div role="dialog" aria-modal="true" aria-labelledby="panel-title" aria-describedby="panel-desc" onKeyDown="{{panelKey}}" class="sc-panel" style="position: absolute; top: 0; right: 0; height: 100%; max-height: 900px; width: 560px; max-width: 100%; z-index: 11; display: flex; flex-direction: column; background: {{t.surface}}; border-left: 1px solid {{t.line}}; box-shadow: -16px 0 40px {{t.shadow}}; box-sizing: border-box">
+<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px 16px 12px 20px; border-bottom: 1px solid {{t.line}}">
+<div aria-hidden="true" style="flex: 0 0 40px; height: 40px; border-radius: 10px; background: {{t.surface2}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{pn.icon}}"></path></svg></div>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; flex: 1">
+<h2 id="panel-title" style="margin: 0; font-size: 18px; font-weight: 600">{{pn.name}}</h2>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{pn.chipBg}}; color: {{pn.chipFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pn.chipIcon}}"></path></svg>{{pn.chip}}</span>
+</div>
+<button autofocus="autofocus" onClick="{{closePanel}}" aria-label="{{pn.closeLabel}}" title="Close (Esc)" style="flex: 0 0 36px; width: 36px; height: 36px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<div style="flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+<p id="panel-desc" style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">{{pn.desc}}</p>
+<sc-if value="{{ghCodeShown}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding-top: 4px">
+<span style="font-size: 13px">Enter this code on GitHub:</span>
+<code style="font-size: 28px; letter-spacing: 0.12em; color: {{t.fg}}">WDJB-MJHT</code>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open GitHub</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copy code</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ghConnectShown}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 4px">
+<sc-if value="{{ghNotConfigured}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">The Scout GitHub App is not configured yet.</p>
+</sc-if>
+<sc-if value="{{ghSignInFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">The code expired. Click Connect with GitHub to get a new one.</p>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{connectGithub}}" aria-disabled="{{ghConnectOff}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{ghConnectBg}}; color: {{ghConnectFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"></path></svg>Connect with GitHub</button>
+<button onClick="{{openGithubDialog}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M17 6l3 3"></path></svg>Use a token</button>
+</div>
+<span style="font-size: 12px; color: {{t.muted}}">Scout shows a one-time code; you enter it on GitHub and approve the Scout GitHub App there.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.isGithubOn}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="margin-right: auto; font-size: 13px">Connected as <strong>acme-owner</strong>{{ghInstalledOn}}</span>
+<sc-if value="{{ghInstallShown}}" hint-placeholder-val="{{false}}">
+<button style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Install Scout on your GitHub account</button>
+</sc-if>
+<button onClick="{{askDisconnectGithub}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+<sc-if value="{{ghTokenWarn}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}">This token can write to your repositories. A read-only fine-grained token is safer.</p>
+</sc-if>
+<sc-if value="{{showDockerHint}}" hint-placeholder-val="{{false}}">
+<div role="note" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: {{t.infoBg}}; color: {{t.info}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8v.5"></path></svg>
+<span style="flex: 1 1 240px; font-size: 13px; line-height: 1.45">Turn on Docker to let Scout run a pull request's tests in an isolated container before it gives a verdict.</span>
+<button onClick="{{setupDocker}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.info}}; background: transparent; color: {{t.info}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; box-sizing: border-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5zM3 8v8l9 5 9-5V8M12 13v8"></path></svg>Set up Docker</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.isGithub}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="bot-title" style="border: 1px solid {{t.line}}; border-radius: 10px; padding: 12px; background: {{t.bg}}; display: flex; flex-direction: column; gap: 10px">
+<h3 id="bot-title" style="margin: 0; font-size: 14px; font-weight: 600">Use a Scout bot on GitHub <span style="font-weight: 400; color: {{t.muted}}">(optional)</span></h3>
+<sc-if value="{{botLede}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Reviews, verdicts, comments and issues Scout posts show as the bot instead of you. GitHub creates an App that you own; Scout keeps its key on this computer.</p>
+</sc-if>
+<sc-if value="{{botUnread}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">Could not reach GitHub.</p>
+</sc-if>
+<sc-if value="{{botCreatingShown}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">Finish creating the App on GitHub in your browser.</p>
+<button style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+</sc-if>
+<sc-if value="{{botNoneShown}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.muted}}">Create the bot on
+<select onChange="{{onBotTarget}}" style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit; font-size: 14px">
+<option value="user">My account</option>
+<option value="org">An organization</option>
+</select>
+</label>
+<sc-if value="{{botOrg}}" hint-placeholder-val="{{false}}">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.muted}}">Organization
+<input type="text" value="{{orgName}}" onChange="{{onOrg}}" placeholder="acme" style="height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit; font-size: 14px; width: 160px">
+</label>
+</sc-if>
+<button onClick="{{createBot}}" aria-disabled="{{createDisabled}}" aria-describedby="bot-reason" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{createFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6M9 14h.01M15 14h.01"></path></svg>Create the bot on GitHub</button>
+</div>
+<span id="bot-reason" style="font-size: 12px; color: {{t.muted}}">{{botReason}}</span>
+</sc-if>
+<sc-if value="{{botInstalled}}" hint-placeholder-val="{{false}}">
+<div>
+<button id="bot-repos-head" aria-expanded="{{botRepos.expanded}}" aria-controls="bot-repos-body" onClick="{{botRepos.toggle}}" style="width: 100%; min-height: 36px; border: 0; background: transparent; color: {{t.fg}}; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="transform: {{botRepos.chevron}}; color: {{t.muted}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg>{{botRepos.summary}}</button>
+<sc-if value="{{botRepos.open}}" hint-placeholder-val="{{false}}">
+<div id="bot-repos-body" role="region" aria-labelledby="bot-repos-head" style="display: flex; flex-direction: column; gap: 8px; padding: 4px 0 0 22px">
+<input type="search" aria-label="Filter the repositories" placeholder="Filter the repositories" value="{{botRepos.query}}" onChange="{{botRepos.onQuery}}" style="height: 32px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit; font-size: 13px">
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; max-height: 256px; overflow-y: auto">
+<sc-for list="{{botRepos.rows}}" as="r" hint-placeholder-count="8">
+<li style="padding: 6px 10px; border-radius: 8px; background: {{t.surface}}">{{r.name}}</li>
+</sc-for>
+</ul>
+</div>
+</sc-if>
+</div>
+<span style="font-size: 12px; color: {{t.muted}}">Signed by the bot; an action switched off is signed as you.</span>
+<ul aria-label="What the bot signs" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{botWriteRows}}" as="bw" hint-placeholder-count="4">
+<li style="display: flex; align-items: center; gap: 12px; padding: 6px 4px">
+<span id="{{bw.id}}" style="margin-right: auto; font-size: 13px">{{bw.label}}</span>
+<button role="switch" aria-checked="{{bw.checked}}" aria-labelledby="{{bw.id}}" onClick="{{bw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{bw.justify}}; background: {{bw.track}}; border: 1px solid {{bw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{bw.thumb}}"></span></span></button>
+</li>
+</sc-for>
+</ul>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Change repositories</button>
+<button onClick="{{removeBot}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Remove the bot</button>
+</div>
+</sc-if>
+<sc-if value="{{botCreated}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">scout-acme[bot] exists. Install it on the repositories it may act on; until then Scout acts as you.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{installBot}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Install the bot</button>
+<button onClick="{{removeBot}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Remove the bot</button>
+</div>
+</sc-if>
+<sc-if value="{{botExists}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid {{t.line}}; font-size: 13px">
+<span>Name: {{botName}}</span>
+<span>Handle: <code style="font-size: 12px; overflow-wrap: anywhere">{{botHandle}}</code></span>
+<sc-if value="{{botNameError}}" hint-placeholder-val="{{false}}">
+<span style="color: {{t.err}}">Scout could not refresh the bot's name from GitHub; this is the last name it read.</span>
+</sc-if>
+<span>Ask for a review with <code style="font-size: 12px; overflow-wrap: anywhere">{{botHandle}}</code></span>
+<button aria-label="Copy {{botHandle}}" onClick="{{copyHandle}}" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg>Copy</button>
+<span style="font-size: 12px; color: {{t.muted}}">Mention it in a pull request's description or a comment; the bell tells you who asked.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid {{t.line}}">
+<a href="{{botSettingsUrl}}" target="_blank" rel="noopener" aria-describedby="bot-picture-help" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; color: {{t.fg}}; text-decoration: none; display: flex; align-items: center; gap: 8px; box-sizing: border-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="9" cy="10" r="2"></circle><path d="M21 16l-5-5-8 8"></path></svg>Add a picture on GitHub</a>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<a href="{{botSettingsUrl}}" target="_blank" rel="noopener" aria-describedby="bot-rename-help" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: flex; align-items: center; gap: 8px; text-decoration: none; box-sizing: border-box">Change the name on GitHub</a>
+<button onClick="{{refreshBot}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px">Refresh</button>
+</div>
+<span id="bot-rename-help" style="font-size: 12px; color: {{t.muted}}">GitHub renames an App only on its settings page; Scout reads the new name when this card opens again or when you click Refresh.</span>
+<span id="bot-picture-help" style="font-size: 12px; color: {{t.muted}}">GitHub shows this picture on everything the bot signs. Actions you sign yourself keep your own picture.</span>
+<code style="font-size: 12px; color: {{t.muted}}; overflow-wrap: anywhere">{{botSettingsUrl}}</code>
+</div>
+</sc-if>
+<sc-if value="{{botFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">GitHub did not send the new App back within 5 minutes, so Scout saved nothing. Try again.</p>
+</sc-if>
+<sc-if value="{{botRemoved}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Scout no longer uses the bot. The App stays on GitHub until you delete it there.</p>
+<a href="{{botSettingsUrl}}" target="_blank" rel="noopener" style="align-self: flex-start; font-size: 13px; color: {{t.accent}}; text-decoration: none">Open the App's settings on GitHub</a>
+</sc-if>
+</section>
+</sc-if>
+<sc-if value="{{ghActionFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">Could not remove the GitHub token file, so Scout is still connected. Try Disconnect again.</p>
+</sc-if>
+
+<sc-if value="{{pn.isDocker}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 13px; color: {{t.fg2}}; margin-right: auto">{{dk.statusLine}}</span>
+<sc-if value="{{dk.missing}}" hint-placeholder-val="{{false}}">
+<a href="https://docs.docker.com/get-started/get-docker/" target="_blank" rel="noopener" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.fg}}; text-decoration: none; box-sizing: border-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>How to install Docker</a>
+</sc-if>
+<button onClick="{{dk.recheck}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Refresh</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}">
+<div style="display: flex; flex-direction: column; gap: 3px; margin-right: auto; min-width: 0">
+<span id="dk-switch-label" style="font-weight: 500">Run a project's tests in isolated containers</span>
+<span id="dk-switch-help" style="font-size: 12px; color: {{t.muted}}; line-height: 1.45">{{dk.switchHelp}}</span>
+</div>
+<button role="switch" aria-checked="{{dk.sw.checked}}" aria-disabled="{{dk.sw.disabled}}" aria-labelledby="dk-switch-label" aria-describedby="dk-switch-help" onClick="{{dk.sw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex; opacity: {{dk.sw.opacity}}"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{dk.sw.justify}}; background: {{dk.sw.track}}; border: 1px solid {{dk.sw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{dk.sw.thumb}}"></span></span></button>
+</div>
+<sc-if value="{{dk.hasSwitchError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">{{dk.switchError}}</p>
+</sc-if>
+<sc-if value="{{dk.hasSwitchNote}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 12px; color: {{t.muted}}">{{dk.switchNote}}</p>
+</sc-if>
+
+<section style="display: flex; flex-direction: column; gap: 6px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<button id="dk-head-uses" aria-expanded="{{dk.sec.uses.expanded}}" aria-controls="dk-body-uses" onClick="{{dk.sec.uses.toggle}}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; padding: 4px 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 14px; font-weight: 600; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: 0 0 14px; transform: {{dk.sec.uses.rotate}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg><span>{{dk.sec.uses.label}}</span></button>
+<sc-if value="{{dk.sec.uses.open}}" hint-placeholder-val="{{false}}">
+<ul id="dk-body-uses" role="region" aria-labelledby="dk-head-uses" style="margin: 0; padding-left: 40px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}; line-height: 1.45">
+<li>Running a pull request's own tests before it gives a verdict, when no check ran them or the review asks for one.</li>
+<li>The project's own tests only, never Scout's own code.</li>
+<li>Offline during the tests; the network is on only to restore the packages.</li>
+<li>One disposable container per run, deleted after it.</li>
+<li>20 minutes at most per run.</li>
+</ul>
+</sc-if>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<button id="dk-head-images" aria-expanded="{{dk.sec.images.expanded}}" aria-controls="dk-body-images" onClick="{{dk.sec.images.toggle}}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; padding: 4px 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 14px; font-weight: 600; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: 0 0 14px; transform: {{dk.sec.images.rotate}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg><span>{{dk.sec.images.label}}</span></button>
+<sc-if value="{{dk.sec.images.open}}" hint-placeholder-val="{{true}}">
+<div id="dk-body-images" role="region" aria-labelledby="dk-head-images" style="display: flex; flex-direction: column; gap: 8px; padding-left: 22px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span id="dk-images-help" style="margin-right: auto; font-size: 12px; color: {{t.muted}}">{{dk.imagesHelp}}</span>
+<button onClick="{{dk.downloadNeeded}}" aria-disabled="{{dk.neededDisabled}}" aria-describedby="dk-download-help" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{dk.neededFg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download images</button>
+</div>
+<span id="dk-download-help" style="font-size: 12px; color: {{t.muted}}; line-height: 1.45">{{dk.downloadHelp}}</span>
+<sc-if value="{{dk.neededPulling}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.fg2}}">
+<span>Downloading 1 of 1: node:20@sha256:...</span>
+<div role="progressbar" aria-label="Download progress of the repositories' images" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="height: 4px; border-radius: 2px; background: {{t.surface2}}"></div>
+</div>
+</sc-if>
+<sc-if value="{{dk.hasPullError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">{{dk.pullError}}</p>
+</sc-if>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{dk.groups}}" as="g" hint-placeholder-count="7">
+<li style="display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid {{t.line}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="margin-right: auto; font-size: 13px; font-weight: 500">{{g.summary}}</span>
+<button onClick="{{g.download}}" aria-disabled="{{g.disabled}}" aria-label="{{g.label}}" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{g.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download</button>
+</div>
+<sc-if value="{{g.pulling}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.fg2}}">
+<span>{{g.progress}}</span>
+<div role="progressbar" aria-label="Image download progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="height: 4px; border-radius: 2px; background: {{t.surface2}}"></div>
+</div>
+</sc-if>
+<ul style="list-style: none; margin: 0; padding: 0 0 0 12px; display: flex; flex-direction: column; gap: 2px">
+<sc-for list="{{g.images}}" as="im" hint-placeholder-count="2">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<code style="flex: 1 1 200px; min-width: 0; font-size: 12px; color: {{t.fg2}}; overflow-wrap: anywhere">{{im.image}}</code>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{im.chipBg}}; color: {{im.chipFg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{im.chipD}}"></path></svg>{{im.status}}</span>
+</li>
+</sc-for>
+</ul>
+</li>
+</sc-for>
+</ul>
+</div>
+</sc-if>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<button id="dk-head-repos" aria-expanded="{{dk.sec.repos.expanded}}" aria-controls="dk-body-repos" onClick="{{dk.sec.repos.toggle}}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; padding: 4px 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 14px; font-weight: 600; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: 0 0 14px; transform: {{dk.sec.repos.rotate}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg><span>{{dk.sec.repos.label}}</span></button>
+<sc-if value="{{dk.sec.repos.open}}" hint-placeholder-val="{{false}}">
+<div id="dk-body-repos" role="region" aria-labelledby="dk-head-repos" style="display: flex; flex-direction: column; gap: 8px; padding-left: 22px">
+<span style="font-size: 12px; color: {{t.muted}}">The stack and versions Scout detected when it read each repository.</span>
+<sc-if value="{{dk.noRepos}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 12px; border: 1px dashed {{t.line}}; border-radius: 10px; text-align: center">
+<span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 20px; background: {{t.surface2}}; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6l2 2h8v14H4zM4 10h16"></path></svg></span>
+<span style="font-size: 13px; color: {{t.fg2}}">Scout lists a repository's stack the first time it reads it.</span>
+</div>
+</sc-if>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{dk.repos}}" as="rp" hint-placeholder-count="3">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid {{t.line}}">
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0">
+<span style="font-size: 13px; font-weight: 600">{{rp.name}}</span>
+<span style="font-size: 12px; color: {{rp.detailColor}}">{{rp.detail}}</span>
+<sc-if value="{{rp.hasImage}}" hint-placeholder-val="{{true}}">
+<code style="font-size: 12px; color: {{t.muted}}; overflow-wrap: anywhere">{{rp.imageRef}}</code>
+</sc-if>
+</div>
+<span id="{{rp.chipId}}" style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{rp.chipBg}}; color: {{rp.chipFg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{rp.chipD}}"></path></svg>{{rp.status}}</span>
+<sc-if value="{{rp.canDownload}}" hint-placeholder-val="{{false}}">
+<button onClick="{{rp.download}}" aria-label="{{rp.downloadLabel}}" aria-disabled="{{dk.downloadDisabled2}}" aria-describedby="{{rp.describedBy}}" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>Download</button>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+</div>
+</sc-if>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<button id="dk-head-folder" aria-expanded="{{dk.sec.folder.expanded}}" aria-controls="dk-body-folder" onClick="{{dk.sec.folder.toggle}}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; padding: 4px 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 14px; font-weight: 600; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: 0 0 14px; transform: {{dk.sec.folder.rotate}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg><span>{{dk.sec.folder.label}}</span></button>
+<sc-if value="{{dk.sec.folder.open}}" hint-placeholder-val="{{false}}">
+<div id="dk-body-folder" role="region" aria-labelledby="dk-head-folder" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-left: 22px">
+<div style="display: flex; flex-direction: column; gap: 3px; margin-right: auto; min-width: 0">
+<code style="font-size: 12px; color: {{t.fg2}}; overflow-wrap: anywhere">~/.local/share/Scout/sandbox</code>
+<span style="font-size: 12px; color: {{t.muted}}">{{dk.space}}</span>
+</div>
+<button onClick="{{dk.askClear}}" aria-disabled="{{dk.clearDisabled}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{dk.clearFg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Clear</button>
+<sc-if value="{{dk.clearRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="flex: 1 1 100%; margin: 0; font-size: 13px; color: {{t.err}}">A test run is in progress in the work folder; clear it after the run ends.</p>
+</sc-if>
+</div>
+</sc-if>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<button id="dk-head-last" aria-expanded="{{dk.sec.last.expanded}}" aria-controls="dk-body-last" onClick="{{dk.sec.last.toggle}}" style="display: flex; align-items: center; gap: 8px; width: 100%; border: 0; padding: 4px 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 14px; font-weight: 600; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="flex: 0 0 14px; transform: {{dk.sec.last.rotate}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg><span>{{dk.sec.last.label}}</span></button>
+<sc-if value="{{dk.sec.last.open}}" hint-placeholder-val="{{false}}">
+<div id="dk-body-last" role="region" aria-labelledby="dk-head-last" style="padding-left: 22px; display: flex; flex-direction: column; gap: 8px">
+<sc-if value="{{dk.noRun}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 18px 12px; border: 1px dashed {{t.line}}; border-radius: 10px; text-align: center; font-size: 13px; color: {{t.fg2}}">No run yet.</p>
+</sc-if>
+<sc-if value="{{dk.hasRun}}" hint-placeholder-val="{{true}}">
+<dl style="margin: 0; display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{dk.last}}" as="lr" hint-placeholder-count="5">
+<div style="flex: 1 1 110px; padding: 8px 10px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; display: flex; flex-direction: column; gap: 2px">
+<dt style="font-size: 12px; color: {{t.muted}}">{{lr.label}}</dt>
+<dd style="margin: 0; font-size: 13px; font-weight: 600; color: {{lr.color}}">{{lr.value}}</dd>
+</div>
+</sc-for>
+</dl>
+</sc-if>
+<sc-if value="{{dk.runFailed}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 12px; color: {{t.muted}}">The restore exited with code 1; the tests did not run.</span>
+</sc-if>
+</div>
+</sc-if>
+</section>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.isK8sOn}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="margin-right: auto; font-size: 13px">Using <strong>{{k8sUsing}}</strong> from ~/.kube/config</span>
+<button onClick="{{askDisconnectK8s}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.err}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.isK8sOff}}" hint-placeholder-val="{{false}}">
+<section aria-labelledby="k8s-q" style="display: flex; flex-direction: column; gap: 10px">
+<h3 id="k8s-q" style="margin: 0; font-size: 14px; font-weight: 600">Use the Kubernetes configuration on this computer?</h3>
+<code style="font-size: 12px; color: {{t.fg2}}; padding: 6px 10px; border-radius: 8px; background: {{t.codeBg}}; align-self: flex-start">{{k8sDetectedPath}}</code>
+<button id="k8s-head" aria-expanded="{{k8sOpenText}}" aria-controls="k8s-body" onClick="{{toggleK8sList}}" style="width: 100%; min-height: 36px; border: 0; background: transparent; color: {{t.fg}}; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-radius: 8px; text-align: left"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style="transform: {{k8sChevron}}; color: {{t.muted}}"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"></path></svg>Contexts: {{k8sCount}} (tick the ones Scout may read)</button>
+<sc-if value="{{k8sListOpen}}" hint-placeholder-val="{{true}}">
+<div id="k8s-body" role="region" aria-labelledby="k8s-head" style="display: flex; flex-direction: column; gap: 10px">
+<input type="search" aria-label="Filter the contexts" placeholder="Filter the contexts" value="{{k8sQuery}}" onChange="{{onK8sQuery}}" style="height: 32px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 13px">
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{contexts}}" as="k" hint-placeholder-count="3">
+<li style="display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 8px; background: {{t.bg}}">
+<label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer"><input type="checkbox" checked="{{k.checked}}" onChange="{{k.toggle}}"><span style="overflow-wrap: anywhere">{{k.line}}</span></label>
+<sc-if value="{{k.hasExec}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0 0 0 24px; font-size: 12px; color: {{t.warn}}">Runs {{k.exec}} to get a token</p>
+</sc-if>
+<sc-if value="{{k.selected}}" hint-placeholder-val="{{false}}">
+<label style="display: flex; flex-direction: column; gap: 4px; padding-left: 24px; font-size: 12px; color: {{t.muted}}">Label
+<input type="text" value="{{k.label}}" onChange="{{k.onLabel}}" style="height: 32px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit; font-size: 13px; width: 200px">
+</label>
+</sc-if>
+</li>
+</sc-for>
+<sc-if value="{{k8sNoMatch}}" hint-placeholder-val="{{false}}">
+<li style="font-size: 13px; color: {{t.muted}}; padding: 6px 10px">No context matches the filter.</li>
+</sc-if>
+</ul>
+</div>
+</sc-if>
+<button onClick="{{useK8s}}" aria-disabled="{{k8sUseDisabled}}" style="align-self: flex-start; height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{k8sUseBg}}; color: {{k8sUseFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Use selected contexts</button>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.45">Scout only reads from your clusters, but these credentials may allow changes. A read-only user is safer:</p>
+<pre style="margin: 0; padding: 8px 10px; border-radius: 8px; background: {{t.codeBg}}; color: {{t.fg2}}; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere">kubectl create serviceaccount scout-reader -n default
+kubectl create clusterrolebinding scout-reader-view --clusterrole=view --serviceaccount=default:scout-reader
+kubectl create token scout-reader -n default --duration=8760h</pre>
+<button style="align-self: flex-start; border: 0; padding: 0; background: transparent; color: {{t.accent}}; font-size: 13px">Copy commands</button>
+</section>
+</sc-if>
+
+<sc-if value="{{pn.isYoutubeOn}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{ytOauth}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 2px; font-size: 13px">
+<span>Connected to <strong>Acme Tech Explained</strong></span>
+<span style="font-size: 12px; color: {{t.muted}}">Signed in with Google</span>
+</div>
+</sc-if>
+<sc-if value="{{ytScopes}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Google access: youtube.readonly, yt-analytics.readonly</p>
+</sc-if>
+<sc-if value="{{ytKey}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">Connected with an API key</p>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Public data only.</p>
+</sc-if>
+<sc-if value="{{ytPending}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<p style="margin: 0; font-size: 13px">Waiting for the browser...</p>
+<button onClick="{{cancelYoutubeWait}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{openStudio}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open YouTube Studio</button>
+<sc-if value="{{ytOauth}}" hint-placeholder-val="{{true}}">
+<button onClick="{{openChannel}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open channel</button>
+</sc-if>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM10 9l5 3-5 3z"></path></svg>Open YouTube operator</button>
+<button onClick="{{askDisconnectYoutube}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.err}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+</div>
+<sc-if value="{{ytDiscFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">Could not remove the YouTube token file, so Scout is still connected. Try Disconnect again.</p>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{pn.isYoutube}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-if value="{{ytPending}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">Waiting for the browser...</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{cancelYoutubeWait}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+</div>
+</sc-if>
+<sc-if value="{{ytIdle}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{ytNoClient}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px">Sign in needs a Google OAuth client: enable the YouTube Data API, create an OAuth client of type Desktop app, then download its JSON as it is to /home/owner/.config/Scout/google-oauth-client.json (or write {"client_id": ..., "client_secret": ...} there). Or use an API key below.</p>
+<button style="align-self: flex-start; border: 0; padding: 0; background: transparent; color: {{t.accent}}; font-size: 13px">Enable the YouTube Data API</button>
+<button style="align-self: flex-start; border: 0; padding: 0; background: transparent; color: {{t.accent}}; font-size: 13px">Open Google Cloud Console credentials</button>
+</sc-if>
+<sc-if value="{{ytFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.err}}">Google could not finish the sign-in (HTTP 503). Sign in again in a moment.</p>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{connectYoutube}}" aria-disabled="{{ytSignInOff}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{ytSignInBg}}; color: {{ytSignInFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"></path></svg>Sign in with Google</button>
+<button onClick="{{openYoutubeDialog}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M17 6l3 3"></path></svg>Add an API key</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.isDesktop}}" hint-placeholder-val="{{false}}">
+<section aria-label="Voice model" style="display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid {{t.line}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="margin-right: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: {{voice.color}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{voice.icon}}"></path></svg>{{voice.line}}</span>
+<sc-if value="{{voice.canDownload}}" hint-placeholder-val="{{true}}">
+<button onClick="{{openVoice}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>Download</button>
+</sc-if>
+<sc-if value="{{voice.canRetry}}" hint-placeholder-val="{{false}}">
+<button onClick="{{retryVoice}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Retry</button>
+</sc-if>
+</div>
+<sc-if value="{{voice.downloading}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="Voice model download" aria-valuenow="{{voice.percent}}" style="height: 4px; border-radius: 2px; background: {{t.surface2}}; overflow: hidden"><div style="height: 4px; width: {{voice.width}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<a href="Models.dc.html" style="align-self: flex-start; font-size: 13px; color: {{t.accent}}">Manage in Models, Transcription</a>
+</section>
+</sc-if>
+
+<sc-if value="{{pn.warnAccess}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; font-size: 13px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.warn}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 16H3zM12 10v4M12 17v.5"></path></svg>
+<span style="color: {{t.fg}}">Nobody can use this connection from chat until you add allowed users in <a href="Settings.dc.html" style="color: {{t.accent}}">Settings</a>.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{pn.hasReads}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="panel-reads" style="border-top: 1px solid {{t.line}}; padding-top: 12px; display: flex; flex-direction: column; gap: 8px">
+<h3 id="panel-reads" style="margin: 0; font-size: 14px; font-weight: 600">Reads <span style="font-weight: 500; color: {{t.muted}}">{{pn.readCount}}</span></h3>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{pn.reads}}" as="rd" hint-placeholder-count="3">
+<li style="display: flex; flex-direction: column; gap: 2px; font-size: 13px"><span style="font-weight: 500">{{rd.label}}</span><span style="color: {{t.muted}}">{{rd.what}}</span></li>
+</sc-for>
+</ul>
+</section>
+</sc-if>
+
+<sc-if value="{{pn.hasWrites}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="panel-writes" style="border-top: 1px solid {{t.line}}; padding-top: 12px; display: flex; flex-direction: column; gap: 8px">
+<h3 id="panel-writes" style="margin: 0; font-size: 14px; font-weight: 600">Permissions <span style="font-weight: 500; color: {{t.muted}}">{{pn.writeCount}}</span></h3>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{pn.writes}}" as="w" hint-placeholder-count="3">
+<li style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-weight: 500">{{w.label}}</span><span style="display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{w.bg}}; color: {{w.fg}}">{{w.access}}</span></span>
+<span style="color: {{t.muted}}">{{w.what}}</span>
+</li>
+</sc-for>
+</ul>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<span style="margin-right: auto; display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{pn.grantBg}}; color: {{pn.grantFg}}">{{pn.grantLabel}}</span>
+<sc-if value="{{pn.isGranted}}" hint-placeholder-val="{{false}}">
+<button onClick="{{pn.revoke}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; display: flex; align-items: center; gap: 8px; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Revoke writes</button>
+</sc-if>
+<sc-if value="{{pn.notGranted}}" hint-placeholder-val="{{true}}">
+<button onClick="{{pn.grant}}" aria-disabled="{{pn.grantDisabled}}" aria-describedby="{{pn.reasonId}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{pn.grantBtnBg}}; color: {{pn.grantBtnFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Allow writes</button>
+</sc-if>
+<sc-if value="{{pn.notGranted}}" hint-placeholder-val="{{true}}">
+<span id="{{pn.reasonId}}" style="flex-basis: 100%; font-size: 12px; color: {{t.muted}}">{{pn.grantReason}}</span>
+</sc-if>
+</div>
+</section>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{wcOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 64px 16px 16px; z-index: 20">
+<div role="dialog" aria-modal="true" aria-labelledby="wc-title" aria-describedby="wc-body" onKeyDown="{{wcKey}}" style="width: 520px; max-width: 100%; max-height: {{wcMax}}; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; box-sizing: border-box">
+<h2 id="wc-title" style="margin: 0; padding: 20px 20px 8px; font-size: 17px; font-weight: 600">Allow {{wc.name}} to write?</h2>
+<div tabindex="0" role="region" aria-label="The writes to allow" style="padding: 4px 20px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 13px; font-weight: 600">Writes</h3>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{wc.writes}}" as="ww" hint-placeholder-count="5">
+<li style="display: flex; flex-direction: column; gap: 3px; padding: 8px 0; border-top: 1px solid {{t.line}}; font-size: 13px">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><span style="font-weight: 500">{{ww.label}}</span><span style="padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{ww.bg}}; color: {{ww.fg}}">{{ww.access}}</span></span>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; color: {{t.muted}}">
+<sc-for list="{{ww.lines}}" as="wl" hint-placeholder-count="1">
+<li>{{wl.text}}</li>
+</sc-for>
+</ul>
+</li>
+</sc-for>
+</ul>
+<p id="wc-body" style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Scout will be allowed to perform these writes on your behalf. Actions marked irreversible will still wait for your approval, one by one, in Approvals.</p>
+</div>
+<sc-if value="{{wcUnseen}}" hint-placeholder-val="{{false}}">
+<p id="wc-hint" style="margin: 0; padding: 8px 20px 0; border-top: 1px solid {{t.line}}; font-size: 12px; color: {{t.muted}}">Scroll to the end of the list to allow these writes.</p>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 20px 20px; border-top: 1px solid {{t.line}}">
+<button autofocus="autofocus" onClick="{{wcCancel}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+<button onClick="{{wcConfirm}}" aria-disabled="{{wcUnseenText}}" aria-describedby="wc-hint" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{wcAllowBg}}; color: {{wcAllowFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Allow these writes</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{credOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 48px 16px; z-index: 20">
+<div role="dialog" aria-modal="true" aria-labelledby="cred-title" style="width: 560px; max-width: 100%; max-height: 820px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}">
+<div style="padding: 20px 20px 8px; display: flex; flex-direction: column; gap: 4px">
+<h2 id="cred-title" style="margin: 0; font-size: 18px; font-weight: 600">Connect {{cred.name}}</h2>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Fields marked * are required. Values stay in this computer's protected storage.</p>
+</div>
+<div style="padding: 8px 20px 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto">
+<sc-for list="{{cred.fields}}" as="f" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="{{f.id}}" style="font-size: 13px; font-weight: 500">{{f.label}}</label>
+<input id="{{f.id}}" type="{{f.type}}" autocomplete="off" value="{{f.value}}" onChange="{{f.onInput}}" placeholder="{{f.placeholder}}" aria-invalid="{{f.invalid}}" aria-describedby="{{f.helpId}}" style="height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid {{f.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px">
+<span id="{{f.helpId}}" style="font-size: 12px; color: {{f.helpColor}}; line-height: 1.45">{{f.help}}</span>
+<sc-if value="{{f.hasLink}}" hint-placeholder-val="{{false}}">
+<a href="#" style="align-self: flex-start; font-size: 13px; color: {{t.accent}}; display: inline-flex; align-items: center; gap: 4px">{{f.linkLabel}}<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+</div>
+</sc-for>
+<details style="border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px">
+<summary style="cursor: pointer; font-weight: 600; font-size: 13px">Required permissions</summary>
+<div style="overflow-x: auto; margin-top: 8px">
+<div role="table" aria-label="Required permissions" style="font-size: 13px">
+<div role="row" style="display: grid; grid-template-columns: 130px 1fr; color: {{t.muted}}"><span role="columnheader" style="padding: 6px 8px 6px 0; font-weight: 600">Permission</span><span role="columnheader" style="padding: 6px 0; font-weight: 600">What it enables</span></div>
+<sc-for list="{{cred.scopes}}" as="s" hint-placeholder-count="3">
+<div role="row" style="display: grid; grid-template-columns: 130px 1fr; border-top: 1px solid {{t.line}}"><span role="cell" style="padding: 6px 8px 6px 0; font-weight: 500">{{s.label}}</span><span role="cell" style="padding: 6px 0; color: {{t.fg2}}">{{s.what}}</span></div>
+</sc-for>
+</div>
+</div>
+</details>
+<section aria-labelledby="steps-title" style="display: flex; flex-direction: column; gap: 6px">
+<h3 id="steps-title" style="margin: 0; font-size: 13px; font-weight: 600">How to get this credential</h3>
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}; line-height: 1.45">
+<sc-for list="{{cred.steps}}" as="st" hint-placeholder-count="4">
+<li>{{st.text}}</li>
+</sc-for>
+</ol>
+</section>
+<sc-if value="{{credHasError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; display: flex; gap: 8px; align-items: center; color: {{t.err}}; font-size: 13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5v.5"></path></svg>{{credError}}</p>
+</sc-if>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 20px; border-top: 1px solid {{t.line}}">
+<button autofocus="autofocus" onClick="{{closeCred}}" aria-disabled="{{savingText}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px">Cancel</button>
+<button onClick="{{saveCred}}" aria-disabled="{{savingText}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{saveIcon}}"></path></svg>{{saveLabel}}</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{voiceOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 160px 16px 16px; z-index: 20">
+<div role="dialog" aria-modal="true" aria-labelledby="voice-title" style="width: 560px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="voice-title" style="margin: 0; font-size: 17px; font-weight: 600">Download a voice model?</h2>
+<p style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Voice messages and live transcription run on this computer with a Whisper model; nothing is sent to the cloud.</p>
+<div role="radiogroup" aria-label="Voice models" style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{voiceModels}}" as="vm" hint-placeholder-count="5">
+<label style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid {{vm.border}}; border-radius: 10px; cursor: pointer">
+<input type="radio" name="voice-model" checked="{{vm.checked}}" disabled="{{vm.disabled}}" onChange="{{vm.pick}}">
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 600">{{vm.title}}<sc-if value="{{vm.recommended}}" hint-placeholder-val="{{false}}"><span style="padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{t.infoBg}}; color: {{t.info}}">Recommended</span></sc-if><sc-if value="{{vm.installed}}" hint-placeholder-val="{{false}}"><span style="padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{t.okBg}}; color: {{t.ok}}">Installed</span></sc-if></span>
+<span style="font-size: 12px; color: {{t.muted}}">{{vm.size}} download · needs {{vm.ram}} of memory</span>
+<span style="font-size: 12px; color: {{t.fg2}}">{{vm.note}}</span>
+</span>
+</label>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{closeVoice}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px">Not now</button>
+<button onClick="{{downloadVoice}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path></svg>Download</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{dkClearOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 240px 16px 16px; z-index: 20">
+<div role="dialog" aria-modal="true" aria-labelledby="dk-clear-title" aria-describedby="dk-clear-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="dk-clear-title" style="margin: 0; font-size: 17px; font-weight: 600">Clear the work folder?</h2>
+<p id="dk-clear-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Scout deletes the logs of past test runs in ~/.local/share/Scout/sandbox (184 MB). The pinned images stay in Docker.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{dkCloseClear}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{dkConfirmClear}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Clear</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{botAskOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px; z-index: 20">
+<div role="alertdialog" aria-modal="true" aria-labelledby="bot-ask-title" aria-describedby="bot-ask-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="bot-ask-title" style="margin: 0; font-size: 17px; font-weight: 600">Remove the Scout bot?</h2>
+<p id="bot-ask-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Scout stops signing as the bot and acts as you again. The App stays on GitHub until you delete it there.</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px">
+<button autofocus="autofocus" onClick="{{closeBotAsk}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px">Cancel</button>
+<button onClick="{{confirmBotAsk}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Remove</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{discOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px; z-index: 20">
+<div role="dialog" aria-modal="true" aria-labelledby="disc-title" aria-describedby="disc-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="disc-title" style="margin: 0; font-size: 17px; font-weight: 600">{{discTitle}}</h2>
+<p id="disc-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{discBody}}</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px">
+<button autofocus="autofocus" onClick="{{closeDisc}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px">Cancel</button>
+<button onClick="{{confirmDisc}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{hasToast}}" hint-placeholder-val="{{false}}">
+<div role="status" style="position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: calc(100% - 32px); box-sizing: border-box; z-index: 30; display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-radius: 10px; background: {{t.toastBg}}; color: {{t.toastFg}}; box-shadow: 0 8px 24px {{t.shadow}}">{{toast}}<button onClick="{{dismissToast}}" style="border: 0; background: transparent; color: {{t.toastAction}}; font-weight: 600">OK</button></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: 'dark', bellOpen: false, bellTab: 'all', preview: 'ready', github: false, ghRepos: 6, k8s: false, docker: 'running', dkTests: false, dkImages: false, dkHighlight: false, dkClear: false, dkCleared: false, dkRepos: 'list', dkRepoDown: {}, dkOpen: {}, dkGroupDown: {}, dkPullError: '', dkPv: '', botCreated: false, wc: null, panel: null, granted: {}, botWrites: { review: true, verdict: true, comment: true, issue: true }, k8sSel: { 'shop-prod': 'shop-prod', staging: 'staging' }, k8sQuery: '', cred: null, disc: null, values: {}, tried: false, saving: false, credFailed: '', botTarget: 'user', org: '', botInstalled: false, botUnnamed: false, botFailed: false, botUnread: false, botAsk: false, botRemoved: false, ghWarn: false, ghNotConfigured: false, ghSignInFailed: false, ghActionFailed: false, botReposOpen: false, botQuery: '', toast: '', voice: 'none', voiceOpen: false, voicePick: 'base', ytMethod: 'oauth', ytPending: false, ytNoClient: false, ytFailed: false, ytScopes: false, ytDiscFailed: false };
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1f5fa8', infoBg: '#e3eefc', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', toastBg: '#18202e', toastFg: '#f5f7fb', toastAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.45)', danger: '#b3261e', codeBg: '#eef1f7', accentRing: 'rgba(42,86,198,0.25)' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8ab8f0', infoBg: '#17263d', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', toastBg: '#e6e9f0', toastFg: '#131c2d', toastAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', danger: '#c5372c', codeBg: '#0b111c', accentRing: 'rgba(143,178,249,0.30)' };
+  }
+  shellVals(t, current) {
+    const navDefs = [
+      ['Chat', 'Main.dc.html', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+      ['AI Sources', 'Sources.dc.html', 'M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z'],
+      ['Features', 'Features.dc.html', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['Models', 'Models.dc.html', 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7'],
+      ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
+      ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+      ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
+      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
+      ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
+    ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
+    const nav = navDefs.map(([label, href, d]) => {
+      const on = label === current;
+      return { label, href, d, bg: on ? t.navActive : 'transparent', color: on ? t.fg : t.fg2, weight: on ? 600 : 500, current: on ? 'page' : 'false', bar: on ? t.accent : 'transparent' };
+    });
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    return {
+      nav,
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      themeSystem: pill(this.state.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+    };
+  }
+  featureData() {
+    const R = 'Read', W = 'Write', I = 'Cannot be undone';
+    return [
+      { id: 'github', name: 'GitHub', icon: 'M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.8 2.8 5.8 3.1 5.8 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4.4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21',
+        desc: 'Query repositories, issues and pull requests from chat; review a pull request and audit a whole project. With your write permission it also posts reviews and comments, opens issues and gives verdicts, each one only after you approve it.',
+        reads: [
+          ['Metadata', 'List the repositories the Scout GitHub App is installed on'],
+          ['Contents', 'Read files, directories and languages; list and search every file to audit a project'],
+          ['Pull requests', 'List and read pull requests, their diffs, comments, checks and reviews, and the account Scout signs in as'],
+          ['Issues', 'List open issues and read one issue'],
+          ['Notifications', 'Search every five minutes for your mentions, review requests and replies; read the pull requests that mention your Scout bot and the bot\'s own name'],
+        ],
+        writes: [
+          ['Scout\'s data folder', W, 'Keep conventions profiles, repository snapshots and audit jobs on this computer', ['Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules', 'Keep a snapshot of a repository at one commit, within a size cap (200 MB unless configured), so a review or an audit reads every file locally and the Knowledge index can search it', 'Keep the audit job of a repository, its plan, progress and findings, when you ask for a whole-repository audit in chat; the audit reads the snapshot and pauses or stops when you ask']],
+          ['Pull request reviews', I, 'Post a review with comments; your click on Post on a review card is the approval, and one asked in chat waits for you in Approvals', ['Post a review with comments on a pull request; this review only comments, it never approves or requests changes. A review notifies the pull request\'s author and everyone following it, so each one needs your approval in Scout Desktop: your click on Post on a review card is that approval, and a review asked for in chat waits for you to approve it']],
+          ['Pull request verdicts', I, 'Approve a pull request or request changes; your choice on a review card is the approval, and one asked in chat waits for you in Approvals', ['Approve a pull request or request changes on it when you choose that verdict on the review card; a verdict stays in the pull request\'s history, so each one runs only after you approve that action in Scout Desktop', 'Approve a pull request or request changes on it when you ask for it in chat; each verdict waits for you to approve it in Scout Desktop']],
+          ['Pull request comments', I, 'Comment on a pull request or reply to a review comment; each one waits for you in Approvals', ['Comment on a pull request\'s conversation when you ask for it in chat; a comment notifies everyone following the pull request, so each one waits for you to approve that comment in Scout Desktop', 'Reply to a review comment on a pull request when you ask for it in chat; each reply waits for you to approve it in Scout Desktop']],
+          ['New issues', I, 'Open an issue; your click on Open issues on a findings card is the approval, and one asked in chat waits for you in Approvals', ['Open an issue on a repository when you ask for it in chat; an issue notifies the repository\'s watchers and stays in its history, so each one waits for you to approve that issue in Scout Desktop', 'Open the issues a findings card lists when you click Open issues on it; that click is your approval of exactly those issues']],
+          ['Issue comments', I, 'Comment on an existing issue; each one waits for you in Approvals', ['Comment on an existing issue when you ask for it in chat; a comment notifies everyone following the issue, so each one waits for you to approve that comment in Scout Desktop']],
+          ['Local container', W, 'Run a pull request\'s tests in a disposable container on this computer', ['Run a pull request\'s own tests in a disposable container on this computer, over the snapshot in Scout\'s data folder; the container sees no file, secret or variable of yours and, during the tests, no network']],
+          ['Scout bot on GitHub (optional)', W, 'Sign what you switched to the bot with its token, on the repositories you installed it on; you create the bot on GitHub\'s page and its key stays on this computer', ['Sign the reviews, verdicts, comments and issues you switched to the bot with its token, on the repositories you installed it on; on any other repository Scout signs as you and says so, and every read still uses your sign-in', 'Creating the bot is your own action in the desktop, like connecting GitHub: you confirm the GitHub App on GitHub\'s page, and its private key stays in this computer\'s protected storage']],
+        ] },
+      { id: 'docker', name: 'Docker', icon: 'M21 8l-9-5-9 5 9 5zM3 8v8l9 5 9-5V8M12 13v8',
+        desc: 'This computer needs nothing but Docker. The .NET, Node, Bun, Python, Go and Java SDKs come inside the container, so Scout runs a project\'s tests without installing anything on your machine.',
+        reads: [], writes: [] },
+      { id: 'kubernetes', name: 'Kubernetes', icon: 'M12 2l8.5 4.5v9L12 20l-8.5-4.5v-9zM12 7v5l4.3 2.5M12 12l-4.3 2.5',
+        desc: 'Read pods, deployments and events from your clusters. Uses the Kubernetes configuration on this computer, with your consent; read-only.',
+        reads: [
+          ['Namespaces', 'List the namespaces of each context you chose'],
+          ['Pods', 'Read pod status and restarts; never logs or secrets'],
+          ['Deployments', 'Read replicas and rollout status'],
+          ['Events', 'Read recent events'],
+        ],
+        writes: [] },
+      { id: 'youtube', name: 'YouTube', icon: 'M3 6h18v12H3zM10 9l5 3-5 3z',
+        desc: 'Reads a channel\'s overview, uploads, statistics, search results and comments; your own channel after you sign in. With your write permission it also produces videos under Scout\'s folder and publishes what you approve.',
+        reads: [
+          ['Channel overview', 'Title, handle, subscribers, total views and video count'],
+          ['Latest uploads', 'The latest uploads of a channel'],
+          ['Video statistics', 'Title, duration, views, likes and comment count'],
+          ['Search', 'Search YouTube for videos on a topic'],
+          ['Comments', 'The comments on your videos'],
+          ['Analytics', 'Views, watch time, retention and subscribers gained'],
+          ['Reach reports', 'Thumbnail impressions and click-through rate'],
+          ['Free-licence pictures', 'Find a CC0, public domain or CC BY picture for a scene on Openverse and download it'],
+        ],
+        writes: [
+          ['Scout\'s data folder', W, 'Save scripts, narration, images, the scene list, the video and thumbnails, and the recording you attach with its transcript'],
+          ['Reach reporting job', W, 'Create the channel\'s reach reporting job once'],
+          ['Upload a video', I, 'Public, private, unlisted or scheduled'],
+          ['Video details', I, 'Change a video\'s title during a title test'],
+          ['Thumbnail', I, 'Set a video\'s thumbnail'],
+          ['Add to a playlist', I, 'Add a video to a playlist'],
+          ['Reply to a comment', I, 'Publish a reply to a comment'],
+          ['Moderate a comment', I, 'Hold a comment for your review on YouTube'],
+        ] },
+      { id: 'desktop', name: 'Desktop', icon: 'M3 4h18v12H3zM8 20h8M12 16v4',
+        desc: 'What Scout can see and hear on this computer when you ask from the desktop. Nothing is captured unless you click.',
+        reads: [
+          ['Screen', 'One screenshot you attach to a question, and the text read from it'],
+          ['Microphone', 'Your voice while you hold to talk, listen or record a meeting'],
+          ['System audio', 'The computer\'s sound while you keep System audio on or record a meeting'],
+        ],
+        writes: [] },
+    ];
+  }
+  credData(id) {
+    if (id === 'youtube') {
+      return { name: 'YouTube', fields: [
+        { key: 'api_key', label: 'YouTube Data API key *', type: 'password', required: true, placeholder: '', help: 'Create it in the Google Cloud Console (APIs & Services, Credentials) for a project with the YouTube Data API v3 enabled. It reads public data only.', error: 'Enter the API key.', link: '' },
+      ], scopes: [['Channel overview', 'Read a channel\'s title, handle and counts'], ['Comments', 'Read the comments on your videos']],
+      steps: ['Create a project in the Google Cloud Console.', 'Enable the YouTube Data API v3 for that project.', 'Create an API key, or sign in with Google from Scout to read your own channel.'] };
+    }
+    return { name: 'GitHub', fields: [
+      { key: 'pat', label: 'Personal access token *', type: 'password', required: true, placeholder: '', help: 'Read access to Metadata, Contents, Checks, Commit statuses, Pull requests and Issues, on the repositories Scout should see.', error: 'Enter a GitHub token.', link: 'Create a fine-grained token on GitHub' },
+    ], scopes: [['Metadata', 'List the repositories Scout is installed on'], ['Contents', 'Read files and search code'], ['Pull requests', 'Read pull requests, diffs, checks and reviews'], ['Issues', 'Read issues']],
+    steps: ['Click Create a fine-grained token on GitHub and sign in there.', 'Name the token, choose when it expires and pick the repositories Scout should see.', 'Under Repository permissions, give read-only access to Metadata, Contents, Checks, Commit statuses, Pull requests and Issues.', 'Click Generate token, copy the token, paste it here and click Save.'] };
+  }
+  bellItems() {
+    return [
+      { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
+      { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
+      { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
+      { id: 'v1', kind: 'done', glyph: '✓', tone: 'ok', title: 'Verdict given: Approved acme/web#17', detail: 'Signed as the Scout bot · the tests line was posted as a comment', when: '25 min', progress: null, action: 'See the review' },
+      { id: 'i1', kind: 'done', glyph: 'I', tone: 'ok', title: '3 issues opened on acme/shop', detail: 'From the audit findings you chose', when: '1 h', progress: null, action: 'See the issues' },
+      { id: 'w1', kind: 'done', glyph: '!', tone: 'err', title: 'A voice message could not be transcribed: no Whisper model is installed.', detail: '1 voice message not transcribed, the last from Discord.', when: '3 min', progress: null, action: '', buttons: [{ label: 'Download the base model (142 MB)', path: 'M12 3v12M7 10l5 5 5-5M5 21h14' }, { label: 'Open Models, Transcription', path: 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4' }] },
+      { id: 'p1', kind: 'paused', glyph: '!', tone: 'err', title: 'Audit of acme/web paused', detail: 'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.', when: '2 h', progress: null, action: '' },
+    ];
+  }
+  bellRunsNow() {
+    return { a1: 'running', t1: 'running', p1: 'pausedByLimit', ...(this.state.bellRuns || {}) };
+  }
+  bellSetRun(id, next) {
+    this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: next }, bellRead: { ...(this.state.bellRead || {}), [id]: true } });
+  }
+  bellStopAudit(id) {
+    this.bellSetRun(id, 'stopping');
+    setTimeout(() => { if (this.bellRunsNow()[id] === 'stopping') this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: 'stoppedAfterArea' } }); }, 4000);
+  }
+  bellLive(n) {
+    const s = this.bellRunsNow()[n.id];
+    const pause = 'M9 5v14M15 5v14';
+    const play = 'M8 5l11 7-11 7z';
+    const stop = 'M7 7h10v10H7z';
+    if (n.id === 't1') {
+      if (s === 'stopped') return { ...n, kind: 'done', glyph: 'T', tone: 'muted', title: 'Tests for acme/api#41 stopped', detail: 'The container was removed; the tests gave no result.', when: 'now', progress: null, controls: [] };
+      return { ...n, controls: [{ label: 'Stop the tests for acme/api#41', path: stop, act: () => this.bellSetRun('t1', 'stopped') }] };
+    }
+    const audit = { a1: ['acme/shop', 3, 8, 4, 'running'], p1: ['acme/web', 5, 9, 2, 'pausedByLimit'] }[n.id];
+    if (!audit) return { ...n, controls: [] };
+    const [repo, done, total, findings, first] = audit;
+    const when = s === first ? n.when : 'now';
+    const pauseIt = { label: 'Pause the audit of ' + repo, path: pause, act: () => this.bellSetRun(n.id, 'pausedByYou') };
+    const goOn = { label: 'Continue the audit of ' + repo, path: play, act: () => this.bellSetRun(n.id, 'running') };
+    const stopIt = { label: 'Stop the audit of ' + repo, path: stop, act: () => this.bellSetRun(n.id, 'stopped') };
+    const stopRunning = { ...stopIt, act: () => this.bellStopAudit(n.id) };
+    const running = { ...n, kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of ' + repo, detail: 'Area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far · cards arrive in the chat as each area ends', when, progress: Math.floor(done * 100 / total) };
+    const stopped = (areas) => ({ ...n, kind: 'done', glyph: 'A', tone: 'muted', title: 'Audit of ' + repo + ' stopped', detail: areas + ' of ' + total + ' areas · ' + findings + ' findings kept', when, progress: null, controls: [] });
+    return {
+      running: { ...running, controls: [pauseIt, stopRunning] },
+      stopping: { ...running, controls: [], status: 'Stopping after this area' },
+      pausedByYou: { ...n, kind: 'paused', glyph: 'A', tone: 'warn', title: 'Audit of ' + repo + ' paused', detail: 'Paused by you · area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far', when, progress: null, controls: [goOn, stopIt] },
+      pausedByLimit: { ...n, kind: 'paused', when, controls: [goOn, stopIt] },
+      stopped: stopped(done),
+      stoppedAfterArea: stopped(done + 1),
+    }[s];
+  }
+  bellPreview(n) {
+    const clock = 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2';
+    const note = (text) => ({ a1: { note: text } });
+    const paused = (detail) => ({ p1: { detail } });
+    const fromApp = {
+      asking: { a1: { asking: true } },
+      pausing: { a1: { controls: [], status: 'Pausing after this area' } },
+      continuing: { p1: { controls: [], status: 'Continuing' } },
+      stoppingPaused: { p1: { controls: [], status: 'Stopping' } },
+      stoppingTests: { t1: { controls: [], status: 'Stopping' } },
+      noteNoAnswer: { t1: { note: 'The Scout control plane did not answer, so this click may not have reached Scout. Try again.' } },
+      noteNotConfirmed: note('Not confirmed: Scout did not say within two and a half minutes whether it applied this click; look at the job before clicking again.'),
+      noteNotReported: note('Scout recorded this click as applied, but the job did not report it; look at the job before clicking again.'),
+      noteWorkerStopped: note('Scout stopped before it said how this click ended; look at the job before clicking again.'),
+      noteDropped: note('Not applied: the click waited more than two minutes for Scout, so it was dropped; click again if it still applies.'),
+      pausedCredit: paused("The AI Source's account has run out of credit. Ask Scout to continue once it has credit again."),
+      pausedRate: paused('The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.'),
+      pausedSignIn: paused('The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.'),
+      pausedKey: paused('The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.'),
+      pausedModel: paused('The AI Source does not have the model llama3.2:3b. Choose a model it has in Models, then ask Scout to continue.'),
+      areaName: { a1: { detail: 'Area 3 of 8 done: src/orders' } },
+      finished: { a1: { kind: 'done', tone: 'ok', title: 'Audit of acme/shop is done', detail: 'Verdict: fix (0 High, 2 Medium, 1 Low).', progress: null, controls: [] } },
+      testsFinished: { t1: { kind: 'done', tone: 'ok', title: 'Tests for acme/api#41 finished', detail: 'The result is in the conversation.', progress: null, controls: [] } },
+      testsNotFinished: { t1: { kind: 'failed', tone: 'err', title: 'Tests for acme/api#41 did not finish', detail: 'The answer ended before the tests reported a result.', progress: null, controls: [] } },
+      healthRestarting: { h1: { id: 'h1', kind: 'running', glyph: '', path: clock, tone: 'accent', title: 'Scout stopped unexpectedly and is restarting.', detail: 'Restart 1 since Scout was started.', when: 'now', progress: null, action: '', controls: [] } },
+      healthGaveUp: { h1: { id: 'h1', kind: 'failed', glyph: '!', tone: 'err', title: 'Scout stopped and does not restart by itself.', detail: 'Start it again from Logs or from Settings, Scout worker.', when: 'now', progress: null, action: '', controls: [] } },
+    }[this.state.bell] || {};
+    return n === undefined ? fromApp : { ...n, ...(fromApp[n.id] || {}) };
+  }
+  bellVals(t) {
+    const read = this.state.bellRead || {};
+    const tab = this.state.bellTab || 'all';
+    const bell = this.state.bell || 'entries';
+    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.bellPreview(this.bellLive(n)))];
+    const unread = all.filter((n) => !read[n.id]).length;
+    const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
+    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
+      ...n,
+      iconBg: tone(n)[0],
+      iconFg: tone(n)[1],
+      hasPath: Boolean(n.path),
+      rowBg: read[n.id] ? t.surface : t.unreadBg,
+      weight: read[n.id] ? 500 : 600,
+      hasDetail: n.detail !== '',
+      hasNote: Boolean(n.note),
+      hasProgress: n.progress !== null,
+      progressWidth: (n.progress || 0) + '%',
+      hasAction: n.action !== '',
+      buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),
+      hasButtons: (n.buttons ?? []).length > 0,
+      hasControls: n.controls.length > 0,
+      controlsOff: n.asking ? 'true' : 'false',
+      controlsOpacity: n.asking ? 0.5 : 1,
+      hasStatus: Boolean(n.status),
+      showWhen: !n.status,
+    }));
+    const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
+    return {
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true }) })),
+      bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
+        const on = tab === id;
+        return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
+      }),
+      bellShown: shown,
+      bellEmpty: shown.length === 0,
+      bellRefused: bell === 'refused',
+      bellUnread: unread,
+      bellHasUnread: unread > 0,
+      bellOpen: this.state.bellOpen,
+      bellOpenText: this.state.bellOpen ? 'true' : 'false',
+      bellBg: this.state.bellOpen ? t.surface2 : 'transparent',
+      bellLabel: unread > 0 ? 'Notifications, ' + unread + ' unread' : 'Notifications',
+      toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
+      bellMarkAllRead: () => { const r = {}; all.forEach((n) => { r[n.id] = true; }); this.setState({ bellRead: r }); },
+    };
+  }
+  renderVals() {
+    const vals = this.pageVals();
+    return { ...vals, ...this.bellVals(vals.t) };
+  }
+  pageVals() {
+    const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;
+    const t = this.palette(mode);
+    const p = this.state.preview;
+    const github = this.state.github;
+    const yt = this.state.youtubeConnected !== false;
+    const dkState = this.state.docker;
+    const dkRunning = dkState === 'running';
+    const connected = { github, kubernetes: this.state.k8s, youtube: yt, desktop: true, docker: dkRunning };
+    const tone = { ok: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], warn: [t.warnBg, t.warn, 'M12 3l9 16H3zM12 10v4'], neutral: [t.surface2, t.fg2, 'M6 12h12'] };
+    const status = (id) => id === 'docker' ? (dkRunning ? ['Running · Docker 28.5.1', 'ok'] : dkState === 'stopped' ? ['Installed, not running', 'warn'] : dkState === 'checking' ? ['Checking...', 'neutral'] : dkState === 'unknown' ? ['Unknown', 'neutral'] : ['Not installed', 'neutral']) : connected[id] ? [id === 'desktop' ? 'On' : 'Connected', 'ok'] : ['Not connected', 'neutral'];
+    const accessTone = (a) => a === 'Cannot be undone' ? [t.errBg, t.err] : [t.warnBg, t.warn];
+    const granted = this.state.granted;
+    const cards = this.featureData().map((f) => {
+      const [chip, tn] = status(f.id);
+      const canGrant = connected[f.id];
+      const isGranted = granted[f.id] === true;
+      return {
+        id: f.id, name: f.name, icon: f.icon, desc: f.desc, titleId: 'feature-' + f.id, cardId: 'card-' + f.id, reasonId: 'grant-reason-' + f.id,
+        chip, chipBg: tone[tn][0], chipFg: tone[tn][1], chipIcon: tone[tn][2],
+        isDocker: f.id === 'docker',
+        border: f.id === 'docker' && this.state.dkHighlight ? t.accent : t.line, ringWidth: f.id === 'docker' && this.state.dkHighlight ? '3px' : '0', ring: f.id === 'docker' && this.state.dkHighlight ? t.accentRing : 'transparent',
+        isGithub: f.id === 'github', isGithubOff: f.id === 'github' && !github, isGithubOn: f.id === 'github' && github,
+        isDesktop: f.id === 'desktop',
+        isK8sOn: f.id === 'kubernetes' && this.state.k8s, isK8sOff: f.id === 'kubernetes' && !this.state.k8s,
+        isYoutube: f.id === 'youtube' && !yt, isYoutubeOn: f.id === 'youtube' && yt,
+        warnAccess: f.id === 'kubernetes' && this.state.k8s,
+        hasReads: f.reads.length > 0, readCount: f.reads.length,
+        reads: f.reads.map(([label, what]) => ({ label, what })),
+        hasWrites: f.writes.length > 0, writeCount: f.writes.length,
+        writes: f.writes.map(([label, access, what, actions]) => ({ label, access, what, actions: actions || [what], bg: accessTone(access)[0], fg: accessTone(access)[1] })),
+        perms: [['Read', f.reads.length, t.surface2, t.fg2], ['Write', f.writes.filter((w) => w[1] === 'Write').length, t.warnBg, t.warn], ['Cannot be undone', f.writes.filter((w) => w[1] === 'Cannot be undone').length, t.errBg, t.err]]
+          .filter((x) => x[1] > 0).map(([label, n, bg, fg]) => ({ label: label + ' ' + n, bg, fg })),
+        permsLabel: f.name + ' permissions',
+        noPerms: f.reads.length + f.writes.length === 0,
+        noPermsText: 'Runs also need GitHub\'s write permission',
+        isGranted, notGranted: !isGranted,
+        grantLabel: isGranted ? 'Write permission: granted on 2026-11-01' : 'Write permission: not granted', grantBg: isGranted ? t.okBg : t.surface2, grantFg: isGranted ? t.ok : t.fg2,
+        grantDisabled: canGrant ? 'false' : 'true',
+        grantBtnBg: canGrant ? t.accentStrong : t.surface2,
+        grantBtnFg: canGrant ? '#ffffff' : t.muted,
+        grantReason: canGrant ? 'You review the list before anything is allowed.' : 'Connect ' + f.name + ' first to allow writes.',
+        grant: () => { if (canGrant) this.setState({ wc: f.id }); },
+        revoke: () => this.setState({ granted: Object.assign({}, granted, { [f.id]: false }), toast: 'Writes revoked for ' + f.name }),
+        closeLabel: 'Close the ' + f.name + ' details',
+        detailsLabel: f.name + ' details',
+        detailsExpanded: this.state.panel === f.id ? 'true' : 'false',
+        openDetails: () => this.setState({ panel: f.id, dkHighlight: false }),
+      };
+    });
+    const credPreview = p.indexOf('cred') === 0 || p.indexOf('yt-cred') === 0;
+    const credId = credPreview && this.state.cred === null ? (p.indexOf('yt-') === 0 ? 'youtube' : 'github') : this.state.cred;
+    const credRaw = this.credData(credId || 'github');
+    const vals = this.state.values;
+    const tried = this.state.tried;
+    const fields = credRaw.fields.map((f) => {
+      const v = vals[f.key] || '';
+      const bad = tried && f.required && v.trim() === '';
+      return { id: 'cred-' + f.key, helpId: 'cred-help-' + f.key, label: f.label, type: f.type, value: v, placeholder: f.placeholder,
+        invalid: bad ? 'true' : 'false', border: bad ? t.err : t.line, help: bad ? f.error : f.help, helpColor: bad ? t.err : t.muted,
+        hasLink: f.link !== '', linkLabel: f.link,
+        onInput: (e) => { const nv = { ...this.state.values }; nv[f.key] = e && e.target ? e.target.value : ''; this.setState({ values: nv }); } };
+    });
+    const missing = credRaw.fields.filter((f) => f.required && (vals[f.key] || '').trim() === '').length;
+    const disc = p === 'disc' && this.state.disc === null ? 'kubernetes' : this.state.disc;
+    const discName = disc === 'github' ? 'GitHub' : disc === 'youtube' ? 'YouTube' : 'Kubernetes';
+    const previewDefs = [['ready', 'Loaded'], ['states', 'Each state'], ['connected', 'GitHub connected'], ['loading', 'Loading'], ['error', 'Control plane down'], ['panel-github', 'Panel: GitHub'], ['panel-docker', 'Panel: Docker'], ['panel-long', 'Panel: Docker, long repository list'], ['wc', 'Allow writes confirmation (GitHub)'], ['wc-actions', 'Allow writes confirmation (GitHub), every action of a write on its own line, as the app lists them'], ['panel-bot', 'GitHub panel: bot created'], ['panel-bot-name', 'GitHub panel: bot name not refreshed'], ['cred', 'Credential dialog'], ['cred-invalid', 'Credential dialog: Save with the token empty'], ['cred-saving', 'Credential dialog: saving'], ['cred-failed', 'Credential dialog: GitHub refused the token'], ['disc', 'Disconnect dialog'], ['unreadable', 'Features unreadable'], ['wc-overflow', 'Allow writes, list not read to the end'], ['gh-code', 'GitHub panel: code shown'], ['panel-bot-creating', 'GitHub panel: bot being created'], ['gh-one', 'GitHub panel: installed on 1 repository'], ['gh-none', 'GitHub panel: App not installed yet'], ['panel-gh-token', 'GitHub panel: a token that can write'], ['gh-not-configured', 'GitHub panel: App not configured'], ['gh-sign-in-failed', 'GitHub panel: sign-in failed'], ['panel-bot-failed', 'GitHub panel: bot creation failed'], ['panel-bot-unread', 'GitHub panel: bot not read'], ['panel-gh-action-failed', 'GitHub panel: Disconnect failed'], ['panel-bot-unnamed', 'GitHub panel: bot name not read yet'], ['panel-bot-remove-ask', 'GitHub panel: Remove the bot asks first'], ['panel-bot-removed', 'GitHub panel: bot removed'], ['yt-access', 'YouTube panel: Google access'], ['yt-key', 'YouTube panel: connected with an API key'], ['yt-waiting', 'YouTube panel: waiting for the browser'], ['yt-waiting-on', 'YouTube panel: waiting for the browser while connected'], ['yt-no-client', 'YouTube panel: OAuth client missing'], ['yt-failed', 'YouTube panel: sign-in failed'], ['yt-disc-failed', 'YouTube panel: Disconnect failed'], ['yt-cred', 'Connect YouTube dialog'], ['yt-cred-invalid', 'Connect YouTube: Save with the key empty'], ['yt-cred-saving', 'Connect YouTube: saving'], ['yt-cred-failed', 'Connect YouTube: Google refused the key'], ['panel-dk-checking', 'Docker panel: checking'], ['panel-dk-unknown', 'Docker panel: Docker not read'], ['panel-dk-pulling', 'Docker panel: a stack downloading'], ['panel-dk-pulling-needed', 'Docker panel: Download images downloading'], ['panel-dk-switch-error', 'Docker panel: the switch not saved'], ['panel-dk-restart-failed', 'Docker panel: saved, Scout not restarted'], ['panel-dk-restart-later', 'Docker panel: restart waits for the answer'], ['panel-dk-clear-refused', 'Docker panel: Clear refused'], ['panel-dk-no-run', 'Docker panel: no run yet'], ['panel-dk-run-failed', 'Docker panel: last run failed'], ['panel-dk-app-detail', 'Docker panel: repository detail as the app writes it'], ['panel-dk-stopped', 'Docker panel: repositories while Docker is not running']];
+    const previews = previewDefs.map(([id, label]) => {
+      const on = p === id;
+      const states = id === 'states';
+      const ghOn = states || id === 'connected' || id === 'wc' || id === 'wc-actions' || id === 'wc-overflow' || id.indexOf('panel') === 0 || id === 'gh-one' || id === 'gh-none';
+      const ytOn = id === 'yt-access' || id === 'yt-key' || id === 'yt-waiting-on' || id === 'yt-disc-failed';
+      const ytPanel = id.indexOf('yt-') === 0;
+      const ghPanel = id === 'panel-github' || id === 'gh-one' || id === 'gh-none' || id === 'wc' || id === 'wc-actions' || id === 'panel-bot' || id === 'panel-bot-name' || id === 'panel-bot-creating' || id === 'gh-code' || id.indexOf('panel-gh-') === 0 || id.indexOf('panel-bot-') === 0 || id === 'gh-not-configured' || id === 'gh-sign-in-failed';
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted,
+        pick: () => this.setState({ preview: id, github: ghOn, granted: states ? { github: true } : {}, docker: states || id === 'panel-dk-stopped' ? 'stopped' : id === 'panel-dk-checking' ? 'checking' : id === 'panel-dk-unknown' ? 'unknown' : 'running', dkPv: id.indexOf('panel-dk-') === 0 ? id : '', k8s: states, youtubeConnected: ytPanel ? ytOn : !states, ytMethod: id === 'yt-key' ? 'apiKey' : 'oauth', ytPending: id === 'yt-waiting' || id === 'yt-waiting-on', ytNoClient: id === 'yt-no-client', ytFailed: id === 'yt-failed', ytScopes: id === 'yt-access', ytDiscFailed: id === 'yt-disc-failed', voice: states ? 'downloading' : 'none',
+          botInstalled: id === 'panel-github' || id === 'panel-bot-name' || id === 'panel-bot-remove-ask', botCreated: id === 'panel-bot' || id === 'panel-bot-unnamed', botNameError: id === 'panel-bot-name', botUnnamed: id === 'panel-bot-unnamed', botFailed: id === 'panel-bot-failed', botUnread: id === 'panel-bot-unread', botAsk: id === 'panel-bot-remove-ask', botRemoved: id === 'panel-bot-removed', ghWarn: id === 'panel-gh-token', ghNotConfigured: id === 'gh-not-configured', ghSignInFailed: id === 'gh-sign-in-failed', ghActionFailed: id === 'panel-gh-action-failed', wc: id === 'wc' || id === 'wc-actions' || id === 'wc-overflow' ? 'github' : null, panel: ghPanel ? 'github' : ytPanel ? 'youtube' : id === 'panel-docker' || id === 'panel-long' || id.indexOf('panel-dk-') === 0 ? 'docker' : null, ghCode: id === 'gh-code', ghRepos: id === 'gh-one' ? 1 : id === 'gh-none' ? 0 : id === 'panel-gh-token' ? null : 6, botCreating: id === 'panel-bot-creating',
+          dkRepos: id === 'panel-long' ? 'long' : 'list', dkOpen: id === 'panel-long' ? { repos: true, images: false } : id === 'panel-dk-pulling' || id === 'panel-dk-pulling-needed' ? { images: true } : id === 'panel-dk-clear-refused' ? { folder: true } : id === 'panel-dk-no-run' || id === 'panel-dk-run-failed' ? { last: true } : id === 'panel-dk-app-detail' || id === 'panel-dk-stopped' ? { repos: true, images: false } : {},
+          dkTests: id === 'panel-dk-restart-failed' || id === 'panel-dk-restart-later' ? true : id === 'panel-dk-switch-error' ? false : this.state.dkTests, dkCleared: id === 'panel-dk-clear-refused' ? false : this.state.dkCleared,
+          dkHighlight: false, cred: null, disc: null, values: id === 'cred-saving' ? { pat: 'example' } : id === 'yt-cred-saving' ? { api_key: 'example' } : {}, tried: id === 'cred-invalid' || id === 'yt-cred-invalid', saving: id === 'cred-saving' || id === 'yt-cred-saving', credFailed: id === 'cred-failed' ? 'GitHub rejected this token.' : id === 'yt-cred-failed' ? 'Google does not recognise this API key. Copy it again from Google Cloud Console credentials.' : '', toast: id === 'panel-bot-removed' ? 'Scout no longer uses the bot' : '' }) };
+    });
+    const dkOn = this.state.dkTests;
+    const dkPv = this.state.dkPv || '';
+    const dkUnread = dkState === 'checking' || dkState === 'unknown';
+    const dkPulling = dkPv === 'panel-dk-pulling' || dkPv === 'panel-dk-pulling-needed';
+    const okD = 'M20 6L9 17l-5-5', dotD = 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z';
+    const groupDefs = [
+      ['.NET', ['mcr.microsoft.com/dotnet/sdk:10.0@sha256:212fe4cb...'], 1],
+      ['Node', ['node:22@sha256:7702d8aa...'], 1],
+      ['Bun', ['oven/bun:1@sha256:1d22548f...'], 0],
+      ['Python', ['python:3.13@sha256:ecbe213f...'], 0],
+      ['Go', ['golang:1.25@sha256:699337d6...'], 0],
+      ['Java (Maven)', ['maven:3-eclipse-temurin-8@sha256:c5f4e354...', 'maven:3-eclipse-temurin-11@sha256:433ab11f...', 'maven:3-eclipse-temurin-17@sha256:bec7efd9...', 'maven:3-eclipse-temurin-21@sha256:9673eef9...', 'maven:3-eclipse-temurin-25@sha256:047a82fc...'], 1],
+      ['Java (Gradle)', ['gradle:7-jdk8@sha256:ec581274...', 'gradle:7-jdk11@sha256:8a25d9da...', 'gradle:7-jdk17@sha256:4a69879a...', 'gradle:8-jdk8@sha256:c58ba7d3...', 'gradle:8-jdk11@sha256:bdd652d6...', 'gradle:8-jdk17@sha256:2f977f0a...', 'gradle:8-jdk21@sha256:930141cf...', 'gradle:9-jdk17@sha256:55af4a98...', 'gradle:9-jdk21@sha256:85f8f572...', 'gradle:9-jdk25@sha256:e46e1535...'], 0],
+    ];
+    const groupDown = this.state.dkGroupDown;
+    const imgs = groupDefs.flatMap(([stack, refs, base]) => refs.map((ref, k) => [stack, ref, groupDown[stack] === true || k < base]));
+    const allDown = imgs.every((i) => i[2]);
+    const downCount = imgs.filter((i) => i[2]).length;
+    const dk = {
+      missing: dkState === 'missing', notRunning: dkState === 'stopped',
+      statusLine: dkRunning ? 'Docker Engine 28.5.1 answers on this computer.' : dkState === 'stopped' ? 'Docker is installed but not running. Start Docker Desktop or the Docker service.' : dkState === 'checking' ? 'Scout is checking Docker on this computer.' : dkState === 'unknown' ? 'Scout could not ask Docker for its state. Try Refresh.' : 'Docker is not installed on this computer.',
+      recheck: () => this.setState({ toast: dkUnread ? '' : dkRunning ? 'Docker is running' : dkState === 'stopped' ? 'Docker is still not running' : 'Docker is still not installed' }),
+      switchHelp: (github ? '' : 'Connect GitHub first. ') + 'Scout runs a project\'s tests only for a pull request you ask it to review. Runs also need GitHub\'s write permission in its card.' + (dkRunning || dkUnread ? '' : ' Runs wait for Docker to be running.'),
+      hasSwitchError: dkPv === 'panel-dk-switch-error' || dkPv === 'panel-dk-restart-failed',
+      switchError: dkPv === 'panel-dk-switch-error' ? 'Scout found no keyring service such as GNOME Keyring or KWallet on this computer, so it saved nothing and does not use the credentials saved before; start or install one, then restart Scout.' : 'Saved, but Scout could not restart to apply it: worker exited before SCOUT_READY (code=1)',
+      hasSwitchNote: dkPv === 'panel-dk-restart-later',
+      switchNote: 'Scout waits for the running answer or the live listen to end, then restarts.',
+      sw: { checked: dkOn ? 'true' : 'false', disabled: github ? 'false' : 'true', opacity: github ? '1' : '0.55', justify: dkOn ? 'flex-end' : 'flex-start', track: dkOn ? t.accentStrong : t.surface2, edge: dkOn ? t.accentStrong : t.line, thumb: dkOn ? '#ffffff' : t.muted,
+        toggle: () => { if (github) this.setState({ dkTests: !dkOn, dkHighlight: false }); } },
+      imagesHelp: dkRunning ? downCount + ' of ' + imgs.length + ' downloaded.' : 'Docker must be running to download images.',
+      hasPullError: this.state.dkPullError !== '', pullError: this.state.dkPullError,
+      groups: dkPv === 'panel-dk-stopped' ? [] : groupDefs.map(([stack, refs]) => {
+        const own = imgs.filter((i) => i[0] === stack);
+        const n = own.filter((i) => i[2]).length;
+        const can = dkRunning && n < own.length && !dkPulling;
+        const pulling = dkPv === 'panel-dk-pulling' && stack === 'Bun';
+        return { summary: stack + ': ' + n + ' of ' + own.length + ' downloaded', label: 'Download the ' + stack + ' images', pulling, progress: 'Downloading 1 of 1: ' + refs[0],
+          disabled: can ? 'false' : 'true', fg: can ? t.fg : t.muted,
+          download: () => { if (can) this.setState(stack === 'Java (Gradle)' ? { dkPullError: 'Docker Hub is limiting downloads; try again later.' } : { dkPullError: '', dkGroupDown: Object.assign({}, groupDown, { [stack]: true }), toast: 'Downloading the ' + stack + ' images in Docker' }); },
+          images: own.map(([, image, d]) => ({ image, status: d ? 'Downloaded' : 'Not downloaded', chipBg: d ? t.okBg : t.surface2, chipFg: d ? t.ok : t.fg2, chipD: d ? okD : dotD })) };
+      }),
+      space: this.state.dkCleared ? 'Empty · run logs are deleted' : '184 MB used · the logs of 12 runs; each run\'s copy of the code is deleted after it',
+      clearRefused: dkPv === 'panel-dk-clear-refused',
+      clearDisabled: this.state.dkCleared ? 'true' : 'false',
+      clearFg: this.state.dkCleared ? t.muted : t.err,
+      askClear: () => { if (!this.state.dkCleared) this.setState({ dkClear: true }); },
+      noRun: dkPv === 'panel-dk-no-run', hasRun: dkPv !== 'panel-dk-no-run', runFailed: dkPv === 'panel-dk-run-failed',
+      last: [
+        { label: 'Repository', value: 'acme/shop', color: t.fg },
+        { label: 'Pull request', value: '#5', color: t.fg },
+        { label: 'Stack', value: '.NET (dotnet test)', color: t.fg },
+        { label: 'Result', value: dkPv === 'panel-dk-run-failed' ? 'Failed (exit 1)' : 'Passed', color: dkPv === 'panel-dk-run-failed' ? t.err : t.ok },
+        { label: 'Duration', value: '41 s', color: t.fg },
+        { label: 'Finished', value: 'Nov 7, 2026, 10:05:00 AM', color: t.fg },
+      ],
+    };
+    const okD2 = 'M20 6L9 17l-5-5', warnD = 'M12 3l9 16H3zM12 10v4M12 17v.5';
+    const repoDefs = [
+      ['acme/billing-api', '.NET 9 (global.json)', 'yes'],
+      ['acme/web', 'Node 20 (.nvmrc)', 'no'],
+      ['acme/legacy', 'Java 23 (pom.xml)', 'unsupported'],
+    ];
+    if (this.state.dkRepos === 'long') {
+      const more = ['shop', 'api', 'mobile-bff', 'payments', 'search', 'infra-tools', 'docs-site', 'design-system', 'analytics', 'auth', 'notifications', 'status-page', 'checkout', 'catalog', 'inventory', 'reports', 'admin', 'gateway', 'scheduler', 'importer', 'exporter', 'pricing', 'orders', 'emails', 'webhooks'];
+      const found = ['.NET 10 (global.json)', 'Node 22 (.nvmrc)', 'Java 21 (pom.xml)', 'Node 20 (.nvmrc)', '.NET 8 (global.json)', 'Java 17 (pom.xml)'];
+      more.forEach((n, i) => repoDefs.push(['acme/' + n, found[i % found.length], i % 3 === 1 ? 'no' : 'yes']));
+    }
+    dk.noRepos = this.state.dkRepos === 'none';
+    const needsImages = dkRunning && !allDown && downCount < imgs.length;
+    const sec = (id, title, summary) => {
+      const chosen = this.state.dkOpen[id];
+      const open = chosen === undefined ? id === 'images' && needsImages : chosen;
+      return { open, expanded: open ? 'true' : 'false', label: open ? title : summary, rotate: open ? 'rotate(90deg)' : 'none',
+        toggle: () => this.setState({ dkOpen: Object.assign({}, this.state.dkOpen, { [id]: !open }) }) };
+    };
+    dk.sec = {
+      uses: sec('uses', 'What Scout uses Docker for', 'What Scout uses Docker for: a pull request\'s tests, offline, 20 minutes at most'),
+      images: sec('images', 'Pinned images per stack', dkPulling ? 'Images: downloading 1 of 1' : dkRunning ? 'Images: ' + downCount + ' of ' + imgs.length + ' downloaded' : dkUnread ? 'Images: checking' : 'Images: Docker is not running'),
+      repos: sec('repos', 'Repositories', dk.noRepos ? 'Repositories: none read yet' : 'Repositories: ' + repoDefs.length + ' read' + (repoDefs.filter((r) => r[2] === 'no').length > 0 ? ', ' + repoDefs.filter((r) => r[2] === 'no').length + ' missing an image' : '') + (repoDefs.filter((r) => r[2] === 'unsupported').length > 0 ? ', ' + repoDefs.filter((r) => r[2] === 'unsupported').length + ' Scout cannot run' : '')),
+      folder: sec('folder', 'Work folder', this.state.dkCleared ? 'Work folder: empty' : 'Work folder: 184 MB'),
+      last: sec('last', 'Last run', dkPv === 'panel-dk-no-run' ? 'Last run: none yet' : dkPv === 'panel-dk-run-failed' ? 'Last run: acme/shop #5, failed (exit 1)' : 'Last run: acme/shop #5, passed'),
+    };
+    dk.downloadDisabled2 = dkRunning && !dkPulling ? 'false' : 'true';
+    dk.repos = dk.noRepos ? [] : repoDefs.map(([name, found, img], i) => {
+      const unknown = dkPv === 'panel-dk-stopped';
+      const down = !unknown && (img === 'yes' || this.state.dkRepoDown[name] === true);
+      const bad = img === 'unsupported';
+      return { name, hasImage: !bad, imageRef: (found.indexOf('.NET') === 0 ? 'mcr.microsoft.com/dotnet/sdk:' + found.split(' ')[1] + '.0' : found.indexOf('Node') === 0 ? 'node:' + found.split(' ')[1] : 'maven:3-eclipse-temurin-' + found.split(' ')[1]) + '@sha256:...',
+        detail: bad ? found + ': not supported, Scout runs Java 8, 11, 17, 21 and 25' : dkPv === 'panel-dk-app-detail' && name === 'acme/web' ? 'Node · Runs on Node 20.20.2. .nvmrc asks for Node 20.' : found,
+        detailColor: bad ? t.warn : t.fg2,
+        status: bad ? 'Not supported' : unknown ? 'Docker is not running' : down ? 'Image downloaded' : 'Image not downloaded',
+        chipId: 'dk-repo-chip-' + i, describedBy: unknown && !bad ? 'dk-repo-chip-' + i : '',
+        chipBg: bad ? t.warnBg : down ? t.okBg : t.surface2, chipFg: bad ? t.warn : down ? t.ok : t.fg2, chipD: bad ? warnD : down ? okD2 : dotD,
+        canDownload: !bad && !down, downloadLabel: 'Download the image for ' + name,
+        download: () => { if (dkRunning) this.setState({ dkRepoDown: Object.assign({}, this.state.dkRepoDown, { [name]: true }) }); } };
+    });
+    const needed = dk.noRepos ? [] : repoDefs.filter(([name, , img]) => img === 'no' && this.state.dkRepoDown[name] !== true).map(([name]) => name);
+    const canNeeded = dkRunning && needed.length > 0 && !dkPulling;
+    dk.neededPulling = dkPv === 'panel-dk-pulling-needed';
+    dk.neededDisabled = canNeeded ? 'false' : 'true';
+    dk.neededFg = canNeeded ? t.fg : t.muted;
+    dk.downloadHelp = dk.noRepos
+      ? 'Download images fetches only what the repositories Scout has read need, and Scout has not listed them yet. Docker Hub limits anonymous downloads and the Java images are several hundred MB each, so download a stack below when you need it.'
+      : dkRunning && needed.length === 0
+        ? 'Every image your repositories need is downloaded.'
+        : 'Download images fetches the one image each repository Scout has read needs and Docker does not hold yet, one at a time; a repository on a version Scout does not run is skipped. Docker Hub limits anonymous downloads, so nothing else is fetched.';
+    dk.downloadNeeded = () => { if (canNeeded) this.setState({ dkRepoDown: Object.assign({}, this.state.dkRepoDown, Object.fromEntries(needed.map((n) => [n, true]))), toast: 'Downloading ' + needed.length + ' image' + (needed.length === 1 ? '' : 's') + ' in Docker' }); };
+    const showDockerHint = github && (!dkOn || !dkRunning);
+    const dockerPreviews = [['missing', 'Not installed'], ['stopped', 'Not running'], ['running', 'Running']].map(([id, label]) => {
+      const on = dkState === id;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, pick: () => this.setState({ docker: id, dkPv: '' }) };
+    });
+    const voiceDefs = [
+      ['tiny', 'Whisper Tiny', '74 MB', '273 MB', 'Fastest and smallest. Less accurate with accents and background noise.'],
+      ['base', 'Whisper Base', '141 MB', '388 MB', 'Recommended for live transcription: words appear within about a second on most computers.'],
+      ['small', 'Whisper Small', '465 MB', '852 MB', 'More accurate than Base, and slower for live transcription.'],
+      ['large-v3', 'Whisper Large v3', '2.9 GB', '4.7 GB', 'Highest local accuracy. Slower and requires more memory.'],
+      ['large-v3-turbo', 'Whisper Large v3 Turbo', '1.5 GB', '3 GB', 'Full precision turbo. Faster high-quality fallback.'],
+    ];
+    const vs = this.state.voice;
+    const voiceInstalled = vs === 'installed' ? [this.state.voicePick] : [];
+    const voice = vs === 'installed'
+      ? { line: 'Voice model: ' + this.state.voicePick + ' installed', icon: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3', color: t.fg, canDownload: false, canRetry: false, downloading: false, percent: 0, width: '0%' }
+      : vs === 'downloading'
+      ? { line: 'Downloading the ' + this.state.voicePick + ' voice model... 42%', icon: 'M12 3v12M7 10l5 5 5-5M4 21h16', color: t.fg, canDownload: false, canRetry: false, downloading: true, percent: 42, width: '42%' }
+      : vs === 'failed'
+      ? { line: 'Could not download the ' + this.state.voicePick + ' voice model: The model download stopped: connection reset.', icon: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM9 9l6 6M15 9l-6 6', color: t.err, canDownload: false, canRetry: true, downloading: false, percent: 0, width: '0%' }
+      : { line: 'Voice model: not installed', icon: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3', color: t.fg, canDownload: true, canRetry: false, downloading: false, percent: 0, width: '0%' };
+    const voiceModels = voiceDefs.map(([id, title, size, ram, note]) => {
+      const installed = voiceInstalled.includes(id);
+      const checked = !installed && this.state.voicePick === id;
+      return { title, size, ram, note, installed, recommended: id === 'base', checked: checked ? 'checked' : null, disabled: installed ? 'disabled' : null, border: checked ? t.accent : t.line, pick: () => this.setState({ voicePick: id }) };
+    });
+    const voicePreviews = [['none', 'Not installed'], ['downloading', 'Downloading'], ['installed', 'Installed'], ['failed', 'Failed']].map(([id, label]) => {
+      const on = vs === id;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, pick: () => this.setState({ voice: id }) };
+    });
+    const k8sSel = this.state.k8sSel;
+    const k8sDefs = [['shop-prod', 'https://k8s.prod.example.internal:6443', 'token'], ['staging', 'https://k8s.staging.example.internal:6443', 'command'], ['dev', 'https://127.0.0.1:6443', 'client certificate']];
+    const k8sQ = this.state.k8sQuery.trim().toLowerCase();
+    const contexts = k8sDefs.map(([name, server, auth]) => {
+      const line = name + ' · ' + server + ' · ' + auth;
+      const selected = k8sSel[name] !== undefined;
+      return { name, line, selected, checked: selected ? 'checked' : null, label: selected ? k8sSel[name] : name, hasExec: auth === 'command', exec: 'aws eks get-token --cluster-name ' + name,
+        toggle: () => { const next = Object.assign({}, this.state.k8sSel); if (selected) delete next[name]; else next[name] = name; this.setState({ k8sSel: next }); },
+        onLabel: (e) => this.setState({ k8sSel: Object.assign({}, this.state.k8sSel, { [name]: e && e.target ? e.target.value : name }) }) };
+    }).filter((c) => k8sQ === '' || c.line.toLowerCase().indexOf(k8sQ) >= 0);
+    const k8sLabels = Object.keys(k8sSel).map((n) => k8sSel[n]);
+    const k8sCanUse = k8sLabels.length > 0 && k8sLabels.every((l) => l.trim() !== '');
+    const btn = (label, icon, act, filled) => ({ hasButton: true, hasLink: false, actLabel: label, actIcon: icon, act, actBg: filled ? t.accentStrong : 'transparent', actFg: filled ? '#ffffff' : t.fg, actBorder: filled ? '0' : '1px solid ' + t.line });
+    const none = { hasButton: false, hasLink: false, actLabel: '', actIcon: '', act: () => {}, actBg: 'transparent', actFg: t.fg, actBorder: '0' };
+    const plugD = 'M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0zM12 16v5', checkD = 'M20 6L9 17l-5-5', downD = 'M12 3v12M7 10l5 5 5-5M5 21h14', refreshD = 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5';
+    const writesWord = (id) => granted[id] === true ? 'Writes allowed' : 'Writes not allowed';
+    const allowFrom = (id) => btn('Allow writes', checkD, () => this.setState({ panel: id }), false);
+    const summaries = {
+      github: github
+        ? Object.assign({ fact: 'Connected as acme-owner · ' + writesWord('github') }, granted.github === true ? none : allowFrom('github'))
+        : this.state.ghCode === true
+        ? Object.assign({ fact: 'Enter the code WDJB-MJHT on GitHub' }, none)
+        : Object.assign({ fact: 'Not connected · Scout shows a one-time code to enter on GitHub' }, btn('Connect with GitHub', plugD, () => this.setState({ github: true, toast: 'GitHub connected as acme-owner' }), true)),
+      docker: dkState === 'missing'
+        ? Object.assign({ fact: dk.statusLine }, none, { hasLink: true })
+        : dkState === 'checking'
+        ? Object.assign({ fact: dk.statusLine }, none)
+        : dkState === 'stopped' || dkState === 'unknown'
+        ? Object.assign({ fact: dk.statusLine }, btn('Refresh', refreshD, dk.recheck, false))
+        : Object.assign({ fact: 'Images: ' + downCount + ' of ' + imgs.length + ' downloaded' }, github && !dkOn ? btn('Turn on', checkD, () => this.setState({ dkTests: true, toast: 'Scout may run a project\'s tests in isolated containers' }), false) : canNeeded ? btn('Download images', downD, dk.downloadNeeded, false) : none),
+      kubernetes: this.state.k8s
+        ? Object.assign({ fact: 'Using ' + k8sLabels.join(', ') }, none)
+        : Object.assign({ fact: k8sDefs.length + ' contexts found in ~/.kube/config' }, none),
+      youtube: yt
+        ? Object.assign({ fact: 'Connected to Acme Tech Explained · ' + writesWord('youtube') }, granted.youtube === true ? none : allowFrom('youtube'))
+        : Object.assign({ fact: 'Not connected · sign in with Google or add an API key' }, btn('Sign in with Google', plugD, () => this.setState({ youtubeConnected: true, toast: 'YouTube connected as Acme Tech Explained' }), true)),
+      desktop: Object.assign({ fact: voice.line }, voice.canDownload ? btn('Download', downD, () => this.setState({ voiceOpen: true }), true) : voice.canRetry ? btn('Retry', refreshD, () => this.setState({ voice: 'downloading' }), false) : none),
+    };
+    cards.forEach((c) => Object.assign(c, summaries[c.id], { factColor: c.id === 'desktop' && vs === 'failed' ? t.err : t.fg2 }));
+    const pn = cards.find((c) => c.id === this.state.panel) || cards[0];
+    const closePanel = () => {
+      const id = this.state.panel;
+      this.setState({ panel: null });
+      setTimeout(() => { const el = typeof document !== 'undefined' ? document.getElementById('card-' + id) : null; const b = el ? el.querySelector('[aria-haspopup="dialog"]') : null; if (b) b.focus(); }, 0);
+    };
+    const panelKey = (e) => {
+      if (!e) return;
+      if (e.key === 'Escape') { if (e.preventDefault) e.preventDefault(); closePanel(); return; }
+      if (e.key !== 'Tab') return;
+      const box = e.currentTarget;
+      if (!box || !box.querySelectorAll) return;
+      const f = Array.prototype.filter.call(box.querySelectorAll('button, a[href], input, select, summary, [tabindex="0"]'), (el) => !el.disabled && el.getClientRects().length > 0);
+      if (f.length === 0) return;
+      const first = f[0], last = f[f.length - 1], act = box.ownerDocument.activeElement;
+      if (e.shiftKey && (act === first || !box.contains(act))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (act === last || !box.contains(act))) { e.preventDefault(); first.focus(); }
+    };
+    const botWriteRows = [['review', 'Post reviews'], ['verdict', 'Give verdicts (approve or request changes)'], ['comment', 'Comment on pull requests and issues'], ['issue', 'Open issues']].map(([id, label]) => {
+      const on = this.state.botWrites[id] === true;
+      return { id: 'bot-write-' + id, label, checked: on ? 'true' : 'false', justify: on ? 'flex-end' : 'flex-start', track: on ? t.accentStrong : t.surface2, edge: on ? t.accentStrong : t.line, thumb: on ? '#ffffff' : t.muted,
+        toggle: () => this.setState({ botWrites: Object.assign({}, this.state.botWrites, { [id]: !on }) }) };
+    });
+    const orgNeeded = this.state.botTarget === 'org' && this.state.org.trim() === '';
+    const botReady = github && !orgNeeded;
+    return {
+      t,
+      ...this.shellVals(t, 'Features'),
+      previews, cards, dk, dockerPreviews, showDockerHint,
+      voice, voiceModels, voicePreviews,
+      voiceOpen: this.state.voiceOpen,
+      openVoice: () => this.setState({ voiceOpen: true }),
+      closeVoice: () => this.setState({ voiceOpen: false }),
+      downloadVoice: () => this.setState({ voiceOpen: false, voice: 'downloading' }),
+      retryVoice: () => this.setState({ voice: 'downloading' }),
+      repoPreviews: [['list', 'Read'], ['long', 'Long list'], ['none', 'None read yet']].map(([id, label]) => { const on = this.state.dkRepos === id; return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, pick: () => this.setState({ dkRepos: id }) }; }),
+      hintChecked: showDockerHint ? 'true' : 'false',
+      hintTrack: showDockerHint ? t.accentStrong : t.surface2,
+      hintKnob: showDockerHint ? 'flex-end' : 'flex-start',
+      toggleHint: () => this.setState(showDockerHint ? { dkTests: true, docker: 'running', dkHighlight: false } : { github: true, dkTests: false, preview: 'connected' }),
+      setupDocker: () => { this.setState({ panel: 'docker' }); setTimeout(() => { const b = typeof document !== 'undefined' ? document.querySelector('[aria-labelledby="panel-title"] button[autofocus]') : null; if (b) b.focus(); }, 0); },
+      dkClearOpen: this.state.dkClear,
+      dkCloseClear: () => this.setState({ dkClear: false }),
+      dkConfirmClear: () => this.setState({ dkClear: false, dkCleared: true, toast: 'Work folder cleared' }),
+      k8sListOpen: this.state.k8sListOpen !== false, k8sOpenText: this.state.k8sListOpen !== false ? 'true' : 'false', k8sChevron: this.state.k8sListOpen !== false ? 'rotate(90deg)' : 'none',
+      toggleK8sList: () => this.setState({ k8sListOpen: this.state.k8sListOpen === false }),
+      contexts, k8sCount: k8sDefs.length, k8sNoMatch: contexts.length === 0, k8sQuery: this.state.k8sQuery,
+      onK8sQuery: (e) => this.setState({ k8sQuery: e && e.target ? e.target.value : '' }),
+      k8sUsing: k8sLabels.join(', '), k8sDetectedPath: '/home/owner/.kube/config',
+      k8sUseDisabled: k8sCanUse ? 'false' : 'true', k8sUseBg: k8sCanUse ? t.accentStrong : t.surface2, k8sUseFg: k8sCanUse ? '#ffffff' : t.muted,
+      useK8s: () => { if (k8sCanUse) this.setState({ k8s: true, toast: 'Kubernetes connected: ' + k8sLabels.join(', ') }); },
+      wcOpen: this.state.wc !== null,
+      wcMax: p === 'wc-overflow' ? '420px' : '760px',
+      wcUnseen: p === 'wc-overflow', wcUnseenText: p === 'wc-overflow' ? 'true' : 'false',
+      wcAllowBg: p === 'wc-overflow' ? t.surface2 : t.accentStrong, wcAllowFg: p === 'wc-overflow' ? t.muted : '#ffffff',
+      wc: (() => { const c = cards.find((x) => x.id === this.state.wc) || cards[0]; return { name: c.name, writes: c.writes.map((w) => ({ label: w.label, what: w.what, lines: (p === 'wc-actions' ? w.actions : [w.what]).map((text) => ({ text })), access: w.access, bg: w.bg, fg: w.fg })) }; })(),
+      wcCancel: () => this.setState({ wc: null }),
+      wcKey: (e) => { if (e && e.key === 'Escape') this.setState({ wc: null }); },
+      wcConfirm: () => { if (p === 'wc-overflow') return; const id = this.state.wc; const c = cards.find((x) => x.id === id); this.setState({ wc: null, granted: Object.assign({}, this.state.granted, { [id]: true }), toast: 'Writes allowed for ' + (c ? c.name : id) }); },
+      pn, panelOpen: this.state.panel !== null, closePanel, panelKey, botWriteRows,
+      openStudio: () => this.setState({ toast: 'YouTube Studio opens in your browser' }),
+      openChannel: () => this.setState({ toast: 'The channel opens in your browser' }),
+      skeletons: [1, 2, 3, 4, 5],
+      isLoading: p === 'loading',
+      isError: p === 'error',
+      isReady: p !== 'loading' && p !== 'error',
+      isUnreadable: p === 'unreadable',
+      ghCodeShown: pn.isGithubOff && this.state.ghCode === true,
+      ghInstalledOn: this.state.ghRepos === 0 || this.state.ghRepos === null ? '' : ' · installed on ' + this.state.ghRepos + (this.state.ghRepos === 1 ? ' repository' : ' repositories'),
+      ghInstallShown: this.state.ghRepos === 0,
+      ghConnectShown: pn.isGithubOff && this.state.ghCode !== true,
+      ghNotConfigured: this.state.ghNotConfigured === true,
+      ghSignInFailed: this.state.ghSignInFailed === true,
+      ghConnectOff: this.state.ghNotConfigured === true ? 'true' : 'false',
+      ghConnectBg: this.state.ghNotConfigured === true ? t.surface2 : t.accentStrong,
+      ghConnectFg: this.state.ghNotConfigured === true ? t.muted : '#ffffff',
+      ghTokenWarn: github && this.state.ghWarn === true,
+      ghActionFailed: this.state.ghActionFailed === true,
+      botLede: !(github && this.state.botUnread === true),
+      botUnread: github && this.state.botUnread === true,
+      botFailed: github && this.state.botFailed === true,
+      botRemoved: github && this.state.botRemoved === true,
+      botAskOpen: this.state.botAsk === true,
+      closeBotAsk: () => this.setState({ botAsk: false }),
+      confirmBotAsk: () => this.setState({ botAsk: false, botInstalled: false, botCreated: false, botRemoved: true, toast: 'Scout no longer uses the bot' }),
+      botCreatingShown: github && this.state.botCreating === true,
+      botNoneShown: !(github && (this.state.botInstalled || this.state.botCreated)) && !(github && this.state.botCreating === true) && !(github && this.state.botUnread === true),
+      reload: () => this.setState({ preview: 'ready', toast: '' }),
+      connectGithub: () => { if (this.state.ghNotConfigured !== true) this.setState({ github: true, ghSignInFailed: false, toast: 'GitHub connected as acme-owner' }); },
+      openGithubDialog: () => this.setState({ cred: 'github', values: {}, tried: false, credFailed: '' }),
+      ytChecked: yt ? 'true' : 'false',
+      ytOauth: this.state.ytMethod !== 'apiKey', ytKey: this.state.ytMethod === 'apiKey', ytScopes: this.state.ytScopes === true,
+      ytPending: this.state.ytPending === true, ytIdle: this.state.ytPending !== true, ytNoClient: this.state.ytNoClient === true, ytFailed: this.state.ytFailed === true, ytDiscFailed: this.state.ytDiscFailed === true,
+      ytSignInOff: this.state.ytNoClient === true ? 'true' : 'false', ytSignInBg: this.state.ytNoClient === true ? t.surface2 : t.accentStrong, ytSignInFg: this.state.ytNoClient === true ? t.muted : '#ffffff',
+      cancelYoutubeWait: () => this.setState({ ytPending: false }),
+      ytTrack: yt ? t.accentStrong : t.surface2,
+      ytKnob: yt ? 'flex-end' : 'flex-start',
+      toggleYoutube: () => this.setState({ youtubeConnected: !yt }),
+      connectYoutube: () => { if (this.state.ytNoClient !== true) this.setState({ youtubeConnected: true, ytMethod: 'oauth', ytFailed: false, toast: 'YouTube connected as Acme Tech Explained' }); },
+      askDisconnectYoutube: () => this.setState({ disc: 'youtube' }),
+      openYoutubeDialog: () => this.setState({ cred: 'youtube', values: {}, tried: false, credFailed: '' }),
+      askDisconnectGithub: () => this.setState({ disc: 'github' }),
+      askDisconnectK8s: () => this.setState({ disc: 'kubernetes' }),
+      botOrg: this.state.botTarget === 'org',
+      orgName: this.state.org,
+      onBotTarget: (e) => this.setState({ botTarget: e && e.target ? e.target.value : 'user' }),
+      onOrg: (e) => this.setState({ org: e && e.target ? e.target.value : '' }),
+      createDisabled: botReady ? 'false' : 'true',
+      createFg: botReady ? t.fg : t.muted,
+      botReason: !github ? 'Connect GitHub first to create the bot.' : orgNeeded ? 'Type the organization first.' : 'GitHub opens in your browser to confirm the App.',
+      createBot: () => { if (botReady) this.setState({ botCreated: true, botInstalled: false, botRemoved: false, botFailed: false, toast: 'scout-acme[bot] was created on GitHub' }); },
+      installBot: () => this.setState({ botCreated: false, botInstalled: true, toast: 'scout-acme[bot] is installed on 14 repositories' }),
+      botCreated: github && this.state.botCreated && !this.state.botInstalled,
+      botExists: github && (this.state.botCreated || this.state.botInstalled),
+      botName: this.state.botUnnamed === true ? 'not read yet' : 'scout-acme',
+      botHandle: '@scout-acme',
+      botNameError: !!this.state.botNameError,
+      copyHandle: () => {},
+      refreshBot: () => this.setState({ botNameError: false }),
+      botSettingsUrl: this.state.botTarget === 'org' ? 'https://github.com/organizations/' + (this.state.org.trim() || 'acme') + '/settings/apps/scout-acme' : 'https://github.com/settings/apps/scout-acme',
+      botNone: !(github && (this.state.botInstalled || this.state.botCreated)),
+      botInstalled: github && this.state.botInstalled,
+      removeBot: () => this.setState({ botInstalled: false, botCreated: false, toast: 'Scout no longer uses the bot' }),
+      botRepos: (() => {
+        const all = ['shop', 'api', 'web', 'mobile', 'payments', 'search', 'billing', 'infra', 'docs', 'design-system', 'analytics', 'auth', 'notifications', 'status-page'].map((n) => 'acme/' + n);
+        const q = this.state.botQuery.trim().toLowerCase();
+        const open = this.state.botReposOpen;
+        return {
+          summary: 'Repositories: ' + all.length + ' (scout-acme[bot] can post in these)',
+          open, expanded: open ? 'true' : 'false', chevron: open ? 'rotate(90deg)' : 'none',
+          query: this.state.botQuery,
+          onQuery: (e) => this.setState({ botQuery: e && e.target ? e.target.value : '' }),
+          rows: all.filter((n) => q === '' || n.indexOf(q) >= 0).map((name) => ({ name })),
+          toggle: () => this.setState({ botReposOpen: !open }),
+        };
+      })(),
+      credOpen: credId !== null,
+      cred: { name: credRaw.name, fields, scopes: credRaw.scopes.map(([label, what]) => ({ label, what })), steps: credRaw.steps.map((text) => ({ text })) },
+      credHasError: (tried && missing > 0) || this.state.credFailed !== '',
+      credError: tried && missing > 0 ? (missing === 1 ? 'One required field is empty. Nothing was saved.' : missing + ' required fields are empty. Nothing was saved.') : this.state.credFailed,
+      saveLabel: this.state.saving ? 'Saving…' : 'Save',
+      saveIcon: this.state.saving ? 'M21 12a9 9 0 1 1-9-9' : 'M5 3h11l3 3v15H5zM8 3v6h8V3M8 21v-7h8v7',
+      savingText: this.state.saving ? 'true' : 'false',
+      closeCred: () => { if (!this.state.saving) this.setState({ cred: null, preview: credPreview ? 'ready' : p, tried: false, credFailed: '' }); },
+      saveCred: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (this.state.saving) return;
+        if (missing > 0) { this.setState({ tried: true, cred: credId, credFailed: '' }); return; }
+        this.setState({ saving: true, cred: credId, credFailed: '' });
+        setTimeout(() => this.setState(Object.assign({ saving: false, cred: null, preview: credPreview ? 'ready' : p, tried: false, toast: credRaw.name + ' credentials saved' }, credId === 'youtube' ? { youtubeConnected: true, ytMethod: 'apiKey', ytFailed: false, ytNoClient: false } : {})), 1200);
+      },
+      discOpen: disc !== null,
+      discTitle: 'Disconnect ' + discName + '?',
+      discBody: disc === 'github'
+        ? 'Scout stops reading and writing on GitHub and forgets the sign-in on this computer. The Scout GitHub App stays installed on your account until you remove it there.'
+        : disc === 'youtube'
+        ? 'Scout signs out of the channel on this computer and the YouTube operator leaves the menu. Drafts already on YouTube stay there.'
+        : 'Scout stops reading from the ' + k8sLabels.length + ' contexts you chose. Your Kubernetes configuration is not changed.',
+      closeDisc: () => this.setState({ disc: null, preview: p === 'disc' ? 'ready' : p }),
+      confirmDisc: () => this.setState({ disc: null, preview: p === 'disc' ? 'ready' : p, github: disc === 'github' ? false : github, k8s: disc === 'kubernetes' ? false : this.state.k8s, youtubeConnected: disc === 'youtube' ? false : yt, toast: discName + ' disconnected' }),
+      hasToast: this.state.toast !== '',
+      toast: this.state.toast,
+      dismissToast: () => this.setState({ toast: '' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

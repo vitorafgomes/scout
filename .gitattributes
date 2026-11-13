@@ -1,0 +1,4 @@
+# Every text file is checked out with LF on every OS: the ui tests that read source files as text compare exact strings.
+* text=auto eol=lf
+# context/log.md is prepend-only and edited by every branch; keep both sides on merge instead of conflicting.
+context/log.md merge=union

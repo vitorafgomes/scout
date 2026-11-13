@@ -1,0 +1,59 @@
+[
+  {
+    "id": "7b5e1c3a9d2f4e6a8b0c1d2e3f4a5b6c",
+    "topic": "Rye bread without a mixer",
+    "status": "script_ready",
+    "origin": "desktop",
+    "createdAt": "2026-11-07T09:00:00+00:00",
+    "updatedAt": "2026-11-07T10:10:00+00:00",
+    "candidates": [],
+    "script": {
+      "hook": "Rye needs no kneading, only patience.",
+      "sections": [
+        {
+          "heading": "Mix",
+          "narration": "Stir rye flour, water and starter into a thick paste."
+        }
+      ],
+      "callToAction": "Tell us how your loaf turned out.",
+      "titleVariants": ["Rye bread without a mixer"],
+      "description": "A rye loaf stirred by hand.",
+      "tags": ["rye"],
+      "chapters": []
+    },
+    "claims": [],
+    "format": "animated_character",
+    "presenter": "A friendly fox who bakes.",
+    "presenterFile": "presenter-0003.png",
+    "presenterSource": "generated",
+    "presenterVersions": [
+      {
+        "file": "presenter-0001.png",
+        "prompt": "A friendly fox in a bakery, flat cartoon",
+        "feedback": "",
+        "previewFile": null,
+        "mouthBox": null,
+        "madeAt": "2026-11-05T10:00:00+00:00",
+        "source": "generated"
+      },
+      {
+        "file": "presenter-0002.png",
+        "prompt": "A friendly fox in a bakery, flat cartoon",
+        "feedback": "Give the fox a flour-dusted apron",
+        "previewFile": null,
+        "mouthBox": null,
+        "madeAt": "2026-11-05T10:05:00+00:00",
+        "source": "generated"
+      },
+      {
+        "file": "presenter-0003.png",
+        "prompt": "A friendly fox in a bakery, flat cartoon",
+        "feedback": "Give the fox a flour-dusted apron",
+        "previewFile": null,
+        "mouthBox": null,
+        "madeAt": "2026-11-05T10:10:00+00:00",
+        "source": "generated"
+      }
+    ]
+  }
+]

@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: AI Sources</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 1400px; display: flex; flex-wrap: wrap; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; max-width: 220px; min-width: 180px; background: {{t.surface}}; border-right: 1px solid {{t.line}}; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.primary}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<span style="font-weight: 600; font-size: 15px">Scout</span>
+</div>
+<sc-for list="{{nav}}" as="item" hint-placeholder-count="11">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 7px; border-left: 3px solid {{item.bar}}; border-radius: 8px; text-decoration: none; color: {{item.color}}; background: {{item.bg}}; font-weight: {{item.weight}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>{{item.label}}</a>
+</sc-for>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; position: relative">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0">
+<span style="font-weight: 600; font-size: 16px">{{screenTitle}}</span>
+<span style="font-size: 12px; color: {{t.muted}}">ChatGPT plan · gpt-5.6-luna</span>
+</div>
+
+<label style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.bg}}; color: {{t.muted}}; min-width: 200px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<input type="search" placeholder="Search screens, repositories, meetings" style="border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit; width: 220px">
+</label>
+
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<button aria-label="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+</button>
+<button aria-label="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+</button>
+</div>
+
+<button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
+<span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
+</sc-if>
+</button>
+
+<sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
+<section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">Notifications</span>
+<button onClick="{{bellMarkAllRead}}" style="border: 0; background: transparent; color: {{t.accent}}; font-size: 13px; padding: 4px 6px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Mark all as read</button>
+</div>
+<div role="tablist" aria-label="Filter notifications" style="display: flex; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid {{t.line}}">
+<sc-for list="{{bellTabs}}" as="bt" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{bt.selected}}" onClick="{{bt.pick}}" style="border: 1px solid {{bt.border}}; background: {{bt.bg}}; color: {{bt.fg}}; border-radius: 14px; padding: 5px 12px; font-size: 13px">{{bt.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-y: auto; display: flex; flex-direction: column">
+<sc-for list="{{bellShown}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.line}}; background: {{n.rowBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700"><sc-if value="{{n.hasPath}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.path}}"></path></svg></sc-if>{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: {{n.weight}}; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<sc-if value="{{n.hasControls}}" hint-placeholder-val="{{false}}">
+<span style="align-self: center; flex: 0 0 auto; display: flex; gap: 4px">
+<sc-for list="{{n.controls}}" as="c" hint-placeholder-count="2">
+<button type="button" aria-label="{{c.label}}" title="{{c.label}}" aria-disabled="{{n.controlsOff}}" onClick="{{c.act}}" style="width: 28px; height: 28px; padding: 0; border-radius: 14px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{n.controlsOpacity}}; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.path}}"></path></svg></button>
+</sc-for>
+</span>
+</sc-if>
+<sc-if value="{{n.hasStatus}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.status}}</span>
+</sc-if>
+<sc-if value="{{n.showWhen}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</sc-if>
+</div>
+<sc-if value="{{n.hasDetail}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+</sc-if>
+<sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{true}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="b" hint-placeholder-count="2">
+<button onClick="{{b.act}}" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{b.path}}"></path></svg>{{b.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{bellEmpty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 16px; font-size: 12px; color: {{t.muted}}">Nothing here yet.</p>
+</sc-if>
+</div>
+<sc-if value="{{bellRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 16px; font-size: 13px; color: {{t.err}}">Scout could not tell which pull request this entry is about.</p>
+</sc-if>
+<div style="padding: 10px 16px; font-size: 12px; color: {{t.muted}}">GitHub mentions and comments are read every 5 minutes, only while the GitHub feature is connected.</div>
+</section>
+</sc-if>
+</header>
+
+<main style="flex: 1; padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; box-sizing: border-box; position: relative">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto; min-width: 0">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600">AI Sources</h1>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Connect a model on this computer or a cloud provider. Scout answers only with the sources you connect.</p>
+</div>
+<div role="group" aria-label="Show sources" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<sc-for list="{{filters}}" as="s" hint-placeholder-count="3">
+<button aria-pressed="{{s.pressed}}" onClick="{{s.pick}}" style="height: 30px; padding: 0 14px; border: 0; border-radius: 16px; background: {{s.bg}}; color: {{s.fg}}; font-weight: {{s.weight}}">{{s.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span id="ol-label" style="font-size: 12px; color: {{t.muted}}">Preview: Ollama connected</span>
+<button role="switch" aria-checked="{{swOllama.checked}}" aria-labelledby="ol-label" onClick="{{swOllama.toggle}}" style="border: 0; padding: 0; margin-right: 8px; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{swOllama.justify}}; background: {{swOllama.track}}; border: 1px solid {{swOllama.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{swOllama.thumb}}"></span></span></button>
+<span id="pv-label" style="font-size: 12px; color: {{t.muted}}">Preview state</span>
+<div role="group" aria-labelledby="pv-label" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px dashed {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<sc-for list="{{preview}}" as="p" hint-placeholder-count="3">
+<button aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="height: 28px; padding: 0 12px; border: 0; border-radius: 14px; font-size: 12px; background: {{p.bg}}; color: {{p.fg}}; font-weight: {{p.weight}}">{{p.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{showLocal}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="sec-local" style="display: flex; flex-direction: column; gap: 10px">
+<h2 id="sec-local" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}; text-transform: uppercase; letter-spacing: 0.04em">On this computer</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+
+<article aria-labelledby="c-ollama" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: {{ollamaCard.border}}; border-radius: 14px; padding: {{ollamaCard.pad}}; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="Ollama logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{logoDark}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 10 12" fill="none" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.95258 0.545107C3.06058 0.587607 3.15808 0.657607 3.24658 0.750107C3.39408 0.903107 3.51858 1.1221 3.61358 1.3816C3.70908 1.6426 3.77108 1.9316 3.79458 2.2216C4.10938 2.04351 4.45876 1.93506 4.81908 1.9036L4.84458 1.9016C5.27958 1.8666 5.70958 1.9451 6.08458 2.1386C6.13508 2.1651 6.18458 2.1936 6.23308 2.2236C6.25808 1.9391 6.31908 1.6566 6.41308 1.4016C6.50808 1.1416 6.63258 0.923107 6.77958 0.769607C6.86173 0.680739 6.96222 0.610791 7.07408 0.564607C7.20258 0.514607 7.33908 0.505607 7.47208 0.543607C7.67258 0.600607 7.84458 0.727607 7.98008 0.912107C8.10408 1.0806 8.19708 1.2966 8.26058 1.5556C8.37558 2.0226 8.39558 2.6371 8.31808 3.3781L8.34458 3.3981L8.35758 3.4076C8.73608 3.6956 8.99958 4.1061 9.1391 4.5826C9.3566 5.3261 9.2471 6.1601 8.87208 6.6266L8.86308 6.6371L8.86408 6.6386C9.0726 7.0196 9.1991 7.4221 9.2261 7.8386L9.2271 7.8536C9.2591 8.3861 9.1271 8.9221 8.82008 9.4486L8.81658 9.4536L8.82158 9.4656C9.0576 10.0441 9.1316 10.6266 9.0406 11.2086L9.0376 11.2281C9.0235 11.3131 8.97624 11.3891 8.90623 11.4393C8.83621 11.4895 8.74913 11.51 8.66408 11.4961C8.62196 11.4895 8.58156 11.4747 8.54518 11.4525C8.50881 11.4303 8.47717 11.4011 8.45209 11.3666C8.42701 11.3322 8.40897 11.2931 8.39902 11.2516C8.38906 11.2102 8.38738 11.1672 8.39408 11.1251C8.47758 10.6086 8.39908 10.0906 8.15408 9.56361C8.13122 9.51465 8.12107 9.46071 8.12456 9.40679C8.12806 9.35287 8.14509 9.3007 8.17408 9.2551L8.17608 9.2521C8.47808 8.7901 8.60308 8.3371 8.57608 7.8921C8.55308 7.5026 8.41358 7.1201 8.17608 6.7556C8.12989 6.68474 8.11343 6.59855 8.13027 6.51566C8.14711 6.43276 8.1959 6.35982 8.26608 6.3126L8.27058 6.3096C8.39208 6.2301 8.50408 6.0271 8.56058 5.7496C8.62292 5.42147 8.60664 5.08324 8.51308 4.7626C8.41058 4.4126 8.22308 4.1206 7.96058 3.9211C7.66308 3.6941 7.26908 3.5846 6.77058 3.6161C6.70539 3.62034 6.64044 3.60493 6.5841 3.57186C6.52777 3.53879 6.48265 3.48959 6.45458 3.4306C6.29758 3.0981 6.06858 2.8601 5.78308 2.7126C5.50898 2.5758 5.20211 2.51831 4.89708 2.5466C4.27458 2.5961 3.72558 2.9471 3.56208 3.3896C3.53895 3.45188 3.49734 3.50561 3.44283 3.54359C3.38832 3.58156 3.32351 3.60198 3.25708 3.6021C2.72358 3.6031 2.31058 3.7281 2.00858 3.9536C1.74758 4.1486 1.56958 4.4211 1.47558 4.7476C1.39052 5.05493 1.37887 5.37795 1.44158 5.6906C1.49758 5.9696 1.60708 6.2006 1.73258 6.3251L1.73658 6.3286C1.84258 6.4321 1.86508 6.5936 1.79108 6.7211C1.61108 7.0321 1.47658 7.4956 1.45458 7.9411C1.42958 8.4501 1.54758 8.8921 1.81408 9.2091L1.82208 9.2186C1.8623 9.26547 1.88816 9.32293 1.89659 9.38412C1.90501 9.4453 1.89563 9.50761 1.86958 9.56361C1.58158 10.1816 1.49308 10.6896 1.58858 11.0896C1.60574 11.1728 1.58977 11.2594 1.54406 11.3309C1.49835 11.4025 1.42651 11.4534 1.34383 11.4728C1.26115 11.4923 1.17416 11.4786 1.10137 11.4349C1.02857 11.3911 0.975731 11.3207 0.954081 11.2386C0.832581 10.7296 0.915081 10.1466 1.19058 9.4896L1.19758 9.4721L1.19358 9.4661C1.05817 9.2661 0.957121 9.04489 0.894581 8.8116L0.892081 8.8021C0.816181 8.51105 0.786321 8.2099 0.803581 7.9096C0.825581 7.4546 0.942581 6.9886 1.11458 6.6146L1.12058 6.6016L1.11958 6.6006C0.973081 6.3916 0.864581 6.1241 0.804581 5.8281L0.802081 5.8161C0.719411 5.40323 0.735341 4.97667 0.848581 4.5711C0.979581 4.1136 1.23708 3.7206 1.61658 3.4366C1.64658 3.4141 1.67808 3.3916 1.70958 3.3706C1.63008 2.6241 1.65008 2.0056 1.76558 1.5356C1.82908 1.2766 1.92258 1.0606 2.04658 0.892107C2.18158 0.708107 2.35358 0.581107 2.55408 0.523607C2.68708 0.485607 2.82408 0.494607 2.95258 0.545107ZM5.01058 5.0901C5.47858 5.0901 5.91058 5.2466 6.23358 5.5176C6.54858 5.7811 6.73608 6.1351 6.73608 6.4876C6.73608 6.9316 6.53308 7.2776 6.16958 7.4986C5.85958 7.6861 5.44408 7.7771 4.96808 7.7771C4.46358 7.7771 4.03258 7.6476 3.72158 7.4101C3.41308 7.1751 3.24008 6.8451 3.24008 6.4876C3.24008 6.1341 3.43908 5.7791 3.76808 5.5146C4.10208 5.2461 4.54308 5.0901 5.01058 5.0901ZM5.01058 5.5381C4.6637 5.53508 4.32601 5.64963 4.05258 5.8631C3.82208 6.0481 3.69158 6.2806 3.69158 6.4881C3.69158 6.7021 3.79658 6.9026 3.99658 7.0551C4.22408 7.2286 4.55858 7.3291 4.96808 7.3291C5.36758 7.3291 5.70458 7.2556 5.93408 7.1161C6.16558 6.9761 6.28408 6.7731 6.28408 6.4876C6.28408 6.2761 6.16108 6.0426 5.94258 5.8596C5.70058 5.6571 5.37258 5.5381 5.01058 5.5381ZM5.34158 6.1431L5.34358 6.1451C5.40358 6.2206 5.39108 6.3301 5.31558 6.3901L5.16958 6.5051V6.7281C5.16931 6.77775 5.14937 6.82526 5.11413 6.86022C5.07889 6.89518 5.03122 6.91474 4.98158 6.9146C4.93194 6.91474 4.88427 6.89518 4.84903 6.86022C4.81378 6.82526 4.79384 6.77775 4.79358 6.7281V6.4981L4.65808 6.3891C4.6402 6.37478 4.62534 6.35706 4.61435 6.33697C4.60336 6.31687 4.59646 6.2948 4.59404 6.27202C4.59162 6.24924 4.59374 6.22621 4.60027 6.20426C4.6068 6.1823 4.61761 6.16186 4.63208 6.1441C4.66159 6.10818 4.70409 6.08535 4.75034 6.08057C4.79658 6.0758 4.84285 6.08947 4.87908 6.1186L4.98658 6.2046L5.09658 6.1176C5.13268 6.08908 5.1785 6.07579 5.22426 6.08055C5.27003 6.08531 5.31212 6.10776 5.34158 6.1431ZM2.82158 5.1836C3.06058 5.1836 3.25508 5.3786 3.25508 5.6191C3.25521 5.73439 3.20958 5.84501 3.1282 5.92667C3.04682 6.00832 2.93636 6.05434 2.82108 6.0546C2.70597 6.05421 2.59571 6.0082 2.51446 5.92667C2.4332 5.84513 2.38758 5.73471 2.38758 5.6196C2.38731 5.50432 2.43282 5.39365 2.5141 5.3119C2.59539 5.23014 2.7063 5.184 2.82158 5.1836ZM7.17458 5.1836C7.41458 5.1836 7.60858 5.3786 7.60858 5.6191C7.60871 5.73439 7.56308 5.84501 7.4817 5.92667C7.40032 6.00832 7.28986 6.05434 7.17458 6.0546C7.05947 6.05421 6.94921 6.0082 6.86796 5.92667C6.7867 5.84513 6.74108 5.73471 6.74108 5.6196C6.74081 5.50432 6.78632 5.39365 6.8676 5.3119C6.94889 5.23014 7.0593 5.184 7.17458 5.1836ZM2.72008 1.1501L2.71858 1.1511C2.66065 1.17629 2.61119 1.2176 2.57608 1.2701L2.57358 1.2731C2.50458 1.3676 2.44458 1.5066 2.39958 1.6891C2.31458 2.0351 2.29158 2.5046 2.33758 3.0801C2.55258 3.0161 2.78708 2.9761 3.03958 2.9616L3.04458 2.9611L3.05408 2.9441C3.07708 2.9031 3.10158 2.8636 3.12808 2.8246C3.18958 2.4391 3.13908 1.9786 3.00158 1.6026C2.93458 1.4206 2.85308 1.2776 2.77508 1.1961C2.75898 1.17916 2.74103 1.16407 2.72158 1.1511L2.72008 1.1501ZM7.30708 1.1701L7.30608 1.1706C7.28663 1.18357 7.26868 1.19866 7.25258 1.2156C7.17458 1.2971 7.09258 1.4406 7.02608 1.6226C6.88108 2.0196 6.83258 2.5106 6.91108 2.9086L6.94008 2.9571L6.94408 2.9641H6.95908C7.20723 2.96417 7.45408 2.99987 7.69208 3.0701C7.73508 2.5081 7.71108 2.0486 7.62808 1.7091C7.58308 1.5266 7.52308 1.3876 7.45358 1.2931L7.45158 1.2901C7.41654 1.23741 7.36707 1.19593 7.30908 1.1706L7.30708 1.1701Z" fill="white"></path></svg></sc-if><sc-if value="{{logoLight}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 17 25" fill="none" width="22" height="22" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M4.40517 0.102088C4.62117 0.198678 4.81617 0.357766 4.99317 0.56799C5.28817 0.915712 5.53718 1.41342 5.72718 2.00318C5.91818 2.59635 6.04218 3.25316 6.08918 3.91224C6.71878 3.5075 7.41754 3.26103 8.13818 3.18953L8.18918 3.18498C9.05919 3.10544 9.91919 3.28384 10.6692 3.72361C10.7702 3.78384 10.8692 3.84861 10.9662 3.91679C11.0162 3.27021 11.1382 2.62817 11.3262 2.04863C11.5162 1.45773 11.7652 0.961166 12.0592 0.612308C12.2235 0.410338 12.4245 0.251368 12.6482 0.146406C12.9052 0.032771 13.1782 0.0123167 13.4442 0.098679C13.8452 0.228223 14.1892 0.516855 14.4602 0.936167C14.7082 1.3191 14.8942 1.81 15.0212 2.39863C15.2512 3.45998 15.2912 4.85655 15.1362 6.54061L15.1892 6.58607L15.2152 6.60766C15.9722 7.26219 16.4992 8.19513 16.7782 9.27807C17.2133 10.9678 16.9943 12.8632 16.2442 13.9235L16.2262 13.9473L16.2282 13.9507C16.6453 14.8166 16.8983 15.7314 16.9523 16.678L16.9543 16.7121C17.0183 17.9223 16.7542 19.1404 16.1402 20.337L16.1332 20.3484L16.1432 20.3756C16.6152 21.6904 16.7632 23.0142 16.5812 24.3369L16.5752 24.3813C16.547 24.5744 16.4525 24.7472 16.3125 24.8612C16.1725 24.9753 15.9983 25.0219 15.8282 24.9903C15.744 24.9753 15.6632 24.9417 15.5904 24.8912C15.5177 24.8408 15.4544 24.7744 15.4042 24.696C15.3541 24.6178 15.318 24.529 15.2981 24.4347C15.2782 24.3406 15.2748 24.2428 15.2882 24.1472C15.4552 22.9733 15.2982 21.7961 14.8082 20.5984C14.7625 20.4871 14.7422 20.3645 14.7492 20.242C14.7562 20.1194 14.7902 20.0009 14.8482 19.8972L14.8522 19.8904C15.4562 18.8404 15.7062 17.8109 15.6522 16.7996C15.6062 15.9143 15.3272 15.045 14.8522 14.2166C14.7598 14.0556 14.7269 13.8597 14.7606 13.6713C14.7943 13.4829 14.8918 13.3171 15.0322 13.2098L15.0412 13.203C15.2842 13.0223 15.5082 12.561 15.6212 11.9303C15.7459 11.1846 15.7133 10.4159 15.5262 9.68716C15.3212 8.89171 14.9462 8.22809 14.4212 7.77468C13.8262 7.25878 13.0382 7.00992 12.0412 7.08151C11.9108 7.09115 11.7809 7.05613 11.6682 6.98097C11.5556 6.90581 11.4653 6.79399 11.4092 6.65993C11.0952 5.90426 10.6372 5.36336 10.0662 5.02814C9.51799 4.71723 8.90425 4.58657 8.29418 4.65087C7.04918 4.76337 5.95118 5.56108 5.62418 6.56675C5.57792 6.70829 5.4947 6.8304 5.38568 6.91672C5.27666 7.00301 5.14703 7.04942 5.01417 7.0497C3.94717 7.05197 3.12117 7.33606 2.51717 7.84855C1.99517 8.29172 1.63916 8.91103 1.45116 9.65307C1.28104 10.3515 1.25774 11.0857 1.38316 11.7962C1.49516 12.4303 1.71416 12.9553 1.96517 13.2382L1.97317 13.2462C2.18517 13.4814 2.23017 13.8485 2.08217 14.1382C1.72216 14.845 1.45316 15.8984 1.40916 16.9109C1.35916 18.0677 1.59516 19.0722 2.12817 19.7927L2.14417 19.8143C2.22461 19.9208 2.27633 20.0514 2.29319 20.1905C2.31003 20.3295 2.29127 20.4711 2.23917 20.5984C1.66316 22.0029 1.48616 23.1574 1.67716 24.0665C1.71148 24.2556 1.67954 24.4524 1.58812 24.6149C1.4967 24.7776 1.35302 24.8933 1.18766 24.9374C1.0223 24.9817 0.848322 24.9506 0.702741 24.8512C0.557141 24.7517 0.451463 24.5917 0.408163 24.4051C0.165162 23.2483 0.330162 21.9233 0.881162 20.4302L0.895162 20.3904L0.887162 20.3768C0.616341 19.9222 0.414243 19.4195 0.289162 18.8893L0.284162 18.8677C0.132362 18.2062 0.0726416 17.5218 0.107162 16.8393C0.151162 15.8052 0.385163 14.7462 0.729162 13.8962L0.741162 13.8666L0.739162 13.8644C0.446163 13.3894 0.229162 12.7814 0.109162 12.1087L0.104162 12.0814C-0.0611788 11.1431 -0.0293187 10.1737 0.197162 9.25194C0.459163 8.21218 0.974162 7.31901 1.73316 6.67356C1.79316 6.62243 1.85616 6.57129 1.91916 6.52357C1.76016 4.827 1.80016 3.42134 2.03117 2.35317C2.15817 1.76455 2.34517 1.27365 2.59317 0.890713C2.86317 0.472537 3.20717 0.183905 3.60817 0.0532252C3.87417 -0.0331371 4.14817 -0.0126829 4.40517 0.102088ZM8.52118 10.4315C9.45719 10.4315 10.3212 10.7871 10.9672 11.403C11.5972 12.0019 11.9722 12.8064 11.9722 13.6076C11.9722 14.6166 11.5662 15.403 10.8392 15.9052C10.2192 16.3314 9.38819 16.5382 8.43618 16.5382C7.42718 16.5382 6.56518 16.2439 5.94318 15.7041C5.32618 15.17 4.98017 14.42 4.98017 13.6076C4.98017 12.8042 5.37818 11.9973 6.03618 11.3962C6.70418 10.786 7.58618 10.4315 8.52118 10.4315ZM8.52118 11.4496C7.82742 11.4428 7.15204 11.7031 6.60518 12.1883C6.14418 12.6087 5.88318 13.1371 5.88318 13.6087C5.88318 14.095 6.09318 14.5507 6.49318 14.8973C6.94818 15.2916 7.61718 15.52 8.43618 15.52C9.23519 15.52 9.90919 15.353 10.3682 15.0359C10.8312 14.7178 11.0682 14.2564 11.0682 13.6076C11.0682 13.1269 10.8222 12.5962 10.3852 12.1803C9.90119 11.7201 9.24519 11.4496 8.52118 11.4496ZM9.18319 12.8246L9.18719 12.8292C9.30719 13.0007 9.28219 13.2496 9.13119 13.386L8.83919 13.6473V14.1541C8.83865 14.267 8.79877 14.375 8.72829 14.4544C8.6578 14.5339 8.56246 14.5783 8.46318 14.578C8.3639 14.5783 8.26856 14.5339 8.19808 14.4544C8.12758 14.375 8.0877 14.267 8.08718 14.1541V13.6314L7.81618 13.3837C7.78042 13.3511 7.7507 13.3109 7.72872 13.2652C7.70674 13.2195 7.69294 13.1694 7.6881 13.1176C7.68326 13.0658 7.6875 13.0135 7.70056 12.9636C7.71362 12.9137 7.73524 12.8672 7.76418 12.8269C7.8232 12.7452 7.9082 12.6934 8.0007 12.6825C8.09318 12.6717 8.18572 12.7027 8.25818 12.7689L8.47318 12.9644L8.69318 12.7667C8.76538 12.7018 8.85702 12.6716 8.94854 12.6825C9.04009 12.6933 9.12427 12.7443 9.18319 12.8246ZM4.14317 10.644C4.62117 10.644 5.01017 11.0871 5.01017 11.6337C5.01043 11.8957 4.91917 12.1471 4.75641 12.3327C4.59365 12.5183 4.37273 12.6229 4.14217 12.6235C3.91195 12.6226 3.69143 12.518 3.52893 12.3327C3.36641 12.1474 3.27517 11.8965 3.27517 11.6349C3.27463 11.3729 3.36565 11.1213 3.52821 10.9355C3.69079 10.7497 3.91261 10.6449 4.14317 10.644ZM12.8492 10.644C13.3292 10.644 13.7172 11.0871 13.7172 11.6337C13.7175 11.8957 13.6262 12.1471 13.4634 12.3327C13.3007 12.5183 13.0798 12.6229 12.8492 12.6235C12.619 12.6226 12.3985 12.518 12.236 12.3327C12.0734 12.1474 11.9822 11.8965 11.9822 11.6349C11.9817 11.3729 12.0727 11.1213 12.2352 10.9355C12.3978 10.7497 12.6186 10.6449 12.8492 10.644ZM3.94017 1.47705L3.93717 1.47932C3.82131 1.53657 3.72239 1.63046 3.65217 1.74977L3.64717 1.75659C3.50917 1.97136 3.38917 2.28727 3.29917 2.70203C3.12917 3.48839 3.08317 4.55541 3.17517 5.86335C3.60517 5.7179 4.07417 5.62699 4.57917 5.59404L4.58917 5.5929L4.60817 5.55426C4.65417 5.46108 4.70317 5.37131 4.75617 5.28268C4.87917 4.40655 4.77817 3.35998 4.50317 2.50545C4.36917 2.09182 4.20617 1.76682 4.05017 1.5816C4.01797 1.5431 3.98207 1.5088 3.94317 1.47932L3.94017 1.47705ZM13.1142 1.52251L13.1122 1.52364C13.0733 1.55312 13.0374 1.58741 13.0052 1.62591C12.8492 1.81114 12.6852 2.13727 12.5522 2.5509C12.2622 3.45316 12.1652 4.56905 12.3222 5.47358L12.3802 5.58381L12.3882 5.59972H12.4182C12.9145 5.59988 13.4082 5.68101 13.8842 5.84062C13.9702 4.56337 13.9222 3.51907 13.7562 2.74749C13.6662 2.33272 13.5462 2.01682 13.4072 1.80205L13.4032 1.79523C13.3331 1.67548 13.2342 1.58121 13.1182 1.52364L13.1142 1.52251Z" fill="black"></path></svg></sc-if></span>
+<h3 id="c-ollama" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">Ollama</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.ollama.bg}}; color: {{chips.ollama.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.ollama.d}}"></path></svg>{{chips.ollama.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Runs open models on this computer. Private, and offline once a model is downloaded.</p>
+<sc-if value="{{ollamaOn}}" hint-placeholder-val="{{true}}">
+<div aria-label="Usage" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<sc-for list="{{u.ollama.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px"><span style="color: {{t.muted}}; margin-right: auto">{{r.label}}</span><b style="font-weight: 600; color: {{r.color}}">{{r.value}}</b></div>
+</sc-for>
+<sc-for list="{{u.ollama.notes}}" as="nt" hint-placeholder-count="1">
+<span style="font-size: 12px; color: {{nt.color}}; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8v.5"></path></svg>{{nt.text}}</span>
+</sc-for>
+<span style="font-size: 12px; color: {{t.muted}}">Scout's own count, from the usage each answer reports.</span>
+<sc-if value="{{u.ollama.hasPage}}" hint-placeholder-val="{{false}}">
+<a href="{{u.ollama.page}}" target="_blank" rel="noopener" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the provider's usage page</a>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{openModels}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"></path></svg>Manage local models</button>
+<sc-if value="{{ollamaUse}}" hint-placeholder-val="{{true}}"><button style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Use</button></sc-if>
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM20 20l-3.5-3.5"></path></svg>Scan again</button>
+<button onClick="{{askDisconnectOllama}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+<sc-if value="{{ollamaSaved}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 12px; color: {{t.ok}}">Restarting Scout to use Ollama.</p></sc-if>
+<sc-if value="{{ollamaFreed}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 13px; color: {{t.fg2}}">Ollama freed its models from memory. It keeps running for other programs.</p></sc-if>
+<sc-if value="{{ollamaNotFreed}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 13px; color: {{t.fg2}}">Scout could not ask Ollama to free its memory. Ollama frees it by itself after a few minutes without use.</p></sc-if>
+</sc-if>
+<sc-if value="{{ollamaOff}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{connectOllama}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Ollama is not answering. Open the Ollama app or run ollama serve, then scan again.</p>
+</sc-if>
+<sc-if value="{{checking}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button disabled="disabled" aria-busy="true" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>Scanning for Ollama...</button>
+</div>
+</sc-if>
+<a href="https://ollama.com/download" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">Download Ollama<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</article>
+
+<article aria-labelledby="c-lms" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="LM Studio logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><svg viewBox="0 0 512 512" fill="none" width="22" height="22" aria-hidden="true"><path d="M0 179.2C0 116.474 0 85.1112 12.2073 61.1531C22.9451 40.0789 40.0789 22.9451 61.1531 12.2073C85.1112 0 116.474 0 179.2 0H332.8C395.526 0 426.889 0 450.847 12.2073C471.921 22.9451 489.055 40.0789 499.793 61.1531C512 85.1112 512 116.474 512 179.2V332.8C512 395.526 512 426.889 499.793 450.847C489.055 471.921 471.921 489.055 450.847 499.793C426.889 512 395.526 512 332.8 512H179.2C116.474 512 85.1112 512 61.1531 499.793C40.0789 489.055 22.9451 471.921 12.2073 450.847C0 426.889 0 395.526 0 332.8V179.2Z" fill="url(#paint0_linear_496_292-lms)"></path><rect opacity="0.25" x="128" y="84" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="64" y="84" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect opacity="0.25" x="224" y="144" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="160" y="144" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect opacity="0.25" x="168" y="204" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="104" y="204" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect opacity="0.25" x="112" y="264" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="48" y="264" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect opacity="0.25" x="176" y="324" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="112" y="324" width="224" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect opacity="0.25" x="304" y="384" width="152" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><rect x="240" y="384" width="152" height="44" rx="22" fill="white" style="fill:white;fill-opacity:1;"></rect><defs><linearGradient id="paint0_linear_496_292-lms" x1="-219.792" y1="229.426" x2="239.06" y2="702.601" gradientUnits="userSpaceOnUse"><stop stop-color="#6E7EF3" style="stop-color:#6E7EF3;stop-color:color(display-p3 0.4303 0.4946 0.9515);stop-opacity:1;"></stop><stop offset="1" stop-color="#4F13BE" style="stop-color:#4F13BE;stop-color:color(display-p3 0.3079 0.0763 0.7470);stop-opacity:1;"></stop></linearGradient></defs></svg></span>
+<h3 id="c-lms" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">LM Studio</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.lms.bg}}; color: {{chips.lms.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.lms.d}}"></path></svg>{{chips.lms.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Runs local models through LM Studio's server. Start the server in LM Studio, then scan.</p>
+<sc-if value="{{lmsDetected}}" hint-placeholder-val="{{false}}"><p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Scout cannot answer with LM Studio yet.</p></sc-if>
+<sc-if value="{{checking}}" hint-placeholder-val="{{false}}"><div style="display: flex; flex-wrap: wrap; gap: 8px"><button disabled="disabled" aria-busy="true" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>Scanning for LM Studio...</button></div></sc-if>
+<sc-if value="{{ready}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14zM20 20l-3.5-3.5"></path></svg>Scan for LM Studio</button>
+</div>
+</sc-if>
+<a href="https://lmstudio.ai" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">Download LM Studio<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</article>
+
+
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{showCloud}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="sec-cloud" style="display: flex; flex-direction: column; gap: 10px">
+<h2 id="sec-cloud" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}; text-transform: uppercase; letter-spacing: 0.04em">Cloud</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 16px">
+
+<article aria-labelledby="c-chatgpt" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: {{chatgptBorder}}; border-radius: 14px; padding: {{chatgptPad}}; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="ChatGPT plan logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{logoDark}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 721 721" fill="none" width="22" height="22" aria-hidden="true"><g clip-path="url(#clip0_1637_2935-chatgpt-d)"><g clip-path="url(#clip1_1637_2935-chatgpt-d)"><path d="M304.246 295.411V249.828C304.246 245.989 305.687 243.109 309.044 241.191L400.692 188.412C413.167 181.215 428.042 177.858 443.394 177.858C500.971 177.858 537.44 222.482 537.44 269.982C537.44 273.34 537.44 277.179 536.959 281.018L441.954 225.358C436.197 222 430.437 222 424.68 225.358L304.246 295.411ZM518.245 472.945V364.024C518.245 357.304 515.364 352.507 509.608 349.149L389.174 279.096L428.519 256.543C431.877 254.626 434.757 254.626 438.115 256.543L529.762 309.323C556.154 324.679 573.905 357.304 573.905 388.971C573.905 425.436 552.315 459.024 518.245 472.941V472.945ZM275.937 376.982L236.592 353.952C233.235 352.034 231.794 349.154 231.794 345.315V239.756C231.794 188.416 271.139 149.548 324.4 149.548C344.555 149.548 363.264 156.268 379.102 168.262L284.578 222.964C278.822 226.321 275.942 231.119 275.942 237.838V376.986L275.937 376.982ZM360.626 425.922L304.246 394.255V327.083L360.626 295.416L417.002 327.083V394.255L360.626 425.922ZM396.852 571.789C376.698 571.789 357.989 565.07 342.151 553.075L436.674 498.374C442.431 495.017 445.311 490.219 445.311 483.499V344.352L485.138 367.382C488.495 369.299 489.936 372.179 489.936 376.018V481.577C489.936 532.917 450.109 571.785 396.852 571.785V571.789ZM283.134 464.79L191.486 412.01C165.094 396.654 147.343 364.029 147.343 332.362C147.343 295.416 169.415 262.309 203.48 248.393V357.791C203.48 364.51 206.361 369.308 212.117 372.665L332.074 442.237L292.729 464.79C289.372 466.707 286.491 466.707 283.134 464.79ZM277.859 543.48C223.639 543.48 183.813 502.695 183.813 452.314C183.813 448.475 184.294 444.636 184.771 440.797L279.295 495.498C285.051 498.856 290.812 498.856 296.568 495.498L417.002 425.927V471.509C417.002 475.349 415.562 478.229 412.204 480.146L320.557 532.926C308.081 540.122 293.206 543.48 277.854 543.48H277.859ZM396.852 600.576C454.911 600.576 503.37 559.313 514.41 504.612C568.149 490.696 602.696 440.315 602.696 388.976C602.696 355.387 588.303 322.762 562.392 299.25C564.791 289.173 566.231 279.096 566.231 269.024C566.231 200.411 510.571 149.067 446.274 149.067C433.322 149.067 420.846 150.984 408.37 155.305C386.775 134.192 357.026 120.758 324.4 120.758C266.342 120.758 217.883 162.02 206.843 216.721C153.104 230.637 118.557 281.018 118.557 332.357C118.557 365.946 132.95 398.571 158.861 422.083C156.462 432.16 155.022 442.237 155.022 452.309C155.022 520.922 210.682 572.266 274.978 572.266C287.931 572.266 300.407 570.349 312.883 566.028C334.473 587.141 364.222 600.576 396.852 600.576Z" fill="white"></path></g></g><defs><clipPath id="clip0_1637_2935-chatgpt-d"><rect width="720" height="720" fill="white" transform="translate(0.606934 0.899902)"></rect></clipPath><clipPath id="clip1_1637_2935-chatgpt-d"><rect width="484.139" height="479.818" fill="white" transform="translate(118.557 120.758)"></rect></clipPath></defs></svg></sc-if><sc-if value="{{logoLight}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 721 721" fill="none" width="22" height="22" aria-hidden="true"><g clip-path="url(#clip0_1637_2934-chatgpt-l)"><g clip-path="url(#clip1_1637_2934-chatgpt-l)"><path d="M304.246 294.611V249.028C304.246 245.189 305.687 242.309 309.044 240.392L400.692 187.612C413.167 180.415 428.042 177.058 443.394 177.058C500.971 177.058 537.44 221.682 537.44 269.182C537.44 272.54 537.44 276.379 536.959 280.218L441.954 224.558C436.197 221.201 430.437 221.201 424.68 224.558L304.246 294.611ZM518.245 472.145V363.224C518.245 356.505 515.364 351.707 509.608 348.349L389.174 278.296L428.519 255.743C431.877 253.826 434.757 253.826 438.115 255.743L529.762 308.523C556.154 323.879 573.905 356.505 573.905 388.171C573.905 424.636 552.315 458.225 518.245 472.141V472.145ZM275.937 376.182L236.592 353.152C233.235 351.235 231.794 348.354 231.794 344.515V238.956C231.794 187.617 271.139 148.749 324.4 148.749C344.555 148.749 363.264 155.468 379.102 167.463L284.578 222.164C278.822 225.521 275.942 230.319 275.942 237.039V376.186L275.937 376.182ZM360.626 425.122L304.246 393.455V326.283L360.626 294.616L417.002 326.283V393.455L360.626 425.122ZM396.852 570.989C376.698 570.989 357.989 564.27 342.151 552.276L436.674 497.574C442.431 494.217 445.311 489.419 445.311 482.699V343.552L485.138 366.582C488.495 368.499 489.936 371.379 489.936 375.219V480.778C489.936 532.117 450.109 570.985 396.852 570.985V570.989ZM283.134 463.99L191.486 411.211C165.094 395.854 147.343 363.229 147.343 331.562C147.343 294.616 169.415 261.509 203.48 247.593V356.991C203.48 363.71 206.361 368.508 212.117 371.866L332.074 441.437L292.729 463.99C289.372 465.907 286.491 465.907 283.134 463.99ZM277.859 542.68C223.639 542.68 183.813 501.895 183.813 451.514C183.813 447.675 184.294 443.836 184.771 439.997L279.295 494.698C285.051 498.056 290.812 498.056 296.568 494.698L417.002 425.127V470.71C417.002 474.549 415.562 477.429 412.204 479.346L320.557 532.126C308.081 539.323 293.206 542.68 277.854 542.68H277.859ZM396.852 599.776C454.911 599.776 503.37 558.513 514.41 503.812C568.149 489.896 602.696 439.515 602.696 388.176C602.696 354.587 588.303 321.962 562.392 298.45C564.791 288.373 566.231 278.296 566.231 268.224C566.231 199.611 510.571 148.267 446.274 148.267C433.322 148.267 420.846 150.184 408.37 154.505C386.775 133.392 357.026 119.958 324.4 119.958C266.342 119.958 217.883 161.22 206.843 215.921C153.104 229.837 118.557 280.218 118.557 331.557C118.557 365.146 132.95 397.771 158.861 421.283C156.462 431.36 155.022 441.437 155.022 451.51C155.022 520.123 210.682 571.466 274.978 571.466C287.931 571.466 300.407 569.549 312.883 565.228C334.473 586.341 364.222 599.776 396.852 599.776Z" fill="black"></path></g></g><defs><clipPath id="clip0_1637_2934-chatgpt-l"><rect width="720" height="720" fill="white" transform="translate(0.606934 0.0999756)"></rect></clipPath><clipPath id="clip1_1637_2934-chatgpt-l"><rect width="484.139" height="479.818" fill="white" transform="translate(118.557 119.958)"></rect></clipPath></defs></svg></sc-if></span>
+<h3 id="c-chatgpt" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">ChatGPT plan</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.chatgpt.bg}}; color: {{chips.chatgpt.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.chatgpt.d}}"></path></svg>{{chips.chatgpt.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Sign in with your ChatGPT Plus or Pro plan. Usage counts against your plan's limits.</p>
+<sc-if value="{{gpt.signedIn}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">owner@example.com<sc-if value="{{gpt.inUse}}" hint-placeholder-val="{{true}}"> · answering with <strong style="color: {{t.fg}}; font-weight: 600">gpt-5.6-luna</strong></sc-if></p>
+<sc-if value="{{gpt.nobody}}" hint-placeholder-val="{{false}}"><p style="margin: 0; font-size: 12px; color: {{t.err}}">Nobody can use this connection from chat until you add allowed users in Settings.</p></sc-if>
+<div aria-label="Usage" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<sc-for list="{{u.chatgpt.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px"><span style="color: {{t.muted}}; margin-right: auto">{{r.label}}</span><b style="font-weight: 600; color: {{r.color}}">{{r.value}}</b></div>
+</sc-for>
+<sc-for list="{{u.chatgpt.notes}}" as="nt" hint-placeholder-count="1">
+<span style="font-size: 12px; color: {{nt.color}}; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8v.5"></path></svg>{{nt.text}}</span>
+</sc-for>
+<span style="font-size: 12px; color: {{t.muted}}">Scout's own count, from the usage each answer reports.</span>
+<sc-if value="{{u.chatgpt.hasPage}}" hint-placeholder-val="{{false}}">
+<a href="{{u.chatgpt.page}}" target="_blank" rel="noopener" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the provider's usage page</a>
+</sc-if>
+</div>
+<sc-if value="{{gpt.noPlan}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">OpenAI did not grant plan usage to Scout for this account, so Scout cannot answer through it.</p></sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<sc-if value="{{gpt.plan}}" hint-placeholder-val="{{true}}"><a href="Models.dc.html" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7"></path></svg>Choose a model</a></sc-if>
+<button style="height: 40px; padding: 0 10px; border-radius: 20px; border: 0; background: transparent; color: {{t.accent}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 17l5-5-5-5M15 12H3"></path></svg>Sign out</button>
+</div>
+</sc-if>
+<sc-if value="{{gpt.signedOut}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><sc-if value="{{gpt.idle}}" hint-placeholder-val="{{true}}"><button style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>{{gpt.signInLabel}}</button></sc-if><sc-if value="{{gpt.waiting}}" hint-placeholder-val="{{false}}"><button disabled="disabled" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Waiting for the browser...</button><button style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button></sc-if></div>
+<sc-if value="{{gpt.signedOutSaved}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 12px; color: {{t.ok}}">Signed out of ChatGPT.</p></sc-if>
+</sc-if>
+<sc-if value="{{checking}}" hint-placeholder-val="{{false}}">
+<div role="status" aria-label="Checking your ChatGPT sign-in" style="display: flex; flex-direction: column; gap: 8px">
+<div style="height: 12px; width: 70%; border-radius: 6px; background: {{t.surface2}}"></div>
+<div style="height: 12px; width: 50%; border-radius: 6px; background: {{t.surface2}}"></div>
+<span style="font-size: 12px; color: {{t.muted}}">Checking your ChatGPT sign-in...</span>
+</div>
+</sc-if>
+</article>
+
+<article aria-labelledby="c-openai" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: {{openaiCard.border}}; border-radius: 14px; padding: {{openaiCard.pad}}; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="OpenAI API logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{logoDark}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 721 721" fill="none" width="22" height="22" aria-hidden="true"><g clip-path="url(#clip0_1637_2935-openai-d)"><g clip-path="url(#clip1_1637_2935-openai-d)"><path d="M304.246 295.411V249.828C304.246 245.989 305.687 243.109 309.044 241.191L400.692 188.412C413.167 181.215 428.042 177.858 443.394 177.858C500.971 177.858 537.44 222.482 537.44 269.982C537.44 273.34 537.44 277.179 536.959 281.018L441.954 225.358C436.197 222 430.437 222 424.68 225.358L304.246 295.411ZM518.245 472.945V364.024C518.245 357.304 515.364 352.507 509.608 349.149L389.174 279.096L428.519 256.543C431.877 254.626 434.757 254.626 438.115 256.543L529.762 309.323C556.154 324.679 573.905 357.304 573.905 388.971C573.905 425.436 552.315 459.024 518.245 472.941V472.945ZM275.937 376.982L236.592 353.952C233.235 352.034 231.794 349.154 231.794 345.315V239.756C231.794 188.416 271.139 149.548 324.4 149.548C344.555 149.548 363.264 156.268 379.102 168.262L284.578 222.964C278.822 226.321 275.942 231.119 275.942 237.838V376.986L275.937 376.982ZM360.626 425.922L304.246 394.255V327.083L360.626 295.416L417.002 327.083V394.255L360.626 425.922ZM396.852 571.789C376.698 571.789 357.989 565.07 342.151 553.075L436.674 498.374C442.431 495.017 445.311 490.219 445.311 483.499V344.352L485.138 367.382C488.495 369.299 489.936 372.179 489.936 376.018V481.577C489.936 532.917 450.109 571.785 396.852 571.785V571.789ZM283.134 464.79L191.486 412.01C165.094 396.654 147.343 364.029 147.343 332.362C147.343 295.416 169.415 262.309 203.48 248.393V357.791C203.48 364.51 206.361 369.308 212.117 372.665L332.074 442.237L292.729 464.79C289.372 466.707 286.491 466.707 283.134 464.79ZM277.859 543.48C223.639 543.48 183.813 502.695 183.813 452.314C183.813 448.475 184.294 444.636 184.771 440.797L279.295 495.498C285.051 498.856 290.812 498.856 296.568 495.498L417.002 425.927V471.509C417.002 475.349 415.562 478.229 412.204 480.146L320.557 532.926C308.081 540.122 293.206 543.48 277.854 543.48H277.859ZM396.852 600.576C454.911 600.576 503.37 559.313 514.41 504.612C568.149 490.696 602.696 440.315 602.696 388.976C602.696 355.387 588.303 322.762 562.392 299.25C564.791 289.173 566.231 279.096 566.231 269.024C566.231 200.411 510.571 149.067 446.274 149.067C433.322 149.067 420.846 150.984 408.37 155.305C386.775 134.192 357.026 120.758 324.4 120.758C266.342 120.758 217.883 162.02 206.843 216.721C153.104 230.637 118.557 281.018 118.557 332.357C118.557 365.946 132.95 398.571 158.861 422.083C156.462 432.16 155.022 442.237 155.022 452.309C155.022 520.922 210.682 572.266 274.978 572.266C287.931 572.266 300.407 570.349 312.883 566.028C334.473 587.141 364.222 600.576 396.852 600.576Z" fill="white"></path></g></g><defs><clipPath id="clip0_1637_2935-openai-d"><rect width="720" height="720" fill="white" transform="translate(0.606934 0.899902)"></rect></clipPath><clipPath id="clip1_1637_2935-openai-d"><rect width="484.139" height="479.818" fill="white" transform="translate(118.557 120.758)"></rect></clipPath></defs></svg></sc-if><sc-if value="{{logoLight}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 721 721" fill="none" width="22" height="22" aria-hidden="true"><g clip-path="url(#clip0_1637_2934-openai-l)"><g clip-path="url(#clip1_1637_2934-openai-l)"><path d="M304.246 294.611V249.028C304.246 245.189 305.687 242.309 309.044 240.392L400.692 187.612C413.167 180.415 428.042 177.058 443.394 177.058C500.971 177.058 537.44 221.682 537.44 269.182C537.44 272.54 537.44 276.379 536.959 280.218L441.954 224.558C436.197 221.201 430.437 221.201 424.68 224.558L304.246 294.611ZM518.245 472.145V363.224C518.245 356.505 515.364 351.707 509.608 348.349L389.174 278.296L428.519 255.743C431.877 253.826 434.757 253.826 438.115 255.743L529.762 308.523C556.154 323.879 573.905 356.505 573.905 388.171C573.905 424.636 552.315 458.225 518.245 472.141V472.145ZM275.937 376.182L236.592 353.152C233.235 351.235 231.794 348.354 231.794 344.515V238.956C231.794 187.617 271.139 148.749 324.4 148.749C344.555 148.749 363.264 155.468 379.102 167.463L284.578 222.164C278.822 225.521 275.942 230.319 275.942 237.039V376.186L275.937 376.182ZM360.626 425.122L304.246 393.455V326.283L360.626 294.616L417.002 326.283V393.455L360.626 425.122ZM396.852 570.989C376.698 570.989 357.989 564.27 342.151 552.276L436.674 497.574C442.431 494.217 445.311 489.419 445.311 482.699V343.552L485.138 366.582C488.495 368.499 489.936 371.379 489.936 375.219V480.778C489.936 532.117 450.109 570.985 396.852 570.985V570.989ZM283.134 463.99L191.486 411.211C165.094 395.854 147.343 363.229 147.343 331.562C147.343 294.616 169.415 261.509 203.48 247.593V356.991C203.48 363.71 206.361 368.508 212.117 371.866L332.074 441.437L292.729 463.99C289.372 465.907 286.491 465.907 283.134 463.99ZM277.859 542.68C223.639 542.68 183.813 501.895 183.813 451.514C183.813 447.675 184.294 443.836 184.771 439.997L279.295 494.698C285.051 498.056 290.812 498.056 296.568 494.698L417.002 425.127V470.71C417.002 474.549 415.562 477.429 412.204 479.346L320.557 532.126C308.081 539.323 293.206 542.68 277.854 542.68H277.859ZM396.852 599.776C454.911 599.776 503.37 558.513 514.41 503.812C568.149 489.896 602.696 439.515 602.696 388.176C602.696 354.587 588.303 321.962 562.392 298.45C564.791 288.373 566.231 278.296 566.231 268.224C566.231 199.611 510.571 148.267 446.274 148.267C433.322 148.267 420.846 150.184 408.37 154.505C386.775 133.392 357.026 119.958 324.4 119.958C266.342 119.958 217.883 161.22 206.843 215.921C153.104 229.837 118.557 280.218 118.557 331.557C118.557 365.146 132.95 397.771 158.861 421.283C156.462 431.36 155.022 441.437 155.022 451.51C155.022 520.123 210.682 571.466 274.978 571.466C287.931 571.466 300.407 569.549 312.883 565.228C334.473 586.341 364.222 599.776 396.852 599.776Z" fill="black"></path></g></g><defs><clipPath id="clip0_1637_2934-openai-l"><rect width="720" height="720" fill="white" transform="translate(0.606934 0.0999756)"></rect></clipPath><clipPath id="clip1_1637_2934-openai-l"><rect width="484.139" height="479.818" fill="white" transform="translate(118.557 119.958)"></rect></clipPath></defs></svg></sc-if></span>
+<h3 id="c-openai" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">OpenAI API</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.openai.bg}}; color: {{chips.openai.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.openai.d}}"></path></svg>{{chips.openai.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Use your OpenAI developer API key. Billing goes to your OpenAI account.</p>
+<sc-if value="{{openaiConnected}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{openaiInUse}}" hint-placeholder-val="{{false}}"><p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Answering with <strong style="color: {{t.fg}}; font-weight: 600">gpt-4o</strong></p></sc-if>
+<div aria-label="Usage" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<sc-for list="{{u.openai.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px"><span style="color: {{t.muted}}; margin-right: auto">{{r.label}}</span><b style="font-weight: 600; color: {{r.color}}">{{r.value}}</b></div>
+</sc-for>
+<sc-for list="{{u.openai.notes}}" as="nt" hint-placeholder-count="1">
+<span style="font-size: 12px; color: {{nt.color}}; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8v.5"></path></svg>{{nt.text}}</span>
+</sc-for>
+<span style="font-size: 12px; color: {{t.muted}}">Scout's own count, from the usage each answer reports.</span>
+<sc-if value="{{u.openai.hasPage}}" hint-placeholder-val="{{false}}">
+<a href="{{u.openai.page}}" target="_blank" rel="noopener" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the provider's usage page</a>
+</sc-if>
+</div>
+<details aria-label="Organization spend" style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<summary style="cursor: pointer; font-weight: 600">Organization spend</summary>
+<p style="margin: 6px 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Optional. An Admin key can read your organization's billing; Scout uses it only to show this month's spend and keeps it on this computer.</p>
+<sc-if value="{{orgOpenai.hasKey}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0 0 6px; font-weight: 600; color: {{orgOpenai.color}}">{{orgOpenai.line}}</p>
+<button onClick="{{askRemoveAdmin}}" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; font-size: 13px; font-weight: 500; align-self: flex-start; color: {{t.err}}">Remove</button>
+</sc-if>
+<sc-if value="{{orgOpenai.form}}" hint-placeholder-val="{{false}}">
+<form aria-label="Add Admin key" style="display: flex; flex-direction: column; gap: 6px">
+<label for="a-openai" style="font-size: 13px; font-weight: 500">Admin key</label>
+<input id="a-openai" type="password" autocomplete="off" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button type="button" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 0; background: {{t.primary}}; color: #ffffff; font-size: 13px; font-weight: 500">Save</button><button type="button" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500">Cancel</button></div>
+</form>
+</sc-if>
+<sc-if value="{{orgOpenai.noKey}}" hint-placeholder-val="{{true}}">
+<button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; align-self: flex-start">Add Admin key</button>
+</sc-if>
+</details>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7a4 4 0 1 1-3.5 6L4 19.5V21h3v-2h2v-2h2l1.4-1.4"></path></svg>Change key</button>
+<button onClick="{{askDisconnect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+<a href="Models.dc.html" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; align-self: flex-start">Choose a model in Models, Analysis</a>
+<sc-if value="{{openaiInUse}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 12px; color: {{t.ok}}">Connected. Restarting Scout to use OpenAI API.</p></sc-if>
+</sc-if>
+<sc-if value="{{openaiNotConnected}}" hint-placeholder-val="{{false}}">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; align-self: flex-start"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+</sc-if>
+</article>
+
+<article aria-labelledby="c-gemini" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="Google Gemini logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><span style="color: {{t.fg}}; font-weight: 700; font-size: 15px">G</span></span>
+<h3 id="c-gemini" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">Google Gemini</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.gemini.bg}}; color: {{chips.gemini.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.gemini.d}}"></path></svg>{{chips.gemini.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Google's Gemini models, such as Gemini 2.5 Pro and Flash, with your Gemini API key.</p>
+<sc-if value="{{geminiForm}}" hint-placeholder-val="{{true}}">
+<form aria-label="Connect Google Gemini" style="display: flex; flex-direction: column; gap: 6px">
+<label for="k-gemini" style="font-size: 13px; font-weight: 500">API key</label>
+<input id="k-gemini" type="password" autocomplete="off" aria-describedby="k-gemini-help" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<span id="k-gemini-help" style="font-size: 12px; color: {{t.muted}}">Stored on this computer only.</span>
+<sc-if value="{{keyRejected}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">That key was rejected by Gemini.</p></sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px">
+<button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7"></path></svg>Save</button>
+<button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+</div>
+</form>
+</sc-if>
+<sc-if value="{{readFailed}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button aria-label="Connect Google Gemini" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button></div>
+<p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">Could not check the Google Gemini key; it may still be stored.</p>
+</sc-if>
+</article>
+
+<article aria-labelledby="c-claude" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="Claude API logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><svg viewBox="0 0 94 94" fill="none" width="22" height="22" aria-hidden="true"><path d="M18.7657 62.4437L37.1822 52.1167L37.4857 51.2122L37.1822 50.7085H36.2715L33.1852 50.5208L22.6615 50.2391L13.5545 49.8636L4.70044 49.3942L2.47428 48.9248L0.399902 46.1553L0.602281 44.794L2.47428 43.5266L5.15579 43.7613L11.0754 44.1837L19.98 44.794L26.4055 45.1695L35.9679 46.1553H37.4857L37.6881 45.545L37.1822 45.1695L36.7774 44.794L27.5692 38.5508L17.6021 31.9791L12.3908 28.1769L9.60812 26.2524L8.19147 24.4686L7.58433 20.5256L10.1141 17.7091L13.5545 17.9438L14.4146 18.1785L17.9056 20.8542L25.343 26.6279L35.0572 33.7629L36.4739 34.9364L37.0443 34.5514L37.1316 34.2792L36.4739 33.1996L31.212 23.6706L25.596 13.9539L23.0663 9.91695L22.4086 7.52296C22.1538 6.51831 22.0038 5.68714 22.0038 4.65957L24.8877 0.716544L26.5067 0.200195L30.4025 0.716544L32.0215 2.12477L34.4501 7.66379L38.3458 16.3478L44.4172 28.1769L46.188 31.6975L47.1493 34.9364L47.5035 35.9222H48.1106V35.3589L48.6166 28.6933L49.5273 20.5256L50.438 10.0108L50.7415 7.05356L52.2088 3.48605L55.1433 1.56148L57.42 2.64112L59.292 5.31674L59.039 7.05356L57.926 14.2824L55.7504 25.5952L54.3337 33.1996H55.1433L56.1046 32.2138L59.9497 27.1442L66.3752 19.0704L69.2085 15.8784L72.5478 12.3579L74.6728 10.668H78.7203L81.6548 15.0804L80.3394 19.6337L76.1906 24.8911L72.7502 29.3504L67.8172 35.9595L64.7562 41.2734L65.0307 41.7118L65.7681 41.6489L76.8989 39.255L82.9197 38.1753L90.1041 36.9549L93.3422 38.457L93.6963 40.006L92.4315 43.151L84.7411 45.0287L75.7353 46.8594L62.3244 50.0164L62.1759 50.1358L62.3512 50.3958L68.399 50.9432L70.9794 51.084H77.3037L89.0922 51.9759L92.1785 53.9944L93.9999 56.4822L93.6963 58.4068L88.9404 60.8008L82.5655 59.2987L67.6401 55.7312L62.5301 54.4638H61.8217V54.8862L66.0717 59.064L73.9139 66.1051L83.6786 75.2116L84.1845 77.4648L82.9197 79.2485L81.6042 79.0608L73.0032 72.5829L69.6639 69.6726L62.1759 63.3356H61.67V63.9928L63.3902 66.5276L72.5478 80.2812L73.0032 84.5059L72.3454 85.8672L69.9675 86.7121L67.3871 86.2427L61.9735 78.6852L56.4587 70.2359L52.0064 62.6315L51.4687 62.971L48.8189 91.2654L47.6047 92.7206L44.7714 93.8002L42.3934 92.0164L41.1286 89.1061L42.3934 83.3324L43.9113 75.8219L45.1255 69.8604L46.2386 62.4437L46.9184 59.9661L46.8583 59.8003L46.3153 59.8916L40.7238 67.5603L32.2239 79.0608L25.4948 86.2427L23.8758 86.8999L21.0931 85.4447L21.3461 82.863L22.9145 80.5629L32.2239 68.7338L37.8399 61.3641L41.4594 57.1337L41.4242 56.5218L41.2244 56.5048L16.489 72.6299L12.0873 73.1932L10.1647 71.4094L10.4176 68.4991L11.3283 67.5603L18.7657 62.4437Z" fill="#D97757"></path></svg></span>
+<h3 id="c-claude" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">Claude API</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.claude.bg}}; color: {{chips.claude.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.claude.d}}"></path></svg>{{chips.claude.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Anthropic's Claude models, with your own Anthropic API key.</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">A Claude Pro or Max subscription cannot be used by other apps; Scout needs an Anthropic API key.</p>
+<sc-if value="{{claudeConnected}}" hint-placeholder-val="{{false}}">
+<div aria-label="Usage" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<sc-for list="{{u.claude.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px"><span style="color: {{t.muted}}; margin-right: auto">{{r.label}}</span><b style="font-weight: 600; color: {{r.color}}">{{r.value}}</b></div>
+</sc-for>
+<span style="font-size: 12px; color: {{t.muted}}">Scout's own count, from the usage each answer reports.</span>
+<a href="https://platform.claude.com/usage" target="_blank" rel="noopener" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the provider's usage page</a>
+</div>
+<details aria-label="Organization spend" style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; border-top: 1px solid {{t.line}}; padding-top: 8px">
+<summary style="cursor: pointer; font-weight: 600">Organization spend</summary>
+<p style="margin: 6px 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Optional. An Admin key can read your organization's billing; Scout uses it only to show this month's spend and keeps it on this computer.</p>
+<sc-if value="{{orgClaude.hasKey}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0 0 6px; font-weight: 600; color: {{orgClaude.color}}">{{orgClaude.line}}</p>
+<button onClick="{{askRemoveAdmin}}" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; font-size: 13px; font-weight: 500; align-self: flex-start; color: {{t.err}}">Remove</button>
+</sc-if>
+<sc-if value="{{orgClaude.noKey}}" hint-placeholder-val="{{true}}">
+<button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; font-weight: 500; align-self: flex-start">Add Admin key</button>
+</sc-if>
+</details>
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7a4 4 0 1 1-3.5 6L4 19.5V21h3v-2h2v-2h2l1.4-1.4"></path></svg>Change key</button><button onClick="{{askDisconnectClaude}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button></div>
+<a href="Models.dc.html" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; align-self: flex-start">Choose a model in Models, Analysis</a>
+</sc-if>
+<sc-if value="{{claudeNotConnected}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{readFailed}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">Could not check the Claude API key; it may still be stored.</p></sc-if>
+<button aria-label="Connect Claude API" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; align-self: flex-start"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+</sc-if>
+</article>
+
+<article aria-labelledby="c-guard" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="TypeSafe (Jev) logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5Z" fill="currentColor"></path></svg></span>
+<h3 id="c-guard" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">TypeSafe (Jev)</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.guard.bg}}; color: {{chips.guard.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.guard.d}}"></path></svg>{{chips.guard.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Read-only guard: checks each request with the recent conversation and refuses ones that ask Scout to change something.</p>
+<sc-if value="{{ready}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px"><button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7a4 4 0 1 1-3.5 6L4 19.5V21h3v-2h2v-2h2l1.4-1.4"></path></svg>Add API key</button><sc-if value="{{guardOn}}" hint-placeholder-val="{{false}}"><button onClick="{{askDisconnectGuard}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button></sc-if></div>
+</sc-if>
+<sc-if value="{{guardSaved}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 12px; color: {{t.ok}}">Saved. Restarting Scout to use the read-only guard.</p></sc-if>
+</article>
+
+<article aria-labelledby="c-openrouter" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="OpenRouter logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; display: flex; align-items: center; justify-content: center"><sc-if value="{{logoDark}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 1024 730" fill="none" width="22" height="22" aria-hidden="true"><path d="M795.893 0C915.776 0 1012.95 97.9963 1012.95 218.88C1012.95 339.764 915.776 437.76 795.893 437.76L1011.2 654.869C1038.55 682.447 1019.18 729.6 980.504 729.6H361.77C161.97 729.6 0 566.273 0 364.8C0 163.327 161.97 0 361.77 0L795.893 0ZM361.77 145.92C241.89 145.92 144.708 243.916 144.708 364.8C144.708 485.684 241.89 583.68 361.77 583.68C481.649 583.68 578.831 485.684 578.831 364.8C578.831 243.916 481.649 145.92 361.77 145.92Z" fill="#FCFCFE"></path></svg></sc-if><sc-if value="{{logoLight}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 1024 730" fill="none" width="22" height="22" aria-hidden="true"><path d="M795.893 0C915.776 0 1012.95 97.9963 1012.95 218.88C1012.95 339.764 915.776 437.76 795.893 437.76L1011.2 654.869C1038.55 682.447 1019.18 729.6 980.504 729.6H361.77C161.97 729.6 0 566.273 0 364.8C0 163.327 161.97 0 361.77 0L795.893 0ZM361.77 145.92C241.89 145.92 144.708 243.916 144.708 364.8C144.708 485.684 241.89 583.68 361.77 583.68C481.649 583.68 578.831 485.684 578.831 364.8C578.831 243.916 481.649 145.92 361.77 145.92Z" fill="#03080A"></path></svg></sc-if></span>
+<h3 id="c-openrouter" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">OpenRouter</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{chips.openrouter.bg}}; color: {{chips.openrouter.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{chips.openrouter.d}}"></path></svg>{{chips.openrouter.label}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">A unified interface to access hundreds of AI models through a single API connection.</p>
+<sc-if value="{{orOff}}" hint-placeholder-val="{{false}}">
+<button aria-label="Connect OpenRouter" onClick="{{connectOpenRouter}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; align-self: flex-start"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+</sc-if>
+<sc-if value="{{orOn}}" hint-placeholder-val="{{true}}">
+<div aria-label="Usage" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<sc-for list="{{u.openrouter.rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px"><span style="color: {{t.muted}}; margin-right: auto">{{r.label}}</span><b style="font-weight: 600; color: {{r.color}}">{{r.value}}</b></div>
+</sc-for>
+<sc-for list="{{u.openrouter.notes}}" as="nt" hint-placeholder-count="1">
+<span style="font-size: 12px; color: {{nt.color}}; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 11v5M12 8v.5"></path></svg>{{nt.text}}</span>
+</sc-for>
+<span style="font-size: 12px; color: {{t.muted}}">Scout's own count, from the usage each answer reports.</span>
+<sc-if value="{{u.openrouter.hasPage}}" hint-placeholder-val="{{false}}">
+<a href="{{u.openrouter.page}}" target="_blank" rel="noopener" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; text-decoration: none; box-sizing: border-box"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the provider's usage page</a>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 7a4 4 0 1 1-3.5 6L4 19.5V21h3v-2h2v-2h2l1.4-1.4"></path></svg>Change key</button>
+<button onClick="{{askDisconnectOpenRouter}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+<a href="Models.dc.html" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; align-self: flex-start">Choose a model in Models, Analysis</a>
+</sc-if>
+</article>
+
+<sc-for list="{{soon}}" as="c" hint-placeholder-count="1">
+<article aria-label="{{c.title}}" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px dashed {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span role="img" aria-label="{{c.title}} logo" style="width: 36px; height: 36px; border-radius: 10px; background: {{t.surface2}}; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{c.d}}"></path></svg></span>
+<h3 style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">{{c.title}}</h3>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.infoBg}}; color: {{t.info}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2"></path></svg>Coming soon</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">{{c.desc}}</p>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Not available yet. It arrives in a later version.</p>
+</article>
+</sc-for>
+
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{snackOpen}}" hint-placeholder-val="{{false}}">
+<div role="status" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; width: 520px; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 10px; background: {{t.inverseBg}}; color: {{t.inverseFg}}; box-shadow: 0 8px 24px {{t.shadow}}; box-sizing: border-box">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM8 12l3 3 5-6"></path></svg>
+<span style="margin-right: auto">OpenAI API disconnected. The key was deleted from this computer.</span>
+<button onClick="{{dismissSnack}}" style="height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: {{t.inverseAction}}; font-weight: 600">Dismiss</button>
+</div>
+</sc-if>
+
+<sc-if value="{{modelsOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 160px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="lm-title" aria-describedby="lm-desc" onKeyDown="{{modelsKey}}" style="width: 560px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 id="lm-title" style="margin: 0; font-size: 17px; font-weight: 600; margin-right: auto">Local models in Ollama</h2>
+<button autofocus="autofocus" onClick="{{closeModels}}" aria-label="Close" title="Close" style="width: 36px; height: 36px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+<p id="lm-desc" style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">The models installed in Ollama on this computer. They appear in Models, Analysis, under Ollama.</p>
+<section aria-labelledby="lm-server" style="display: flex; flex-direction: column; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}">
+<div style="display: flex; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0"><h3 id="lm-server" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">LLM Server</h3><p style="margin: 0; font-size: 13px; color: {{t.muted}}">Runs on this computer, private by default.</p></div>
+<span style="display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{serverChip.bg}}; color: {{serverChip.fg}}">{{serverChip.label}}</span>
+</div>
+<dl style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0"><div style="display: flex; flex-direction: column; gap: 4px"><dt style="font-size: 11px; font-weight: 700; color: {{t.muted}}; letter-spacing: 0.08em">SELECTED</dt><dd style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">{{selectedTitle}}</dd></div><div style="display: flex; flex-direction: column; gap: 4px"><dt style="font-size: 11px; font-weight: 700; color: {{t.muted}}; letter-spacing: 0.08em">DOWNLOADED</dt><dd style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">{{installedCount}}</dd></div><div style="display: flex; flex-direction: column; gap: 4px"><dt style="font-size: 11px; font-weight: 700; color: {{t.muted}}; letter-spacing: 0.08em">STORAGE</dt><dd style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">{{installedGbText}}</dd></div></dl>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">{{serverLine}}</p>
+<sc-if value="{{inUseNoTools}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.45; background: {{t.warnBg}}; color: {{t.warn}}">This model cannot call tools, so Scout cannot read your repositories or cluster with it. Choose a model that supports tools.</p></sc-if>
+<p role="note" style="margin: 0; display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.45; background: {{t.warnBg}}; color: {{t.warn}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M12 3l9 16H3z"></path><path d="M12 10v4"></path><path d="M12 17h.01"></path></svg><span><strong>Not supported yet.</strong> Scout does not start or stop Ollama: Ollama is run by this computer, not by Scout. Autostart, Start, Stop and Restart are a design, not built.</span></p>
+<div title="Design, not built: Scout does not start or stop Ollama yet" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}"><div><div style="font-size: 13px; font-weight: 600">Autostart</div><div style="font-size: 12px; color: {{t.muted}}">If enabled, the server starts when a model is requested.</div></div><button role="switch" aria-label="Autostart" aria-checked="false" aria-disabled="true" disabled="disabled" title="Design, not built: Scout does not start or stop Ollama yet" style="border: 0; padding: 0; background: transparent; display: flex; opacity: 0.5"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: flex-start; background: {{t.surface2}}; border: 1px solid {{t.line}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{t.muted}}"></span></span></button></div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><button disabled="disabled" title="Design, not built: Scout does not start or stop Ollama yet" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>Start</button><button disabled="disabled" title="Design, not built: Scout does not start or stop Ollama yet" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>Stop</button><button disabled="disabled" title="Design, not built: Scout does not start or stop Ollama yet" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Restart</button></div>
+</section>
+<h3 id="lm-skill" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">Skill matching</h3>
+<ul aria-labelledby="lm-skill" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<li style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{skill.rowBg}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0"><span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600">nomic-embed-text<sc-if value="{{skill.installed}}" hint-placeholder-val="{{true}}"><span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.okBg}}; color: {{t.ok}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Installed</span></sc-if></span><span style="font-size: 12px; color: {{t.muted}}">274 MB on disk</span></div>
+<sc-if value="{{skill.idle}}" hint-placeholder-val="{{false}}">
+<button onClick="{{skill.download}}" aria-label="Download nomic-embed-text" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Download</button>
+</sc-if>
+<sc-if value="{{skill.busy}}" hint-placeholder-val="{{false}}">
+<button onClick="{{skill.cancel}}" aria-label="Cancel the download of nomic-embed-text" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+</sc-if>
+</div>
+<p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.fg2}}">Scout uses this model to match a message to a skill. Without it, Scout picks a skill by the words of the message.</p>
+<sc-if value="{{skill.busy}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div role="progressbar" aria-label="Downloading nomic-embed-text" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{skill.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 100%; width: {{skill.progressWidth}}; background: {{t.accent}}"></div></div>
+<span style="font-size: 12px; color: {{t.muted}}">{{skill.progressText}}</span>
+</div>
+</sc-if>
+<sc-if value="{{skill.failed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; background: {{t.errBg}}; color: {{t.err}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg><span>Ollama sent nothing for 60 s; the download stopped.</span><a href="Logs.dc.html" style="margin-left: auto; color: {{t.err}}; font-weight: 600">See logs</a></p>
+</sc-if>
+</li>
+</ul>
+<h3 style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">Installed</h3>
+<sc-if value="{{noInstalled}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 10px; padding: 14px; border: 1px dashed {{t.line}}; border-radius: 10px; font-size: 13px; color: {{t.fg2}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01"></path></svg>No models installed yet. Pull one below.</div>
+</sc-if>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{installed}}" as="m" hint-placeholder-count="2">
+<li style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0"><span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600">{{m.title}}<sc-if value="{{m.recommended}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: {{t.okBg}}; color: {{t.ok}}">Recommended</span></sc-if><sc-if value="{{m.inUse}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.okBg}}; color: {{t.ok}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>In use</span></sc-if><sc-if value="{{m.embeddings}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">Embeddings only</span></sc-if><sc-if value="{{m.noTools}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.warnBg}}; color: {{t.warn}}">No tools</span></sc-if></span><span style="font-size: 12px; color: {{t.muted}}">{{m.meta}}</span></div>
+<sc-if value="{{m.canUse}}" hint-placeholder-val="{{true}}"><button aria-describedby="{{m.noToolsId}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Use this</button></sc-if>
+<sc-if value="{{m.canRemove}}" hint-placeholder-val="{{true}}"><button onClick="{{m.askRemove}}" aria-label="{{m.removeLabel}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg>Remove</button></sc-if>
+<sc-if value="{{m.inUse}}" hint-placeholder-val="{{false}}"><button disabled="disabled" aria-label="{{m.removeLabel}}" aria-describedby="{{m.inUseNoteId}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg>Remove</button></sc-if>
+</div>
+<sc-if value="{{m.hasDesc}}" hint-placeholder-val="{{true}}"><p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.fg2}}">{{m.desc}}</p></sc-if>
+<sc-if value="{{m.noTools}}" hint-placeholder-val="{{false}}"><p id="{{m.noToolsId}}" style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.warn}}">This model cannot call tools, so Scout cannot read your repositories or cluster with it. Choose a model that supports tools.</p></sc-if>
+<sc-if value="{{m.inUse}}" hint-placeholder-val="{{false}}"><p id="{{m.inUseNoteId}}" style="margin: 0; font-size: 12px; color: {{t.muted}}">In use. Choose another model before removing it.</p></sc-if>
+<sc-if value="{{m.confirming}}" hint-placeholder-val="{{false}}">
+<div role="alertdialog" aria-labelledby="{{m.confirmId}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: {{t.errBg}}">
+<span id="{{m.confirmId}}" style="margin-right: auto; font-size: 13px; color: {{t.fg}}">{{m.confirmText}}</span>
+<button autofocus="autofocus" onClick="{{cancelRemove}}" style="height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{m.remove}}" style="height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: {{t.danger}}; color: #ffffff; display: inline-flex; align-items: center; gap: 6px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg>Remove</button>
+</div>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+<h3 id="lm-pull" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">Pull by name</h3>
+<form onSubmit="{{pull.submit}}" aria-labelledby="lm-pull" style="display: flex; flex-direction: column; gap: 8px; margin: 0">
+<label for="pull-name" style="font-size: 12px; color: {{t.fg2}}">Any model of the Ollama library, as name or name:tag</label>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<input id="pull-name" type="text" value="{{pull.value}}" onChange="{{pull.onInput}}" placeholder="For example llama3.2:3b" autocomplete="off" spellcheck="false" disabled="{{pull.busy}}" aria-invalid="{{pull.invalid}}" aria-describedby="{{pull.describedBy}}" style="flex: 1 1 220px; height: 36px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{pull.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<sc-if value="{{pull.idle}}" hint-placeholder-val="{{true}}">
+<button type="submit" disabled="{{pull.cannotPull}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{pull.buttonFg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Pull</button>
+</sc-if>
+<sc-if value="{{pull.busy}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{pull.cancel}}" aria-label="{{pull.cancelLabel}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+</sc-if>
+</div>
+<sc-if value="{{pull.invalid}}" hint-placeholder-val="{{false}}">
+<p id="pull-name-error" style="margin: 0; font-size: 12px; color: {{t.err}}">That is not a model name. Use name or name:tag, for example llama3.2:3b.</p>
+</sc-if>
+<sc-if value="{{pull.busy}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div role="progressbar" aria-label="{{pull.progressLabel}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{pull.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 100%; width: {{pull.progressWidth}}; background: {{t.accent}}"></div></div>
+<span style="font-size: 12px; color: {{t.muted}}">{{pull.progressText}}</span>
+</div>
+</sc-if>
+<sc-if value="{{pull.failed}}" hint-placeholder-val="{{false}}">
+<p id="pull-name-error" role="alert" style="display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 10px; border-radius: 8px; font-size: 12px; background: {{t.errBg}}; color: {{t.err}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg><span>{{pull.error}}</span><a href="Logs.dc.html" style="margin-left: auto; color: {{t.err}}; font-weight: 600">See logs</a></p>
+</sc-if>
+<sc-if value="{{pull.done}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 12px; color: {{t.muted}}">{{pull.doneText}}</p>
+</sc-if>
+<div><button type="button" onClick="{{pull.browse}}" style="padding: 0; border: 0; background: transparent; color: {{t.accent}}; font: inherit; font-size: 13px; font-weight: 600; text-decoration: underline; cursor: pointer">Browse the Ollama library</button></div>
+</form>
+<h3 style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">Recommended</h3>
+<sc-if value="{{skill.note}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">The first download also gets nomic-embed-text (274 MB), which Scout uses to match a message to a skill.</p>
+</sc-if>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{available}}" as="m" hint-placeholder-count="2">
+<li style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.line}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0"><span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600">{{m.title}}<sc-if value="{{m.recommended}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; background: {{t.okBg}}; color: {{t.ok}}">Recommended</span></sc-if><sc-if value="{{m.inUse}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{t.okBg}}; color: {{t.ok}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>In use</span></sc-if></span><span style="font-size: 12px; color: {{t.muted}}">{{m.meta}}</span></div>
+<sc-if value="{{m.idle}}" hint-placeholder-val="{{true}}">
+<button onClick="{{m.download}}" aria-label="{{m.downloadLabel}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>Download</button>
+</sc-if>
+<sc-if value="{{m.busy}}" hint-placeholder-val="{{false}}">
+<button onClick="{{cancelDownload}}" aria-label="{{m.cancelLabel}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+</sc-if>
+</div>
+<p style="margin: 0; font-size: 12px; line-height: 1.5; color: {{t.fg2}}">{{m.desc}}</p>
+<sc-if value="{{m.busy}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div role="progressbar" aria-label="{{m.progressLabel}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{m.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 100%; width: {{m.progressWidth}}; background: {{t.accent}}"></div></div>
+<span style="font-size: 12px; color: {{t.muted}}">{{m.progressText}}</span>
+</div>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 220px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">{{discTitle}}</h2>
+<p id="dlg-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{discBody}}</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{closeConfirm}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{confirmDisconnect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>{{discLabel}}</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      theme: 'dark',
+      bellOpen: false,
+      preview: 'normal',
+      filter: 'all',
+      openaiGone: false,
+      orGone: false,
+      snack: false,
+      ollama: true,
+      disc: 'openai',
+      discInUse: false,
+      modelsOpen: false,
+      removing: null,
+      removed: {},
+      added: {},
+      dl: null,
+      dlPct: 0,
+      skillDl: false,
+      skillPct: 0,
+      skillAdded: false,
+      pullName: '',
+      pullState: 'idle',
+      pullPct: 0,
+      pulled: '',
+    };
+  }
+  bellItems() {
+    return [
+      { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
+      { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
+      { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
+      { id: 'v1', kind: 'done', glyph: '✓', tone: 'ok', title: 'Verdict given: Approved acme/web#17', detail: 'Signed as the Scout bot · the tests line was posted as a comment', when: '25 min', progress: null, action: 'See the review' },
+      { id: 'i1', kind: 'done', glyph: 'I', tone: 'ok', title: '3 issues opened on acme/shop', detail: 'From the audit findings you chose', when: '1 h', progress: null, action: 'See the issues' },
+      { id: 'w1', kind: 'done', glyph: '!', tone: 'err', title: 'A voice message could not be transcribed: no Whisper model is installed.', detail: '1 voice message not transcribed, the last from Discord.', when: '3 min', progress: null, action: '', buttons: [{ label: 'Download the base model (142 MB)', path: 'M12 3v12M7 10l5 5 5-5M5 21h14' }, { label: 'Open Models, Transcription', path: 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4' }] },
+      { id: 'p1', kind: 'paused', glyph: '!', tone: 'err', title: 'Audit of acme/web paused', detail: 'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.', when: '2 h', progress: null, action: '' },
+    ];
+  }
+  bellRunsNow() {
+    return { a1: 'running', t1: 'running', p1: 'pausedByLimit', ...(this.state.bellRuns || {}) };
+  }
+  bellSetRun(id, next) {
+    this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: next }, bellRead: { ...(this.state.bellRead || {}), [id]: true } });
+  }
+  bellStopAudit(id) {
+    this.bellSetRun(id, 'stopping');
+    setTimeout(() => { if (this.bellRunsNow()[id] === 'stopping') this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: 'stoppedAfterArea' } }); }, 4000);
+  }
+  bellLive(n) {
+    const s = this.bellRunsNow()[n.id];
+    const pause = 'M9 5v14M15 5v14';
+    const play = 'M8 5l11 7-11 7z';
+    const stop = 'M7 7h10v10H7z';
+    if (n.id === 't1') {
+      if (s === 'stopped') return { ...n, kind: 'done', glyph: 'T', tone: 'muted', title: 'Tests for acme/api#41 stopped', detail: 'The container was removed; the tests gave no result.', when: 'now', progress: null, controls: [] };
+      return { ...n, controls: [{ label: 'Stop the tests for acme/api#41', path: stop, act: () => this.bellSetRun('t1', 'stopped') }] };
+    }
+    const audit = { a1: ['acme/shop', 3, 8, 4, 'running'], p1: ['acme/web', 5, 9, 2, 'pausedByLimit'] }[n.id];
+    if (!audit) return { ...n, controls: [] };
+    const [repo, done, total, findings, first] = audit;
+    const when = s === first ? n.when : 'now';
+    const pauseIt = { label: 'Pause the audit of ' + repo, path: pause, act: () => this.bellSetRun(n.id, 'pausedByYou') };
+    const goOn = { label: 'Continue the audit of ' + repo, path: play, act: () => this.bellSetRun(n.id, 'running') };
+    const stopIt = { label: 'Stop the audit of ' + repo, path: stop, act: () => this.bellSetRun(n.id, 'stopped') };
+    const stopRunning = { ...stopIt, act: () => this.bellStopAudit(n.id) };
+    const running = { ...n, kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of ' + repo, detail: 'Area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far · cards arrive in the chat as each area ends', when, progress: Math.floor(done * 100 / total) };
+    const stopped = (areas) => ({ ...n, kind: 'done', glyph: 'A', tone: 'muted', title: 'Audit of ' + repo + ' stopped', detail: areas + ' of ' + total + ' areas · ' + findings + ' findings kept', when, progress: null, controls: [] });
+    return {
+      running: { ...running, controls: [pauseIt, stopRunning] },
+      stopping: { ...running, controls: [], status: 'Stopping after this area' },
+      pausedByYou: { ...n, kind: 'paused', glyph: 'A', tone: 'warn', title: 'Audit of ' + repo + ' paused', detail: 'Paused by you · area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far', when, progress: null, controls: [goOn, stopIt] },
+      pausedByLimit: { ...n, kind: 'paused', when, controls: [goOn, stopIt] },
+      stopped: stopped(done),
+      stoppedAfterArea: stopped(done + 1),
+    }[s];
+  }
+  bellPreview(n) {
+    const clock = 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2';
+    const note = (text) => ({ a1: { note: text } });
+    const paused = (detail) => ({ p1: { detail } });
+    const fromApp = {
+      asking: { a1: { asking: true } },
+      pausing: { a1: { controls: [], status: 'Pausing after this area' } },
+      continuing: { p1: { controls: [], status: 'Continuing' } },
+      stoppingPaused: { p1: { controls: [], status: 'Stopping' } },
+      stoppingTests: { t1: { controls: [], status: 'Stopping' } },
+      noteNoAnswer: { t1: { note: 'The Scout control plane did not answer, so this click may not have reached Scout. Try again.' } },
+      noteNotConfirmed: note('Not confirmed: Scout did not say within two and a half minutes whether it applied this click; look at the job before clicking again.'),
+      noteNotReported: note('Scout recorded this click as applied, but the job did not report it; look at the job before clicking again.'),
+      noteWorkerStopped: note('Scout stopped before it said how this click ended; look at the job before clicking again.'),
+      noteDropped: note('Not applied: the click waited more than two minutes for Scout, so it was dropped; click again if it still applies.'),
+      pausedCredit: paused("The AI Source's account has run out of credit. Ask Scout to continue once it has credit again."),
+      pausedRate: paused('The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.'),
+      pausedSignIn: paused('The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.'),
+      pausedKey: paused('The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.'),
+      pausedModel: paused('The AI Source does not have the model llama3.2:3b. Choose a model it has in Models, then ask Scout to continue.'),
+      areaName: { a1: { detail: 'Area 3 of 8 done: src/orders' } },
+      finished: { a1: { kind: 'done', tone: 'ok', title: 'Audit of acme/shop is done', detail: 'Verdict: fix (0 High, 2 Medium, 1 Low).', progress: null, controls: [] } },
+      testsFinished: { t1: { kind: 'done', tone: 'ok', title: 'Tests for acme/api#41 finished', detail: 'The result is in the conversation.', progress: null, controls: [] } },
+      testsNotFinished: { t1: { kind: 'failed', tone: 'err', title: 'Tests for acme/api#41 did not finish', detail: 'The answer ended before the tests reported a result.', progress: null, controls: [] } },
+      healthRestarting: { h1: { id: 'h1', kind: 'running', glyph: '', path: clock, tone: 'accent', title: 'Scout stopped unexpectedly and is restarting.', detail: 'Restart 1 since Scout was started.', when: 'now', progress: null, action: '', controls: [] } },
+      healthGaveUp: { h1: { id: 'h1', kind: 'failed', glyph: '!', tone: 'err', title: 'Scout stopped and does not restart by itself.', detail: 'Start it again from Logs or from Settings, Scout worker.', when: 'now', progress: null, action: '', controls: [] } },
+    }[this.state.bell] || {};
+    return n === undefined ? fromApp : { ...n, ...(fromApp[n.id] || {}) };
+  }
+  bellVals(t) {
+    const read = this.state.bellRead || {};
+    const tab = this.state.bellTab || 'all';
+    const bell = this.state.bell || 'entries';
+    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.bellPreview(this.bellLive(n)))];
+    const unread = all.filter((n) => !read[n.id]).length;
+    const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
+    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
+      ...n,
+      iconBg: tone(n)[0],
+      iconFg: tone(n)[1],
+      hasPath: Boolean(n.path),
+      rowBg: read[n.id] ? t.surface : t.unreadBg,
+      weight: read[n.id] ? 500 : 600,
+      hasDetail: n.detail !== '',
+      hasNote: Boolean(n.note),
+      hasProgress: n.progress !== null,
+      progressWidth: (n.progress || 0) + '%',
+      hasAction: n.action !== '',
+      buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),
+      hasButtons: (n.buttons ?? []).length > 0,
+      hasControls: n.controls.length > 0,
+      controlsOff: n.asking ? 'true' : 'false',
+      controlsOpacity: n.asking ? 0.5 : 1,
+      hasStatus: Boolean(n.status),
+      showWhen: !n.status,
+    }));
+    const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
+    return {
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true }) })),
+      bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
+        const on = tab === id;
+        return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
+      }),
+      bellShown: shown,
+      bellEmpty: shown.length === 0,
+      bellRefused: bell === 'refused',
+      bellUnread: unread,
+      bellHasUnread: unread > 0,
+      bellOpen: this.state.bellOpen,
+      bellOpenText: this.state.bellOpen ? 'true' : 'false',
+      bellBg: this.state.bellOpen ? t.surface2 : 'transparent',
+      bellLabel: unread > 0 ? 'Notifications, ' + unread + ' unread' : 'Notifications',
+      toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
+      bellMarkAllRead: () => { const r = {}; all.forEach((n) => { r[n.id] = true; }); this.setState({ bellRead: r }); },
+    };
+  }
+  renderVals() {
+    const vals = this.pageVals();
+    return { ...vals, ...this.bellVals(vals.t) };
+  }
+  pageVals() {
+    const t = this.palette(this.state.theme === 'system' ? 'dark' : this.state.theme);
+    const s = this.state;
+    const checking = s.preview === 'checking';
+    const chip = (tone, label) => {
+      const d = { ok: 'M20 6L9 17l-5-5', info: 'M12 3a9 9 0 1 0 9 9', neutral: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z' }[tone];
+      return { label, d, bg: t[tone + 'Bg'], fg: t[tone] };
+    };
+    const wait = chip('info', 'Checking...');
+    const openaiConnected = !checking && !s.openaiGone;
+    const isIn = (m) => s.added[m.id] === true || (m.base && s.removed[m.id] !== true && s.added[m.id] !== false);
+    const installed = this.ollamaModels().filter(isIn);
+    const available = this.ollamaModels().filter((m) => !isIn(m));
+    const installedGb = installed.reduce((sum, m) => sum + m.size, 0);
+    const pv = s.preview;
+    const inUseId = pv === 'noToolsInUse' ? 'example-chat:1b' : 'gemma3:4b';
+    const skillIn = s.skillAdded || (pv !== 'skillMissing' && pv !== 'skillFailed');
+    const NR ='Not reported by the provider';
+    const row = (label, value, color) => ({ label, value, color: color || t.fg });
+    const note = (text, color) => ({ text, color: color || t.muted });
+    const block = (rows, notes, page) => ({ rows, notes, hasPage: !!page, page: page || '' });
+    const u = {
+      ollama: block([row('Cost', 'Local, free'), row('Models installed', installed.length + ' · ' + installedGb.toFixed(1) + ' GB'), row('Scout today', '41.2K tokens'), row('Scout this month', '3.1M tokens')], [], ''),
+      chatgpt: block([pv === 'limit' ? row('Plan usage', 'Usage limit reached at 13:42', t.warn) : row('Plan usage', NR), row('Scout today', '96.4K tokens'), row('Scout this month', '2.8M tokens')], [], 'https://chatgpt.com/#settings'),
+      openai: block([row('Balance', NR), row('Scout today', pv === 'unreported' ? '0 tokens' : '18.9K tokens'), row('Scout this month', '1.2M tokens')], pv === 'unreported' ? [note('Usage not reported for this model')] : [], 'https://platform.openai.com/usage'),
+      claude: block([row('Balance', NR), row('Scout today', '4.2K tokens'), row('Scout this month', '310K tokens')], [], 'https://platform.claude.com/usage'),
+      openrouter: block(
+        (pv === 'orNoLimit' ? [row('Credits', 'No limit on this key')] : [row('Credits', 'US$ 7.42 of US$ 20.00 left'), row('Resets', 'Monthly')])
+          .concat([row('OpenRouter this month', 'US$ 12.58'), row('Scout today', '22.7K tokens · US$ 0.31'), row('Scout this month', '640K tokens · US$ 8.94')]),
+        pv === 'orFailed' ? [note('Balance as of 14:02; the latest read failed.', t.warn)] : [], ''),
+    };
+    return Object.assign(this.shellVals(t, 'AI Sources', 'AI Sources'), {
+      preview: this.segVals(t, [['normal', 'Normal'], ['checking', 'Checking'], ['limit', 'Plan limit reached'], ['unreported', 'Usage not reported'], ['orFailed', 'OpenRouter read failed'], ['orNoLimit', 'OpenRouter no limit'], ['confirm', 'Disconnect confirm'], ['ollamaNotAnswering', 'Ollama not answering'], ['admin', 'Admin key added'], ['adminRejected', 'Admin key rejected'], ['adminForm', 'Admin key form'], ['signedOut', 'ChatGPT signed out'], ['signingIn', 'Waiting for the browser'], ['noPlan', 'No plan usage'], ['nobody', 'Nobody allowed'], ['openaiInUse', 'OpenAI API in use'], ['keyRejected', 'Key rejected'], ['readFailed', 'Keychain not read'], ['ollamaInUse', 'Ollama in use'], ['ollamaFreed', 'Ollama freed its memory'], ['ollamaNotFreed', 'Ollama not asked to free memory'], ['lmsDetected', 'LM Studio detected'], ['guardOn', 'Read-only guard on'], ['skillMissing', 'Skill model missing'], ['skillFailed', 'Skill model download failed'], ['outside', 'Installed outside Scout'], ['pullEmpty', 'Pull by name empty'], ['pullRefused', 'Pull by name refused'], ['pulling', 'Pulling by name'], ['pullNotFound', 'Pull by name not in the library'], ['pullFailed', 'Pull by name failed'], ['pullDone', 'Pulled by name'], ['noTools', 'No tools'], ['noToolsInUse', 'In use without tools']], s.preview, (id) => this.setState(Object.assign(this.pullPreview(id), { preview: id, disc: 'openai', snack: false, openaiGone: false, orGone: false, skillDl: false, skillPct: 0, skillAdded: false, ollama: ['ollamaInUse', 'ollamaNotAnswering', 'ollamaFreed', 'ollamaNotFreed', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.ollama, modelsOpen: ['ollamaNotAnswering', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.modelsOpen }))),
+      u,
+      orOn: !checking && !s.orGone,
+      orOff: !checking && s.orGone,
+      connectOpenRouter: () => this.setState({ orGone: false }),
+      claudeConnected: !checking && (pv === 'admin' || pv === 'adminRejected'),
+      claudeNotConnected: !checking && pv !== 'admin' && pv !== 'adminRejected',
+      readFailed: pv === 'readFailed',
+      keyRejected: pv === 'keyRejected',
+      geminiForm: !checking && pv !== 'readFailed',
+      guardOn: pv === 'guardOn',
+      guardSaved: pv === 'guardOn',
+      lmsDetected: pv === 'lmsDetected',
+      ollamaUse: !checking && s.ollama && pv !== 'ollamaInUse',
+      ollamaSaved: pv === 'ollamaInUse',
+      ollamaFreed: pv === 'ollamaFreed',
+      ollamaNotFreed: pv === 'ollamaNotFreed',
+      ollamaCard: pv === 'ollamaInUse' ? { border: '2px solid ' + t.accent, pad: '15px' } : { border: '1px solid ' + t.line, pad: '16px' },
+      openaiInUse: pv === 'openaiInUse',
+      openaiCard: pv === 'openaiInUse' ? { border: '2px solid ' + t.accent, pad: '15px' } : { border: '1px solid ' + t.line, pad: '16px' },
+      gpt: {
+        signedIn: !checking && !['signedOut', 'signingIn'].includes(pv),
+        inUse: !['openaiInUse', 'ollamaInUse', 'noPlan'].includes(pv),
+        plan: pv !== 'noPlan',
+        noPlan: pv === 'noPlan',
+        nobody: pv === 'nobody',
+        signedOut: !checking && ['signedOut', 'signingIn'].includes(pv),
+        idle: pv === 'signedOut',
+        waiting: pv === 'signingIn',
+        signInLabel: 'Continue with ChatGPT',
+        signedOutSaved: pv === 'signedOut',
+      },
+      askRemoveAdmin: () => this.setState({ preview: 'confirm', disc: 'admin', snack: false }),
+      askDisconnectGuard: () => this.setState({ preview: 'confirm', disc: 'guard', snack: false }),
+      askDisconnectClaude: () => this.setState({ preview: 'confirm', disc: 'claude', snack: false }),
+      orgOpenai: pv === 'admin'
+        ? { hasKey: true, noKey: false, form: false, line: 'US$ 12.40 spent this month (organization)', color: t.fg }
+        : pv === 'adminRejected'
+        ? { hasKey: true, noKey: false, form: false, line: 'The Admin key was rejected', color: t.err }
+        : pv === 'adminForm'
+        ? { hasKey: false, noKey: false, form: true, line: '', color: t.fg }
+        : { hasKey: false, noKey: true, form: false, line: '', color: t.fg },
+      orgClaude: pv === 'admin'
+        ? { hasKey: true, noKey: false, line: 'US$ 4.10 spent this month (organization)', color: t.fg }
+        : pv === 'adminRejected'
+        ? { hasKey: true, noKey: false, line: 'The Admin key was rejected', color: t.err }
+        : { hasKey: false, noKey: true, line: '', color: t.fg },
+      askDisconnectOpenRouter: () => this.setState({ preview: 'confirm', disc: 'openrouter', snack: false }),
+      filters: this.segVals(t, [['all', 'All'], ['local', 'On this computer'], ['cloud', 'Cloud']], s.filter, (id) => this.setState({ filter: id })),
+      showLocal: s.filter !== 'cloud',
+      showCloud: s.filter !== 'local',
+      checking,
+      ready: !checking,
+      chips: {
+        ollama: checking ? wait : pv === 'ollamaInUse' ? chip('ok', 'In use') : s.ollama ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
+        lms: checking ? wait : pv === 'lmsDetected' ? chip('ok', 'Detected') : chip('neutral', 'Not connected'),
+        chatgpt: checking ? wait : ['signedOut', 'signingIn'].includes(pv) ? chip('neutral', 'Not connected') : ['openaiInUse', 'ollamaInUse', 'noPlan'].includes(pv) ? chip('ok', 'Connected') : chip('ok', 'In use'),
+        openai: checking ? wait : pv === 'openaiInUse' ? chip('ok', 'In use') : openaiConnected ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
+        gemini: checking ? wait : chip('neutral', 'Not connected'),
+        claude: checking ? wait : pv === 'admin' || pv === 'adminRejected' ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
+        openrouter: checking ? wait : s.orGone ? chip('neutral', 'Not connected') : chip('ok', 'Connected'),
+        guard: checking ? wait : pv === 'guardOn' ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
+      },
+      chatgptBorder: checking || ['signedOut', 'signingIn', 'openaiInUse', 'ollamaInUse', 'noPlan'].includes(pv) ? '1px solid ' + t.line : '2px solid ' + t.accent,
+      chatgptPad: checking || ['signedOut', 'signingIn', 'openaiInUse', 'ollamaInUse', 'noPlan'].includes(pv) ? '16px' : '15px',
+      openaiConnected,
+      openaiNotConnected: !checking && s.openaiGone,
+      logoDark: s.theme !== 'light',
+      logoLight: s.theme === 'light',
+      soon: [
+        { title: 'Custom API', desc: 'Any OpenAI-compatible endpoint, such as a model server you host yourself.', d: 'M8 8l-4 4 4 4M16 8l4 4-4 4' },
+      ],
+      confirmOpen: s.preview === 'confirm',
+      askDisconnect: () => this.setState({ preview: 'confirm', disc: 'openai', discInUse: this.state.preview === 'openaiInUse', snack: false }),
+      closeConfirm: () => this.setState({ preview: 'normal' }),
+      confirmDisconnect: () => this.setState(s.disc === 'ollama' ? { preview: 'normal', ollama: false, modelsOpen: false } : s.disc === 'openrouter' ? { preview: 'normal', orGone: true } : s.disc === 'openai' ? { preview: 'normal', openaiGone: true, snack: true } : { preview: 'normal' }),
+      confirmKey: (e) => { if (e && e.key === 'Escape') this.setState({ preview: 'normal' }); },
+      discTitle: { ollama: 'Disconnect Ollama?', openrouter: 'Disconnect OpenRouter?', guard: 'Disconnect TypeSafe (Jev)?', admin: 'Remove the Admin key?', claude: 'Disconnect Claude API?' }[s.disc] || 'Disconnect OpenAI API?',
+      discBody: {
+        ollama: 'Scout stops using Ollama and its models leave Models, Analysis. The models stay installed in Ollama on this computer. Ollama frees its memory and keeps running.',
+        openrouter: 'Scout deletes the stored OpenRouter key from this computer and stops reading its balance. Your credits stay on your OpenRouter account.',
+        guard: 'Scout deletes the TypeSafe key stored on this computer and the read-only guard turns off.',
+        admin: 'Scout deletes the OpenAI API Admin key stored on this computer and stops showing the organization spend.',
+        claude: 'Scout deletes the stored API key from this computer.',
+      }[s.disc] || (s.discInUse ? 'Scout deletes the stored API key from this computer. Answers stop using OpenAI until you connect it again with a key.' : 'Scout deletes the stored API key from this computer.'),
+      discLabel: s.disc === 'admin' ? 'Remove' : 'Disconnect',
+      ollamaOn: !checking && s.ollama,
+      ollamaOff: !checking && !s.ollama,
+      swOllama: { checked: s.ollama ? 'true' : 'false', justify: s.ollama ? 'flex-end' : 'flex-start', track: s.ollama ? t.primary : t.surface2, edge: s.ollama ? t.primary : t.line, thumb: s.ollama ? '#ffffff' : t.muted, toggle: () => this.setState({ ollama: !s.ollama, modelsOpen: false }) },
+      connectOllama: () => this.setState({ ollama: true }),
+      askDisconnectOllama: () => this.setState({ preview: 'confirm', disc: 'ollama', snack: false }),
+      installedSummary: installed.length + ' · ' + installedGb.toFixed(1) + ' GB',
+      installedCount: String(installed.length),
+      installedGbText: installedGb.toFixed(1) + ' GB',
+      selectedTitle: (installed.find((m) => m.id === inUseId) || { title: '—' }).title,
+      inUseNoTools: installed.some((m) => m.id === inUseId && m.noTools),
+      serverChip: checking ? chip('neutral', 'Checking') : pv === 'ollamaNotAnswering' ? chip('neutral', 'Not running') : chip('ok', 'Running'),
+      serverLine: pv === 'ollamaNotAnswering' ? 'Ollama is not answering. Open the Ollama app or run ollama serve, then scan again.' : 'Ollama is run by this computer, not by Scout.',
+      modelsOpen: s.modelsOpen && s.ollama,
+      openModels: () => this.setState({ modelsOpen: true, removing: null }),
+      closeModels: () => this.setState({ modelsOpen: false, removing: null }),
+      modelsKey: (e) => { if (e && e.key === 'Escape') this.setState(this.state.removing ? { removing: null } : { modelsOpen: false }); },
+      noInstalled: installed.length === 0,
+      installed: installed.map((m) => ({ title: m.title, meta: m.meta, desc: m.desc, hasDesc: m.desc !== '', recommended: !!m.recommended, inUse: m.id === inUseId, embeddings: !!m.embeddings, noTools: !!m.noTools, noToolsId: m.noTools ? 'notools-' + m.id : '', canUse: m.id !== inUseId && !m.embeddings, canRemove: m.id !== inUseId, inUseNoteId: m.id === inUseId ? 'inuse-' + m.id : '', removeLabel: 'Remove ' + m.title, confirmId: 'rm-' + m.id,
+        confirming: s.removing === m.id,
+        confirmText: 'Remove ' + m.title + '? ' + m.size + ' GB is deleted from this computer.',
+        askRemove: () => this.setState({ removing: m.id }),
+        remove: () => this.setState({ removing: null, removed: Object.assign({}, this.state.removed, { [m.id]: true }), added: Object.assign({}, this.state.added, { [m.id]: false }) }) })),
+      cancelRemove: () => this.setState({ removing: null }),
+      available: available.map((m) => {
+        const busy = s.dl === m.id;
+        const pct = busy ? s.dlPct : 0;
+        return { title: m.title, meta: m.meta, desc: m.desc, recommended: !!m.recommended, inUse: false, canUse: false, idle: !busy, busy, downloadLabel: 'Download ' + m.title, cancelLabel: 'Cancel the download of ' + m.title,
+          progress: String(pct), progressWidth: pct + '%', progressLabel: 'Downloading ' + m.title,
+          progressText: (m.size * pct / 100).toFixed(1) + ' of ' + m.size.toFixed(1) + ' GB · ' + pct + '%',
+          download: () => { if (this.state.dl) return; this.setState({ dl: m.id, dlPct: 0 }); this.tick(m.id); if (!skillIn) this.startSkill(); } };
+      }),
+      cancelDownload: () => this.setState({ dl: null, dlPct: 0 }),
+      skill: {
+        installed: skillIn,
+        idle: !skillIn && !s.skillDl,
+        busy: !skillIn && s.skillDl,
+        failed: pv === 'skillFailed' && !skillIn && !s.skillDl,
+        note: !skillIn,
+        rowBg: skillIn ? t.bg : 'transparent',
+        progress: String(s.skillPct),
+        progressWidth: s.skillPct + '%',
+        progressText: Math.round(274 * s.skillPct / 100) + ' of 274 MB · ' + s.skillPct + '%',
+        download: () => this.startSkill(),
+        cancel: () => this.setState({ skillDl: false, skillPct: 0 }),
+      },
+      pull: this.pullVals(t),
+      snackOpen: s.snack,
+      dismissSnack: () => this.setState({ snack: false }),
+    });
+  }
+  pullVals(t) {
+    const s = this.state;
+    const name = s.pullName.trim();
+    const busy = s.pullState === 'pulling';
+    const invalid = !busy && name !== '' && !this.isModelName(name);
+    const failed = s.pullState === 'notFound' || s.pullState === 'failed';
+    return {
+      value: s.pullName,
+      busy,
+      idle: !busy,
+      invalid,
+      failed,
+      done: s.pullState === 'done',
+      cannotPull: name === '' || invalid,
+      buttonFg: name === '' || invalid ? t.muted : t.fg,
+      border: invalid ? t.err : t.line,
+      describedBy: invalid || failed ? 'pull-name-error' : '',
+      error: s.pullState === 'notFound' ? 'The Ollama library has no model named ' + name + '.' : 'Ollama could not download ' + name + ': no space left on device',
+      doneText: 'Pulled ' + s.pulled + '. It is under Installed: Use this makes it the model Scout uses.',
+      cancelLabel: 'Cancel the download of ' + name,
+      progress: String(s.pullPct),
+      progressWidth: s.pullPct + '%',
+      progressLabel: 'Downloading ' + name,
+      progressText: s.pullPct + '%',
+      onInput: (e) => this.setState({ pullName: e && e.target ? e.target.value : '', pullState: 'idle' }),
+      submit: (e) => { if (e && e.preventDefault) e.preventDefault(); if (busy || name === '' || invalid) return; this.setState({ pullState: 'pulling', pullPct: 0 }); this.tickPull(); if (!(this.state.skillAdded || (this.state.preview !== 'skillMissing' && this.state.preview !== 'skillFailed'))) this.startSkill(); },
+      cancel: () => this.setState({ pullState: 'idle', pullPct: 0 }),
+      browse: () => window.open('https://ollama.com/library', '_blank', 'noopener'),
+    };
+  }
+  pullPreview(id) {
+    return {
+      pullEmpty: { pullName: '', pullState: 'idle', pullPct: 0, pulled: '' },
+      pullRefused: { pullName: 'ollama run llama3.2', pullState: 'idle', pullPct: 0, pulled: '' },
+      pulling: { pullName: 'llama3.2:3b', pullState: 'pulling', pullPct: 42, pulled: '' },
+      pullNotFound: { pullName: 'llama9:3b', pullState: 'notFound', pullPct: 0, pulled: '' },
+      pullFailed: { pullName: 'llama3.2:3b', pullState: 'failed', pullPct: 0, pulled: '' },
+      pullDone: { pullName: '', pullState: 'done', pullPct: 0, pulled: 'llama3.2:3b' },
+    }[id] || { pullName: '', pullState: 'idle', pullPct: 0, pulled: '' };
+  }
+  isModelName(name) {
+    return /^(?:[a-z0-9][a-z0-9_-]{0,79}\/)?[a-z0-9][a-z0-9._-]{0,79}(?::[A-Za-z0-9][A-Za-z0-9._-]{0,79})?$/.test(name);
+  }
+  tickPull() {
+    setTimeout(() => {
+      if (this.state.pullState !== 'pulling') return;
+      const pct = Math.min(100, this.state.pullPct + 20);
+      if (pct >= 100) { this.setState({ pullState: 'done', pullPct: 0, pulled: this.state.pullName.trim(), pullName: '' }); return; }
+      this.setState({ pullPct: pct });
+      this.tickPull();
+    }, 600);
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1b5a8f', infoBg: '#e1eefa', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.40)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fc7f5', infoBg: '#14283d', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(5,8,14,0.60)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
+  }
+  ollamaModels() {
+    return [
+      { id: 'gemma3:4b', title: 'Gemma 3 4B', meta: 'Text and images · 3.3 GB on disk · 8 GB RAM', size: 3.3, base: true, desc: 'Recommended default. Handles both text and image analysis.' },
+      { id: 'qwen2.5:1.5b', title: 'Qwen 2.5 1.5B (Instruct)', meta: 'Text only · 1.1 GB on disk · 2.5 GB RAM', size: 1.1, base: true, desc: 'Small and capable text analysis. Good quality for low-RAM systems. No image support.' },
+      { id: 'qwen2.5:3b', title: 'Qwen 2.5 3B', meta: 'Text only · 1.9 GB on disk · 6 GB RAM', size: 1.9, base: true, recommended: true, desc: 'Lightweight text analysis from the Qwen 2.5 family. Best for low-resource machines.' },
+      { id: 'qwen2.5:0.5b', title: 'Qwen 2.5 0.5B (Instruct)', meta: 'Text only · 491 MB on disk · 1.5 GB RAM', size: 0.5, base: false, desc: 'Ultra-lightweight text analysis. Ideal for machines with 4 GB RAM or less. No image support.' },
+      { id: 'gemma3:12b', title: 'Gemma 3 12B', meta: 'Text and images · 8 GB on disk · 16 GB RAM', size: 8.0, base: false, desc: 'Higher quality. Handles both text and image analysis.' },
+    ].concat(this.state.preview === 'outside' ? [
+      { id: 'llama3.2:3b', title: 'llama3.2:3b', meta: 'llama · 3.2B · Q4_K_M · 2.0 GB on disk', size: 2.0, base: true, outside: true, desc: '' },
+      { id: 'example-embed:latest', title: 'example-embed:latest', meta: 'bert · 335M · F16 · 670 MB on disk', size: 0.7, base: true, outside: true, embeddings: true, desc: '' },
+    ] : []).concat(['noTools', 'noToolsInUse'].includes(this.state.preview) ? [
+      { id: 'example-chat:1b', title: 'example-chat:1b', meta: 'example · 1.2B · Q4_K_M · 800 MB on disk', size: 0.8, base: true, outside: true, noTools: true, desc: '' },
+    ] : []).concat(this.state.pulled !== '' && this.state.preview !== 'outside' ? [
+      { id: this.state.pulled, title: this.state.pulled, meta: this.state.pulled === 'llama3.2:3b' ? 'llama · 3.2B · Q4_K_M · 2.0 GB on disk' : '', size: 2.0, base: true, outside: true, desc: '' },
+    ] : []);
+  }
+  tick(id) {
+    setTimeout(() => {
+      if (this.state.dl !== id) return;
+      const pct = Math.min(100, this.state.dlPct + 20);
+      if (pct >= 100) { this.setState({ dl: null, dlPct: 0, added: Object.assign({}, this.state.added, { [id]: true }) }); return; }
+      this.setState({ dlPct: pct });
+      this.tick(id);
+    }, 600);
+  }
+  startSkill() {
+    if (this.state.skillDl) return;
+    this.setState({ skillDl: true, skillPct: 0 });
+    this.tickSkill();
+  }
+  tickSkill() {
+    setTimeout(() => {
+      if (!this.state.skillDl) return;
+      const pct = Math.min(100, this.state.skillPct + 25);
+      if (pct >= 100) { this.setState({ skillDl: false, skillPct: 0, skillAdded: true }); return; }
+      this.setState({ skillPct: pct });
+      this.tickSkill();
+    }, 600);
+  }
+  segVals(t, defs, current, pick) {
+    return defs.map(([id, label, d]) => {
+      const on = current === id;
+      return { id, label, d: d || '', pressed: on ? 'true' : 'false', selected: on ? 'true' : 'false', bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, weight: on ? 600 : 500, pick: () => pick(id) };
+    });
+  }
+  shellVals(t, screenTitle, current) {
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const navDefs = [
+      ['Chat', 'Main.dc.html', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+      ['AI Sources', 'Sources.dc.html', 'M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z'],
+      ['Features', 'Features.dc.html', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['Models', 'Models.dc.html', 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7'],
+      ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
+      ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+      ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
+      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
+      ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
+    ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
+    const nav = navDefs.map(([label, href, d]) => {
+      const on = label === current;
+      return { label, href, d, current: on ? 'page' : 'false', bar: on ? t.accent : 'transparent', bg: on ? t.surface2 : 'transparent', color: on ? t.fg : t.fg2, weight: on ? 600 : 500 };
+    });
+    return {
+      t,
+      screenTitle,
+      nav,
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      themeSystem: pill(this.state.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

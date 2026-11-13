@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: YouTube operator, Production</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+@keyframes sc-pulse{0%{opacity:.55}50%{opacity:1}100%{opacity:.55}}
+@keyframes sc-slide{0%{margin-left:-40%}100%{margin-left:100%}}
+</style>
+</helmet>
+<div style="min-height: 1500px; display: flex; flex-wrap: wrap; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px; position: relative">
+
+<nav aria-label="YouTube operator" style="flex: 1 1 200px; max-width: 220px; min-width: 180px; background: {{t.surface}}; border-right: 1px solid {{t.line}}; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 4px">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM10 9l5 3-5 3z"></path></svg></div>
+<div style="display: flex; flex-direction: column; min-width: 0"><span style="font-weight: 600; font-size: 15px">YouTube operator</span><span style="font-size: 12px; color: {{t.muted}}">Acme Tech Explained</span></div>
+</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px 14px; font-size: 13px; color: {{t.accent}}; text-decoration: none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>Back to Scout</a>
+<sc-for list="{{nav}}" as="item" hint-placeholder-count="6">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; text-decoration: none; color: {{item.color}}; background: {{item.bg}}; font-weight: {{item.weight}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>{{item.label}}<sc-if value="{{item.hasBadge}}" hint-placeholder-val="{{false}}"><span role="img" aria-label="{{item.badgeLabel}}" style="margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center">{{item.badge}}</span></sc-if></a>
+</sc-for>
+<sc-if value="{{granted}}" hint-placeholder-val="{{true}}">
+<div style="margin-top: auto; padding: 12px 10px 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.ok}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>YouTube feature granted</div>
+</sc-if>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; position: relative">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0">
+<span style="font-weight: 600; font-size: 16px">Production</span>
+<span style="font-size: 12px; color: {{t.muted}}">ChatGPT plan · gpt-5.6-luna</span>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.bg}}; color: {{t.muted}}; min-width: 200px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<input type="search" aria-label="Search videos and comments" placeholder="Search videos and comments" style="border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit; width: 200px">
+</label>
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" title="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<button aria-label="Dark theme" title="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+</button>
+<button aria-label="Follow the system theme" title="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+</button>
+</div>
+<button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
+<span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
+</sc-if>
+</button>
+
+<sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
+<section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">Notifications</span>
+<button onClick="{{bellMarkAllRead}}" style="border: 0; background: transparent; color: {{t.accent}}; font-size: 13px; padding: 4px 6px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Mark all as read</button>
+</div>
+<div role="tablist" aria-label="Filter notifications" style="display: flex; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid {{t.line}}">
+<sc-for list="{{bellTabs}}" as="bt" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{bt.selected}}" onClick="{{bt.pick}}" style="border: 1px solid {{bt.border}}; background: {{bt.bg}}; color: {{bt.fg}}; border-radius: 14px; padding: 5px 12px; font-size: 13px">{{bt.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-y: auto; display: flex; flex-direction: column">
+<sc-for list="{{bellShown}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.line}}; background: {{n.rowBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700"><sc-if value="{{n.hasPath}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.path}}"></path></svg></sc-if>{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: {{n.weight}}; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<sc-if value="{{n.hasControls}}" hint-placeholder-val="{{false}}">
+<span style="align-self: center; flex: 0 0 auto; display: flex; gap: 4px">
+<sc-for list="{{n.controls}}" as="c" hint-placeholder-count="2">
+<button type="button" aria-label="{{c.label}}" title="{{c.label}}" aria-disabled="{{n.controlsOff}}" onClick="{{c.act}}" style="width: 28px; height: 28px; padding: 0; border-radius: 14px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{n.controlsOpacity}}; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.path}}"></path></svg></button>
+</sc-for>
+</span>
+</sc-if>
+<sc-if value="{{n.hasStatus}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.status}}</span>
+</sc-if>
+<sc-if value="{{n.showWhen}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</sc-if>
+</div>
+<sc-if value="{{n.hasDetail}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+</sc-if>
+<sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{true}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="b" hint-placeholder-count="2">
+<button onClick="{{b.act}}" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{b.path}}"></path></svg>{{b.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{bellEmpty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 16px; font-size: 12px; color: {{t.muted}}">Nothing here yet.</p>
+</sc-if>
+</div>
+<sc-if value="{{bellRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 16px; font-size: 13px; color: {{t.err}}">Scout could not tell which pull request this entry is about.</p>
+</sc-if>
+<div style="padding: 10px 16px; font-size: 12px; color: {{t.muted}}">GitHub mentions and comments are read every 5 minutes, only while the GitHub feature is connected.</div>
+</section>
+</sc-if>
+</header>
+
+<main style="flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 1180px; width: 100%; box-sizing: border-box">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto; min-width: 0; flex: 1 1 320px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em">Production</h1>
+<p style="margin: 0; color: {{t.fg2}}; line-height: 1.5">What the channel is for, the videos Scout is making, and what to check.</p>
+</div>
+<a href="#make-a-video" style="height: 40px; padding: 0 16px; border-radius: 20px; background: {{t.accentStrong}}; color: #ffffff; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>New video</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span id="pv-label" style="font-size: 12px; color: {{t.muted}}">Preview state</span>
+<div role="group" aria-labelledby="pv-label" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.surface}}">
+<sc-for list="{{previews}}" as="pv" hint-placeholder-count="4">
+<button aria-pressed="{{pv.pressed}}" onClick="{{pv.pick}}" style="border: 0; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: {{pv.bg}}; color: {{pv.fg}}">{{pv.label}}</button>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{isDown}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 12px 16px; border-radius: 14px; border: 1px solid {{t.err}}; background: {{t.errBg}}; color: {{t.err}}">The Scout control plane did not answer.</p>
+</sc-if>
+<details open="{{channelOpen}}" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 14px 18px">
+<summary style="cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline"><span style="font-weight: 600; font-size: 16px">Channel</span><span style="font-size: 13px; color: {{t.muted}}">{{channelSummary}}</span></summary>
+<section style="padding-top: 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 6px"><h2 style="margin: 0; font-size: 14px; font-weight: 600">Mandate</h2><button type="button" aria-label="What this block is for" title="{{mandateHelp}}" style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></div>
+<sc-if value="{{noMandate}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; color: {{t.muted}}">The operator needs a mandate before it makes a video: what the channel is for, who it is for and its language. Fill it in and save it.</p>
+</sc-if>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding-top: 6px">
+<sc-for list="{{mandateFirst}}" as="m" hint-placeholder-count="2">
+<label style="display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: {{t.muted}}">{{m.label}}<input type="text" value="{{m.value}}" style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px"></label>
+</sc-for>
+<fieldset style="grid-column: 1 / -1; margin: 0; padding: 0; border: 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; font-size: 12px; color: {{t.muted}}">
+<legend style="padding: 0 0 2px">Pillars (up to 5)</legend>
+<sc-for list="{{pillars}}" as="pl" hint-placeholder-count="5">
+<input type="text" maxlength="80" aria-label="{{pl.label}}" value="{{pl.value}}" style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px">
+</sc-for>
+</fieldset>
+<sc-for list="{{mandateRest}}" as="m" hint-placeholder-count="8">
+<label style="display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: {{t.muted}}">{{m.label}}<input type="text" value="{{m.value}}" style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px"></label>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7"></path></svg>Save</button><sc-if value="{{hasMandate}}" hint-placeholder-val="{{true}}"><span style="color: {{t.muted}}">Saved 5 Nov, 14:20</span></sc-if></div>
+</section>
+<section style="padding-top: 14px; display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 14px; font-weight: 600">What Scout can make</h2>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{readinessLines}}" as="r" hint-placeholder-count="6">
+<li>{{r.text}}</li>
+</sc-for>
+</ul>
+</section>
+</details>
+
+<section id="make-a-video" aria-labelledby="mk-h" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="mk-h" style="margin: 0; font-size: 18px; font-weight: 600">Make a video</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end">
+<div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px">
+<label for="mk-topic" style="font-size: 13px; font-weight: 600">Topic</label>
+<input id="mk-topic" type="text" maxlength="200" placeholder="For example: why your SSD slows down when it is full" aria-describedby="mk-help" style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+</div>
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>Start</button>
+</div>
+<span id="mk-help" style="font-size: 12px; color: {{t.muted}}">Scout researches the topic, writes the script and lists the claims to check. You can also ask for a video in chat.</span>
+<details open="{{fold.open}}">
+<summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">More options: format and direction</summary>
+<fieldset style="border: 0; margin: 10px 0 0; padding: 0; min-width: 0">
+<legend style="font-size: 13px; font-weight: 600; padding: 0 0 8px">Format</legend>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px">
+<sc-for list="{{formats}}" as="f" hint-placeholder-count="6">
+<label style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; border: 1px {{f.borderStyle}} {{f.border}}; box-shadow: 0 0 0 1px {{f.ring}}; background: {{f.bg}}; cursor: {{f.cursor}}">
+<input type="radio" name="fmt" checked="{{f.checked}}" disabled="{{f.disabled}}" aria-describedby="{{f.describedBy}}" onChange="{{f.pick}}" style="margin: 3px 0 0; flex: 0 0 auto">
+<span style="display: flex; flex-direction: column; gap: 3px; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: {{f.nameFg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{f.icon}}"></path></svg>{{f.name}}</span>
+<span id="{{f.blurbId}}" style="font-size: 12px; color: {{f.blurbFg}}; line-height: 1.4">{{f.blurb}}</span>
+<sc-if value="{{f.off}}" hint-placeholder-val="{{false}}">
+<span id="{{f.reasonId}}" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{f.reason}}</span>
+</sc-if>
+</span>
+</label>
+</sc-for>
+</div>
+</fieldset>
+<sc-if value="{{fold.podcast}}" hint-placeholder-val="{{false}}">
+<fieldset style="border: 1px solid {{t.line}}; border-radius: 10px; margin: 12px 0 0; padding: 8px 12px 12px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<legend style="font-size: 13px; font-weight: 600; padding: 0 6px; display: flex; align-items: center; gap: 6px">Presenters for this video<button type="button" aria-label="What this block is for" title="{{podcastHelp}}" style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></legend>
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px">
+<legend style="font-size: 13px; font-weight: 600; padding: 0 0 6px">Presenters</legend>
+<sc-for list="{{presenterCounts}}" as="n" hint-placeholder-count="2">
+<label style="display: flex; gap: 8px; align-items: center"><input type="radio" name="start-presenters" checked="{{n.checked}}" onChange="{{n.pick}}">{{n.label}}</label>
+</sc-for>
+</fieldset>
+<sc-if value="{{hasConversation}}" hint-placeholder-val="{{true}}">
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px">
+<legend style="font-size: 13px; font-weight: 600; padding: 0 0 6px">Podcast conversation</legend>
+<sc-for list="{{dynamics}}" as="d" hint-placeholder-count="2">
+<label style="display: flex; gap: 8px; align-items: center"><input type="radio" name="start-dynamic" checked="{{d.checked}}" onChange="{{d.pick}}">{{d.label}}</label>
+</sc-for>
+</fieldset>
+</sc-if>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px">
+<sc-for list="{{cast}}" as="m" hint-placeholder-count="2">
+<fieldset style="border: 1px solid {{t.line}}; border-radius: 10px; margin: 0; padding: 8px 12px 12px; min-width: 0; display: flex; flex-direction: column; gap: 8px; background: {{t.bg}}">
+<legend style="font-size: 13px; font-weight: 600; padding: 0 6px">{{m.legend}}</legend>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">Name<input type="text" maxlength="40" style="height: 36px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">Role<input type="text" maxlength="80" style="height: 36px; box-sizing: border-box; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">Description<textarea rows="3" placeholder="{{m.placeholder}}" style="font: inherit; color: {{t.fg}}; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 8px; padding: 8px 10px; resize: vertical"></textarea></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">Voice<select style="height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; font: inherit"><option value="" selected="selected">Scout's choice</option></select></label>
+</fieldset>
+</sc-for>
+</div>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px">Set<textarea rows="3" placeholder="{{setPlaceholder}}" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 8px; padding: 8px 10px; resize: vertical"></textarea></label>
+</fieldset>
+</sc-if>
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px">
+<label for="start-direction" style="font-size: 13px; font-weight: 600">Direction</label>
+<span id="start-direction-help" style="font-size: 12px; color: {{t.muted}}">How the video should feel: tone, audience, what to stress or avoid.</span>
+<textarea id="start-direction" rows="3" aria-describedby="start-direction-help start-direction-count" placeholder="Plain words, one analogy per idea, end with a checklist" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea>
+<span id="start-direction-count" style="font-size: 12px; color: {{t.muted}}; align-self: flex-end">0 / 1,000</span>
+</div>
+<sc-if value="{{fold.animated}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 6px; margin-top: 12px">
+<label for="start-presenter" style="font-size: 13px; font-weight: 600">Presenter</label>
+<span id="start-presenter-help" style="font-size: 12px; color: {{t.muted}}">Who appears on screen: look, age, clothing, setting. Scout keeps the same character in every scene.</span>
+<textarea id="start-presenter" rows="2" aria-describedby="start-presenter-help start-presenter-count" placeholder="A friendly woman in her thirties, glasses, a navy blazer, a bright studio" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea>
+<span id="start-presenter-count" style="font-size: 12px; color: {{t.muted}}; align-self: flex-end">0 / 300</span>
+</div>
+</sc-if>
+</details>
+<sc-if value="{{show.queued}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; color: {{t.muted}}">Records in C# <span style="padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{t.surface2}}; color: {{t.fg2}}">queued</span></p>
+<p style="margin: 0; color: {{t.err}}">The owner has not allowed youtube to write; allow it on the Features screen of Scout Desktop.</p>
+</sc-if>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+<section aria-labelledby="pj-h" style="flex: 1 1 300px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="pj-h" style="margin: 0; font-size: 18px; font-weight: 600">Projects <span style="font-weight: 500; color: {{t.muted}}; font-size: 14px">{{projectCount}}</span></h2>
+<sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+<div role="status" aria-label="Loading projects" style="display: flex; flex-direction: column; gap: 10px">
+<div style="height: 4px; border-radius: 2px; background: {{t.surface2}}; overflow: hidden"><div style="height: 4px; width: 40%; background: {{t.accent}}; animation: sc-slide 1.2s ease-in-out infinite"></div></div>
+<sc-for list="{{skeleton}}" as="sk" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; border: 1px solid {{t.line}}; animation: sc-pulse 1.4s ease-in-out infinite"><div style="height: 12px; width: {{sk.w}}; border-radius: 6px; background: {{t.surface2}}"></div><div style="height: 10px; width: 30%; border-radius: 5px; background: {{t.surface2}}"></div></div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px 12px">
+<span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3zM10 9l5 3-5 3z"></path></svg></span>
+<span>No videos yet. Start one above, or ask Scout in chat.</span>
+<a href="#mk-topic" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; color: {{t.fg}}; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Start a video</a>
+</div>
+</sc-if>
+<sc-if value="{{hasProjects}}" hint-placeholder-val="{{true}}">
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{projects}}" as="p" hint-placeholder-count="5">
+<li style="display: flex; align-items: stretch; gap: 4px; border-radius: 10px; border: 1px solid {{p.border}}; background: {{p.bg}}">
+<button aria-pressed="{{p.selected}}" onClick="{{p.open}}" style="flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; color: {{t.fg}}; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-weight: 600; line-height: 1.35">{{p.topic}}</span>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{p.chip.bg}}; color: {{p.chip.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{p.chip.icon}}"></path></svg>{{p.statusLabel}}</span><span style="font-size: 12px; color: {{t.muted}}">{{p.updated}}</span></span>
+</button>
+<sc-if value="{{p.deletable}}" hint-placeholder-val="{{true}}">
+<button aria-label="{{p.deleteLabel}}" title="{{p.deleteLabel}}" onClick="{{p.askDelete}}" style="align-self: center; margin-right: 6px; width: 34px; height: 34px; border-radius: 17px; border: 0; background: transparent; color: {{t.err}}; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg></button>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+</sc-if>
+</section>
+
+<sc-if value="{{hasDetail}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="pd-h" style="flex: 2 1 520px; min-width: 0; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 6px; margin-right: auto; min-width: 0; flex: 1 1 260px">
+<h2 id="pd-h" style="margin: 0; font-size: 20px; font-weight: 600">{{detail.topic}}</h2>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: {{t.muted}}"><span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{detail.chip.bg}}; color: {{detail.chip.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{detail.chip.icon}}"></path></svg>{{detail.statusLabel}}</span>Generated pictures · updated {{detail.updated}}</span>
+</div>
+<button title="Scout finishes the video on its own and asks you only at approval" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>Let Scout finish it</button>
+<button onClick="{{askDeleteSelected}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Delete</button>
+<button aria-label="Close the project" title="Close the project" onClick="{{closeDetail}}" style="width: 36px; height: 36px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: {{t.muted}}"><span>Voice: Scout's choice</span><span>Visual: Gentle motion</span><sc-if value="{{show.delegated}}" hint-placeholder-val="{{false}}"><span style="padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{t.surface2}}; color: {{t.fg2}}">Delegated</span></sc-if></div>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}"><strong>Direction:</strong> Plain words, one analogy per idea, end with a checklist the viewer can follow.</p>
+
+<details style="border-top: 1px solid {{t.line}}; padding-top: 14px">
+<summary style="cursor: pointer; display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Topic candidates</h3><button type="button" aria-label="What this block is for" title="The angles Scout found for this topic before writing. They stay here for reference once the script exists." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></summary>
+<ul style="list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<li><strong>Why a full SSD slows down</strong> <span style="font-size: 12px; color: {{t.muted}}">82%</span><p style="margin: 0; color: {{t.muted}}">Fits the channel's everyday-tech pillar.</p></li>
+</ul>
+</details>
+
+<div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Script</h3><button type="button" aria-label="What this block is for" title="The hook, the sections and the close, in the words the narration will say. Edit a scene&#39;s text below to change it." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></div>
+<p style="margin: 0; line-height: 1.5"><strong>Hook:</strong> Your SSD felt fast on day one. At 95% full it can write ten times slower, and here is why.</p>
+<sc-for list="{{scriptSections}}" as="sec" hint-placeholder-count="2">
+<div style="padding: 10px 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}"><h4 style="margin: 0 0 4px; font-size: 14px; font-weight: 600">{{sec.heading}}</h4><p style="margin: 0; color: {{t.fg2}}; line-height: 1.5; font-size: 13px">{{sec.narration}}</p></div>
+</sc-for>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}"><strong>Call to action:</strong> Subscribe for one tech fix a week.</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}"><strong>Titles:</strong> Why a full SSD gets slow · The 10% rule for SSDs</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}"><strong>Description:</strong> Why an SSD slows down when it fills up, and the two habits that keep it fast.</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}"><strong>Tags:</strong> ssd, storage, performance</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Claims to check</h3><button type="button" aria-label="What this block is for" title="Facts the script states that a viewer could dispute. Scout looked for a source for each one. Supported keeps the line; Not supported rewrites without it; Needs no source keeps it without a source, with your reason. Production waits until every claim is decided." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button><span style="font-weight: 500; color: {{t.warn}}; font-size: 13px">2 waiting for you</span></div>
+<sc-for list="{{claims}}" as="c" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid {{t.line}}; border-left: 3px solid {{c.riskColor}}; background: {{t.bg}}">
+<p style="margin: 0; line-height: 1.45">{{c.text}}</p>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: {{t.muted}}"><span style="padding: 2px 9px; border-radius: 12px; background: {{c.riskBg}}; color: {{c.riskColor}}">{{c.risk}}</span>Status: pending</span>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><span title="{{c.url}}" style="padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{t.surface2}}; color: {{t.fg2}}">{{c.domain}}</span><button type="button" style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px">Copy link</button></span>
+<div role="group" aria-label="{{c.groupLabel}}" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 18px; align-self: flex-start">
+<sc-for list="{{c.choices}}" as="ch" hint-placeholder-count="3">
+<button aria-pressed="{{ch.pressed}}" onClick="{{ch.pick}}" style="border: 0; border-radius: 14px; padding: 5px 12px; font-size: 13px; display: flex; align-items: center; gap: 6px; background: {{ch.bg}}; color: {{ch.fg}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ch.icon}}"></path></svg>{{ch.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<details>
+<summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Decided (1)</summary>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-top: 8px; border-radius: 10px; border: 1px solid {{t.line}}; border-left: 3px solid {{t.ok}}; background: {{t.bg}}">
+<p style="margin: 0; line-height: 1.45">Most SSDs keep a spare area the operating system cannot see.</p>
+<span style="font-size: 12px; color: {{t.muted}}">Status: supported</span>
+<button type="button" style="align-self: flex-start; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px">Change</button>
+</div>
+</details>
+</div>
+
+<sc-if value="{{show.animated}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Presenter</h3><button type="button" aria-label="What this block is for" title="The character that speaks the whole video. Scout makes it from the script as soon as the script is ready, finds the mouth on the picture and shows a short preview. Ask for changes in plain words; every request makes a new version you can switch back to." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button><span style="color: {{t.muted}}">Version 2 of 2 · Generated · 38 of 40 pictures left today</span></div>
+<p style="margin: 0; color: {{t.muted}}">Presenter: A friendly woman in her thirties, glasses, a navy blazer, a bright studio</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div role="img" aria-label="Presenter preview" style="aspect-ratio: 16 / 9; border-radius: 8px; background: {{t.media}}; color: {{t.mediaFg}}; display: flex; align-items: center; justify-content: center; font-size: 12px">Presenter preview, 5 seconds</div>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px">
+<li style="position: relative; width: 96px; display: flex; flex-direction: column; gap: 2px; font-size: 11px"><button type="button" aria-label="Use presenter version 1" style="padding: 0; border: 2px solid transparent; border-radius: 4px; background: {{t.media}}; height: 54px"></button><button type="button" aria-label="Remove presenter version 1" style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 10px; background: {{t.surface}}; color: {{t.fg}}">x</button><span>1 · Generated</span><span style="color: {{t.muted}}">A friendly woman in her thirties</span></li>
+<li style="width: 96px; display: flex; flex-direction: column; gap: 2px; font-size: 11px"><span style="border: 2px solid {{t.ok}}; border-radius: 4px; background: {{t.media}}; height: 54px; box-sizing: border-box"></span><span>2 · Generated · Current</span><span style="color: {{t.muted}}">Rounder glasses</span></li>
+</ol>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">What would you change?<textarea rows="2" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea></label>
+<span style="font-size: 12px; color: {{t.muted}}; align-self: flex-end">0 / 300</span>
+<button type="button" disabled style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; align-self: flex-start; background: {{t.surface2}}; color: {{t.muted}}">Ask for a change</button>
+<details><summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Edit the full prompt</summary><div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px"><label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Prompt<textarea rows="4" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea></label><span style="font-size: 12px; color: {{t.muted}}">0 / 1500</span><p style="margin: 0; color: {{t.muted}}; opacity: 0.6">no text, no letters, no logos, no trademarks, no real person&#39;s likeness and no public figure.</p><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; align-self: flex-start">Generate</button></div></details>
+<details open="{{show.ownPicture}}"><summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Use one of Scout&#39;s presenters, or your own picture</summary><div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px"><label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Scout&#39;s presenters<select style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit"><option selected="selected">Ada</option></select></label><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; align-self: flex-start">Use this one</button><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; align-self: flex-start">Replace picture</button><h4 style="margin: 0; font-size: 14px; font-weight: 600">Mark the mouth</h4><div role="img" aria-label="Presenter picture with the mouth box" style="position: relative; width: 240px; aspect-ratio: 1; border-radius: 6px; background: {{t.media}}"><span style="position: absolute; left: 40%; top: 62%; width: 20%; height: 8%; border: 2px dashed {{t.warn}}"></span></div><p style="margin: 0; color: {{t.muted}}">Drag a box around the mouth so the character speaks.</p><div style="display: flex; gap: 8px"><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Save mouth</button><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Clear</button></div></div></details>
+</div>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Scenes</h3><button aria-label="About scenes" title="Each scene is a picture with its narration. Assembly, on the next page, joins them into the video." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button disabled aria-describedby="produce-why" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.surface2}}; color: {{t.muted}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>Produce media</button>
+<sc-if value="{{show.blocked}}" hint-placeholder-val="{{true}}"><span id="produce-why" style="font-size: 13px; color: {{t.warn}}">2 claims are still waiting; decide every claim before producing the media.</span></sc-if>
+</div>
+<sc-if value="{{show.produce}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.surface}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end"><label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}; flex: 1 1 240px">Narration voice<select style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit"><option selected="selected">Scout's choice</option><option>Cori (medium)</option></select></label><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Preview</button></div>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Direction<textarea rows="3" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical">Plain words, one analogy per idea, end with a checklist the viewer can follow.</textarea></label>
+<span style="font-size: 12px; color: {{t.muted}}; align-self: flex-end">78 / 1000</span>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Motion<select style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit"><option>Still</option><option selected="selected">Gentle (recommended)</option><option>Dynamic</option></select></label>
+<p style="margin: 0; color: {{t.muted}}">ChatGPT plan has no speech service in Scout: every scene will be silent. Replace the narration on each scene afterwards, or connect an AI Source with speech first.</p>
+<div style="display: flex; gap: 8px"><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>Produce</button><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button></div>
+</div>
+</sc-if>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{scenes}}" as="s" hint-placeholder-count="3">
+<li style="display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}">
+<div role="img" aria-label="{{s.pictureLabel}}" style="flex: 0 1 200px; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; background: {{t.media}}; color: {{t.mediaFg}}; display: flex; align-items: center; justify-content: center; font-size: 12px">{{s.pictureText}}</div>
+<div style="flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><strong>Scene {{s.order}}</strong><span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 12px; font-size: 12px; background: {{s.chip.bg}}; color: {{s.chip.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.chip.icon}}"></path></svg>{{s.statusLabel}}</span><span style="font-size: 12px; color: {{t.muted}}">{{s.source}}</span></span>
+<p style="margin: 0; color: {{t.fg2}}; line-height: 1.5; font-size: 13px">{{s.narration}}</p>
+<sc-if value="{{s.failed}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: {{t.err}}">Speech is not available.</span></sc-if>
+<sc-if value="{{s.editingPrompt}}" hint-placeholder-val="{{false}}">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Picture prompt<textarea rows="2" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea></label>
+<span style="font-size: 13px; color: {{t.err}}">A picture prompt is 1 to 700 characters.</span>
+<div style="display: flex; gap: 8px"><button type="button" disabled style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Save</button><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button></div>
+</sc-if>
+<sc-if value="{{s.showPrompt}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{s.promptLine}}</span>
+</sc-if>
+<sc-if value="{{s.hasCredit}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; color: {{t.muted}}">Credit: Photo by A. Author, CC BY, via Openverse</span></sc-if>
+<sc-if value="{{s.hasAudio}}" hint-placeholder-val="{{false}}"><div role="img" aria-label="Narration of scene {{s.order}}" style="height: 32px; border-radius: 16px; background: {{t.surface2}}; color: {{t.fg2}}; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>0:00 / 0:06</div></sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>New picture</button>
+<button style="height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-size: 13px; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit text</button>
+<button aria-label="{{s.upLabel}}" title="Move up" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+<button aria-label="{{s.downLabel}}" title="Move down" style="width: 32px; height: 32px; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
+<details open="{{s.menuOpen}}" style="position: relative">
+<summary aria-label="{{s.moreLabel}}" title="More: attach a picture, edit the prompt, replace the narration, lock" style="list-style: none; width: 32px; height: 32px; box-sizing: border-box; border-radius: 16px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"></path></svg></summary>
+<div style="position: absolute; right: 0; z-index: 5; min-width: 200px; margin-top: 4px; padding: 6px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 10px; box-shadow: 0 16px 40px {{t.shadow}}">
+<sc-for list="{{menuItems}}" as="mi" hint-placeholder-count="5">
+<button type="button" style="text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: {{t.fg}}; font-size: 13px">{{mi.label}}</button>
+</sc-for>
+</div>
+</details>
+</div>
+</div>
+<sc-if value="{{s.editingText}}" hint-placeholder-val="{{false}}">
+<div style="flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.surface}}">
+<sc-if value="{{show.ownVideo}}" hint-placeholder-val="{{false}}"><span style="font-size: 13px; color: {{t.muted}}">The new text replaces this scene&#39;s captions; the recording is not changed.</span></sc-if>
+<textarea rows="4" aria-label="Text of scene {{s.order}}" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical">{{s.narration}}</textarea>
+<span style="font-size: 12px; color: {{t.muted}}">{{s.count}} / 700</span>
+<div style="display: flex; gap: 8px"><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7"></path></svg>Save</button><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button></div>
+</div>
+</sc-if>
+</li>
+</sc-for>
+</ol>
+</div>
+
+<sc-if value="{{show.ownVideo}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Recording</h3><button type="button" aria-label="What this block is for" title="The video you recorded. Scout transcribes it on this machine and cuts the scenes from it; nothing is uploaded." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></div>
+<p style="margin: 0; color: {{t.muted}}">No recording yet: attach the video you recorded; Scout transcribes it on this machine.</p>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; align-self: flex-start">Attach recording</button>
+</div>
+</sc-if>
+<sc-if value="{{show.background}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 10px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<div style="display: flex; align-items: center; gap: 6px"><h3 style="margin: 0; font-size: 16px; font-weight: 600">Background</h3><button type="button" aria-label="What this block is for" title="The picture behind any scene that has none of its own. Without it, that scene is a dark card with its text." style="width: 24px; height: 24px; border-radius: 12px; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"></path></svg></button></div>
+<p style="margin: 0; color: {{t.muted}}">No background yet: every scene without its own picture is a dark text card.</p>
+<button type="button" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Attach background</button>
+</div>
+</sc-if>
+</section>
+</sc-if>
+</div>
+
+<sc-if value="{{show.delegate}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 160px 16px 16px; z-index: 50">
+<div role="dialog" aria-modal="true" aria-label="Delegate Why your SSD slows down when it is full" style="width: 100%; max-width: 560px; max-height: 80vh; overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">Delegate Why your SSD slows down when it is full</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end"><label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}; flex: 1 1 240px">Narration voice<select style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit"><option selected="selected">Scout&#39;s choice</option></select></label><button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Preview</button></div>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Direction<textarea rows="3" style="font: inherit; color: {{t.fg}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 10px; padding: 10px 12px; resize: vertical"></textarea></label>
+<span style="font-size: 12px; color: {{t.muted}}; align-self: flex-end">0 / 1000</span>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.muted}}">Motion<select style="height: 40px; box-sizing: border-box; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit"><option selected="selected">Gentle (recommended)</option></select></label>
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">What will run</h3>
+<ul style="margin: 0; padding-left: 18px; color: {{t.fg2}}"><li>Produce media</li><li>Assemble the video</li><li>Stop at ready to approve: publishing needs your approval</li></ul>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end"><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff">Confirm and delegate</button></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{show.narration}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 160px 16px 16px; z-index: 50">
+<div role="dialog" aria-modal="true" aria-label="Replace your own narration" style="width: 100%; max-width: 560px; max-height: 80vh; overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">Replace your own narration</h2>
+<p style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Replace your own narration on this scene with Scout&#39;s voice? Your file stays on disk but the video will use the generated narration.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end"><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button><button type="button" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff">Confirm</button></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{deleteOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 160px 16px 16px; z-index: 50">
+<div role="alertdialog" aria-modal="true" aria-labelledby="del-title" aria-describedby="del-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 460px; max-height: 80vh; overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<h2 id="del-title" style="margin: 0; font-size: 17px; font-weight: 600">{{deleteTitle}}</h2>
+<p id="del-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">This removes the project, its script, scenes and media files from Scout's data folder. A video already on YouTube stays there. It cannot be undone.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
+<button autofocus onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+<button onClick="{{confirmDelete}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Delete project</button>
+</div>
+<span style="font-size: 12px; color: {{t.muted}}">Escape or Cancel closes this without deleting.</span>
+</div>
+</div>
+</sc-if>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2200}}'>
+class Component extends DCLogic {
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#e6edfb', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.45)', media: '#d9dfeb', mediaFg: '#3f4a61' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#18264a', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(5,8,14,0.65)', media: '#22304a', mediaFg: '#c3cadb' };
+  }
+  tone(t, tone) {
+    if (tone === 'ok') return { bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' };
+    if (tone === 'warn') return { bg: t.warnBg, fg: t.warn, icon: 'M12 8v5M12 16.5h.01' };
+    if (tone === 'error') return { bg: t.errBg, fg: t.err, icon: 'M18 6L6 18M6 6l12 12' };
+    if (tone === 'info') return { bg: t.infoBg, fg: t.info, icon: 'M12 7v5l3 2' };
+    return { bg: t.surface2, fg: t.fg2, icon: 'M5 12h14' };
+  }
+  shell(t, active, previewDefs) {
+    const st = this.state;
+    const navDefs = [
+      ['Production', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
+      ['Assembly', 'Assembly.dc.html', 'M4 4h16v6H4zM4 14h7v6H4zM15 14h5v6h-5z'],
+      ['Comments', 'Comments.dc.html', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+      ['Reports', 'Reports.dc.html', 'M4 20V10M10 20V4M16 20v-7M22 20H2'],
+      ['Experiments', 'Experiments.dc.html', 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3'],
+      ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+    ];
+    const waiting = 2;
+    const nav = navDefs.map(([label, href, d], i) => ({ label, href, d, hasBadge: label === 'Approvals' && waiting > 0, badge: waiting, badgeLabel: waiting + ' ' + (waiting === 1 ? 'action' : 'actions') + ' waiting for your approval', current: i === active ? 'page' : 'false', bg: i === active ? t.surface2 : 'transparent', color: i === active ? t.fg : t.fg2, weight: i === active ? 600 : 500 }));
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const previews = previewDefs.map(([id, label]) => {
+      const on = st.preview === id;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, pick: () => this.setState({ preview: id, dialog: null, fmt: 'generated_pictures', optsTouched: false }) };
+    });
+    previews.push({ label: 'YouTube not granted', pressed: st.notGranted ? 'true' : 'false', bg: st.notGranted ? t.surface2 : 'transparent', fg: st.notGranted ? t.fg : t.muted, pick: () => this.setState({ notGranted: !st.notGranted }) });
+    return {
+      t,
+      nav,
+      granted: !st.notGranted,
+      previews,
+      themeLight: pill(st.theme === 'light'),
+      themeDark: pill(st.theme === 'dark'),
+      themeSystem: pill(st.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+      closeDialog: () => this.setState({ dialog: null }),
+      dialogKey: (e) => { if (e && e.key === 'Escape') this.setState({ dialog: null }); },
+    };
+  }
+  constructor(props) {
+    super(props);
+    this.state = { theme: 'dark', bellOpen: false, preview: 'open', selected: 'p1', dialog: null, deleting: null, deleted: {}, claims: {}, fmt: 'generated_pictures', optsTouched: false, presenters: 2, dynamic: 'interview' };
+  }
+  bellItems() {
+    return [
+      { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
+      { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
+      { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
+      { id: 'v1', kind: 'done', glyph: '✓', tone: 'ok', title: 'Verdict given: Approved acme/web#17', detail: 'Signed as the Scout bot · the tests line was posted as a comment', when: '25 min', progress: null, action: 'See the review' },
+      { id: 'i1', kind: 'done', glyph: 'I', tone: 'ok', title: '3 issues opened on acme/shop', detail: 'From the audit findings you chose', when: '1 h', progress: null, action: 'See the issues' },
+      { id: 'w1', kind: 'done', glyph: '!', tone: 'err', title: 'A voice message could not be transcribed: no Whisper model is installed.', detail: '1 voice message not transcribed, the last from Discord.', when: '3 min', progress: null, action: '', buttons: [{ label: 'Download the base model (142 MB)', path: 'M12 3v12M7 10l5 5 5-5M5 21h14' }, { label: 'Open Models, Transcription', path: 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4' }] },
+      { id: 'p1', kind: 'paused', glyph: '!', tone: 'err', title: 'Audit of acme/web paused', detail: 'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.', when: '2 h', progress: null, action: '' },
+    ];
+  }
+  bellRunsNow() {
+    return { a1: 'running', t1: 'running', p1: 'pausedByLimit', ...(this.state.bellRuns || {}) };
+  }
+  bellSetRun(id, next) {
+    this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: next }, bellRead: { ...(this.state.bellRead || {}), [id]: true } });
+  }
+  bellStopAudit(id) {
+    this.bellSetRun(id, 'stopping');
+    setTimeout(() => { if (this.bellRunsNow()[id] === 'stopping') this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: 'stoppedAfterArea' } }); }, 4000);
+  }
+  bellLive(n) {
+    const s = this.bellRunsNow()[n.id];
+    const pause = 'M9 5v14M15 5v14';
+    const play = 'M8 5l11 7-11 7z';
+    const stop = 'M7 7h10v10H7z';
+    if (n.id === 't1') {
+      if (s === 'stopped') return { ...n, kind: 'done', glyph: 'T', tone: 'muted', title: 'Tests for acme/api#41 stopped', detail: 'The container was removed; the tests gave no result.', when: 'now', progress: null, controls: [] };
+      return { ...n, controls: [{ label: 'Stop the tests for acme/api#41', path: stop, act: () => this.bellSetRun('t1', 'stopped') }] };
+    }
+    const audit = { a1: ['acme/shop', 3, 8, 4, 'running'], p1: ['acme/web', 5, 9, 2, 'pausedByLimit'] }[n.id];
+    if (!audit) return { ...n, controls: [] };
+    const [repo, done, total, findings, first] = audit;
+    const when = s === first ? n.when : 'now';
+    const pauseIt = { label: 'Pause the audit of ' + repo, path: pause, act: () => this.bellSetRun(n.id, 'pausedByYou') };
+    const goOn = { label: 'Continue the audit of ' + repo, path: play, act: () => this.bellSetRun(n.id, 'running') };
+    const stopIt = { label: 'Stop the audit of ' + repo, path: stop, act: () => this.bellSetRun(n.id, 'stopped') };
+    const stopRunning = { ...stopIt, act: () => this.bellStopAudit(n.id) };
+    const running = { ...n, kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of ' + repo, detail: 'Area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far · cards arrive in the chat as each area ends', when, progress: Math.floor(done * 100 / total) };
+    const stopped = (areas) => ({ ...n, kind: 'done', glyph: 'A', tone: 'muted', title: 'Audit of ' + repo + ' stopped', detail: areas + ' of ' + total + ' areas · ' + findings + ' findings kept', when, progress: null, controls: [] });
+    return {
+      running: { ...running, controls: [pauseIt, stopRunning] },
+      stopping: { ...running, controls: [], status: 'Stopping after this area' },
+      pausedByYou: { ...n, kind: 'paused', glyph: 'A', tone: 'warn', title: 'Audit of ' + repo + ' paused', detail: 'Paused by you · area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far', when, progress: null, controls: [goOn, stopIt] },
+      pausedByLimit: { ...n, kind: 'paused', when, controls: [goOn, stopIt] },
+      stopped: stopped(done),
+      stoppedAfterArea: stopped(done + 1),
+    }[s];
+  }
+  bellPreview(n) {
+    const clock = 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2';
+    const note = (text) => ({ a1: { note: text } });
+    const paused = (detail) => ({ p1: { detail } });
+    const fromApp = {
+      asking: { a1: { asking: true } },
+      pausing: { a1: { controls: [], status: 'Pausing after this area' } },
+      continuing: { p1: { controls: [], status: 'Continuing' } },
+      stoppingPaused: { p1: { controls: [], status: 'Stopping' } },
+      stoppingTests: { t1: { controls: [], status: 'Stopping' } },
+      noteNoAnswer: { t1: { note: 'The Scout control plane did not answer, so this click may not have reached Scout. Try again.' } },
+      noteNotConfirmed: note('Not confirmed: Scout did not say within two and a half minutes whether it applied this click; look at the job before clicking again.'),
+      noteNotReported: note('Scout recorded this click as applied, but the job did not report it; look at the job before clicking again.'),
+      noteWorkerStopped: note('Scout stopped before it said how this click ended; look at the job before clicking again.'),
+      noteDropped: note('Not applied: the click waited more than two minutes for Scout, so it was dropped; click again if it still applies.'),
+      pausedCredit: paused("The AI Source's account has run out of credit. Ask Scout to continue once it has credit again."),
+      pausedRate: paused('The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.'),
+      pausedSignIn: paused('The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.'),
+      pausedKey: paused('The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.'),
+      pausedModel: paused('The AI Source does not have the model llama3.2:3b. Choose a model it has in Models, then ask Scout to continue.'),
+      areaName: { a1: { detail: 'Area 3 of 8 done: src/orders' } },
+      finished: { a1: { kind: 'done', tone: 'ok', title: 'Audit of acme/shop is done', detail: 'Verdict: fix (0 High, 2 Medium, 1 Low).', progress: null, controls: [] } },
+      testsFinished: { t1: { kind: 'done', tone: 'ok', title: 'Tests for acme/api#41 finished', detail: 'The result is in the conversation.', progress: null, controls: [] } },
+      testsNotFinished: { t1: { kind: 'failed', tone: 'err', title: 'Tests for acme/api#41 did not finish', detail: 'The answer ended before the tests reported a result.', progress: null, controls: [] } },
+      healthRestarting: { h1: { id: 'h1', kind: 'running', glyph: '', path: clock, tone: 'accent', title: 'Scout stopped unexpectedly and is restarting.', detail: 'Restart 1 since Scout was started.', when: 'now', progress: null, action: '', controls: [] } },
+      healthGaveUp: { h1: { id: 'h1', kind: 'failed', glyph: '!', tone: 'err', title: 'Scout stopped and does not restart by itself.', detail: 'Start it again from Logs or from Settings, Scout worker.', when: 'now', progress: null, action: '', controls: [] } },
+    }[this.state.bell] || {};
+    return n === undefined ? fromApp : { ...n, ...(fromApp[n.id] || {}) };
+  }
+  bellVals(t) {
+    const read = this.state.bellRead || {};
+    const tab = this.state.bellTab || 'all';
+    const bell = this.state.bell || 'entries';
+    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.bellPreview(this.bellLive(n)))];
+    const unread = all.filter((n) => !read[n.id]).length;
+    const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
+    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
+      ...n,
+      iconBg: tone(n)[0],
+      iconFg: tone(n)[1],
+      hasPath: Boolean(n.path),
+      rowBg: read[n.id] ? t.surface : t.unreadBg,
+      weight: read[n.id] ? 500 : 600,
+      hasDetail: n.detail !== '',
+      hasNote: Boolean(n.note),
+      hasProgress: n.progress !== null,
+      progressWidth: (n.progress || 0) + '%',
+      hasAction: n.action !== '',
+      buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),
+      hasButtons: (n.buttons ?? []).length > 0,
+      hasControls: n.controls.length > 0,
+      controlsOff: n.asking ? 'true' : 'false',
+      controlsOpacity: n.asking ? 0.5 : 1,
+      hasStatus: Boolean(n.status),
+      showWhen: !n.status,
+    }));
+    const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
+    return {
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true }) })),
+      bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
+        const on = tab === id;
+        return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
+      }),
+      bellShown: shown,
+      bellEmpty: shown.length === 0,
+      bellRefused: bell === 'refused',
+      bellUnread: unread,
+      bellHasUnread: unread > 0,
+      bellOpen: this.state.bellOpen,
+      bellOpenText: this.state.bellOpen ? 'true' : 'false',
+      bellBg: this.state.bellOpen ? t.surface2 : 'transparent',
+      bellLabel: unread > 0 ? 'Notifications, ' + unread + ' unread' : 'Notifications',
+      toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
+      bellMarkAllRead: () => { const r = {}; all.forEach((n) => { r[n.id] = true; }); this.setState({ bellRead: r }); },
+    };
+  }
+  renderVals() {
+    const vals = this.pageVals();
+    return { ...vals, ...this.bellVals(vals.t) };
+  }
+  pageVals() {
+    const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;
+    const t = this.palette(mode);
+    const st = this.state;
+    const shell = this.shell(t, 0, [['loading', 'Loading'], ['empty', 'No projects'], ['list', 'Projects'], ['open', 'Project open'], ['delete', 'Delete dialog'], ['down', 'Control plane down'], ['optsClosed', 'More options closed'], ['optsOpen', 'More options open'], ['optsOff', 'A format that is off'], ['optsPodcast', 'Podcast chosen'], ['optsPodcastOff', 'Podcast not available yet'], ['noMandate', 'No mandate'], ['menu', 'Scene menu open'], ['delegated', 'Delegated project'], ['animated', 'Animated character project'], ['produce', 'Produce panel open'], ['delegate', 'Delegate dialog'], ['narration', 'Replace your narration dialog'], ['ownVideo', 'Your own video project'], ['editing', 'Editing a scene'], ['queued', 'Video queued, start refused']]);
+    const EXTRA = ['delegated', 'animated', 'produce', 'delegate', 'narration', 'ownVideo', 'editing'];
+    const show = { delegated: st.preview === 'delegated', animated: st.preview === 'animated', ownPicture: st.preview === 'animated' ? 'open' : null, produce: st.preview === 'produce', delegate: st.preview === 'delegate', narration: st.preview === 'narration', ownVideo: st.preview === 'ownVideo', background: st.preview !== 'ownVideo', blocked: st.preview !== 'produce', queued: st.preview === 'queued' };
+    const FOLD = ['optsOpen', 'optsOff', 'optsPodcast', 'optsPodcastOff'];
+    const foldState = st.preview === 'optsClosed' || FOLD.indexOf(st.preview) >= 0;
+    const foldOpen = FOLD.indexOf(st.preview) >= 0;
+    const offline = st.preview === 'optsOff';
+    const lipSyncReason = 'Needs the lip-sync tool, which is not installed on this computer.';
+    const FORMAT_CARDS = [
+      ['generated_pictures', 'Generated pictures', 'Narration over pictures Scout makes or finds', 'M3 5h18v14H3z M3 16l5-5 4 4 3-3 6 6', ''],
+      ['own_pictures', 'Your own pictures', 'Narration over pictures you attach', 'M12 16V4 M7 9l5-5 5 5 M4 20h16', ''],
+      ['animated_character', 'Animated character', 'A cartoon presenter that speaks the script', 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 21c0-4 3-7 8-7s8 3 8 7', offline ? lipSyncReason : ''],
+      ['podcast', 'Podcast', 'One or two animated presenters talking about the subject', 'M9 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z M2 20c0-3.5 3-6 7-6 M17 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z M13 14.5c1-.5 2-.5 3-.5 3.5 0 6 2.3 6 5.5', offline ? lipSyncReason : st.preview === 'optsPodcastOff' ? 'Coming later.' : ''],
+      ['ai_presenter', 'AI presenter', 'Coming later', 'M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z', 'The connected AI Source has no video model.'],
+      ['own_video', 'Your own video', 'Your recording, cut into scenes', 'M3 6h12v12H3z M15 10l6-3v10l-6-3', offline ? 'Scout has no speech-to-text model on this machine; download one in Models, Transcription.' : ''],
+    ];
+    const offIds = FORMAT_CARDS.filter((c) => c[4] !== '').map((c) => c[0]);
+    const wanted = st.preview === 'optsPodcast' ? 'podcast' : st.fmt;
+    const chosen = offIds.indexOf(wanted) >= 0 ? 'generated_pictures' : wanted;
+    const formats = FORMAT_CARDS.map(([id, name, blurb, icon, reason]) => {
+      const off = reason !== '';
+      const on = id === chosen;
+      return { name, blurb, icon, reason, off,
+        blurbId: 'fmt-blurb-' + id, reasonId: 'fmt-reason-' + id,
+        describedBy: off ? 'fmt-blurb-' + id + ' fmt-reason-' + id : 'fmt-blurb-' + id,
+        checked: on ? 'checked' : null, disabled: off ? 'disabled' : null,
+        bg: off ? t.surface2 : t.bg, border: on ? t.accent : t.line, ring: on ? t.accent : 'transparent', borderStyle: off ? 'dashed' : 'solid',
+        cursor: off ? 'not-allowed' : 'pointer', nameFg: off ? t.muted : t.fg, blurbFg: off ? t.muted : t.fg2,
+        pick: () => { if (!off) this.setState(foldState ? { fmt: id, optsTouched: true, preview: id === 'podcast' ? 'optsPodcast' : offline ? 'optsOff' : 'optsOpen' } : { fmt: id, optsTouched: true }); } };
+    });
+    const castPlaceholders = {
+      a: 'a charismatic young man, thick slightly messy dark brown hair, expressive brown eyes, friendly smile, royal-blue hoodie and dark trousers',
+      b: 'a cheerful young woman, shoulder-length dark brown bob, large expressive brown eyes, warm smile, white button-up blouse with rolled sleeves, navy trousers, black belt, smartwatch',
+    };
+    const fold = { open: foldOpen || st.optsTouched ? 'open' : null, podcast: chosen === 'podcast', animated: chosen === 'animated_character' };
+    const STATUS = {
+      queued: ['Queued', 'neutral'], researching: ['Researching topics', 'info'], scripting: ['Writing the script', 'info'],
+      script_ready: ['Script ready for review', 'warn'], recording_waiting: ['Waiting for your recording', 'warn'], transcribing: ['Transcribing', 'info'],
+      presenting: ['Making the presenter', 'info'], producing: ['Making the media', 'info'], media_ready: ['Media ready', 'ok'],
+      assembly_queued: ['Waiting to assemble', 'info'], assembling: ['Assembling', 'info'], assembled: ['Assembled', 'ok'],
+      approved: ['Approved', 'ok'], published: ['On YouTube', 'ok'], failed: ['Failed', 'error'],
+    };
+    const RUNNING = ['researching', 'scripting', 'transcribing', 'producing', 'assembling', 'presenting'];
+    const all = [
+      { id: 'p1', topic: 'Why your SSD slows down when it is full', status: 'script_ready', updated: 'Today, 14:02' },
+      { id: 'p2', topic: 'What a CPU cache miss really costs', status: 'producing', updated: 'Today, 13:40 · 3 of 6 scenes ready' },
+      { id: 'p3', topic: 'Docker volumes in 8 minutes', status: 'published', updated: '4 Nov, 18:00' },
+      { id: 'p4', topic: 'Git rebase without fear', status: 'approved', updated: '2 Nov, 09:15' },
+      { id: 'p5', topic: 'Five Linux commands you use wrong', status: 'failed', updated: '1 Nov, 21:30 · the AI Source reached its usage limit' },
+    ].filter((p) => !st.deleted[p.id]);
+    const label = (s) => (STATUS[s] || [s.replace(/_/g, ' '), 'neutral']);
+    const preview = foldState || st.preview === 'noMandate' || st.preview === 'menu' || st.preview === 'queued' || EXTRA.indexOf(st.preview) >= 0 ? 'open' : st.preview;
+    const listed = preview === 'list' || preview === 'open' || preview === 'delete';
+    const selectedId = preview === 'list' ? null : st.selected;
+    const projects = all.map((p) => {
+      const [statusLabel, tone] = label(p.status);
+      const on = p.id === selectedId;
+      return { ...p, statusLabel, chip: this.tone(t, tone), selected: on ? 'true' : 'false', bg: on ? t.surface2 : t.bg, border: on ? t.accent : t.line,
+        deletable: RUNNING.indexOf(p.status) < 0, deleteLabel: 'Delete ' + p.topic,
+        open: () => this.setState({ preview: 'open', selected: p.id }),
+        askDelete: () => this.setState({ preview: 'delete', deleting: p.id }) };
+    });
+    const sel = projects.find((p) => p.id === selectedId) || null;
+    const delTarget = all.find((p) => p.id === (st.deleting || st.selected));
+    const claimDefs = [
+      { id: 'c1', text: 'An SSD can write up to ten times slower once it is more than 90% full.', risk: 'High risk', tone: 'error', source: 'Source: drive maker\'s white paper, 2024', url: 'https://example.com/ssd-white-paper', domain: 'example.com' },
+      { id: 'c2', text: 'TRIM tells the drive which blocks are free so it can clean them ahead of time.', risk: 'Low risk', tone: 'ok', source: 'Source: operating system documentation', url: 'https://docs.example.org/trim', domain: 'docs.example.org' },
+    ];
+    const claims = claimDefs.map((c) => {
+      const tone = this.tone(t, c.tone);
+      const choices = [['supported', 'Supported', 'M20 6L9 17l-5-5'], ['unsupported', 'Not supported', 'M18 6L6 18M6 6l12 12'], ['waived', 'Needs no source', 'M5 12h14']].map(([id, lbl, icon]) => {
+        const on = st.claims[c.id] === id;
+        return { label: lbl, icon, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.fg2, pick: () => this.setState({ claims: { ...st.claims, [c.id]: id } }) };
+      });
+      return { ...c, riskBg: tone.bg, riskColor: tone.fg, choices, groupLabel: 'Decision on the claim: ' + c.text };
+    });
+    const sceneDefs = [
+      { order: 1, status: 'ready', source: 'Generated picture · narration: generated', narration: 'Your SSD felt fast on day one. At 95% full it can write ten times slower.' },
+      { order: 2, status: 'ready', source: 'Stock picture · narration: generated', narration: 'An SSD cannot overwrite a cell in place. It erases whole blocks, and it needs free blocks to do that.' },
+      { order: 3, status: 'pending', source: 'No picture yet · narration: none', narration: 'Keep at least 10% free, leave TRIM on, and your drive stays fast.' },
+    ];
+    const scenes = sceneDefs.map((s) => ({ ...s, prompt: 'A drive filling up, its free blocks shrinking', menuOpen: st.preview === 'menu' && s.order === 1 ? 'open' : null, hasAudio: s.status === 'ready' && st.preview !== 'ownVideo', hasCredit: s.order === 2, failed: false, editingText: st.preview === 'editing' && s.order === 1, editingPrompt: st.preview === 'editing' && s.order === 2, showPrompt: !(st.preview === 'editing' && s.order === 2), count: s.narration.length, promptLine: st.preview === 'ownVideo' ? 'Clip: 0:0' + (s.order * 4 - 4) + ' to 0:0' + (s.order * 4) : 'Picture prompt: A drive filling up, its free blocks shrinking', statusLabel: s.status === 'ready' ? 'Ready' : 'Not made yet', chip: this.tone(t, s.status === 'ready' ? 'ok' : 'neutral'),
+      pictureLabel: 'Picture of scene ' + s.order, pictureText: s.status === 'ready' ? 'Scene ' + s.order + ' picture' : 'No picture yet',
+      upLabel: 'Move scene ' + s.order + ' up', downLabel: 'Move scene ' + s.order + ' down', moreLabel: 'More actions for scene ' + s.order }));
+    return {
+      ...shell,
+      fold,
+      show,
+      formats,
+      podcastHelp: "This video's presenters and the studio they sit in. The Mandate holds the channel's defaults and fills them in here; Keep for the channel on the podcast's Presenter block copies a video's cast and set back to the Mandate.",
+      presenterCounts: [[1, 'One presenter'], [2, 'Two presenters']].map(([value, label]) => ({ label, checked: st.presenters === value ? 'checked' : null, pick: () => this.setState({ presenters: value }) })),
+      hasConversation: st.presenters === 2,
+      dynamics: [['interview', 'Interview: a asks, b explains'], ['two_hosts', 'Two hosts']].map(([value, label]) => ({ label, checked: st.dynamic === value ? 'checked' : null, pick: () => this.setState({ dynamic: value }) })),
+      cast: (st.presenters === 2 ? ['a', 'b'] : ['a']).map((id) => ({ legend: 'Podcast member ' + id, placeholder: castPlaceholders[id] })),
+      setPlaceholder: 'a modern podcast studio: a beige sectional sofa with teal cushions, two boom microphones, an oval coffee table with a glowing blue LED ring, navy walls with two tall screens and wooden shelves with plants and warm strip lights, floor-to-ceiling windows on a city skyline at blue hour',
+      pillars: ['Storage', 'Networking', '', '', ''].map((value, i) => ({ label: 'Pillar ' + (i + 1), value: st.preview === 'noMandate' ? '' : value })),
+      mandateFirst: [
+        ['Objective', 'Explain everyday tech in under 10 minutes'],
+        ['Audience', 'Developers and curious beginners'],
+      ].map(([label, value]) => ({ label, value: st.preview === 'noMandate' ? '' : value })),
+      mandateRest: [
+        ['Cadence', 'One video a week'],
+        ['Language', 'English'],
+        ['Voice and style', 'Calm, plain words'],
+        ['Blocked topics (comma separated)', 'politics'],
+        ['Target metric', 'Watch hours'],
+        ['Target value', '500'],
+        ['Default format', 'Generated pictures'],
+      ].map(([label, value]) => ({ label, value: st.preview === 'noMandate' ? (label === 'Default format' ? 'Generated pictures' : label === 'Target metric' ? 'Not set' : '') : value })),
+      noMandate: st.preview === 'noMandate',
+      hasMandate: st.preview !== 'noMandate',
+      channelOpen: st.preview === 'noMandate' ? 'open' : null,
+      channelSummary: (st.preview === 'noMandate' ? 'No mandate yet' : 'Mandate saved 5 Nov, 14:20 · Default format: Generated pictures') + ' · Can make: narration, generated pictures, stock pictures',
+      mandateHelp: 'What the channel is for: who it speaks to, what it covers and how it sounds. Scout reads it before every topic, script and picture.',
+      readinessLines: ['Narration: available', 'Generated pictures: available', 'Pictures: generated by ChatGPT plan', 'Provider: ChatGPT plan', 'YouTube: signed in', 'Voices: 3 available'].map((text) => ({ text })),
+      menuItems: ['Edit prompt', 'Replace narration', 'Lock', 'Regenerate scene', 'Regenerate narration'].map((label) => ({ label })),
+      isDown: preview === 'down',
+      isLoading: preview === 'loading',
+      isEmpty: preview === 'empty',
+      hasProjects: listed && projects.length > 0,
+      projectCount: listed ? '(' + projects.length + ')' : '',
+      skeleton: [{ w: '80%' }, { w: '65%' }, { w: '72%' }, { w: '55%' }],
+      projects,
+      hasDetail: (preview === 'open' || preview === 'delete') && sel !== null,
+      detail: sel || { topic: '', statusLabel: '', updated: '', chip: this.tone(t, 'neutral') },
+      closeDetail: () => this.setState({ preview: 'list' }),
+      askDeleteSelected: () => this.setState({ preview: 'delete', deleting: st.selected }),
+      scriptSections: [
+        { heading: 'Why a full drive slows down', narration: 'An SSD writes into empty blocks. When few are left, it must move data and erase a block before every write.' },
+        { heading: 'What you can do', narration: 'Keep 10% free, leave TRIM on, and avoid filling the drive with temporary files.' },
+      ],
+      claims,
+      scenes,
+      deleteOpen: preview === 'delete' && !!delTarget,
+      deleteTitle: delTarget ? 'Delete "' + delTarget.topic + '"?' : '',
+      confirmDelete: () => { if (delTarget) this.setState({ deleted: { ...st.deleted, [delTarget.id]: true }, preview: 'list' }); },
+      closeDialog: () => this.setState({ preview: sel ? 'open' : 'list' }),
+      dialogKey: (e) => { if (e && e.key === 'Escape') this.setState({ preview: sel ? 'open' : 'list' }); },
+    };
+  }
+}
+</script>
+</body>
+</html>

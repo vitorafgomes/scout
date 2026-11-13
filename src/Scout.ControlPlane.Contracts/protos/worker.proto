@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+import "protos/operator.proto";
+import "protos/features.proto";
+
+service WorkerGate {
+  rpc RequestWrite(RequestWriteRequest) returns (RequestWriteResponse);
+  rpc RecordWrite(RecordWriteRequest) returns (RecordWriteResponse);
+  rpc GetOperatorMandate(GetMandateRequest) returns (Mandate);
+  rpc SaveOperatorProject(SaveOperatorProjectRequest) returns (Project);
+  rpc NextQueuedProject(NextQueuedProjectRequest) returns (NextQueuedProjectResponse);
+  rpc GetOperatorProject(GetProjectRequest) returns (Project);
+  rpc ListOperatorProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc GetOperatorMediaDirectory(GetProjectRequest) returns (MediaDirectory);
+  rpc ReportReadiness(Readiness) returns (Readiness);
+  rpc NextApprovedAction(NextApprovedActionRequest) returns (NextApprovedActionResponse);
+  rpc CheckActionGrant(CheckActionGrantRequest) returns (CheckActionGrantResponse);
+  rpc NextJobControl(NextJobControlRequest) returns (NextJobControlResponse);
+  rpc SettleJobControl(SettleJobControlRequest) returns (SettleJobControlResponse);
+  rpc GetComments(ListCommentsRequest) returns (CommentsView);
+  rpc SaveComments(CommentsView) returns (CommentsView);
+  rpc GetVoiceSamplesDirectory(GetVoiceSamplesDirectoryRequest) returns (MediaDirectory);
+  rpc ChatEditSceneText(EditSceneTextRequest) returns (Project);
+  rpc ChatRegenerateNarration(SceneRequest) returns (Project);
+  rpc ChatRegenerateScene(SceneRequest) returns (Project);
+  rpc ChatSetSceneLocked(SetSceneLockedRequest) returns (Project);
+  rpc ChatReorderScenes(ReorderScenesRequest) returns (Project);
+  rpc ChatProduceProject(ProduceProjectRequest) returns (Project);
+  rpc ChatDelegateProject(DelegateProjectRequest) returns (Project);
+  rpc ChatRequestPresenter(RequestPresenterRequest) returns (Project);
+  rpc ChatEditScenePicturePrompt(EditScenePicturePromptRequest) returns (Project);
+  rpc ChatRegenerateScenePicture(SceneRequest) returns (Project);
+  rpc CloseWriteGroup(CloseWriteGroupRequest) returns (CloseWriteGroupResponse);
+}
+
+message RequestWriteRequest {
+  string feature_id = 1;
+  string scope = 2;
+  string target = 3;
+  string summary = 4;
+  optional string payload = 5;
+  optional string group_id = 6;
+  optional string repository = 7;
+}
+
+message RequestWriteResponse {
+  string decision = 1;
+  string reason = 2;
+  optional string action_id = 3;
+}
+
+message RecordWriteRequest {
+  string feature_id = 1;
+  string scope = 2;
+  string target = 3;
+  string outcome = 4;
+  optional string action_id = 5;
+  optional string result = 6;
+  optional string signed_as = 7;
+}
+
+message RecordWriteResponse {}
+
+message CloseWriteGroupRequest {
+  string group_id = 1;
+}
+
+message CloseWriteGroupResponse {
+  int32 actions = 1;
+}
+
+message SaveOperatorProjectRequest {
+  Project project = 1;
+  optional string origin_reference = 2;
+}
+
+message NextQueuedProjectRequest {}
+
+message NextQueuedProjectResponse {
+  optional Project project = 1;
+  optional string origin_reference = 2;
+}
+
+message NextApprovedActionRequest {
+  // The feature whose approved actions the worker runs; empty for the YouTube operator's queue.
+  optional string feature_id = 1;
+}
+
+message CheckActionGrantRequest {
+  string feature_id = 1;
+  string action_id = 2;
+}
+
+message CheckActionGrantResponse {
+  bool granted = 1;
+}
+
+message NextApprovedActionResponse {
+  optional PendingAction action = 1;
+  optional string origin_reference = 2;
+  optional string payload = 3;
+}
+
+message JobControl {
+  string id = 1;
+  string kind = 2;
+  string owner = 3;
+  string repo = 4;
+  optional int32 number = 5;
+  string action = 6;
+}
+
+message NextJobControlRequest {}
+
+message NextJobControlResponse {
+  optional JobControl control = 1;
+}
+
+message SettleJobControlRequest {
+  string id = 1;
+  string outcome = 2;
+  string status = 3;
+}
+
+message SettleJobControlResponse {
+  bool recorded = 1;
+}

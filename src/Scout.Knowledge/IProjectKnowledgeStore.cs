@@ -1,0 +1,72 @@
+namespace Scout.Knowledge;
+
+/// <summary>Persistence + similarity search over indexed project chunks.</summary>
+public interface IProjectKnowledgeStore
+{
+    /// <summary>Ensure the backing collection and the full-text table exist.</summary>
+    /// <param name="ct">Cancellation token.</param>
+    Task InitializeAsync(CancellationToken ct);
+
+    /// <summary>Returns true when the project has an index to answer from; false for one whose first full write did not finish.</summary>
+    /// <param name="project">Project name to probe.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<bool> HasProjectAsync(string project, CancellationToken ct);
+
+    /// <summary>
+    /// The repository path the project's chunks were last indexed from; null when none is recorded, as in a database
+    /// written before the path was kept, and empty when a full write of the project started and its path was not recorded yet.
+    /// </summary>
+    /// <param name="project">Project name to look up.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<string?> GetIndexedPathAsync(string project, CancellationToken ct);
+
+    /// <summary>Record the repository path the project's chunks were indexed from, replacing the one recorded before.</summary>
+    /// <param name="project">Project name the path belongs to.</param>
+    /// <param name="repoPath">The repository path the chunks in the store came from.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task SetIndexedPathAsync(string project, string repoPath, CancellationToken ct);
+
+    /// <summary>Replace all chunks for a project with the supplied set.</summary>
+    /// <param name="project">Project name whose chunks are being replaced.</param>
+    /// <param name="chunks">The complete new chunk set for the project.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task ReplaceProjectAsync(string project, IReadOnlyList<ChunkRecord> chunks, CancellationToken ct);
+
+    /// <summary>Replace the chunks for a single file within a project; empty <paramref name="chunks"/> deletes the file's rows.</summary>
+    /// <param name="project">Project name the file belongs to.</param>
+    /// <param name="relativePath">Repo-relative file path whose chunks are being replaced.</param>
+    /// <param name="chunks">The complete new chunk set for the file; empty to delete only.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task ReplaceFileAsync(string project, string relativePath, IReadOnlyList<ChunkRecord> chunks, CancellationToken ct);
+
+    /// <summary>Top-K cosine search restricted to one project.</summary>
+    /// <param name="project">Project name to restrict the search to.</param>
+    /// <param name="query">Query embedding vector.</param>
+    /// <param name="top">Maximum number of results to return.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Matching chunks ordered nearest first.</returns>
+    Task<IReadOnlyList<ChunkRecord>> SearchAsync(string project, ReadOnlyMemory<float> query, int top, CancellationToken ct);
+
+    /// <summary>
+    /// Metadata-only symbol lookup restricted to one project. No embedding is used.
+    /// Exact (case-insensitive) symbol matches come first, then partial (contains) matches.
+    /// </summary>
+    /// <param name="project">Project name to restrict the lookup to.</param>
+    /// <param name="symbol">Symbol name to match against <see cref="ChunkRecord.Symbol"/>.</param>
+    /// <param name="kind">Optional coarse kind filter ("code"/"doc"); null or empty to skip.</param>
+    /// <param name="top">Maximum results; a non-positive value means unbounded (all matches).</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Matching chunks, exact matches before partial matches, capped at <paramref name="top"/>.</returns>
+    Task<IReadOnlyList<ChunkRecord>> FindSymbolAsync(string project, string symbol, string? kind, int top, CancellationToken ct);
+
+    /// <summary>
+    /// Full-text search restricted to one project, with no embedding: the words of <paramref name="text"/>
+    /// (three characters or more, at most twelve) are matched as plain terms, never as query operators.
+    /// </summary>
+    /// <param name="project">Project name to restrict the search to.</param>
+    /// <param name="text">The question in the user's words.</param>
+    /// <param name="top">Maximum number of results to return.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Matching chunks without vectors, best match first; empty when the text has no words.</returns>
+    Task<IReadOnlyList<ChunkRecord>> SearchTextAsync(string project, string text, int top, CancellationToken ct);
+}

@@ -1,0 +1,15 @@
+---
+title: "Adapter.Teams: Testing footprint"
+version: "1.0"
+date: 2026-11-13
+changes: "Split out of the Adapter.Teams service page."
+page_type: service
+status: active
+description: "Read when a change touches: Testing footprint."
+source: ["src/Scout.Adapter.Teams/", "tests/Scout.Adapter.Teams.Tests/"]
+reliability: high
+---
+
+## Testing footprint
+
+`tests/Scout.Adapter.Teams.Tests` (67 test attributes, 71 test cases, 7 files on 2026-11-11): a sink with streaming off declares no fine-grained editing and one with streaming on does (`tests/Scout.Adapter.Teams.Tests/Streaming/TeamsResponseSinkTests.cs:205`); the lifecycle reads as running only with the handler of that start, before a start, after a stop and after a restart (`tests/Scout.Adapter.Teams.Tests/TeamsAdapterLifecycleTests.cs:10`); through the adapter, a message while running reaches the handler of that start and one after stop reaches none and never throws (`tests/Scout.Adapter.Teams.Tests/TeamsChatAdapterTests.cs:223`); a turn delivered from inside the start's lock, once the running state is published, reads the lifecycle as running and reaches the handler, so a turn racing a start is never dropped for a missing handler (`tests/Scout.Adapter.Teams.Tests/TeamsChatAdapterTests.cs:321`, through `SessionPublished`, an internal hook `Start` runs as its last step under the lock, null outside tests, `src/Scout.Adapter.Teams/TeamsAdapterLifecycle.cs:90`, `:137`); that turn runs on the start's own thread, so that the lock keeps a turn on another thread out of the publication is proved by reading the lock, not by a test; a failed reply over the limit, driven through the real pump, shows its first part, one truncation marker and the footer (`tests/Scout.Adapter.Teams.Tests/Streaming/TeamsSinkStreamPumpTests.cs:111`), a group message that mentions someone else is not for the bot when the recipient name is absent, and one whose mention entity carries the bot's id is, the mention ids are projected from the activity, a mention accepted by id is stripped by its own tag when the tag differs from the bot's display name, another user's tag kept, and a mention entity of the bot with no tag text never fails, the name tag still stripped (`TeamsMessageTranslatorTests.cs`); a Begin answered without a stream id sends no update and ends with a plain message, and a Begin failing with a 5xx escapes to the caller, the Rule I test (`Streaming/TeamsSinkBoundaryTests.cs`); a start while a stop is unwinding keeps its handler after that stop returns, and two concurrent stops with a start, raced 10,000 times, never leave a running adapter without its handler, a group mention matched by id reaches the handler without its tag, and an activity whose mention entity cannot be read never fails the webhook and is logged with its id (`TeamsChatAdapterTests.cs`); a `teams:` reference returns false from the composed notifier (`TeamsServiceCollectionExtensionsTests.cs`); translator, adapter and lifecycle, DI gating, sink behaviour, a sink boundary test and a sink-with-pump test using `Streaming/RecordingSender.cs`. No Azure calls.

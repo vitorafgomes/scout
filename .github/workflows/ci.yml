@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # Seconds, no .NET needed, so it runs first; jq ships on ubuntu runners.
+      - name: Hook guard self-test
+        shell: bash
+        run: |
+          bash .claude/hooks/pre-git-guard.test.sh
+          bash .claude/hooks/stop-review-gate.test.sh
+          bash .claude/hooks/session-start.test.sh
+          bash .claude/hooks/post-edit-build-rules-note.test.sh
+          bash .claude/hooks/session-end-metrics.test.sh
+          bash .claude/hooks/post-edit-test-reminder.test.sh
+          bash .claude/hooks/pre-test-in-docker.test.sh
+          bash .claude/hooks/agent-read-only-bash.test.sh
+          bash .claude/hooks/prompt-router.test.sh
+          bash .claude/workflows/scout-review.test.sh
+          bash tools/checks/check-context-refs.test.sh
+          bash tools/checks/test-per-project.test.sh
+          bash tools/release/next-version.test.sh
+          bash tools/release/with-test-version.test.sh
+          bash tools/release/release-workflow.test.sh
+          bash tools/checks/check-diagnostics.test.sh
+          bash tools/dev/install-git-hooks.test.sh
+          bash tools/dev/token-usage.test.sh
+          bash tools/checks/check-hidden-text.test.sh
+          bash tools/checks/check-hidden-text.sh
+          bash tools/checks/check-context-refs.sh
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore
+
+      # The 10.0.1xx SDK cannot open the MSBuild workspace that `dotnet format` needs (the
+      # build-host pipe bug); the 10.0.2xx band can, and global.json's latestMinor roll-forward
+      # lets the whole job use it.
+      - name: Setup .NET 10.0.2xx for dotnet format
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 10.0.2xx
+
+      - name: Format check
+        run: dotnet format Scout.slnx --verify-no-changes --no-restore
+
+      # One build, through the diagnostics gate: the IDE rules the root .editorconfig gates (IDE0005
+      # and the rest) are emitted only with a documentation file, which test projects do not generate,
+      # and info-level diagnostics never fail a build; the gate forces both on, rebuilds in Release so
+      # the tests below run on its output, and fails on any diagnostic at any severity. Owner decision
+      # 2026-11-06: in CI as well, so a diagnostic the agent gate missed still fails the PR.
+      - name: Build and diagnostics gate
+        run: tools/checks/check-diagnostics.sh Scout.slnx info Release
+
+      # One dotnet test per project: a solution-wide run reports one green total, which hides a
+      # project that did not compile and a suite that was skipped entirely.
+      - name: Test, per project
+        run: bash tools/checks/test-per-project.sh --configuration Release --no-build --logger "trx" --collect:"XPlat Code Coverage"
+
+      # The Docker end-to-end tests of Scout.Sandbox, on their own: test-per-project.sh leaves them out
+      # when no Docker daemon answers, and ubuntu runners have one, so here a missing daemon fails the job.
+      - name: Test, Docker end-to-end (Scout.Sandbox)
+        run: dotnet test tests/Scout.Sandbox.Tests --configuration Release --no-build --filter "Category=Docker"

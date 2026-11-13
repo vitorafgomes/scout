@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: Settings</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 1300px; display: flex; flex-wrap: wrap; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; max-width: 220px; min-width: 180px; background: {{t.surface}}; border-right: 1px solid {{t.line}}; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.primary}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<span style="font-weight: 600; font-size: 15px">Scout</span>
+</div>
+<sc-for list="{{nav}}" as="item" hint-placeholder-count="11">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 7px; border-left: 3px solid {{item.bar}}; border-radius: 8px; text-decoration: none; color: {{item.color}}; background: {{item.bg}}; font-weight: {{item.weight}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>{{item.label}}</a>
+</sc-for>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; position: relative">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0">
+<span style="font-weight: 600; font-size: 16px">{{screenTitle}}</span>
+<span style="font-size: 12px; color: {{t.muted}}">ChatGPT plan · gpt-5.6-luna</span>
+</div>
+
+<label style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.bg}}; color: {{t.muted}}; min-width: 200px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<input type="search" placeholder="Search screens, repositories, meetings" style="border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit; width: 220px">
+</label>
+
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<button aria-label="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+</button>
+<button aria-label="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+</button>
+</div>
+
+<button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
+<span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
+</sc-if>
+</button>
+
+<sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
+<section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">Notifications</span>
+<button onClick="{{bellMarkAllRead}}" style="border: 0; background: transparent; color: {{t.accent}}; font-size: 13px; padding: 4px 6px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Mark all as read</button>
+</div>
+<div role="tablist" aria-label="Filter notifications" style="display: flex; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid {{t.line}}">
+<sc-for list="{{bellTabs}}" as="bt" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{bt.selected}}" onClick="{{bt.pick}}" style="border: 1px solid {{bt.border}}; background: {{bt.bg}}; color: {{bt.fg}}; border-radius: 14px; padding: 5px 12px; font-size: 13px">{{bt.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-y: auto; display: flex; flex-direction: column">
+<sc-for list="{{bellShown}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.line}}; background: {{n.rowBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700"><sc-if value="{{n.hasPath}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.path}}"></path></svg></sc-if>{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: {{n.weight}}; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<sc-if value="{{n.hasControls}}" hint-placeholder-val="{{false}}">
+<span style="align-self: center; flex: 0 0 auto; display: flex; gap: 4px">
+<sc-for list="{{n.controls}}" as="c" hint-placeholder-count="2">
+<button type="button" aria-label="{{c.label}}" title="{{c.label}}" aria-disabled="{{n.controlsOff}}" onClick="{{c.act}}" style="width: 28px; height: 28px; padding: 0; border-radius: 14px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{n.controlsOpacity}}; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.path}}"></path></svg></button>
+</sc-for>
+</span>
+</sc-if>
+<sc-if value="{{n.hasStatus}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.status}}</span>
+</sc-if>
+<sc-if value="{{n.showWhen}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</sc-if>
+</div>
+<sc-if value="{{n.hasDetail}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+</sc-if>
+<sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{true}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="b" hint-placeholder-count="2">
+<button onClick="{{b.act}}" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{b.path}}"></path></svg>{{b.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{bellEmpty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 16px; font-size: 12px; color: {{t.muted}}">Nothing here yet.</p>
+</sc-if>
+</div>
+<sc-if value="{{bellRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 16px; font-size: 13px; color: {{t.err}}">Scout could not tell which pull request this entry is about.</p>
+</sc-if>
+<div style="padding: 10px 16px; font-size: 12px; color: {{t.muted}}">GitHub mentions and comments are read every 5 minutes, only while the GitHub feature is connected.</div>
+</section>
+</sc-if>
+</header>
+
+<main style="flex: 1; padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; width: 100%; box-sizing: border-box; position: relative">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto; min-width: 0">
+<h1 style="margin: 0; font-size: 20px; font-weight: 600">Settings</h1>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Chat connections, the Scout worker, who can use Scout, the quick-ask button, the microphone and speaker, and how this app looks.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span id="yt-label" style="font-size: 12px; color: {{t.muted}}">Preview: YouTube connected</span>
+<button role="switch" aria-checked="{{swYoutube.checked}}" aria-labelledby="yt-label" onClick="{{swYoutube.toggle}}" style="border: 0; padding: 0; margin-right: 8px; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{swYoutube.justify}}; background: {{swYoutube.track}}; border: 1px solid {{swYoutube.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{swYoutube.thumb}}"></span></span></button>
+<span id="pv-label" style="font-size: 12px; color: {{t.muted}}">Preview state</span>
+<div role="group" aria-labelledby="pv-label" style="display: flex; gap: 2px; padding: 3px; border: 1px dashed {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<sc-for list="{{preview}}" as="p" hint-placeholder-count="3">
+<button aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="height: 28px; padding: 0 12px; border: 0; border-radius: 14px; font-size: 12px; background: {{p.bg}}; color: {{p.fg}}; font-weight: {{p.weight}}">{{p.label}}</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+<div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<section aria-labelledby="s-appearance" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-appearance" style="margin: 0; font-size: 15px; font-weight: 600">Appearance</h2>
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 22px; background: {{t.bg}}; align-self: flex-start">
+<sc-for list="{{themeChoices}}" as="c" hint-placeholder-count="3">
+<button aria-pressed="{{c.pressed}}" onClick="{{c.pick}}" style="height: 34px; padding: 0 14px; border: 0; border-radius: 18px; display: flex; align-items: center; gap: 8px; background: {{c.bg}}; color: {{c.fg}}; font-weight: {{c.weight}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.d}}"></path></svg>{{c.label}}</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">The same choice as the switch in the top bar. System follows your desktop's light or dark setting, in every Scout window.</p>
+</section>
+
+<section aria-labelledby="s-clients" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px">
+<h2 id="s-clients" style="margin: 0; font-size: 15px; font-weight: 600">Chat connections</h2>
+<p style="margin: 0 0 8px; font-size: 13px; color: {{t.muted}}">Where Scout answers. Credentials are entered here and kept on this computer.</p>
+<sc-for list="{{chats}}" as="c" hint-placeholder-count="3">
+<article aria-labelledby="{{c.titleId}}" style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid {{t.line}}">
+<div style="display: flex; flex-direction: column; gap: 4px; margin-right: auto; min-width: 0">
+<div style="display: flex; align-items: center; gap: 8px"><h3 id="{{c.titleId}}" style="margin: 0; font-size: 14px; font-weight: 600">{{c.name}}</h3><span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{c.chipBg}}; color: {{c.chipFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.chipD}}"></path></svg>{{c.chip}}</span></div>
+<span style="font-size: 13px; color: {{t.muted}}">{{c.detail}}</span>
+</div>
+<sc-if value="{{c.on}}" hint-placeholder-val="{{false}}">
+<button onClick="{{c.manage}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 3.1V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 9h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 2z"></path></svg>Manage</button>
+<button onClick="{{c.disconnect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</sc-if>
+<sc-if value="{{c.needs}}" hint-placeholder-val="{{false}}">
+<button onClick="{{c.addToServer}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Add to server</button>
+<button onClick="{{c.disconnect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</sc-if>
+<sc-if value="{{c.off}}" hint-placeholder-val="{{true}}">
+<button onClick="{{c.connect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+</sc-if>
+<sc-if value="{{c.later}}" hint-placeholder-val="{{false}}">
+<button disabled="disabled" aria-describedby="{{c.reasonId}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.muted}}; cursor: not-allowed"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
+<span id="{{c.reasonId}}" style="flex-basis: 100%; font-size: 12px; color: {{t.muted}}">{{c.reason}}</span>
+</sc-if>
+</article>
+</sc-for>
+<sc-if value="{{chatError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 8px 0 0; font-size: 13px; color: {{t.err}}">Discord is still connected: the credential store is unavailable.</p>
+</sc-if>
+</section>
+
+<section aria-labelledby="s-worker" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 id="s-worker" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">Scout worker</h2>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: {{worker.chipBg}}; color: {{worker.chipFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{worker.chipD}}"></path></svg>{{worker.chip}}</span>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">{{worker.meta}}</p>
+<sc-if value="{{worker.running}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{stopWorker}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>Stop</button>
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Restart</button>
+</div>
+</sc-if>
+<sc-if value="{{worker.starting}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{stopWorker}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>Stop</button>
+</div>
+</sc-if>
+<sc-if value="{{worker.off}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button onClick="{{startWorker}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>Start</button>
+</div>
+</sc-if>
+<sc-if value="{{worker.restartWaits}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 13px; color: {{t.muted}}">Scout waits for the running answer or the live listen to end, then restarts.</p>
+</sc-if>
+<sc-if value="{{worker.failed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg>Scout could not stop the worker. It is still running. The worker did not stop in time.</p>
+</sc-if>
+<div style="display: flex; align-items: center; gap: 12px; padding-top: 4px; border-top: 1px solid {{t.line}}">
+<span id="lbl-logs" style="margin-right: auto; padding-top: 8px">Show Logs in the menu</span>
+<button role="switch" aria-checked="{{swLogs.checked}}" aria-labelledby="lbl-logs" onClick="{{swLogs.toggle}}" style="border: 0; padding: 8px 0 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{swLogs.justify}}; background: {{swLogs.track}}; border: 1px solid {{swLogs.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{swLogs.thumb}}"></span></span></button>
+</div>
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Log verbosity: coming soon.</p>
+</section>
+
+<section aria-labelledby="s-about" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 id="s-about" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">About</h2>
+<span style="font-size: 13px; color: {{t.muted}}">Version</span><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">0.9.0</code>
+<button aria-expanded="{{about.expanded}}" aria-label="{{about.label}}" title="{{about.label}}" onClick="{{about.toggle}}" style="width: 32px; height: 32px; border-radius: 16px; border: 0; background: transparent; color: {{t.fg2}}; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: {{about.turn}}"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+<sc-if value="{{about.open}}" hint-placeholder-val="{{false}}">
+<div id="about-more" style="display: flex; flex-direction: column; gap: 8px">
+<p style="display: flex; flex-wrap: wrap; gap: 12px; margin: 0">
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Source code on GitHub</button>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>MIT licence</button>
+</p>
+<ul style="margin: 0; padding-left: 18px; font-size: 12px; color: {{t.muted}}; line-height: 1.6">
+<li>OpenAI and ChatGPT are trademarks of OpenAI.</li>
+<li>Google and Gemini are trademarks of Google.</li>
+<li>Anthropic and Claude are trademarks of Anthropic.</li>
+<li>OpenRouter is a trademark of OpenRouter, Inc.</li>
+<li>Ollama is a trademark of Ollama, Inc.</li>
+<li>LM Studio is a trademark of Element Labs, Inc.</li>
+<li>Third-party logos are not covered by Scout's MIT licence and remain their owners' trademarks.</li>
+<li>All other product names and logos are trademarks of their respective owners. Their use identifies the service you connect and does not imply endorsement.</li>
+</ul>
+</div>
+</sc-if>
+</section>
+
+</div>
+
+<div style="flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+<section aria-labelledby="s-access" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-access" style="margin: 0; font-size: 15px; font-weight: 600">Who can use Scout</h2>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">People listed here can ask Scout from Discord or Slack. Chat on this computer never needs the list.</p>
+<ul style="margin: 0; padding-left: 18px; font-size: 12px; color: {{t.muted}}; line-height: 1.6">
+<li>Discord: turn on Developer Mode, right-click a person, Copy User ID.</li>
+<li>Slack: open their profile, More, Copy member ID.</li>
+<li>Teams: the user's Bot Framework user ID, which starts with 29:.</li>
+</ul>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start">
+<div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 6px">
+<label for="f-user" style="font-size: 13px; font-weight: 500">User ID</label>
+<input id="f-user" type="text" placeholder="412398765432109876" aria-describedby="f-user-help" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<span id="f-user-help" style="font-size: 12px; color: {{t.muted}}">A Discord user ID or a Slack member ID.</span>
+</div>
+<button style="margin-top: 25px; height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M8.5 3a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7zM19 8v6M16 11h6"></path></svg>Add</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>Pair from chat</button>
+<sc-if value="{{pairing.pending}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}">Send <code style="padding: 2px 6px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">pair 482913</code> to Scout in a direct message on Discord.</span>
+</sc-if>
+</div>
+<sc-if value="{{pairing.expired}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">Pairing expired. Start again.</p>
+</sc-if>
+<ul aria-label="Allowed people" style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column">
+<sc-if value="{{nobodyListed}}" hint-placeholder-val="{{false}}">
+<li style="padding: 8px 0; border-top: 1px solid {{t.line}}; font-size: 13px; color: {{t.muted}}">No one is listed yet. The list only matters once Discord or Slack is connected; chat on this computer never needs it.</li>
+</sc-if>
+<sc-for list="{{allowed}}" as="u" hint-placeholder-count="2">
+<li style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid {{t.line}}">
+<code style="font-size: 13px; margin-right: auto">{{u.id}}</code>
+<button aria-label="{{u.removeLabel}}" style="height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: {{t.err}}; display: inline-flex; align-items: center; gap: 6px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Remove</button>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section aria-labelledby="s-bubble" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-bubble" style="margin: 0; font-size: 15px; font-weight: 600">Floating button and quick ask</h2>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">A small round Scout button stays above your windows. Click it to open the quick-ask box in the same corner.</p>
+<div style="display: flex; align-items: center; gap: 12px">
+<span id="lbl-bubble" style="margin-right: auto">Show the floating button</span>
+<button role="switch" aria-checked="{{swBubble.checked}}" aria-labelledby="lbl-bubble" onClick="{{swBubble.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{swBubble.justify}}; background: {{swBubble.track}}; border: 1px solid {{swBubble.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{swBubble.thumb}}"></span></span></button>
+</div>
+<span id="lbl-corner" style="font-size: 13px; font-weight: 500">Corner</span>
+<div role="group" aria-labelledby="lbl-corner" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}; align-self: flex-start">
+<sc-for list="{{corners}}" as="s" hint-placeholder-count="4">
+<button aria-pressed="{{s.pressed}}" onClick="{{s.pick}}" style="height: 30px; padding: 0 12px; border: 0; border-radius: 16px; background: {{s.bg}}; color: {{s.fg}}; font-weight: {{s.weight}}; font-size: 13px">{{s.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{hasDisplayRow}}" hint-placeholder-val="{{true}}">
+<span id="lbl-display" style="font-size: 13px; font-weight: 500">Display</span>
+<div role="group" aria-labelledby="lbl-display" style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}; align-self: flex-start">
+<sc-for list="{{displays}}" as="s" hint-placeholder-count="3">
+<button aria-pressed="{{s.pressed}}" onClick="{{s.pick}}" style="height: 30px; padding: 0 12px; border: 0; border-radius: 16px; background: {{s.bg}}; color: {{s.fg}}; font-weight: {{s.weight}}; font-size: 13px">{{s.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{hasDisplayHint}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{displayHint}}</span>
+</sc-if>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid {{t.line}}">
+<span id="lbl-shortcut" style="font-size: 13px; font-weight: 500; padding-top: 8px">Quick-ask shortcut</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<div role="group" aria-labelledby="lbl-shortcut" aria-describedby="shortcut-help" style="flex: 1 1 200px; height: 40px; padding: 0 8px; border-radius: 10px; border: 1px solid {{rec.edge}}; background: {{t.bg}}; display: flex; align-items: center; gap: 6px; box-sizing: border-box">
+<sc-if value="{{rec.on}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 13px; color: {{t.muted}}">Press the new shortcut</span>
+</sc-if>
+<sc-if value="{{rec.off}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{keys}}" as="k" hint-placeholder-count="3">
+<kbd style="font-family: inherit; font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}">{{k.label}}</kbd>
+</sc-for>
+</sc-if>
+</div>
+<button aria-pressed="{{rec.pressed}}" onClick="{{rec.toggle}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{rec.btnEdge}}; background: {{rec.btnBg}}; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10"></path></svg>Record shortcut</button>
+<sc-if value="{{rec.off}}" hint-placeholder-val="{{true}}">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7"></path></svg>Save</button>
+</sc-if>
+<sc-if value="{{rec.on}}" hint-placeholder-val="{{false}}">
+<button disabled="disabled" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; opacity: 0.5; cursor: not-allowed; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7V3M8 21v-7h8v7"></path></svg>Save</button>
+</sc-if>
+</div>
+<span id="shortcut-help" style="font-size: 12px; color: {{t.muted}}">Click Record shortcut, then press the keys. Press it anywhere to ask Scout, typed or spoken.</span>
+<sc-if value="{{rec.hasRefusal}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">"K" has no modifier, so it would fire whenever you type it; add Ctrl, Alt, Super or Cmd.</p>
+</sc-if>
+<sc-if value="{{rec.hasSaveError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">That shortcut is taken</p>
+</sc-if>
+<sc-if value="{{rec.hasLost}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">Scout could not register Ctrl+Alt+Space again: another application may hold it now. Choose another shortcut.</p>
+</sc-if>
+<sc-if value="{{rec.hasHint}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Your desktop (Wayland) does not let apps register global shortcuts. Add a custom shortcut in your system settings that runs: /home/you/Apps/Scout.AppImage --ask</p>
+</sc-if>
+</div>
+</section>
+
+<section aria-labelledby="s-audio" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-audio" style="margin: 0; font-size: 15px; font-weight: 600">Audio</h2>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">The microphone Scout listens with, for dictation, conversation and meetings, and the speaker it reads answers aloud on.</p>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px"><span style="font-weight: 500">Microphone</span>
+<select style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<option value="">System default</option>
+<option value="mic-1" selected>USB headset</option>
+<option value="mic-2">Microphone 2</option>
+</select></label>
+<sc-if value="{{audio.hidden}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Press and hold Test once so Scout can list your microphones and speakers.</p>
+</sc-if>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 13px"><span style="font-weight: 500">Speaker</span>
+<select style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit">
+<option value="" selected>System default</option>
+<option value="spk-1">Built-in speakers</option>
+<option value="spk-2">HDMI</option>
+</select></label>
+<div style="display: flex; align-items: center; gap: 12px">
+<button aria-pressed="{{audio.pressed}}" title="Hold to hear the microphone's level" onClick="{{audio.toggle}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{audio.edge}}; background: {{audio.bg}}; color: {{t.fg}}; font-weight: 500">Test</button>
+<div role="meter" aria-label="Microphone level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{audio.level}}" style="position: relative; flex: 1; height: 12px; border-radius: 6px; background: {{t.surface2}}; border: 1px solid {{t.line}}; overflow: hidden">
+<div style="height: 100%; width: {{audio.fill}}; background: {{t.accentStrong}}"></div>
+<sc-if value="{{audio.testing}}" hint-placeholder-val="{{true}}">
+<div title="The room" style="position: absolute; top: 0; bottom: 0; left: 22%; width: 2px; background: {{t.muted}}"></div>
+<div title="Speech starts here" style="position: absolute; top: 0; bottom: 0; left: 39%; width: 2px; background: {{t.fg}}"></div>
+</sc-if>
+</div>
+</div>
+<span style="font-size: 12px; color: {{t.muted}}">Hold Test and speak. The first second learns the room (the grey mark); Scout hears speech that passes the mark in the text colour. It stops after 10 seconds.</span>
+<sc-if value="{{audio.hasError}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">{{audio.error}}</p>
+</sc-if>
+</section>
+
+<section aria-labelledby="s-desktop" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-desktop" style="margin: 0; font-size: 15px; font-weight: 600">Desktop</h2>
+<sc-for list="{{desktopSwitches}}" as="sw" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px">
+<span id="{{sw.id}}" style="margin-right: auto">{{sw.label}}</span>
+<sc-if value="{{sw.free}}" hint-placeholder-val="{{true}}">
+<button role="switch" aria-checked="{{sw.checked}}" aria-labelledby="{{sw.id}}" onClick="{{sw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{sw.justify}}; background: {{sw.track}}; border: 1px solid {{sw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{sw.thumb}}"></span></span></button>
+</sc-if>
+<sc-if value="{{sw.isLocked}}" hint-placeholder-val="{{false}}">
+<button role="switch" aria-checked="{{sw.checked}}" aria-labelledby="{{sw.id}}" disabled="disabled" onClick="{{sw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex; opacity: 0.5; cursor: not-allowed"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{sw.justify}}; background: {{sw.track}}; border: 1px solid {{sw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{sw.thumb}}"></span></span></button>
+</sc-if>
+</div>
+<sc-if value="{{sw.hasNote}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{sw.note}}</p>
+</sc-if>
+</sc-for>
+<sc-if value="{{devBuild}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Update checks run only in the installed app.</p>
+</sc-if>
+<sc-if value="{{installed}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">Last check: 7 Nov 2026, 14:02 · You have the latest version</span>
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Check now</button>
+</div>
+</sc-if>
+</section>
+
+</div>
+</div>
+
+<sc-if value="{{audio.unplugged}}" hint-placeholder-val="{{false}}">
+<div role="status" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; width: 480px; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 10px; background: {{t.inverseBg}}; color: {{t.inverseFg}}; box-shadow: 0 8px 24px {{t.shadow}}; box-sizing: border-box">
+<span>The chosen microphone is not connected; Scout uses the default one.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{snackOpen}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; width: 480px; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px; border-radius: 10px; background: {{t.inverseBg}}; color: {{t.inverseFg}}; box-shadow: 0 8px 24px {{t.shadow}}; box-sizing: border-box">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg>
+<span style="margin-right: auto">Could not stop the Scout worker. Try again.</span>
+<button onClick="{{stopWorker}}" style="height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: transparent; color: {{t.inverseAction}}; font-weight: 600">Retry</button>
+</div>
+</sc-if>
+
+<sc-if value="{{chatDlgOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="chat-dlg-title" aria-describedby="chat-dlg-desc" onKeyDown="{{chatKey}}" style="width: 480px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="chat-dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">{{chatDlg.title}}</h2>
+<p id="chat-dlg-desc" style="margin: 0; color: {{t.fg2}}; font-size: 13px; line-height: 1.5">{{chatDlg.desc}}</p>
+<sc-if value="{{chatDlg.hasSteps}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="dlg-steps" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
+<h3 id="dlg-steps" style="margin: 0; font-size: 13px; font-weight: 600">{{chatDlg.stepsTitle}}</h3>
+<sc-if value="{{chatDlg.isSlack}}" hint-placeholder-val="{{true}}">
+<button type="button" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Create the Slack app</button>
+</sc-if>
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}; line-height: 1.45">
+<sc-for list="{{chatDlg.steps}}" as="st" hint-placeholder-count="4">
+<li>{{st.text}}</li>
+</sc-for>
+</ol>
+</section>
+</sc-if>
+<sc-if value="{{chatDlg.hasPortal}}" hint-placeholder-val="{{false}}">
+<button type="button" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Open the Developer Portal</button>
+</sc-if>
+<sc-if value="{{chatDlg.hasNote}}" hint-placeholder-val="{{false}}">
+<div role="note" style="display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 13px; line-height: 1.45"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px; margin-top: 1px"><path d="M12 3l9 16H3zM12 10v4M12 17v.5"></path></svg><span>{{chatDlg.note}}</span></div>
+</sc-if>
+<sc-for list="{{chatDlg.fields}}" as="f" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<label for="{{f.id}}" style="font-size: 13px; font-weight: 500; color: {{t.fg}}">{{f.label}}</label>
+<div style="display: flex; gap: 8px">
+<input id="{{f.id}}" type="{{f.type}}" autocomplete="off" spellcheck="false" value="{{f.value}}" placeholder="{{f.placeholder}}" onChange="{{f.onInput}}" aria-invalid="{{f.invalid}}" aria-describedby="{{f.helpId}}" style="flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid {{f.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-family: ui-monospace, monospace; font-size: 13px">
+<sc-if value="{{f.secret}}" hint-placeholder-val="{{true}}">
+<button type="button" aria-label="{{f.revealLabel}}" title="{{f.revealLabel}}" aria-pressed="{{f.revealed}}" onClick="{{toggleReveal}}" style="width: 40px; height: 40px; flex: 0 0 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}; display: inline-flex; align-items: center; justify-content: center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{f.revealIcon}}"></path></svg></button>
+</sc-if>
+</div>
+<span id="{{f.helpId}}" style="font-size: 12px; color: {{f.helpColor}}; line-height: 1.4">{{f.help}}</span>
+</div>
+</sc-for>
+<sc-if value="{{chatDlg.hasError}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="font-size: 13px; color: {{t.err}}">Check the highlighted fields. Nothing was saved.</div>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button type="button" autofocus="autofocus" onClick="{{closeChat}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">{{chatDlg.cancelLabel}}</button>
+<sc-if value="{{chatDlg.hasSave}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{saveChat}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>{{chatDlg.saveLabel}}</button>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">{{discTitle}}</h2>
+<p id="dlg-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{discBody}}</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{closeConfirm}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{confirmDisconnect}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-7.5 4.3M12 17v5M3 3l18 18"></path></svg>Disconnect</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1600}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      theme: 'dark',
+      bellOpen: false,
+      preview: 'normal',
+      showLogs: true,
+      bubble: true,
+      corner: 'bottom-right',
+      display: 'cursor',
+      keepRunning: true,
+      startAtLogin: false,
+      checkUpdates: true,
+      aboutOpen: false,
+      youtubeConnected: true,
+      chats: { discord: true, slack: false, teams: false },
+      reveal: false,
+      disc: 'discord',
+      chatDlg: null,
+      tokens: {},
+      tried: false,
+    };
+  }
+  bellItems() {
+    return [
+      { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
+      { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
+      { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
+      { id: 'v1', kind: 'done', glyph: '✓', tone: 'ok', title: 'Verdict given: Approved acme/web#17', detail: 'Signed as the Scout bot · the tests line was posted as a comment', when: '25 min', progress: null, action: 'See the review' },
+      { id: 'i1', kind: 'done', glyph: 'I', tone: 'ok', title: '3 issues opened on acme/shop', detail: 'From the audit findings you chose', when: '1 h', progress: null, action: 'See the issues' },
+      { id: 'w1', kind: 'done', glyph: '!', tone: 'err', title: 'A voice message could not be transcribed: no Whisper model is installed.', detail: '1 voice message not transcribed, the last from Discord.', when: '3 min', progress: null, action: '', buttons: [{ label: 'Download the base model (142 MB)', path: 'M12 3v12M7 10l5 5 5-5M5 21h14' }, { label: 'Open Models, Transcription', path: 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4' }] },
+      { id: 'p1', kind: 'paused', glyph: '!', tone: 'err', title: 'Audit of acme/web paused', detail: 'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.', when: '2 h', progress: null, action: '' },
+    ];
+  }
+  bellRunsNow() {
+    return { a1: 'running', t1: 'running', p1: 'pausedByLimit', ...(this.state.bellRuns || {}) };
+  }
+  bellSetRun(id, next) {
+    this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: next }, bellRead: { ...(this.state.bellRead || {}), [id]: true } });
+  }
+  bellStopAudit(id) {
+    this.bellSetRun(id, 'stopping');
+    setTimeout(() => { if (this.bellRunsNow()[id] === 'stopping') this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: 'stoppedAfterArea' } }); }, 4000);
+  }
+  bellLive(n) {
+    const s = this.bellRunsNow()[n.id];
+    const pause = 'M9 5v14M15 5v14';
+    const play = 'M8 5l11 7-11 7z';
+    const stop = 'M7 7h10v10H7z';
+    if (n.id === 't1') {
+      if (s === 'stopped') return { ...n, kind: 'done', glyph: 'T', tone: 'muted', title: 'Tests for acme/api#41 stopped', detail: 'The container was removed; the tests gave no result.', when: 'now', progress: null, controls: [] };
+      return { ...n, controls: [{ label: 'Stop the tests for acme/api#41', path: stop, act: () => this.bellSetRun('t1', 'stopped') }] };
+    }
+    const audit = { a1: ['acme/shop', 3, 8, 4, 'running'], p1: ['acme/web', 5, 9, 2, 'pausedByLimit'] }[n.id];
+    if (!audit) return { ...n, controls: [] };
+    const [repo, done, total, findings, first] = audit;
+    const when = s === first ? n.when : 'now';
+    const pauseIt = { label: 'Pause the audit of ' + repo, path: pause, act: () => this.bellSetRun(n.id, 'pausedByYou') };
+    const goOn = { label: 'Continue the audit of ' + repo, path: play, act: () => this.bellSetRun(n.id, 'running') };
+    const stopIt = { label: 'Stop the audit of ' + repo, path: stop, act: () => this.bellSetRun(n.id, 'stopped') };
+    const stopRunning = { ...stopIt, act: () => this.bellStopAudit(n.id) };
+    const running = { ...n, kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of ' + repo, detail: 'Area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far · cards arrive in the chat as each area ends', when, progress: Math.floor(done * 100 / total) };
+    const stopped = (areas) => ({ ...n, kind: 'done', glyph: 'A', tone: 'muted', title: 'Audit of ' + repo + ' stopped', detail: areas + ' of ' + total + ' areas · ' + findings + ' findings kept', when, progress: null, controls: [] });
+    return {
+      running: { ...running, controls: [pauseIt, stopRunning] },
+      stopping: { ...running, controls: [], status: 'Stopping after this area' },
+      pausedByYou: { ...n, kind: 'paused', glyph: 'A', tone: 'warn', title: 'Audit of ' + repo + ' paused', detail: 'Paused by you · area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far', when, progress: null, controls: [goOn, stopIt] },
+      pausedByLimit: { ...n, kind: 'paused', when, controls: [goOn, stopIt] },
+      stopped: stopped(done),
+      stoppedAfterArea: stopped(done + 1),
+    }[s];
+  }
+  bellPreview(n) {
+    const clock = 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2';
+    const note = (text) => ({ a1: { note: text } });
+    const paused = (detail) => ({ p1: { detail } });
+    const fromApp = {
+      asking: { a1: { asking: true } },
+      pausing: { a1: { controls: [], status: 'Pausing after this area' } },
+      continuing: { p1: { controls: [], status: 'Continuing' } },
+      stoppingPaused: { p1: { controls: [], status: 'Stopping' } },
+      stoppingTests: { t1: { controls: [], status: 'Stopping' } },
+      noteNoAnswer: { t1: { note: 'The Scout control plane did not answer, so this click may not have reached Scout. Try again.' } },
+      noteNotConfirmed: note('Not confirmed: Scout did not say within two and a half minutes whether it applied this click; look at the job before clicking again.'),
+      noteNotReported: note('Scout recorded this click as applied, but the job did not report it; look at the job before clicking again.'),
+      noteWorkerStopped: note('Scout stopped before it said how this click ended; look at the job before clicking again.'),
+      noteDropped: note('Not applied: the click waited more than two minutes for Scout, so it was dropped; click again if it still applies.'),
+      pausedCredit: paused("The AI Source's account has run out of credit. Ask Scout to continue once it has credit again."),
+      pausedRate: paused('The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.'),
+      pausedSignIn: paused('The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.'),
+      pausedKey: paused('The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.'),
+      pausedModel: paused('The AI Source does not have the model llama3.2:3b. Choose a model it has in Models, then ask Scout to continue.'),
+      areaName: { a1: { detail: 'Area 3 of 8 done: src/orders' } },
+      finished: { a1: { kind: 'done', tone: 'ok', title: 'Audit of acme/shop is done', detail: 'Verdict: fix (0 High, 2 Medium, 1 Low).', progress: null, controls: [] } },
+      testsFinished: { t1: { kind: 'done', tone: 'ok', title: 'Tests for acme/api#41 finished', detail: 'The result is in the conversation.', progress: null, controls: [] } },
+      testsNotFinished: { t1: { kind: 'failed', tone: 'err', title: 'Tests for acme/api#41 did not finish', detail: 'The answer ended before the tests reported a result.', progress: null, controls: [] } },
+      healthRestarting: { h1: { id: 'h1', kind: 'running', glyph: '', path: clock, tone: 'accent', title: 'Scout stopped unexpectedly and is restarting.', detail: 'Restart 1 since Scout was started.', when: 'now', progress: null, action: '', controls: [] } },
+      healthGaveUp: { h1: { id: 'h1', kind: 'failed', glyph: '!', tone: 'err', title: 'Scout stopped and does not restart by itself.', detail: 'Start it again from Logs or from Settings, Scout worker.', when: 'now', progress: null, action: '', controls: [] } },
+    }[this.state.bell] || {};
+    return n === undefined ? fromApp : { ...n, ...(fromApp[n.id] || {}) };
+  }
+  bellVals(t) {
+    const read = this.state.bellRead || {};
+    const tab = this.state.bellTab || 'all';
+    const bell = this.state.bell || 'entries';
+    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.bellPreview(this.bellLive(n)))];
+    const unread = all.filter((n) => !read[n.id]).length;
+    const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
+    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
+      ...n,
+      iconBg: tone(n)[0],
+      iconFg: tone(n)[1],
+      hasPath: Boolean(n.path),
+      rowBg: read[n.id] ? t.surface : t.unreadBg,
+      weight: read[n.id] ? 500 : 600,
+      hasDetail: n.detail !== '',
+      hasNote: Boolean(n.note),
+      hasProgress: n.progress !== null,
+      progressWidth: (n.progress || 0) + '%',
+      hasAction: n.action !== '',
+      buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),
+      hasButtons: (n.buttons ?? []).length > 0,
+      hasControls: n.controls.length > 0,
+      controlsOff: n.asking ? 'true' : 'false',
+      controlsOpacity: n.asking ? 0.5 : 1,
+      hasStatus: Boolean(n.status),
+      showWhen: !n.status,
+    }));
+    const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
+    return {
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true }) })),
+      bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
+        const on = tab === id;
+        return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
+      }),
+      bellShown: shown,
+      bellEmpty: shown.length === 0,
+      bellRefused: bell === 'refused',
+      bellUnread: unread,
+      bellHasUnread: unread > 0,
+      bellOpen: this.state.bellOpen,
+      bellOpenText: this.state.bellOpen ? 'true' : 'false',
+      bellBg: this.state.bellOpen ? t.surface2 : 'transparent',
+      bellLabel: unread > 0 ? 'Notifications, ' + unread + ' unread' : 'Notifications',
+      toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
+      bellMarkAllRead: () => { const r = {}; all.forEach((n) => { r[n.id] = true; }); this.setState({ bellRead: r }); },
+    };
+  }
+  renderVals() {
+    const vals = this.pageVals();
+    return { ...vals, ...this.bellVals(vals.t) };
+  }
+  pageVals() {
+    const t = this.palette(this.state.theme === 'system' ? 'dark' : this.state.theme);
+    const s = this.state;
+    const flip = (key) => () => this.setState({ [key]: !this.state[key] });
+    const sun = 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4';
+    const moon = 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z';
+    const monitor = 'M3 4h18v12H3zM8 20h8M12 16v4';
+    const failed = s.preview === 'stopFailed';
+    const audioError = s.preview === 'audioDenied' ? 'Scout was not allowed to use the microphone.' : s.preview === 'audioMissing' ? 'No microphone was found.' : s.preview === 'audioBusy' ? 'The microphone is busy: another program is using it.' : '';
+    const desk = [
+      ['d-keep', 'Keep Scout running when the window is closed', 'keepRunning'],
+      ['d-login', 'Start Scout when I log in', 'startAtLogin'],
+      ['d-updates', 'Check for new versions', 'checkUpdates'],
+    ].filter(([id]) => id !== 'd-updates' || s.preview !== 'devBuild').map(([id, label, key]) => {
+      const locked = id === 'd-keep' && s.preview === 'noTray';
+      return Object.assign(this.switchVals(t, locked ? false : s[key], locked ? () => {} : flip(key)), {
+        id, label, free: !locked, isLocked: locked,
+        hasNote: locked, note: 'This desktop has no system tray, so Scout quits when its window is closed.',
+      });
+    });
+    const recording = s.preview === 'shortcutRecording' || s.preview === 'shortcutRefused';
+    const chk = 'M20 6L9 17l-5-5';
+    const dot = 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z';
+    const clock = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2';
+    const wk = { workerIdle: 'idle', workerStarting: 'starting', workerStopped: 'stopped', workerCrashed: 'crashed' }[s.preview] || 'running';
+    const wkChip = { idle: ['Not started', 'neutral', dot], starting: ['Starting', 'info', 'M12 3a9 9 0 1 0 9 9'], running: ['Running', 'ok', chk], stopped: ['Stopped', 'neutral', dot], crashed: ['Stopped unexpectedly', 'err', 'M15 9l-6 6M9 9l6 6M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z'] }[wk];
+    const chatList = [
+      ['discord', 'Discord', 'Server: Acme Engineering', 'Answer in your Discord server.'],
+      ['slack', 'Slack', 'Workspace: Acme', 'Answer in your Slack workspace.'],
+      ['teams', 'Microsoft Teams', 'App: Scout (Acme tenant)', 'Answer in Microsoft Teams.'],
+    ].map(([id, name, onDetail, offDetail]) => {
+      const later = false;
+      const needs = id === 'discord' && s.preview === 'needsServer';
+      const on = !later && !needs && s.chats[id] === true;
+      return {
+        name, titleId: 'chat-' + id, reasonId: 'chat-reason-' + id, reason: '',
+        detail: on ? onDetail : needs ? 'Scout is in no server yet. Add it to the server it answers in.' : offDetail,
+        chip: later ? 'Coming later' : on ? 'Connected' : needs ? 'Needs a server' : 'Not connected',
+        chipBg: later ? t.infoBg : on ? t.okBg : t.neutralBg,
+        chipFg: later ? t.info : on ? t.ok : t.neutral,
+        chipD: later ? clock : on ? chk : dot,
+        on, off: !later && !on && !needs, later, needs,
+        addToServer: () => this.setState({ preview: 'normal', chats: Object.assign({}, s.chats, { discord: true }) }),
+        connect: () => this.setState({ chatDlg: id, tokens: {}, tried: false, reveal: false }),
+        manage: () => this.setState({ chatDlg: id, tokens: {}, tried: false, reveal: false }),
+        disconnect: () => this.setState({ disc: id, preview: 'confirm' }),
+      };
+    });
+    const discName = s.disc === 'slack' ? 'Slack' : s.disc === 'teams' ? 'Microsoft Teams' : 'Discord';
+    const dlgDefs = {
+      slack: { title: s.chats.slack ? 'Manage Slack' : 'Connect Slack', save: s.chats.slack ? 'Save tokens' : 'Connect',
+        desc: 'Scout joins your workspace as a Slack app, so it needs the two tokens of that app.',
+        stepsTitle: 'Step 1. Create the Slack app',
+        steps: ['Pick the workspace and click Create.', 'Click Install to Workspace, then copy the Bot User OAuth Token.', 'Open Basic Information, App-Level Tokens, Generate Token and Scopes, add the scope connections:write, Generate, then copy the token.', 'In Slack, invite @scout to each channel where it should answer.'],
+        note: '',
+        fields: [
+          ['bot', 'Bot User OAuth Token (xoxb-)', 'xoxb-...', 'xoxb-', 'Step 2. Paste the two tokens. This one is under OAuth & Permissions after you install the app.', 'This is not a bot token: it starts with xoxb-.', true],
+          ['app', 'App-level token (xapp-)', 'xapp-...', 'xapp-', 'Under Basic Information, App-Level Tokens, with the connections:write scope.', 'This is not an app-level token: it starts with xapp-.', true],
+        ] },
+      discord: { title: s.chats.discord ? 'Manage Discord' : 'Connect Discord', save: s.chats.discord ? 'Save token' : 'Connect',
+        desc: s.chats.discord ? 'Scout answers as your Discord bot. Paste the bot token from the Discord Developer Portal.' : 'Scout answers as your Discord bot. Paste the bot token from the Discord Developer Portal. After the token, Scout opens the step that adds the bot to your server.',
+        stepsTitle: '', steps: [], note: '', portal: true,
+        fields: [
+          ['discord', 'Discord bot token', 'Paste the bot token', '', 'In the Discord Developer Portal: your application, Bot, Reset Token. Discord shows it once.', 'Enter the bot token.', true],
+        ] },
+      teams: { title: 'Connect Microsoft Teams', save: '',
+        desc: 'Scout answers in Teams as a Bot Framework bot.',
+        stepsTitle: '', steps: [],
+        note: 'Teams cannot be connected yet. Scout has no place on this computer to keep a Teams bot registration, and Teams sends its messages to a public HTTPS endpoint that Scout does not open.',
+        fields: [] },
+    };
+    const dlgDef = s.chatDlg ? dlgDefs[s.chatDlg] : null;
+    const tk = s.tokens;
+    const badField = (key, prefix) => { const v = (tk[key] || '').trim(); return v === '' || (prefix !== '' && !v.startsWith(prefix)); };
+    const eye = 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z';
+    const eyeOff = 'M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2';
+    const dlgFields = dlgDef ? dlgDef.fields.map(([key, label, placeholder, prefix, help, err, secret]) => {
+      const bad = s.tried && badField(key, prefix);
+      return { id: 'tok-' + key, helpId: 'tok-help-' + key, label, placeholder, value: tk[key] || '',
+        secret, type: secret && !s.reveal ? 'password' : 'text', revealed: s.reveal ? 'true' : 'false', revealLabel: s.reveal ? 'Hide ' + label : 'Show ' + label, revealIcon: s.reveal ? eyeOff : eye,
+        invalid: bad ? 'true' : 'false', border: bad ? t.err : t.line, help: bad ? err : help, helpColor: bad ? t.err : t.muted,
+        onInput: (e) => this.setState({ tokens: Object.assign({}, this.state.tokens, { [key]: e && e.target ? e.target.value : '' }) }) };
+    }) : [];
+    const dlgMissing = dlgDef ? dlgDef.fields.some(([key, , , prefix]) => badField(key, prefix)) : false;
+    return Object.assign(this.shellVals(t, 'Settings', 'Settings'), {
+      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About open'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
+      themeChoices: this.segVals(t, [['light', 'Light', sun], ['dark', 'Dark', moon], ['system', 'System', monitor]], s.theme, (id) => this.setState({ theme: id })),
+      worker: {
+        chip: wkChip[0],
+        chipBg: t[wkChip[1] + 'Bg'],
+        chipFg: t[wkChip[1]],
+        chipD: wkChip[2],
+        meta: wk === 'running' ? 'PID 48213 · Uptime 2 h 14 min · Restarts 0' : wk === 'starting' ? 'PID 48213 · Uptime 2 s · Restarts 0' : 'Uptime — · Restarts 0',
+        running: wk === 'running',
+        restartWaits: s.preview === 'restartWaits',
+        starting: wk === 'starting',
+        off: wk !== 'running' && wk !== 'starting',
+        failed,
+      },
+      stopWorker: () => this.setState({ preview: 'workerStopped' }),
+      startWorker: () => this.setState({ preview: 'workerStarting' }),
+      audio: {
+        testing: s.preview === 'audioTest',
+        pressed: s.preview === 'audioTest' ? 'true' : 'false',
+        edge: s.preview === 'audioTest' ? t.accentStrong : t.line,
+        bg: s.preview === 'audioTest' ? t.surface2 : 'transparent',
+        level: s.preview === 'audioTest' ? 77 : 0,
+        fill: s.preview === 'audioTest' ? '77%' : '0%',
+        toggle: () => this.setState({ preview: s.preview === 'audioTest' ? 'normal' : 'audioTest' }),
+        hasError: audioError !== '',
+        error: audioError,
+        unplugged: s.preview === 'audioUnplugged',
+        hidden: s.preview === 'audioHidden',
+      },
+      swLogs: this.switchVals(t, s.showLogs, flip('showLogs')),
+      swBubble: this.switchVals(t, s.bubble, flip('bubble')),
+      corners: this.segVals(t, [['top-left', 'Top left'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']], s.corner, (id) => this.setState({ corner: id })),
+      hasDisplayRow: s.preview !== 'oneMonitor' && s.preview !== 'monitorGoneOneLeft',
+      displays: this.segVals(t, [['cursor', 'Follow the mouse cursor'], ['external', 'External display 3440×1440 (primary)'], ['built-in', 'Built-in display 1920×1080']], s.preview === 'monitorGone' ? 'unplugged' : s.preview === 'cursorStale' ? 'cursor' : s.display === 'primary' ? 'external' : s.display, (id) => this.setState({ display: id === 'external' ? 'primary' : id, preview: 'normal' })),
+      hasDisplayHint: s.preview === 'cursorStale' || s.preview === 'monitorGone' || s.preview === 'monitorGoneOneLeft',
+      displayHint: s.preview === 'monitorGone' || s.preview === 'monitorGoneOneLeft'
+        ? 'The monitor chosen for the floating button is not connected; the button is on the primary display until it is back.'
+        : "Your desktop (Wayland) does not tell Scout where the pointer is outside Scout's own windows, so the button follows the cursor only when the pointer passes over one of them.",
+      keys: [{ label: 'Ctrl' }, { label: 'Alt' }, { label: 'Space' }],
+      rec: {
+        on: recording,
+        off: !recording,
+        pressed: recording ? 'true' : 'false',
+        edge: recording ? t.accentStrong : t.line,
+        btnEdge: recording ? t.accentStrong : t.line,
+        btnBg: recording ? t.surface2 : 'transparent',
+        toggle: () => this.setState({ preview: recording ? 'normal' : 'shortcutRecording' }),
+        hasRefusal: s.preview === 'shortcutRefused',
+        hasSaveError: s.preview === 'shortcutTaken',
+        hasLost: s.preview === 'shortcutLost',
+        hasHint: s.preview === 'shortcutWayland',
+      },
+      about: {
+        open: s.aboutOpen || s.preview === 'aboutOpen',
+        expanded: s.aboutOpen || s.preview === 'aboutOpen' ? 'true' : 'false',
+        label: s.aboutOpen || s.preview === 'aboutOpen' ? 'Hide the links and notices' : 'Show the links and notices',
+        turn: s.aboutOpen || s.preview === 'aboutOpen' ? 'rotate(180deg)' : 'none',
+        toggle: () => this.setState({ aboutOpen: !(s.aboutOpen || s.preview === 'aboutOpen'), preview: s.preview === 'aboutOpen' ? 'normal' : s.preview }),
+      },
+      pairing: { pending: s.preview !== 'pairingExpired', expired: s.preview === 'pairingExpired' },
+      nobodyListed: s.preview === 'nobodyListed',
+      chatError: s.preview === 'disconnectFailed',
+      devBuild: s.preview === 'devBuild',
+      installed: s.preview !== 'devBuild',
+      allowed: s.preview === 'nobodyListed' ? [] : [
+        { id: '412398765432109876', platform: 'Discord', removeLabel: 'Remove 412398765432109876' },
+        { id: 'U04QF7K2L9P', platform: 'Slack', removeLabel: 'Remove U04QF7K2L9P' },
+      ],
+      desktopSwitches: desk,
+      snackOpen: failed,
+      confirmOpen: s.preview === 'confirm',
+      closeConfirm: () => this.setState({ preview: 'normal' }),
+      confirmKey: (e) => { if (e && e.key === 'Escape') this.setState({ preview: 'normal' }); },
+      discTitle: 'Disconnect ' + discName + '?',
+      discBody: s.disc === 'slack'
+        ? 'Scout leaves the Acme workspace and stops answering there. The tokens are removed from this computer; the Slack app stays in your workspace until you delete it.'
+        : s.disc === 'teams'
+        ? 'Scout stops answering in Microsoft Teams. The app password is removed from this computer; the bot registration stays in your Azure tenant.'
+        : 'Scout forgets the Discord app and stops answering in Acme Engineering. To use Discord again you paste the bot token and add the bot to the server again.',
+      confirmDisconnect: () => this.setState({ preview: 'normal', chats: Object.assign({}, s.chats, { [s.disc]: false }) }),
+      swYoutube: this.switchVals(t, s.youtubeConnected, flip('youtubeConnected')),
+      chats: chatList,
+      chatDlgOpen: dlgDef !== null,
+      chatDlg: dlgDef ? { title: dlgDef.title, desc: dlgDef.desc, isSlack: s.chatDlg === 'slack', hasSteps: dlgDef.steps.length > 0, stepsTitle: dlgDef.stepsTitle, steps: dlgDef.steps.map((text) => ({ text })), hasNote: dlgDef.note !== '', note: dlgDef.note, fields: dlgFields, hasError: s.tried && dlgMissing, saveLabel: dlgDef.save, hasSave: dlgDef.save !== '', cancelLabel: dlgDef.save === '' ? 'Close' : 'Cancel', hasPortal: dlgDef.portal === true } : { title: '', desc: '', isSlack: false, hasSteps: false, stepsTitle: '', steps: [], hasNote: false, note: '', fields: [], hasError: false, saveLabel: '', hasSave: false, cancelLabel: 'Cancel', hasPortal: false },
+      toggleReveal: () => this.setState({ reveal: !this.state.reveal }),
+      closeChat: () => this.setState({ chatDlg: null, tried: false }),
+      chatKey: (e) => { if (e && e.key === 'Escape') this.setState({ chatDlg: null, tried: false }); },
+      saveChat: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (dlgMissing) { this.setState({ tried: true }); return; }
+        this.setState({ chatDlg: null, tried: false, tokens: {}, chats: Object.assign({}, s.chats, { [s.chatDlg]: true }) });
+      },
+    });
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1b5a8f', infoBg: '#e1eefa', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.40)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fc7f5', infoBg: '#14283d', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(5,8,14,0.60)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
+  }
+  switchVals(t, on, toggle) {
+    return { checked: on ? 'true' : 'false', justify: on ? 'flex-end' : 'flex-start', track: on ? t.primary : t.surface2, edge: on ? t.primary : t.line, thumb: on ? '#ffffff' : t.muted, toggle };
+  }
+  segVals(t, defs, current, pick) {
+    return defs.map(([id, label, d]) => {
+      const on = current === id;
+      return { id, label, d: d || '', pressed: on ? 'true' : 'false', selected: on ? 'true' : 'false', bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, weight: on ? 600 : 500, pick: () => pick(id) };
+    });
+  }
+  shellVals(t, screenTitle, current) {
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const navDefs = [
+      ['Chat', 'Main.dc.html', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+      ['AI Sources', 'Sources.dc.html', 'M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z'],
+      ['Features', 'Features.dc.html', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['Models', 'Models.dc.html', 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7'],
+      ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
+      ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+      ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
+      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
+      ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
+    ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
+    const nav = navDefs.map(([label, href, d]) => {
+      const on = label === current;
+      return { label, href, d, current: on ? 'page' : 'false', bar: on ? t.accent : 'transparent', bg: on ? t.surface2 : 'transparent', color: on ? t.fg : t.fg2, weight: on ? 600 : 500 };
+    });
+    return {
+      t,
+      screenTitle,
+      nav,
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      themeSystem: pill(this.state.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

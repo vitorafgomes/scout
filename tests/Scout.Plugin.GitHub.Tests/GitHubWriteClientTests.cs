@@ -1,0 +1,118 @@
+using System.Net;
+using System.Text.Json;
+using Scout.Plugin.GitHub.Abstractions;
+using Scout.Plugin.GitHub.Tests.Fakes;
+
+namespace Scout.Plugin.GitHub.Tests;
+
+public sealed class GitHubWriteClientTests
+{
+    private static (GitHubWriteClient client, StubHttpMessageHandler handler) Build()
+    {
+        var handler = new StubHttpMessageHandler();
+        var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
+        return (new GitHubWriteClient(http), handler);
+    }
+
+    private static async Task<JsonElement> SentJson(StubHttpMessageHandler handler) =>
+        JsonDocument.Parse(await handler.LastRequest!.Content!.ReadAsStringAsync()).RootElement;
+
+    [Fact]
+    public async Task SubmitReview_Posts_A_Commenting_Review_With_Every_Comment_On_The_Right_Side()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.OK, """{"id":77,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-77"}""");
+
+        var posted = await client.SubmitReviewAsync("octocat", "hello", 42, "Ready after one fix.",
+            [new ReviewComment("src/Checkout.cs", 88, "Summed before the discount.")], CancellationToken.None);
+
+        posted.ShouldBe(new PostedReview(77, "https://github.com/octocat/hello/pull/42#pullrequestreview-77"));
+        handler.LastRequest!.Method.ShouldBe(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.ToString().ShouldEndWith("repos/octocat/hello/pulls/42/reviews");
+        var json = await SentJson(handler);
+        json.GetProperty("event").GetString().ShouldBe("COMMENT");
+        json.GetProperty("body").GetString().ShouldBe("Ready after one fix.");
+        var comment = json.GetProperty("comments").EnumerateArray().Single();
+        comment.GetProperty("path").GetString().ShouldBe("src/Checkout.cs");
+        comment.GetProperty("line").GetInt32().ShouldBe(88);
+        comment.GetProperty("side").GetString().ShouldBe("RIGHT");
+        comment.GetProperty("body").GetString().ShouldBe("Summed before the discount.");
+    }
+
+    [Fact]
+    public async Task CreateIssue_Posts_Title_Body_And_Labels_Only_When_Given()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.Created, """{"number":13,"html_url":"https://github.com/octocat/hello/issues/13"}""");
+        handler.EnqueueJson(HttpStatusCode.Created, """{"number":14,"html_url":"u"}""");
+
+        var created = await client.CreateIssueAsync("octocat", "hello", "CI never runs the tests", "What, why, how, where.", ["ci", "tests"], CancellationToken.None);
+        var first = await SentJson(handler);
+        await client.CreateIssueAsync("octocat", "hello", "Second", "Body", [], CancellationToken.None);
+        var second = await SentJson(handler);
+
+        created.ShouldBe(new CreatedIssue(13, "https://github.com/octocat/hello/issues/13"));
+        handler.LastRequest!.Method.ShouldBe(HttpMethod.Post);
+        handler.LastRequest.RequestUri!.ToString().ShouldEndWith("repos/octocat/hello/issues");
+        first.GetProperty("title").GetString().ShouldBe("CI never runs the tests");
+        first.GetProperty("labels").EnumerateArray().Select(l => l.GetString()).ShouldBe(["ci", "tests"]);
+        second.TryGetProperty("labels", out _).ShouldBeFalse("no labels means the property is left out, so GitHub keeps its default");
+    }
+
+    [Fact]
+    public async Task A_422_Names_What_GitHub_Rejected()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.UnprocessableEntity,
+            """{"message":"Validation Failed","errors":[{"message":"Pull request review thread line must be part of the diff"}]}""");
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.SubmitReviewAsync("octocat", "hello", 42, "b",
+            [new ReviewComment("a.cs", 999, "x")], CancellationToken.None));
+
+        ex.Message.ShouldBe("GitHub rejected the write: Pull request review thread line must be part of the diff.");
+        ex.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, """{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}""")]
+    [InlineData((HttpStatusCode)429, """{"message":"API rate limit exceeded"}""")]
+    [InlineData(HttpStatusCode.Forbidden, "{}")]
+    public async Task A_Secondary_Rate_Limit_Or_A_429_On_A_Write_Is_A_Rate_Limit_Never_Missing_Permissions(HttpStatusCode status, string body)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(status, body, r => r.Headers.TryAddWithoutValidation("Retry-After", "45"));
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.CreateIssueAsync("octocat", "hello", "t", "b", [], CancellationToken.None));
+
+        ex.Message.ShouldBe("GitHub's rate limit was reached; try again in 45 seconds.");
+        ex.StatusCode.ShouldBe(status);
+    }
+
+    [Fact]
+    public async Task A_Server_Error_Maps_Like_The_Reads_And_A_Timeout_Bubbles()
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.ServiceUnavailable, "");
+        handler.EnqueueThrow(new TaskCanceledException("timed out"));
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.CreateIssueAsync("octocat", "hello", "t", "b", [], CancellationToken.None));
+        ex.Message.ShouldBe("GitHub is currently unavailable. Try again later.");
+        await Should.ThrowAsync<TaskCanceledException>(() => client.CreateIssueAsync("octocat", "hello", "t", "b", [], CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("""{"message":"Unprocessable Entity","errors":["Can not approve your own pull request"]}""", "GitHub rejected the write: Can not approve your own pull request.")]
+    [InlineData("""{"message":"Validation Failed"}""", "GitHub rejected the write: Validation Failed.")]
+    [InlineData("", "GitHub rejected the write: the request was not valid.")]
+    [InlineData("<html>", "GitHub rejected the write: the request was not valid.")]
+    public async Task A_422_Whose_Errors_Are_Texts_Or_Missing_Still_Names_What_GitHub_Rejected(string reply, string message)
+    {
+        var (client, handler) = Build();
+        handler.EnqueueJson(HttpStatusCode.UnprocessableEntity, reply);
+
+        var ex = await Should.ThrowAsync<GitHubApiException>(() => client.SubmitVerdictAsync("octocat", "hello", 42, ReviewVerdict.Approve, "b", [], "abc1234", CancellationToken.None));
+
+        ex.Message.ShouldBe(message);
+        ex.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+}

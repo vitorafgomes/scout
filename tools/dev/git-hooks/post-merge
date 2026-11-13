@@ -1,0 +1,15 @@
+#!/bin/sh
+# Fast-forward pulls fire neither post-commit nor post-checkout, so this reuses the post-commit rebuild over ORIG_HEAD..HEAD.
+# In a worktree the git dir is .git/worktrees/<name>, which holds ORIG_HEAD but no hooks/, so hooks resolve through the common dir.
+gitdir=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+hooks="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
+if [ ! -f "$gitdir/ORIG_HEAD" ]; then
+    echo "[graphify post-merge] no ORIG_HEAD in $gitdir, nothing to do"
+    exit 0
+fi
+if [ ! -x "$hooks/post-commit" ]; then
+    echo "[graphify post-merge] no executable post-commit in $hooks, nothing to do"
+    exit 0
+fi
+echo "[graphify post-merge] refreshing over ORIG_HEAD..HEAD via $hooks/post-commit"
+GRAPHIFY_DIFF_BASE=ORIG_HEAD exec "$hooks/post-commit"

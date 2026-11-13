@@ -1,0 +1,2 @@
+The presenters in this folder (ada.png, kofi.png, mei.png and rafa.png) and presenters.json are part of Scout and
+are licensed under Scout's MIT licence, the LICENSE file at the root of the Scout repository.

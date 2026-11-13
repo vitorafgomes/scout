@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Scout.Operator</RootNamespace>
+    <AssemblyName>Scout.Operator</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+    <PackageReference Include="Microsoft.SemanticKernel" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Scout.Llm\Scout.Llm.csproj" />
+    <ProjectReference Include="..\Scout.Conversation\Scout.Conversation.csproj" />
+    <ProjectReference Include="..\Scout.Plugin.YouTube\Scout.Plugin.YouTube.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Scout.Operator.Tests" />
+    <InternalsVisibleTo Include="Scout.Host.Console.Tests" />
+  </ItemGroup>
+</Project>

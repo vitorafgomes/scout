@@ -1,0 +1,994 @@
+import {
+  CHANNEL,
+  type AppNotification,
+  type LocalBubbleStatus,
+  type LocalListeningResponse,
+  type LocalTranscriptEvent,
+  type GitHubVerdictStatus,
+  type LocalTurn,
+  type ScoutBridge,
+  type ThemeState,
+  type UpdateNotice,
+  type UpdateProgress,
+  type UsageSnapshot,
+  type WorkerEvent,
+} from '@scout/shared';
+
+export interface IpcSubset {
+  invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+  on(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown;
+  removeListener(channel: string, listener: (event: unknown, ...args: unknown[]) => void): unknown;
+}
+
+export function buildBridge(ipc: IpcSubset): ScoutBridge {
+  return {
+    detectClients() {
+      return ipc.invoke(CHANNEL.detectClients) as ReturnType<ScoutBridge['detectClients']>;
+    },
+
+    discordCheckToken(req) {
+      return ipc.invoke(CHANNEL.discordCheckToken, req) as ReturnType<
+        ScoutBridge['discordCheckToken']
+      >;
+    },
+
+    discordEnableIntent() {
+      return ipc.invoke(CHANNEL.discordEnableIntent) as ReturnType<
+        ScoutBridge['discordEnableIntent']
+      >;
+    },
+
+    discordInviteUrl() {
+      return ipc.invoke(CHANNEL.discordInviteUrl) as ReturnType<ScoutBridge['discordInviteUrl']>;
+    },
+
+    discordGuilds() {
+      return ipc.invoke(CHANNEL.discordGuilds) as ReturnType<ScoutBridge['discordGuilds']>;
+    },
+
+    chatgptSignIn() {
+      return ipc.invoke(CHANNEL.chatgptSignIn) as ReturnType<ScoutBridge['chatgptSignIn']>;
+    },
+
+    chatgptCancelSignIn() {
+      return ipc.invoke(CHANNEL.chatgptCancelSignIn) as ReturnType<
+        ScoutBridge['chatgptCancelSignIn']
+      >;
+    },
+
+    chatgptListModels() {
+      return ipc.invoke(CHANNEL.chatgptListModels) as ReturnType<ScoutBridge['chatgptListModels']>;
+    },
+
+    chatgptSignOut() {
+      return ipc.invoke(CHANNEL.chatgptSignOut) as ReturnType<ScoutBridge['chatgptSignOut']>;
+    },
+
+    chatgptStatus() {
+      return ipc.invoke(CHANNEL.chatgptStatus) as ReturnType<ScoutBridge['chatgptStatus']>;
+    },
+
+    usageGet() {
+      return ipc.invoke(CHANNEL.usageGet) as ReturnType<ScoutBridge['usageGet']>;
+    },
+
+    onUsageChanged(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as UsageSnapshot);
+      ipc.on(CHANNEL.usageChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.usageChanged, handler);
+      };
+    },
+
+    usageOpenRouterKey() {
+      return ipc.invoke(CHANNEL.usageOpenRouterKey) as ReturnType<
+        ScoutBridge['usageOpenRouterKey']
+      >;
+    },
+
+    usageOrgSpend(req) {
+      return ipc.invoke(CHANNEL.usageOrgSpend, req) as ReturnType<ScoutBridge['usageOrgSpend']>;
+    },
+
+    usageAdminKeySave(req) {
+      return ipc.invoke(CHANNEL.usageAdminKeySave, req) as ReturnType<
+        ScoutBridge['usageAdminKeySave']
+      >;
+    },
+
+    usageAdminKeyRemove(req) {
+      return ipc.invoke(CHANNEL.usageAdminKeyRemove, req) as ReturnType<
+        ScoutBridge['usageAdminKeyRemove']
+      >;
+    },
+
+    vaultStore(req) {
+      return ipc.invoke(CHANNEL.vaultStore, req) as ReturnType<ScoutBridge['vaultStore']>;
+    },
+
+    vaultHas(req) {
+      return ipc.invoke(CHANNEL.vaultHas, req) as ReturnType<ScoutBridge['vaultHas']>;
+    },
+
+    vaultDelete(req) {
+      return ipc.invoke(CHANNEL.vaultDelete, req) as ReturnType<ScoutBridge['vaultDelete']>;
+    },
+
+    vaultGetPublic(req) {
+      return ipc.invoke(CHANNEL.vaultGetPublic, req) as ReturnType<ScoutBridge['vaultGetPublic']>;
+    },
+
+    vaultIsAvailable() {
+      return ipc.invoke(CHANNEL.vaultIsAvailable) as ReturnType<ScoutBridge['vaultIsAvailable']>;
+    },
+
+    workerStart() {
+      return ipc.invoke(CHANNEL.workerStart) as ReturnType<ScoutBridge['workerStart']>;
+    },
+
+    workerStop() {
+      return ipc.invoke(CHANNEL.workerStop) as ReturnType<ScoutBridge['workerStop']>;
+    },
+
+    workerRestart(req) {
+      return ipc.invoke(CHANNEL.workerRestart, req) as ReturnType<ScoutBridge['workerRestart']>;
+    },
+
+    workerStatus() {
+      return ipc.invoke(CHANNEL.workerStatus) as ReturnType<ScoutBridge['workerStatus']>;
+    },
+
+    workerLogSnapshot() {
+      return ipc.invoke(CHANNEL.workerLogSnapshot) as ReturnType<ScoutBridge['workerLogSnapshot']>;
+    },
+
+    onWorkerEvent(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as WorkerEvent);
+      ipc.on(CHANNEL.workerEvents, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.workerEvents, handler);
+      };
+    },
+
+    appOpenExternal(req) {
+      return ipc.invoke(CHANNEL.appOpenExternal, req) as ReturnType<ScoutBridge['appOpenExternal']>;
+    },
+
+    appGetVersion() {
+      return ipc.invoke(CHANNEL.appGetVersion) as ReturnType<ScoutBridge['appGetVersion']>;
+    },
+
+    appQuit() {
+      return ipc.invoke(CHANNEL.appQuit) as ReturnType<ScoutBridge['appQuit']>;
+    },
+
+    appShowMainWindow() {
+      return ipc.invoke(CHANNEL.appShowMainWindow) as ReturnType<ScoutBridge['appShowMainWindow']>;
+    },
+
+    llmListOllamaModels(req) {
+      return ipc.invoke(CHANNEL.llmListOllamaModels, req) as ReturnType<
+        ScoutBridge['llmListOllamaModels']
+      >;
+    },
+
+    llmListLmStudioModels(req) {
+      return ipc.invoke(CHANNEL.llmListLmStudioModels, req) as ReturnType<
+        ScoutBridge['llmListLmStudioModels']
+      >;
+    },
+
+    llmPullOllamaModel(req) {
+      return ipc.invoke(CHANNEL.llmPullOllamaModel, req) as ReturnType<
+        ScoutBridge['llmPullOllamaModel']
+      >;
+    },
+
+    onLlmPullOllamaProgress(listener) {
+      const handler = (_event: unknown, payload: unknown): void => {
+        listener(payload as Parameters<typeof listener>[0]);
+      };
+      ipc.on(CHANNEL.llmPullOllamaProgress, handler);
+      return (): void => {
+        ipc.removeListener(CHANNEL.llmPullOllamaProgress, handler);
+      };
+    },
+
+    llmCancelOllamaPull(req) {
+      return ipc.invoke(CHANNEL.llmCancelOllamaPull, req) as ReturnType<
+        ScoutBridge['llmCancelOllamaPull']
+      >;
+    },
+
+    llmDeleteOllamaModel(req) {
+      return ipc.invoke(CHANNEL.llmDeleteOllamaModel, req) as ReturnType<
+        ScoutBridge['llmDeleteOllamaModel']
+      >;
+    },
+
+    llmUnloadOllamaModels() {
+      return ipc.invoke(CHANNEL.llmUnloadOllamaModels) as ReturnType<
+        ScoutBridge['llmUnloadOllamaModels']
+      >;
+    },
+
+    whisperListInstalled() {
+      return ipc.invoke(CHANNEL.whisperListInstalled) as ReturnType<
+        ScoutBridge['whisperListInstalled']
+      >;
+    },
+
+    whisperModelTable() {
+      return ipc.invoke(CHANNEL.whisperModelTable) as ReturnType<ScoutBridge['whisperModelTable']>;
+    },
+
+    whisperUseModel(req) {
+      return ipc.invoke(CHANNEL.whisperUseModel, req) as ReturnType<ScoutBridge['whisperUseModel']>;
+    },
+
+    whisperDownloadModel(req) {
+      return ipc.invoke(CHANNEL.whisperDownloadModel, req) as ReturnType<
+        ScoutBridge['whisperDownloadModel']
+      >;
+    },
+
+    onWhisperDownloadProgress(listener) {
+      const handler = (_event: unknown, payload: unknown): void => {
+        listener(payload as Parameters<typeof listener>[0]);
+      };
+      ipc.on(CHANNEL.whisperDownloadProgress, handler);
+      return (): void => {
+        ipc.removeListener(CHANNEL.whisperDownloadProgress, handler);
+      };
+    },
+
+    whisperCancelDownload(req) {
+      return ipc.invoke(CHANNEL.whisperCancelDownload, req) as ReturnType<
+        ScoutBridge['whisperCancelDownload']
+      >;
+    },
+
+    whisperDeleteModel(req) {
+      return ipc.invoke(CHANNEL.whisperDeleteModel, req) as ReturnType<
+        ScoutBridge['whisperDeleteModel']
+      >;
+    },
+
+    validateProviderKey(req) {
+      return ipc.invoke(CHANNEL.providersValidateKey, req) as ReturnType<
+        ScoutBridge['validateProviderKey']
+      >;
+    },
+
+    llmListModels(req) {
+      return ipc.invoke(CHANNEL.llmListModels, req) as ReturnType<ScoutBridge['llmListModels']>;
+    },
+
+    featuresList() {
+      return ipc.invoke(CHANNEL.featuresList) as ReturnType<ScoutBridge['featuresList']>;
+    },
+
+    featureSetCredentials(req) {
+      return ipc.invoke(CHANNEL.featureSetCredentials, req) as ReturnType<
+        ScoutBridge['featureSetCredentials']
+      >;
+    },
+
+    featureSetup(req) {
+      return ipc.invoke(CHANNEL.featureSetup, req) as ReturnType<ScoutBridge['featureSetup']>;
+    },
+
+    featureDeleteCredentials(req) {
+      return ipc.invoke(CHANNEL.featureDeleteCredentials, req) as ReturnType<
+        ScoutBridge['featureDeleteCredentials']
+      >;
+    },
+
+    featureEnable(req) {
+      return ipc.invoke(CHANNEL.featureEnable, req) as ReturnType<ScoutBridge['featureEnable']>;
+    },
+
+    featureDisable(req) {
+      return ipc.invoke(CHANNEL.featureDisable, req) as ReturnType<ScoutBridge['featureDisable']>;
+    },
+
+    featureWriteGrant(req) {
+      return ipc.invoke(CHANNEL.featureWriteGrant, req) as ReturnType<
+        ScoutBridge['featureWriteGrant']
+      >;
+    },
+
+    onFeaturesChanged(listener) {
+      const handler = (): void => listener();
+      ipc.on(CHANNEL.featuresChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.featuresChanged, handler);
+      };
+    },
+
+    actionsList() {
+      return ipc.invoke(CHANNEL.actionsList) as ReturnType<ScoutBridge['actionsList']>;
+    },
+
+    actionsApprove(req) {
+      return ipc.invoke(CHANNEL.actionsApprove, req) as ReturnType<ScoutBridge['actionsApprove']>;
+    },
+
+    actionsReject(req) {
+      return ipc.invoke(CHANNEL.actionsReject, req) as ReturnType<ScoutBridge['actionsReject']>;
+    },
+
+    onActionsChanged(listener) {
+      const handler = (): void => listener();
+      ipc.on(CHANNEL.actionsChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.actionsChanged, handler);
+      };
+    },
+
+    writesList(req) {
+      return ipc.invoke(CHANNEL.writesList, req) as ReturnType<ScoutBridge['writesList']>;
+    },
+
+    operatorMandate() {
+      return ipc.invoke(CHANNEL.operatorMandate) as ReturnType<ScoutBridge['operatorMandate']>;
+    },
+
+    operatorSaveMandate(req) {
+      return ipc.invoke(CHANNEL.operatorSaveMandate, req) as ReturnType<
+        ScoutBridge['operatorSaveMandate']
+      >;
+    },
+
+    operatorProjects(req) {
+      return ipc.invoke(CHANNEL.operatorProjects, req) as ReturnType<
+        ScoutBridge['operatorProjects']
+      >;
+    },
+
+    operatorProject(req) {
+      return ipc.invoke(CHANNEL.operatorProject, req) as ReturnType<ScoutBridge['operatorProject']>;
+    },
+
+    operatorStartProject(req) {
+      return ipc.invoke(CHANNEL.operatorStartProject, req) as ReturnType<
+        ScoutBridge['operatorStartProject']
+      >;
+    },
+
+    operatorDecideClaim(req) {
+      return ipc.invoke(CHANNEL.operatorDecideClaim, req) as ReturnType<
+        ScoutBridge['operatorDecideClaim']
+      >;
+    },
+
+    operatorProduce(req) {
+      return ipc.invoke(CHANNEL.operatorProduction, req) as ReturnType<
+        ScoutBridge['operatorProduce']
+      >;
+    },
+
+    operatorDelegate(req) {
+      return ipc.invoke(CHANNEL.operatorDelegation, req) as ReturnType<
+        ScoutBridge['operatorDelegate']
+      >;
+    },
+
+    operatorDeleteProject(req) {
+      return ipc.invoke(CHANNEL.operatorProjectDeletion, req) as ReturnType<
+        ScoutBridge['operatorDeleteProject']
+      >;
+    },
+
+    operatorReorderScenes(req) {
+      return ipc.invoke(CHANNEL.operatorSceneOrder, req) as ReturnType<
+        ScoutBridge['operatorReorderScenes']
+      >;
+    },
+
+    operatorSetSceneLocked(req) {
+      return ipc.invoke(CHANNEL.operatorSceneLock, req) as ReturnType<
+        ScoutBridge['operatorSetSceneLocked']
+      >;
+    },
+
+    operatorRegenerateScene(req) {
+      return ipc.invoke(CHANNEL.operatorSceneRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateScene']
+      >;
+    },
+
+    operatorEditSceneText(req) {
+      return ipc.invoke(CHANNEL.operatorSceneText, req) as ReturnType<
+        ScoutBridge['operatorEditSceneText']
+      >;
+    },
+
+    operatorRegenerateNarration(req) {
+      return ipc.invoke(CHANNEL.operatorNarrationRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateNarration']
+      >;
+    },
+
+    operatorSetMouthBox(req) {
+      return ipc.invoke(CHANNEL.operatorMouthBox, req) as ReturnType<
+        ScoutBridge['operatorSetMouthBox']
+      >;
+    },
+
+    operatorRegeneratePresenter(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegeneratePresenter']
+      >;
+    },
+
+    operatorRequestPresenter(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterRequest, req) as ReturnType<
+        ScoutBridge['operatorRequestPresenter']
+      >;
+    },
+
+    operatorUsePresenterVersion(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterVersion, req) as ReturnType<
+        ScoutBridge['operatorUsePresenterVersion']
+      >;
+    },
+
+    operatorRemovePresenterVersion(req) {
+      return ipc.invoke(CHANNEL.operatorPresenterVersionRemoval, req) as ReturnType<
+        ScoutBridge['operatorRemovePresenterVersion']
+      >;
+    },
+
+    operatorEditScenePicturePrompt(req) {
+      return ipc.invoke(CHANNEL.operatorScenePicturePrompt, req) as ReturnType<
+        ScoutBridge['operatorEditScenePicturePrompt']
+      >;
+    },
+
+    operatorRegenerateScenePicture(req) {
+      return ipc.invoke(CHANNEL.operatorScenePictureRegeneration, req) as ReturnType<
+        ScoutBridge['operatorRegenerateScenePicture']
+      >;
+    },
+
+    operatorAttachSceneMedia(req) {
+      return ipc.invoke(CHANNEL.operatorSceneMedia, req) as ReturnType<
+        ScoutBridge['operatorAttachSceneMedia']
+      >;
+    },
+
+    operatorReadiness() {
+      return ipc.invoke(CHANNEL.operatorReadiness) as ReturnType<ScoutBridge['operatorReadiness']>;
+    },
+
+    operatorOpenWindow() {
+      return ipc.invoke(CHANNEL.operatorWindow) as ReturnType<ScoutBridge['operatorOpenWindow']>;
+    },
+
+    operatorAssemble(req) {
+      return ipc.invoke(CHANNEL.operatorAssembly, req) as ReturnType<
+        ScoutBridge['operatorAssemble']
+      >;
+    },
+
+    operatorConfirmMediaRights(req) {
+      return ipc.invoke(CHANNEL.operatorMediaRights, req) as ReturnType<
+        ScoutBridge['operatorConfirmMediaRights']
+      >;
+    },
+
+    operatorEditPackageMetadata(req) {
+      return ipc.invoke(CHANNEL.operatorPackageMetadata, req) as ReturnType<
+        ScoutBridge['operatorEditPackageMetadata']
+      >;
+    },
+
+    operatorApprovePackage(req) {
+      return ipc.invoke(CHANNEL.operatorPackageApproval, req) as ReturnType<
+        ScoutBridge['operatorApprovePackage']
+      >;
+    },
+
+    operatorPublishPackage(req) {
+      return ipc.invoke(CHANNEL.operatorPublication, req) as ReturnType<
+        ScoutBridge['operatorPublishPackage']
+      >;
+    },
+
+    operatorDecideProposal(req) {
+      return ipc.invoke(CHANNEL.operatorProposalDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideProposal']
+      >;
+    },
+
+    operatorStartExperiment(req) {
+      return ipc.invoke(CHANNEL.operatorExperiment, req) as ReturnType<
+        ScoutBridge['operatorStartExperiment']
+      >;
+    },
+
+    operatorAdoptExperimentWinner(req) {
+      return ipc.invoke(CHANNEL.operatorExperimentAdoption, req) as ReturnType<
+        ScoutBridge['operatorAdoptExperimentWinner']
+      >;
+    },
+
+    operatorComments() {
+      return ipc.invoke(CHANNEL.operatorComments) as ReturnType<ScoutBridge['operatorComments']>;
+    },
+
+    operatorRequestCommentSync() {
+      return ipc.invoke(CHANNEL.operatorCommentSync) as ReturnType<
+        ScoutBridge['operatorRequestCommentSync']
+      >;
+    },
+
+    operatorDecideComment(req) {
+      return ipc.invoke(CHANNEL.operatorCommentDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideComment']
+      >;
+    },
+
+    operatorApproveReply(req) {
+      return ipc.invoke(CHANNEL.operatorReplyApproval, req) as ReturnType<
+        ScoutBridge['operatorApproveReply']
+      >;
+    },
+
+    operatorDecideIdea(req) {
+      return ipc.invoke(CHANNEL.operatorIdeaDecision, req) as ReturnType<
+        ScoutBridge['operatorDecideIdea']
+      >;
+    },
+
+    githubSignIn() {
+      return ipc.invoke(CHANNEL.githubSignIn) as ReturnType<ScoutBridge['githubSignIn']>;
+    },
+
+    githubStatus() {
+      return ipc.invoke(CHANNEL.githubStatus) as ReturnType<ScoutBridge['githubStatus']>;
+    },
+
+    githubCancel() {
+      return ipc.invoke(CHANNEL.githubCancel) as ReturnType<ScoutBridge['githubCancel']>;
+    },
+
+    githubSignOut() {
+      return ipc.invoke(CHANNEL.githubSignOut) as ReturnType<ScoutBridge['githubSignOut']>;
+    },
+
+    githubSaveToken(req) {
+      return ipc.invoke(CHANNEL.githubSaveToken, req) as ReturnType<ScoutBridge['githubSaveToken']>;
+    },
+    githubBotStatus() {
+      return ipc.invoke(CHANNEL.githubBotStatus) as ReturnType<ScoutBridge['githubBotStatus']>;
+    },
+    githubBotCreate(req) {
+      return ipc.invoke(CHANNEL.githubBotCreate, req) as ReturnType<ScoutBridge['githubBotCreate']>;
+    },
+    githubBotCancel() {
+      return ipc.invoke(CHANNEL.githubBotCancel) as ReturnType<ScoutBridge['githubBotCancel']>;
+    },
+    githubBotRemove() {
+      return ipc.invoke(CHANNEL.githubBotRemove) as ReturnType<ScoutBridge['githubBotRemove']>;
+    },
+    githubGiveVerdict(req) {
+      return ipc.invoke(CHANNEL.githubGiveVerdict, req) as ReturnType<
+        ScoutBridge['githubGiveVerdict']
+      >;
+    },
+    githubVerdictStatus(req) {
+      return ipc.invoke(CHANNEL.githubVerdictStatus, req) as ReturnType<
+        ScoutBridge['githubVerdictStatus']
+      >;
+    },
+    githubVerdictFor(req) {
+      return ipc.invoke(CHANNEL.githubVerdictFor, req) as ReturnType<
+        ScoutBridge['githubVerdictFor']
+      >;
+    },
+    onGitHubVerdict(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as GitHubVerdictStatus);
+      ipc.on(CHANNEL.githubVerdict, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.githubVerdict, handler);
+      };
+    },
+    githubBotSetWrites(req) {
+      return ipc.invoke(CHANNEL.githubBotSetWrites, req) as ReturnType<
+        ScoutBridge['githubBotSetWrites']
+      >;
+    },
+
+    youtubeSignIn() {
+      return ipc.invoke(CHANNEL.youtubeSignIn) as ReturnType<ScoutBridge['youtubeSignIn']>;
+    },
+
+    youtubeStatus() {
+      return ipc.invoke(CHANNEL.youtubeStatus) as ReturnType<ScoutBridge['youtubeStatus']>;
+    },
+
+    youtubeCancelSignIn() {
+      return ipc.invoke(CHANNEL.youtubeCancelSignIn) as ReturnType<
+        ScoutBridge['youtubeCancelSignIn']
+      >;
+    },
+
+    youtubeSignOut() {
+      return ipc.invoke(CHANNEL.youtubeSignOut) as ReturnType<ScoutBridge['youtubeSignOut']>;
+    },
+
+    youtubeSaveApiKey(req) {
+      return ipc.invoke(CHANNEL.youtubeSaveApiKey, req) as ReturnType<
+        ScoutBridge['youtubeSaveApiKey']
+      >;
+    },
+
+    youtubeClearApiKey() {
+      return ipc.invoke(CHANNEL.youtubeClearApiKey) as ReturnType<
+        ScoutBridge['youtubeClearApiKey']
+      >;
+    },
+
+    kubernetesDetect() {
+      return ipc.invoke(CHANNEL.kubernetesDetect) as ReturnType<ScoutBridge['kubernetesDetect']>;
+    },
+
+    kubernetesUse(req) {
+      return ipc.invoke(CHANNEL.kubernetesUse, req) as ReturnType<ScoutBridge['kubernetesUse']>;
+    },
+
+    kubernetesStatus() {
+      return ipc.invoke(CHANNEL.kubernetesStatus) as ReturnType<ScoutBridge['kubernetesStatus']>;
+    },
+
+    kubernetesDisconnect() {
+      return ipc.invoke(CHANNEL.kubernetesDisconnect) as ReturnType<
+        ScoutBridge['kubernetesDisconnect']
+      >;
+    },
+
+    dockerState() {
+      return ipc.invoke(CHANNEL.dockerState) as ReturnType<ScoutBridge['dockerState']>;
+    },
+
+    dockerImages() {
+      return ipc.invoke(CHANNEL.dockerImages) as ReturnType<ScoutBridge['dockerImages']>;
+    },
+
+    dockerPull(req) {
+      return ipc.invoke(CHANNEL.dockerPull, req) as ReturnType<ScoutBridge['dockerPull']>;
+    },
+
+    dockerPullImage(req) {
+      return ipc.invoke(CHANNEL.dockerPullImage, req) as ReturnType<ScoutBridge['dockerPullImage']>;
+    },
+
+    onDockerPullProgress(listener) {
+      const handler = (_event: unknown, payload: unknown): void => {
+        listener(payload as Parameters<typeof listener>[0]);
+      };
+      ipc.on(CHANNEL.dockerPullProgress, handler);
+      return (): void => {
+        ipc.removeListener(CHANNEL.dockerPullProgress, handler);
+      };
+    },
+
+    dockerWorkFolder() {
+      return ipc.invoke(CHANNEL.dockerWorkFolder) as ReturnType<ScoutBridge['dockerWorkFolder']>;
+    },
+
+    dockerClear() {
+      return ipc.invoke(CHANNEL.dockerClear) as ReturnType<ScoutBridge['dockerClear']>;
+    },
+
+    dockerRepositories() {
+      return ipc.invoke(CHANNEL.dockerRepositories) as ReturnType<
+        ScoutBridge['dockerRepositories']
+      >;
+    },
+
+    dockerLastRun() {
+      return ipc.invoke(CHANNEL.dockerLastRun) as ReturnType<ScoutBridge['dockerLastRun']>;
+    },
+
+    accessGet() {
+      return ipc.invoke(CHANNEL.accessGet) as ReturnType<ScoutBridge['accessGet']>;
+    },
+
+    accessSet(req) {
+      return ipc.invoke(CHANNEL.accessSet, req) as ReturnType<ScoutBridge['accessSet']>;
+    },
+
+    accessStartPairing() {
+      return ipc.invoke(CHANNEL.accessStartPairing) as ReturnType<
+        ScoutBridge['accessStartPairing']
+      >;
+    },
+
+    slackManifestUrl() {
+      return ipc.invoke(CHANNEL.slackManifestUrl) as ReturnType<ScoutBridge['slackManifestUrl']>;
+    },
+
+    slackSave(req) {
+      return ipc.invoke(CHANNEL.slackSave, req) as ReturnType<ScoutBridge['slackSave']>;
+    },
+
+    slackStatus() {
+      return ipc.invoke(CHANNEL.slackStatus) as ReturnType<ScoutBridge['slackStatus']>;
+    },
+
+    slackDisconnect() {
+      return ipc.invoke(CHANNEL.slackDisconnect) as ReturnType<ScoutBridge['slackDisconnect']>;
+    },
+
+    desktopGetSettings() {
+      return ipc.invoke(CHANNEL.desktopGetSettings) as ReturnType<
+        ScoutBridge['desktopGetSettings']
+      >;
+    },
+
+    desktopSetKeepRunning(req) {
+      return ipc.invoke(CHANNEL.desktopSetKeepRunning, req) as ReturnType<
+        ScoutBridge['desktopSetKeepRunning']
+      >;
+    },
+
+    desktopSetStartAtLogin(req) {
+      return ipc.invoke(CHANNEL.desktopSetStartAtLogin, req) as ReturnType<
+        ScoutBridge['desktopSetStartAtLogin']
+      >;
+    },
+
+    themeGet() {
+      return ipc.invoke(CHANNEL.themeGet) as ReturnType<ScoutBridge['themeGet']>;
+    },
+
+    themeSet(choice) {
+      return ipc.invoke(CHANNEL.themeSet, { choice }) as ReturnType<ScoutBridge['themeSet']>;
+    },
+
+    onTheme(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as ThemeState);
+      ipc.on(CHANNEL.theme, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.theme, handler);
+      };
+    },
+
+    localAsk(req) {
+      return ipc.invoke(CHANNEL.localAsk, req) as ReturnType<ScoutBridge['localAsk']>;
+    },
+
+    localCancel(req) {
+      return ipc.invoke(CHANNEL.localCancel, req) as ReturnType<ScoutBridge['localCancel']>;
+    },
+
+    localGetTurns() {
+      return ipc.invoke(CHANNEL.localGetTurns) as ReturnType<ScoutBridge['localGetTurns']>;
+    },
+
+    localClearTurns() {
+      return ipc.invoke(CHANNEL.localClearTurns) as ReturnType<ScoutBridge['localClearTurns']>;
+    },
+    localSetDecisions(req) {
+      return ipc.invoke(CHANNEL.localSetDecisions, req) as ReturnType<
+        ScoutBridge['localSetDecisions']
+      >;
+    },
+
+    onLocalTurns(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as readonly LocalTurn[]);
+      ipc.on(CHANNEL.localTurns, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localTurns, handler);
+      };
+    },
+
+    localHide() {
+      return ipc.invoke(CHANNEL.localHide) as ReturnType<ScoutBridge['localHide']>;
+    },
+
+    localGetShortcut() {
+      return ipc.invoke(CHANNEL.localGetShortcut) as ReturnType<ScoutBridge['localGetShortcut']>;
+    },
+
+    localSetShortcut(req) {
+      return ipc.invoke(CHANNEL.localSetShortcut, req) as ReturnType<
+        ScoutBridge['localSetShortcut']
+      >;
+    },
+
+    localSuspendShortcut(req) {
+      return ipc.invoke(CHANNEL.localSuspendShortcut, req) as ReturnType<
+        ScoutBridge['localSuspendShortcut']
+      >;
+    },
+
+    localOpen() {
+      return ipc.invoke(CHANNEL.localOpen) as ReturnType<ScoutBridge['localOpen']>;
+    },
+
+    localGetBubble() {
+      return ipc.invoke(CHANNEL.localGetBubble) as ReturnType<ScoutBridge['localGetBubble']>;
+    },
+
+    localSetBubble(req) {
+      return ipc.invoke(CHANNEL.localSetBubble, req) as ReturnType<ScoutBridge['localSetBubble']>;
+    },
+
+    onLocalBubble(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as LocalBubbleStatus);
+      ipc.on(CHANNEL.localBubbleChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localBubbleChanged, handler);
+      };
+    },
+
+    localListen(req) {
+      return ipc.invoke(CHANNEL.localListen, req) as ReturnType<ScoutBridge['localListen']>;
+    },
+
+    localAudio(req) {
+      return ipc.invoke(CHANNEL.localAudio, req) as ReturnType<ScoutBridge['localAudio']>;
+    },
+
+    localStopListening(req) {
+      return ipc.invoke(CHANNEL.localStopListening, req) as ReturnType<
+        ScoutBridge['localStopListening']
+      >;
+    },
+    localBubbleCard(req) {
+      return ipc.invoke(CHANNEL.localBubbleCard, req) as ReturnType<ScoutBridge['localBubbleCard']>;
+    },
+    localListening() {
+      return ipc.invoke(CHANNEL.localListening) as ReturnType<ScoutBridge['localListening']>;
+    },
+
+    onLocalListening(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as LocalListeningResponse);
+      ipc.on(CHANNEL.localListeningChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localListeningChanged, handler);
+      };
+    },
+
+    onLocalTranscript(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as LocalTranscriptEvent);
+      ipc.on(CHANNEL.localTranscript, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localTranscript, handler);
+      };
+    },
+
+    localReadText(req) {
+      return ipc.invoke(CHANNEL.localReadText, req) as ReturnType<ScoutBridge['localReadText']>;
+    },
+
+    localSpeak(req) {
+      return ipc.invoke(CHANNEL.localSpeak, req) as ReturnType<ScoutBridge['localSpeak']>;
+    },
+
+    localVoices() {
+      return ipc.invoke(CHANNEL.localVoices) as ReturnType<ScoutBridge['localVoices']>;
+    },
+
+    localKeepMeeting(req) {
+      return ipc.invoke(CHANNEL.localKeepMeeting, req) as ReturnType<
+        ScoutBridge['localKeepMeeting']
+      >;
+    },
+
+    localMeetings(req) {
+      return ipc.invoke(CHANNEL.localMeetings, req) as ReturnType<ScoutBridge['localMeetings']>;
+    },
+
+    localExportMeeting(req) {
+      return ipc.invoke(CHANNEL.localExportMeeting, req) as ReturnType<
+        ScoutBridge['localExportMeeting']
+      >;
+    },
+
+    localDeleteMeetings(req) {
+      return ipc.invoke(CHANNEL.localDeleteMeetings, req) as ReturnType<
+        ScoutBridge['localDeleteMeetings']
+      >;
+    },
+
+    onLocalMeetingsChanged(listener) {
+      const handler = () => listener();
+      ipc.on(CHANNEL.localMeetingsChanged, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.localMeetingsChanged, handler);
+      };
+    },
+
+    updateGetState() {
+      return ipc.invoke(CHANNEL.updateGetState) as ReturnType<ScoutBridge['updateGetState']>;
+    },
+
+    updateSetCheckEnabled(req) {
+      return ipc.invoke(CHANNEL.updateSetCheckEnabled, req) as ReturnType<
+        ScoutBridge['updateSetCheckEnabled']
+      >;
+    },
+
+    updateCheckNow() {
+      return ipc.invoke(CHANNEL.updateCheckNow) as ReturnType<ScoutBridge['updateCheckNow']>;
+    },
+
+    updateSkipVersion(req) {
+      return ipc.invoke(CHANNEL.updateSkipVersion, req) as ReturnType<
+        ScoutBridge['updateSkipVersion']
+      >;
+    },
+
+    updateRemindLater() {
+      return ipc.invoke(CHANNEL.updateRemindLater) as ReturnType<ScoutBridge['updateRemindLater']>;
+    },
+
+    onUpdateNotice(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as UpdateNotice | null);
+      ipc.on(CHANNEL.updateNotice, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.updateNotice, handler);
+      };
+    },
+
+    updateInstall() {
+      return ipc.invoke(CHANNEL.updateInstall) as ReturnType<ScoutBridge['updateInstall']>;
+    },
+
+    onUpdateProgress(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) => listener(args[0] as UpdateProgress);
+      ipc.on(CHANNEL.updateProgress, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.updateProgress, handler);
+      };
+    },
+
+    notificationsList() {
+      return ipc.invoke(CHANNEL.notificationsList) as ReturnType<ScoutBridge['notificationsList']>;
+    },
+
+    notificationsMarkRead(ids) {
+      return ipc.invoke(
+        CHANNEL.notificationsMarkRead,
+        ids === undefined ? {} : { ids },
+      ) as ReturnType<ScoutBridge['notificationsMarkRead']>;
+    },
+
+    notificationsAct(req) {
+      return ipc.invoke(CHANNEL.notificationsAct, req) as ReturnType<
+        ScoutBridge['notificationsAct']
+      >;
+    },
+
+    notificationsControl(req) {
+      return ipc.invoke(CHANNEL.notificationsControl, {
+        id: req.id,
+        action: req.action,
+      }) as ReturnType<ScoutBridge['notificationsControl']>;
+    },
+
+    onNotifications(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as readonly AppNotification[]);
+      ipc.on(CHANNEL.notifications, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.notifications, handler);
+      };
+    },
+
+    noticeRecord(req) {
+      return ipc.invoke(CHANNEL.noticeRecord, req) as ReturnType<ScoutBridge['noticeRecord']>;
+    },
+  };
+}

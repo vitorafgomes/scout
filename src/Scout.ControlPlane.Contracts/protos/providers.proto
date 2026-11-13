@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+// Local runtime providers (Ollama, LM Studio).
+service Providers {
+  rpc ListProviders(ListProvidersRequest) returns (ListProvidersResponse);
+  rpc GetProviderStatus(GetProviderStatusRequest) returns (ProviderStatus);
+  rpc StartProvider(StartProviderRequest) returns (ProviderStatus);
+  rpc StopProvider(StopProviderRequest) returns (ProviderStatus);
+  rpc RestartProvider(RestartProviderRequest) returns (ProviderStatus);
+  rpc SetAutostart(SetAutostartRequest) returns (SetAutostartResponse);
+  rpc WatchProviderStatus(WatchProviderStatusRequest) returns (stream ProviderStatusEvent);
+}
+
+enum ProviderId {
+  PROVIDER_ID_UNSPECIFIED = 0;
+  OLLAMA = 1;
+  LM_STUDIO = 2;
+}
+
+// Structured error payload for a provider snapshot.
+message ProviderError {
+  string code = 1;
+  string message = 2;
+}
+
+// A single model exposed by a local runtime provider.
+message ProviderModel {
+  string name = 1;
+  int64 size_bytes = 2;
+  string modified_at = 3;
+}
+
+// Snapshot describing a local runtime provider.
+message ProviderStatus {
+  ProviderId id = 1;
+  bool installed = 2;
+  bool running = 3;
+  optional string endpoint = 4;
+  optional string version = 5;
+  bool managed_by_worker = 6;
+  bool autostart = 7;
+  bool supports_lifecycle = 8;
+  ProviderError last_error = 9;
+  repeated ProviderModel models = 10;
+}
+
+message ListProvidersRequest {}
+
+message ListProvidersResponse {
+  repeated ProviderStatus providers = 1;
+}
+
+message GetProviderStatusRequest {
+  ProviderId id = 1;
+}
+
+message StartProviderRequest {
+  ProviderId id = 1;
+}
+
+message StopProviderRequest {
+  ProviderId id = 1;
+}
+
+message RestartProviderRequest {
+  ProviderId id = 1;
+}
+
+message SetAutostartRequest {
+  ProviderId id = 1;
+  bool enabled = 2;
+}
+
+message SetAutostartResponse {}
+
+message WatchProviderStatusRequest {
+  ProviderId id = 1;
+}
+
+// Streamed status update for a watched provider.
+message ProviderStatusEvent {
+  ProviderStatus status = 1;
+}

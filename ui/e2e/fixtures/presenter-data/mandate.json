@@ -1,0 +1,13 @@
+{
+  "objective": "Teach home bakers to make bread they are proud of.",
+  "audience": "Beginners who bake at the weekend",
+  "pillars": ["Sourdough", "Quick breads"],
+  "cadence": "One video a week",
+  "language": "English",
+  "voiceAndStyle": "Warm, plain and practical",
+  "blockedTopics": ["Diet advice"],
+  "targetMetric": "watch_hours",
+  "targetValue": "4000",
+  "updatedAt": "2026-11-02T12:00:00+00:00",
+  "defaultFormat": "generated_pictures"
+}

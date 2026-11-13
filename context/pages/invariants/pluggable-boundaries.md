@@ -1,0 +1,75 @@
+---
+title: "Adapters, LLM providers and plugins are swapped by configuration"
+version: "1.5"
+date: 2026-10-21
+updated: 2026-11-12
+changes: "An ArchTest pins the Ollama client inside its provider folder, now that Ollama chat is built from it (ADR 0012 amendment). Earlier: No connector type is named in Scout.Llm outside the provider folders, pinned by an ArchTest; the OpenAI settings type is built in one provider file.."
+page_type: invariant
+status: active
+description: "Chat adapters, LLM providers and plugins sit behind abstractions and are selected or gated by Scout: configuration; the core names no vendor. The set of options is closed at compile time."
+enforced_by:
+  - "src/Scout.Conversation/Abstractions/IChatAdapter.cs:11"
+  - "src/Scout.Llm/Abstractions/ILlmProviderFactory.cs:17"
+  - "src/Scout.Llm/LlmServiceCollectionExtensions.cs:73"
+  - "src/Scout.Llm/LlmServiceCollectionExtensions.cs:128"
+verified_by:
+  - "tests/Scout.ArchTests/ArchitectureTests.cs:147"
+  - "tests/Scout.ArchTests/ArchitectureTests.cs:169"
+  - "tests/Scout.ArchTests/ArchitectureTests.cs:188"
+  - "tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:233"
+  - "tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:309"
+  - "tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:187"
+source:
+  - "src/Scout.Conversation/"
+  - "src/Scout.Llm/"
+  - "src/Scout.Host.Console/"
+  - "tests/Scout.Llm.Tests/"
+  - "tests/Scout.Host.Console.Tests/"
+reliability: high
+---
+
+# Adapters, LLM providers and plugins are swapped by configuration
+
+> The conversation core and the host talk to `IChatAdapter`, `IChatGateway` and `KernelPlugin`, never to Discord, Ollama or GitHub types; which implementation runs is decided by `Scout:` configuration.
+
+## Why this exists
+
+Scout is open source and ships to users who have different chat platforms and different LLM budgets. A vendor type in the core would force every user to carry it.
+
+## Scope
+
+- **Applies to:** `Scout.Conversation`, `Scout.Host.Console`, and every consumer of `IChatGateway`.
+- **Does not cover:** adding a new vendor. That needs a code change and a rebuild (see Known gaps).
+
+## Where it is enforced
+
+- **Adapters.** `src/Scout.Conversation/Abstractions/IChatAdapter.cs:11` and `src/Scout.Conversation/Abstractions/IResponseSink.cs:17` are the only surface the core sees. Each adapter registers itself as `IChatAdapter` only when its credentials are present: `src/Scout.Adapter.Discord/DiscordServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Slack/SlackServiceCollectionExtensions.cs:32`, `src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:37`; the local adapter has no credential and registers only when `Scout:Adapters:Local:Enabled` is true (`src/Scout.Adapter.Local/LocalServiceCollectionExtensions.cs:23`, [[pages/services/adapter-local]]). The host starts whatever set is registered: `src/Scout.Host.Console/ConversationWorker.cs:40`.
+- **LLM providers.** `src/Scout.Llm/Abstractions/ILlmProviderFactory.cs:17` is the contract. `src/Scout.Llm/LlmServiceCollectionExtensions.cs:76` switches on `Scout:Llm:Provider` over eleven factories (ten providers, ChatGptPlan and Anthropic among them, and `None`, which answers with a fixed message and calls no model) and fails startup on an unknown name (`:112`). Consumers receive `IChatGateway` (`src/Scout.Llm/Abstractions/IChatGateway.cs:8`), built at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:164`, and a standalone embedding generator (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:161`).
+- **Plugins.** The kernel adds every `KernelPlugin` found in DI (`src/Scout.Llm/LlmServiceCollectionExtensions.cs:131`). GitHub, Kubernetes, Skills and ProjectKnowledge each register one only when enabled: `src/Scout.Plugin.GitHub/GitHubServiceCollectionExtensions.cs:45`, `src/Scout.Plugin.Kubernetes/KubernetesServiceCollectionExtensions.cs:33`, `src/Scout.Skills/SkillsServiceCollectionExtensions.cs:43`, `src/Scout.Knowledge/KnowledgeServiceCollectionExtensions.cs:77`.
+
+## How it is verified
+- `tests/Scout.ArchTests/ArchitectureTests.cs:147` fails when any Scout library type outside `Scout.Llm.Providers.Anthropic` references the Anthropic SDK (its `Anthropic` namespace or its `Microsoft.Extensions.AI.Anthropic*` extension types), so the Claude API client stays inside its factory ([[pages/decisions/0048-claude-as-an-ai-source]]).
+- `tests/Scout.ArchTests/ArchitectureTests.cs:188` fails when any Scout library type outside `Scout.Llm.Providers.Ollama` references the Ollama client library (`OllamaSharp`), whose chat client the Ollama factory builds for the native chat endpoint ([[pages/decisions/0012-llm-communication-through-semantic-kernel]], amendment of 2026-11-12); it was seen to fail naming `OllamaLlmProviderFactory` when the excluded namespace pointed elsewhere.
+
+- `tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:38,106,203` resolve the expected factory for Ollama, Gemini and six more providers; `:290` asserts an unknown name throws and lists the supported ones.
+- `tests/Scout.Llm.Tests/LlmServiceCollectionExtensionsTests.cs:309` asserts a registered plugin lands on the kernel.
+- `tests/Scout.Adapter.Discord.Tests/DiscordServiceCollectionExtensionsTests.cs:39`, `tests/Scout.Adapter.Slack.Tests/SlackServiceCollectionExtensionsTests.cs:52` and `tests/Scout.Adapter.Teams.Tests/TeamsServiceCollectionExtensionsTests.cs:39` assert no credentials means no adapter; `tests/Scout.Adapter.Local.Tests/LocalChatAdapterTests.cs` asserts the local adapter is absent unless enabled.
+- `tests/Scout.Host.Console.Tests/HostCompositionSmokeTests.cs:187` builds the host with no adapter and no project and asserts it still resolves.
+- `tests/Scout.Knowledge.Tests/KnowledgeServiceCollectionExtensionsTests.cs:107` asserts the plugin is on the kernel with no project configured and no project listed, because a repository snapshot registers one at run time (ADR 0039); the GitHub plugin reaches the index only through `IRepositoryProjects`, which the host implements (`src/Scout.Host.Console/KnowledgeRepositoryProjects.cs:7`).
+
+## Known gaps
+
+- **The provider list is closed.** The switch at `src/Scout.Llm/LlmServiceCollectionExtensions.cs:76` has no registry or discovery; a new provider means editing it.
+- **Vendor packages are linked in.** `src/Scout.Llm/Scout.Llm.csproj` references the connectors for all providers, and `Scout.Conversation` and the adapters inherit them through the project reference. `Scout.Host.Console` references all four adapters and the GitHub and Kubernetes plugins at compile time; the `KubernetesClient` package stays inside `Scout.Plugin.Kubernetes`, which exposes only a `KernelPlugin` (`src/Scout.Host.Console/Scout.Host.Console.csproj:21`), so swapping is by configuration, not by deployment.
+- **One settings type serves every provider.** `src/Scout.Llm/Providers/ProviderSettings.cs:19` builds `OpenAIPromptExecutionSettings` for every provider, inside the provider folders; no file of `Scout.Llm` outside them names a connector type (`tests/Scout.ArchTests/ArchitectureTests.cs:169`). The type still leaks into the core at `src/Scout.Knowledge/ProjectExpertAgentFactory.cs:88`.
+- **Log label covers three providers.** `src/Scout.Llm/ChatGateway.cs:44` describes Ollama, OpenAI and Gemini; any other provider logs its name with `unknown` endpoint and model.
+- **Teams has no live inbound path.** `TeamsChatAdapter.ProcessActivityAsync` (`src/Scout.Adapter.Teams/TeamsChatAdapter.cs:100`) has no production caller; the webhook is deliberately not wired (`src/Scout.Adapter.Teams/TeamsServiceCollectionExtensions.cs:18`).
+
+## Related
+
+- Services: [[pages/services/llm]], [[pages/services/conversation]], [[pages/services/host-console]], [[pages/services/adapter-discord]], [[pages/services/adapter-slack]], [[pages/services/adapter-teams]], [[pages/services/plugin-github]]
+- Similar: [[pages/invariants/local-first-default]], [[pages/invariants/no-executive-writes]]
+
+## Change protocol
+
+To close a gap (for example a provider registry), draft a superseding ADR first, then change the switch and keep the unknown-provider test.

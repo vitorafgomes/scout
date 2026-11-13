@@ -1,0 +1,249 @@
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Agents;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.TextGeneration;
+using Scout.Llm.Abstractions;
+using Scout.Llm.Configuration;
+using Scout.Llm.Guard;
+using Scout.Llm.Providers.Anthropic;
+using Scout.Llm.Providers.AzureAIInference;
+using Scout.Llm.Providers.AzureOpenAI;
+using Scout.Llm.Providers.ChatGptPlan;
+using Scout.Llm.Providers.Gemini;
+using Scout.Llm.Providers.HuggingFace;
+using Scout.Llm.Providers.Mistral;
+using Scout.Llm.Providers.None;
+using Scout.Llm.Providers.Ollama;
+using Scout.Llm.Providers.OpenAI;
+using Scout.Llm.Providers.OpenRouter;
+
+namespace Scout.Llm;
+
+/// <summary>
+/// Composition root for the Scout LLM gateway. Wires the active provider, a
+/// single shared <see cref="Kernel"/>, the chat-completion and embedding
+/// services resolved from that kernel, and the streaming-first
+/// <see cref="IChatGateway"/> so every consumer shares one routing surface.
+/// </summary>
+public static class LlmServiceCollectionExtensions
+{
+    /// <summary>
+    /// Register the Scout LLM gateway. Binds <c>Scout:Llm</c>, selects the
+    /// provider, builds one shared kernel, and exposes
+    /// <see cref="IChatCompletionService"/> and
+    /// <see cref="IEmbeddingGenerator{TInput,TEmbedding}"/> from it. When
+    /// <c>Scout:Guard:TypeSafe:ApiKey</c> is set, the kernel's chat service is the
+    /// read-only guard wrapping the provider's own; with provider <c>None</c> no
+    /// model answers, so no guard is registered and TypeSafe is never called.
+    /// The live translator, outside the guard, uses a chat service bound to
+    /// <c>Scout:Llm:Translation:Model</c> when it is set and the provider builds one,
+    /// and the provider's chat service otherwise.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown at startup when <c>LlmOptions.Provider</c> names an unknown provider.
+    /// </exception>
+    public static IServiceCollection AddScoutLlm(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.Configure<LlmOptions>(configuration.GetSection("Scout:Llm"));
+
+        var provider = configuration.GetSection("Scout:Llm")["Provider"];
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            provider = new LlmOptions().Provider;
+        }
+
+        var guarded = provider != "None" && !string.IsNullOrWhiteSpace(
+            configuration.GetSection(TypeSafeGuardOptions.Section)["ApiKey"]);
+        if (guarded)
+        {
+            services.Configure<TypeSafeGuardOptions>(configuration.GetSection(TypeSafeGuardOptions.Section));
+            services.Configure<FeatureGrantsOptions>(configuration.GetSection(FeatureGrantsOptions.Section));
+            services.AddHttpClient<TypeSafeClient>(client => client.Timeout = TimeSpan.FromSeconds(5));
+        }
+
+        switch (provider)
+        {
+            case "Ollama":
+                services.AddOllamaLlmProvider();
+                break;
+            case "Gemini":
+                services.AddGeminiLlmProvider();
+                break;
+            case "OpenAI":
+                services.AddOpenAILlmProvider();
+                break;
+            case "OpenRouter":
+                services.AddOpenRouterLlmProvider();
+                break;
+            case "AzureOpenAI":
+                services.AddAzureOpenAILlmProvider();
+                break;
+            case "Mistral":
+                services.AddMistralLlmProvider();
+                break;
+            case "HuggingFace":
+                services.AddHuggingFaceLlmProvider();
+                break;
+            case "AzureAIInference":
+                services.AddAzureAIInferenceLlmProvider();
+                break;
+            case "ChatGptPlan":
+                services.AddChatGptPlanLlmProvider();
+                break;
+            case "Anthropic":
+                services.TryAddSingleton<ILlmProviderFactory, AnthropicLlmProviderFactory>();
+                break;
+            case "None":
+                services.AddNoneLlmProvider();
+                break;
+            default:
+                throw new InvalidOperationException(
+                    $"Unknown LLM provider '{provider}'. Supported providers: Ollama, " +
+                    "Gemini, OpenAI, OpenRouter, AzureOpenAI, Mistral, HuggingFace, " +
+                    "AzureAIInference, ChatGptPlan, Anthropic, None.");
+        }
+
+        services.AddSingleton(sp =>
+        {
+            var factory = sp.GetRequiredService<ILlmProviderFactory>();
+            var builder = Kernel.CreateBuilder();
+            factory.AddToKernel(builder);
+            if (guarded)
+            {
+                AddReadOnlyGuard(builder.Services, sp);
+            }
+
+            // Register every plugin contributed by feature modules (e.g. GitHub)
+            // onto the shared kernel so the LLM can invoke them via
+            // function-calling. Self-gating modules contribute none when off.
+            foreach (var plugin in sp.GetServices<KernelPlugin>())
+            {
+                builder.Plugins.Add(plugin);
+            }
+
+            builder.Services.AddSingleton<IFunctionInvocationFilter>(new ActivityFilter());
+            var writeFunctions = sp.GetServices<WriteFunctionDeclaration>().ToList();
+            if (writeFunctions.Count > 0)
+            {
+                builder.Services.AddSingleton<IFunctionInvocationFilter>(new WriteGateFilter(
+                    writeFunctions,
+                    sp.GetRequiredService<IWriteGate>(),
+                    sp.GetService<ILogger<WriteGateFilter>>() ?? NullLogger<WriteGateFilter>.Instance));
+            }
+
+            return builder.Build();
+        });
+
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<Kernel>().GetRequiredService<IChatCompletionService>());
+
+        // Resolve the embedding generator straight from the provider factory, NOT
+        // from the shared kernel. Deriving it from the kernel created a cycle:
+        // kernel -> KernelPlugin (project knowledge) -> ProjectKnowledgeService ->
+        // IEmbeddingGenerator -> kernel (still under construction). The kernel
+        // still registers its own embedder via AddToKernel for its internal use.
+        // Resolve the embedding generator straight from the provider factory, NOT
+        // from the shared kernel. Deriving it from the kernel created a cycle:
+        // kernel -> KernelPlugin (project knowledge) -> ProjectKnowledgeService ->
+        // IEmbeddingGenerator -> kernel (still under construction). The kernel
+        // still registers its own embedder via AddToKernel for its internal use.
+        services.AddSingleton(sp =>
+            sp.GetRequiredService<ILlmProviderFactory>().CreateEmbeddingGenerator());
+
+        services.AddSingleton<IChatGateway>(sp =>
+            new ChatGateway(
+                sp.GetRequiredService<IChatCompletionService>(),
+                sp.GetRequiredService<Kernel>(),
+                sp.GetService<IOptions<LlmOptions>>(),
+                sp.GetService<ILogger<ChatGateway>>(),
+                // Optional: when a feature module registers the Project Expert
+                // agent, the gateway streams replies through it so its grounding
+                // instructions and tools apply. Absent, the direct chat path runs.
+                sp.GetService<ChatCompletionAgent>(),
+                sp.GetRequiredService<ILlmProviderFactory>().Media, sp.GetService<ILlmUsageSink>()));
+
+        services.AddSingleton(sp => sp.GetRequiredService<ILlmProviderFactory>().Media);
+
+        if (provider != "None")
+        {
+            services.AddSingleton<ILiveTranslator>(sp =>
+            {
+                var model = sp.GetRequiredService<IOptions<LlmOptions>>().Value.Translation.Model;
+                if (!string.IsNullOrWhiteSpace(model)
+                    && sp.GetRequiredService<ILlmProviderFactory>().CreateChatCompletionService(model.Trim()) is { } own)
+                {
+                    return new LiveTranslator(own);
+                }
+
+                var chat = sp.GetRequiredService<IChatCompletionService>();
+                return new LiveTranslator(chat is ReadOnlyGuardChatCompletionService guard ? guard.Inner : chat);
+            });
+        }
+
+        return services;
+    }
+
+    private static void AddReadOnlyGuard(IServiceCollection kernelServices, IServiceProvider services)
+    {
+        var chat = kernelServices.Where(d => d.ServiceType == typeof(IChatCompletionService)).ToList();
+        if (chat.Count != 1 || chat[0].IsKeyedService || chat[0].ImplementationFactory is not { } innerFactory)
+        {
+            throw new InvalidOperationException(
+                "The read-only guard needs exactly one unkeyed, factory-registered chat-completion " +
+                "service in the kernel.");
+        }
+
+        kernelServices.Remove(chat[0]);
+        kernelServices.RemoveAll<ITextGenerationService>();
+        kernelServices.AddSingleton<IChatCompletionService>(kernelProvider =>
+            new ReadOnlyGuardChatCompletionService(
+                (IChatCompletionService)innerFactory(kernelProvider),
+                services.GetRequiredService<TypeSafeClient>(),
+                services.GetRequiredService<IOptions<TypeSafeGuardOptions>>().Value.Threshold,
+                services.GetRequiredService<IOptions<FeatureGrantsOptions>>().Value.GrantedWriteIds(),
+                services.GetService<ILogger<ReadOnlyGuardChatCompletionService>>()
+                    ?? NullLogger<ReadOnlyGuardChatCompletionService>.Instance));
+    }
+
+    /// <summary>
+    /// Declare that a kernel function performs a write for a feature. Every call to it
+    /// then asks the registered <see cref="IWriteGate"/> first; the kernel fails to build
+    /// when a write function is declared and no gate is registered.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="pluginName">The kernel plugin's name.</param>
+    /// <param name="functionName">The kernel function's name.</param>
+    /// <param name="featureId">The catalog id of the feature the write belongs to.</param>
+    /// <param name="scope">The catalog scope row the write performs.</param>
+    /// <param name="summaryArguments">The arguments whose values the request summary shows; none by default.</param>
+    /// <param name="carriesPayload">True to send the arguments for the function's own parameters as the request's payload, for an irreversible write that runs after the owner approves it.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddWriteFunction(
+        this IServiceCollection services,
+        string pluginName,
+        string functionName,
+        string featureId,
+        string scope,
+        IReadOnlyList<string>? summaryArguments = null,
+        bool carriesPayload = false)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.AddSingleton(new WriteFunctionDeclaration(pluginName, functionName, featureId, scope)
+        {
+            SummaryArguments = summaryArguments ?? [],
+            CarriesPayload = carriesPayload,
+        });
+    }
+}

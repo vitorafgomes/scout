@@ -1,0 +1,139 @@
+# Icons under build/icons/ are placeholders; replace with final Scout logo before 1.0.
+# Builds are UNSIGNED; the release workflow publishes them and the project site says so.
+
+appId: com.scout.desktop
+productName: Scout Desktop
+copyright: Scout OSS contributors
+artifactName: Scout-Desktop-${version}-${os}-${arch}.${ext}
+electronVersion: "45.2.3"
+
+extraMetadata:
+  main: packages/main/dist/main.js
+  desktopName: scout-desktop.desktop
+  description: Scout Desktop — provisioning wizard for the Scout bot
+  homepage: https://github.com/vitorafgomes/scout
+  author: Scout OSS contributors
+  license: MIT
+
+directories:
+  output: build/dist
+  buildResources: build
+
+files:
+  - packages/main/dist/**
+  - packages/main/resources/**
+  - packages/preload/dist/**
+  - packages/renderer/dist/**
+  - package.json
+  - "!packages/main/resources/media-tools/**"
+  - "!packages/main/resources/fonts/**"
+  - "!packages/main/resources/voices/**"
+  - "!packages/main/resources/mouths/**"
+  - "!packages/main/resources/presenters/**"
+  - "!**/node_modules/**/{test,__tests__,tests,*.md,*.map}"
+  - "!**/*.ts"
+
+asar: true
+asarUnpack:
+  - packages/main/resources/**
+
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableCookieEncryption: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: true
+  resetAdHocDarwinSignature: true
+
+extraResources:
+  - from: build/worker
+    to: worker
+    filter:
+      - "**/*"
+  - from: ../src/Scout.ControlPlane.Contracts/protos
+    to: protos
+    filter:
+      - "*.proto"
+  - from: build/icons
+    to: icons
+    filter:
+      - "icon.png"
+  - from: packages/main/resources/media-tools
+    to: media-tools
+    filter:
+      - "**/*"
+  - from: packages/main/resources/fonts
+    to: fonts
+    filter:
+      - "*.ttf"
+      - "OFL.txt"
+  - from: packages/main/resources/voices
+    to: voices
+    filter:
+      - "**/*"
+  - from: packages/main/resources/mouths
+    to: mouths
+    filter:
+      - "**/*"
+  - from: packages/main/resources/presenters
+    to: presenters
+    filter:
+      - "**/*"
+
+electronLanguages:
+  - en-US
+
+# Generates app-update.yml in resources and latest*.yml next to the packages for electron-updater;
+# the release workflow still publishes with gh and passes --publish never.
+publish:
+  provider: github
+  owner: vitorafgomes
+  repo: scout
+  releaseType: release
+
+mac:
+  category: public.app-category.developer-tools
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  icon: build/icons/icon.icns
+  extendInfo:
+    NSMicrophoneUsageDescription: Scout listens only while you hold Space or the microphone button in the quick-ask window, and transcribes on this computer.
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icons/icon.ico
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+linux:
+  executableName: scout-desktop
+  syncDesktopName: true
+  desktop:
+    entry:
+      StartupWMClass: scout-desktop
+  category: Development
+  maintainer: Scout OSS contributors <noreply@example.com>
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  icon: build/icons

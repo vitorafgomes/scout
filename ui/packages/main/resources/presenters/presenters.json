@@ -1,0 +1,46 @@
+[
+  {
+    "id": "ada",
+    "label": "Ada",
+    "file": "ada.png",
+    "mouthBox": {
+      "x": 0.389,
+      "y": 0.534,
+      "width": 0.224,
+      "height": 0.111
+    }
+  },
+  {
+    "id": "kofi",
+    "label": "Kofi",
+    "file": "kofi.png",
+    "mouthBox": {
+      "x": 0.389,
+      "y": 0.534,
+      "width": 0.224,
+      "height": 0.111
+    }
+  },
+  {
+    "id": "mei",
+    "label": "Mei",
+    "file": "mei.png",
+    "mouthBox": {
+      "x": 0.389,
+      "y": 0.534,
+      "width": 0.224,
+      "height": 0.111
+    }
+  },
+  {
+    "id": "rafa",
+    "label": "Rafa",
+    "file": "rafa.png",
+    "mouthBox": {
+      "x": 0.389,
+      "y": 0.534,
+      "width": 0.224,
+      "height": 0.111
+    }
+  }
+]

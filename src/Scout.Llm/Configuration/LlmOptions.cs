@@ -1,0 +1,329 @@
+namespace Scout.Llm.Configuration;
+
+/// <summary>
+/// Top-level LLM configuration. Bound from the "Scout:Llm" section. The active
+/// provider is selected by <see cref="Provider"/>; provider-specific blocks
+/// (<see cref="Ollama"/>, <see cref="Gemini"/>, <see cref="OpenAI"/>,
+/// <see cref="OpenRouter"/>, <see cref="AzureOpenAI"/>, <see cref="Mistral"/>,
+/// <see cref="HuggingFace"/>, <see cref="AzureAIInference"/>,
+/// <see cref="ChatGptPlan"/>, <see cref="Anthropic"/>) carry the settings
+/// for each implementation.
+/// Single source of truth for both chat and embeddings.
+/// </summary>
+public sealed class LlmOptions
+{
+    /// <summary>Provider factory name, e.g. "Ollama". Must match
+    /// <c>ILlmProviderFactory.Name</c>.</summary>
+    public string Provider { get; set; } = "Ollama";
+
+    /// <summary>Settings for the Ollama provider.</summary>
+    public OllamaOptions Ollama { get; set; } = new();
+
+    /// <summary>Settings for the Gemini provider. Null when not configured.</summary>
+    public GeminiOptions? Gemini { get; set; }
+
+    /// <summary>Settings for the OpenAI-compatible provider. Null when not configured.</summary>
+    public OpenAIOptions? OpenAI { get; set; }
+
+    /// <summary>Settings for the OpenRouter provider. Null when not configured.</summary>
+    public OpenRouterOptions? OpenRouter { get; set; }
+
+    /// <summary>Settings for the Azure OpenAI provider. Null when not configured.</summary>
+    public AzureOpenAIOptions? AzureOpenAI { get; set; }
+
+    /// <summary>Settings for the Mistral provider. Null when not configured.</summary>
+    public MistralOptions? Mistral { get; set; }
+
+    /// <summary>Settings for the HuggingFace provider. Null when not configured.</summary>
+    public HuggingFaceOptions? HuggingFace { get; set; }
+
+    /// <summary>Settings for the Azure AI Inference provider. Null when not configured.</summary>
+    public AzureAIInferenceOptions? AzureAIInference { get; set; }
+
+    /// <summary>Settings for the ChatGPT plan provider. Null when not configured.</summary>
+    public ChatGptPlanOptions? ChatGptPlan { get; set; }
+
+    /// <summary>The model the live translator uses on the provider in use; blank uses the chat model.</summary>
+    public TranslationOptions Translation { get; set; } = new();
+
+    /// <summary>Settings for the Anthropic (Claude API) provider. Null when not configured.</summary>
+    public AnthropicOptions? Anthropic { get; set; }
+}
+
+/// <summary>Settings for live translation, bound from <c>Scout:Llm:Translation</c>.</summary>
+public sealed class TranslationOptions
+{
+    /// <summary>A model of <see cref="LlmOptions.Provider"/> for live translation; blank uses the chat model.</summary>
+    public string? Model { get; set; }
+}
+
+/// <summary>Settings for the ChatGPT plan provider. Chat reaches the OpenAI
+/// Responses API with the access token of the user's ChatGPT plan, read from
+/// <see cref="TokenFile"/> on each request. The plan offers no embeddings.</summary>
+public sealed class ChatGptPlanOptions
+{
+    /// <summary>Path of the JSON file holding <c>access_token</c> and
+    /// <c>expires_at</c>, written by the desktop after sign-in. Required.</summary>
+    public string TokenFile { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new() { Model = "gpt-5.6-luna" };
+}
+
+/// <summary>Settings for the generic OpenAI-compatible LLM provider. When
+/// <see cref="Endpoint"/> is set the connector targets an OpenAI-compatible base
+/// (e.g. NVIDIA, OpenRouter, Mistral-compat); when null the default OpenAI API is
+/// used. The <see cref="Embeddings"/> block is decoupled so chat and embeddings
+/// can point at different endpoints and keys.</summary>
+public sealed class OpenAIOptions
+{
+    /// <summary>API key for the chat endpoint.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Optional OpenAI-compatible base URL for chat. Null targets the
+    /// default OpenAI API.</summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding settings; may point at a different endpoint/key than chat.</summary>
+    public OpenAIEmbeddingOptions Embeddings { get; set; } = new();
+
+    /// <summary>Text-to-audio model for narration, on the chat endpoint and key.</summary>
+    public string SpeechModel { get; set; } = "gpt-4o-mini-tts";
+
+    /// <summary>Text-to-image model for scene visuals, on the chat endpoint and key; gpt-image-1 was shut down by OpenAI on 2026-10-23, so the default is gpt-image-2.5-sunburst.</summary>
+    public string ImageModel { get; set; } = "gpt-image-2.5-sunburst";
+
+    /// <summary>Quality a <c>gpt-image</c> model is asked for: low or medium.</summary>
+    public string ImageQuality { get; set; } = "medium";
+
+    /// <summary>
+    /// Register speech and images on an <see cref="Endpoint"/> other than api.openai.com; off by default, because an
+    /// OpenAI-compatible host rarely serves the OpenAI media endpoints.
+    /// </summary>
+    public bool MediaOnCustomEndpoint { get; set; }
+}
+
+/// <summary>Embedding settings for the OpenAI-compatible provider. When
+/// <see cref="Endpoint"/> or <see cref="ApiKey"/> are set they override the chat
+/// endpoint/key, so embeddings can run against a separate OpenAI-compatible host
+/// (e.g. chat on OpenRouter, embeddings on OpenAI).</summary>
+public sealed class OpenAIEmbeddingOptions
+{
+    /// <summary>Embedding model identifier, e.g. "text-embedding-3-small".</summary>
+    public string Model { get; set; } = "text-embedding-3-small";
+
+    /// <summary>Optional embeddings base URL. Null falls back to the chat endpoint.</summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>Optional embeddings API key. Null falls back to the chat key.</summary>
+    public string? ApiKey { get; set; }
+}
+
+/// <summary>Settings for the OpenRouter provider. Chat targets the preset
+/// OpenRouter base URL via the OpenAI connector. Embeddings come from the
+/// <see cref="Embeddings"/> block, a separate OpenAI-compatible host with its own
+/// endpoint and key; left empty, the provider has no embeddings.</summary>
+public sealed class OpenRouterOptions
+{
+    /// <summary>API key for the OpenRouter chat endpoint.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding settings on a separate OpenAI-compatible host: all three
+    /// fields set, or all three empty for no embeddings.</summary>
+    public OpenRouterEmbeddingOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Embedding settings for the OpenRouter provider: all three fields point
+/// at a separate OpenAI-compatible host, and are either all set or all empty.</summary>
+public sealed class OpenRouterEmbeddingOptions
+{
+    /// <summary>Embedding model identifier, e.g. "text-embedding-3-small".</summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>Base URL of the OpenAI-compatible embeddings host.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>API key for the embeddings host.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+}
+
+/// <summary>Settings for the Azure OpenAI provider. Uses deployment names rather
+/// than bare model identifiers; the endpoint is required.</summary>
+public sealed class AzureOpenAIOptions
+{
+    /// <summary>Azure OpenAI API key.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Azure OpenAI resource endpoint, e.g. https://my-aoai.openai.azure.com.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>Chat deployment settings.</summary>
+    public AzureDeploymentOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding deployment settings.</summary>
+    public AzureDeploymentOptions Embeddings { get; set; } = new();
+
+    /// <summary>Optional text-to-audio deployment for narration; empty registers no speech service.</summary>
+    public string SpeechDeployment { get; set; } = string.Empty;
+
+    /// <summary>Optional text-to-image deployment for scene visuals; empty registers no image service.</summary>
+    public string ImageDeployment { get; set; } = string.Empty;
+
+    /// <summary>The model behind <see cref="ImageDeployment"/>, which decides the picture settings: dall-e-3 or a gpt-image model; gpt-image-2.5-sunburst by default, because gpt-image-1 was shut down on 2026-10-23.</summary>
+    public string ImageModel { get; set; } = "gpt-image-2.5-sunburst";
+}
+
+/// <summary>Azure OpenAI deployment settings. The deployment name is the unit the
+/// connector binds against; the underlying model is configured in the portal.</summary>
+public sealed class AzureDeploymentOptions
+{
+    /// <summary>Azure OpenAI deployment name.</summary>
+    public string Deployment { get; set; } = string.Empty;
+}
+
+/// <summary>Settings for the Mistral LLM provider. One API key serves both chat
+/// and embeddings; the endpoint is optional.</summary>
+public sealed class MistralOptions
+{
+    /// <summary>Mistral API key.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Optional Mistral-compatible base URL. Null targets the default API.</summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Settings for the HuggingFace LLM provider. One API key serves both
+/// chat and embeddings; the endpoint is optional.</summary>
+public sealed class HuggingFaceOptions
+{
+    /// <summary>HuggingFace API token.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Optional HuggingFace inference base URL. Null targets the default API.</summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Settings for the Azure AI Inference provider. One API key serves both
+/// chat and embeddings; the endpoint is required.</summary>
+public sealed class AzureAIInferenceOptions
+{
+    /// <summary>Azure AI Inference API key.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Azure AI Inference endpoint URL.</summary>
+    public string Endpoint { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Settings for the Google Gemini LLM provider. One API key serves both
+/// the chat-completion and embedding services against the hosted Google AI API.</summary>
+public sealed class GeminiOptions
+{
+    /// <summary>Google AI API key used for both chat and embeddings.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public ChatModelOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Settings for the Ollama LLM provider. One endpoint serves both the
+/// chat-completion and embedding services.</summary>
+public sealed class OllamaOptions
+{
+    /// <summary>Base URL of the Ollama daemon, e.g. http://localhost:11434.</summary>
+    public string Endpoint { get; set; } = "http://localhost:11434";
+
+    /// <summary>Chat-completion model settings.</summary>
+    public OllamaChatOptions Chat { get; set; } = new();
+
+    /// <summary>Embedding model settings.</summary>
+    public EmbeddingModelOptions Embeddings { get; set; } = new();
+}
+
+/// <summary>Chat-completion model settings shared across providers that bind a
+/// bare model identifier.</summary>
+public sealed class ChatModelOptions
+{
+    /// <summary>Model identifier, e.g. "llama3.1".</summary>
+    public string Model { get; set; } = "llama3.1";
+}
+
+/// <summary>Embedding model settings shared across providers that bind a bare
+/// model identifier.</summary>
+public sealed class EmbeddingModelOptions
+{
+    /// <summary>Model identifier, e.g. "nomic-embed-text".</summary>
+    public string Model { get; set; } = "nomic-embed-text";
+
+    /// <summary>Maximum inputs per embedding request.</summary>
+    public int MaxBatchSize { get; set; } = 16;
+
+    /// <summary>Expected vector length. Zero disables the dimension check.</summary>
+    public int ExpectedDimensions { get; set; }
+
+    /// <summary>HTTP timeout for embedding requests, in seconds.</summary>
+    public int HttpTimeoutSeconds { get; set; } = 100;
+}
+
+/// <summary>Settings for the Anthropic provider: the Claude API reached with the owner's Anthropic API key.
+/// Anthropic offers no embeddings.</summary>
+public sealed class AnthropicOptions
+{
+    /// <summary>The Anthropic API key. Required.</summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>Chat-completion model settings.</summary>
+    public AnthropicChatOptions Chat { get; set; } = new();
+}
+
+/// <summary>Chat settings of the Anthropic provider.</summary>
+public sealed class AnthropicChatOptions
+{
+    /// <summary>Model identifier.</summary>
+    public string Model { get; set; } = "claude-opus-5-5";
+
+    /// <summary>
+    /// The most tokens one model call may write, thinking included, when the request names no limit. A review ends
+    /// with every finding in one function call after the model has thought, which a small limit cuts off.
+    /// </summary>
+    public int MaxOutputTokens { get; set; } = 64_000;
+}
+
+/// <summary>Chat settings of the Ollama provider.</summary>
+public sealed class OllamaChatOptions
+{
+    /// <summary>Model identifier, e.g. "llama3.1".</summary>
+    public string Model { get; set; } = "llama3.1";
+
+    /// <summary>
+    /// The context length, in tokens, every chat request asks the server to load the model with. The server's own
+    /// default is smaller than a turn's prompt and cuts it without saying so. Must be at least 4096.
+    /// </summary>
+    public int ContextLength { get; set; } = 16_384;
+}

@@ -1,0 +1,217 @@
+{
+  "ffmpeg": {
+    "version": "n9.0.2-39-g7adfbe40dc",
+    "release": "https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2026-10-31-12-59",
+    "source": "https://github.com/FFmpeg/FFmpeg/tree/7adfbe40dcde598f93a6963d2f7b22cd75202ccc",
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0.tar.xz",
+        "sha256": "6046d6731b26f58887e953561551d254a6eec9fbca4100dfeab56e19af8328d5",
+        "root": "ffmpeg-n9.0.2-39-g7adfbe40dc-linux64-lgpl-9.0"
+      },
+      "win32-x64": {
+        "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0.zip",
+        "sha256": "9d37c564e0d01c18cde184a079fa6ef04d7d2783ada41da81d04165cc8f1a650",
+        "root": "ffmpeg-n9.0.2-39-g7adfbe40dc-win64-lgpl-9.0"
+      }
+    }
+  },
+  "fonts": [
+    {
+      "file": "NotoSans-Regular.ttf",
+      "url": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/e408cf09bf2042e9fe0d7d22789c29510e876359/fonts/NotoSans/hinted/ttf/NotoSans-Regular.ttf",
+      "sha256": "478c558ea716033cd60c03438f628dfa75694dcf6b5f6d505a2f05fd2b4f3823"
+    },
+    {
+      "file": "NotoSans-Bold.ttf",
+      "url": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/e408cf09bf2042e9fe0d7d22789c29510e876359/fonts/NotoSans/hinted/ttf/NotoSans-Bold.ttf",
+      "sha256": "1df075a380fc7cb898acf64c1f7b3b4dd780de3caa860178bf929de35817a913"
+    },
+    {
+      "file": "OFL.txt",
+      "url": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/e408cf09bf2042e9fe0d7d22789c29510e876359/fonts/LICENSE",
+      "sha256": "f2095b08bed08b23a6fe26112fcd679a2bee3f002eef077eb05d215ed1051bd8"
+    }
+  ],
+  "piper": {
+    "version": "2023.11.14-2",
+    "project": "https://github.com/rhasspy/piper",
+    "release": "https://github.com/rhasspy/piper/releases/tag/2023.11.14-2",
+    "source": "https://github.com/rhasspy/piper/tree/2023.11.14-2",
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz",
+        "sha256": "a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992",
+        "root": "piper"
+      },
+      "win32-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+        "sha256": "f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea",
+        "root": "piper"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz",
+        "sha256": "ced85c0a3df13945b1e623b878a48fdc2854d5c485b4b67f62857cf551deaf8b",
+        "root": "piper"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz",
+        "sha256": "6b1eb03b3735946cb35216e063e7eebcc33a6bbf5dd96ec0217959bf1cdcb0cc",
+        "root": "piper"
+      }
+    }
+  },
+  "tesseract": {
+    "version": "5.5.4",
+    "project": "https://github.com/tesseract-ocr/tesseract",
+    "release": "https://github.com/AlexanderP/tesseract-appimage/releases/tag/v5.5.4",
+    "source": "https://github.com/tesseract-ocr/tesseract/tree/5.5.4",
+    "leptonica": "https://github.com/DanBloomberg/leptonica/tree/1.87.0",
+    "leptonicaLicense": {
+      "file": "leptonica-license.txt",
+      "url": "https://raw.githubusercontent.com/DanBloomberg/leptonica/13275a278eb55b5746e33f95fbf5a2c8f604b3ab/leptonica-license.txt",
+      "size": 1521,
+      "sha256": "87829abb5bbb00b55a107365da89e9a33f86c4250169e5a1e5588505be7d5806"
+    },
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/AlexanderP/tesseract-appimage/releases/download/v5.5.4/tesseract-5.5.4_lept-1.87-x86_64.AppImage",
+        "size": 24017400,
+        "sha256": "fc2b2a3e1d49912e03a9cb0744ce4198318801dfc42e2166c81373dbd88587b9",
+        "root": "squashfs-root"
+      }
+    }
+  },
+  "tessdata": {
+    "repo": "https://github.com/tesseract-ocr/tessdata_fast",
+    "commit": "87416418657359cb625c412a48b6e1d6d41c29bd",
+    "license": "Apache-2.0",
+    "files": [
+      {
+        "file": "eng.traineddata",
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata",
+        "size": 4113088,
+        "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+      },
+      {
+        "file": "por.traineddata",
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/por.traineddata",
+        "size": 1982756,
+        "sha256": "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb"
+      },
+      {
+        "file": "LICENSE",
+        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/LICENSE",
+        "size": 11358,
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      }
+    ]
+  },
+  "voices": {
+    "repo": "https://huggingface.co/rhasspy/piper-voices",
+    "commit": "e7229f7d33a10e145e109b886d661984201ac3c4",
+    "items": [
+      {
+        "name": "en_GB-cori-medium",
+        "dataset": "https://librivox.org",
+        "license": "public domain",
+        "files": [
+          {
+            "file": "en_GB-cori-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
+            "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d"
+          },
+          {
+            "file": "en_GB-cori-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
+            "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36"
+          },
+          {
+            "file": "en_GB-cori-medium.MODEL_CARD",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/cori/medium/MODEL_CARD",
+            "sha256": "38d76dfde845837b184668f8bab1c6426ad740b1af0fcebc349037822739e536"
+          }
+        ]
+      },
+      {
+        "name": "en_GB-aru-medium",
+        "dataset": "https://www.liverpool.ac.uk/architecture/research/acoustics-research-unit/speech-corpus/",
+        "license": "CC-BY 4.0 https://creativecommons.org/licenses/by/4.0/",
+        "attribution": "University of Liverpool Acoustics Research Unit speech corpus",
+        "files": [
+          {
+            "file": "en_GB-aru-medium.onnx",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/en_GB-aru-medium.onnx",
+            "sha256": "9e74d089a8563f8b2446426d01becb046cd3c3bfbafe1a20fd03a9a79bd82619"
+          },
+          {
+            "file": "en_GB-aru-medium.onnx.json",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/en_GB-aru-medium.onnx.json",
+            "sha256": "00529fabf0e79f29a9cb10fda5b60f9b7cf80671faac2b316e13af20e7816d5e"
+          },
+          {
+            "file": "en_GB-aru-medium.MODEL_CARD",
+            "url": "https://huggingface.co/rhasspy/piper-voices/resolve/e7229f7d33a10e145e109b886d661984201ac3c4/en/en_GB/aru/medium/MODEL_CARD",
+            "sha256": "b9a880778b6cc58330e78f862ba3554836f4ac9194f613533dbfdf28fce0a7ff"
+          }
+        ]
+      }
+    ]
+  },
+  "rhubarb": {
+    "version": "1.14.0",
+    "source": "https://github.com/DanielSWolf/rhubarb-lip-sync",
+    "license": "MIT",
+    "archives": {
+      "linux-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Linux.zip",
+        "size": 87225003,
+        "sha256": "a9a9074862cff47b2d59b8bf399a678a3b0b74f9452ad6ad94cb292913dd8667",
+        "root": "Rhubarb-Lip-Sync-1.14.0-Linux"
+      },
+      "darwin-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-macOS.zip",
+        "size": 86870942,
+        "sha256": "f991deacac6c973a14a4431a16a58b842f436531e120cfaea142c87c0d3ab4c5",
+        "root": "Rhubarb-Lip-Sync-1.14.0-macOS"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-macOS.zip",
+        "size": 86870942,
+        "sha256": "f991deacac6c973a14a4431a16a58b842f436531e120cfaea142c87c0d3ab4c5",
+        "root": "Rhubarb-Lip-Sync-1.14.0-macOS"
+      },
+      "win32-x64": {
+        "url": "https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Windows.zip",
+        "size": 87374842,
+        "sha256": "62fa416a8d5e382a3828ee4bef358ce520d0b4cabdeaea75a7ac266d098d1fe3",
+        "root": "Rhubarb-Lip-Sync-1.14.0-Windows"
+      }
+    }
+  },
+  "face": {
+    "files": [
+      {
+        "file": "blazeface-short-range.onnx",
+        "url": "https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx/resolve/50f2c66ffbdf84beae8c267df2b49e5c5a5162e9/face_detector.onnx",
+        "size": 418437,
+        "sha256": "02a04d5d37c3558dc4d5274f7f8f0f0f01ac94e46c5ffb2cee82395d47e23181",
+        "repo": "https://huggingface.co/fernandotonon/QtMeshEditor-blazeface-onnx",
+        "commit": "50f2c66ffbdf84beae8c267df2b49e5c5a5162e9",
+        "license": "Apache-2.0",
+        "model": "Google's MediaPipe BlazeFace short-range face detector, converted to ONNX"
+      },
+      {
+        "file": "face-landmarker.onnx",
+        "url": "https://huggingface.co/naklitechie/face-landmarks-onnx/resolve/575c33816c840c5b156398adb485e4f8d138adc2/face_landmarks.onnx",
+        "size": 4920995,
+        "sha256": "f38c3321ceffbc9e95103480ad38cc3f52e7e1bde2bcee7cd9355d0b9138ac0c",
+        "repo": "https://huggingface.co/naklitechie/face-landmarks-onnx",
+        "commit": "575c33816c840c5b156398adb485e4f8d138adc2",
+        "license": "Apache-2.0",
+        "model": "Google's MediaPipe Face Mesh V2 weights, converted to ONNX (format conversion only)",
+        "outOfScope": "Its model card places identification and life-critical decisions outside its intended use."
+      }
+    ]
+  }
+}

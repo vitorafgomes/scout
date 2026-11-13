@@ -1,0 +1,1273 @@
+import { Injectable } from '@angular/core';
+import {
+  ScoutError,
+  type AppGetVersionResponse,
+  type AppOpenExternalRequest,
+  type ChatGptListModelsResponse,
+  type ChatGptSignOutResponse,
+  type ChatGptStatus,
+  type OpenRouterKeyState,
+  type OrgSpendRequest,
+  type OrgSpendState,
+  type AdminKeySaveRequest,
+  type UsageSnapshot,
+  type DetectClientsResponse,
+  type DiscordBotInfo,
+  type DiscordCheckTokenRequest,
+  type DiscordEnableIntentResult,
+  type DiscordGuildsResponse,
+  type DiscordInviteUrlResponse,
+  type LlmListOllamaModelsRequest,
+  type LlmListOllamaModelsResponse,
+  type LlmPullOllamaModelRequest,
+  type LlmPullOllamaModelResponse,
+  type LlmPullOllamaProgressEvent,
+  type LlmCancelOllamaPullRequest,
+  type LlmDeleteOllamaModelRequest,
+  type LlmDeleteOllamaModelResponse,
+  type LlmUnloadOllamaModelsResponse,
+  type LlmListLmStudioModelsRequest,
+  type LlmListLmStudioModelsResponse,
+  type WhisperListInstalledResponse,
+  type WhisperModelTableResponse,
+  type WhisperUseModelRequest,
+  type WhisperUseModelResponse,
+  type WhisperDownloadModelRequest,
+  type WhisperDownloadModelResponse,
+  type WhisperDownloadProgressEvent,
+  type WhisperCancelDownloadRequest,
+  type WhisperDeleteModelRequest,
+  type WhisperDeleteModelResponse,
+  type ScoutBridge,
+  type VaultDeleteRequest,
+  type VaultDeleteResponse,
+  type VaultGetPublicRequest,
+  type VaultGetPublicResponse,
+  type VaultHasRequest,
+  type VaultHasResponse,
+  type VaultIsAvailableResponse,
+  type VaultStoreRequest,
+  type WorkerEvent,
+  type WorkerStartResponse,
+  type WorkerStatusResponse,
+  type WorkerStopResponse,
+  type WorkerRestartRequest,
+  type WorkerRestartResponse,
+  type ProviderKeyValidateRequest,
+  type ProviderKeyValidateResponse,
+  type LlmListModelsRequest,
+  type LlmListModelsResponse,
+  type ActionDecisionRequest,
+  type FeatureDto,
+  type FeatureEnableRequest,
+  type FeatureIdRequest,
+  type FeatureWriteGrantRequest,
+  type PendingActionDto,
+  type PendingActionsResponse,
+  type WritesListRequest,
+  type WritesListResponse,
+  type MandateDto,
+  type MandateResponse,
+  type MandateSaveRequest,
+  type OperatorProjectDto,
+  type OperatorProjectRequest,
+  type OperatorProduceRequest,
+  type OperatorDelegateRequest,
+  type OperatorProjectDeletionResponse,
+  type PackageMetadataRequest,
+  type PublishPackageRequest,
+  type ProposalDecisionRequest,
+  type ExperimentStartRequest,
+  type CommentsViewDto,
+  type CommentDecisionRequest,
+  type ReplyApprovalRequest,
+  type IdeaDecisionRequest,
+  type OperatorProjectsRequest,
+  type OperatorProjectsResponse,
+  type StartProjectRequest,
+  type ClaimDecisionRequest,
+  type ReadinessDto,
+  type SceneLockRequest,
+  type SceneMediaRequest,
+  type SceneMediaResponse,
+  type SceneOrderRequest,
+  type SceneRequest,
+  type SceneTextRequest,
+  type MouthBoxRequest,
+  type PresenterRequest,
+  type PresenterVersionRequest,
+  type ScenePicturePromptRequest,
+  type FeatureSetCredentialsRequest,
+  type FeatureSetupRequest,
+  type FeaturesListResponse,
+  type GitHubPendingSignIn,
+  type GitHubSaveTokenRequest,
+  type GitHubStatus,
+  type GitHubBotCreateRequest,
+  type GitHubBotSetWritesRequest,
+  type GitHubBotStatus,
+  type GitHubVerdictAction,
+  type GitHubVerdictKey,
+  type GitHubVerdictRequest,
+  type GitHubVerdictStatus,
+  type LocalSetDecisionsRequest,
+  type YouTubeSaveApiKeyRequest,
+  type YouTubeStatus,
+  type KubernetesDetection,
+  type KubernetesStatus,
+  type KubernetesUseRequest,
+  type DockerClearResponse,
+  type DockerImagesResponse,
+  type DockerLastRunResponse,
+  type DockerRepositoriesResponse,
+  type DockerPullImageRequest,
+  type DockerPullProgress,
+  type DockerPullRequest,
+  type DockerPullResponse,
+  type DockerState,
+  type DockerWorkFolder,
+  type AccessAllowedUsers,
+  type AccessPairing,
+  type SlackManifestUrlResponse,
+  type SlackSaveRequest,
+  type SlackStatus,
+  type DesktopSettings,
+  type DesktopToggleRequest,
+  type ThemeChoice,
+  type ThemeState,
+  type LocalAskRequest,
+  type LocalCancelRequest,
+  type LocalTurn,
+  type LocalShortcut,
+  type LocalSuspendShortcutRequest,
+  type LocalBubbleSettings,
+  type LocalBubbleStatus,
+  type LocalListenRequest,
+  type LocalListenResponse,
+  type LocalAudioRequest,
+  type LocalBubbleCardRequest,
+  type LocalBubbleCardResponse,
+  type LocalListeningResponse,
+  type LocalStopListeningRequest,
+  type LocalReadTextRequest,
+  type LocalReadTextResponse,
+  type LocalSpeakRequest,
+  type LocalSpeakResponse,
+  type LocalVoicesResponse,
+  type LocalKeepMeetingRequest,
+  type LocalKeepMeetingResponse,
+  type LocalMeetingsRequest,
+  type LocalMeetingsResponse,
+  type LocalExportMeetingRequest,
+  type LocalExportMeetingResponse,
+  type LocalDeleteMeetingsRequest,
+  type LocalDeleteMeetingsResponse,
+  type LocalTranscriptEvent,
+  type UpdateNotice,
+  type UpdateProgress,
+  type UpdateSkipVersionRequest,
+  type UpdateState,
+  type AppNotification,
+  type NotificationsActRequest,
+  type NotificationsControlRequest,
+  type NoticeRecordRequest,
+} from '@scout/shared';
+
+const BRIDGE_NOT_AVAILABLE_CODE = 'bridge/not-available';
+const BRIDGE_NOT_AVAILABLE_MESSAGE =
+  'window.scout is not available. The renderer is running outside of Electron or the preload bridge failed to load.';
+
+type WindowWithBridge = Window & { readonly scout?: ScoutBridge };
+
+function resolveBridge(): ScoutBridge {
+  const globalWindow = (globalThis as { window?: WindowWithBridge }).window;
+  const fromWindow = globalWindow?.scout;
+  if (fromWindow !== undefined) {
+    return fromWindow;
+  }
+  return createFakeBridge();
+}
+
+function rejectNotAvailable<T>(): Promise<T> {
+  return Promise.reject(new ScoutError(BRIDGE_NOT_AVAILABLE_CODE, BRIDGE_NOT_AVAILABLE_MESSAGE));
+}
+
+function createFakeBridge(): ScoutBridge {
+  return {
+    detectClients: (): Promise<DetectClientsResponse> => rejectNotAvailable(),
+    discordCheckToken: (_req: DiscordCheckTokenRequest): Promise<DiscordBotInfo> =>
+      rejectNotAvailable(),
+    discordEnableIntent: (): Promise<DiscordEnableIntentResult> => rejectNotAvailable(),
+    discordInviteUrl: (): Promise<DiscordInviteUrlResponse> => rejectNotAvailable(),
+    discordGuilds: (): Promise<DiscordGuildsResponse> => rejectNotAvailable(),
+    chatgptSignIn: (): Promise<ChatGptStatus> => rejectNotAvailable(),
+    chatgptCancelSignIn: (): Promise<void> => rejectNotAvailable(),
+    chatgptListModels: (): Promise<ChatGptListModelsResponse> => rejectNotAvailable(),
+    chatgptSignOut: (): Promise<ChatGptSignOutResponse> => rejectNotAvailable(),
+    chatgptStatus: (): Promise<ChatGptStatus> => rejectNotAvailable(),
+    usageGet: (): Promise<UsageSnapshot> => rejectNotAvailable(),
+    onUsageChanged: (_listener: (usage: UsageSnapshot) => void): (() => void) => {
+      return (): void => {
+        // no-op unsubscribe
+      };
+    },
+    usageOpenRouterKey: (): Promise<OpenRouterKeyState | null> => rejectNotAvailable(),
+    usageOrgSpend: (_req: OrgSpendRequest): Promise<OrgSpendState | null> => rejectNotAvailable(),
+    usageAdminKeySave: (_req: AdminKeySaveRequest): Promise<ProviderKeyValidateResponse> =>
+      rejectNotAvailable(),
+    usageAdminKeyRemove: (_req: OrgSpendRequest): Promise<void> => rejectNotAvailable(),
+    vaultStore: (_req: VaultStoreRequest): Promise<void> => rejectNotAvailable(),
+    vaultHas: (_req: VaultHasRequest): Promise<VaultHasResponse> => rejectNotAvailable(),
+    vaultDelete: (_req: VaultDeleteRequest): Promise<VaultDeleteResponse> => rejectNotAvailable(),
+    vaultGetPublic: (_req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> =>
+      rejectNotAvailable(),
+    vaultIsAvailable: (): Promise<VaultIsAvailableResponse> => rejectNotAvailable(),
+    workerStart: (): Promise<WorkerStartResponse> => rejectNotAvailable(),
+    workerStop: (): Promise<WorkerStopResponse> => rejectNotAvailable(),
+    workerRestart: (): Promise<WorkerRestartResponse> => rejectNotAvailable(),
+    workerStatus: (): Promise<WorkerStatusResponse> => rejectNotAvailable(),
+    workerLogSnapshot: (): Promise<readonly WorkerEvent[]> => rejectNotAvailable(),
+    onWorkerEvent: (_listener: (event: WorkerEvent) => void): (() => void) => {
+      return (): void => {
+        // no-op unsubscribe
+      };
+    },
+    appOpenExternal: (_req: AppOpenExternalRequest): Promise<void> => rejectNotAvailable(),
+    appGetVersion: (): Promise<AppGetVersionResponse> => rejectNotAvailable(),
+    appQuit: (): Promise<void> => rejectNotAvailable(),
+    appShowMainWindow: (): Promise<void> => rejectNotAvailable(),
+    llmListOllamaModels: (_req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse> =>
+      rejectNotAvailable(),
+    llmListLmStudioModels: (
+      _req: LlmListLmStudioModelsRequest,
+    ): Promise<LlmListLmStudioModelsResponse> => rejectNotAvailable(),
+    llmPullOllamaModel: (_req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse> =>
+      rejectNotAvailable(),
+    onLlmPullOllamaProgress: (
+      _listener: (event: LlmPullOllamaProgressEvent) => void,
+    ): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    llmCancelOllamaPull: (_req: LlmCancelOllamaPullRequest): Promise<void> => rejectNotAvailable(),
+    llmDeleteOllamaModel: (
+      _req: LlmDeleteOllamaModelRequest,
+    ): Promise<LlmDeleteOllamaModelResponse> => rejectNotAvailable(),
+    llmUnloadOllamaModels: (): Promise<LlmUnloadOllamaModelsResponse> => rejectNotAvailable(),
+    whisperListInstalled: (): Promise<WhisperListInstalledResponse> => rejectNotAvailable(),
+    whisperModelTable: (): Promise<WhisperModelTableResponse> => rejectNotAvailable(),
+    whisperUseModel: (_req: WhisperUseModelRequest): Promise<WhisperUseModelResponse> =>
+      rejectNotAvailable(),
+    whisperDownloadModel: (
+      _req: WhisperDownloadModelRequest,
+    ): Promise<WhisperDownloadModelResponse> => rejectNotAvailable(),
+    onWhisperDownloadProgress: (
+      _listener: (event: WhisperDownloadProgressEvent) => void,
+    ): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    whisperCancelDownload: (_req: WhisperCancelDownloadRequest): Promise<void> =>
+      rejectNotAvailable(),
+    whisperDeleteModel: (_req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse> =>
+      rejectNotAvailable(),
+    validateProviderKey: (_req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> =>
+      rejectNotAvailable(),
+    llmListModels: (_req: LlmListModelsRequest): Promise<LlmListModelsResponse> =>
+      rejectNotAvailable(),
+    featuresList: (): Promise<FeaturesListResponse> => rejectNotAvailable(),
+    featureSetCredentials: (_req: FeatureSetCredentialsRequest): Promise<FeatureDto> =>
+      rejectNotAvailable(),
+    featureSetup: (_req: FeatureSetupRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureDeleteCredentials: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureEnable: (_req: FeatureEnableRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureDisable: (_req: FeatureIdRequest): Promise<FeatureDto> => rejectNotAvailable(),
+    featureWriteGrant: (_req: FeatureWriteGrantRequest): Promise<FeatureDto> =>
+      rejectNotAvailable(),
+    onFeaturesChanged: (_listener: () => void): (() => void) => {
+      return (): void => undefined;
+    },
+    actionsList: (): Promise<PendingActionsResponse> => rejectNotAvailable(),
+    actionsApprove: (_req: ActionDecisionRequest): Promise<PendingActionDto> =>
+      rejectNotAvailable(),
+    actionsReject: (_req: ActionDecisionRequest): Promise<PendingActionDto> => rejectNotAvailable(),
+    onActionsChanged: (_listener: () => void): (() => void) => {
+      return (): void => undefined;
+    },
+    writesList: (_req: WritesListRequest): Promise<WritesListResponse> => rejectNotAvailable(),
+    operatorMandate: (): Promise<MandateResponse> => rejectNotAvailable(),
+    operatorSaveMandate: (_req: MandateSaveRequest): Promise<MandateDto> => rejectNotAvailable(),
+    operatorProjects: (_req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> =>
+      rejectNotAvailable(),
+    operatorProject: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartProject: (_req: StartProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideClaim: (_req: ClaimDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorProduce: (_req: OperatorProduceRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDelegate: (_req: OperatorDelegateRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDeleteProject: (
+      _req: OperatorProjectRequest,
+    ): Promise<OperatorProjectDeletionResponse> => rejectNotAvailable(),
+    operatorReorderScenes: (_req: SceneOrderRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorSetSceneLocked: (_req: SceneLockRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegenerateScene: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditSceneText: (_req: SceneTextRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegenerateNarration: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorSetMouthBox: (_req: MouthBoxRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRegeneratePresenter: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRequestPresenter: (_req: PresenterRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorUsePresenterVersion: (_req: PresenterVersionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorRemovePresenterVersion: (_req: PresenterVersionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditScenePicturePrompt: (
+      _req: ScenePicturePromptRequest,
+    ): Promise<OperatorProjectDto> => rejectNotAvailable(),
+    operatorRegenerateScenePicture: (_req: SceneRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAttachSceneMedia: (_req: SceneMediaRequest): Promise<SceneMediaResponse> =>
+      rejectNotAvailable(),
+    operatorReadiness: (): Promise<ReadinessDto> => rejectNotAvailable(),
+    operatorOpenWindow: (): Promise<void> => rejectNotAvailable(),
+    operatorAssemble: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorConfirmMediaRights: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorEditPackageMetadata: (_req: PackageMetadataRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorApprovePackage: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorPublishPackage: (_req: PublishPackageRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorDecideProposal: (_req: ProposalDecisionRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorStartExperiment: (_req: ExperimentStartRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorAdoptExperimentWinner: (_req: OperatorProjectRequest): Promise<OperatorProjectDto> =>
+      rejectNotAvailable(),
+    operatorComments: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorRequestCommentSync: (): Promise<CommentsViewDto> => rejectNotAvailable(),
+    operatorDecideComment: (_req: CommentDecisionRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorApproveReply: (_req: ReplyApprovalRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    operatorDecideIdea: (_req: IdeaDecisionRequest): Promise<CommentsViewDto> =>
+      rejectNotAvailable(),
+    githubSignIn: (): Promise<GitHubPendingSignIn> => rejectNotAvailable(),
+    githubStatus: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubCancel: (): Promise<void> => rejectNotAvailable(),
+    githubSignOut: (): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubSaveToken: (_req: GitHubSaveTokenRequest): Promise<GitHubStatus> => rejectNotAvailable(),
+    githubBotStatus: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubGiveVerdict: (_req: GitHubVerdictRequest): Promise<GitHubVerdictAction> =>
+      rejectNotAvailable(),
+    githubVerdictStatus: (_req: GitHubVerdictAction): Promise<GitHubVerdictStatus> =>
+      rejectNotAvailable(),
+    githubVerdictFor: (_req: GitHubVerdictKey): Promise<GitHubVerdictStatus | null> =>
+      rejectNotAvailable(),
+    onGitHubVerdict:
+      (_listener: (status: GitHubVerdictStatus) => void): (() => void) =>
+      () =>
+        undefined,
+    githubBotCreate: (_req: GitHubBotCreateRequest): Promise<GitHubBotStatus> =>
+      rejectNotAvailable(),
+    githubBotCancel: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubBotRemove: (): Promise<GitHubBotStatus> => rejectNotAvailable(),
+    githubBotSetWrites: (_req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus> =>
+      rejectNotAvailable(),
+    youtubeSignIn: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeStatus: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeCancelSignIn: (): Promise<void> => rejectNotAvailable(),
+    youtubeSignOut: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    youtubeSaveApiKey: (_req: YouTubeSaveApiKeyRequest): Promise<YouTubeStatus> =>
+      rejectNotAvailable(),
+    youtubeClearApiKey: (): Promise<YouTubeStatus> => rejectNotAvailable(),
+    kubernetesDetect: (): Promise<KubernetesDetection> => rejectNotAvailable(),
+    kubernetesUse: (_req: KubernetesUseRequest): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesStatus: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    kubernetesDisconnect: (): Promise<KubernetesStatus> => rejectNotAvailable(),
+    dockerState: (): Promise<DockerState> => rejectNotAvailable(),
+    dockerImages: (): Promise<DockerImagesResponse> => rejectNotAvailable(),
+    dockerPull: (_req: DockerPullRequest): Promise<DockerPullResponse> => rejectNotAvailable(),
+    dockerPullImage: (_req: DockerPullImageRequest): Promise<DockerPullResponse> =>
+      rejectNotAvailable(),
+    onDockerPullProgress:
+      (_listener: (progress: DockerPullProgress) => void): (() => void) =>
+      (): void =>
+        undefined,
+    dockerWorkFolder: (): Promise<DockerWorkFolder> => rejectNotAvailable(),
+    dockerClear: (): Promise<DockerClearResponse> => rejectNotAvailable(),
+    dockerRepositories: (): Promise<DockerRepositoriesResponse> => rejectNotAvailable(),
+    dockerLastRun: (): Promise<DockerLastRunResponse> => rejectNotAvailable(),
+    accessGet: (): Promise<AccessAllowedUsers> => rejectNotAvailable(),
+    accessSet: (_req: AccessAllowedUsers): Promise<AccessAllowedUsers> => rejectNotAvailable(),
+    accessStartPairing: (): Promise<AccessPairing> => rejectNotAvailable(),
+    slackManifestUrl: (): Promise<SlackManifestUrlResponse> => rejectNotAvailable(),
+    slackSave: (_req: SlackSaveRequest): Promise<SlackStatus> => rejectNotAvailable(),
+    slackStatus: (): Promise<SlackStatus> => rejectNotAvailable(),
+    slackDisconnect: (): Promise<SlackStatus> => rejectNotAvailable(),
+    desktopGetSettings: (): Promise<DesktopSettings> => rejectNotAvailable(),
+    desktopSetKeepRunning: (_req: DesktopToggleRequest): Promise<DesktopSettings> =>
+      rejectNotAvailable(),
+    desktopSetStartAtLogin: (_req: DesktopToggleRequest): Promise<DesktopSettings> =>
+      rejectNotAvailable(),
+    themeGet: (): Promise<ThemeState> => rejectNotAvailable(),
+    themeSet: (_choice: ThemeChoice): Promise<ThemeState> => rejectNotAvailable(),
+    onTheme:
+      (_listener: (state: ThemeState) => void): (() => void) =>
+      () =>
+        undefined,
+    localAsk: (_req: LocalAskRequest): Promise<void> => rejectNotAvailable(),
+    localCancel: (_req: LocalCancelRequest): Promise<void> => rejectNotAvailable(),
+    localGetTurns: (): Promise<readonly LocalTurn[]> => rejectNotAvailable(),
+    localClearTurns: (): Promise<void> => rejectNotAvailable(),
+    localSetDecisions: (_req: LocalSetDecisionsRequest): Promise<void> => rejectNotAvailable(),
+    onLocalTurns: (_listener: (turns: readonly LocalTurn[]) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    localHide: (): Promise<void> => rejectNotAvailable(),
+    localGetShortcut: (): Promise<LocalShortcut> => rejectNotAvailable(),
+    localSetShortcut: (_req: Pick<LocalShortcut, 'accelerator'>): Promise<LocalShortcut> =>
+      rejectNotAvailable(),
+    localSuspendShortcut: (_req: LocalSuspendShortcutRequest): Promise<LocalShortcut> =>
+      rejectNotAvailable(),
+    localOpen: (): Promise<void> => rejectNotAvailable(),
+    localGetBubble: (): Promise<LocalBubbleStatus> => rejectNotAvailable(),
+    localSetBubble: (_req: LocalBubbleSettings): Promise<LocalBubbleStatus> => rejectNotAvailable(),
+    onLocalBubble: (_listener: (status: LocalBubbleStatus) => void): (() => void) => {
+      return (): void => undefined;
+    },
+    localListen: (): Promise<LocalListenResponse> => rejectNotAvailable(),
+    localAudio: (_req: LocalAudioRequest): Promise<void> => rejectNotAvailable(),
+    localStopListening: (_req: LocalStopListeningRequest): Promise<void> => rejectNotAvailable(),
+    localBubbleCard: (_req: LocalBubbleCardRequest): Promise<LocalBubbleCardResponse> =>
+      rejectNotAvailable(),
+    localListening: (): Promise<LocalListeningResponse> => rejectNotAvailable(),
+    onLocalListening: (_listener: (state: LocalListeningResponse) => void): (() => void) => {
+      return (): void => undefined;
+    },
+    localReadText: (_req: LocalReadTextRequest): Promise<LocalReadTextResponse> =>
+      rejectNotAvailable(),
+    localSpeak: (_req: LocalSpeakRequest): Promise<LocalSpeakResponse> => rejectNotAvailable(),
+    localVoices: (): Promise<LocalVoicesResponse> => rejectNotAvailable(),
+    localKeepMeeting: (_req: LocalKeepMeetingRequest): Promise<LocalKeepMeetingResponse> =>
+      rejectNotAvailable(),
+    localMeetings: (_req: LocalMeetingsRequest): Promise<LocalMeetingsResponse> =>
+      rejectNotAvailable(),
+    localExportMeeting: (_req: LocalExportMeetingRequest): Promise<LocalExportMeetingResponse> =>
+      rejectNotAvailable(),
+    localDeleteMeetings: (_req: LocalDeleteMeetingsRequest): Promise<LocalDeleteMeetingsResponse> =>
+      rejectNotAvailable(),
+    onLocalMeetingsChanged: (_listener: () => void): (() => void) => {
+      return (): void => undefined;
+    },
+    onLocalTranscript:
+      (_listener: (event: LocalTranscriptEvent) => void): (() => void) =>
+      () =>
+        undefined,
+    updateGetState: (): Promise<UpdateState> => rejectNotAvailable(),
+    updateSetCheckEnabled: (_req: DesktopToggleRequest): Promise<UpdateState> =>
+      rejectNotAvailable(),
+    updateCheckNow: (): Promise<UpdateState> => rejectNotAvailable(),
+    updateSkipVersion: (_req: UpdateSkipVersionRequest): Promise<UpdateState> =>
+      rejectNotAvailable(),
+    updateRemindLater: (): Promise<UpdateState> => rejectNotAvailable(),
+    onUpdateNotice: (_listener: (notice: UpdateNotice | null) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    updateInstall: (): Promise<UpdateState> => rejectNotAvailable(),
+    onUpdateProgress: (_listener: (progress: UpdateProgress) => void): (() => void) => {
+      return (): void => {
+        // no-op
+      };
+    },
+    notificationsList: (): Promise<readonly AppNotification[]> => rejectNotAvailable(),
+    notificationsMarkRead: (_ids?: readonly string[]): Promise<readonly AppNotification[]> =>
+      rejectNotAvailable(),
+    notificationsAct: (_req: NotificationsActRequest): Promise<void> => rejectNotAvailable(),
+    notificationsControl: (_req: NotificationsControlRequest): Promise<void> =>
+      rejectNotAvailable(),
+    onNotifications:
+      (_listener: (list: readonly AppNotification[]) => void): (() => void) =>
+      (): void =>
+        undefined,
+    noticeRecord: (_req: NoticeRecordRequest): Promise<void> => rejectNotAvailable(),
+  };
+}
+
+@Injectable({ providedIn: 'root' })
+export class ScoutBridgeService {
+  private readonly bridge: ScoutBridge = resolveBridge();
+
+  async detectClients(): Promise<DetectClientsResponse> {
+    return this.bridge.detectClients();
+  }
+
+  async vaultIsAvailable(): Promise<VaultIsAvailableResponse> {
+    return this.bridge.vaultIsAvailable();
+  }
+
+  async vaultStore(req: VaultStoreRequest): Promise<void> {
+    return this.bridge.vaultStore(req);
+  }
+
+  async vaultHas(req: VaultHasRequest): Promise<VaultHasResponse> {
+    return this.bridge.vaultHas(req);
+  }
+
+  async vaultDelete(req: VaultDeleteRequest): Promise<VaultDeleteResponse> {
+    return this.bridge.vaultDelete(req);
+  }
+
+  async vaultGetPublic(req: VaultGetPublicRequest): Promise<VaultGetPublicResponse> {
+    return this.bridge.vaultGetPublic(req);
+  }
+
+  async appOpenExternal(req: AppOpenExternalRequest): Promise<void> {
+    return this.bridge.appOpenExternal(req);
+  }
+
+  async discordCheckToken(req: DiscordCheckTokenRequest): Promise<DiscordBotInfo> {
+    return this.bridge.discordCheckToken(req);
+  }
+
+  async discordEnableIntent(): Promise<DiscordEnableIntentResult> {
+    return this.bridge.discordEnableIntent();
+  }
+
+  async discordInviteUrl(): Promise<DiscordInviteUrlResponse> {
+    return this.bridge.discordInviteUrl();
+  }
+
+  async discordGuilds(): Promise<DiscordGuildsResponse> {
+    return this.bridge.discordGuilds();
+  }
+
+  async chatgptSignIn(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptSignIn();
+  }
+
+  async chatgptListModels(): Promise<ChatGptListModelsResponse> {
+    return this.bridge.chatgptListModels();
+  }
+
+  async chatgptCancelSignIn(): Promise<void> {
+    return this.bridge.chatgptCancelSignIn();
+  }
+
+  async chatgptSignOut(): Promise<ChatGptSignOutResponse> {
+    return this.bridge.chatgptSignOut();
+  }
+
+  async chatgptStatus(): Promise<ChatGptStatus> {
+    return this.bridge.chatgptStatus();
+  }
+
+  async usageGet(): Promise<UsageSnapshot> {
+    return this.bridge.usageGet();
+  }
+
+  onUsageChanged(listener: (usage: UsageSnapshot) => void): () => void {
+    return this.bridge.onUsageChanged(listener);
+  }
+
+  async usageOpenRouterKey(): Promise<OpenRouterKeyState | null> {
+    return this.bridge.usageOpenRouterKey();
+  }
+
+  async usageOrgSpend(req: OrgSpendRequest): Promise<OrgSpendState | null> {
+    return this.bridge.usageOrgSpend(req);
+  }
+
+  async usageAdminKeySave(req: AdminKeySaveRequest): Promise<ProviderKeyValidateResponse> {
+    return this.bridge.usageAdminKeySave(req);
+  }
+
+  async usageAdminKeyRemove(req: OrgSpendRequest): Promise<void> {
+    return this.bridge.usageAdminKeyRemove(req);
+  }
+
+  async workerStart(): Promise<WorkerStartResponse> {
+    return this.bridge.workerStart();
+  }
+
+  async workerStop(): Promise<WorkerStopResponse> {
+    return this.bridge.workerStop();
+  }
+
+  async workerRestart(req: WorkerRestartRequest): Promise<WorkerRestartResponse> {
+    return this.bridge.workerRestart(req);
+  }
+
+  async workerStatus(): Promise<WorkerStatusResponse> {
+    return this.bridge.workerStatus();
+  }
+
+  async workerLogSnapshot(): Promise<readonly WorkerEvent[]> {
+    return this.bridge.workerLogSnapshot();
+  }
+
+  onWorkerEvent(listener: (event: WorkerEvent) => void): () => void {
+    return this.bridge.onWorkerEvent(listener);
+  }
+
+  async llmListOllamaModels(req: LlmListOllamaModelsRequest): Promise<LlmListOllamaModelsResponse> {
+    return this.bridge.llmListOllamaModels(req);
+  }
+
+  async llmListLmStudioModels(
+    req: LlmListLmStudioModelsRequest,
+  ): Promise<LlmListLmStudioModelsResponse> {
+    return this.bridge.llmListLmStudioModels(req);
+  }
+
+  async llmPullOllamaModel(req: LlmPullOllamaModelRequest): Promise<LlmPullOllamaModelResponse> {
+    return this.bridge.llmPullOllamaModel(req);
+  }
+
+  onLlmPullOllamaProgress(listener: (event: LlmPullOllamaProgressEvent) => void): () => void {
+    return this.bridge.onLlmPullOllamaProgress(listener);
+  }
+
+  async llmCancelOllamaPull(req: LlmCancelOllamaPullRequest): Promise<void> {
+    return this.bridge.llmCancelOllamaPull(req);
+  }
+
+  async llmDeleteOllamaModel(
+    req: LlmDeleteOllamaModelRequest,
+  ): Promise<LlmDeleteOllamaModelResponse> {
+    return this.bridge.llmDeleteOllamaModel(req);
+  }
+
+  async llmUnloadOllamaModels(): Promise<LlmUnloadOllamaModelsResponse> {
+    return this.bridge.llmUnloadOllamaModels();
+  }
+
+  async whisperListInstalled(): Promise<WhisperListInstalledResponse> {
+    return this.bridge.whisperListInstalled();
+  }
+
+  async whisperModelTable(): Promise<WhisperModelTableResponse> {
+    return this.bridge.whisperModelTable();
+  }
+
+  async whisperUseModel(req: WhisperUseModelRequest): Promise<WhisperUseModelResponse> {
+    return this.bridge.whisperUseModel(req);
+  }
+
+  async whisperDownloadModel(
+    req: WhisperDownloadModelRequest,
+  ): Promise<WhisperDownloadModelResponse> {
+    return this.bridge.whisperDownloadModel(req);
+  }
+
+  onWhisperDownloadProgress(listener: (event: WhisperDownloadProgressEvent) => void): () => void {
+    return this.bridge.onWhisperDownloadProgress(listener);
+  }
+
+  async whisperCancelDownload(req: WhisperCancelDownloadRequest): Promise<void> {
+    return this.bridge.whisperCancelDownload(req);
+  }
+
+  async whisperDeleteModel(req: WhisperDeleteModelRequest): Promise<WhisperDeleteModelResponse> {
+    return this.bridge.whisperDeleteModel(req);
+  }
+
+  async appGetVersion(): Promise<AppGetVersionResponse> {
+    return this.bridge.appGetVersion();
+  }
+
+  async validateProviderKey(req: ProviderKeyValidateRequest): Promise<ProviderKeyValidateResponse> {
+    return this.bridge.validateProviderKey(req);
+  }
+
+  async llmListModels(req: LlmListModelsRequest): Promise<LlmListModelsResponse> {
+    return this.bridge.llmListModels(req);
+  }
+
+  async featuresList(): Promise<FeaturesListResponse> {
+    return this.bridge.featuresList();
+  }
+
+  async featureSetCredentials(req: FeatureSetCredentialsRequest): Promise<FeatureDto> {
+    return this.bridge.featureSetCredentials(req);
+  }
+
+  async featureSetup(req: FeatureSetupRequest): Promise<FeatureDto> {
+    return this.bridge.featureSetup(req);
+  }
+
+  async featureDeleteCredentials(req: FeatureIdRequest): Promise<FeatureDto> {
+    return this.bridge.featureDeleteCredentials(req);
+  }
+
+  async featureEnable(req: FeatureEnableRequest): Promise<FeatureDto> {
+    return this.bridge.featureEnable(req);
+  }
+
+  async featureDisable(req: FeatureIdRequest): Promise<FeatureDto> {
+    return this.bridge.featureDisable(req);
+  }
+
+  async featureWriteGrant(req: FeatureWriteGrantRequest): Promise<FeatureDto> {
+    return this.bridge.featureWriteGrant(req);
+  }
+
+  async actionsList(): Promise<PendingActionsResponse> {
+    return this.bridge.actionsList();
+  }
+
+  async actionsApprove(req: ActionDecisionRequest): Promise<PendingActionDto> {
+    return this.bridge.actionsApprove(req);
+  }
+
+  async actionsReject(req: ActionDecisionRequest): Promise<PendingActionDto> {
+    return this.bridge.actionsReject(req);
+  }
+
+  onActionsChanged(listener: () => void): () => void {
+    return this.bridge.onActionsChanged(listener);
+  }
+
+  onFeaturesChanged(listener: () => void): () => void {
+    return this.bridge.onFeaturesChanged(listener);
+  }
+
+  async writesList(req: WritesListRequest): Promise<WritesListResponse> {
+    return this.bridge.writesList(req);
+  }
+
+  async operatorMandate(): Promise<MandateResponse> {
+    return this.bridge.operatorMandate();
+  }
+
+  async operatorSaveMandate(req: MandateSaveRequest): Promise<MandateDto> {
+    return this.bridge.operatorSaveMandate(req);
+  }
+
+  async operatorProjects(req: OperatorProjectsRequest): Promise<OperatorProjectsResponse> {
+    return this.bridge.operatorProjects(req);
+  }
+
+  async operatorProject(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProject(req);
+  }
+
+  async operatorStartProject(req: StartProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartProject(req);
+  }
+
+  async operatorDecideClaim(req: ClaimDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideClaim(req);
+  }
+
+  async operatorProduce(req: OperatorProduceRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorProduce(req);
+  }
+
+  async operatorDelegate(req: OperatorDelegateRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDelegate(req);
+  }
+
+  async operatorDeleteProject(
+    req: OperatorProjectRequest,
+  ): Promise<OperatorProjectDeletionResponse> {
+    return this.bridge.operatorDeleteProject(req);
+  }
+
+  async operatorReorderScenes(req: SceneOrderRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorReorderScenes(req);
+  }
+
+  async operatorSetSceneLocked(req: SceneLockRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorSetSceneLocked(req);
+  }
+
+  async operatorRegenerateScene(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateScene(req);
+  }
+
+  async operatorEditSceneText(req: SceneTextRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditSceneText(req);
+  }
+
+  async operatorRegenerateNarration(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateNarration(req);
+  }
+
+  async operatorSetMouthBox(req: MouthBoxRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorSetMouthBox(req);
+  }
+
+  async operatorRegeneratePresenter(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegeneratePresenter(req);
+  }
+
+  async operatorRequestPresenter(req: PresenterRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRequestPresenter(req);
+  }
+
+  async operatorUsePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorUsePresenterVersion(req);
+  }
+
+  async operatorRemovePresenterVersion(req: PresenterVersionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRemovePresenterVersion(req);
+  }
+
+  async operatorEditScenePicturePrompt(
+    req: ScenePicturePromptRequest,
+  ): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditScenePicturePrompt(req);
+  }
+
+  async operatorRegenerateScenePicture(req: SceneRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorRegenerateScenePicture(req);
+  }
+
+  async operatorAttachSceneMedia(req: SceneMediaRequest): Promise<SceneMediaResponse> {
+    return this.bridge.operatorAttachSceneMedia(req);
+  }
+
+  async operatorReadiness(): Promise<ReadinessDto> {
+    return this.bridge.operatorReadiness();
+  }
+
+  async operatorOpenWindow(): Promise<void> {
+    return this.bridge.operatorOpenWindow();
+  }
+
+  async appShowMainWindow(): Promise<void> {
+    return this.bridge.appShowMainWindow();
+  }
+
+  async operatorAssemble(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAssemble(req);
+  }
+
+  async operatorConfirmMediaRights(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorConfirmMediaRights(req);
+  }
+
+  async operatorEditPackageMetadata(req: PackageMetadataRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorEditPackageMetadata(req);
+  }
+
+  async operatorApprovePackage(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorApprovePackage(req);
+  }
+
+  async operatorPublishPackage(req: PublishPackageRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorPublishPackage(req);
+  }
+
+  async operatorDecideProposal(req: ProposalDecisionRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorDecideProposal(req);
+  }
+
+  async operatorStartExperiment(req: ExperimentStartRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorStartExperiment(req);
+  }
+
+  async operatorAdoptExperimentWinner(req: OperatorProjectRequest): Promise<OperatorProjectDto> {
+    return this.bridge.operatorAdoptExperimentWinner(req);
+  }
+
+  async operatorComments(): Promise<CommentsViewDto> {
+    return this.bridge.operatorComments();
+  }
+
+  async operatorRequestCommentSync(): Promise<CommentsViewDto> {
+    return this.bridge.operatorRequestCommentSync();
+  }
+
+  async operatorDecideComment(req: CommentDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideComment(req);
+  }
+
+  async operatorApproveReply(req: ReplyApprovalRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorApproveReply(req);
+  }
+
+  async operatorDecideIdea(req: IdeaDecisionRequest): Promise<CommentsViewDto> {
+    return this.bridge.operatorDecideIdea(req);
+  }
+
+  async githubSignIn(): Promise<GitHubPendingSignIn> {
+    return this.bridge.githubSignIn();
+  }
+
+  async githubStatus(): Promise<GitHubStatus> {
+    return this.bridge.githubStatus();
+  }
+
+  async githubCancel(): Promise<void> {
+    return this.bridge.githubCancel();
+  }
+
+  async githubSignOut(): Promise<GitHubStatus> {
+    return this.bridge.githubSignOut();
+  }
+
+  async githubSaveToken(req: GitHubSaveTokenRequest): Promise<GitHubStatus> {
+    return this.bridge.githubSaveToken(req);
+  }
+
+  async githubBotStatus(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotStatus();
+  }
+
+  async githubGiveVerdict(req: GitHubVerdictRequest): Promise<GitHubVerdictAction> {
+    return this.bridge.githubGiveVerdict(req);
+  }
+
+  async githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus> {
+    return this.bridge.githubVerdictStatus(req);
+  }
+
+  async githubVerdictFor(req: GitHubVerdictKey): Promise<GitHubVerdictStatus | null> {
+    return this.bridge.githubVerdictFor(req);
+  }
+
+  onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void {
+    return this.bridge.onGitHubVerdict(listener);
+  }
+
+  async githubBotCreate(req: GitHubBotCreateRequest): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotCreate(req);
+  }
+
+  async githubBotCancel(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotCancel();
+  }
+
+  async githubBotRemove(): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotRemove();
+  }
+
+  async githubBotSetWrites(req: GitHubBotSetWritesRequest): Promise<GitHubBotStatus> {
+    return this.bridge.githubBotSetWrites(req);
+  }
+
+  async youtubeSignIn(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSignIn();
+  }
+
+  async youtubeStatus(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeStatus();
+  }
+
+  async youtubeCancelSignIn(): Promise<void> {
+    return this.bridge.youtubeCancelSignIn();
+  }
+
+  async youtubeSignOut(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSignOut();
+  }
+
+  async youtubeSaveApiKey(req: YouTubeSaveApiKeyRequest): Promise<YouTubeStatus> {
+    return this.bridge.youtubeSaveApiKey(req);
+  }
+
+  async youtubeClearApiKey(): Promise<YouTubeStatus> {
+    return this.bridge.youtubeClearApiKey();
+  }
+
+  async kubernetesDetect(): Promise<KubernetesDetection> {
+    return this.bridge.kubernetesDetect();
+  }
+
+  async kubernetesUse(req: KubernetesUseRequest): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesUse(req);
+  }
+
+  async kubernetesStatus(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesStatus();
+  }
+
+  async kubernetesDisconnect(): Promise<KubernetesStatus> {
+    return this.bridge.kubernetesDisconnect();
+  }
+
+  async dockerState(): Promise<DockerState> {
+    return this.bridge.dockerState();
+  }
+
+  async dockerImages(): Promise<DockerImagesResponse> {
+    return this.bridge.dockerImages();
+  }
+
+  async dockerPull(req: DockerPullRequest): Promise<DockerPullResponse> {
+    return this.bridge.dockerPull(req);
+  }
+
+  async dockerPullImage(req: DockerPullImageRequest): Promise<DockerPullResponse> {
+    return this.bridge.dockerPullImage(req);
+  }
+
+  onDockerPullProgress(listener: (progress: DockerPullProgress) => void): () => void {
+    return this.bridge.onDockerPullProgress(listener);
+  }
+
+  async dockerWorkFolder(): Promise<DockerWorkFolder> {
+    return this.bridge.dockerWorkFolder();
+  }
+
+  async dockerClear(): Promise<DockerClearResponse> {
+    return this.bridge.dockerClear();
+  }
+
+  async dockerRepositories(): Promise<DockerRepositoriesResponse> {
+    return this.bridge.dockerRepositories();
+  }
+
+  async dockerLastRun(): Promise<DockerLastRunResponse> {
+    return this.bridge.dockerLastRun();
+  }
+
+  async accessGet(): Promise<AccessAllowedUsers> {
+    return this.bridge.accessGet();
+  }
+
+  async accessSet(req: AccessAllowedUsers): Promise<AccessAllowedUsers> {
+    return this.bridge.accessSet(req);
+  }
+
+  async accessStartPairing(): Promise<AccessPairing> {
+    return this.bridge.accessStartPairing();
+  }
+
+  async slackManifestUrl(): Promise<SlackManifestUrlResponse> {
+    return this.bridge.slackManifestUrl();
+  }
+
+  async slackSave(req: SlackSaveRequest): Promise<SlackStatus> {
+    return this.bridge.slackSave(req);
+  }
+
+  async slackStatus(): Promise<SlackStatus> {
+    return this.bridge.slackStatus();
+  }
+
+  async slackDisconnect(): Promise<SlackStatus> {
+    return this.bridge.slackDisconnect();
+  }
+
+  async desktopGetSettings(): Promise<DesktopSettings> {
+    return this.bridge.desktopGetSettings();
+  }
+
+  async desktopSetKeepRunning(req: DesktopToggleRequest): Promise<DesktopSettings> {
+    return this.bridge.desktopSetKeepRunning(req);
+  }
+
+  async desktopSetStartAtLogin(req: DesktopToggleRequest): Promise<DesktopSettings> {
+    return this.bridge.desktopSetStartAtLogin(req);
+  }
+
+  async themeGet(): Promise<ThemeState> {
+    return this.bridge.themeGet();
+  }
+
+  async themeSet(choice: ThemeChoice): Promise<ThemeState> {
+    return this.bridge.themeSet(choice);
+  }
+
+  onTheme(listener: (state: ThemeState) => void): () => void {
+    return this.bridge.onTheme(listener);
+  }
+
+  async localAsk(req: LocalAskRequest): Promise<void> {
+    return this.bridge.localAsk(req);
+  }
+
+  async localCancel(req: LocalCancelRequest): Promise<void> {
+    return this.bridge.localCancel(req);
+  }
+
+  async localGetTurns(): Promise<readonly LocalTurn[]> {
+    return this.bridge.localGetTurns();
+  }
+
+  async localClearTurns(): Promise<void> {
+    return this.bridge.localClearTurns();
+  }
+
+  async localSetDecisions(req: LocalSetDecisionsRequest): Promise<void> {
+    return this.bridge.localSetDecisions(req);
+  }
+
+  onLocalTurns(listener: (turns: readonly LocalTurn[]) => void): () => void {
+    return this.bridge.onLocalTurns(listener);
+  }
+
+  async localHide(): Promise<void> {
+    return this.bridge.localHide();
+  }
+
+  async localGetShortcut(): Promise<LocalShortcut> {
+    return this.bridge.localGetShortcut();
+  }
+
+  async localSetShortcut(req: Pick<LocalShortcut, 'accelerator'>): Promise<LocalShortcut> {
+    return this.bridge.localSetShortcut(req);
+  }
+
+  async localSuspendShortcut(req: LocalSuspendShortcutRequest): Promise<LocalShortcut> {
+    return this.bridge.localSuspendShortcut(req);
+  }
+
+  async localOpen(): Promise<void> {
+    return this.bridge.localOpen();
+  }
+
+  async localGetBubble(): Promise<LocalBubbleStatus> {
+    return this.bridge.localGetBubble();
+  }
+
+  async localSetBubble(req: LocalBubbleSettings): Promise<LocalBubbleStatus> {
+    return this.bridge.localSetBubble(req);
+  }
+
+  onLocalBubble(listener: (status: LocalBubbleStatus) => void): () => void {
+    return this.bridge.onLocalBubble(listener);
+  }
+
+  async localListen(req?: LocalListenRequest): Promise<LocalListenResponse> {
+    return this.bridge.localListen(req);
+  }
+
+  async localAudio(req: LocalAudioRequest): Promise<void> {
+    return this.bridge.localAudio(req);
+  }
+
+  async localStopListening(req: LocalStopListeningRequest): Promise<void> {
+    return this.bridge.localStopListening(req);
+  }
+
+  async localBubbleCard(req: LocalBubbleCardRequest): Promise<LocalBubbleCardResponse> {
+    return this.bridge.localBubbleCard(req);
+  }
+
+  async localListening(): Promise<LocalListeningResponse> {
+    return this.bridge.localListening();
+  }
+
+  onLocalListening(listener: (state: LocalListeningResponse) => void): () => void {
+    return this.bridge.onLocalListening(listener);
+  }
+
+  onLocalTranscript(listener: (event: LocalTranscriptEvent) => void): () => void {
+    return this.bridge.onLocalTranscript(listener);
+  }
+
+  async localReadText(req: LocalReadTextRequest): Promise<LocalReadTextResponse> {
+    return this.bridge.localReadText(req);
+  }
+
+  async localSpeak(req: LocalSpeakRequest): Promise<LocalSpeakResponse> {
+    return this.bridge.localSpeak(req);
+  }
+
+  async localVoices(): Promise<LocalVoicesResponse> {
+    return this.bridge.localVoices();
+  }
+
+  async localKeepMeeting(req: LocalKeepMeetingRequest): Promise<LocalKeepMeetingResponse> {
+    return this.bridge.localKeepMeeting(req);
+  }
+
+  async localMeetings(req: LocalMeetingsRequest): Promise<LocalMeetingsResponse> {
+    return this.bridge.localMeetings(req);
+  }
+
+  async localExportMeeting(req: LocalExportMeetingRequest): Promise<LocalExportMeetingResponse> {
+    return this.bridge.localExportMeeting(req);
+  }
+
+  async localDeleteMeetings(req: LocalDeleteMeetingsRequest): Promise<LocalDeleteMeetingsResponse> {
+    return this.bridge.localDeleteMeetings(req);
+  }
+
+  /** Main pushes this when a meeting is kept or deleted, from any window. */
+  onLocalMeetingsChanged(listener: () => void): () => void {
+    return this.bridge.onLocalMeetingsChanged(listener);
+  }
+
+  async updateGetState(): Promise<UpdateState> {
+    return this.bridge.updateGetState();
+  }
+
+  async updateSetCheckEnabled(req: DesktopToggleRequest): Promise<UpdateState> {
+    return this.bridge.updateSetCheckEnabled(req);
+  }
+
+  async updateCheckNow(): Promise<UpdateState> {
+    return this.bridge.updateCheckNow();
+  }
+
+  async updateSkipVersion(req: UpdateSkipVersionRequest): Promise<UpdateState> {
+    return this.bridge.updateSkipVersion(req);
+  }
+
+  async updateRemindLater(): Promise<UpdateState> {
+    return this.bridge.updateRemindLater();
+  }
+
+  onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void {
+    return this.bridge.onUpdateNotice(listener);
+  }
+
+  async updateInstall(): Promise<UpdateState> {
+    return this.bridge.updateInstall();
+  }
+
+  onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void {
+    return this.bridge.onUpdateProgress(listener);
+  }
+
+  async notificationsList(): Promise<readonly AppNotification[]> {
+    return this.bridge.notificationsList();
+  }
+
+  async notificationsMarkRead(ids?: readonly string[]): Promise<readonly AppNotification[]> {
+    return this.bridge.notificationsMarkRead(ids);
+  }
+
+  async notificationsAct(req: NotificationsActRequest): Promise<void> {
+    return this.bridge.notificationsAct(req);
+  }
+
+  /** Asks main to pause, continue or stop the job of an entry it holds; the entry shows what came of it. */
+  async notificationsControl(req: NotificationsControlRequest): Promise<void> {
+    return this.bridge.notificationsControl(req);
+  }
+
+  onNotifications(listener: (list: readonly AppNotification[]) => void): () => void {
+    return this.bridge.onNotifications(listener);
+  }
+
+  async noticeRecord(req: NoticeRecordRequest): Promise<void> {
+    return this.bridge.noticeRecord(req);
+  }
+}
+
+export const SCOUT_BRIDGE_NOT_AVAILABLE_CODE = BRIDGE_NOT_AVAILABLE_CODE;

@@ -1,0 +1,22 @@
+{
+  "name": "@scout/desktop-preload",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "bun build src/preload.ts --target=node --format=cjs --outfile dist/preload.cjs --external electron",
+    "test": "bun test",
+    "dev": "echo 'not yet'"
+  },
+  "dependencies": {
+    "@scout/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "electron": "^45.2.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^24.19.2",
+    "typescript": "^6.0.3"
+  }
+}

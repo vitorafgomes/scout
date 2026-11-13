@@ -1,0 +1,3 @@
+{"at":"2026-11-05T08:00:00+00:00","featureId":"youtube","action":"Scout's data folder","target":"5f3c9a1e7b2d4c6fa8e0b1d2c3f4a5b6","outcome":"saved script_ready","approvedBy":null,"actionId":null}
+{"at":"2026-11-06T14:20:00+00:00","featureId":"youtube","action":"thumbnails.set","target":"project:6a4d0b2f8c3e4d7fb9f1c2e3d4a5b6c7","outcome":"succeeded","approvedBy":"owner","actionId":"2c3d4e5f607142930415c6d7e8f9a0b1"}
+{"at":"2026-11-06T16:45:00+00:00","featureId":"youtube","action":"videos.update","target":"project:6a4d0b2f8c3e4d7fb9f1c2e3d4a5b6c7","outcome":"rejected: the title is not final","approvedBy":"owner","actionId":"3d4e5f60718243a40526d7e8f9a0b1c2"}

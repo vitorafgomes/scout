@@ -1,0 +1,17 @@
+{
+  "name": "@scout/desktop-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint --no-error-on-unmatched-pattern \"**/*.ts\" \"**/*.mjs\"",
+    "test": "bash run.sh",
+    "smoke": "bash smoke/run.sh"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "^24.19.2",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@scout/desktop",
+  "version": "0.0.1",
+  "main": "packages/main/dist/main.js",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "e2e"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "scripts": {
+    "typecheck": "bun run --cwd packages/shared typecheck && bun run --cwd packages/main typecheck && bun run --cwd packages/preload typecheck && bun run --cwd packages/renderer typecheck && bun run --cwd e2e typecheck",
+    "lint": "eslint --no-error-on-unmatched-pattern \"packages/**/*.ts\" \"packages/**/*.mts\" \"e2e/**/*.ts\" \"e2e/**/*.mjs\"",
+    "format": "prettier --check \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,mjs,json}\" \"*.json\" \"*.md\"",
+    "format:write": "prettier --write \"packages/**/*.{ts,mts,json,md}\" \"e2e/**/*.{ts,mjs,json}\" \"*.json\" \"*.md\"",
+    "test": "bun run --cwd packages/shared test && bun run --cwd packages/main test && bun run --cwd packages/preload test && bun run --cwd packages/renderer test",
+    "test:e2e": "bun run --cwd e2e test",
+    "test:smoke": "bun run --cwd e2e smoke",
+    "build": "bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
+    "clean": "find . -not -path '*/node_modules/*' -type d -name 'dist' -exec rm -rf {} + 2>/dev/null; find . -maxdepth 3 -type d -name 'node_modules' -exec rm -rf {} + 2>/dev/null; true",
+    "worker:publish": "bash build/scripts/publish-worker.sh",
+    "package:all": "node build/scripts/write-google-client.mjs && node build/scripts/fetch-media-tools.mjs && bun run worker:publish && bun run --cwd packages/preload build && bun run --cwd packages/renderer build && bun run --cwd packages/main build",
+    "dist": "bun run package:all && electron-builder --config build/electron-builder.yml",
+    "dist:linux": "bun run package:all && electron-builder --config build/electron-builder.yml --linux",
+    "dist:linux:test": "bash ../tools/release/with-test-version.sh bun run dist:linux",
+    "dist:mac": "bun run package:all && electron-builder --config build/electron-builder.yml --mac",
+    "dist:win": "bun run package:all && electron-builder --config build/electron-builder.yml --win"
+  },
+  "overrides": {
+    "@jridgewell/sourcemap-codec": "^1.6.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.18.1",
+    "eslint": "^10.14.0",
+    "js-yaml": "^5.5.0",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.72.1"
+  }
+}

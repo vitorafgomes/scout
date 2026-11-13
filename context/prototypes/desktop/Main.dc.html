@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: top bar, theme and notifications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 820px; display: flex; flex-wrap: wrap; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px">
+
+<nav aria-label="Primary" style="flex: 1 1 200px; max-width: 220px; min-width: 180px; background: {{t.surface}}; border-right: 1px solid {{t.line}}; padding: 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<span style="font-weight: 600; font-size: 15px">Scout</span>
+</div>
+<sc-for list="{{nav}}" as="item" hint-placeholder-count="8">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; text-decoration: none; color: {{item.color}}; background: {{item.bg}}; font-weight: {{item.weight}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>{{item.label}}<sc-if value="{{item.hasBadge}}" hint-placeholder-val="{{false}}"><span role="img" aria-label="{{item.badgeLabel}}" style="margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center">{{item.badge}}</span></sc-if></a>
+</sc-for>
+</nav>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; position: relative">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto; min-width: 0">
+<span style="font-weight: 600; font-size: 16px">Chat</span>
+<span style="font-size: 12px; color: {{t.muted}}">{{sourceLine}}</span>
+</div>
+
+<button type="button" title="{{clearTitle}}" aria-disabled="{{clearDisabled}}" onClick="{{clearChat}}" style="height: 32px; padding: 0 12px; border: 1px solid {{t.line}}; border-radius: 8px; background: transparent; color: {{clearFg}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"></path></svg>Clear</button>
+<button type="button" aria-label="Read answers aloud" title="Read answers aloud" aria-pressed="{{readAloudPressed}}" onClick="{{toggleReadAloud}}" style="width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{readAloudBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{readAloudPath}}"></path></svg></button>
+
+<label style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.bg}}; color: {{t.muted}}; min-width: 200px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+<input type="search" placeholder="Search screens, repositories, meetings" style="border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit; width: 220px">
+</label>
+
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<button aria-label="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+</button>
+<button aria-label="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+</button>
+</div>
+
+<button aria-label="{{bellLabel}}" aria-expanded="{{bellOpenText}}" onClick="{{toggleBell}}" style="position: relative; width: 40px; height: 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: {{bellBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center">
+<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<sc-if value="{{bellHasUnread}}" hint-placeholder-val="{{true}}">
+<span style="position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: {{t.danger}}; color: #ffffff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">{{bellUnread}}</span>
+</sc-if>
+</button>
+
+<sc-if value="{{bellOpen}}" hint-placeholder-val="{{true}}">
+<section aria-label="Notifications" style="position: absolute; top: 58px; right: 16px; width: 400px; max-width: calc(100% - 32px); max-height: 600px; display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; z-index: 5; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">Notifications</span>
+<button onClick="{{bellMarkAllRead}}" style="border: 0; background: transparent; color: {{t.accent}}; font-size: 13px; padding: 4px 6px; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Mark all as read</button>
+</div>
+<div role="tablist" aria-label="Filter notifications" style="display: flex; gap: 6px; padding: 0 16px 10px; border-bottom: 1px solid {{t.line}}">
+<sc-for list="{{bellTabs}}" as="bt" hint-placeholder-count="3">
+<button role="tab" aria-selected="{{bt.selected}}" onClick="{{bt.pick}}" style="border: 1px solid {{bt.border}}; background: {{bt.bg}}; color: {{bt.fg}}; border-radius: 14px; padding: 5px 12px; font-size: 13px">{{bt.label}}</button>
+</sc-for>
+</div>
+<div style="overflow-y: auto; display: flex; flex-direction: column">
+<sc-for list="{{bellShown}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.line}}; background: {{n.rowBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700"><sc-if value="{{n.hasPath}}" hint-placeholder-val="{{false}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{n.path}}"></path></svg></sc-if>{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: {{n.weight}}; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<sc-if value="{{n.hasControls}}" hint-placeholder-val="{{false}}">
+<span style="align-self: center; flex: 0 0 auto; display: flex; gap: 4px">
+<sc-for list="{{n.controls}}" as="c" hint-placeholder-count="2">
+<button type="button" aria-label="{{c.label}}" title="{{c.label}}" aria-disabled="{{n.controlsOff}}" onClick="{{c.act}}" style="width: 28px; height: 28px; padding: 0; border-radius: 14px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{n.controlsOpacity}}; display: inline-flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.path}}"></path></svg></button>
+</sc-for>
+</span>
+</sc-if>
+<sc-if value="{{n.hasStatus}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.status}}</span>
+</sc-if>
+<sc-if value="{{n.showWhen}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</sc-if>
+</div>
+<sc-if value="{{n.hasDetail}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+</sc-if>
+<sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
+<span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{true}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="b" hint-placeholder-count="2">
+<button onClick="{{b.act}}" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{b.path}}"></path></svg>{{b.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{bellEmpty}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; padding: 16px; font-size: 12px; color: {{t.muted}}">Nothing here yet.</p>
+</sc-if>
+</div>
+<sc-if value="{{bellRefused}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 16px; font-size: 13px; color: {{t.err}}">Scout could not tell which pull request this entry is about.</p>
+</sc-if>
+<div style="padding: 10px 16px; font-size: 12px; color: {{t.muted}}">GitHub mentions and comments are read every 5 minutes, only while the GitHub feature is connected.</div>
+</section>
+</sc-if>
+</header>
+
+<main style="flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 16px; max-width: 880px; width: 100%; margin: 0 auto; box-sizing: border-box">
+<div role="group" aria-labelledby="pv-yt" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 10px; border: 1px dashed {{t.line}}; border-radius: 20px; font-size: 12px; color: {{t.muted}}">
+<span id="pv-yt">Preview state</span>
+<div style="display: flex; gap: 2px">
+<sc-for list="{{ytStates}}" as="y" hint-placeholder-count="2">
+<button aria-pressed="{{y.pressed}}" onClick="{{y.pick}}" style="height: 28px; padding: 0 12px; border: 0; border-radius: 14px; font-size: 12px; background: {{y.bg}}; color: {{y.fg}}; font-weight: {{y.weight}}">{{y.label}}</button>
+</sc-for>
+</div>
+<span>The YouTube operator shows in the menu only while YouTube is connected.</span>
+</div>
+<div role="group" aria-labelledby="pv-bell" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-bell">Bell</span>
+<sc-for list="{{bellStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>Drawn from the app and not approved yet: every state after Review it refused. A running job's time is the time since its last activity; "now" is sample data.</span>
+</div>
+<div role="group" aria-labelledby="pv-voice" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-voice">Voice conversation</span>
+<sc-for list="{{voiceStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-labelledby="pv-answer" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-answer">Answer</span>
+<sc-for list="{{answerStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>While Scout answers, a new question stops that answer and is asked instead, and Clear stops it too; while Scout queues a card's issues for your approval, Send, Stop and Clear are off.</span>
+</div>
+<div role="group" aria-labelledby="pv-conversation" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-conversation">Conversation</span>
+<sc-for list="{{conversationStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>Empty and No AI Source are drawn from the app and not approved yet.</span>
+</div>
+<div role="group" aria-labelledby="pv-reply" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-reply">Reply</span>
+<sc-for list="{{replyStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-labelledby="pv-card" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-card">Findings card</span>
+<sc-for list="{{cardStates}}" as="ps" hint-placeholder-count="6">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>A proposal for the owner (approve together): an audit card's Open issues is the approval and nothing waits in Approvals; today the issues wait there one by one.</span>
+</div>
+<div role="group" aria-labelledby="pv-dictation" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-dictation">Hold to talk and alerts</span>
+<sc-for list="{{dictationStates}}" as="ps" hint-placeholder-count="5">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>Drawn from the app and not approved yet: the Reply states, these lines, Streaming in Answer, and Read answers aloud in the top bar.</span>
+</div>
+<sc-if value="{{hasTurns}}" hint-placeholder-val="{{true}}">
+<div style="align-self: flex-end; max-width: 520px; background: {{t.accentStrong}}; color: #ffffff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; line-height: 1.45">{{turnQuestion}}</div>
+<div style="display: flex; flex-direction: column; gap: 12px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600">Scout</span><span style="font-size: 12px; color: {{t.muted}}">14:05</span><button type="button" aria-label="Read this answer aloud" title="Read this answer aloud" aria-pressed="false" style="margin-left: auto; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"></path></svg></button></div>
+<p style="margin: 0; line-height: 1.5; color: {{replyColor}}">{{replyText}}</p>
+<sc-if value="{{replyInterrupted}}" hint-placeholder-val="{{false}}"><p style="margin: 0; font-size: 12px; font-style: italic; color: {{t.muted}}">Interrupted</p></sc-if>
+<sc-if value="{{replyNotRunning}}" hint-placeholder-val="{{false}}"><button type="button" style="align-self: flex-start; height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}">Start Scout</button></sc-if>
+<sc-if value="{{replyIsReview}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="Tests" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{chatTestChips}}" as="tc" hint-placeholder-count="2">
+<a href="#" title="{{tc.title}}" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; text-decoration: none; background: {{tc.bg}}; color: {{tc.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{tc.icon}}"></path></svg>{{tc.label}}</a>
+</sc-for>
+</div>
+</sc-if>
+<sc-for list="{{chatFindings}}" as="cf" hint-placeholder-count="2">
+<article aria-label="{{cf.aria}}" style="border: 1px solid {{t.line}}; border-radius: 12px; background: {{t.surface}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<sc-if value="{{cf.sent}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: {{t.fg2}}"><span style="margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{cf.title}}</span><span style="flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; background: {{t.okBg}}; color: {{t.ok}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Issue queued</span></p>
+</sc-if>
+<sc-if value="{{cf.full}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; gap: 8px"><span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{cf.sevBg}}; color: {{cf.sevFg}}">{{cf.severity}}</span><h3 style="margin: 0; font-size: 14px; font-weight: 600">{{cf.title}}</h3></div>
+<a href="#" style="align-self: flex-start; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.accent}}">{{cf.path}}</a>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{cf.body}}</p>
+</sc-if>
+<sc-if value="{{cf.decidable}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" aria-pressed="{{cf.yesPressed}}" onClick="{{cf.yes}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{cf.yesBorder}}; background: {{cf.yesBg}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>{{cf.yesLabel}}</button>
+<button type="button" aria-pressed="{{cf.noPressed}}" onClick="{{cf.no}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{cf.noBorder}}; background: {{cf.noBg}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>No</button>
+<button type="button" aria-expanded="false" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit</button>
+</div>
+</sc-if>
+</article>
+</sc-for>
+<sc-if value="{{cardOpen}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">acme/shop · PR #5 · commit ec7f951</span>
+</sc-if>
+<sc-if value="{{cardClean}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">No findings.</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{cardCleanRead}}</p>
+</sc-if>
+<sc-if value="{{cardDecides}}" hint-placeholder-val="{{true}}">
+<span style="font-size: 13px; color: {{t.fg2}}">{{cardSummary}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end">
+<button type="button" onClick="{{cardYesAll}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Yes to all</button>
+<button type="button" aria-disabled="{{cardPostDisabled}}" onClick="{{cardPost}}" style="min-height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: {{cardPostBg}}; color: {{cardPostFg}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>{{cardPostLabel}}</button>
+</div>
+</sc-if>
+<sc-if value="{{cardHasApprovalLine}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{cardApprovalLine}}</p>
+</sc-if>
+<sc-if value="{{cardIsAudit}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<button type="button" aria-expanded="{{cardPreviewOpen}}" onClick="{{cardTogglePreview}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>{{cardPreviewLabel}}</button>
+<span style="font-size: 12px; color: {{t.muted}}">Each chosen finding as its own issue on GitHub, in the card order.</span>
+</div>
+<sc-for list="{{cardPreview}}" as="pv" hint-placeholder-count="0">
+<div style="border: 1px solid {{t.line}}; border-radius: 8px; background: {{t.bg}}; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-weight: 600; font-size: 14px">{{pv.title}}</span>
+<span style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: {{t.fg2}}; overflow-wrap: anywhere">{{pv.body}}</span>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="Verdict" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<span style="font-size: 12px; color: {{t.muted}}; margin-right: auto">Verdict on the reviewed commit</span>
+<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve</button>
+<sc-if value="{{cardDecides}}" hint-placeholder-val="{{true}}">
+<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Request changes</button>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{cardAllSent}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}"><strong>Every chosen issue is queued on acme/shop</strong><span style="font-size: 13px; color: {{t.fg2}}">Each waits for your approval, here and in Approvals; nothing is left to open.</span></div>
+</sc-if>
+<sc-if value="{{cardPosting}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}; font-size: 13px; color: {{t.fg2}}">{{cardPostingLine}}</p>
+</sc-if>
+<sc-if value="{{cardSending}}" hint-placeholder-val="{{false}}">
+<section aria-label="{{cardSendingLabel}}" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<p aria-live="polite" style="margin: 0; font-size: 13px; color: {{t.fg}}">{{cardSendingHead}}</p>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{cardProgress}}" as="cp" hint-placeholder-count="6">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: {{t.surface}}">
+<span style="flex: 1 1 200px; min-width: 0; font-size: 13px">{{cp.title}}</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; background: {{cp.bg}}; color: {{cp.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{cp.icon}}"></path></svg>{{cp.status}}</span>
+<sc-if value="{{cp.hasReason}}" hint-placeholder-val="{{false}}">
+<span role="alert" style="flex: 1 1 100%; font-size: 12px; color: {{t.err}}">{{cp.reason}}</span>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+</section>
+</sc-if>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+<div style="margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 24px 12px">
+<span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6M9 14h.01M15 14h.01"></path></svg></span>
+<p style="margin: 0; color: {{t.fg2}}">Ask Scout anything, or hold the microphone button to talk.</p>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"></path></svg>Try: list my open pull requests</button>
+</div>
+</sc-if>
+<sc-if value="{{holding}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.err}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg>Listening. Release to send.</p></sc-if>
+<sc-if value="{{nothingHeard}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 12px; color: {{t.muted}}">No speech heard; nothing was sent.</p></sc-if>
+<sc-if value="{{readAloudFailed}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">Scout could not read that aloud; see Scout logs.</p></sc-if>
+<sc-if value="{{questionRefused}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">Type a question of 1 to 4000 characters.</p></sc-if>
+<div role="group" aria-labelledby="pv-approval" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-approval">Approval</span>
+<sc-for list="{{approvalStates}}" as="as" hint-placeholder-count="18">
+<button aria-pressed="{{as.pressed}}" onClick="{{as.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{as.bg}}; color: {{as.fg}}">{{as.label}}</button>
+</sc-for>
+<span>Group states are a proposal for the owner (approve together); the code shows one card per action.</span>
+</div>
+<sc-if value="{{approvalShown}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="main-approval-heading" style="flex: 0 0 auto; max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 0">
+<h2 id="main-approval-heading" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">{{approvalHeading}}</h2>
+<sc-if value="{{groupShown}}" hint-placeholder-val="{{false}}">
+<section aria-labelledby="main-approval-group" style="flex: 0 0 auto; background: {{t.surface}}; border: 1px solid {{t.line}}; border-left: 3px solid {{t.accent}}; border-radius: 12px; display: flex; flex-direction: column">
+<div style="position: sticky; top: 0; z-index: 1; background: {{t.surface}}; border-bottom: 1px solid {{t.line}}; border-radius: 12px 12px 0 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.surface2}}; color: {{t.fg2}}">GitHub</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"></path></svg>Cannot be undone</span>
+<span style="margin-left: auto; font-size: 12px; color: {{t.muted}}">Requested 2026-11-10 14:06</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<h3 id="main-approval-group" style="margin: 0 auto 0 0; font-size: 15px; font-weight: 600">{{group.heading}}</h3>
+<button type="button" aria-pressed="{{group.allOpen}}" onClick="{{group.toggleAll}}" style="height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"></path></svg>{{group.toggleAllLabel}}</button>
+</div>
+<span style="font-size: 12px; color: {{t.fg2}}">{{group.origin}}</span>
+<sc-if value="{{group.hasNotice}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; padding: 8px 10px; border-radius: 8px; background: {{t.warnBg}}; color: {{t.fg}}; font-size: 13px; display: flex; gap: 8px; align-items: flex-start"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex: 0 0 16px; margin-top: 1px; color: {{t.warn}}"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"></path></svg>{{group.notice}}</p>
+</sc-if>
+</div>
+<ul aria-label="{{group.heading}}" style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{group.lines}}" as="ln" hint-placeholder-count="10">
+<li style="border-bottom: 1px solid {{t.line}}; padding: 6px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px; min-height: 32px">
+<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.textId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px; text-align: left; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 14px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
+<sc-if value="{{ln.notOpened}}" hint-placeholder-val="{{true}}">
+<span style="flex: 0 0 auto; font-size: 11px; color: {{t.muted}}">Not opened</span>
+</sc-if>
+<sc-if value="{{ln.hasStatus}}" hint-placeholder-val="{{false}}">
+<span style="flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; background: {{ln.statusBg}}; color: {{ln.statusFg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ln.statusIcon}}"></path></svg>{{ln.status}}</span>
+</sc-if>
+</div>
+<sc-if value="{{ln.isExpanded}}" hint-placeholder-val="{{false}}">
+<div id="{{ln.textId}}" style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: {{t.fg2}}; background: {{t.bg}}; border: 1px solid {{t.line}}; border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere">{{ln.text}}</div>
+<sc-if value="{{ln.decidable}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px">
+<button type="button" aria-label="{{ln.rejectLabel}}" onClick="{{ln.reject}}" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+<button type="button" aria-label="{{ln.approveLabel}}" onClick="{{ln.approve}}" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>Approve</button>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{ln.hasReason}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 12px; color: {{t.err}}">{{ln.reason}}</p>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+<div style="position: sticky; bottom: 0; z-index: 1; background: {{t.surface}}; border-top: 1px solid {{t.line}}; border-radius: 0 0 12px 12px; padding: 10px 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span aria-live="polite" style="flex: 1 1 220px; font-size: 12px; color: {{t.fg2}}">{{group.footText}}</span>
+<sc-if value="{{group.canRejectAll}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{group.rejectAll}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>{{group.rejectAllLabel}}</button>
+</sc-if>
+<sc-if value="{{group.canDecideAll}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{group.approveAll}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>{{group.approveAllLabel}}</button>
+</sc-if>
+<sc-if value="{{group.canDismiss}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{group.dismiss}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Dismiss</button>
+</sc-if>
+</div>
+</section>
+</sc-if>
+<sc-if value="{{singleShown}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="main-approval-card" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-left: 3px solid {{t.accent}}; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.surface2}}; color: {{t.fg2}}">{{single.feature}}</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"></path></svg>Cannot be undone</span>
+<span style="margin-left: auto; font-size: 12px; color: {{t.muted}}">{{single.requested}}</span>
+</div>
+<h3 id="main-approval-card" style="margin: 0; font-size: 15px; font-weight: 600">{{single.title}}</h3>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Target: <code>{{single.target}}</code></p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; overflow-wrap: anywhere">{{single.summary}}</p>
+<sc-if value="{{approvalPending}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px">
+<button type="button" onClick="{{approvalStartReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+<button type="button" onClick="{{approvalApprove}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>Approve</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalRejecting}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: flex-end; gap: 8px">
+<label style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.muted}}">Reason (optional)<input type="text" placeholder="Saved with the decision in the history" style="height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px"></label>
+<button type="button" onClick="{{approvalCancelReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}">Cancel</button>
+<button type="button" onClick="{{approvalConfirmReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalDecided}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span role="status" style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{approvalOutcomeBg}}; color: {{approvalOutcomeFg}}">{{approvalOutcome}}</span>
+<button type="button" onClick="{{approvalDismiss}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Dismiss</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalFailedCall}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 10px; border-radius: 8px; background: {{t.errBg}}; color: {{t.err}}; font-size: 13px">The Scout control plane did not answer.</p>
+</sc-if>
+</section>
+</sc-if>
+</section>
+</sc-if>
+<sc-if value="{{answerRunning}}" hint-placeholder-val="{{false}}">
+<div style="align-self: flex-end; max-width: 520px; background: {{t.accentStrong}}; color: #ffffff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; line-height: 1.45">{{answerQuestion}}</div>
+<sc-if value="{{answerStreaming}}" hint-placeholder-val="{{false}}"><p style="margin: 0; line-height: 1.5; color: {{t.fg2}}">Two findings on acme/shop#5. The checks passed;</p></sc-if>
+<div style="display: flex; align-items: center; gap: 8px">
+<p aria-live="polite" style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{answerActivity}}</p>
+<sc-if value="{{answerStreaming}}" hint-placeholder-val="{{false}}"><button type="button" aria-label="Read this answer aloud" title="Read this answer aloud" aria-pressed="false" style="margin-left: auto; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"></path></svg></button></sc-if>
+</div>
+</sc-if>
+<div style="display: flex; align-items: flex-end; gap: 8px">
+<div style="flex: 1; min-width: 0; position: relative; display: flex">
+<textarea aria-label="Ask Scout" rows="1" placeholder="{{placeholder}}" aria-disabled="{{fieldOff}}" style="flex: 1; min-width: 0; resize: none; box-sizing: border-box; padding: 9px 44px 9px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px; line-height: 20px"></textarea>
+<button type="button" aria-label="{{micLabel}}" title="{{micLabel}}" aria-pressed="{{holdingText}}" aria-disabled="{{fieldOff}}" style="position: absolute; right: 4px; bottom: 4px; width: 32px; height: 32px; border-radius: 8px; border: {{micBorder}}; background: {{micBg}}; color: {{micFg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+</div>
+<button type="button" aria-label="{{talkLabel}}" title="{{talkTitle}}" aria-pressed="{{talkOn}}" aria-disabled="{{fieldOff}}" style="flex: 0 0 32px; width: 32px; height: 32px; margin-bottom: 4px; border-radius: 16px; border: 0; background: {{t.accentStrong}}; color: #ffffff; opacity: {{talkOpacity}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"></path></svg></button>
+<sc-if value="{{talkHasState}}" hint-placeholder-val="{{false}}"><span aria-live="polite" style="align-self: center; font-size: 12px; color: {{t.fg2}}">{{talkState}}</span></sc-if>
+<sc-if value="{{talkHasHeard}}" hint-placeholder-val="{{false}}"><span aria-live="polite" style="align-self: center; max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-style: italic; color: {{t.fg2}}">{{talkHeard}}</span></sc-if>
+<sc-if value="{{talkHasError}}" hint-placeholder-val="{{false}}"><span role="alert" style="align-self: center; font-size: 12px; color: {{t.err}}">{{talkError}}</span></sc-if>
+<sc-if value="{{answerRunning}}" hint-placeholder-val="{{false}}">
+<button type="button" aria-label="Stop the answer" title="{{stopTitle}}" aria-disabled="{{stopDisabled}}" onClick="{{stopAnswer}}" style="flex: 0 0 40px; width: 40px; height: 40px; border-radius: 10px; border: 0; background: {{stopBg}}; color: {{stopFg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></button>
+</sc-if>
+<button type="button" aria-label="Send" title="{{sendTitle}}" aria-disabled="{{sendDisabled}}" onClick="{{sendQuestion}}" style="flex: 0 0 40px; width: 40px; height: 40px; border-radius: 10px; border: 0; background: {{sendBg}}; color: {{sendFg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg></button>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">{{composerHint}}</p>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      theme: 'dark',
+      bellOpen: true,
+      youtubeConnected: true,
+    };
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', danger: '#b3261e', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', danger: '#c5372c', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
+  }
+  issues() {
+    return [
+      { id: 'i1', sev: 'Blocking', title: 'Discounts applied after the sum', path: 'src/orders/Checkout.cs:88', why: 'The discount is subtracted after tax is added, so a 20% voucher removes tax the customer already paid.', fix: 'Apply the discount to the net amount, then add tax.' },
+      { id: 'i2', sev: 'Suggestion', title: 'Name the magic number 0.2', path: 'src/orders/Discounts.cs:17', why: 'A named constant says this is the voucher cap, not a tax rate.', fix: 'Introduce VoucherCap = 0.2m and use it here and in the basket summary.' },
+      { id: 'i3', sev: 'Fix', title: 'Order sync retries without a limit', path: 'src/sync/OrderSync.cs:142', why: 'A 5xx answer from the warehouse is retried forever, so one bad order blocks every order queued behind it.', fix: 'Stop after five attempts with a growing delay and park the order for a person to look at.' },
+      { id: 'i4', sev: 'Fix', title: 'Prices read as float', path: 'src/catalog/Price.cs:23', why: 'Prices are parsed into float, so 19.99 becomes 19.9899997 and an order of many items is a cent off.', fix: 'Parse and keep prices as decimal from the catalog to the invoice.' },
+      { id: 'i5', sev: 'Blocking', title: 'The payment webhook trusts the amount in the request', path: 'src/payments/Webhook.cs:57', why: 'The order is marked paid for the amount in the request body, not the amount the payment provider confirmed.', fix: 'Read the amount from the provider\'s signed event and compare it with the order total before marking it paid.' },
+      { id: 'i6', sev: 'Fix', title: 'No test for an empty basket', path: 'tests/orders/CheckoutTests.cs:12', why: 'Checkout with no items divides by the item count and throws; no test covers it.', fix: 'Add a test that an empty basket is refused with a message, and the guard that makes it pass.' },
+      { id: 'i7', sev: 'Blocking', title: 'Stock reserved twice on a retried order', path: 'src/stock/Reservations.cs:71', why: 'A retried order request reserves its items again, so the shop shows them sold out while half the stock is idle.', fix: 'Key the reservation by the order id so a retry finds the one it made.' },
+      { id: 'i8', sev: 'Fix', title: 'A log line prints the customer email', path: 'src/orders/OrderLog.cs:34', why: 'The order log writes the customer email in clear text at Information level, and the logs are shipped to a shared service.', fix: 'Log the customer id instead of the email.' },
+      { id: 'i9', sev: 'Fix', title: 'Rounding differs between the cart and the invoice', path: 'src/invoices/Totals.cs:48', why: 'The cart rounds each line and the invoice rounds the total, so the two disagree by a cent on some orders.', fix: 'Round once, per line, in one shared function both use.' },
+      { id: 'i10', sev: 'Suggestion', title: 'The coupon table is read on every request', path: 'src/coupons/CouponCache.cs:12', why: 'The cache is built and dropped per request, so every page view reads the whole coupon table.', fix: 'Keep the cache for the life of the process and refresh it when a coupon changes.' },
+    ];
+  }
+  issueBody(f) {
+    return '## Problem\n\n[' + f.sev + '] ' + f.title + '\n\n' + f.why + '\n\n## Evidence\n\n`' + f.path + '`\n\n## Proposed change\n\n' + f.fix + '\n\n---\nDrafted by Scout from an audit of acme/shop at ec7f951.';
+  }
+  setGrp(patch, extra) {
+    this.setState({ ...(extra || {}), grp: { ...(this.state.grp || {}), ...patch } });
+  }
+  groupItems() {
+    const base = this.issues();
+    if ((this.state.grp || {}).queuing === true) return base.slice(0, 7);
+    if ((this.state.grp || {}).changed !== true) return base;
+    return base.concat([{ id: 'i11', sev: 'Fix', title: 'Session cookie without the Secure flag', path: 'src/web/Startup.cs:61', why: 'The session cookie is sent over plain HTTP too, so anyone on the same network can read it.', fix: 'Set Secure and SameSite=Lax on the session cookie.', added: true }]);
+  }
+  groupSend(dec) {
+    const approved = this.groupItems().filter((f) => dec[f.id] === 'approved').length;
+    if (approved === 0) { this.setGrp({ dec, sent: 0 }, { approval: 'groupDone' }); return; }
+    this.setGrp({ dec, sent: 0 }, { approval: 'groupApproving' });
+    this.groupTick();
+  }
+  groupTick() {
+    setTimeout(() => {
+      if (this.state.approval !== 'groupApproving') return;
+      const g = this.state.grp || {};
+      const total = this.groupItems().filter((f) => (g.dec || {})[f.id] === 'approved').length;
+      const next = (g.sent || 0) + 1;
+      if (next >= total) { this.setGrp({ sent: total }, { approval: 'groupDone' }); return; }
+      this.setGrp({ sent: next });
+      this.groupTick();
+    }, 1000);
+  }
+  groupVals(t, ap) {
+    const g = this.state.grp || {};
+    const exp = g.exp || {};
+    const seen = g.seen || {};
+    const dec = g.dec || {};
+    const changed = g.changed === true;
+    const queuing = g.queuing === true;
+    const items = this.groupItems();
+    const phase = ap === 'groupApproving' ? 'sending' : ap === 'groupDone' ? 'done' : 'waiting';
+    const approvedIds = items.filter((f) => dec[f.id] === 'approved').map((f) => f.id);
+    const sent = g.sent || 0;
+    const failId = 'i4';
+    const tones = {
+      ok: [t.okBg, t.ok, 'M20 6L9 17l-5-5'],
+      rejected: [t.surface2, t.fg2, 'M6 6l12 12M18 6L6 18'],
+      failed: [t.errBg, t.err, 'M12 7v6M12 16.5v.5'],
+      busy: [t.surface2, t.accent, 'M21 12a9 9 0 1 1-9-9'],
+      waiting: [t.surface2, t.fg2, 'M12 7v5l3 2'],
+      added: [t.warnBg, t.warn, 'M12 5v14M5 12h14'],
+    };
+    const decide = (id, how) => () => {
+      const next = { ...dec, [id]: how };
+      const left = items.filter((f) => !next[f.id]).length;
+      if (left === 0) this.groupSend(next); else this.setGrp({ dec: next, seen: { ...seen, [id]: true } });
+    };
+    const lines = items.map((f) => {
+      const open = exp[f.id] === true;
+      const d = dec[f.id];
+      let status = '';
+      let tone = null;
+      let reason = '';
+      if (d === 'rejected') { status = 'Rejected'; tone = tones.rejected; }
+      else if (d === 'approved' && phase === 'waiting') { status = 'Approved, sending'; tone = tones.busy; }
+      else if (d === 'approved') {
+        const k = approvedIds.indexOf(f.id);
+        if (phase === 'done' || k < sent) {
+          if (f.id === failId) { status = 'Failed'; tone = tones.failed; reason = 'GitHub answered 502 Bad Gateway, so Scout recorded it as failed and did not send it again. Look on GitHub before asking for it again.'; }
+          else { status = 'Opened #' + (140 + approvedIds.slice(0, k).filter((id) => id !== failId).length); tone = tones.ok; }
+        } else if (k === sent) { status = 'Sending'; tone = tones.busy; }
+        else { status = 'Waiting'; tone = tones.waiting; }
+      } else if (f.added) { status = 'New, not in the list you saw'; tone = tones.added; }
+      const toggle = () => {
+        const nextExp = { ...exp, [f.id]: !open };
+        this.setGrp({ exp: nextExp, seen: open ? seen : { ...seen, [f.id]: true } });
+      };
+      return {
+        kind: 'Issue',
+        target: 'acme/shop',
+        first: f.title,
+        text: 'Title: ' + f.title + '\n\n' + this.issueBody(f),
+        textId: 'group-line-' + f.id,
+        expanded: open ? 'true' : 'false',
+        isExpanded: open,
+        chevron: open ? 'M6 9l6 6 6-6' : 'M9 6l6 6-6 6',
+        notOpened: phase === 'waiting' && !d && seen[f.id] !== true && !open,
+        hasStatus: status !== '',
+        status,
+        statusBg: tone ? tone[0] : t.surface2,
+        statusFg: tone ? tone[1] : t.fg2,
+        statusIcon: tone ? tone[2] : '',
+        decidable: phase === 'waiting' && !d,
+        approve: decide(f.id, 'approved'),
+        reject: decide(f.id, 'rejected'),
+        approveLabel: 'Approve the issue: ' + f.title,
+        rejectLabel: 'Reject the issue: ' + f.title,
+        hasReason: reason !== '',
+        reason,
+        toggle,
+      };
+    });
+    const remaining = items.filter((f) => !dec[f.id]).length;
+    const decidedCount = items.length - remaining;
+    const rejectedCount = items.filter((f) => dec[f.id] === 'rejected').length;
+    const notOpened = lines.filter((l) => l.notOpened).length;
+    const allOpen = items.every((f) => exp[f.id] === true);
+    const failedHere = approvedIds.includes(failId);
+    let footText;
+    if (phase === 'sending') {
+      const done = Math.min(sent, approvedIds.length);
+      const failedSoFar = approvedIds.slice(0, done).includes(failId) ? 1 : 0;
+      footText = 'Sending ' + approvedIds.length + ' issues one second apart: ' + (done - failedSoFar) + ' opened, ' + (failedSoFar ? '1 failed, ' : '') + (done < approvedIds.length ? 1 : 0) + ' sending, ' + Math.max(approvedIds.length - done - 1, 0) + ' waiting.';
+    } else if (phase === 'done') {
+      footText = approvedIds.length === 0
+        ? 'Every issue was rejected; nothing was sent.'
+        : failedHere
+          ? (approvedIds.length - 1) + ' of ' + approvedIds.length + ' opened on acme/shop. 1 failed and was not sent again: ' + items.find((f) => f.id === failId).title + '. Nothing else waits.'
+          : 'All ' + approvedIds.length + ' opened on acme/shop. Nothing else waits.';
+    } else if (queuing) {
+      footText = 'Scout is still queuing: ' + items.length + ' so far. Approve all comes once it has finished; you can open and decide each one now.';
+    } else if (changed) {
+      footText = 'Open each issue to approve or reject it, or reject all. ' + remaining + ' waiting.';
+    } else if (decidedCount === 0) {
+      footText = (notOpened === 0 ? 'All ' + items.length + ' opened.' : notOpened + ' of ' + items.length + ' not opened.') + ' Approve all covers every issue listed above, opened or not.';
+    } else {
+      footText = (decidedCount - rejectedCount) + ' approved, ' + rejectedCount + ' rejected; the other ' + remaining + ' wait for you.';
+    }
+    const fill = (how) => { const next = { ...dec }; items.forEach((f) => { if (!next[f.id]) next[f.id] = how; }); return next; };
+    return {
+      heading: items.length + ' issues on acme/shop' + (queuing && phase === 'waiting' ? ' so far' : ''),
+      origin: 'From the audit of acme/shop on 2026-11-10, asked in the chat at 14:06',
+      hasNotice: (changed || queuing) && phase === 'waiting',
+      notice: queuing ? 'Scout is still queuing issues for this request. The list grows as they arrive; Approve all is offered once it has finished.' : 'This list changed after it was shown: an eleventh issue joined it after Scout had finished queuing. Decide each issue on its own, or reject all. Approve all is not offered because the list changed.',
+      allOpen: allOpen ? 'true' : 'false',
+      toggleAllLabel: allOpen ? 'Hide every full text' : 'Show every full text',
+      toggleAll: () => {
+        if (allOpen) { this.setGrp({ exp: {} }); return; }
+        const all = {};
+        items.forEach((f) => { all[f.id] = true; });
+        this.setGrp({ exp: all, seen: { ...seen, ...all } });
+      },
+      lines,
+      footText,
+      canRejectAll: phase === 'waiting' && !queuing && remaining > 0,
+      canDecideAll: phase === 'waiting' && !changed && !queuing && remaining > 0,
+      approveAllLabel: decidedCount === 0 ? 'Approve all ' + remaining : 'Approve the other ' + remaining,
+      rejectAllLabel: decidedCount === 0 ? 'Reject all' : 'Reject the other ' + remaining,
+      approveAll: () => this.groupSend(fill('approved')),
+      rejectAll: () => this.groupSend(fill('rejected')),
+      canDismiss: phase === 'done',
+      dismiss: () => this.setState({ approval: 'none', grp: {} }),
+      waiting: phase === 'waiting' ? remaining : 0,
+    };
+  }
+  cardFindings(audit) {
+    if (audit) return this.issues().slice(0, 6);
+    return [
+      { id: 'r1', sev: 'Blocking', title: 'Discounts applied after the sum', path: 'src/orders/Checkout.cs:88', why: 'The discount is subtracted after tax is added, so a 20% voucher removes tax the customer already paid.' },
+      { id: 'r2', sev: 'Suggestion', title: 'Name the magic number 0.2', path: 'src/orders/Discounts.cs:17', why: 'A named constant says this is the voucher cap, not a tax rate.' },
+    ];
+  }
+  cardTick() {
+    setTimeout(() => {
+      if (this.state.card !== 'auditSending') return;
+      const total = this.cardFindings(true).filter((f) => (this.state.picks || {})[f.id] === 'yes').length;
+      const next = (this.state.cardSent || 0) + 1;
+      if (next >= total) { this.setState({ card: 'auditDone', cardSent: total }); return; }
+      this.setState({ cardSent: next });
+      this.cardTick();
+    }, 1000);
+  }
+  cardVals(t) {
+    const card = this.state.card || 'review';
+    const audit = card === 'audit' || card === 'auditSending' || card === 'auditDone' || card === 'auditNewBatch' || card === 'auditAllSent';
+    const picks = this.state.picks || {};
+    const clean = card === 'reviewClean';
+    const findings = clean ? [] : this.cardFindings(audit);
+    const sentIds = card === 'auditNewBatch' ? findings.slice(0, 4).map((f) => f.id) : card === 'auditAllSent' ? findings.map((f) => f.id) : [];
+    const unsent = findings.filter((f) => !sentIds.includes(f.id));
+    const allSent = sentIds.length > 0 && unsent.every((f) => picks[f.id] === 'no');
+    const open = (card === 'review' || clean || card === 'audit' || card === 'auditNewBatch') && !allSent;
+    const sevTone = { Blocking: [t.errBg, t.err], Fix: [t.warnBg, t.warn], Suggestion: [t.surface2, t.fg2] };
+    const pick = (id, how) => () => { if (open) this.setState({ picks: { ...picks, [id]: picks[id] === how ? undefined : how } }); };
+    const chatFindings = findings.map((f) => {
+      const yes = picks[f.id] === 'yes';
+      const no = picks[f.id] === 'no';
+      const sent = sentIds.includes(f.id);
+      return {
+        aria: f.sev + ': ' + f.title, severity: f.sev, sevBg: sevTone[f.sev][0], sevFg: sevTone[f.sev][1], title: f.title, path: f.path, body: f.why,
+        sent, full: !sent,
+        decidable: open && !sent,
+        yesLabel: audit ? 'Yes, open an issue' : 'Yes, add to the PR',
+        yesPressed: yes ? 'true' : 'false', yesBg: yes ? t.surface2 : 'transparent', yesBorder: yes ? t.accent : t.line,
+        noPressed: no ? 'true' : 'false', noBg: no ? t.surface2 : 'transparent', noBorder: no ? t.accent : t.line,
+        yes: pick(f.id, 'yes'), no: pick(f.id, 'no'),
+      };
+    });
+    const selected = unsent.filter((f) => picks[f.id] === 'yes');
+    const n = selected.length;
+    const decided = unsent.filter((f) => picks[f.id] !== undefined).length;
+    const kept = unsent.filter((f) => picks[f.id] !== 'no').length;
+    const undecided = unsent.length - decided;
+    const summary = decided === 0 ? 'Nothing selected yet. Decide item by item, or Yes to all.' : n + ' of ' + kept + ' selected' + (undecided > 0 ? ' · ' + undecided + ' undecided' : '');
+    const label = audit
+      ? (n === 0 ? 'Open issues on acme/shop' : 'Open ' + n + ' issue' + (n === 1 ? '' : 's') + ' on acme/shop')
+      : (n === 0 ? 'Post on PR #5' : 'Post a review with ' + n + ' comment' + (n === 1 ? '' : 's') + ' on PR #5');
+    const sent = this.state.cardSent || 0;
+    const failId = 'i4';
+    const ok = [t.okBg, t.ok, 'M20 6L9 17l-5-5'];
+    const progress = selected.map((f, k) => {
+      const done = card === 'auditDone' || k < sent;
+      const failed = done && f.id === failId;
+      const tone = failed ? [t.errBg, t.err, 'M12 7v6M12 16.5v.5'] : done ? ok : k === sent ? [t.surface2, t.accent, 'M21 12a9 9 0 1 1-9-9'] : [t.surface2, t.fg2, 'M12 7v5l3 2'];
+      return {
+        title: f.title,
+        status: failed ? 'Failed' : done ? 'Opened #' + (150 + selected.slice(0, k).filter((x) => x.id !== failId).length) : k === sent ? 'Opening' : 'Waiting',
+        bg: tone[0], fg: tone[1], icon: tone[2],
+        hasReason: failed,
+        reason: failed ? 'GitHub answered 502 Bad Gateway, so Scout recorded it as failed and did not send it again. Look on GitHub before asking for it again.' : '',
+      };
+    });
+    const failedCount = progress.filter((p) => p.hasReason).length;
+    const doneCount = Math.min(sent, n);
+    const head = card === 'auditDone'
+      ? (n - failedCount) + ' of ' + n + ' opened on acme/shop' + (failedCount ? '; 1 failed and was not sent again.' : '.') + ' Each is in History and the write log.'
+      : 'Opening ' + n + ' issues on acme/shop, one second apart: ' + (doneCount - (selected.slice(0, doneCount).some((x) => x.id === failId) ? 1 : 0)) + ' opened, ' + (selected.slice(0, doneCount).some((x) => x.id === failId) ? '1 failed, ' : '') + (doneCount < n ? 1 : 0) + ' opening, ' + Math.max(n - doneCount - 1, 0) + ' waiting. Your click on Open was the approval.';
+    const previewOpen = this.state.cardPreview === true && audit && open;
+    const picksAll = (ids) => { const p = {}; ids.forEach((id) => { p[id] = 'yes'; }); return p; };
+    return {
+      turnQuestion: audit ? 'Audit acme/shop' : 'Review acme/shop#5 and run its tests',
+      cardIsReview: !audit,
+      cardIsAudit: audit,
+      cardOpen: open,
+      chatFindings,
+      cardSummary: summary,
+      cardClean: clean,
+      cardCleanRead: 'What Scout says it read: the whole diff, the files it touches and their tests.',
+      cardDecides: !clean,
+      cardYesAll: () => { if (open) this.setState({ picks: { ...picks, ...picksAll(unsent.map((f) => f.id)) } }); },
+      cardAllSent: allSent,
+      cardPostLabel: label,
+      cardPostDisabled: n === 0 ? 'true' : 'false',
+      cardPostBg: n === 0 ? t.surface : t.accentStrong,
+      cardPostFg: n === 0 ? t.muted : '#ffffff',
+      cardPost: () => {
+        if (n === 0 || !open) return;
+        if (audit) { this.setState({ card: 'auditSending', cardSent: 0, cardPreview: false }); this.cardTick(); } else this.setState({ card: 'reviewPosting' });
+      },
+      cardHasApprovalLine: n > 0,
+      cardApprovalLine: audit ? 'This sends them now. Nothing else to approve.' : 'This posts the review now. Nothing else to approve.',
+      cardPreviewOpen: previewOpen ? 'true' : 'false',
+      cardPreviewLabel: previewOpen ? 'Hide the preview' : 'See how the issues read',
+      cardTogglePreview: () => this.setState({ cardPreview: !previewOpen }),
+      cardPreview: previewOpen ? selected.map((f) => ({ title: f.title, body: this.issueBody(f) })) : [],
+      cardPosting: card === 'reviewPosting',
+      cardPostingLine: 'Posting the review… ' + n + ' comment' + (n === 1 ? '' : 's') + ' in one review on PR #5; your click on Post was the approval.',
+      cardSending: card === 'auditSending' || card === 'auditDone',
+      cardSendingLabel: 'Opening the issues on acme/shop',
+      cardSendingHead: head,
+      cardProgress: progress,
+      cardStates: [['review', 'Review: Post'], ['reviewClean', 'Review: no findings'], ['audit', 'Audit: Open issues'], ['auditSending', 'Audit: sending'], ['auditDone', 'Audit: one failed'], ['auditNewBatch', 'Audit: new batch after sending'], ['auditAllSent', 'Audit: every chosen issue sent']].map(([id, lbl]) => ({
+        label: lbl, pressed: card === id ? 'true' : 'false', bg: card === id ? t.surface2 : 'transparent', fg: card === id ? t.fg : t.muted,
+        pick: () => this.setState({ card: id, cardPreview: false, cardSent: id === 'auditSending' ? 2 : id === 'auditDone' ? 6 : 0, picks: id === 'review' || id === 'reviewClean' ? {} : picksAll(this.cardFindings(true).map((f) => f.id)) }),
+      })),
+    };
+  }
+  bellItems() {
+    return [
+      { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
+      { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
+      { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
+      { id: 'v1', kind: 'done', glyph: '✓', tone: 'ok', title: 'Verdict given: Approved acme/web#17', detail: 'Signed as the Scout bot · the tests line was posted as a comment', when: '25 min', progress: null, action: 'See the review' },
+      { id: 'i1', kind: 'done', glyph: 'I', tone: 'ok', title: '3 issues opened on acme/shop', detail: 'From the audit findings you chose', when: '1 h', progress: null, action: 'See the issues' },
+      { id: 'w1', kind: 'done', glyph: '!', tone: 'err', title: 'A voice message could not be transcribed: no Whisper model is installed.', detail: '1 voice message not transcribed, the last from Discord.', when: '3 min', progress: null, action: '', buttons: [{ label: 'Download the base model (142 MB)', path: 'M12 3v12M7 10l5 5 5-5M5 21h14' }, { label: 'Open Models, Transcription', path: 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4' }] },
+      { id: 'p1', kind: 'paused', glyph: '!', tone: 'err', title: 'Audit of acme/web paused', detail: 'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.', when: '2 h', progress: null, action: '' },
+    ];
+  }
+  bellRunsNow() {
+    return { a1: 'running', t1: 'running', p1: 'pausedByLimit', ...(this.state.bellRuns || {}) };
+  }
+  bellSetRun(id, next) {
+    this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: next }, bellRead: { ...(this.state.bellRead || {}), [id]: true } });
+  }
+  bellStopAudit(id) {
+    this.bellSetRun(id, 'stopping');
+    setTimeout(() => { if (this.bellRunsNow()[id] === 'stopping') this.setState({ bellRuns: { ...(this.state.bellRuns || {}), [id]: 'stoppedAfterArea' } }); }, 4000);
+  }
+  bellLive(n) {
+    const s = this.bellRunsNow()[n.id];
+    const pause = 'M9 5v14M15 5v14';
+    const play = 'M8 5l11 7-11 7z';
+    const stop = 'M7 7h10v10H7z';
+    if (n.id === 't1') {
+      if (s === 'stopped') return { ...n, kind: 'done', glyph: 'T', tone: 'muted', title: 'Tests for acme/api#41 stopped', detail: 'The container was removed; the tests gave no result.', when: 'now', progress: null, controls: [] };
+      return { ...n, controls: [{ label: 'Stop the tests for acme/api#41', path: stop, act: () => this.bellSetRun('t1', 'stopped') }] };
+    }
+    const audit = { a1: ['acme/shop', 3, 8, 4, 'running'], p1: ['acme/web', 5, 9, 2, 'pausedByLimit'] }[n.id];
+    if (!audit) return { ...n, controls: [] };
+    const [repo, done, total, findings, first] = audit;
+    const when = s === first ? n.when : 'now';
+    const pauseIt = { label: 'Pause the audit of ' + repo, path: pause, act: () => this.bellSetRun(n.id, 'pausedByYou') };
+    const goOn = { label: 'Continue the audit of ' + repo, path: play, act: () => this.bellSetRun(n.id, 'running') };
+    const stopIt = { label: 'Stop the audit of ' + repo, path: stop, act: () => this.bellSetRun(n.id, 'stopped') };
+    const stopRunning = { ...stopIt, act: () => this.bellStopAudit(n.id) };
+    const running = { ...n, kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of ' + repo, detail: 'Area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far · cards arrive in the chat as each area ends', when, progress: Math.floor(done * 100 / total) };
+    const stopped = (areas) => ({ ...n, kind: 'done', glyph: 'A', tone: 'muted', title: 'Audit of ' + repo + ' stopped', detail: areas + ' of ' + total + ' areas · ' + findings + ' findings kept', when, progress: null, controls: [] });
+    return {
+      running: { ...running, controls: [pauseIt, stopRunning] },
+      stopping: { ...running, controls: [], status: 'Stopping after this area' },
+      pausedByYou: { ...n, kind: 'paused', glyph: 'A', tone: 'warn', title: 'Audit of ' + repo + ' paused', detail: 'Paused by you · area ' + done + ' of ' + total + ' done · ' + findings + ' findings so far', when, progress: null, controls: [goOn, stopIt] },
+      pausedByLimit: { ...n, kind: 'paused', when, controls: [goOn, stopIt] },
+      stopped: stopped(done),
+      stoppedAfterArea: stopped(done + 1),
+    }[s];
+  }
+  bellPreview(n) {
+    const clock = 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2';
+    const note = (text) => ({ a1: { note: text } });
+    const paused = (detail) => ({ p1: { detail } });
+    const fromApp = {
+      asking: { a1: { asking: true } },
+      pausing: { a1: { controls: [], status: 'Pausing after this area' } },
+      continuing: { p1: { controls: [], status: 'Continuing' } },
+      stoppingPaused: { p1: { controls: [], status: 'Stopping' } },
+      stoppingTests: { t1: { controls: [], status: 'Stopping' } },
+      noteNoAnswer: { t1: { note: 'The Scout control plane did not answer, so this click may not have reached Scout. Try again.' } },
+      noteNotConfirmed: note('Not confirmed: Scout did not say within two and a half minutes whether it applied this click; look at the job before clicking again.'),
+      noteNotReported: note('Scout recorded this click as applied, but the job did not report it; look at the job before clicking again.'),
+      noteWorkerStopped: note('Scout stopped before it said how this click ended; look at the job before clicking again.'),
+      noteDropped: note('Not applied: the click waited more than two minutes for Scout, so it was dropped; click again if it still applies.'),
+      pausedCredit: paused("The AI Source's account has run out of credit. Ask Scout to continue once it has credit again."),
+      pausedRate: paused('The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.'),
+      pausedSignIn: paused('The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.'),
+      pausedKey: paused('The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.'),
+      pausedModel: paused('The AI Source does not have the model llama3.2:3b. Choose a model it has in Models, then ask Scout to continue.'),
+      areaName: { a1: { detail: 'Area 3 of 8 done: src/orders' } },
+      finished: { a1: { kind: 'done', tone: 'ok', title: 'Audit of acme/shop is done', detail: 'Verdict: fix (0 High, 2 Medium, 1 Low).', progress: null, controls: [] } },
+      testsFinished: { t1: { kind: 'done', tone: 'ok', title: 'Tests for acme/api#41 finished', detail: 'The result is in the conversation.', progress: null, controls: [] } },
+      testsNotFinished: { t1: { kind: 'failed', tone: 'err', title: 'Tests for acme/api#41 did not finish', detail: 'The answer ended before the tests reported a result.', progress: null, controls: [] } },
+      healthRestarting: { h1: { id: 'h1', kind: 'running', glyph: '', path: clock, tone: 'accent', title: 'Scout stopped unexpectedly and is restarting.', detail: 'Restart 1 since Scout was started.', when: 'now', progress: null, action: '', controls: [] } },
+      healthGaveUp: { h1: { id: 'h1', kind: 'failed', glyph: '!', tone: 'err', title: 'Scout stopped and does not restart by itself.', detail: 'Start it again from Logs or from Settings, Scout worker.', when: 'now', progress: null, action: '', controls: [] } },
+    }[this.state.bell] || {};
+    return n === undefined ? fromApp : { ...n, ...(fromApp[n.id] || {}) };
+  }
+  bellVals(t) {
+    const read = this.state.bellRead || {};
+    const tab = this.state.bellTab || 'all';
+    const bell = this.state.bell || 'entries';
+    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.bellPreview(this.bellLive(n)))];
+    const unread = all.filter((n) => !read[n.id]).length;
+    const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
+    const shownBy = { running: ['running', 'paused'], github: ['github', 'mention'], done: ['done', 'failed'] };
+    const shown = all.filter((n) => tab === 'all' || shownBy[tab].includes(n.kind)).map((n) => ({
+      ...n,
+      iconBg: tone(n)[0],
+      iconFg: tone(n)[1],
+      hasPath: Boolean(n.path),
+      rowBg: read[n.id] ? t.surface : t.unreadBg,
+      weight: read[n.id] ? 500 : 600,
+      hasDetail: n.detail !== '',
+      hasNote: Boolean(n.note),
+      hasProgress: n.progress !== null,
+      progressWidth: (n.progress || 0) + '%',
+      hasAction: n.action !== '',
+      buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),
+      hasButtons: (n.buttons ?? []).length > 0,
+      hasControls: n.controls.length > 0,
+      controlsOff: n.asking ? 'true' : 'false',
+      controlsOpacity: n.asking ? 0.5 : 1,
+      hasStatus: Boolean(n.status),
+      showWhen: !n.status,
+    }));
+    const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
+    return {
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true }) })),
+      bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
+        const on = tab === id;
+        return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
+      }),
+      bellShown: shown,
+      bellEmpty: shown.length === 0,
+      bellRefused: bell === 'refused',
+      bellUnread: unread,
+      bellHasUnread: unread > 0,
+      bellOpen: this.state.bellOpen,
+      bellOpenText: this.state.bellOpen ? 'true' : 'false',
+      bellBg: this.state.bellOpen ? t.surface2 : 'transparent',
+      bellLabel: unread > 0 ? 'Notifications, ' + unread + ' unread' : 'Notifications',
+      toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
+      bellMarkAllRead: () => { const r = {}; all.forEach((n) => { r[n.id] = true; }); this.setState({ bellRead: r }); },
+    };
+  }
+  renderVals() {
+    const vals = this.pageVals();
+    return { ...vals, ...this.bellVals(vals.t) };
+  }
+  pageVals() {
+    const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;
+    const t = this.palette(mode);
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const navDefs = [
+      ['Chat', 'Main.dc.html', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+      ['AI Sources', 'Sources.dc.html', 'M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z'],
+      ['Features', 'Features.dc.html', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'],
+      ['Models', 'Models.dc.html', 'M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7'],
+      ['Meetings', 'Meetings.dc.html', 'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4'],
+      ['Approvals', 'Review.dc.html', 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9'],
+      ['Logs', 'Logs.dc.html', 'M4 6h16M4 12h16M4 18h10'],
+      ['Settings', 'Settings.dc.html', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1'],
+      ['YouTube operator', 'Production.dc.html', 'M3 6h18v12H3zM10 9l5 3-5 3z'],
+    ].filter(([label]) => label !== 'YouTube operator' || this.state.youtubeConnected !== false);
+    const ap = this.state.approval || 'waiting';
+    const singleStates = ['waiting', 'rejecting', 'callFailed', 'running', 'done', 'rejected', 'rejectedBeforeGrant', 'failed', 'already'];
+    const groupStates = ['groupWaiting', 'groupExpanded', 'groupPartly', 'groupApproving', 'groupDone', 'mixed', 'groupQueuing', 'groupChanged'];
+    const isGroup = groupStates.includes(ap);
+    const mixed = ap === 'mixed';
+    const sap = mixed ? (this.state.mixedSingle || 'waiting') : ap;
+    const group = this.groupVals(t, ap);
+    const singlePending = ['waiting', 'rejecting', 'callFailed'].includes(sap);
+    const singleShown = mixed ? sap !== 'none' : singleStates.includes(ap);
+    const apWaiting = (isGroup ? group.waiting : 0) + (singleShown && singlePending ? 1 : 0);
+    const nav = navDefs.map(([label, href, d], i) => ({ label, href, d, hasBadge: label === 'Approvals' && apWaiting > 0, badge: apWaiting, badgeLabel: apWaiting + ' ' + (apWaiting === 1 ? 'action' : 'actions') + ' waiting for your approval', current: i === 0 ? 'page' : 'false', bg: i === 0 ? t.surface2 : 'transparent', color: i === 0 ? t.fg : t.fg2, weight: i === 0 ? 600 : 500 }));
+    const apOutcome = { running: ['Approved, running', t.surface2, t.accent], done: ['Done', t.okBg, t.ok], rejected: ['Rejected: Wrong repository', t.surface2, t.fg2], rejectedBeforeGrant: ['Rejected: asked before writes were granted; ask again', t.surface2, t.fg2], failed: ['Failed: GitHub answered 422, the pull request is closed', t.errBg, t.err], already: ['Already decided', t.surface2, t.fg2] }[sap] || ['', t.surface2, t.fg2];
+    const setSingle = (next) => (mixed ? this.setState({ mixedSingle: next }) : this.setState({ approval: next }));
+    const allApproved = () => { const d = {}; this.issues().forEach((f) => { d[f.id] = 'approved'; }); return d; };
+    const groupSeeds = {
+      groupWaiting: {},
+      groupExpanded: { exp: { i3: true }, seen: { i3: true } },
+      groupPartly: { dec: { i2: 'rejected', i7: 'approved' }, seen: { i2: true, i7: true } },
+      groupApproving: { dec: allApproved(), sent: 4 },
+      groupDone: { dec: allApproved(), sent: 10 },
+      mixed: {},
+      groupQueuing: { queuing: true },
+      groupChanged: { changed: true },
+    };
+    const single = mixed
+      ? { feature: 'YouTube', requested: 'Requested 2026-11-10 14:09', title: 'Publish a reply to a comment', target: 'Comment on "Kubernetes in 10 minutes"', summary: 'Reply: "Thanks! The manifest is linked in the description, and part 2 goes out on Friday."' }
+      : { feature: 'GitHub', requested: 'Requested 2026-11-07 14:06', title: 'Approve pull request #12 on acme/api', target: 'GitHub.give_pull_request_verdict', summary: 'give_pull_request_verdict(body, comments, commit, number=12, owner=acme, repo=api, verdict=approve)' };
+    const approvalVals = {
+      approvalStates: [['waiting', 'Waiting'], ['rejecting', 'Rejecting'], ['callFailed', 'Approve failed'], ['running', 'Approved, running'], ['done', 'Done'], ['rejected', 'Rejected'], ['rejectedBeforeGrant', 'Rejected before the grant'], ['failed', 'Failed'], ['already', 'Already decided'], ['none', 'None'], ['groupWaiting', 'Group waiting (10)'], ['groupExpanded', 'Group, one line open'], ['groupPartly', 'Group partly decided'], ['groupApproving', 'Group approving'], ['groupDone', 'Group done, one failed'], ['mixed', 'Group and a single action'], ['groupQueuing', 'Group still queuing'], ['groupChanged', 'Group changed after it was listed']].map(([id, label]) => ({ label, pressed: ap === id ? 'true' : 'false', bg: ap === id ? t.surface2 : 'transparent', fg: ap === id ? t.fg : t.muted, pick: () => this.setState({ approval: id, grp: groupSeeds[id] || {}, mixedSingle: 'waiting' }) })),
+      approvalShown: ap !== 'none' && (isGroup || singleShown),
+      approvalHeading: apWaiting > 0 ? 'Waiting for your approval' : 'Your decisions',
+      groupShown: isGroup,
+      group,
+      singleShown,
+      single,
+      approvalPending: sap === 'waiting' || sap === 'callFailed',
+      approvalRejecting: sap === 'rejecting',
+      approvalFailedCall: sap === 'callFailed',
+      approvalDecided: ['running', 'done', 'rejected', 'rejectedBeforeGrant', 'failed', 'already'].includes(sap),
+      approvalOutcome: apOutcome[0], approvalOutcomeBg: apOutcome[1], approvalOutcomeFg: apOutcome[2],
+      approvalApprove: () => setSingle('running'),
+      approvalStartReject: () => setSingle('rejecting'),
+      approvalCancelReject: () => setSingle('waiting'),
+      approvalConfirmReject: () => setSingle('rejected'),
+      approvalDismiss: () => setSingle('none'),
+    };
+    const seg = (defs, current, key) => defs.map(([id, label]) => ({ label, pressed: current === id ? 'true' : 'false', bg: current === id ? t.surface2 : 'transparent', fg: current === id ? t.fg : t.muted, pick: () => this.setState({ [key]: id }) }));
+    const voice = this.state.voice || 'off';
+    const talk = { off: ['', '', ''], listening: ['Listening', 'can you check the failing build on', ''], thinking: ['Thinking', '', ''], speaking: ['Speaking', '', ''], taken: ['', '', 'Another listen took the microphone.'], ended: ['', '', 'Scout stopped listening.'] }[voice];
+    const talkOn = ['listening', 'thinking', 'speaking'].includes(voice);
+    const answer = this.state.answer || 'idle';
+    const reply = this.state.reply || 'done';
+    const dictation = this.state.dictation || 'off';
+    const posting = answer === 'posting';
+    const answerRunning = answer !== 'idle';
+    const conversation = this.state.conversation || 'turns';
+    const noSource = conversation === 'nosource';
+    const noTurns = conversation !== 'turns' && !answerRunning;
+    return {
+      t,
+      chatTestChips: [
+        { label: 'build passed', title: 'Details of build', bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' },
+        { label: 'tests passed in 41 s (dotnet test)', title: '', bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' },
+      ],
+      ...this.cardVals(t),
+      answerStates: seg([['idle', 'Idle'], ['answering', 'Answering'], ['streaming', 'Streaming'], ['asked', 'Stopped by a new question'], ['posting', 'Queuing for approval']], answer, 'answer'),
+      answerRunning,
+      answerStreaming: answer === 'streaming',
+      replyStates: seg([['done', 'Done'], ['interrupted', 'Interrupted'], ['notRunning', 'Scout not running']], reply, 'reply'),
+      replyIsReview: reply === 'done',
+      replyInterrupted: reply === 'interrupted',
+      replyNotRunning: reply === 'notRunning',
+      replyText: reply === 'notRunning' ? 'Scout is not running. Start it from the tray or the app.' : reply === 'done' && (this.state.card || 'review').startsWith('audit') ? 'Six findings on acme/shop at ec7f951. Choose the ones to open as issues.' : reply === 'interrupted' ? 'Two findings on acme/shop#5. The checks passed;' : (this.state.card === 'reviewClean' ? 'No findings' : 'Two findings') + ' on acme/shop#5. The checks passed; the tests ran in a container and passed in 41 s.',
+      replyColor: reply === 'notRunning' ? t.err : t.fg2,
+      dictationStates: seg([['off', 'Off'], ['holding', 'Holding the microphone'], ['nothing', 'Nothing heard'], ['readAloud', 'Read aloud failed'], ['refused', 'Question refused']], dictation, 'dictation'),
+      holding: dictation === 'holding',
+      holdingText: dictation === 'holding' ? 'true' : 'false',
+      nothingHeard: dictation === 'nothing',
+      readAloudFailed: dictation === 'readAloud',
+      questionRefused: dictation === 'refused',
+      micLabel: dictation === 'holding' ? 'Listening' : 'Hold to talk',
+      micBg: dictation === 'holding' ? t.errBg : 'transparent',
+      micBorder: dictation === 'holding' ? '1px solid ' + t.err : '0',
+      readAloudPressed: this.state.readAloud ? 'true' : 'false',
+      readAloudBg: this.state.readAloud ? t.surface2 : 'transparent',
+      readAloudPath: this.state.readAloud ? 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12' : 'M4 9h4l5-4v14l-5-4H4zM22 9l-6 6M16 9l6 6',
+      toggleReadAloud: () => this.setState({ readAloud: !this.state.readAloud }),
+      answerQuestion: posting ? 'Open 1 issue on acme/shop' : answer === 'asked' ? 'Stop and review acme/shop#5' : 'Analyze the project',
+      answerActivity: posting ? 'Queuing cards…' : answer === 'asked' ? 'The answer before this one was interrupted · Reading the pull request…' : 'Reading the repository…',
+      stopTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Stop the answer',
+      stopDisabled: posting ? 'true' : 'false',
+      stopBg: posting ? t.surface2 : t.danger,
+      stopFg: posting ? t.muted : '#ffffff',
+      stopAnswer: () => { if (!posting) this.setState({ answer: 'idle' }); },
+      sendTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Send',
+      sendDisabled: posting || noSource ? 'true' : 'false',
+      sendBg: posting || noSource ? t.surface2 : t.accentStrong,
+      sendFg: posting || noSource ? t.muted : '#ffffff',
+      sendQuestion: () => { if (!posting && !noSource) this.setState({ answer: answer === 'idle' ? 'answering' : 'asked' }); },
+      clearTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Clear the conversation',
+      clearDisabled: posting || noTurns ? 'true' : 'false',
+      clearFg: posting || noTurns ? t.muted : t.fg2,
+      clearChat: () => { if (!posting) this.setState({ answer: 'idle', conversation: noSource ? 'nosource' : 'empty' }); },
+      conversationStates: seg([['turns', 'Turns'], ['empty', 'Empty'], ['nosource', 'No AI Source']], conversation, 'conversation'),
+      hasTurns: conversation === 'turns',
+      isEmpty: noTurns,
+      sourceLine: noSource ? 'No AI Source' : 'ChatGPT plan · gpt-5.6-luna',
+      placeholder: noSource ? 'Connect an AI Source first' : 'Ask Scout',
+      fieldOff: noSource ? 'true' : 'false',
+      micFg: noSource ? t.muted : dictation === 'holding' ? t.err : t.fg2,
+      talkOpacity: noSource ? 0.4 : 1,
+      composerHint: posting ? 'Queuing cards; cannot be stopped.' : answerRunning ? 'A new question stops this answer · Stop ends it' : 'Enter sends · Shift+Enter for a new line',
+      ...approvalVals,
+      voiceStates: seg([['off', 'Off'], ['listening', 'Listening, partial shown'], ['thinking', 'Thinking'], ['speaking', 'Speaking'], ['taken', 'Microphone taken'], ['ended', 'Stopped listening']], voice, 'voice'),
+      talkOn: talkOn ? 'true' : 'false',
+      talkLabel: talkOn ? 'End the voice conversation' : 'Start a voice conversation',
+      talkTitle: talkOn ? 'End the voice conversation (Esc)' : noSource ? 'Connect an AI Source first' : 'Start a voice conversation',
+      talkState: talk[0], talkHasState: talk[0] !== '',
+      talkHeard: talk[1], talkHasHeard: talk[1] !== '',
+      talkError: talk[2], talkHasError: talk[2] !== '',
+      nav,
+      ytStates: [[true, 'YouTube connected'], [false, 'YouTube not connected']].map(([on, label]) => { const sel = (this.state.youtubeConnected !== false) === on; return { label, pressed: sel ? 'true' : 'false', bg: sel ? t.pressedBg : 'transparent', fg: sel ? t.pressedFg : t.idleFg, weight: sel ? 600 : 500, pick: () => this.setState({ youtubeConnected: on }) }; }),
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      themeSystem: pill(this.state.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

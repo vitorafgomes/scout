@@ -1,0 +1,383 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  ControlPlaneNotImplementedError,
+  ControlPlaneUnavailableError,
+  ControlPlaneWriteConfirmationError,
+  encodeIpcErrorMessage,
+  serializeError,
+  type FeatureDto,
+} from '@scout/shared';
+
+import { FeaturesStore } from './features.store';
+import { ScoutBridgeService } from './scout-bridge';
+
+interface BridgeStub {
+  featuresList: ReturnType<typeof vi.fn>;
+  featureEnable: ReturnType<typeof vi.fn>;
+  featureDisable: ReturnType<typeof vi.fn>;
+  featureSetCredentials: ReturnType<typeof vi.fn>;
+  featureSetup: ReturnType<typeof vi.fn>;
+  featureDeleteCredentials: ReturnType<typeof vi.fn>;
+  featureWriteGrant: ReturnType<typeof vi.fn>;
+  onFeaturesChanged: ReturnType<typeof vi.fn>;
+}
+
+function makeBridge(overrides: Partial<BridgeStub> = {}): BridgeStub {
+  return {
+    featuresList: vi.fn(async () => ({ features: [] as FeatureDto[] })),
+    featureEnable: vi.fn(),
+    featureDisable: vi.fn(),
+    featureSetCredentials: vi.fn(),
+    featureSetup: vi.fn(),
+    featureDeleteCredentials: vi.fn(),
+    featureWriteGrant: vi.fn(),
+    onFeaturesChanged: vi.fn(() => () => undefined),
+    ...overrides,
+  };
+}
+
+function provide(bridge: BridgeStub): FeaturesStore {
+  TestBed.configureTestingModule({
+    providers: [
+      provideZonelessChangeDetection(),
+      { provide: ScoutBridgeService, useValue: bridge as unknown as ScoutBridgeService },
+    ],
+  });
+  return TestBed.inject(FeaturesStore);
+}
+
+const githubDisabled: FeatureDto = {
+  id: 'github',
+  displayName: 'GitHub',
+  description: 'GitHub integration',
+  requiresCredentials: true,
+  hasCredentials: false,
+  enabled: false,
+  status: 'needs-credentials',
+  lastError: null,
+  credentialFields: [],
+  settingsFields: [],
+  settings: {},
+  scopeMatrix: null,
+  setupSteps: null,
+  writeClass: 'none',
+  granted: false,
+  grantedAt: null,
+};
+
+const githubEnabled: FeatureDto = {
+  ...githubDisabled,
+  hasCredentials: true,
+  enabled: true,
+  status: 'enabled',
+};
+
+function asRendererReceives(channel: string, err: Error): Error {
+  return new Error(
+    `Error invoking remote method '${channel}': Error: ${encodeIpcErrorMessage(serializeError(err))}`,
+  );
+}
+
+describe('FeaturesStore', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  it('load populates features from the bridge', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(bridge.featuresList).toHaveBeenCalledTimes(1);
+    expect(store.features().length).toBe(1);
+    expect(store.features()[0]!.id).toBe('github');
+    expect(store.features()[0]!.busy).toBe(false);
+  });
+
+  it('reloads the features when main announces they changed, so a grant revoked elsewhere shows as revoked', async () => {
+    const granted = {
+      ...githubEnabled,
+      id: 'youtube' as const,
+      writeClass: 'executive' as const,
+      granted: true,
+    };
+    const listeners: (() => void)[] = [];
+    const bridge = makeBridge({
+      featuresList: vi
+        .fn()
+        .mockResolvedValueOnce({ features: [granted] })
+        .mockResolvedValueOnce({ features: [{ ...granted, granted: false }] }),
+      onFeaturesChanged: vi.fn((listener: () => void) => {
+        listeners.push(listener);
+        return () => undefined;
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    listeners.forEach((listener) => listener());
+    await vi.waitFor(() => expect(bridge.featuresList).toHaveBeenCalledTimes(2));
+
+    await vi.waitFor(() => expect(store.features()[0]!.granted).toBe(false));
+  });
+
+  it('toggle flips enabled optimistically and confirms with bridge response', async () => {
+    let answer: (feature: FeatureDto) => void = () => undefined;
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+      featureEnable: vi.fn(
+        () =>
+          new Promise<FeatureDto>((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    const toggling = store.toggle('github');
+    const pending = store.features()[0]!;
+    const whilePending = { enabled: pending.enabled, busy: pending.busy };
+    answer(githubEnabled);
+    await toggling;
+
+    expect(whilePending).toEqual({ enabled: true, busy: true });
+    expect(bridge.featureEnable).toHaveBeenCalledWith({ id: 'github', confirmWrites: false });
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(true);
+    expect(view.status).toBe('enabled');
+    expect(view.busy).toBe(false);
+  });
+
+  it('toggle rolls back on error and sets status="error"', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+      featureEnable: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.toggle('github');
+
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(false); // rolled back
+    expect(view.status).toBe('error');
+    expect(view.lastError).toBe('boom');
+  });
+
+  it('storeCredentials replaces the feature with bridge response (hasCredentials true)', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+      featureSetCredentials: vi.fn(async () => ({
+        ...githubDisabled,
+        hasCredentials: true,
+        status: 'disabled' as const,
+      })),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.storeCredentials('github', { raw: '{}' });
+
+    expect(bridge.featureSetCredentials).toHaveBeenCalledWith({
+      id: 'github',
+      body: { raw: '{}' },
+    });
+    expect(store.features()[0]!.hasCredentials).toBe(true);
+  });
+
+  it('setup forwards credentials and settings to the bridge and replaces the feature', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubDisabled] })),
+      featureSetup: vi.fn(async () => ({
+        ...githubDisabled,
+        hasCredentials: true,
+        status: 'disabled' as const,
+      })),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.setup(
+      'github',
+      { pat: 'ghp_abc' },
+      { default_repo_url: 'https://github.com/acme/repo' },
+    );
+
+    expect(bridge.featureSetup).toHaveBeenCalledWith({
+      id: 'github',
+      credentials: { pat: 'ghp_abc' },
+      settings: { default_repo_url: 'https://github.com/acme/repo' },
+    });
+    expect(store.features()[0]!.hasCredentials).toBe(true);
+  });
+
+  it('clearCredentials resets the feature to needs-credentials when bridge says so', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubEnabled] })),
+      featureDeleteCredentials: vi.fn(async () => githubDisabled),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.clearCredentials('github');
+
+    expect(bridge.featureDeleteCredentials).toHaveBeenCalledWith({ id: 'github' });
+    const view = store.features()[0]!;
+    expect(view.hasCredentials).toBe(false);
+    expect(view.status).toBe('needs-credentials');
+  });
+
+  it('load swallows errors and surfaces lastError signal', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        throw new Error('list-failed');
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(store.lastError()).toBe('list-failed');
+    expect(store.features()).toEqual([]);
+  });
+
+  it('load sets backendUnavailable=true and clears lastError on worker/http-unavailable', async () => {
+    const unavailableErr = Object.assign(new Error('Worker HTTP endpoint not available'), {
+      code: 'worker/http-unavailable',
+    });
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        throw unavailableErr;
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(store.backendUnavailable()).toBe(true);
+    expect(store.lastError()).toBeNull();
+    expect(store.features()).toEqual([]);
+  });
+
+  it('load clears backendUnavailable on success after prior unavailable state', async () => {
+    const unavailableErr = Object.assign(new Error('unavailable'), {
+      code: 'worker/http-unavailable',
+    });
+    let callCount = 0;
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        callCount += 1;
+        if (callCount === 1) throw unavailableErr;
+        return { features: [githubDisabled] };
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+    expect(store.backendUnavailable()).toBe(true);
+
+    await store.load();
+    expect(store.backendUnavailable()).toBe(false);
+    expect(store.features().length).toBe(1);
+  });
+
+  it('load shows the control plane as unavailable from the error Electron delivers, which has no code property', async () => {
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.list',
+          new ControlPlaneUnavailableError('socket did not appear'),
+        );
+      }),
+    });
+    const store = provide(bridge);
+
+    await store.load();
+
+    expect(store.backendUnavailable()).toBe(true);
+    expect(store.lastError()).toBeNull();
+  });
+
+  it('turning a feature on that the control plane does not implement says it is not available yet, not the raw error', async () => {
+    const githubWithCredentials: FeatureDto = {
+      ...githubDisabled,
+      hasCredentials: true,
+      status: 'disabled',
+    };
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [githubWithCredentials] })),
+      featureEnable: vi.fn(async () => {
+        throw asRendererReceives('scout:features.enable', new ControlPlaneNotImplementedError());
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.toggle('github');
+
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(false);
+    expect(view.lastError).toBe('Turning this feature on is not available yet.');
+    expect(store.lastError()).toBe('Turning this feature on is not available yet.');
+  });
+
+  it("the control plane's confirmation message is shown when enable was called without confirming", async () => {
+    const youtube: FeatureDto = {
+      ...githubDisabled,
+      id: 'youtube',
+      hasCredentials: true,
+      status: 'disabled',
+      writeClass: 'executive',
+    };
+    const message =
+      'Confirm the writes of youtube before enabling it: youtube.upload (irreversible write).';
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [youtube] })),
+      featureEnable: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.enable',
+          new ControlPlaneWriteConfirmationError(message),
+        );
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.toggle('youtube');
+
+    const view = store.features()[0]!;
+    expect(view.enabled).toBe(false);
+    expect(view.lastError).toBe(message);
+  });
+
+  it("a refused write grant shows the control plane's message on the feature and leaves the grant off", async () => {
+    const youtube: FeatureDto = { ...githubDisabled, id: 'youtube', writeClass: 'executive' };
+    const message =
+      'Confirm the writes of youtube before granting them: youtube.upload (irreversible write).';
+    const bridge = makeBridge({
+      featuresList: vi.fn(async () => ({ features: [youtube] })),
+      featureWriteGrant: vi.fn(async () => {
+        throw asRendererReceives(
+          'scout:features.writeGrant',
+          new ControlPlaneWriteConfirmationError(message),
+        );
+      }),
+    });
+    const store = provide(bridge);
+    await store.load();
+
+    await store.setWriteGrant('youtube', true, false);
+
+    const view = store.features()[0]!;
+    expect([view.granted, view.lastError, view.busy]).toEqual([false, message, false]);
+  });
+});

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "angular-cli": {
+      "command": "sh",
+      "args": ["-c", "cd ui/packages/renderer && exec bunx ng mcp --read-only"]
+    }
+  }
+}

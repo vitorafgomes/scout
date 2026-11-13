@@ -1,0 +1,36 @@
+[
+  {
+    "id": "5f3c9a1e7b2d4c6fa8e0b1d2c3f4a5b6",
+    "topic": "Sourdough starter in five days",
+    "status": "script_ready",
+    "origin": "desktop",
+    "createdAt": "2026-11-04T09:00:00+00:00",
+    "updatedAt": "2026-11-05T08:00:00+00:00",
+    "candidates": [],
+    "script": {
+      "hook": "Flour, water and five days are all a starter needs.",
+      "sections": [
+        {
+          "heading": "Day one",
+          "narration": "Mix equal weights of flour and water in a clean jar."
+        }
+      ],
+      "callToAction": "Tell us how your starter is doing.",
+      "titleVariants": ["Sourdough starter in five days"],
+      "description": "A starter from flour and water, one day at a time.",
+      "tags": ["sourdough"],
+      "chapters": []
+    },
+    "claims": []
+  },
+  {
+    "id": "6a4d0b2f8c3e4d7fb9f1c2e3d4a5b6c7",
+    "topic": "No-knead bread for a weeknight",
+    "status": "queued",
+    "origin": "chat",
+    "createdAt": "2026-11-06T18:00:00+00:00",
+    "updatedAt": "2026-11-06T18:00:00+00:00",
+    "candidates": [],
+    "claims": []
+  }
+]

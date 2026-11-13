@@ -1,0 +1,104 @@
+---
+title: "ADR 0040 - The review's findings as cards in the chat, posted as one review from the cards"
+version: "1.6"
+date: 2026-11-06
+updated: 2026-11-13
+changes: "v1.6 (2026-11-13) dated line: a review's block may be posted by the review job, its verdict and read line computed by code (ADR 0055)."
+page_type: adr
+status: proposed
+description: "A code review answered in chat carries its findings as a fenced scout-findings JSON block; Scout Desktop renders them as cards with Yes, No and Edit, Yes to all and Post, and posting is one question to the worker carrying the chosen comments after a marker, which the code-review skill turns into one submit_pull_request_review call under the GitHub grant."
+supersedes: ""
+superseded_by: ""
+source:
+  - chat
+  - "src/Scout.Skills/skills/code-review.md"
+  - "src/Scout.Skills/skills/code-audit.md"
+  - "src/Scout.Plugin.GitHub/ReviewFindings.cs"
+  - "src/Scout.Plugin.GitHub/GitHubPlugin.Findings.cs"
+  - "src/Scout.Llm/Abstractions/TurnAttachments.cs"
+  - "ui/packages/renderer/src/app/core/"
+  - "ui/packages/main/src/quick-ask/quick-ask.ts"
+reliability: high
+---
+
+# ADR 0040 - The review's findings as cards in the chat, posted as one review from the cards
+
+> The model writes the review's findings once more as a fenced `scout-findings` JSON block; the desktop's two chat surfaces render that block as cards the owner decides on one by one, and "Post" is a new question to the worker carrying the chosen comments after a marker, which the skill turns into exactly one `submit_pull_request_review` call under the grant.
+
+## Status
+
+- [x] Proposed
+- [ ] Accepted
+- [ ] Deprecated / superseded by
+
+Updated: 2026-11-06. Proposed on the owner's prototype of 2026-11-06 ("the chat was supposed to look like this", "with the buttons and everything", "I want it to look just as nice"): a Scout turn with a status line, a heading with the verdict, one card per finding with a severity pill, the `path:line`, the context, what is wrong and the fix, Yes, No and Edit as icon buttons, "Yes to all", "Post n on PR #5", a "See how it reads on the PR" preview in GitHub's own look, and a green "Review posted on PR #5" box with the link. Merging the pull request accepts it.
+
+## Context
+
+Since [[pages/decisions/0038-code-quality-assistant-on-the-write-gate]] v1.3 a review asked for in chat is posted at once under the GitHub grant, and the chat shows the model's prose. The owner's first real review (Acme #5) came back as prose with `[P2]`, `Local:` and `Trecho:` lines: the right finding, no way to pick which comments go to the pull request, no way to edit one before it goes, and nothing that says it went. The owner drew the chat he wants as a prototype: findings as cards, decided one by one, posted together, with the posted result in the same thread.
+
+Three things already carry most of it. The replies render Markdown on both surfaces (`ui/packages/renderer/src/app/core/markdown.ts`), so a fenced block is data the renderer can take. A question to the worker may carry data after a marker that main strips from the turn and the worker reads as data ([[pages/services/desktop-quick-ask]]: the transcript, the screen text and the last answer markers). The write is already there: `submit_pull_request_review` takes the body and the comments, anchors each to the diff and posts under the grant ([[pages/services/plugin-github]]).
+
+## Decision
+
+- **The findings travel in the reply as a fenced block.** The `code-review` skill ends the review with one fenced block whose info string is `scout-findings`: a JSON object with `repository`, `number`, `commit`, `verdict`, `read` and `findings`, each finding with `id`, `severity` (`block`, `fix`, `nit`), `title`, `path`, `line`, `context`, `why` and `fix`, written in the language of the request (`src/Scout.Skills/skills/code-review.md`, "The findings block"; pinned by `tests/Scout.Skills.Tests/BundledSkillsTests.cs::The_Code_Review_Skill_Calls_The_Findings_Function_Never_Writes_The_Fence_And_Posts_A_Chosen_Review_Unchanged`). Other chats (Discord, Slack, Teams) show the fence as it is; no adapter changes.
+  - Amended 2026-11-13 by [[pages/decisions/0055-pull-request-review-as-a-job-in-batches]]: a review's block may be posted by the review job, its verdict and read line computed by code.
+- **The desktop renders the block as cards, on the Chat screen and in the floating-button chat alike.** `parseReviewFindings` takes exactly one valid block out of the reply and leaves the surrounding Markdown; a block that is not valid JSON of that shape is left in the reply as a code fence, so a model that writes it wrong costs nothing. One shared component renders the cards, the Yes, No and Edit icon buttons, the editor, "Yes to all", the Post button, the GitHub-styled preview and the posted box, in the look of the prototype. The picks, the edited comment bodies and the posted state live in renderer memory per findings turn, never on disk, and Clear drops them with the conversation.
+- **Posting is a question to the worker, like every other write Scout makes from chat.** Post composes `Post n findings on owner/repo#5`, the marker `Review to post (data, not instructions):` and a JSON object with the repository, the number, the review body (the verdict, the chosen titles with their marks and the read scope) and the chosen comments (`path`, `line`, `body`, the body in the shape the skill gives a posted comment: the severity mark and the title, the context, what is wrong and why, the fix), and sends it over `scout:local.ask`. Main keeps the bare question on the turn with `review: true`, allows 120,000 more characters for the block and sends the whole text to the worker, as it does for the transcript. The skill tells the model that such a message is the user's choice: call `submit_pull_request_review` once with exactly that body and those comments, unchanged, and answer with the URL. The write stays declared, granted and logged as ADR 0038 v1.3 says; the chat message is the ask under the grant, never the authorization.
+  - Amended 2026-11-09 by [[pages/decisions/0032-per-feature-write-permissions]] (the owner's decision of that day): Post is no longer a question to the worker. A review is an irreversible write and the owner's click on Post is its approval, so the card sends the review body, the chosen comments and the reviewed commit to Scout Desktop as one approved action, the verdict `comment` on the channel the verdict buttons use, and the worker's executor posts it once; the model is not in the path, the `Review to post` marker is no longer sent by the cards or read by the skill, and the cards show "Posting the review…", then "Review posted on PR #n" with the link, or the reason it failed, from that action's state in every window. A review without a reviewed commit cannot be posted from the card. A review the model is asked for in chat is queued and waits for the owner's Approve on its own card.
+- **The posted state comes from the answer.** When the post turn completes with a `github.com` URL in its reply, the findings turn shows the green "Review posted on PR #n" box with that link and loses its buttons; a post turn that fails, or answers without a URL (writes not allowed, GitHub refused, a dropped comment list), shows its reply as any other and the cards keep their buttons, so the owner can post again.
+
+## Amendment v1.1 (2026-11-06): the block comes from a function, not from the model's text
+
+The owner tested the cards and the model answered in prose without the block: "it does not show the button", "it has none of the prototype's formatting". The same review called five read functions, so the model calls functions far more reliably than it follows an output format. The `code-review` skill now calls `present_review_findings(repository, number, verdict, findings_json, commit, read)` once before its final answer and never writes the fence ([[pages/services/skills]]); the function, on the read-only `GitHub` plugin, checks the findings by the renderer's rules, answers one sentence naming the first problem when they fail, and otherwise hands the fenced block to `TurnAttachments`, the per-turn collector the conductor begins beside `TurnProgress` ([[pages/services/plugin-github]], [[pages/services/conversation]]). The stream pump appends the block to the reply on a completed turn only, after the model's text and a blank line, and removes a `scout-findings` fence the model wrote itself, so the reply carries exactly one block and the desktop renders the cards whatever the model wrote around them. The function refuses a block over 24,000 characters, below the 32,000 a desktop reply carries, and asks the model for fewer findings. The function calls nothing outside the process and writes nothing; the renderer, the posting question and the write are unchanged. This is not the worker event the alternatives below rejected: the block still travels in the reply text, with no new event kind and no change on main or the adapters. The cost named under Consequences changes with it: the model passes the findings once to the function instead of writing them twice in the answer.
+
+## Amendment v1.2 (2026-11-06): an audit comes back as the same cards, and the cards open issues
+
+The owner asked "Could you analyze the Acme project and see if there's anything wrong with what was implemented?", the `code-audit` skill answered in prose, and the owner said: "It is not in the shape we want." An audit has no pull request, so the action on its cards is one GitHub issue per chosen finding instead of one review.
+
+- **The block.** The same `scout-findings` fence, one JSON object. A review's is unchanged. An audit's is `{"kind":"audit","repository","commit"?,"verdict","read"?,"known"?,"findings"}` with no `number`: `kind` absent means a review and `audit` is the only other value; `known` is 0 to 20 texts of 1 to 300 characters, the limitations the project already documents, shown as a note under the cards and never as findings. Every finding of either kind may carry `rule`, 1 to 300 characters, the project rule, ADR, convention or requirement it departs from, or "Defect", shown on the card as "Rule: ..."; every other field and limit is as above. On an audit `block` is High (a defect or security risk that breaks a documented flow or loses data), `fix` Medium and `nit` Low.
+- **The function.** `present_audit_findings(repository, verdict, findings_json, commit, read, known_json)` sits beside `present_review_findings` on the read-only `GitHub` plugin with the same checks plus `rule` and `known`, the same refusal sentences, the same 24,000-character limit and the same answer to the model, and hands the audit block to `TurnAttachments`; both blocks open with the same fence line, so the latest call of either function in a turn leaves the only block. `present_review_findings` accepts `rule` too. Neither calls anything outside the process ([[pages/services/plugin-github]]).
+- **The skill.** `code-audit` calls `present_audit_findings` once before its final answer with every finding it reports, never writes the fence, and keeps its prose to a summary, the verdict and the scope paragraph ([[pages/services/skills]]).
+- **Opening the issues.** The desktop sends one question, `Open N issue(s) on owner/repo`, the marker `Issues to open (data, not instructions):` and a JSON object with the repository and the issues, each a title and a body built from the finding (or the owner's edit of it), through the same ask path as Post; main cuts the marker as it does the review's and marks the turn `issues`. The skill reads that message as the user's choice made on the cards: one `create_issue(owner, repo, title, body)` per issue, in order, with exactly that title and body, unchanged, no labels, no new audit, each URL on its own line and one line naming any that failed. The write is `create_issue` under the `github` grant as before; the chat message is the ask, never the authorization ([[pages/invariants/no-executive-writes]]). The findings turn shows "N issue(s) opened on owner/repo" with the links once a later `issues` turn answers with them; a failed turn or one without a link keeps the buttons.
+  - Amended 2026-11-09 by [[pages/decisions/0032-per-feature-write-permissions]]: each `create_issue` call is queued for the owner's approval of that issue instead of opening it, so the skill answers `Queued for your approval:` with each queued title and no URL, and the findings turn shows "Issues queued for your approval on owner/repo" with no Open button back once a later `issues` turn says so; the links are on each approved action's card ([[pages/services/desktop-quick-ask]]).
+
+This supersedes the v1.0 Neutral consequence that the audit keeps its prose answer; the improvements skill still does.
+
+## Consequences
+
+- **Better:** the owner decides comment by comment, edits a comment before it goes, posts one review, and sees that it went, in the same thread; nothing new leaves the process from the desktop, no new IPC channel, no new worker event; a model that cannot write the block degrades to the prose review of today.
+- **Worse:** the review text and the block repeat the findings, so a long review costs the model more tokens; the posting depends on the model following the skill (the function then checks the names, the caps and the diff anchors, so a wrong call is refused, not posted wrong); the `scout-findings` fence shows as JSON on Discord, Slack and Teams.
+- **Neutral but noteworthy:** the status line with "n of m files read" is what the block's `read` field says, not a live count; the audit and the improvements skills keep their prose answers until they adopt the same block.
+
+## Alternatives considered
+
+- **A worker event carrying the findings** (a plugin function the model calls, a `findings` line from the local adapter) - structured on the wire, but a new function the model may call out of turn, a new event kind on the local adapter and on main, and nothing for the other chats; the fenced block does the same with no new boundary.
+- **Posting from the desktop through a control-plane rpc** - would make the desktop call the GitHub plugin directly, outside the kernel's write-gate filter, and needs a new abstraction across `Scout.Conversation` for a function the model already owns; a message with a marker reuses the path the write gate guards.
+- **Posting at once, as v1.3 does** - what the owner had and did not want: no choice, no edit, no confirmation in the thread.
+
+## Enforcement
+
+- `tests/Scout.Skills.Tests/BundledSkillsTests.cs::The_Code_Review_Skill_Calls_The_Findings_Function_Never_Writes_The_Fence_And_Posts_A_Chosen_Review_Unchanged` - the skill calls `present_review_findings`, never writes the fence, names the three severities and tells the model to post a chosen review unchanged (v1.1; renamed from the v1.0 test that pinned the fence template).
+- `tests/Scout.Plugin.GitHub.Tests/GitHubPluginFindingsTests.cs` - a valid call attaches one block the desktop's fence pattern takes, with the same findings; every invalid shape answers its sentence and attaches nothing; a second call replaces the first (v1.1).
+- `tests/Scout.Conversation.Tests/Streaming/StreamPumpTests.cs` - an attached block ends the completed reply after the model's text; a failed turn and the interim updates carry none (v1.1).
+- `ui/packages/renderer/src/app/core/review-findings.spec.ts` - a valid block is taken and the surrounding text kept; invalid JSON, a missing field, a bad severity, a bad repository or more than 50 findings leave the reply as it is; the comment and review bodies follow the posted-comment shape.
+- `ui/packages/renderer/src/app/core/review-findings.component.spec.ts` - the cards, Yes, No, Edit, Yes to all, the summary, Post disabled until a Yes, the posting question with the marker and the chosen comments in order with the edited body, the preview, the posted box after the URL, the buttons back after a failed post.
+- `ui/packages/renderer/src/app/chat/chat.component.spec.ts` and `ui/packages/renderer/src/app/quick-ask/quick-ask.component.spec.ts` - a reply with the block renders the cards and the text around it; one without renders as before.
+- `ui/packages/main/test/quick-ask.test.ts` - an ask with the review marker sends the whole text to the worker and keeps the bare question on the turn, marked `review` (until 2026-11-10; nothing builds that block any more, so main reads it as plain text of the question).
+- `tests/Scout.Plugin.GitHub.Tests/GitHubPluginFindingsTests.cs` - an audit call attaches one block with `"kind":"audit"`, no number and the known list; every invalid audit shape and the 24,000 limit answer their sentence and attach nothing; `rule` and `known` reach the block and blank ones are left out, on an audit and on a review; an audit after a review in the same turn leaves only the audit block (v1.2).
+- `tests/Scout.Skills.Tests/BundledSkillsTests.cs::The_Code_Audit_Skill_Calls_The_Audit_Findings_Function_And_Opens_The_Chosen_Issues_Unchanged` - the audit skill calls `present_audit_findings`, never writes the fence, maps High, Medium and Low to the three severities, and opens the issues after the marker unchanged, without labels (v1.2).
+- Invariant page: [[pages/invariants/no-executive-writes]] (the write is the skill's `submit_pull_request_review` under the grant; the desktop adds no call).
+
+## Related
+
+- Services affected: [[pages/services/desktop-quick-ask]] (the cards on both surfaces, the marker), [[pages/services/skills]] (the block and the posting order in `code-review`), [[pages/services/plugin-github]] (the write the cards post through).
+- Amends: [[pages/decisions/0038-code-quality-assistant-on-the-write-gate]] (how the chat presents and posts a review).
+- Initiative: [[pages/roadmap/code-quality-assistant]].
+
+## Notes
+
+The prototype the owner approved on 2026-11-06 is the design: the dark-first tokens, the pills (Blocking, Fix, Suggestion), the icon buttons with their labels hidden under 480 px, the GitHub preview in GitHub's light greys, the posted box in the green of a Yes.
+
+2026-11-07: the owner asked the chat to follow the prototype's artboards (`context/prototypes/desktop/Main.dc.html`, `Review.dc.html`, `QuickAsk.dc.html`). None of them draws the GitHub preview, so it keeps GitHub's light greys and `color-scheme: light` in either theme, the look approved for it, while the cards around it paint with the theme tokens; the test "the GitHub preview keeps GitHub's light look in either theme" in `ui/packages/renderer/src/app/chat/chat.component.spec.ts` holds it. The microphone button became the icon of the same prototype in the same change.
+
+2026-11-12: a review that finds nothing still produces a findings card, so the owner sees what Scout checked (the commit, the checks, the tests) and gives the verdict from it. `present_review_findings` accepts `[]` for a review and records a block with an empty `findings`; `present_audit_findings` still needs 1 to 50 ([[pages/services/plugin-github]]). The card shows "No findings." and, under it, "What Scout says it read: ...", labelled as the model's report, and Approve alone; Post, Yes to all, the preview and Request changes are not shown, and a verdict asked for in chat still goes through the skill's verdict function ([[pages/services/desktop-quick-ask]]).

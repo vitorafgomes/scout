@@ -1,0 +1,45 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Scout.Llm/Scout.Llm.csproj" />
+    <Project Path="src/Scout.Conversation/Scout.Conversation.csproj" />
+    <Project Path="src/Scout.Adapter.Discord/Scout.Adapter.Discord.csproj" />
+    <Project Path="src/Scout.Adapter.Slack/Scout.Adapter.Slack.csproj" />
+    <Project Path="src/Scout.Adapter.Teams/Scout.Adapter.Teams.csproj" />
+    <Project Path="src/Scout.Host.Console/Scout.Host.Console.csproj" />
+    <Project Path="src/Scout.Operator/Scout.Operator.csproj" />
+    <Project Path="src/Scout.Plugin.GitHub/Scout.Plugin.GitHub.csproj" />
+    <Project Path="src/Scout.Plugin.YouTube/Scout.Plugin.YouTube.csproj" />
+    <Project Path="src/Scout.Knowledge/Scout.Knowledge.csproj" />
+    <Project Path="src/Scout.Plugin.Kubernetes/Scout.Plugin.Kubernetes.csproj" />
+    <Project Path="src/Scout.Skills/Scout.Skills.csproj" />
+    <Project Path="src/Scout.ControlPlane.Contracts/Scout.ControlPlane.Contracts.csproj" />
+    <Project Path="src/Scout.ControlPlane/Scout.ControlPlane.csproj" />
+    <Project Path="src/Scout.Host.ControlPlane/Scout.Host.ControlPlane.csproj" />
+    <Project Path="src/Scout.Transcription.Whisper/Scout.Transcription.Whisper.csproj" />
+    <Project Path="src/Scout.Adapter.Local/Scout.Adapter.Local.csproj" />
+    <Project Path="src/Scout.Meetings/Scout.Meetings.csproj" />
+    <Project Path="src/Scout.Sandbox/Scout.Sandbox.csproj" />
+    <Project Path="src/Scout.Audit/Scout.Audit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Scout.Llm.Tests/Scout.Llm.Tests.csproj" />
+    <Project Path="tests/Scout.Conversation.Tests/Scout.Conversation.Tests.csproj" />
+    <Project Path="tests/Scout.Adapter.Discord.Tests/Scout.Adapter.Discord.Tests.csproj" />
+    <Project Path="tests/Scout.Adapter.Slack.Tests/Scout.Adapter.Slack.Tests.csproj" />
+    <Project Path="tests/Scout.Adapter.Teams.Tests/Scout.Adapter.Teams.Tests.csproj" />
+    <Project Path="tests/Scout.Host.Console.Tests/Scout.Host.Console.Tests.csproj" />
+    <Project Path="tests/Scout.Operator.Tests/Scout.Operator.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.GitHub.Tests/Scout.Plugin.GitHub.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.YouTube.Tests/Scout.Plugin.YouTube.Tests.csproj" />
+    <Project Path="tests/Scout.Knowledge.Tests/Scout.Knowledge.Tests.csproj" />
+    <Project Path="tests/Scout.Plugin.Kubernetes.Tests/Scout.Plugin.Kubernetes.Tests.csproj" />
+    <Project Path="tests/Scout.Skills.Tests/Scout.Skills.Tests.csproj" />
+    <Project Path="tests/Scout.ControlPlane.Tests/Scout.ControlPlane.Tests.csproj" />
+    <Project Path="tests/Scout.Transcription.Whisper.Tests/Scout.Transcription.Whisper.Tests.csproj" />
+    <Project Path="tests/Scout.Adapter.Local.Tests/Scout.Adapter.Local.Tests.csproj" />
+    <Project Path="tests/Scout.Meetings.Tests/Scout.Meetings.Tests.csproj" />
+    <Project Path="tests/Scout.Sandbox.Tests/Scout.Sandbox.Tests.csproj" />
+    <Project Path="tests/Scout.Audit.Tests/Scout.Audit.Tests.csproj" />
+    <Project Path="tests/Scout.ArchTests/Scout.ArchTests.csproj" />
+  </Folder>
+</Solution>

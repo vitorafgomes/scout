@@ -1,0 +1,260 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'From main: release (vX.Y.Z, marked Latest) or prerelease (vX.Y.Z-beta.N, hidden from the site and the updater). Ignored when run from a tag.'
+        type: choice
+        options: [release, prerelease]
+        default: release
+      version:
+        description: 'From main: a version to use instead of the computed one, for example 1.0.0 or 1.0.0-beta.1. Leave empty to use the computed version.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      create: ${{ steps.version.outputs.create }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      notes: ${{ steps.version.outputs.notes }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: github.ref_type == 'branch'
+        with:
+          fetch-depth: 0
+
+      - name: The version
+        id: version
+        shell: bash
+        env:
+          KIND: ${{ inputs.kind }}
+          VERSION_OVERRIDE: ${{ inputs.version }}
+        run: |
+          create=false; prerelease=false; notes=''
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME is not a version. Use v<major>.<minor>.<patch>, for example v1.2.3 or v1.2.3-beta.1."
+              exit 1
+            fi
+            version="${GITHUB_REF_NAME#v}"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF_NAME" = main ]; then
+            case "$KIND" in
+              release) args=(release); shape='^[0-9]+\.[0-9]+\.[0-9]+$' ;;
+              prerelease) args=(prerelease beta); prerelease=true; shape='^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$' ;;
+              *) echo "::error::Kind $KIND is neither release nor prerelease."; exit 1 ;;
+            esac
+            if [ -n "$VERSION_OVERRIDE" ]; then
+              if ! [[ "$VERSION_OVERRIDE" =~ $shape ]]; then
+                echo "::error::Version $VERSION_OVERRIDE does not fit a $KIND. A release is <major>.<minor>.<patch>, for example 1.2.3; a prerelease adds a suffix, for example 1.2.3-beta.1."
+                exit 1
+              fi
+              version="$VERSION_OVERRIDE"
+            else
+              version=$(bash tools/release/next-version.sh "${args[@]}")
+            fi
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "::error::The tag v$version already exists. Pick another version, or run the workflow from that tag to rebuild it."
+              exit 1
+            fi
+            notes=$(bash tools/release/next-version.sh --notes "${args[@]}")
+            create=true
+          else
+            echo "::error::A release runs from a version tag, or by hand from main, not from the $GITHUB_REF_TYPE $GITHUB_REF_NAME. Push a tag such as v1.2.3, or choose main or the tag under Use workflow from."
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "create=$create"
+            echo "prerelease=$prerelease"
+            echo "notes<<SCOUT_RELEASE_NOTES"
+            printf '%s\n' "$notes"
+            echo "SCOUT_RELEASE_NOTES"
+          } >> "$GITHUB_OUTPUT"
+          {
+            if [ "$create" = true ]; then
+              echo "## Releasing v$version ($KIND)"
+              echo
+              echo "The tag and the release are created on $GITHUB_SHA once every build leg passes."
+              echo
+              printf '%s\n' "$notes"
+            else
+              echo "## Releasing $GITHUB_REF_NAME from its tag"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Releasing $version"
+
+  verify:
+    needs: check
+    uses: ./.github/workflows/ci.yml
+
+  verify-ui:
+    needs: check
+    uses: ./.github/workflows/ui-ci.yml
+
+  build:
+    needs: [check, verify, verify-ui]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            dist_script: dist:linux
+            platform: linux
+          - os: macos-latest
+            rid: osx-arm64
+            dist_script: dist:mac
+            platform: mac
+          - os: windows-latest
+            rid: win-x64
+            dist_script: dist:win
+            platform: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Cache Bun install
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('ui/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache NuGet
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('src/**/*.csproj', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Install UI dependencies
+        working-directory: ui
+        run: bun install --frozen-lockfile
+
+      - name: Set the app version
+        working-directory: ui
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: npm pkg set version="$VERSION"
+
+      - name: Publish worker binary
+        working-directory: ui
+        shell: bash
+        run: bun run worker:publish -- ${{ matrix.rid }}
+
+      - name: Cache media tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ui/build/media-cache
+          key: media-tools-${{ runner.os }}-${{ hashFiles('ui/build/media-tools.json') }}
+
+      - name: Cache Electron and packaging tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ github.workspace }}/.cache/electron
+            ${{ github.workspace }}/.cache/electron-builder
+          key: electron-builder-${{ runner.os }}-${{ hashFiles('ui/bun.lock', 'ui/build/electron-builder.yml') }}
+          restore-keys: electron-builder-${{ runner.os }}-
+
+      - name: Package
+        working-directory: ui
+        shell: bash
+        run: bun run ${{ matrix.dist_script }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          SCOUT_GOOGLE_CLIENT_SECRET: ${{ secrets.SCOUT_GOOGLE_CLIENT_SECRET }}
+          ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+
+      - name: Keep the packages and the updater metadata, and write checksums
+        working-directory: ui/build/dist
+        shell: bash
+        run: |
+          shopt -s extglob
+          rm -f -- !(latest*).yml *.yaml Scout-Desktop-*-mac-x64.dmg*
+          if [ "${{ matrix.platform }}" = mac ]; then rm -f -- *.blockmap *.yml; fi
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          "${hash[@]}" Scout-Desktop-!(*.blockmap) > "SHA256SUMS-${{ matrix.platform }}.txt"
+          cat "SHA256SUMS-${{ matrix.platform }}.txt"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-${{ matrix.platform }}
+          path: |
+            ui/build/dist/Scout-Desktop-*
+            ui/build/dist/SHA256SUMS-*.txt
+            ui/build/dist/latest*.yml
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+
+      - name: Publish the GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.check.outputs.tag }}
+          CREATE: ${{ needs.check.outputs.create }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+          NOTES: ${{ needs.check.outputs.notes }}
+        run: |
+          ls -l release
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          elif [ "$CREATE" = true ]; then
+            printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Scout Desktop $TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" release/*
+          else
+            gh release create "$TAG" --verify-tag --title "Scout Desktop $TAG" --generate-notes release/*
+          fi

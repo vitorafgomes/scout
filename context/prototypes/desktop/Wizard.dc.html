@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: first-run wizard</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+@keyframes sc-spin{to{transform:rotate(360deg)}}
+</style>
+</helmet>
+<div style="min-height: 760px; display: flex; flex-direction: column; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px; position: relative">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 20px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}">
+<div style="display: flex; align-items: center; gap: 10px; margin-right: auto">
+<div style="width: 28px; height: 28px; border-radius: 8px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600; font-size: 15px">Scout setup</span>
+<span style="font-size: 12px; color: {{t.muted}}">{{stepCounter}}</span>
+</div>
+</div>
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" title="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+</button>
+<button aria-label="Dark theme" title="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+</button>
+<button aria-label="Follow the system theme" title="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+</button>
+</div>
+</header>
+
+<nav aria-label="Setup progress" style="padding: 16px 24px 4px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}">
+<ol style="list-style: none; margin: 0; padding: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px 4px; align-items: center">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+<li style="display: flex; align-items: center; gap: 4px">
+<sc-if value="{{s.isDone}}" hint-placeholder-val="{{false}}">
+<button onClick="{{s.go}}" aria-label="{{s.ariaLabel}}" style="display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: {{t.fg2}}; padding: 4px 8px; border-radius: 16px">
+<span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+<span style="font-size: 13px">{{s.label}}</span>
+</button>
+</sc-if>
+<sc-if value="{{s.isCurrent}}" hint-placeholder-val="{{true}}">
+<span aria-current="step" style="display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 16px; background: {{t.surface2}}">
+<span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 12px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">{{s.number}}</span>
+<span style="font-size: 13px; font-weight: 600">{{s.label}}</span>
+</span>
+</sc-if>
+<sc-if value="{{s.isTodo}}" hint-placeholder-val="{{false}}">
+<span style="display: flex; align-items: center; gap: 8px; padding: 4px 8px; color: {{t.muted}}">
+<span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 12px; border: 1px solid {{t.line}}; display: flex; align-items: center; justify-content: center; font-size: 12px">{{s.number}}</span>
+<span style="font-size: 13px">{{s.label}}</span>
+</span>
+</sc-if>
+<sc-if value="{{s.hasSeparator}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="width: 16px; height: 1px; background: {{t.line}}"></span>
+</sc-if>
+</li>
+</sc-for>
+</ol>
+</nav>
+
+<main style="flex: 1; display: flex; justify-content: center; padding: 28px 24px; box-sizing: border-box">
+<div style="width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 18px">
+
+<sc-if value="{{hasSubStates}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; align-self: flex-end">
+<span id="wz-preview" style="font-size: 12px; color: {{t.muted}}">Preview state</span>
+<div role="group" aria-labelledby="wz-preview" style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 18px; background: {{t.surface}}">
+<sc-for list="{{subStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 14px; padding: 5px 12px; font-size: 12px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em">{{page.title}}</h1>
+<p style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{page.lede}}</p>
+</div>
+
+<sc-if value="{{is.platform}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{detectFailed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; color: {{t.err}}">Unknown error while detecting clients.</p>
+</sc-if>
+<sc-if value="{{detecting}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.muted}}">Detecting clients...</p>
+</sc-if>
+<sc-if value="{{chatAppsShown}}" hint-placeholder-val="{{true}}">
+<div role="radiogroup" aria-label="Chat app" style="display: flex; flex-wrap: wrap; gap: 12px">
+<sc-for list="{{platforms}}" as="pl" hint-placeholder-count="3">
+<article style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 10px; background: {{t.surface}}; border: {{pl.border}}; border-radius: 14px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="font-weight: 600; font-size: 15px; margin-right: auto">{{pl.name}}</span>
+<span style="display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 12px; font-size: 12px; background: {{pl.chipBg}}; color: {{pl.chipFg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pl.chipIcon}}"></path></svg>{{pl.status}}</span>
+</div>
+<span style="font-size: 13px; color: {{t.muted}}; line-height: 1.45">{{pl.helper}}</span>
+<sc-if value="{{pl.download}}" hint-placeholder-val="{{false}}">
+<button style="align-self: flex-start; border: 0; padding: 0; background: transparent; color: {{t.accent}}; font-size: 13px; text-decoration: underline">Download Discord</button>
+</sc-if>
+<sc-if value="{{pl.choosable}}" hint-placeholder-val="{{true}}">
+<button role="radio" aria-checked="{{pl.checked}}" onClick="{{pl.pick}}" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{pl.btnBorder}}; background: {{pl.btnBg}}; color: {{pl.btnFg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pl.btnIcon}}"></path></svg>{{pl.btnLabel}}</button>
+</sc-if>
+</article>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px dashed {{t.line}}; border-radius: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">No chat app?</span><span style="font-size: 13px; color: {{t.muted}}">Chat with Scout in its own window. You can connect Discord or Slack later in Settings.</span></div>
+<a href="Main.dc.html" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; color: {{t.fg}}; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>Use on this computer</a>
+</div>
+</sc-if>
+</sc-if>
+
+<sc-if value="{{is.provision}}" hint-placeholder-val="{{false}}">
+<section style="display: flex; flex-direction: column; gap: 14px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px">
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; color: {{t.fg2}}">
+<li>Click <strong style="color: {{t.fg}}">New Application</strong> and name it Scout.</li>
+<li>Open <strong style="color: {{t.fg}}">Bot</strong> and click <strong style="color: {{t.fg}}">Reset Token</strong>.</li>
+<li>Click <strong style="color: {{t.fg}}">Copy</strong>, then come back here.</li>
+</ol>
+<div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 13px; line-height: 1.45"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px; margin-top: 1px"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path></svg><span>Reset Token stops the old token working. If this bot already runs somewhere else, that copy goes offline.</span></div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button onClick="{{openPortal}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: {{portalBtn.border}}; background: {{portalBtn.bg}}; color: {{portalBtn.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M10 14L21 3M21 14v7H3V3h7"></path></svg>{{portalBtn.label}}</button>
+<span style="font-size: 13px; color: {{t.muted}}">Already have a bot token? Continue straight away.</span>
+</div>
+<sc-if value="{{portalFailed}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; background: {{t.errBg}}">
+<span style="color: {{t.err}}; font-weight: 600">The Developer Portal did not open.</span>
+<span style="font-size: 13px; color: {{t.fg2}}">Open this address in any browser, then come back and continue:</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<code style="padding: 6px 10px; border-radius: 8px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 13px">https://discord.com/developers/applications</code>
+<button onClick="{{copyUrl}}" style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>{{copyLabel}}</button>
+</div>
+</div>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{is.token}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{tokenKeyring}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 13px">Keyring unavailable. Install gnome-keyring / kwallet / libsecret to proceed.</div>
+</sc-if>
+<sc-if value="{{tokenNoKeyringService}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 13px">Scout found no keyring service such as GNOME Keyring or KWallet on this computer, so it saved nothing and does not use the credentials saved before; start or install one, then restart Scout.</div>
+</sc-if>
+<section style="display: flex; flex-direction: column; gap: 14px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="wz-token" style="font-size: 13px; font-weight: 600">Discord bot token</label>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<div style="flex: 1 1 280px; display: flex; align-items: center; height: 40px; border: 1px solid {{tokenField.border}}; border-radius: 10px; background: {{t.bg}}; padding: 0 4px 0 12px">
+<input id="wz-token" type="{{tokenType}}" value="{{tokenValue}}" autocomplete="off" spellcheck="false" aria-describedby="wz-token-help" style="flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: {{t.fg}}; font: inherit">
+<button aria-label="{{revealLabel}}" title="{{revealLabel}}" onClick="{{toggleReveal}}" style="width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"></path></svg></button>
+</div>
+<button onClick="{{saveToken}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: {{saveBtn.border}}; background: {{saveBtn.bg}}; color: {{saveBtn.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l3 3v15H5zM8 3v5h7M8 21v-7h8v7"></path></svg>{{saveBtn.label}}</button>
+</div>
+<span id="wz-token-help" style="font-size: 12px; color: {{tokenField.helpColor}}">{{tokenField.help}}</span>
+</div>
+<div aria-live="polite" style="display: flex; flex-direction: column; gap: 8px">
+<sc-for list="{{tokenChecks}}" as="tc" hint-placeholder-count="2">
+<div style="display: flex; gap: 10px; align-items: flex-start">
+<span aria-hidden="true" style="width: 22px; height: 22px; flex: 0 0 22px; border-radius: 11px; background: {{tc.bg}}; color: {{tc.fg}}; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="{{tc.icon}}"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 500">{{tc.title}}</span>
+<sc-if value="{{tc.hasDetail}}" hint-placeholder-val="{{true}}"><span style="font-size: 13px; color: {{t.muted}}">{{tc.detail}}</span></sc-if>
+<sc-if value="{{tc.hasActions}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px">
+<sc-if value="{{tc.offersPortal}}" hint-placeholder-val="{{false}}"><button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Open Developer Portal</button></sc-if>
+<button onClick="{{saveToken}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Check again</button>
+</div>
+</sc-if>
+<sc-if value="{{tc.portalFailed}}" hint-placeholder-val="{{false}}"><span role="alert" style="font-size: 12px; color: {{t.err}}">The Developer Portal did not open. Open this address in any browser, then come back and check again: <span style="font-family: monospace; overflow-wrap: anywhere">https://discord.com/developers/applications/111222333/bot</span></span></sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">The token is kept encrypted on this computer, under a key from its keyring.</p>
+</section>
+</sc-if>
+
+<sc-if value="{{is.oauth}}" hint-placeholder-val="{{false}}">
+<section style="display: flex; flex-direction: column; gap: 14px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px">
+<sc-if value="{{oauth.idle}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; color: {{t.fg2}}">Discord opens in your browser so you can pick the server.</p>
+<button onClick="{{openInvite}}" style="align-self: flex-start; height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add Scout to a server</button>
+</sc-if>
+<sc-if value="{{oauth.waiting}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; gap: 12px; align-items: center">
+<span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 10px; border: 2px solid {{t.surface2}}; border-top-color: {{t.accent}}; animation: sc-spin 0.9s linear infinite"></span>
+<div style="display: flex; flex-direction: column; gap: 2px"><span>Pick your server in the browser and click Authorize. Scout continues on its own.</span><span style="font-size: 13px; color: {{t.muted}}">Still waiting · 1:20 of 5:00</span></div>
+</div>
+<button onClick="{{openInvite}}" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M10 14L21 3M21 14v7H3V3h7"></path></svg>Open the invite again</button>
+</sc-if>
+<sc-if value="{{oauth.joined}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 10px; background: {{t.okBg}}; color: {{t.ok}}; font-weight: 600"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Scout joined Acme Engineering</div>
+</sc-if>
+<sc-if value="{{oauth.failed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; color: {{t.err}}">Scout has not joined a server yet. Click Add Scout to a server to try again.</p>
+</sc-if>
+<sc-if value="{{oauth.showGuilds}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid {{t.line}}; padding-top: 14px">
+<span style="font-weight: 600">Scout is already in these servers</span>
+<span style="font-size: 13px; color: {{t.muted}}">Picking one uses it right away; you can change it later in Settings.</span>
+<sc-for list="{{guilds}}" as="g" hint-placeholder-count="2">
+<button onClick="{{g.pick}}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; text-align: left">
+<span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px">{{g.initial}}</span>
+<span style="display: flex; flex-direction: column; margin-right: auto"><span style="font-weight: 500">{{g.name}}</span><span style="font-size: 12px; color: {{t.muted}}">{{g.members}}</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"></path></svg>
+</button>
+</sc-for>
+</div>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{is.launch}}" hint-placeholder-val="{{false}}">
+<section style="display: flex; flex-direction: column; gap: 14px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px">
+<div role="status" style="display: flex; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 14px; font-size: 13px; font-weight: 600; background: {{launchChip.bg}}; color: {{launchChip.fg}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{launchChip.icon}}"></path></svg>{{launchChip.label}}</span>
+<span style="font-size: 13px; color: {{t.muted}}">{{launchChip.detail}}</span>
+</div>
+<sc-if value="{{launchStarting}}" hint-placeholder-val="{{true}}">
+<div role="progressbar" aria-label="Starting Scout" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: 45%; background: {{t.accent}}"></div></div>
+</sc-if>
+<dl style="margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; align-items: baseline">
+<dt style="color: {{t.muted}}; font-size: 13px">Chat app</dt><dd style="margin: 0">Discord · server <strong>Acme Engineering</strong></dd>
+<dt style="color: {{t.muted}}; font-size: 13px">AI Source</dt><dd style="margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline"><span>{{aiSource}}</span><a href="Sources.dc.html" style="color: {{t.accent}}; font-size: 13px">Change in AI Sources</a></dd>
+<dt style="color: {{t.muted}}; font-size: 13px">Bot token</dt><dd style="margin: 0">Saved, encrypted with this computer's keyring</dd>
+</dl>
+<sc-if value="{{launchFailed}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; background: {{t.errBg}}">
+<span style="color: {{t.err}}; font-weight: 600">Scout stopped before it was ready.</span>
+<span style="font-size: 13px; color: {{t.fg2}}">{{launchReason}}</span>
+</div>
+</sc-if>
+<sc-if value="{{launchNotFailed}}" hint-placeholder-val="{{true}}">
+<details style="border-top: 1px solid {{t.line}}; padding-top: 12px">
+<summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Show details</summary>
+<pre style="margin: 10px 0 0; padding: 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; white-space: pre-wrap">{{launchLog}}</pre>
+</details>
+</sc-if>
+<sc-if value="{{launchFailed}}" hint-placeholder-val="{{false}}">
+<details open style="border-top: 1px solid {{t.line}}; padding-top: 12px">
+<summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Show details</summary>
+<sc-if value="{{launchRefused}}" hint-placeholder-val="{{false}}"><p style="margin: 10px 0 0; font-family: monospace; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; overflow-wrap: anywhere">Error invoking remote method 'scout:worker.start': Error: Error: worker/start-failed: the worker crashed before it was running</p></sc-if>
+<pre style="margin: 10px 0 0; padding: 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; white-space: pre-wrap">{{launchLog}}</pre>
+</details>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button onClick="{{retryLaunch}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Retry</button>
+<button onClick="{{cancelLaunch}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+</div>
+</sc-if>
+</section>
+</sc-if>
+
+<sc-if value="{{is.ready}}" hint-placeholder-val="{{false}}">
+<section style="display: flex; gap: 14px; align-items: center; padding: 18px 20px; border-radius: 14px; background: {{t.okBg}}">
+<span aria-hidden="true" style="width: 40px; height: 40px; flex: 0 0 40px; border-radius: 20px; background: {{t.ok}}; color: {{t.okBg}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600; font-size: 16px; color: {{t.ok}}">Setup is complete</span><span style="color: {{t.fg2}}">{{readySummary}}</span></div>
+</section>
+<sc-if value="{{ready.noModel}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; background: {{t.warnBg}}; color: {{t.warn}}; font-size: 13px">
+<span>No LLM model selected. Pick one to enable Scout's responses.</span>
+<a href="Models.dc.html" style="height: 40px; padding: 0 16px; border-radius: 20px; background: {{t.accentStrong}}; color: #ffffff; text-decoration: none; display: flex; align-items: center; gap: 8px; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12L3 7"></path></svg>Choose model</a>
+</div>
+</sc-if>
+<sc-if value="{{ready.crashed}}" hint-placeholder-val="{{false}}">
+<div role="alert" style="display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 10px; background: {{t.errBg}}">
+<span style="color: {{t.err}}; font-weight: 600">Scout crashed.</span>
+<span style="font-size: 13px; color: {{t.fg2}}">Exit code: 1. Check the logs under Scout process and start over.</span>
+</div>
+</sc-if>
+<h2 style="margin: 4px 0 0; font-size: 15px; font-weight: 600">What to do next</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<sc-for list="{{nextActions}}" as="na" hint-placeholder-count="3">
+<a href="{{na.href}}" style="flex: 1 1 200px; display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 14px; border: 1px solid {{t.line}}; background: {{t.surface}}; color: {{t.fg}}; text-decoration: none">
+<span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 10px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{na.d}}"></path></svg></span>
+<span style="font-weight: 600">{{na.title}}</span>
+<span style="font-size: 13px; color: {{t.muted}}; line-height: 1.45">{{na.detail}}</span>
+</a>
+</sc-for>
+</div>
+<sc-if value="{{ready.processClosed}}" hint-placeholder-val="{{true}}">
+<details style="border: 1px solid {{t.line}}; border-radius: 14px; padding: 12px 16px; background: {{t.surface}}">
+<summary style="cursor: pointer; color: {{t.fg2}}">Scout process and start over</summary>
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; background: {{readyChip.bg}}; color: {{readyChip.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{readyChip.icon}}"></path></svg>{{readyChip.label}}</span>
+<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">{{readyChip.meta}}</span>
+<sc-if value="{{ready.running}}" hint-placeholder-val="{{true}}">
+<button onClick="{{stopScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>Stop</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Restart</button>
+</sc-if>
+<sc-if value="{{ready.stopped}}" hint-placeholder-val="{{false}}">
+<button onClick="{{startScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>Start</button>
+</sc-if>
+<sc-if value="{{ready.crashed}}" hint-placeholder-val="{{false}}">
+<button onClick="{{startScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Restart</button>
+</sc-if>
+</div>
+<sc-if value="{{ready.hasNote}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 13px; color: {{t.muted}}">{{readyNote}}</p></sc-if>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+<span style="font-size: 13px; color: {{t.muted}}">Logs (last 200 lines)</span>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>Copy</button>
+</div>
+<pre style="margin: 0; padding: 12px; min-height: 20px; max-height: 320px; overflow-y: auto; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; white-space: pre-wrap">{{readyLog}}</pre>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; border-radius: 10px; border: 1px solid {{t.errBg}}">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto"><span style="font-weight: 600">Start over with another bot</span><span style="font-size: 13px; color: {{t.muted}}">Removes this bot's token from Scout and runs setup again.</span></div>
+<button onClick="{{openReset}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Start over</button>
+</div>
+</div>
+</details>
+</sc-if>
+<sc-if value="{{ready.processOpen}}" hint-placeholder-val="{{false}}">
+<details open style="border: 1px solid {{t.line}}; border-radius: 14px; padding: 12px 16px; background: {{t.surface}}">
+<summary style="cursor: pointer; color: {{t.fg2}}">Scout process and start over</summary>
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; background: {{readyChip.bg}}; color: {{readyChip.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{readyChip.icon}}"></path></svg>{{readyChip.label}}</span>
+<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">{{readyChip.meta}}</span>
+<sc-if value="{{ready.running}}" hint-placeholder-val="{{true}}">
+<button onClick="{{stopScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6h12v12H6z"></path></svg>Stop</button>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Restart</button>
+</sc-if>
+<sc-if value="{{ready.stopped}}" hint-placeholder-val="{{false}}">
+<button onClick="{{startScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg>Start</button>
+</sc-if>
+<sc-if value="{{ready.crashed}}" hint-placeholder-val="{{false}}">
+<button onClick="{{startScout}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Restart</button>
+</sc-if>
+</div>
+<sc-if value="{{ready.hasNote}}" hint-placeholder-val="{{false}}"><p role="status" style="margin: 0; font-size: 13px; color: {{t.muted}}">{{readyNote}}</p></sc-if>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px">
+<span style="font-size: 13px; color: {{t.muted}}">Logs (last 200 lines)</span>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>Copy</button>
+</div>
+<pre style="margin: 0; padding: 12px; min-height: 20px; max-height: 320px; overflow-y: auto; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; white-space: pre-wrap">{{readyLog}}</pre>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px; border-radius: 10px; border: 1px solid {{t.errBg}}">
+<div style="display: flex; flex-direction: column; gap: 2px; margin-right: auto"><span style="font-weight: 600">Start over with another bot</span><span style="font-size: 13px; color: {{t.muted}}">Removes this bot's token from Scout and runs setup again.</span></div>
+<button onClick="{{openReset}}" style="height: 36px; padding: 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Start over</button>
+</div>
+</div>
+</details>
+</sc-if>
+</sc-if>
+
+<footer style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-top: 1px solid {{t.line}}; padding-top: 18px; margin-top: 4px">
+<sc-if value="{{showBack}}" hint-placeholder-val="{{true}}">
+<button onClick="{{back}}" aria-disabled="{{backDisabled}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; opacity: {{backOpacity}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>Back</button>
+</sc-if>
+<span style="margin-right: auto; font-size: 12px; color: {{t.muted}}">{{footerHint}}</span>
+<sc-if value="{{continueEnabled}}" hint-placeholder-val="{{true}}">
+<button onClick="{{next}}" style="height: 40px; padding: 0 18px; border-radius: 20px; border: {{continueBtn.border}}; background: {{continueBtn.bg}}; color: {{continueBtn.fg}}; display: flex; align-items: center; gap: 8px">{{continueLabel}}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg></button>
+</sc-if>
+<sc-if value="{{continueBlocked}}" hint-placeholder-val="{{false}}">
+<button disabled aria-describedby="wz-blocked" style="height: 40px; padding: 0 18px; border-radius: 20px; border: 0; background: {{t.surface2}}; color: {{t.muted}}; display: flex; align-items: center; gap: 8px">{{continueLabel}}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg></button>
+<span id="wz-blocked" style="flex-basis: 100%; text-align: right; font-size: 12px; color: {{t.muted}}">{{blockedReason}}</span>
+</sc-if>
+<sc-if value="{{isFinish}}" hint-placeholder-val="{{false}}">
+<a href="Main.dc.html" style="height: 40px; padding: 0 18px; border-radius: 20px; background: {{t.accentStrong}}; color: #ffffff; text-decoration: none; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>Open the chat</a>
+</sc-if>
+</footer>
+
+</div>
+</main>
+
+<sc-if value="{{resetOpen}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50">
+<div role="alertdialog" aria-modal="true" aria-labelledby="wz-reset-title" aria-describedby="wz-reset-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 440px; max-height: calc(100% - 32px); overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<h2 id="wz-reset-title" style="margin: 0; font-size: 17px; font-weight: 600">Start over with another bot?</h2>
+<p id="wz-reset-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">The bot token is removed from the keyring and setup starts again from the first step. Scout stops unless Slack or this computer still use it. The bot stays in your Discord server until you remove it there.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
+<button autofocus onClick="{{closeReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
+<button onClick="{{confirmReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Start over</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1100,"height":760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      theme: 'dark',
+      step: 0,
+      detect: 'done',
+      platform: 'discord',
+      portal: 'closed',
+      copied: false,
+      token: 'empty',
+      reveal: false,
+      oauth: 'idle',
+      launch: 'starting',
+      ready: 'running',
+      resetOpen: false,
+    };
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.45)' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(5,8,14,0.65)' };
+  }
+  renderVals() {
+    const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;
+    const t = this.palette(mode);
+    const st = this.state;
+    const aiSource = 'ChatGPT plan · gpt-5.6-luna';
+    const defs = [
+      ['platform', 'Chat app', 'Choose where you chat with Scout', 'Pick the chat app Scout joins. You can add another one later in Settings.'],
+      ['provision', 'Create bot', 'Create your Discord bot', 'Scout talks in Discord through a bot you own. Create it in the Discord Developer Portal.'],
+      ['token', 'Bot token', 'Paste the bot token', 'Scout checks the token with Discord and turns on what it needs to read your messages.'],
+      ['oauth', 'Add to server', 'Add Scout to your server', 'Invite the bot to the server where your team will ask it questions.'],
+      ['launch', 'Launch', 'Start Scout', 'Scout starts on this computer with the AI Source you connected.'],
+      ['ready', 'Ready', 'You are all set', 'Mention @Scout in your server, or chat with it in this window.'],
+    ];
+    const total = defs.length;
+    const go = (i) => this.setState({ step: i, resetOpen: false });
+    const steps = defs.map(([id, label], i) => ({
+      label,
+      number: String(i + 1),
+      isDone: i < st.step,
+      isCurrent: i === st.step,
+      isTodo: i > st.step,
+      hasSeparator: i < total - 1,
+      ariaLabel: 'Go back to step ' + (i + 1) + ', ' + label,
+      go: () => go(i),
+    }));
+    const cur = defs[st.step][0];
+    const is = {};
+    defs.forEach(([id]) => { is[id] = id === cur; });
+    const page = { title: defs[st.step][2], lede: defs[st.step][3] };
+
+    const seg = (key, list) => list.map(([id, label]) => {
+      const on = st[key] === id;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, pick: () => this.setState({ [key]: id }) };
+    });
+    const subMap = {
+      platform: seg('detect', [['done', 'Detected'], ['detecting', 'Detecting'], ['failed', 'Detection failed']]),
+      provision: seg('portal', [['closed', 'Portal not opened'], ['opened', 'Portal opened'], ['failed', 'Could not open']]),
+      token: seg('token', [['empty', 'Empty'], ['saved', 'Saved'], ['earlier', 'Saved earlier'], ['invalid', 'Rejected'], ['keyring', 'Keyring unavailable'], ['nokeyringservice', 'No keyring service'], ['checking', 'Checking'], ['portal', 'Needs the portal'], ['portalfailed', 'Portal did not open'], ['failed', 'Check failed']]),
+      oauth: seg('oauth', [['idle', 'Not started'], ['waiting', 'Waiting'], ['joined', 'Joined'], ['failed', 'Not joined yet']]),
+      launch: seg('launch', [['starting', 'Starting'], ['running', 'Running'], ['failed', 'Could not start'], ['crashed', 'Crashed while starting']]),
+      ready: seg('ready', [['running', 'Running'], ['starting', 'Starting'], ['stopped', 'Stopped'], ['crashed', 'Crashed'], ['idle', 'Idle'], ['nomodel', 'No model'], ['restartwait', 'Restart waiting'], ['restartfailed', 'Restart failed']]),
+    };
+    const subStates = subMap[cur] || [];
+
+    const primary = { border: '0', bg: t.accentStrong, fg: '#ffffff' };
+    const secondary = { border: '1px solid ' + t.line, bg: 'transparent', fg: t.fg };
+
+    const detectFailed = st.detect === 'failed';
+    const platDefs = [
+      { id: 'discord', name: 'Discord', status: detectFailed ? 'Not installed' : 'Installed', tone: detectFailed ? 'neutral' : 'ok', download: detectFailed, helper: 'Scout joins a server through a bot you create. About five minutes.', choosable: true },
+      { id: 'slack', name: 'Slack', status: 'Not connected', tone: 'neutral', download: false, helper: 'Scout joins a workspace as a Slack app.', choosable: true },
+      { id: 'teams', name: 'Microsoft Teams', status: 'Coming soon', tone: 'neutral', download: false, helper: 'Not available yet.', choosable: false },
+    ];
+    const chip = (tone) => tone === 'ok' ? [t.okBg, t.ok, 'M20 6L9 17l-5-5'] : [t.surface2, t.fg2, 'M12 8v4M12 16h.01'];
+    const platforms = platDefs.map((p) => {
+      const on = st.platform === p.id;
+      const c = chip(p.tone);
+      return { ...p, chipBg: c[0], chipFg: c[1], chipIcon: c[2], checked: on ? 'true' : 'false', border: on ? '2px solid ' + t.accent : '1px solid ' + t.line, btnBg: on ? t.accentStrong : 'transparent', btnFg: on ? '#ffffff' : t.fg, btnBorder: on ? t.accentStrong : t.line, btnLabel: on ? 'Chosen' : 'Choose ' + p.name, btnIcon: on ? 'M20 6L9 17l-5-5' : 'M12 5v14M5 12h14', pick: () => this.setState({ platform: p.id }) };
+    });
+
+    const portalOpened = st.portal === 'opened';
+    const portalBtn = portalOpened ? { ...secondary, label: 'Open the portal again' } : { ...primary, label: 'Open Discord Developer Portal' };
+
+    const tokenSaved = st.token === 'saved' || st.token === 'earlier';
+    const tokenInvalid = st.token === 'invalid';
+    const tokenField = tokenInvalid
+      ? { border: t.err, help: 'Discord rejected this bot token.', helpColor: t.err }
+      : { border: t.line, help: 'Paste it here; Scout saves and checks it as soon as you paste.', helpColor: t.muted };
+    const check = (title, detail, bg, fg, icon, actions) => ({ title, detail, hasDetail: detail !== '', hasActions: actions !== 'none', offersPortal: actions === 'portal' || actions === 'portal-failed', portalFailed: actions === 'portal-failed', bg, fg, icon });
+    const found = check('Found Scout (bot Scout#4821)', 'The token belongs to the application you created.', t.okBg, t.ok, 'M20 6L9 17l-5-5', 'none');
+    const tokenChecks = {
+      saved: [found, check('Message Content Intent is on', 'Lets Scout read the messages that mention it.', t.okBg, t.ok, 'M20 6L9 17l-5-5', 'none')],
+      checking: [found, check('Turning on Message Content Intent...', '', t.surface2, t.accent, 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5', 'none')],
+      earlier: [check('The bot token is saved and Message Content Intent is on', '', t.okBg, t.ok, 'M20 6L9 17l-5-5', 'none')],
+      portal: [found, check('Scout is in 100 or more servers, so Discord only lets you turn on Message Content Intent in the Developer Portal (Bot, Privileged Gateway Intents).', '', t.warnBg, t.warn, 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z', 'portal')],
+      portalfailed: [found, check('Scout is in 100 or more servers, so Discord only lets you turn on Message Content Intent in the Developer Portal (Bot, Privileged Gateway Intents).', '', t.warnBg, t.warn, 'M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z', 'portal-failed')],
+      failed: [found, check('Could not reach Discord. Check the internet connection and try again.', '', t.errBg, t.err, 'M18 6L6 18M6 6l12 12', 'again')],
+    }[st.token] || [];
+    const saveBtn = tokenSaved
+      ? { ...secondary, label: 'Saved' }
+      : st.token === 'checking'
+        ? { border: '0', bg: t.surface2, fg: t.muted, label: 'Checking...' }
+        : { ...primary, label: st.token === 'invalid' ? 'Try again' : 'Save' };
+
+    const oauth = { idle: st.oauth === 'idle' || st.oauth === 'failed', waiting: st.oauth === 'waiting', joined: st.oauth === 'joined', failed: st.oauth === 'failed', showGuilds: st.oauth !== 'joined' };
+    const guilds = [
+      { name: 'Acme Engineering', members: '42 members', initial: 'A' },
+      { name: 'Acme Ops', members: '9 members', initial: 'O' },
+    ].map((g) => ({ ...g, pick: () => this.setState({ oauth: 'joined' }) }));
+
+    const launchChips = {
+      starting: { label: 'Starting Scout', detail: 'This usually takes a few seconds.', bg: t.surface2, fg: t.accent, icon: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5' },
+      running: { label: 'Scout is running', detail: 'Connected to Discord.', bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' },
+      failed: { label: 'Could not start', detail: 'Stopped after 6 seconds.', bg: t.errBg, fg: t.err, icon: 'M18 6L6 18M6 6l12 12' },
+    };
+    launchChips.crashed = launchChips.failed;
+    const launchFailed = st.launch === 'failed' || st.launch === 'crashed';
+    const launchLog = st.launch === 'crashed'
+      ? '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:17 Scout exited with code 1'
+      : st.launch === 'failed'
+      ? '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:17 AI Source did not answer within 5 s\n14:02:17 Stopped'
+      : '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:13 AI Source: ' + aiSource;
+
+    const readyNotes = { restartwait: 'Scout waits for the running answer or the live listen to end, then restarts.', restartfailed: 'Scout could not restart: worker/start-failed: the worker crashed before it was running' };
+    const readyNote = readyNotes[st.ready] || '';
+    const readyRuns = st.ready === 'running' || st.ready === 'nomodel' || readyNote !== '';
+    const processOpen = !readyRuns || readyNote !== '';
+    const ready = { running: readyRuns, stopped: st.ready === 'stopped', crashed: st.ready === 'crashed', noModel: st.ready === 'nomodel', hasNote: readyNote !== '', processOpen, processClosed: !processOpen };
+    const readySummary = st.ready !== 'nomodel' && readyRuns
+      ? 'Scout is running in Acme Engineering and answers with ' + aiSource + '.'
+      : readyRuns ? 'Scout is running in Acme Engineering.' : 'Scout is set up in Acme Engineering.';
+    const idleMeta = 'Uptime — · Restarts 0';
+    const readyChip = {
+      running: { label: 'Running', meta: 'PID 48213 · Uptime 2m 3s · Restarts 0', bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' },
+      starting: { label: 'Starting', meta: idleMeta, bg: t.surface2, fg: t.accent, icon: 'M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5' },
+      stopped: { label: 'Stopped', meta: idleMeta, bg: t.surface2, fg: t.fg2, icon: 'M6 6h12v12H6z' },
+      crashed: { label: 'Crashed', meta: 'Uptime — · Restarts 1', bg: t.errBg, fg: t.err, icon: 'M18 6L6 18M6 6l12 12' },
+      idle: { label: 'Idle', meta: idleMeta, bg: t.surface2, fg: t.fg2, icon: 'M8 5v14M16 5v14' },
+    }[readyRuns ? 'running' : st.ready];
+    const readyLog = {
+      running: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:13 AI Source: ' + aiSource,
+      restartwait: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:13 AI Source: ' + aiSource,
+      restartfailed: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:02:13 AI Source: ' + aiSource,
+      nomodel: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821',
+      starting: '14:02:11 Starting Scout',
+      stopped: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:20:05 Stopped',
+      crashed: '14:02:11 Starting Scout\n14:02:12 Discord connected as Scout#4821\n14:09:40 Scout exited with code 1',
+      idle: '',
+    }[st.ready];
+
+    const nextActions = [
+      { title: 'Try it in Discord', detail: 'Mention @Scout in #general on Acme Engineering and ask about a repository.', href: '#', d: 'M14 3h7v7M10 14L21 3M21 14v7H3V3h7' },
+      { title: 'Connect features', detail: 'Grant GitHub, Kubernetes or YouTube so Scout can read, and later act, there.', href: 'Features.dc.html', d: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z' },
+      { title: 'Review the AI Source', detail: aiSource + '. Change it or add a local model.', href: 'Sources.dc.html', d: 'M12 3l2.4 5.6L20 11l-5.6 2.4L12 19l-2.4-5.6L4 11l5.6-2.4z' },
+    ];
+
+    let canContinue = true;
+    let blockedReason = '';
+    const continueLabel = 'Continue';
+    let continuePrimary = true;
+    let footerHint = '';
+    if (cur === 'platform' && st.detect === 'detecting') { canContinue = false; blockedReason = 'Detecting the chat apps on this computer.'; }
+    const backBusy = cur === 'token' && st.token === 'checking';
+    if (cur === 'provision') { continuePrimary = portalOpened; footerHint = 'Continue works whether or not the portal opened here.'; }
+    if (cur === 'token' && !tokenSaved) { canContinue = false; blockedReason = 'Save a token Discord accepts to continue.'; }
+    if (cur === 'oauth' && st.oauth !== 'joined') { canContinue = false; blockedReason = 'Add Scout to a server, or pick one it is already in.'; }
+    if (cur === 'launch' && st.launch !== 'running') { canContinue = false; blockedReason = launchFailed ? 'Fix the AI Source, then go Back and Continue to try again.' : 'Waiting for Scout to start.'; }
+    const isFinish = cur === 'ready';
+
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    return {
+      t,
+      steps,
+      is,
+      page,
+      stepCounter: 'Step ' + (st.step + 1) + ' of ' + total + ' · ' + defs[st.step][1],
+      hasSubStates: subStates.length > 0,
+      subStates,
+      detectFailed,
+      detecting: st.detect === 'detecting',
+      chatAppsShown: st.detect !== 'detecting',
+      platforms,
+      portalBtn,
+      portalFailed: st.portal === 'failed',
+      copyLabel: st.copied ? 'Copied' : 'Copy address',
+      copyUrl: () => this.setState({ copied: true }),
+      openPortal: () => this.setState({ portal: 'opened' }),
+      tokenType: st.reveal ? 'text' : 'password',
+      tokenValue: ['invalid', 'keyring', 'nokeyringservice'].includes(st.token) ? 'the-bot-token-you-pasted' : '',
+      tokenKeyring: st.token === 'keyring',
+      tokenNoKeyringService: st.token === 'nokeyringservice',
+      revealLabel: st.reveal ? 'Hide token' : 'Show token',
+      toggleReveal: () => this.setState({ reveal: !st.reveal }),
+      tokenField,
+      tokenChecks,
+      saveBtn,
+      saveToken: () => this.setState({ token: 'saved' }),
+      oauth,
+      guilds,
+      openInvite: () => this.setState({ oauth: 'waiting' }),
+      aiSource,
+      launchChip: launchChips[st.launch],
+      launchStarting: st.launch === 'starting',
+      launchFailed,
+      launchNotFailed: !launchFailed,
+      launchRefused: st.launch === 'failed',
+      launchReason: st.launch === 'crashed' ? 'Scout crashed while starting. Its last lines are under Show details.' : 'Scout could not start. The reason is under Show details.',
+      retryLaunch: () => this.setState({ launch: 'starting' }),
+      cancelLaunch: () => go(0),
+      ready,
+      readySummary,
+      readyNote,
+      readyChip,
+      readyLog,
+      stopScout: () => this.setState({ ready: 'stopped' }),
+      startScout: () => this.setState({ ready: 'running' }),
+      launchLog,
+      nextActions,
+      showBack: st.step > 0,
+      backDisabled: backBusy ? 'true' : 'false',
+      backOpacity: backBusy ? '0.5' : '1',
+      back: () => go(Math.max(0, st.step - 1)),
+      next: () => go(Math.min(total - 1, st.step + 1)),
+      continueEnabled: !isFinish && canContinue,
+      continueBlocked: !isFinish && !canContinue,
+      continueBtn: continuePrimary ? primary : secondary,
+      continueLabel,
+      blockedReason,
+      footerHint,
+      isFinish,
+      resetOpen: st.resetOpen,
+      openReset: () => this.setState({ resetOpen: true }),
+      closeReset: () => this.setState({ resetOpen: false }),
+      confirmReset: () => this.setState({ resetOpen: false, step: 0, detect: 'done', token: 'empty', oauth: 'idle', portal: 'closed', launch: 'starting', ready: 'running' }),
+      dialogKey: (e) => { if (e && e.key === 'Escape') this.setState({ resetOpen: false }); },
+      themeLight: pill(st.theme === 'light'),
+      themeDark: pill(st.theme === 'dark'),
+      themeSystem: pill(st.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

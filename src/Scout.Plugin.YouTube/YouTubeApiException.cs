@@ -1,0 +1,23 @@
+using System.Net;
+
+namespace Scout.Plugin.YouTube;
+
+/// <summary>
+/// Raised when the YouTube API returns a non-success response. The
+/// <see cref="Exception.Message"/> is user-safe and suitable for surfacing in
+/// chat; it never carries the API key, the token or the request URL.
+/// <see cref="StatusCode"/> is the originating HTTP status when known.
+/// </summary>
+/// <remarks>Creates the exception with a user-safe message and optional status.</remarks>
+public sealed class YouTubeApiException(string message, HttpStatusCode? statusCode = null) : Exception(message)
+{
+
+    /// <summary>HTTP status that produced the failure, when known.</summary>
+    public HttpStatusCode? StatusCode { get; } = statusCode;
+
+    /// <summary>
+    /// True when the same request can succeed later unchanged: YouTube unavailable, a spent quota, a rate limit, or a
+    /// sign-in the owner can renew.
+    /// </summary>
+    public bool Retryable { get; init; }
+}

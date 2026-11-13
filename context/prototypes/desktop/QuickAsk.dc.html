@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: Quick ask</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+@keyframes scPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+.sc-pulse{animation:scPulse 1.2s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.sc-pulse{animation:none}}
+</style>
+</helmet>
+<main aria-label="Quick ask" style="height: 700px; min-height: 700px; display: flex; flex-direction: column; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px; line-height: 1.45; overflow: hidden">
+
+<header style="flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}; -webkit-app-region: drag; user-select: none">
+<span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 7px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6M9 14h.01M15 14h.01"></path></svg></span>
+<div style="display: flex; flex-direction: column; min-width: 0; margin-right: auto">
+<b style="font-size: 14px">Scout</b>
+<span role="status" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.muted}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><i aria-hidden="true" class="{{dotClass}}" style="flex: 0 0 8px; width: 8px; height: 8px; border-radius: 4px; background: {{dot}}; box-shadow: 0 0 0 3px {{dotRing}}"></i>{{statusText}}</span>
+</div>
+<div role="group" aria-label="Theme" style="display: flex; gap: 1px; padding: 2px; border: 1px solid {{t.line}}; border-radius: 16px; background: {{t.bg}}; -webkit-app-region: no-drag">
+<button aria-label="Light theme" title="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 26px; height: 24px; border: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></button>
+<button aria-label="Dark theme" title="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 26px; height: 24px; border: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></button>
+<button aria-label="Follow the system theme" title="Follow the system theme" aria-pressed="{{themeSystem.pressed}}" onClick="{{setSystem}}" style="width: 26px; height: 24px; border: 0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: {{themeSystem.bg}}; color: {{themeSystem.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg></button>
+</div>
+<button aria-label="Tools" title="Tools: screen, listen, meeting, translation" aria-controls="tools-tray" aria-pressed="{{toolsPressed}}" onClick="{{toggleTools}}" style="-webkit-app-region: no-drag; width: 32px; height: 32px; border-radius: 8px; border: 1px solid {{toolsBorder}}; background: {{toolsBg}}; color: {{t.fg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h10M18 6h3M3 12h3M11 12h10M3 18h13"></path><circle cx="15.5" cy="6" r="2.2"></circle><circle cx="8.5" cy="12" r="2.2"></circle><circle cx="18.5" cy="18" r="2.2"></circle></svg></button>
+<button aria-label="Clear the conversation" title="{{clearTitle}}" aria-disabled="{{clearDisabled}}" onClick="{{clearConversation}}" style="-webkit-app-region: no-drag; width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: {{clearFg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"></path></svg></button>
+<button aria-label="Close" title="Close (Esc)" style="-webkit-app-region: no-drag; width: 32px; height: 32px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: {{t.fg2}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</header>
+
+<div style="flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px dashed {{t.line}}; font-size: 11px; color: {{t.muted}}">
+<span>Preview state</span>
+<div role="group" aria-label="Preview state" style="display: flex; flex-wrap: wrap; gap: 2px">
+<sc-for list="{{previews}}" as="p" hint-placeholder-count="3">
+<button aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{p.bg}}; color: {{p.fg}}">{{p.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<sc-if value="{{toolsOpen}}" hint-placeholder-val="{{false}}">
+<div id="tools-tray" role="group" aria-label="Tools" style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{tools}}" as="tl" hint-placeholder-count="5">
+<button aria-pressed="{{tl.pressed}}" aria-disabled="{{tl.disabled}}" title="{{tl.title}}" onClick="{{tl.run}}" style="height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid {{tl.border}}; background: {{tl.bg}}; color: {{tl.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{tl.icon}}"></path></svg>{{tl.label}}</button>
+</sc-for>
+<label style="height: 32px; padding: 0 4px 0 10px; border-radius: 16px; border: 1px solid {{t.line}}; display: flex; align-items: center; gap: 4px; font-size: 13px; color: {{t.fg2}}">Translate:
+<select title="Translate what Scout hears, from the next Listen" style="border: 0; background: transparent; color: {{t.fg}}; font: inherit; font-size: 13px; height: 28px">
+<option value="off">Off</option>
+<option value="system">To the system language</option>
+<option value="channel">To the channel language</option>
+</select>
+</label>
+<button aria-label="Read answers aloud" title="Read answers aloud" aria-pressed="{{readAloudPressed}}" onClick="{{toggleReadAloud}}" style="width: 32px; height: 32px; border-radius: 8px; border: 1px solid {{readAloudBorder}}; background: {{readAloudBg}}; color: {{readAloudFg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{readAloudIcon}}"></path></svg></button>
+</div>
+<span style="font-size: 12px; color: {{t.muted}}">Read text works on an attached screenshot. System audio is what this computer plays.</span>
+</div>
+</sc-if>
+
+<ol aria-label="Conversation" aria-live="polite" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 12px 12px 4px; display: flex; flex-direction: column; gap: 14px">
+
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+<li style="margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 24px 12px">
+<span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 22px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6M9 14h.01M15 14h.01"></path></svg></span>
+<p style="margin: 0; color: {{t.fg2}}">{{emptyText}}</p>
+<sc-if value="{{hasSuggestion}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{useSuggestion}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"></path></svg>Try: list my open pull requests</button>
+</sc-if>
+</li>
+</sc-if>
+<sc-if value="{{hasTurn}}" hint-placeholder-val="{{true}}">
+<li style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+<span style="font-size: 12px; color: {{t.muted}}">You</span>
+<p style="margin: 0; max-width: 80%; background: {{t.accentStrong}}; color: #ffffff; padding: 8px 12px; border-radius: 14px 14px 4px 14px">Review acme/shop#5 and run its tests</p>
+</li>
+
+<li style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 6px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6"></path></svg></span><span style="font-weight: 600; font-size: 13px">Scout</span><span style="font-size: 12px; color: {{t.muted}}">14:05</span><button type="button" aria-label="Read this answer aloud" title="Read this answer aloud" aria-pressed="false" style="margin-left: auto; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: {{t.muted}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"></path></svg></button></div>
+<p style="margin: 0; color: {{t.fg2}}">Three findings on acme/shop#5. The checks passed; the tests ran in a container on this computer.</p>
+<div role="group" aria-label="Tests" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{testChips}}" as="tc" hint-placeholder-count="2">
+<a href="#" title="{{tc.title}}" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; text-decoration: none; background: {{tc.bg}}; color: {{tc.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{tc.icon}}"></path></svg>{{tc.label}}</a>
+</sc-for>
+</div>
+
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
+<article aria-label="{{c.aria}}" style="border: 1px solid {{c.border}}; border-radius: 12px; background: {{t.surface}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<sc-if value="{{c.dismissed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; color: {{t.fg2}}"><span style="margin-right: auto; text-decoration: line-through">Dismissed: {{c.title}}</span><button onClick="{{c.undo}}" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"></path></svg>Undo</button></p>
+</sc-if>
+<sc-if value="{{c.open}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{c.sevBg}}; color: {{c.sevFg}}">{{c.severity}}</span><h3 style="margin: 0; font-size: 14px; font-weight: 600">{{c.title}}</h3></div>
+<a href="#" style="align-self: flex-start; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.accent}}">{{c.path}}</a>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{c.body}}</p>
+<sc-if value="{{c.canDecide}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button aria-pressed="{{c.yesPressed}}" onClick="{{c.yes}}" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{c.yesBorder}}; background: {{c.yesBg}}; color: {{c.yesFg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v6M9 10h6"></path></svg>Yes, add to the PR</button>
+<button aria-pressed="false" onClick="{{c.no}}" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>No</button>
+<button aria-expanded="false" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Edit</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</article>
+</sc-for>
+
+<sc-if value="{{given}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}">
+<strong style="display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Approved on PR #5</strong>
+<a href="#" style="font-size: 12px; color: {{t.ok}}; overflow-wrap: anywhere">https://github.com/acme/shop/pull/5#pullrequestreview-3121</a>
+</div>
+</sc-if>
+<sc-if value="{{showFooter}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">acme/shop · PR #5 · commit ec7f951</span>
+<span style="font-size: 13px; color: {{t.fg2}}">{{summary}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end">
+<button onClick="{{yesAll}}" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L7 17l-5-5M22 10l-7.5 7.5L13 16"></path></svg>Yes to all</button>
+<button onClick="{{post}}" aria-label="{{postLabel}}" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>{{postLabel}}</button>
+</div>
+<sc-if value="{{canVerdict}}" hint-placeholder-val="{{true}}">
+<div role="group" aria-label="Verdict" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<span style="font-size: 12px; color: {{t.muted}}; margin-right: auto">Verdict on the reviewed commit</span>
+<button onClick="{{approve}}" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve</button>
+<button onClick="{{requestChanges}}" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Request changes</button>
+</div>
+</sc-if>
+<sc-if value="{{allDismissed}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Nothing to post; every finding was dismissed.</p>
+</sc-if>
+<sc-if value="{{giving}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 13px; color: {{t.accent}}; display: flex; align-items: center; gap: 6px"><span class="sc-pulse" aria-hidden="true" style="width: 8px; height: 8px; border-radius: 4px; background: {{t.accent}}"></span>Giving the verdict…</p>
+</sc-if>
+<sc-if value="{{verdictFailed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}; display: flex; align-items: flex-start; gap: 6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="flex: 0 0 15px; margin-top: 2px"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg>The verdict was not given.</p>
+</sc-if>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<button type="button" aria-expanded="false" style="height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>See how it reads on the PR</button>
+<span style="font-size: 13px; color: {{t.muted}}">The same finding, as the PR author reads it on GitHub: a Comment review with the comment on the line.</span>
+</div>
+</sc-if>
+
+<sc-if value="{{isPosting}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; background: {{t.infoBg}}; color: {{t.fg}}">
+<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">acme/shop · PR #5 · commit ec7f951</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{t.info}}" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"></path></svg>{{postingLine}}</span>
+<div role="progressbar" aria-label="Posting the review" style="height: 4px; border-radius: 2px; background: {{t.surface2}}; overflow: hidden"><div style="height: 4px; width: 55%; background: {{t.accent}}"></div></div>
+</div>
+</sc-if>
+</li>
+</sc-if>
+
+<sc-for list="{{extraTurns}}" as="x" hint-placeholder-count="0">
+<li style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px"><span style="font-size: 12px; color: {{t.muted}}">You</span><p style="margin: 0; max-width: 80%; background: {{t.accentStrong}}; color: #ffffff; padding: 8px 12px; border-radius: 14px 14px 4px 14px">{{x.question}}</p></div>
+<div style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 22px; height: 22px; border-radius: 6px; background: {{t.surface2}}; color: {{t.accent}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"></rect><path d="M12 8V4M9 4h6"></path></svg></span><span style="font-weight: 600; font-size: 13px">Scout</span></div>
+<p style="margin: 0; display: flex; align-items: center; gap: 8px; color: {{x.color}}; font-size: 13px"><span aria-hidden="true" style="display: inline-flex; gap: 3px"><i style="width: 5px; height: 5px; border-radius: 3px; background: {{x.dots}}"></i><i style="width: 5px; height: 5px; border-radius: 3px; background: {{x.dots}}; opacity: 0.7"></i><i style="width: 5px; height: 5px; border-radius: 3px; background: {{x.dots}}; opacity: 0.4"></i></span>{{x.activity}}</p>
+</li>
+</sc-for>
+</ol>
+
+<div role="group" aria-labelledby="pv-approval" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-approval">Approval</span>
+<sc-for list="{{approvalStates}}" as="as" hint-placeholder-count="7">
+<button aria-pressed="{{as.pressed}}" onClick="{{as.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{as.bg}}; color: {{as.fg}}">{{as.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-labelledby="pv-tests" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-tests">Tests</span>
+<sc-for list="{{testStates}}" as="ts" hint-placeholder-count="4">
+<button aria-pressed="{{ts.pressed}}" onClick="{{ts.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ts.bg}}; color: {{ts.fg}}">{{ts.label}}</button>
+</sc-for>
+</div>
+<div role="group" aria-labelledby="pv-voice" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-voice">Voice conversation</span>
+<sc-for list="{{voiceStates}}" as="ps" hint-placeholder-count="3">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{approvalShown}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="qa-approval-heading" style="flex: 0 0 auto; max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 12px">
+<h2 id="qa-approval-heading" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.muted}}">{{approvalHeading}}</h2>
+<section aria-labelledby="qa-approval-card" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-left: 3px solid {{t.accent}}; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.surface2}}; color: {{t.fg2}}">GitHub</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"></path></svg>Cannot be undone</span>
+<span style="margin-left: auto; font-size: 12px; color: {{t.muted}}">Requested 2026-11-07 14:06</span>
+</div>
+<h3 id="qa-approval-card" style="margin: 0; font-size: 15px; font-weight: 600">Approve pull request #12 on acme/api</h3>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Target: <code>GitHub.give_pull_request_verdict</code></p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; overflow-wrap: anywhere">give_pull_request_verdict(body, comments, commit, number=12, owner=acme, repo=api, verdict=approve)</p>
+<sc-if value="{{approvalPending}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px">
+<button type="button" onClick="{{approvalStartReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+<button type="button" onClick="{{approvalApprove}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>Approve</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalRejecting}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: flex-end; gap: 8px">
+<label style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: {{t.muted}}">Reason (optional)<input type="text" placeholder="Saved with the decision in the history" style="height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-size: 14px"></label>
+<button type="button" onClick="{{approvalCancelReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}">Cancel</button>
+<button type="button" onClick="{{approvalConfirmReject}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalDecided}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span role="status" style="padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{approvalOutcomeBg}}; color: {{approvalOutcomeFg}}">{{approvalOutcome}}</span>
+<button type="button" onClick="{{approvalDismiss}}" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Dismiss</button>
+</div>
+</sc-if>
+<sc-if value="{{approvalFailedCall}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; padding: 8px 10px; border-radius: 8px; background: {{t.errBg}}; color: {{t.err}}; font-size: 13px">The Scout control plane did not answer.</p>
+</sc-if>
+</section>
+</section>
+</sc-if>
+<div role="form" aria-label="Ask Scout" style="flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; border-top: 1px solid {{t.line}}; background: {{t.surface}}">
+<sc-if value="{{hasShot}}" hint-placeholder-val="{{true}}">
+<div style="display: flex">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 3px 3px 3px 4px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{t.bg}}; font-size: 12px; color: {{t.fg2}}">
+<span role="img" aria-label="Screenshot to send with the next question" style="width: 36px; height: 24px; border-radius: 5px; background: {{t.surface2}}; border: 1px solid {{t.line}}; display: flex; align-items: center; justify-content: center; color: {{t.muted}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M3 15l5-5 4 4 3-3 6 6"></path></svg></span>
+Screenshot
+<button type="button" aria-label="Remove the screenshot" title="Remove the screenshot" onClick="{{removeShot}}" style="width: 24px; height: 24px; border-radius: 6px; border: 0; background: transparent; color: {{t.fg2}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</span>
+</div>
+</sc-if>
+<div style="display: flex; align-items: flex-end; gap: 8px">
+<div style="flex: 1; min-width: 0; position: relative; display: flex">
+<textarea aria-label="Ask Scout" rows="{{rows}}" maxlength="4000" placeholder="{{placeholder}}" aria-disabled="{{fieldOff}}" onChange="{{onQuestion}}" style="flex: 1; min-width: 0; resize: none; box-sizing: border-box; padding: 9px 44px 9px 12px; border-radius: 10px; border: 1px solid {{t.line}}; background: {{fieldBg}}; color: {{t.fg}}; font: inherit; font-size: 14px; line-height: 20px; max-height: 120px; overflow-y: auto">{{question}}</textarea>
+<button type="button" aria-label="{{micLabel}}" title="{{micTitle}}" aria-pressed="{{micPressed}}" aria-disabled="{{busyText}}" onClick="{{toggleTalk}}" style="position: absolute; right: 4px; bottom: 4px; width: 32px; height: 32px; border-radius: 8px; border: 0; background: {{micBg}}; color: {{micFg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+</div>
+<button type="button" aria-label="{{talkLabel}}" title="{{talkTitle}}" aria-pressed="{{talkOn}}" style="flex: 0 0 32px; width: 32px; height: 32px; margin-bottom: 4px; border-radius: 16px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"></path></svg></button>
+<sc-if value="{{talkHasState}}" hint-placeholder-val="{{false}}"><span aria-live="polite" style="align-self: center; font-size: 12px; color: {{t.fg2}}">{{talkState}}</span></sc-if>
+<sc-if value="{{talkHasHeard}}" hint-placeholder-val="{{false}}"><span aria-live="polite" style="align-self: center; max-width: 24em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-style: italic; color: {{t.fg2}}">{{talkHeard}}</span></sc-if>
+<sc-if value="{{talkHasError}}" hint-placeholder-val="{{false}}"><span role="alert" style="align-self: center; font-size: 12px; color: {{t.err}}">{{talkError}}</span></sc-if>
+<sc-if value="{{showStop}}" hint-placeholder-val="{{false}}">
+<button type="button" aria-label="Stop the answer" title="{{stopTitle}}" aria-disabled="{{stopDisabled}}" onClick="{{stop}}" style="flex: 0 0 40px; width: 40px; height: 40px; border-radius: 10px; border: 0; background: {{stopBg}}; color: {{stopFg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></button>
+</sc-if>
+<button type="button" aria-label="Send" title="{{sendTitle}}" aria-disabled="{{sendDisabled}}" onClick="{{send}}" style="flex: 0 0 40px; width: 40px; height: 40px; border-radius: 10px; border: 0; background: {{sendBg}}; color: {{sendFg}}; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg></button>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{hintColor}}; display: inline-flex; align-items: center; gap: 6px"><sc-if value="{{talking}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></sc-if>{{hint}}</p>
+</div>
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":440,"height":700}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: 'dark', preview: 'idle', toolsOpen: false, picks: { f2: 'no', f3: 'yes' }, shot: true, question: 'Which of these touch the payment flow?\nList the files.', extra: [], cleared: false, listening: false, systemAudio: false, readAloud: false };
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1f5fa8', infoBg: '#e3eefc', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', danger: '#b3261e', disabledBg: '#e8ecf4', disabledFg: '#5d677d', okRing: 'rgba(29,107,70,0.18)', accentRing: 'rgba(42,86,198,0.22)', mutedRing: 'rgba(93,103,125,0.18)' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8ab8f0', infoBg: '#17263d', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', danger: '#c62f26', disabledBg: '#1a2436', disabledFg: '#9aa3b6', okRing: 'rgba(126,214,166,0.18)', accentRing: 'rgba(143,178,249,0.25)', mutedRing: 'rgba(154,163,182,0.18)' };
+  }
+  renderVals() {
+    const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;
+    const t = this.palette(mode);
+    const p = this.state.preview;
+    const answering = p === 'answering';
+    const talking = p === 'talking';
+    const vstate = p === 'giving' || p === 'given' || p === 'verdictFailed' ? p : '';
+    const cardPosting = p === 'posting';
+    const posting = p === 'queuing';
+    const busy = answering || posting;
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const findings = [
+      { id: 'f1', severity: 'Blocking', sev: 'block', title: 'Discounts applied after the sum', path: 'src/orders/Checkout.cs:88', body: 'The discount is subtracted after tax is added, so a 20% voucher removes tax the customer already paid. Apply it to the subtotal before tax.' },
+      { id: 'f2', severity: 'Fix', sev: 'fix', title: 'Retry without a limit on the payment call', path: 'src/payments/Client.cs:41', body: 'A failing gateway is retried forever.' },
+      { id: 'f3', severity: 'Suggestion', sev: 'nit', title: 'Name the magic number 0.2', path: 'src/orders/Discounts.cs:17', body: 'A named constant says this is the voucher cap, not a tax rate.' },
+    ];
+    const sev = { block: [t.errBg, t.err], fix: [t.warnBg, t.warn], nit: [t.surface2, t.fg2] };
+    const picks = this.state.picks;
+    const setPick = (id, v) => () => { const n = { ...this.state.picks }; n[id] = n[id] === v ? undefined : v; this.setState({ picks: n }); };
+    const cards = findings.map((f) => {
+      const pick = picks[f.id];
+      const yes = pick === 'yes';
+      return {
+        ...f, aria: f.severity + ': ' + f.title,
+        dismissed: pick === 'no', open: pick !== 'no', canDecide: !cardPosting,
+        border: yes ? t.ok : t.line,
+        sevBg: sev[f.sev][0], sevFg: sev[f.sev][1],
+        yesPressed: yes ? 'true' : 'false', yesBg: yes ? t.okBg : 'transparent', yesFg: yes ? t.ok : t.fg, yesBorder: yes ? t.ok : t.line,
+        yes: setPick(f.id, 'yes'), no: setPick(f.id, 'no'),
+        undo: () => { const n = { ...this.state.picks }; n[f.id] = undefined; this.setState({ picks: n }); },
+      };
+    });
+    const chosen = findings.filter((f) => picks[f.id] === 'yes').length;
+    const dismissedN = findings.filter((f) => picks[f.id] === 'no').length;
+    const open = findings.length - chosen - dismissedN;
+    const summary = chosen + ' of ' + findings.length + ' chosen' + (dismissedN ? ' · ' + dismissedN + ' dismissed' : '') + (open ? ' · ' + open + ' to decide' : '');
+    const postLabel = chosen === 0 ? 'Post on PR #5' : 'Post ' + chosen + ' on PR #5';
+    const noSource = p === 'nosource';
+    const unchosen = p === 'unchosen';
+    const status = noSource ? ['No AI Source connected', t.muted, t.surface2] : unchosen ? ['No AI Source', t.muted, t.surface2] : answering ? ['Answering…', t.accent, t.accentRing] : posting ? ['Queuing cards…', t.accent, t.accentRing] : ['ChatGPT plan · gpt-5.6-luna', t.ok, t.okRing];
+    const toolDefs = [
+      ['shot', 'Attach screenshot', 'M3 5h18v12H3zM8 21h8', false, false, 'Attach a screenshot of the screen to the next question'],
+      ['read', 'Read text', 'M4 7V4h16v3M9 20h6M12 4v16', !this.state.shot, false, this.state.shot ? 'Read the text on the attached screenshot' : 'Attach a screenshot first'],
+      ['listen', this.state.listening ? 'Stop listening' : 'Listen', 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4', false, this.state.listening, 'Listen and write what you say'],
+      ['system', this.state.systemAudio ? 'Stop system audio' : 'System audio', 'M3 9h4l5-4v14l-5-4H3zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12', false, this.state.systemAudio, 'Listen to the sound this computer plays'],
+      ...(this.state.listening || this.state.systemAudio ? [['stopAll', 'Stop all', 'M6 6h12v12H6z', false, false, '']] : []),
+      ['meeting', 'Meeting', 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c0-3 2.7-5 6-5s6 2 6 5M14 15.5c.6-.3 1.3-.5 2-.5 3.3 0 6 2 6 5', false, false, 'Record a meeting; keep it at the end to see it in Meetings'],
+    ];
+    const tools = toolDefs.map(([id, label, icon, disabled, on, title]) => ({
+      label, icon, title,
+      disabled: disabled ? 'true' : 'false',
+      pressed: on ? 'true' : 'false',
+      bg: on ? t.errBg : 'transparent', fg: disabled ? t.muted : on ? t.err : t.fg, border: on ? t.err : t.line,
+      run: () => {
+        if (disabled) return;
+        if (id === 'shot') this.setState({ shot: true });
+        if (id === 'listen') this.setState({ listening: !this.state.listening });
+        if (id === 'system') this.setState({ systemAudio: !this.state.systemAudio });
+        if (id === 'stopAll') this.setState({ listening: false, systemAudio: false });
+      },
+    }));
+    const extraTurns = this.state.extra.map((x) => ({ ...x, color: x.failed ? t.err : t.fg2, dots: x.failed ? 'transparent' : t.accent }));
+    const answeringTurns = answering && extraTurns.length === 0
+      ? [{ question: 'Which of these touch the payment flow? List the files.', activity: 'Reading src/payments in the snapshot…', color: t.fg2, dots: t.accent }]
+      : extraTurns;
+    const previewDefs = [['idle', 'Idle'], ['talking', 'Hold to talk'], ['answering', 'Answering'], ['posting', 'Posting the review'], ['queuing', 'Queuing cards'], ['giving', 'Giving verdict'], ['given', 'Verdict given'], ['verdictFailed', 'Verdict failed'], ['empty', 'Empty'], ['nosource', 'No source'], ['unchosen', 'No AI Source chosen']];
+    const previews = previewDefs.map(([id, label]) => {
+      const on = p === id;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted,
+        pick: () => this.setState({ preview: id, extra: [], cleared: id === 'empty' || id === 'nosource' || id === 'unchosen', picks: id === 'given' || id === 'giving' ? { f1: 'yes', f2: 'no', f3: 'yes' } : { f2: 'no', f3: 'yes' }, question: id === 'idle' ? 'Which of these touch the payment flow?\nList the files.' : '', shot: id === 'idle' }) };
+    });
+    const ap = this.state.approval || 'waiting';
+    const apOutcome = { running: ['Approved, running', t.infoBg, t.info], done: ['Done', t.okBg, t.ok], rejected: ['Rejected: Wrong repository', t.surface2, t.fg2], rejectedBeforeGrant: ['Rejected: asked before writes were granted; ask again', t.surface2, t.fg2], failed: ['Failed: GitHub answered 422, the pull request is closed', t.errBg, t.err], already: ['Already decided', t.surface2, t.fg2] }[ap] || ['', t.surface2, t.fg2];
+    const approvalVals = {
+      approvalStates: [['waiting', 'Waiting'], ['rejecting', 'Rejecting'], ['callFailed', 'Approve failed'], ['running', 'Approved, running'], ['done', 'Done'], ['rejected', 'Rejected'], ['rejectedBeforeGrant', 'Rejected before the grant'], ['failed', 'Failed'], ['already', 'Already decided'], ['none', 'None']].map(([id, label]) => ({ label, pressed: ap === id ? 'true' : 'false', bg: ap === id ? t.surface2 : 'transparent', fg: ap === id ? t.fg : t.muted, pick: () => this.setState({ approval: id }) })),
+      approvalShown: ap !== 'none',
+      approvalHeading: ap === 'waiting' || ap === 'rejecting' || ap === 'callFailed' ? 'Waiting for your approval' : 'Your decisions',
+      approvalPending: ap === 'waiting' || ap === 'callFailed',
+      approvalRejecting: ap === 'rejecting',
+      approvalFailedCall: ap === 'callFailed',
+      approvalDecided: ['running', 'done', 'rejected', 'rejectedBeforeGrant', 'failed', 'already'].includes(ap),
+      approvalOutcome: apOutcome[0], approvalOutcomeBg: apOutcome[1], approvalOutcomeFg: apOutcome[2],
+      approvalApprove: () => this.setState({ approval: 'running' }),
+      approvalStartReject: () => this.setState({ approval: 'rejecting' }),
+      approvalCancelReject: () => this.setState({ approval: 'waiting' }),
+      approvalConfirmReject: () => this.setState({ approval: 'rejected' }),
+      approvalDismiss: () => this.setState({ approval: 'none' }),
+    };
+    const tcase = this.state.tests || 'passed';
+    const chip = (label, tone, title) => {
+      const pair = { passed: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], failed: [t.errBg, t.err, 'M6 6l12 12M18 6L6 18'], pending: [t.warnBg, t.warn, 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2'], notrun: [t.surface2, t.fg2, 'M5 12h14'] }[tone];
+      return { label, title, bg: pair[0], fg: pair[1], icon: pair[2] };
+    };
+    const testChips = {
+      passed: [chip('build passed', 'passed', 'Details of build'), chip('tests passed in 41 s (dotnet test)', 'passed', '')],
+      failed: [chip('build passed', 'passed', 'Details of build'), chip('lint failed', 'failed', 'Details of lint'), chip('tests failed (exit 1)', 'failed', '')],
+      pending: [chip('build passed', 'passed', 'Details of build'), chip('deploy pending', 'pending', 'Details of deploy')],
+      notrun: [chip('build passed', 'passed', 'Details of build'), chip('tests did not run: Docker is not installed.', 'notrun', '')],
+    }[tcase];
+    const q = this.state.question;
+    const rows = Math.max(1, Math.min(5, q.split('\n').length));
+    const voice = this.state.voice || 'off';
+    const talk = { off: ['', '', ''], listening: ['Listening', 'which of these touch the payment', ''], thinking: ['Thinking', '', ''], speaking: ['Speaking', '', ''], taken: ['', '', 'Another listen took the microphone.'], ended: ['', '', 'Scout stopped listening.'] }[voice];
+    const talkOn = ['listening', 'thinking', 'speaking'].includes(voice);
+    return {
+      t,
+      ...approvalVals,
+      testChips,
+      testStates: [['passed', 'Passed'], ['failed', 'Failed'], ['pending', 'Pending'], ['notrun', 'Not run']].map(([id, label]) => ({ label, pressed: tcase === id ? 'true' : 'false', bg: tcase === id ? t.surface2 : 'transparent', fg: tcase === id ? t.fg : t.muted, pick: () => this.setState({ tests: id }) })),
+      voiceStates: [['off', 'Off'], ['listening', 'Listening, partial shown'], ['thinking', 'Thinking'], ['speaking', 'Speaking'], ['taken', 'Microphone taken'], ['ended', 'Stopped listening']].map(([id, label]) => ({ label, pressed: voice === id ? 'true' : 'false', bg: voice === id ? t.surface2 : 'transparent', fg: voice === id ? t.fg : t.muted, pick: () => this.setState({ voice: id }) })),
+      talkOn: talkOn ? 'true' : 'false',
+      talkLabel: talkOn ? 'End the voice conversation' : 'Start a voice conversation',
+      talkTitle: talkOn ? 'End the voice conversation (Esc)' : noSource ? 'Connect an AI Source first' : 'Start a voice conversation',
+      talkState: talk[0], talkHasState: talk[0] !== '',
+      talkHeard: talk[1], talkHasHeard: talk[1] !== '',
+      talkError: talk[2], talkHasError: talk[2] !== '',
+      previews, cards, tools, summary, postLabel,
+      extraTurns: answeringTurns,
+      statusText: status[0], dot: status[1], dotRing: status[2], dotClass: busy ? 'sc-pulse' : '',
+      noSource,
+      emptyText: noSource ? 'Connect an AI Source in Scout, under AI Sources, so Scout can answer.' : 'Ask anything. Hold Space or the mic to talk.',
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      themeSystem: pill(this.state.theme === 'system'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+      setSystem: () => this.setState({ theme: 'system' }),
+      toolsOpen: this.state.toolsOpen,
+      readAloudPressed: this.state.readAloud ? 'true' : 'false',
+      readAloudBg: this.state.readAloud ? t.infoBg : 'transparent',
+      readAloudFg: this.state.readAloud ? t.accent : t.fg2,
+      readAloudBorder: this.state.readAloud ? t.line : 'transparent',
+      readAloudIcon: this.state.readAloud ? 'M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12' : 'M4 9h4l5-4v14l-5-4H4zM17 9.5a3.5 3.5 0 0 1 .5 4.5M3 3l18 18',
+      toggleReadAloud: () => this.setState({ readAloud: !this.state.readAloud }),
+      toolsPressed: this.state.toolsOpen ? 'true' : 'false',
+      toolsBg: this.state.toolsOpen ? t.surface2 : 'transparent',
+      toolsBorder: this.state.toolsOpen ? t.line : 'transparent',
+      toggleTools: () => this.setState({ toolsOpen: !this.state.toolsOpen }),
+      clearConversation: () => { if (!posting && !this.state.cleared) this.setState({ extra: [], cleared: true, preview: busy ? 'idle' : p }); },
+      hasTurn: !this.state.cleared,
+      isEmpty: this.state.cleared && answeringTurns.length === 0,
+      showFooter: !cardPosting && vstate !== 'given' && dismissedN < findings.length,
+      allDismissed: dismissedN === findings.length,
+      canVerdict: vstate === '' || vstate === 'verdictFailed',
+      giving: vstate === 'giving',
+      given: vstate === 'given',
+      verdictFailed: vstate === 'verdictFailed',
+      approve: () => { if (!busy) this.setState({ preview: 'giving' }); },
+      requestChanges: () => { if (!busy) this.setState({ preview: 'giving' }); },
+      hasSuggestion: !noSource,
+      useSuggestion: () => this.setState({ question: 'List my open pull requests on acme/shop', cleared: true }),
+      micLabel: talking ? 'Listening' : 'Hold to talk',
+      micTitle: talking ? 'Listening' : 'Hold to talk, or hold Space with the box empty',
+      micPressed: talking ? 'true' : 'false',
+      micBg: talking ? t.errBg : 'transparent',
+      toggleTalk: () => { if (!busy && !noSource) this.setState({ preview: talking ? 'idle' : 'talking' }); },
+      clearDisabled: posting || this.state.cleared ? 'true' : 'false',
+      clearTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Clear the conversation',
+      clearFg: posting || this.state.cleared ? t.muted : t.fg2,
+      isPosting: cardPosting,
+      postingLine: 'Posting the review… ' + chosen + ' comment' + (chosen === 1 ? '' : 's') + ' in one review on PR #5; your click on Post was the approval.',
+      yesAll: () => { const n = {}; findings.forEach((f) => { n[f.id] = 'yes'; }); this.setState({ picks: n }); },
+      post: () => { if (chosen > 0) this.setState({ preview: 'posting' }); },
+      hasShot: this.state.shot && !busy,
+      removeShot: () => this.setState({ shot: false }),
+      question: talking ? 'list my open pull' : posting ? '' : q,
+      talking,
+      rows: posting ? 1 : rows,
+      placeholder: noSource ? 'Connect an AI Source first' : posting ? 'Waiting for Scout to queue…' : answering ? 'Ask something else to stop this answer' : 'Ask Scout',
+      busyText: busy || noSource ? 'true' : 'false',
+      fieldOff: posting || noSource ? 'true' : 'false',
+      fieldBg: posting || noSource ? t.disabledBg : t.bg,
+      micFg: busy ? t.muted : talking ? t.err : t.fg2,
+      onQuestion: (e) => this.setState({ question: e && e.target ? e.target.value : '' }),
+      sendDisabled: posting || noSource ? 'true' : 'false',
+      sendTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Send',
+      sendBg: posting || noSource ? t.disabledBg : t.accentStrong,
+      sendFg: posting || noSource ? t.disabledFg : '#ffffff',
+      showStop: busy,
+      stopBg: posting ? t.disabledBg : t.danger,
+      stopFg: posting ? t.disabledFg : '#ffffff',
+      stopDisabled: posting ? 'true' : 'false',
+      stopTitle: posting ? 'Queuing cards; cannot be stopped.' : 'Stop the answer',
+      stop: () => { if (answering) this.setState({ preview: 'idle', extra: [{ question: 'Which of these touch the payment flow? List the files.', activity: 'Interrupted', failed: true }] }); },
+      send: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (posting || noSource || q.trim() === '') return;
+        const stopped = answeringTurns.map((x) => ({ question: x.question, activity: 'Interrupted', failed: true }));
+        this.setState({ preview: 'answering', extra: [...stopped, { question: q.replace(/\n/g, ' '), activity: 'Working on it', failed: false }], question: '', shot: false });
+      },
+      hint: talking ? 'Listening. Release to send.' : posting ? 'Queuing cards; cannot be stopped.' : answering ? 'A new question stops this answer · Stop ends it' : 'Enter sends · Shift+Enter for a new line · Esc closes',
+      hintColor: talking ? t.err : t.muted,
+    };
+  }
+}
+</script>
+</body>
+</html>

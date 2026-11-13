@@ -1,0 +1,291 @@
+syntax = "proto3";
+
+package scout.controlplane.v1;
+
+option csharp_namespace = "Scout.ControlPlane.Contracts";
+
+// Feature catalog: list, configure credentials/settings, enable/disable.
+service Features {
+  rpc ListFeatures(ListFeaturesRequest) returns (ListFeaturesResponse);
+  rpc SetCredentials(SetCredentialsRequest) returns (Feature);
+  rpc Setup(SetupRequest) returns (Feature);
+  rpc DeleteCredentials(DeleteCredentialsRequest) returns (Feature);
+  rpc Enable(EnableRequest) returns (Feature);
+  rpc Disable(DisableRequest) returns (Feature);
+  rpc SetWriteGrant(SetWriteGrantRequest) returns (Feature);
+  rpc ListPendingActions(ListPendingActionsRequest) returns (ListPendingActionsResponse);
+  rpc ApproveAction(ActionDecisionRequest) returns (PendingAction);
+  rpc RejectAction(ActionDecisionRequest) returns (PendingAction);
+  rpc ApproveSet(ActionSetRequest) returns (ActionSetResponse);
+  rpc RejectSet(ActionSetRequest) returns (ActionSetResponse);
+  rpc GetActionGroup(GetActionGroupRequest) returns (GetActionGroupResponse);
+  rpc GetActionText(GetActionTextRequest) returns (GetActionTextResponse);
+  rpc ApproveCardIssues(ApproveCardIssuesRequest) returns (ActionSetResponse);
+  rpc ListWrites(ListWritesRequest) returns (ListWritesResponse);
+  rpc GiveVerdict(GiveVerdictRequest) returns (GiveVerdictResponse);
+  rpc GetVerdict(GetVerdictRequest) returns (GetVerdictResponse);
+  rpc GetVerdictFor(GetVerdictForRequest) returns (GetVerdictForResponse);
+  rpc ControlJob(ControlJobRequest) returns (ControlJobResponse);
+}
+
+enum FeatureStatus {
+  FEATURE_STATUS_UNSPECIFIED = 0;
+  ENABLED = 1;
+  NEEDS_CREDENTIALS = 2;
+  DISABLED = 3;
+  ERROR = 4;
+}
+
+// One credential input the UI renders in the setup dialog.
+message FeatureCredentialField {
+  string key = 1;
+  string kind = 2;
+  string label = 3;
+  optional string helper_text = 4;
+  optional string create_link_url = 5;
+  optional string create_link_label = 6;
+}
+
+// One non-secret configuration input.
+message FeatureSettingField {
+  string key = 1;
+  string kind = 2;
+  string label = 3;
+  optional string helper_text = 4;
+  optional string create_link_url = 5;
+  optional string create_link_label = 6;
+  bool required = 7;
+}
+
+// One row of a scope-to-actions matrix.
+message FeatureScopeRow {
+  string scope = 1;
+  repeated string actions = 2;
+  int32 access = 3;
+  string summary = 4;
+}
+
+// Merged catalog + persisted state + credential-presence snapshot.
+message Feature {
+  string id = 1;
+  string display_name = 2;
+  string description = 3;
+  bool requires_credentials = 4;
+  bool has_credentials = 5;
+  bool enabled = 6;
+  FeatureStatus status = 7;
+  optional string last_error = 8;
+  repeated FeatureCredentialField credential_fields = 9;
+  repeated FeatureSettingField settings_fields = 10;
+  map<string, string> settings = 11;
+  repeated FeatureScopeRow scope_matrix = 12;
+  bool has_scope_matrix = 13;
+  repeated string setup_steps = 14;
+  bool has_setup_steps = 15;
+  int32 write_class = 16;
+  bool granted = 17;
+  optional string granted_at = 18;
+}
+
+message ListFeaturesRequest {}
+
+message ListFeaturesResponse {
+  repeated Feature features = 1;
+}
+
+message SetCredentialsRequest {
+  string id = 1;
+  map<string, string> credentials = 2;
+}
+
+message SetupRequest {
+  string id = 1;
+  map<string, string> credentials = 2;
+  // Settings carry an explicit clear semantic: a key present in
+  // cleared_settings is removed; settings carries the upserts.
+  map<string, string> settings = 3;
+  repeated string cleared_settings = 4;
+}
+
+message DeleteCredentialsRequest {
+  string id = 1;
+}
+
+message EnableRequest {
+  string id = 1;
+  bool confirm_writes = 2;
+}
+
+message DisableRequest {
+  string id = 1;
+}
+
+message SetWriteGrantRequest {
+  string id = 1;
+  bool granted = 2;
+  bool confirm_writes = 3;
+}
+
+message PendingAction {
+  string id = 1;
+  string feature_id = 2;
+  string action = 3;
+  string target = 4;
+  string summary = 5;
+  string requested_at = 6;
+  string status = 7;
+  optional string decided_at = 8;
+  optional string reason = 9;
+  optional string outcome = 10;
+  optional string result = 11;
+  optional string group_id = 12;
+  optional string repository = 13;
+  optional string title = 14;
+  optional string body = 15;
+  optional string payload_digest = 16;
+  optional string group_state = 17;
+  optional bool text_clipped = 18;
+}
+
+message GiveVerdictRequest {
+  string repository = 1;
+  int32 number = 2;
+  string verdict = 3;
+  string body = 4;
+  string comments_json = 5;
+  string commit = 6;
+  string tests_line = 7;
+}
+
+message GiveVerdictResponse {
+  string action_id = 1;
+}
+
+message GetVerdictRequest {
+  string action_id = 1;
+}
+
+message GetVerdictResponse {
+  string state = 1;
+  string url = 2;
+  string reason = 3;
+  string repository = 4;
+  int32 number = 5;
+  string commit = 6;
+  string verdict = 7;
+}
+
+message ListPendingActionsRequest {}
+
+message ListPendingActionsResponse {
+  repeated PendingAction actions = 1;
+}
+
+message ActionDecisionRequest {
+  string id = 1;
+  optional string reason = 2;
+}
+
+message ActionRef {
+  string id = 1;
+  string digest = 2;
+}
+
+message ActionSetRequest {
+  string group_id = 1;
+  repeated ActionRef actions = 2;
+  optional string reason = 3;
+}
+
+message ActionMismatch {
+  string id = 1;
+  string reason = 2;
+}
+
+message ActionSetResponse {
+  bool decided = 1;
+  string group_id = 2;
+  repeated PendingAction actions = 3;
+  repeated ActionMismatch mismatches = 4;
+}
+
+message GetActionGroupRequest {
+  string group_id = 1;
+}
+
+message GetActionGroupResponse {
+  string group_id = 1;
+  repeated PendingAction actions = 2;
+}
+
+message GetActionTextRequest {
+  string id = 1;
+}
+
+message GetActionTextResponse {
+  optional string title = 1;
+  optional string body = 2;
+  optional string payload_digest = 3;
+  bool cut_after_execution = 4;
+}
+
+message CardIssue {
+  string title = 1;
+  string body = 2;
+}
+
+message ApproveCardIssuesRequest {
+  string card_id = 1;
+  string repository = 2;
+  repeated CardIssue issues = 3;
+}
+
+message WriteLogEntry {
+  string at = 1;
+  string feature_id = 2;
+  string action = 3;
+  string target = 4;
+  string outcome = 5;
+  optional string approved_by = 6;
+  optional string action_id = 7;
+  optional string signed_as = 8;
+  optional string control_status = 9;
+  optional string group_id = 10;
+}
+
+message ListWritesRequest {
+  int32 limit = 1;
+}
+
+message ListWritesResponse {
+  repeated WriteLogEntry entries = 1;
+}
+
+message GetVerdictForRequest {
+  string repository = 1;
+  int32 number = 2;
+  string commit = 3;
+}
+
+message GetVerdictForResponse {
+  bool found = 1;
+  string action_id = 2;
+  string state = 3;
+  string url = 4;
+  string reason = 5;
+  string verdict = 6;
+}
+
+message ControlJobRequest {
+  string kind = 1;
+  string owner = 2;
+  string repo = 3;
+  optional int32 number = 4;
+  string action = 5;
+}
+
+message ControlJobResponse {
+  bool accepted = 1;
+  string reason = 2;
+  optional string control_id = 3;
+}
