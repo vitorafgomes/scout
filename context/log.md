@@ -1,3 +1,5 @@
+## [2026-11-13] fix | The ChatGPT sign-in cancel test no longer races the fake browser
+The cancel test waited only for the authorize URL and cancelled while the fake browser was still probing the listener, which on the macOS runner held the rejection past one second; it now waits for the fake browser to return ([[pages/history/desktop-ui]]).
 ## [2026-11-13] chore | Every workflow runs with a read-only GITHUB_TOKEN
 ci.yml and ui-ci.yml had no top-level permissions, so their jobs ran with the repository's default token; both now declare `permissions: contents: read` at the end of the file, as release.yml already did at the top, and HarnessDocumentTests.EveryWorkflowDeclaresATopLevelReadOnlyToken fails for any workflow without it. Page updated: conventions/tooling.
 ## [2026-11-13] chore | The documentation folder is renamed from vault to context

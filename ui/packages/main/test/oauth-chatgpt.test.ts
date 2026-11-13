@@ -601,7 +601,7 @@ describe('ChatGPT sign-in cancel', () => {
     const auth = makeAuth({ findFreePort: async () => port });
 
     const pending = auth.signIn().catch((err: unknown) => err);
-    expect(await eventually(async () => scenario.authorizeUrls.length > 0)).toBe(true);
+    expect(await eventually(async () => scenario.listenerUpWhenBrowserOpened !== null)).toBe(true);
     auth.cancelSignIn();
     const outcome = await Promise.race([
       pending,
