@@ -1,5 +1,7 @@
 ## [2026-11-14] feat | Docker panel: the logs of the runs and the command on the Stack tile
 The work folder line counts the run records ("the logs of 12 runs") and the last run's Stack tile names the command (".NET (dotnet test)"): the sandbox's run record gains `command`, main counts the records and copies the command, and the two owed Docker items of the Features artboard are done. Pages updated: services/desktop-ui (Docker card, the panel), services/sandbox (public contract), history/desktop-ui, history/sandbox, roadmap/prototype-migration.
+## [2026-11-14] feat | Disconnect on the Ollama card
+AI Sources gains Disconnect on the Ollama card: Scout stops using Ollama (a connected cloud provider or None), frees its memory and lists none of its models until Connect; the artboard draws the disconnected state first ([[pages/history/desktop-ui]]).
 ## [2026-11-14] feat | Updates: install a version the owner picks
 Settings, Updates lists the published versions on the owner's channel and installs one, an older one after a confirmation; main installs only a listed version and goes down for that install only; ADR 0056 ([[pages/decisions/0056-install-a-version-the-owner-picks]]).
 ## [2026-11-14] chore | The session-start hook installs the graphify hooks and rebuilds a stale graph

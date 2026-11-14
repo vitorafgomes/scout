@@ -2555,6 +2555,99 @@ describe('SourcesComponent', () => {
     });
   });
 
+  describe('Disconnect on the Ollama card', () => {
+    beforeEach(() => window.localStorage.removeItem('scout:ollama-disconnected'));
+
+    it('a connected Ollama offers Disconnect, which asks "Disconnect Ollama?" with Cancel focused, and Cancel changes nothing', async () => {
+      const { fixture, bridge } = await setup({ models: [] });
+
+      query<HTMLButtonElement>(fixture, '[data-test="disconnect-ollama"]').click();
+      await settle(fixture);
+      await settle(fixture);
+      const dialog = {
+        title: document.querySelector('sc-confirm-dialog h2')?.textContent?.trim(),
+        body: document
+          .querySelector('sc-confirm-dialog p')
+          ?.textContent?.replace(/\s+/g, ' ')
+          .trim(),
+        focused: (document.activeElement as HTMLElement | null)?.getAttribute('data-test'),
+      };
+      await answerConfirm(fixture, 'confirm-cancel');
+
+      expect([
+        dialog,
+        bridge.vaultStore.mock.calls,
+        text(fixture, '[data-test="badge-ollama"]'),
+      ]).toEqual([
+        {
+          title: 'Disconnect Ollama?',
+          body: 'Scout stops using Ollama and its models leave Models, Analysis. The models stay installed in Ollama on this computer. Ollama frees its memory and keeps running.',
+          focused: 'confirm-cancel',
+        },
+        [],
+        expect.stringContaining('Connected'),
+      ]);
+    });
+
+    it('confirmed, the card reads Not connected with "Scout does not use Ollama. Connect to use it again." and Connect, and Scout uses None', async () => {
+      const { fixture, bridge } = await setup({ models: [] });
+
+      query<HTMLButtonElement>(fixture, '[data-test="disconnect-ollama"]').click();
+      await settle(fixture);
+      await settle(fixture);
+      await answerConfirm(fixture, 'confirm-ok');
+      await settle(fixture);
+
+      expect({
+        chip: text(fixture, '[data-test="badge-ollama"]').trim(),
+        line: text(fixture, '[data-test="ollama-disconnected"]').trim(),
+        notAnswering: fixture.nativeElement.querySelector('[data-test="ollama-not-answering"]'),
+        manage: fixture.nativeElement.querySelector('[data-test="manage-ollama-models"]'),
+        action: text(fixture, '[data-test="action-ollama"]').trim(),
+        provider: bridge.vaultStore.mock.calls.map((call: unknown[]) => call[0]),
+      }).toEqual({
+        chip: 'Not connected',
+        line: 'Scout does not use Ollama. Connect to use it again.',
+        notAnswering: null,
+        manage: null,
+        action: 'Connect',
+        provider: [{ key: 'llm.provider', value: 'None' }],
+      });
+    });
+
+    it('a confirmed Disconnect restarts a running Scout so it stops using Ollama', async () => {
+      const { fixture, bridge } = await setup({ models: [], workerState: 'running' });
+
+      query<HTMLButtonElement>(fixture, '[data-test="disconnect-ollama"]').click();
+      await settle(fixture);
+      await settle(fixture);
+      await answerConfirm(fixture, 'confirm-ok');
+      await settle(fixture);
+
+      expect([
+        bridge.workerStop.mock.calls.length,
+        bridge.workerStart.mock.calls.length,
+        text(fixture, '[data-test="saved-ollama"]').trim(),
+      ]).toEqual([1, 1, 'Restarting Scout so it stops using Ollama.']);
+    });
+
+    it('Connect after a Disconnect scans again and the card reads Connected', async () => {
+      window.localStorage.setItem('scout:ollama-disconnected', '1');
+      const { fixture } = await setup({ models: [] });
+      const before = text(fixture, '[data-test="badge-ollama"]').trim();
+
+      query<HTMLButtonElement>(fixture, '[data-test="action-ollama"]').click();
+      await settle(fixture);
+      await settle(fixture);
+
+      expect([
+        before,
+        text(fixture, '[data-test="badge-ollama"]').trim(),
+        fixture.nativeElement.querySelector('[data-test="ollama-disconnected"]'),
+      ]).toEqual(['Not connected', 'Connected', null]);
+    });
+  });
+
   describe('provider actions, keys and card states', () => {
     function pending<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
       let resolve!: (value: T) => void;
@@ -3121,7 +3214,7 @@ describe('Ollama card: scan result x what it shows', () => {
   const SEEN: Readonly<Record<Scan, ReturnType<typeof seen>>> = {
     answers: {
       badge: 'Connected',
-      actions: ['Manage local models', 'Use', 'Scan again'],
+      actions: ['Manage local models', 'Use', 'Scan again', 'Disconnect'],
       notAnswering: null,
       present: [],
     },

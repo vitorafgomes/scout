@@ -419,7 +419,7 @@ const GROUP_LOGOS: Readonly<Record<string, CardIcon>> = Object.freeze({
                 </details>
               }
 
-              @if (localListed()) {
+              @if (localListed() && !ollamaDisconnected()) {
                 @let view = localView();
                 <details
                   class="group"
@@ -1328,6 +1328,8 @@ const GROUP_LOGOS: Readonly<Record<string, CardIcon>> = Object.freeze({
 export class ModelsComponent implements OnInit {
   readonly store = inject(LocalModelsStore);
   private readonly llmConfig = inject(LlmConfigStore);
+  /** True after the owner disconnected Ollama: Analysis lists none of its models. */
+  readonly ollamaDisconnected = this.llmConfig.ollamaDisconnected;
   private readonly bridge = inject(ScoutBridgeService);
   private readonly route = inject(ActivatedRoute);
 

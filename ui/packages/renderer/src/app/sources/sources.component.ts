@@ -430,7 +430,7 @@ const ICONS = Object.freeze({
                       [attr.aria-busy]="scanning().has(card.id) ? 'true' : null"
                       [attr.data-test]="'action-' + card.id"
                       [disabled]="card.disabled || scanning().has(card.id)"
-                      (click)="onScan(card.id)"
+                      (click)="onScanClick(card.id)"
                     >
                       <svg
                         class="glyph"
@@ -441,8 +441,27 @@ const ICONS = Object.freeze({
                         <path [attr.d]="scanGlyph(card.id)" /></svg
                       >{{ scanLabel(card.id) }}
                     </button>
+                    @if (card.id === 'ollama' && stateOf('ollama') === 'connected') {
+                      <button
+                        type="button"
+                        matButton="outlined"
+                        class="btn btn--danger"
+                        data-test="disconnect-ollama"
+                        aria-label="Disconnect Ollama"
+                        [disabled]="saving()"
+                        (click)="confirmDisconnectOllama()"
+                      >
+                        <svg class="glyph" viewBox="0 0 24 24" aria-hidden="true">
+                          <path [attr.d]="glyphs.plug" /></svg
+                        >Disconnect
+                      </button>
+                    }
                   </div>
-                  @if (
+                  @if (card.id === 'ollama' && ollamaDisconnected() && !scanning().has('ollama')) {
+                    <p class="server-note" data-test="ollama-disconnected">
+                      Scout does not use Ollama. Connect to use it again.
+                    </p>
+                  } @else if (
                     card.id === 'ollama' &&
                     stateOf('ollama') === 'not-connected' &&
                     !scanning().has('ollama')
@@ -1468,6 +1487,7 @@ export class SourcesComponent implements OnInit {
   readonly actionError = signal<string | null>(null);
   readonly activeModel = this.llmConfig.model;
   readonly ollamaFreed = this.llmConfig.ollamaFreed;
+  readonly ollamaDisconnected = this.llmConfig.ollamaDisconnected;
   readonly scanning = signal<ReadonlySet<string>>(new Set());
   readonly chatgpt = signal<ChatGptStatus>(CHATGPT_SIGNED_OUT);
   readonly chatgptLoaded = signal<boolean>(false);
@@ -1833,6 +1853,7 @@ export class SourcesComponent implements OnInit {
   }
 
   stateOf(id: string): ConnectionState {
+    if (id === 'ollama' && this.llmConfig.ollamaDisconnected()) return 'not-connected';
     return this.states()[id] ?? 'unknown';
   }
 
@@ -2182,6 +2203,32 @@ export class SourcesComponent implements OnInit {
     return id === 'ollama' && this.llmConfig.provider() === 'Ollama';
   }
 
+  /** Asks first, Cancel focused; Disconnect stops Scout using Ollama and keeps its models installed. */
+  async confirmDisconnectOllama(): Promise<void> {
+    if (this.saving()) return;
+    const confirmed = await confirmAction(this.dialog, {
+      title: 'Disconnect Ollama?',
+      body: 'Scout stops using Ollama and its models leave Models, Analysis. The models stay installed in Ollama on this computer. Ollama frees its memory and keeps running.',
+      confirmLabel: 'Disconnect',
+    });
+    if (!confirmed) return;
+    await this.exclusive(async () => {
+      this.beginAction('ollama');
+      try {
+        await this.llmConfig.disconnectOllama();
+        this.ollamaModelsOpen.set(false);
+      } catch (err: unknown) {
+        this.actionError.set(err instanceof Error ? err.message : 'Could not disconnect Ollama.');
+        return;
+      }
+      await this.restartIfRunning({
+        restarting: 'Restarting Scout so it stops using Ollama.',
+        idle: 'Scout will stop using Ollama the next time it starts.',
+        failed: 'Restart Scout from the status screen so it stops using Ollama.',
+      });
+    });
+  }
+
   async useOllama(): Promise<void> {
     if (this.saving()) return;
     await this.exclusive(async () => {
@@ -2324,6 +2371,12 @@ export class SourcesComponent implements OnInit {
       this.savedMessage.set(messages.failed);
       this.actionError.set(err instanceof Error ? err.message : 'Could not restart Scout.');
     }
+  }
+
+  /** The card's Connect or Scan: on Ollama it also undoes a Disconnect, which the scan at start never does. */
+  async onScanClick(id: string): Promise<void> {
+    if (id === 'ollama') this.llmConfig.connectOllama();
+    await this.onScan(id);
   }
 
   async onScan(id: string): Promise<void> {

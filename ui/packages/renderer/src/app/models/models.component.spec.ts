@@ -720,6 +720,20 @@ describe('ModelsComponent - Analysis per connected provider', () => {
     );
   });
 
+  it('after the owner disconnected Ollama, Analysis lists none of its models', async () => {
+    window.localStorage.setItem('scout:ollama-disconnected', '1');
+    try {
+      const { el } = await openAnalysis(
+        { localRuntime: true, ollamaTags: ['qwen2.5:1.5b'] },
+        (store) => store.markDownloaded('qwen-2.5-1.5b-instruct'),
+      );
+
+      expect(el.querySelector('[data-test="provider-ollama"]')).toBeNull();
+    } finally {
+      window.localStorage.removeItem('scout:ollama-disconnected');
+    }
+  });
+
   it('a connected local runtime with downloaded models lists them in the local group', async () => {
     const { el } = await openAnalysis(
       { localRuntime: true, ollamaTags: ['qwen2.5:1.5b', 'gemma3:4b'] },

@@ -21,6 +21,25 @@ export interface LlmConfigSnapshot {
 }
 
 const STORAGE_KEY = 'scout:llm-config';
+const OLLAMA_DISCONNECTED_KEY = 'scout:ollama-disconnected';
+
+function readOllamaDisconnected(): boolean {
+  try {
+    return getStorage()?.getItem(OLLAMA_DISCONNECTED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Keeps the owner's Disconnect of Ollama; storage that refuses leaves the choice to this session only. */
+function storeOllamaDisconnected(disconnected: boolean): void {
+  try {
+    if (disconnected) getStorage()?.setItem(OLLAMA_DISCONNECTED_KEY, '1');
+    else getStorage()?.removeItem(OLLAMA_DISCONNECTED_KEY);
+  } catch {
+    return;
+  }
+}
 const DEFAULT_ENDPOINT = 'http://localhost:11434';
 const DEFAULT_PROVIDER: LlmProvider = 'Ollama';
 const CLOUD_PROVIDERS: readonly CloudLlmProvider[] = [
@@ -178,6 +197,9 @@ export class LlmConfigStore {
   private readonly _ollamaFreed = signal<OllamaFreeOutcome | null>(null);
   /** Set when the provider in use last moved away from Ollama and Scout asked it to free its models; null otherwise. */
   readonly ollamaFreed = this._ollamaFreed.asReadonly();
+  private readonly _ollamaDisconnected = signal<boolean>(readOllamaDisconnected());
+  /** True after the owner disconnected Ollama, until Connect: its card reads Not connected and Models lists none of its models. */
+  readonly ollamaDisconnected = this._ollamaDisconnected.asReadonly();
   private ollamaAsk = 0;
 
   /** The cloud provider the next worker start will use, once its API key is confirmed in the vault; null otherwise. */
@@ -436,6 +458,41 @@ export class LlmConfigStore {
     clearPersisted();
     this._provider.set('None');
     this._model.set(null);
+  }
+
+  /**
+   * Stops using Ollama: when it was the provider in use, or none was saved, Scout switches to another connected cloud
+   * provider or to None, never back to Ollama, and asks Ollama to free its memory. The models stay installed.
+   */
+  async disconnectOllama(): Promise<void> {
+    if (this._readFailed()) {
+      throw new Error(
+        'Scout could not read which AI Source is in use, so Ollama was not disconnected. Try again.',
+      );
+    }
+    const provider = this._provider();
+    if (provider === null || provider === 'Ollama') {
+      const other = ACTIVE_CLOUD_PROVIDERS.find((candidate) =>
+        this._connectedProviders().has(candidate),
+      );
+      if (other !== undefined) await this.use(other, DEFAULT_CLOUD_MODELS[other]);
+      else {
+        await this.bridge.vaultStore({ key: 'llm.provider', value: 'None' });
+        clearPersisted();
+        this._provider.set('None');
+        this._model.set(null);
+        this.ollamaAsk += 1;
+        void this.freeOllama(provider);
+      }
+    }
+    this._ollamaDisconnected.set(true);
+    storeOllamaDisconnected(true);
+  }
+
+  /** Lets Scout use Ollama again after a Disconnect; it does not make Ollama the provider in use. */
+  connectOllama(): void {
+    this._ollamaDisconnected.set(false);
+    storeOllamaDisconnected(false);
   }
 
   /** Makes the local Ollama server the provider in use; its stored model and endpoint are left as they are. */

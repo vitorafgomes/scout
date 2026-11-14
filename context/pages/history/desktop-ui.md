@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.41"
+version: "1.42"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - Disconnect on the Ollama card
+
+The AI Sources artboard drew Disconnect on the Ollama card and the app had none: the only way off Ollama was choosing another source, and Ollama's models stayed in Models, Analysis. Now Disconnect asks "Disconnect Ollama?" first; confirmed, Scout switches to a connected cloud provider or writes `llm.provider=None` when Ollama was in use or nothing was saved, asks Ollama to free its memory, and keeps the choice in `localStorage`: the card reads Not connected with "Scout does not use Ollama. Connect to use it again.", Analysis lists no Ollama model, and only Connect undoes it. The owner chose on 2026-11-14 that Scout stays with no source rather than block the Disconnect, and the drawn state for a disconnected Ollama that still answers. Tests changed on purpose: the Ollama card's actions now end with Disconnect.
 
 ## 2026-11-14 - Docker: the logs of the runs and the command on the Stack tile
 
