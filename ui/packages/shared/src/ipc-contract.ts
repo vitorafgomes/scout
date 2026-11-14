@@ -2004,6 +2004,8 @@ export interface AppNotification {
   readonly at: number;
   readonly read: boolean;
   readonly progress?: number;
+  /** A running entry whose progress cannot be measured shows a bar that sweeps instead of filling. */
+  readonly indeterminate?: boolean;
   readonly url?: string;
   readonly actions?: readonly NotificationAction[];
   /** A GitHub entry's comment count when it was last read from GitHub. */
@@ -2135,6 +2137,8 @@ export interface DockerRun {
   readonly reason: string | null;
   readonly exitCode: number | null;
   readonly durationSeconds: number;
+  /** When the test command started; null when it never did or the record predates it. */
+  readonly startedAt: string | null;
   readonly finishedAt: string;
 }
 

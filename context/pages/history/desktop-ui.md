@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.44"
+version: "1.45"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - The bell's test run: its command, how long it has run, an indeterminate bar
+
+The bell's running test run reads "npm test in a container · running for 2 min 14 s" over a sweeping bar, as `Main.dc.html` draws it; before, it read "Running in a container on this computer." with no bar until it ended. Main reads the sandbox's running record of that pull request every 2 seconds and keeps the first sentence until the record exists or when a read fails; the Docker panel's last run and its count of runs leave a running record out. The owner chose an indeterminate bar, since the run has no progress to measure; it stops moving under reduced motion. Tests: `ui/packages/main/test/notifications-job-controls.test.ts`, `ui/packages/main/test/docker.test.ts`, `ui/packages/renderer/src/app/shell/notification-bell.component.spec.ts`.
 
 ## 2026-11-14 - The bell's audit entry: findings so far, every area, running on Continue
 

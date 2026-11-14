@@ -12,6 +12,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 body{margin:0}
+@keyframes scSweep{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+.sc-sweep{animation:scSweep 1.4s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.sc-sweep{animation:none;transform:none}}
 a{color:#7aa2f7}a:hover{color:#a9c1fa}
 button{font:inherit;cursor:pointer}
 button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
@@ -101,6 +104,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-if>
 <sc-if value="{{n.hasNote}}" hint-placeholder-val="{{false}}">
 <span role="status" style="font-size: 12px; color: {{t.muted}}; line-height: 1.4">{{n.note}}</span>
+</sc-if>
+<sc-if value="{{n.indeterminate}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div class="sc-sweep" style="height: 6px; width: 40%; border-radius: 3px; background: {{t.accent}}"></div></div>
 </sc-if>
 <sc-if value="{{n.hasProgress}}" hint-placeholder-val="{{false}}">
 <div role="progressbar" aria-label="{{n.title}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{n.progress}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: {{n.progressWidth}}; background: {{t.accent}}"></div></div>
@@ -727,7 +733,7 @@ class Component extends DCLogic {
   bellItems() {
     return [
       { id: 'a1', kind: 'running', glyph: 'A', tone: 'accent', title: 'Audit of acme/shop', detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends', when: 'now', progress: 37, action: '' },
-      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: 60, action: '' },
+      { id: 't1', kind: 'running', glyph: 'T', tone: 'accent', title: 'Tests for acme/api#41', detail: 'npm test in a container · running for 2 min 14 s', when: 'now', progress: null, indeterminate: true, action: '' },
       { id: 'b1', kind: 'mention', glyph: '@', tone: 'warn', title: '@acme-dev mentioned @scout-acme on acme/api#44: @scout-acme can you review the retry change?', detail: 'Retry the payment webhook on a 5xx answer', when: '2 min', progress: null, action: 'Open on GitHub', buttons: [{ label: 'Review it', path: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35', review: true }] },
       { id: 'm1', kind: 'github', glyph: '@', tone: 'warn', title: 'Retry logic for the order sync', detail: 'You were mentioned in acme/api#41', when: '5 min', progress: null, action: 'Open on GitHub' },
       { id: 'c1', kind: 'github', glyph: 'C', tone: 'warn', title: 'Apply discounts before the sum', detail: 'New activity on your pull request acme/shop#5', when: '12 min', progress: null, action: 'Open on GitHub' },
@@ -823,6 +829,7 @@ class Component extends DCLogic {
       hasDetail: n.detail !== '',
       hasNote: Boolean(n.note),
       hasProgress: n.progress !== null,
+      indeterminate: Boolean(n.indeterminate),
       progressWidth: (n.progress || 0) + '%',
       hasAction: n.action !== '',
       buttons: (n.buttons ?? []).map((b) => ({ ...b, act: () => { if (b.review && bell === 'refused') return; if (b.review) this.setState({ bellOpen: false, bellRead: { ...read, [n.id]: true } }); } })),

@@ -2857,6 +2857,7 @@ describe('Features as Features.dc.html draws it: the Docker toasts, look and Pre
     reason: 'The restore exited with code 1; the tests did not run.',
     exitCode: 1,
     durationSeconds: 41,
+    startedAt: null,
     finishedAt: '2026-11-07T10:05:00Z',
   };
 

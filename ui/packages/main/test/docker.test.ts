@@ -551,7 +551,19 @@ const PASSED_RUN: DockerRun = {
   reason: null,
   exitCode: 0,
   durationSeconds: 12.5,
+  startedAt: '2026-11-07T10:04:47+00:00',
   finishedAt: '2026-11-07T10:05:00+00:00',
+};
+
+const RUNNING_RECORD = {
+  ...PASSED_RUN,
+  repository: 'acme/api',
+  pullRequest: 41,
+  result: 'running',
+  exitCode: null,
+  durationSeconds: 0,
+  startedAt: '2026-11-14T09:00:00+00:00',
+  finishedAt: null,
 };
 
 describe('the repositories folder, beside the work folder', () => {
@@ -589,7 +601,8 @@ describe("each repository's stack and the last run, read from the worker's recor
     await rm(root, { recursive: true, force: true });
   });
 
-  const records = () => fakeDocker(() => ok(), { snapshotsFolder: snapshots, workFolder: work });
+  const records = (now: () => number = Date.now) =>
+    fakeDocker(() => ok(), { snapshotsFolder: snapshots, workFolder: work, now });
 
   it('lists every repository record, newest first, with the stack, image, versions and source, or the refusal', async () => {
     await writeFile(path.join(snapshots, 'octocat__hello.stack.json'), JSON.stringify(NODE_RECORD));
@@ -713,6 +726,104 @@ describe("each repository's stack and the last run, read from the worker's recor
       'an older record without a command still reads, with command null',
     ).toEqual({ ...PASSED_RUN, command: null });
   });
+
+  it('reads an older record written before the start was recorded, with the start null', async () => {
+    const { startedAt: _, ...older } = PASSED_RUN;
+    await writeFile(path.join(work, 'a.run.json'), JSON.stringify(older));
+
+    expect(
+      await records().docker.lastRun(),
+      'an older record without a start still reads, with startedAt null',
+    ).toEqual({ ...PASSED_RUN, startedAt: null });
+  });
+
+  it('a running record is neither the last run nor a run the work folder counts, even when it is the newest', async () => {
+    await writeFile(path.join(work, 'b-done.run.json'), JSON.stringify(PASSED_RUN));
+    await writeFile(path.join(work, 'a-live.run.json'), JSON.stringify(RUNNING_RECORD));
+    const { docker, lines } = records();
+
+    expect(await docker.lastRun(), "the Docker panel's last run ignores a running record").toEqual(
+      PASSED_RUN,
+    );
+    expect(
+      (await docker.workFolder()).runs,
+      "the Docker panel's runs count ignores a running record",
+    ).toBe(1);
+    expect(lines.filter((l) => l.includes('skipped a record that does not parse'))).toEqual([]);
+  });
+
+  it('a record that does not parse still counts as a run, because only a record that says running is left out', async () => {
+    await writeFile(path.join(work, 'a-done.run.json'), JSON.stringify(PASSED_RUN));
+    await writeFile(path.join(work, 'b-torn.run.json'), '{"result": "runn');
+
+    expect(
+      (await records().docker.workFolder()).runs,
+      "a record the panel cannot read is a finished run's, so the runs count keeps it",
+    ).toBe(2);
+  });
+
+  it('the running record of a pull request answers its command and start, the newest start winning, the repository compared without case', async () => {
+    const written: readonly [string, unknown][] = [
+      ['older', { ...RUNNING_RECORD, command: 'npm ci', startedAt: '2026-11-14T08:00:00+00:00' }],
+      ['newest', { ...RUNNING_RECORD, repository: 'Acme/API' }],
+      ['other-pr', { ...RUNNING_RECORD, pullRequest: 42, startedAt: '2026-11-14T10:00:00+00:00' }],
+      [
+        'other-repo',
+        { ...RUNNING_RECORD, repository: 'acme/web', startedAt: '2026-11-14T10:00:00+00:00' },
+      ],
+      [
+        'finished',
+        {
+          ...PASSED_RUN,
+          repository: 'acme/api',
+          pullRequest: 41,
+          startedAt: '2026-11-14T11:00:00+00:00',
+          finishedAt: '2026-11-14T11:01:00+00:00',
+        },
+      ],
+    ];
+    for (const [name, record] of written) {
+      await writeFile(path.join(work, `${name}.run.json`), JSON.stringify(record));
+    }
+    const { docker } = records(() => Date.parse('2026-11-14T09:02:14+00:00'));
+
+    expect(
+      await docker.running('acme/api', 41),
+      'the newest running record of acme/api#41 gives the command and the start',
+    ).toEqual({ command: 'npm test', startedAt: '2026-11-14T09:00:00+00:00' });
+    expect(await docker.running('acme/api', 7), 'no running record of acme/api#7').toBeNull();
+  });
+
+  it('a running record that started longer ago than the sandbox allows is one a stopped worker left, and the bell skips it', async () => {
+    await writeFile(path.join(work, 'left.run.json'), JSON.stringify(RUNNING_RECORD));
+    const started = Date.parse('2026-11-14T09:00:00+00:00');
+
+    expect(
+      await records(() => started + 20 * 60_000).docker.running('acme/api', 41),
+      'a record 20 minutes old may still be running',
+    ).toEqual({ command: 'npm test', startedAt: '2026-11-14T09:00:00+00:00' });
+    expect(
+      await records(() => started + 3 * 3_600_000).docker.running('acme/api', 41),
+      'a record 3 hours old is not shown as "running for 3 h"',
+    ).toBeNull();
+  });
+
+  const unreadableRunning: readonly [string, string][] = [
+    ['no start', JSON.stringify({ ...RUNNING_RECORD, startedAt: null })],
+    ['no command', JSON.stringify({ ...RUNNING_RECORD, command: null })],
+    ['a finish time', JSON.stringify({ ...RUNNING_RECORD, finishedAt: PASSED_RUN.finishedAt })],
+    ['a start that is not a time', JSON.stringify({ ...RUNNING_RECORD, startedAt: 'now' })],
+    ['not JSON', '{"result": "running"'],
+  ];
+  for (const [name, text] of unreadableRunning) {
+    it(`a running record with ${name} is skipped by the bell's reader without a log line`, async () => {
+      await writeFile(path.join(work, 'a.run.json'), text);
+      const { docker, lines } = records(() => Date.parse('2026-11-14T09:02:14+00:00'));
+
+      expect(await docker.running('acme/api', 41), `a running record with ${name}`).toBeNull();
+      expect(lines, 'the bell reads every few seconds, so a skip is not logged').toEqual([]);
+    });
+  }
 
   const malformedRuns: readonly [string, string][] = [
     ['not JSON', 'nope'],

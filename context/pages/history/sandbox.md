@@ -1,9 +1,9 @@
 ---
 title: "Sandbox - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-10
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
+changes: "v1.2 (2026-11-14): the record is written as running when the test command starts. v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
 page_type: reference
 status: artefact
 description: "What changed in Scout.Sandbox and when."
@@ -17,6 +17,12 @@ reliability: high
 # Sandbox - history
 
 > Dated changes to [[pages/services/sandbox]]; the service page states how it works now.
+
+## 2026-11-14 - The run's record is written while the tests run
+
+- **Asked for:** the bell's test run names its command and how long it has run, which needs the start of the container run.
+- **What changed:** `<id>.run.json` is first written when the test command starts, with `result` `running`, the command and `startedAt`, and `finishedAt` null; the end rewrites it with the result and keeps `startedAt` (null when the tests never started). A run that ends without a result deletes it. Still Scout's own file in Scout's own folder; no new write.
+- **Tests:** `SandboxRunRecordTests.cs`.
 
 ## 2026-11-14 - The run's record names the command that ran
 

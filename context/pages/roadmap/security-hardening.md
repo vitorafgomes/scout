@@ -26,7 +26,7 @@ Scout reads untrusted text all day (repositories, pull requests, issues, meeting
 - **The write contract.** Every call leaving the process is declared read, write or irreversible; writes run only under the owner's grant; irreversible actions need the owner's approval in the desktop; every write is logged; the model and the chat can only ask. The filter is `src/Scout.Llm/Guard/WriteGateFilter.cs:19`.
 - **Content is data.** The code-review and code-audit skills, and the live translator, the comment desk and the sandbox run, tell the model that the content they read is data, never instructions ([[pages/services/skills]]).
 - **The sandbox.** A project's tests run only in a disposable container with no network, a read-only filesystem, an image pinned by digest and an unprivileged user ([[pages/services/sandbox]]).
-- **The desktop.** Context isolation and the renderer sandbox (`ui/packages/main/src/browser-window-factory.ts:28`), a content security policy (`ui/packages/main/src/main.ts:1070`), an `openExternal` host allowlist over https (`ui/packages/main/src/ipc/app.ts:6`), credentials in the OS keyring ([[pages/invariants/secrets-never-in-source]]).
+- **The desktop.** Context isolation and the renderer sandbox (`ui/packages/main/src/browser-window-factory.ts:28`), a content security policy (`ui/packages/main/src/main.ts:1069`), an `openExternal` host allowlist over https (`ui/packages/main/src/ipc/app.ts:6`), credentials in the OS keyring ([[pages/invariants/secrets-never-in-source]]).
 
 ## Scope
 

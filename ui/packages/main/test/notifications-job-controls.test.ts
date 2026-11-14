@@ -12,6 +12,7 @@ import {
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import type { JobControlAnswer, JobControlRequest } from '../src/control-plane/client.js';
 import {
+  ELAPSED_REFRESH_MS,
   NOTICE_WAIT_MS,
   NOT_CONFIRMED,
   NOT_REPORTED,
@@ -24,6 +25,7 @@ import {
   TESTS_WORKER_STOPPED,
   WORKER_STOPPED,
   createJobControls,
+  elapsed,
   registerJobControlHandler,
 } from '../src/notifications/job-controls.js';
 import {
@@ -111,6 +113,9 @@ function setup(seed: readonly NotificationInput[] = []) {
     controlId: 'c1',
   });
   let writes: () => Promise<WriteLogEntryDto[]> = async () => [];
+  type RunningTest = { readonly command: string; readonly startedAt: string } | null;
+  let running: () => Promise<RunningTest> = async () => null;
+  const runningAsked: string[] = [];
   const timers: { ms: number; callback: () => void; cancelled: boolean }[] = [];
   const jobs = createJobControls({
     store,
@@ -130,6 +135,10 @@ function setup(seed: readonly NotificationInput[] = []) {
       return () => {
         timer.cancelled = true;
       };
+    },
+    runningTest: (repository, pullRequest) => {
+      runningAsked.push(`${repository}#${pullRequest}`);
+      return running();
     },
     now: () => clock.now,
     logger,
@@ -165,6 +174,10 @@ function setup(seed: readonly NotificationInput[] = []) {
     },
     writesAre(next: () => Promise<WriteLogEntryDto[]>): void {
       writes = next;
+    },
+    runningAsked,
+    runningIs(next: () => Promise<RunningTest>): void {
+      running = next;
     },
   };
 }
@@ -907,6 +920,155 @@ describe('a test run in the bell', () => {
   });
 });
 
+describe("a test run's entry reads the sandbox's running record", () => {
+  const START = '2026-11-14T09:00:00Z';
+  const RECORD = { command: 'npm test', startedAt: START };
+  const progress = JSON.stringify({
+    id: 'q1',
+    event: 'progress',
+    text: 'Run pull request tests: Acme API 41',
+  });
+  const at = (seconds: number): number => Date.parse(START) + seconds * 1000;
+  const entryOf = (t: ReturnType<typeof setup>) => {
+    const n = t.get('tests:acme/api#41');
+    return {
+      kind: n?.kind,
+      detail: n?.detail,
+      indeterminate: n?.indeterminate,
+      read: n?.read,
+      control: n?.control ?? null,
+      offered: n === undefined ? null : jobControls(n).join(' '),
+    };
+  };
+
+  const formats: readonly [number, string][] = [
+    [14_000, '14 s'],
+    [134_000, '2 min 14 s'],
+    [3_780_000, '1 h 3 min'],
+    [-5_000, '0 s'],
+  ];
+  for (const [ms, text] of formats) {
+    it(`${ms} ms elapsed reads "${text}"`, () => {
+      expect(elapsed(ms), `the elapsed time of ${ms} ms`).toBe(text);
+    });
+  }
+
+  it('reads "npm test in a container · running for 2 min 14 s" with an indeterminate bar, moved on every few seconds, the read entry staying read', async () => {
+    const t = setup();
+    t.runningIs(async () => RECORD);
+    t.clock.now = at(134);
+
+    t.workerLine(progress);
+    await t.flush();
+
+    expect(entryOf(t), 'the running entry names the command and the time it has run').toEqual({
+      kind: 'running',
+      detail: 'npm test in a container · running for 2 min 14 s',
+      indeterminate: true,
+      read: false,
+      control: null,
+      offered: 'stop',
+    });
+    expect(t.runningAsked, "the record is read for the entry's own pull request").toEqual([
+      'acme/api#41',
+    ]);
+    expect(t.timers.map((timer) => timer.ms)).toEqual([ELAPSED_REFRESH_MS]);
+
+    t.store.markRead();
+    await t.tick();
+
+    expect(entryOf(t), 'the elapsed time moves on and the read entry stays read').toEqual({
+      kind: 'running',
+      detail: 'npm test in a container · running for 2 min 16 s',
+      indeterminate: true,
+      read: true,
+      control: null,
+      offered: 'stop',
+    });
+  });
+
+  it('a Stop that waits for the worker keeps Stopping while the elapsed time moves on', async () => {
+    const t = setup();
+    t.runningIs(async () => RECORD);
+    t.clock.now = at(14);
+    t.workerLine(progress);
+    await t.flush();
+
+    await t.jobs.control('tests:acme/api#41', 'stop');
+    await t.tick();
+
+    expect(entryOf(t), 'the click stays on the entry the refresh writes').toMatchObject({
+      detail: 'npm test in a container · running for 16 s',
+      control: { action: 'stop', phase: 'waiting' },
+    });
+  });
+
+  it('before the record exists the entry keeps "Running in a container on this computer.", then names the command once it does', async () => {
+    const t = setup();
+    t.clock.now = at(14);
+
+    t.workerLine(progress);
+    await t.flush();
+
+    expect(entryOf(t), 'no running record yet: the entry keeps its first sentence').toMatchObject({
+      kind: 'running',
+      detail: TESTS_RUNNING,
+      indeterminate: true,
+    });
+
+    t.runningIs(async () => RECORD);
+    await t.tick();
+
+    expect(entryOf(t).detail, 'the record appeared: the entry names the command').toBe(
+      'npm test in a container · running for 16 s',
+    );
+  });
+
+  it('a running record that cannot be read leaves the entry as it was, and the next read moves it on again', async () => {
+    const t = setup();
+    t.clock.now = at(14);
+    t.runningIs(() => Promise.reject(Object.assign(new Error('EACCES'), { code: 'EACCES' })));
+
+    t.workerLine(progress);
+    await t.flush();
+
+    expect(entryOf(t).detail, 'a failed read before any record keeps the first sentence').toBe(
+      TESTS_RUNNING,
+    );
+    expect(t.lines.join('\n')).toContain('the running test record was not read');
+
+    t.runningIs(async () => RECORD);
+    await t.tick();
+    t.runningIs(() => Promise.reject(new Error('EIO')));
+    await t.tick();
+
+    expect(entryOf(t).detail, 'a failed read after a record keeps the last detail shown').toBe(
+      'npm test in a container · running for 16 s',
+    );
+    expect(t.timers.filter((timer) => !timer.cancelled)).toHaveLength(1);
+  });
+
+  it('refreshing stops once the entry is no longer running', async () => {
+    const t = setup();
+    t.runningIs(async () => RECORD);
+    t.clock.now = at(14);
+    t.workerLine(progress);
+    await t.flush();
+
+    t.workerLine(JSON.stringify({ id: 'q1', event: 'complete', text: 'done' }));
+    await t.tick();
+    await t.tick();
+
+    expect(entryOf(t), 'the finished entry keeps its own sentence and no bar').toMatchObject({
+      kind: 'done',
+      detail: TESTS_FINISHED,
+      indeterminate: undefined,
+    });
+    expect(t.runningAsked, 'no record is read after the run ended').toHaveLength(1);
+    expect(t.timers, 'no refresh is scheduled after the run ended').toEqual([]);
+  });
+});
+
 describe('when a job entry the owner has read becomes unread again, and the badge with it', () => {
   type Setup = ReturnType<typeof setup>;
   const testsProgress = JSON.stringify({
@@ -1282,6 +1444,12 @@ describe('main.ts wiring of the job controls', () => {
     );
     expect(main).toMatch(/registerJobControlHandler\(\s*ipcMain,\s*jobs,\s*senders,/);
     expect(main).toMatch(/client: \(\) => connection\.client,/);
+    expect(
+      main,
+      "a test run's entry reads the sandbox's records through main's docker module",
+    ).toContain(
+      'runningTest: (repository, pullRequest) => docker.running(repository, pullRequest),',
+    );
     expect(main).toContain('unregisterJobControls?.();');
     expect(main).toContain('jobControls?.dispose();');
   });

@@ -640,10 +640,20 @@ app
       platform: process.platform,
     });
     controlPlane = connection;
+    const dockerWorkFolder = sandboxWorkFolder(process.platform, process.env, os.homedir());
+    const docker = createDocker({
+      exec: (cmd, args, timeoutMs) => createProductionDeps().exec(cmd, args, timeoutMs),
+      dockerPath: 'docker',
+      workFolder: dockerWorkFolder,
+      snapshotsFolder: githubSnapshotsFolder(process.platform, process.env, os.homedir()),
+      now: () => Date.now(),
+      logger: logger.child({ module: 'docker' }),
+    });
     const jobs = createJobControls({
       store: notifications,
       client: () => connection.client,
       setTimer,
+      runningTest: (repository, pullRequest) => docker.running(repository, pullRequest),
       now: () => Date.now(),
       logger: logger.child({ module: 'job-controls' }),
     });
@@ -733,18 +743,7 @@ app
       logger: kubernetesLogger,
     });
 
-    const dockerWorkFolder = sandboxWorkFolder(process.platform, process.env, os.homedir());
-    unregisterDocker = registerDockerHandlers(
-      ipcMain,
-      createDocker({
-        exec: (cmd, args, timeoutMs) => createProductionDeps().exec(cmd, args, timeoutMs),
-        dockerPath: 'docker',
-        workFolder: dockerWorkFolder,
-        snapshotsFolder: githubSnapshotsFolder(process.platform, process.env, os.homedir()),
-        now: () => Date.now(),
-        logger: logger.child({ module: 'docker' }),
-      }),
-    );
+    unregisterDocker = registerDockerHandlers(ipcMain, docker);
 
     const accessLogger = logger.child({ module: 'access' });
     const access = registerAccessHandlers(credentialIpc, {
