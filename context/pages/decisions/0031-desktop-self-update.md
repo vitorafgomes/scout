@@ -1,9 +1,9 @@
 ---
 title: "ADR 0031 - Scout Desktop updates itself only on the user's click, and only its own installation"
-version: "1.2"
+version: "1.3"
 date: 2026-11-02
 updated: 2026-11-14
-changes: "v1.2 (2026-11-14): amended by ADR 0056, a version the owner picks. v1.1 (2026-11-14): amendment, the owner may choose a Beta channel that offers pre-releases."
+changes: "v1.3 (2026-11-14): wording only, no quote of chat words. v1.2 (2026-11-14): amended by ADR 0056, a version the owner picks. v1.1 (2026-11-14): amendment, the owner may choose a Beta channel that offers pre-releases."
 page_type: adr
 status: accepted
 description: "The desktop may replace its own executable with a GitHub Release the user chose by clicking Update and restart; the model and the worker never reach that path; macOS and .deb keep a download link until signing or a package repository exist."
@@ -67,7 +67,7 @@ Constraints: the builds are unsigned ([[pages/roadmap/followups]], "Desktop buil
 
 ## Amendment of 2026-11-14: a Beta channel the owner chooses
 
-The owner asked for a way to use beta versions for testing, and approved the Settings artboard that draws it ("aprovado, pode seguir com o código do beta"). This amendment replaces one sentence of the Decision, "No background download, no install on quit, no update from a prerelease or a draft, no update when the API, the metadata or the checksum disagree, no token", with:
+The owner asked for a way to use beta versions for testing, and approved the Settings artboard that draws it. This amendment replaces one sentence of the Decision, "No background download, no install on quit, no update from a prerelease or a draft, no update when the API, the metadata or the checksum disagree, no token", with:
 
 > "No background download, no install on quit, no update from a draft, no update from a prerelease unless the owner chose the Beta channel in Settings, no update when the API, the metadata or the checksum disagree, no token."
 
