@@ -326,9 +326,48 @@ describe('clear the work folder', () => {
     await writeFile(path.join(folder, 'run-1.log'), 'x'.repeat(250));
     await oldRun('run-2');
 
-    expect(await docker().docker.workFolder()).toEqual({ path: folder, bytes: 350 });
+    expect(await docker().docker.workFolder()).toEqual({ path: folder, bytes: 350, runs: 0 });
     const absent = fakeDocker(() => ok(), { workFolder: path.join(root, 'none') });
-    expect(await absent.docker.workFolder()).toEqual({ path: path.join(root, 'none'), bytes: 0 });
+    expect(await absent.docker.workFolder()).toEqual({
+      path: path.join(root, 'none'),
+      bytes: 0,
+      runs: 0,
+    });
+  });
+
+  for (const records of [0, 1, 3]) {
+    it(`counts ${records} run records as the runs it holds, never the run folders or the logs`, async () => {
+      for (let i = 0; i < records; i++) {
+        await writeFile(path.join(folder, `run-${i}.run.json`), '{}');
+        await writeFile(path.join(folder, `run-${i}.log`), 'log');
+      }
+      await oldRun('run-now');
+
+      expect(
+        await docker().docker.workFolder(),
+        'the work folder counts the logs of its runs by their records, never the run folders or the logs',
+      ).toEqual({ path: folder, bytes: 100 + records * 5, runs: records });
+    });
+  }
+
+  it('counts 0 runs when the work folder is missing or cannot be read', async () => {
+    const absent = path.join(root, 'none');
+    const unreadable = path.join(root, 'not-a-folder');
+    await writeFile(unreadable, 'x'.repeat(42));
+
+    const missing = await fakeDocker(() => ok(), { workFolder: absent }).docker.workFolder();
+    const failing = await fakeDocker(() => ok(), { workFolder: unreadable }).docker.workFolder();
+
+    expect(missing, 'a missing work folder counts 0 runs').toEqual({
+      path: absent,
+      bytes: 0,
+      runs: 0,
+    });
+    expect(failing, 'a work folder whose listing fails counts 0 runs').toEqual({
+      path: unreadable,
+      bytes: 42,
+      runs: 0,
+    });
   });
 
   it("deletes the folder's contents, keeps the folder, and logs the clear", async () => {
@@ -338,7 +377,7 @@ describe('clear the work folder', () => {
 
     const result = await d.clear();
 
-    expect(result).toEqual({ refused: null, folder: { path: folder, bytes: 0 } });
+    expect(result).toEqual({ refused: null, folder: { path: folder, bytes: 0, runs: 0 } });
     expect((await stat(folder)).isDirectory()).toBe(true);
     expect(lines.join('\n')).toContain('work folder cleared by the owner');
   });
@@ -403,7 +442,10 @@ describe('clear the work folder', () => {
 
     const result = await d.clear();
 
-    expect(result).toEqual({ refused: CLEAR_UNREADABLE, folder: { path: unreadable, bytes: 42 } });
+    expect(result).toEqual({
+      refused: CLEAR_UNREADABLE,
+      folder: { path: unreadable, bytes: 42, runs: 0 },
+    });
     expect(await readFile(unreadable, 'utf8')).toBe('x'.repeat(42));
     expect(lines.join('\n')).not.toContain('work folder cleared by the owner');
   });
@@ -412,7 +454,7 @@ describe('clear the work folder', () => {
     const absent = path.join(root, 'none');
     const { docker: d } = fakeDocker(() => ok(), { workFolder: absent, now: () => now });
 
-    expect(await d.clear()).toEqual({ refused: null, folder: { path: absent, bytes: 0 } });
+    expect(await d.clear()).toEqual({ refused: null, folder: { path: absent, bytes: 0, runs: 0 } });
   });
 });
 
@@ -504,6 +546,7 @@ const PASSED_RUN: DockerRun = {
   pullRequest: 42,
   stack: 'Node',
   image: 'node:20@sha256:8f69',
+  command: 'npm test',
   result: 'passed',
   reason: null,
   exitCode: 0,
@@ -642,14 +685,34 @@ describe("each repository's stack and the last run, read from the worker's recor
       'with no repository or pull request named',
       { ...PASSED_RUN, repository: null, pullRequest: null },
     ],
+    [
+      'names the command it ran',
+      {
+        ...PASSED_RUN,
+        stack: '.NET',
+        image: 'mcr.microsoft.com/dotnet/sdk:10.0',
+        command: 'dotnet test',
+      },
+    ],
+    ['started no command', { ...PASSED_RUN, result: 'notRun', exitCode: null, command: null }],
   ];
   for (const [name, run] of runKinds) {
     it(`reads a run that ${name}`, async () => {
       await writeFile(path.join(work, 'a.run.json'), JSON.stringify(run));
 
-      expect(await records().docker.lastRun()).toEqual(run);
+      expect(await records().docker.lastRun(), `the last run ${name}`).toEqual(run);
     });
   }
+
+  it('reads an older record written before the command was recorded, with the command null', async () => {
+    const { command: _, ...older } = PASSED_RUN;
+    await writeFile(path.join(work, 'a.run.json'), JSON.stringify(older));
+
+    expect(
+      await records().docker.lastRun(),
+      'an older record without a command still reads, with command null',
+    ).toEqual({ ...PASSED_RUN, command: null });
+  });
 
   const malformedRuns: readonly [string, string][] = [
     ['not JSON', 'nope'],
@@ -660,6 +723,7 @@ describe("each repository's stack and the last run, read from the worker's recor
     ],
     ['no duration', JSON.stringify({ ...PASSED_RUN, durationSeconds: undefined })],
     ['no finish time', JSON.stringify({ ...PASSED_RUN, finishedAt: undefined })],
+    ['a command that is not text', JSON.stringify({ ...PASSED_RUN, command: 42 })],
   ];
   for (const [name, text] of malformedRuns) {
     it(`skips a run record with ${name}, even when it would be the newest`, async () => {

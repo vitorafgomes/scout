@@ -366,7 +366,12 @@ export function createDocker(deps: DockerDeps): Docker {
   }
 
   async function workFolder(): Promise<DockerWorkFolder> {
-    return { path: deps.workFolder, bytes: await sizeOf(deps.workFolder) };
+    const names = await readdir(deps.workFolder).catch((): string[] => []);
+    return {
+      path: deps.workFolder,
+      bytes: await sizeOf(deps.workFolder),
+      runs: names.filter((n) => n.endsWith('.run.json')).length,
+    };
   }
 
   async function clear(): Promise<DockerClearResponse> {
@@ -498,16 +503,18 @@ export function toRepository(value: unknown): DockerRepository | null {
   };
 }
 
-/** A run's record as the sandbox writes it beside the run's log. */
+/** A run's record as the sandbox writes it beside the run's log; a record written before `command` existed reads it as null. */
 export function toRun(value: unknown): DockerRun | null {
   const r = fields(value);
   if (r === null) return null;
   const result = r['result'];
+  const command = r['command'] ?? null;
   if (
     !textOrNull(r['repository']) ||
     !wholeOrNull(r['pullRequest']) ||
     !text(r['stack']) ||
     !text(r['image']) ||
+    !textOrNull(command) ||
     (result !== 'passed' && result !== 'failed' && result !== 'notRun') ||
     !textOrNull(r['reason']) ||
     !wholeOrNull(r['exitCode']) ||
@@ -522,6 +529,7 @@ export function toRun(value: unknown): DockerRun | null {
     pullRequest: r['pullRequest'],
     stack: r['stack'],
     image: r['image'],
+    command,
     result,
     reason: r['reason'],
     exitCode: r['exitCode'],

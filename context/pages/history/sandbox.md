@@ -1,8 +1,9 @@
 ---
 title: "Sandbox - history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-10
-changes: "Initial history note: a test command that could not be started says so"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
 page_type: reference
 status: artefact
 description: "What changed in Scout.Sandbox and when."
@@ -16,6 +17,12 @@ reliability: high
 # Sandbox - history
 
 > Dated changes to [[pages/services/sandbox]]; the service page states how it works now.
+
+## 2026-11-14 - The run's record names the command that ran
+
+- **Asked for:** the Docker panel's Stack tile, ".NET (dotnet test)" as the Features artboard draws it, which needs the command the run used.
+- **What changed:** `<id>.run.json` gains `command`, after `image`: the result's `Command`, so the test command, the restore command after a failed restore, the command running at the time limit, and null when Docker refused the mount. The record is still Scout's own file in Scout's own folder; no new write.
+- **Tests:** `Each_run_writes_a_record_beside_its_log_naming_the_repository_the_pull_request_the_stack_the_image_the_command_and_how_it_ended` in `SandboxRunRecordTests.cs`, with the command per case and the property list.
 
 ## 2026-11-10 - A run the owner stops leaves no record
 

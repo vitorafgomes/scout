@@ -64,8 +64,8 @@ describe('ScoutBridgeService over the preload bridge', () => {
           calls.push(`pull ${JSON.stringify(req)}`);
           return { error: null };
         },
-        dockerWorkFolder: answer('folder', { path: '/w', bytes: 3 }),
-        dockerClear: answer('clear', { refused: null, folder: { path: '/w', bytes: 0 } }),
+        dockerWorkFolder: answer('folder', { path: '/w', bytes: 3, runs: 1 }),
+        dockerClear: answer('clear', { refused: null, folder: { path: '/w', bytes: 0, runs: 0 } }),
         dockerRepositories: answer('repositories', { repositories: [] }),
         dockerPullImage: async (req: unknown) => {
           calls.push(`pullImage ${JSON.stringify(req)}`);
@@ -88,10 +88,10 @@ describe('ScoutBridgeService over the preload bridge', () => {
       expect(await bridge.dockerState()).toEqual({ state: 'running', version: '28.5.1' });
       expect(await bridge.dockerImages()).toEqual({ images: [] });
       expect(await bridge.dockerPull({ stack: 'Go' })).toEqual({ error: null });
-      expect(await bridge.dockerWorkFolder()).toEqual({ path: '/w', bytes: 3 });
+      expect(await bridge.dockerWorkFolder()).toEqual({ path: '/w', bytes: 3, runs: 1 });
       expect(await bridge.dockerClear()).toEqual({
         refused: null,
-        folder: { path: '/w', bytes: 0 },
+        folder: { path: '/w', bytes: 0, runs: 0 },
       });
       expect(await bridge.dockerPullImage({ reference: 'node:20@sha256:x' })).toEqual({
         error: null,

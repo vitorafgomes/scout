@@ -1,8 +1,9 @@
 ---
 title: "Follow-ups"
-version: "1.0"
+version: "1.1"
 date: 2026-10-21
-changes: "Initial tracker page"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Initial tracker page"
 page_type: roadmap
 status: active
 description: "Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it."
@@ -295,7 +296,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A review reads every non-zero exit as "Tests failed" (2026-11-10)
 
-- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:82`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:547`).
+- **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:82`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
 - **Unblocks with:** `testsLine` reading "Tests could not be started: <reason>" when `ran` is true and `reason` is set, with rows for a restore failure, exits 126 and 127, an exit 1 without a reason and a pass; no contract change, the field is already in the block. Exit 2 from a line `sh` cannot parse stays "Tests failed".
 
 ### Models keeps "Restart failed" after Scout restarted itself (2026-11-10)

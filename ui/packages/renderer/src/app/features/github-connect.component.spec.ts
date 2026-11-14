@@ -1365,7 +1365,7 @@ describe('the Docker card in Features', () => {
   it('sits beside GitHub: right after the GitHub card and before Kubernetes', async () => {
     const bridge = Object.assign(makeBridge(connected, ['111']), {
       dockerState: vi.fn(async () => ({ state: 'notInstalled' as const })),
-      dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0 })),
+      dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0, runs: 0 })),
       vaultGetPublic: vi.fn(async () => ({ value: null })),
     });
     const fixture = await render(bridge);

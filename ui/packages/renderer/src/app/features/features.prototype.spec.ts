@@ -185,7 +185,7 @@ function bridgeWith(o: Options = {}) {
         { stack: 'Node', reference: 'node:22', present: false },
       ],
     })),
-    dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0 })),
+    dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0, runs: 0 })),
     dockerRepositories: vi.fn(async () => ({ repositories: [] })),
     dockerLastRun: vi.fn(async () => ({ run: null })),
     vaultGetPublic: vi.fn(async () => ({ value: null })),
@@ -2090,9 +2090,13 @@ describe('Features as Features.dc.html draws it, round 1: the toasts', () => {
       const fixture = await screen({
         github: CONNECTED,
         extra: {
-          dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 2048 })),
+          dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 2048, runs: 12 })),
           dockerClear: vi.fn(async () => ({
-            folder: { path: '/w', bytes: row.refused === null ? 0 : 2048 },
+            folder: {
+              path: '/w',
+              bytes: row.refused === null ? 0 : 2048,
+              runs: row.refused === null ? 0 : 12,
+            },
             refused: row.refused,
           })),
         },
@@ -2848,6 +2852,7 @@ describe('Features as Features.dc.html draws it: the Docker toasts, look and Pre
     pullRequest: 5,
     stack: '.NET',
     image: 'mcr.microsoft.com/dotnet/sdk:10.0',
+    command: 'dotnet test',
     result: 'failed',
     reason: 'The restore exited with code 1; the tests did not run.',
     exitCode: 1,
@@ -3166,9 +3171,9 @@ describe('Features as Features.dc.html draws it: the Docker toasts, look and Pre
     {
       preview: 'Docker panel: Clear refused',
       extra: {
-        dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 2048 })),
+        dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 2048, runs: 12 })),
         dockerClear: vi.fn(async () => ({
-          folder: { path: '/w', bytes: 2048 },
+          folder: { path: '/w', bytes: 2048, runs: 12 },
           refused: 'A test run is in progress in the work folder; clear it after the run ends.',
         })),
       },
@@ -3183,7 +3188,8 @@ describe('Features as Features.dc.html draws it: the Docker toasts, look and Pre
       shown: {
         'docker-clear-refused':
           'A test run is in progress in the work folder; clear it after the run ends.',
-        'docker-folder-size': "2.0 KB used · each run's copy of the code is deleted after it",
+        'docker-folder-size':
+          "2.0 KB used · the logs of 12 runs; each run's copy of the code is deleted after it",
       },
     },
     {
@@ -3198,7 +3204,7 @@ describe('Features as Features.dc.html draws it: the Docker toasts, look and Pre
       shown: {
         'docker-last-result': 'Failed (exit 1)',
         'docker-last-reason': 'The restore exited with code 1; the tests did not run.',
-        'docker-last-stack': '.NET',
+        'docker-last-stack': '.NET (dotnet test)',
       },
     },
     {

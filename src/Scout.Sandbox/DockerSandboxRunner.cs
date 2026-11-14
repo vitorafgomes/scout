@@ -255,7 +255,7 @@ public sealed partial class DockerSandboxRunner
     {
         var outcome = !result.Ran ? "notRun" : result.ExitCode == 0 && result.Reason is null ? "passed" : "failed";
         var record = new RunRecord(
-            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, outcome, result.Reason, result.ExitCode, result.DurationSeconds, _time.GetUtcNow());
+            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, result.Command, outcome, result.Reason, result.ExitCode, result.DurationSeconds, _time.GetUtcNow());
         try
         {
             await File.WriteAllTextAsync(path, JsonSerializer.Serialize(record, RecordJson), CancellationToken.None).ConfigureAwait(false);
@@ -323,12 +323,13 @@ public sealed partial class DockerSandboxRunner
 
     private static readonly JsonSerializerOptions RecordJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    /// <summary>The record of one run, written beside its log: the result is <c>passed</c>, <c>failed</c> or <c>notRun</c>.</summary>
+    /// <summary>The record of one run, written beside its log: the command that ran last, null when none started, and the result, <c>passed</c>, <c>failed</c> or <c>notRun</c>.</summary>
     private sealed record RunRecord(
         string? Repository,
         int? PullRequest,
         string Stack,
         string Image,
+        string? Command,
         string Result,
         string? Reason,
         int? ExitCode,

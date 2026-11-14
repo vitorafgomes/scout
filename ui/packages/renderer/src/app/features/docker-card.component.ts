@@ -517,7 +517,10 @@ function shortReference(reference: string): string {
                       }
                       <div class="tile">
                         <dt>Stack</dt>
-                        <dd data-test="docker-last-stack">{{ stackOf(run.image, run.stack) }}</dd>
+                        <dd data-test="docker-last-stack">
+                          {{ stackOf(run.image, run.stack)
+                          }}{{ run.command === null ? '' : ' (' + run.command + ')' }}
+                        </dd>
                       </div>
                       <div class="tile">
                         <dt>Result</dt>
@@ -1045,9 +1048,9 @@ export class DockerCardComponent implements OnInit {
   readonly folderSize = computed(() => {
     const f = this.folder();
     if (f === null) return 'Scout is checking the folder.';
-    return f.bytes === 0
-      ? 'Empty · run logs are deleted'
-      : `${formatBytes(f.bytes)} used · each run's copy of the code is deleted after it`;
+    if (f.bytes === 0) return 'Empty · run logs are deleted';
+    const logs = f.runs === 0 ? '' : ` the logs of ${f.runs} ${f.runs === 1 ? 'run' : 'runs'};`;
+    return `${formatBytes(f.bytes)} used ·${logs} each run's copy of the code is deleted after it`;
   });
 
   async ngOnInit(): Promise<void> {
