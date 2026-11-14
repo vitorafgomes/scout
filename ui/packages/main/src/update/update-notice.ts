@@ -8,7 +8,9 @@ import {
   type DesktopToggleRequest,
   type ReleaseAsset,
   type UpdateNotice,
+  type UpdateChannel,
   type UpdateProgress,
+  type UpdateSetChannelRequest,
   type UpdateSkipVersionRequest,
   type UpdateState,
 } from '@scout/shared';
@@ -17,9 +19,11 @@ import type { Vault } from '../vault/safe-storage-vault.js';
 import type { Logger } from '../util/logger.js';
 
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases/latest';
+const RELEASES_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases?per_page=30';
 const RELEASES_PAGE_URL = 'https://github.com/vitorafgomes/scout/releases';
 const CHECK_ENABLED_KEY = 'update.check-enabled';
 const SKIPPED_VERSION_KEY = 'update.skipped-version';
+const CHANNEL_KEY = 'update.channel';
 const LAST_CHECK_KEY = 'update.last-check';
 const FIRST_CHECK_DELAY_MS = 10_000;
 const CHECK_INTERVAL_MS = 86_400_000;
@@ -138,6 +142,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     });
   let checkEnabled = (await read(CHECK_ENABLED_KEY)) !== 'false';
   let skippedVersion = await read(SKIPPED_VERSION_KEY);
+  let channel: UpdateChannel = (await read(CHANNEL_KEY)) === 'beta' ? 'beta' : 'stable';
   let lastCheck: { at: string; result: string } | null = null;
   try {
     const stored = JSON.parse((await read(LAST_CHECK_KEY)) ?? 'null') as unknown;
@@ -164,6 +169,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
   function state(): UpdateState {
     return {
       checkEnabled,
+      channel,
       lastCheckAt: lastCheck?.at ?? null,
       lastResult: lastCheck?.result ?? null,
       notice,
@@ -206,10 +212,10 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     });
   }
 
-  async function fetchLatest(): Promise<Record<string, unknown>> {
+  async function fetchJson(url: string): Promise<unknown> {
     let response: Response;
     try {
-      response = await deps.fetch(LATEST_RELEASE_URL, {
+      response = await deps.fetch(url, {
         method: 'GET',
         headers: {
           Accept: 'application/vnd.github+json',
@@ -229,23 +235,55 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     } catch {
       throw new CheckFailed('parse');
     }
-    if (typeof body !== 'object' || body === null) throw new CheckFailed('parse');
-    if (typeof (body as Record<string, unknown>)['tag_name'] !== 'string') {
-      throw new CheckFailed('parse');
+    return body;
+  }
+
+  const isRelease = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>)['tag_name'] === 'string';
+
+  /**
+   * Stable reads the latest release, which GitHub never makes a pre-release; Beta reads the recent releases and
+   * takes the highest version that is not a draft, a pre-release included.
+   */
+  async function fetchLatest(on: UpdateChannel): Promise<Record<string, unknown>> {
+    if (on === 'stable') {
+      const body = await fetchJson(LATEST_RELEASE_URL);
+      if (!isRelease(body)) throw new CheckFailed('parse');
+      return body;
     }
-    return body as Record<string, unknown>;
+    const body = await fetchJson(RELEASES_URL);
+    if (!Array.isArray(body)) throw new CheckFailed('parse');
+    let best: Record<string, unknown> | null = null;
+    for (const candidate of body) {
+      if (!isRelease(candidate) || candidate['draft'] === true) continue;
+      if (
+        best === null ||
+        compareVersions(
+          normalise(candidate['tag_name'] as string),
+          normalise(best['tag_name'] as string),
+        ) > 0
+      ) {
+        best = candidate;
+      }
+    }
+    if (best === null) throw new CheckFailed('parse');
+    return best;
   }
 
   async function runCheck(): Promise<void> {
     let result: string;
+    const on = channel;
     try {
-      const release = await fetchLatest();
+      const release = await fetchLatest(on);
+      if (on !== channel) return;
       const latest = normalise(release['tag_name'] as string);
       const text = (field: string): string =>
         typeof release[field] === 'string' ? (release[field] as string) : '';
       if (
         release['draft'] === true ||
-        release['prerelease'] === true ||
+        (on === 'stable' && (release['prerelease'] === true || latest.includes('-'))) ||
         compareVersions(latest, currentVersion) <= 0
       ) {
         result = 'up-to-date';
@@ -280,6 +318,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       }
       logger.info('update: checked', { result });
     } catch (err: unknown) {
+      if (on !== channel) return;
       result = `error ${err instanceof CheckFailed ? err.kind : 'parse'}`;
       logger.info('update: check failed', { result });
     }
@@ -337,7 +376,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     try {
       updater.autoDownload = false;
       updater.autoInstallOnAppQuit = false;
-      updater.allowPrerelease = false;
+      updater.allowPrerelease = channel === 'beta';
       progress('checking');
       const offered = await updater.checkForUpdates();
       changed = normalise(offered?.updateInfo.version ?? '') !== target.latestVersion;
@@ -434,6 +473,23 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       return state();
     }),
   );
+  ipcMain.handle(CHANNEL.updateSetChannel, (_event, req: UpdateSetChannelRequest | undefined) =>
+    relay('setChannel', async () => {
+      const next = req?.channel;
+      if (next !== 'stable' && next !== 'beta') return state();
+      if (next === channel) return state();
+      channel = next;
+      setNotice(null);
+      await vault.store(CHANNEL_KEY, next).catch((err: unknown) => {
+        logger.warn('update: channel not stored', { code: serializeError(err).code });
+      });
+      if (packaged && checkEnabled) {
+        await inFlight?.catch(() => undefined);
+        await check();
+      }
+      return state();
+    }),
+  );
   ipcMain.handle(CHANNEL.updateRemindLater, () =>
     relay('remindLater', async () => {
       setNotice(null);
@@ -473,6 +529,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       detachUpdater?.();
       ipcMain.removeHandler(CHANNEL.updateInstall);
       ipcMain.removeHandler(CHANNEL.updateRemindLater);
+      ipcMain.removeHandler(CHANNEL.updateSetChannel);
       ipcMain.removeHandler(CHANNEL.updateSkipVersion);
       ipcMain.removeHandler(CHANNEL.updateCheckNow);
       ipcMain.removeHandler(CHANNEL.updateSetCheckEnabled);

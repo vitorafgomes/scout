@@ -42,6 +42,7 @@ const progress = (
 
 const state = (notice: UpdateNotice | null): UpdateState => ({
   checkEnabled: true,
+  channel: 'stable',
   lastCheckAt: '2026-11-02T09:30:00.000Z',
   lastResult: notice === null ? 'up-to-date' : `available ${notice.latestVersion}`,
   notice,

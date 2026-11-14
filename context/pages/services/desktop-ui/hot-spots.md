@@ -13,7 +13,7 @@ reliability: high
 ## Hot spots
 
 - `ui/packages/main/src/worker/supervisor.ts:218` - restart policy; the watchdog test race fixed in PR 55 lives in its spec.
-- `ui/packages/main/src/vault/safe-storage-vault.ts:164` - synchronous `safeStorage` API, deprecated in Electron 45, removed in 46 (tracked in [[pages/roadmap/followups]]).
+- `ui/packages/main/src/vault/safe-storage-vault.ts:165` - synchronous `safeStorage` API, deprecated in Electron 45, removed in 46 (tracked in [[pages/roadmap/followups]]).
 - `ui/packages/main/src/control-plane/launcher.ts:231` - the host is started once per app run with no restart policy.
 - `ui/build/electron-builder.yml` - `executableName` must stay filesystem-safe for AppImage; `ui/packages/main/test/packaging-config.test.ts` guards it.
 - `ui/build/electron-builder.yml` - `extraMetadata.desktopName` (`scout-desktop.desktop`) is the name the running app reports to the desktop: Electron takes the X11 window class (and, by the builder's account, the Wayland app_id) from it, and without it from a slug of `productName`, so renaming the product would silently change the class. The Linux desktop entry's `StartupWMClass`, its file name (`syncDesktopName`) and its `Icon` (`executableName`) must all equal that basename, or the dock shows a generic icon for the running window; `ui/packages/main/test/packaging-config.test.ts` guards the four together and `ui/e2e/smoke/packaged-app.spec.ts` checks the entry inside the built AppImage against the running app.

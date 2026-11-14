@@ -27,6 +27,7 @@ export type MainOnlyVaultKey =
   | 'app.theme'
   | 'update.check-enabled'
   | 'update.skipped-version'
+  | 'update.channel'
   | 'update.last-check'
   | 'features.pending-revokes';
 

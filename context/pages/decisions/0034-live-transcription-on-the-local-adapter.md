@@ -130,7 +130,7 @@ The owner wants the chat to see what is being said ("the chat to see what we say
 
 - **Rule.** The desktop opens at most two sessions, one per lane: `me`, the owner's microphone, and `others`, the system audio. The lane is the desktop's idea only.
   - `scout:local.listen` takes `{ lane }`. Main mints a fresh UUID per listen, keeps an id-to-lane map, and at most one session per lane: a listen on an open lane stops that lane's old id first (`ui/packages/main/src/quick-ask/quick-ask.ts:917`).
-  - The worker still sees only ids; the wire shape above is unchanged. Main echoes the lane on each `scout:local.transcript` event from its map (`ui/packages/shared/src/ipc-contract.ts:1741`).
+  - The worker still sees only ids; the wire shape above is unchanged. Main echoes the lane on each `scout:local.transcript` event from its map (`ui/packages/shared/src/ipc-contract.ts:1742`).
   - A `listen` the worker refuses, "Scout is already listening.", ends only that lane with the sentence.
 - **How the loopback is obtained.**
   - On Linux main adds `PulseaudioLoopbackForScreenShare` and `WebRtcPipeWireCapturer` to any `enable-features` value before the app is ready (`ui/packages/main/src/quick-ask/quick-ask.ts:298`, `ui/packages/main/src/main.ts:370`).

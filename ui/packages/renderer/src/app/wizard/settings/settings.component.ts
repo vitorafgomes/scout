@@ -15,6 +15,9 @@ import {
   type LocalBubbleSettings,
   type LocalBubbleStatus,
   type LocalMonitor,
+  type UpdateChannel,
+  type UpdateNotice,
+  type UpdateProgress,
   type UpdateState,
 } from '@scout/shared';
 
@@ -30,6 +33,18 @@ import { WorkerSettingsComponent } from './worker-settings.component';
 
 const REPOSITORY_URL = 'https://github.com/vitorafgomes/scout';
 const LICENCE_URL = 'https://github.com/vitorafgomes/scout/blob/main/LICENSE';
+const CHANGELOG_URL = 'https://github.com/vitorafgomes/scout/releases';
+const SECURITY_URL = 'https://github.com/vitorafgomes/scout/security/advisories/new';
+
+const CHANNEL_OPTIONS: readonly { value: UpdateChannel; label: string }[] = [
+  { value: 'stable', label: 'Stable' },
+  { value: 'beta', label: 'Beta' },
+];
+
+const CHANNEL_HINTS: Readonly<Record<UpdateChannel, string>> = {
+  stable: 'Stable gets released versions only.',
+  beta: 'Beta also gets pre-releases, to try changes before they are released. A pre-release can have bugs; keep Stable for daily work.',
+};
 
 const CHECK_FAILURES: Readonly<Record<string, string>> = {
   network: 'no connection to GitHub',
@@ -112,10 +127,75 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
           <sc-worker-settings />
 
           <section class="card about" aria-labelledby="s-about" data-test="about-section">
-            <div class="about-row">
-              <h2 id="s-about">About</h2>
-              <span class="muted">Version</span>
-              <code data-test="about-version">{{ version() ?? 'unknown' }}</code>
+            <h2 id="s-about">About</h2>
+            <div class="about-name">
+              <span class="name">Scout</span>
+              <span class="description" data-test="about-description">
+                A chat assistant for Discord, Slack and Teams. It reads your repositories and cloud,
+                reports problems as issues and reviews pull requests. It never writes code.
+              </span>
+            </div>
+            <dl class="facts">
+              <dt>Version</dt>
+              <dd>
+                <code data-test="about-version">{{ version() ?? 'unknown' }}</code>
+              </dd>
+              <dt>Licence</dt>
+              <dd data-test="about-licence-text">MIT, open source</dd>
+              <dt>Built with</dt>
+              <dd data-test="about-built-with">Angular, Electron and .NET</dd>
+            </dl>
+            <div class="about-line">
+              <span class="about-label">Project</span>
+              <button
+                type="button"
+                class="link"
+                data-test="about-repository"
+                (click)="openAbout(repositoryUrl)"
+              >
+                <sc-icon name="external" [size]="14" />
+                Repository
+              </button>
+              <button
+                type="button"
+                class="link"
+                data-test="about-changelog"
+                (click)="openAbout(changelogUrl)"
+              >
+                <sc-icon name="external" [size]="14" />
+                Changelog
+              </button>
+              <button
+                type="button"
+                class="link"
+                data-test="about-licence"
+                (click)="openAbout(licenceUrl)"
+              >
+                <sc-icon name="external" [size]="14" />
+                MIT licence
+              </button>
+            </div>
+            <div class="about-line">
+              <span class="about-label">Security</span>
+              <button
+                type="button"
+                class="link"
+                data-test="about-security"
+                (click)="openAbout(securityUrl)"
+              >
+                <sc-icon name="external" [size]="14" />
+                Report a security problem privately
+              </button>
+              <span class="about-note">
+                A private report to the maintainers on GitHub, never a public issue.
+              </span>
+            </div>
+            @if (aboutError(); as error) {
+              <p class="error" role="alert" data-test="about-error">{{ error }}</p>
+            }
+            <p class="hint">Links open in your browser.</p>
+            <div class="about-notices">
+              <span class="notices-label">Trademark notices</span>
               <button
                 type="button"
                 class="icon-btn"
@@ -123,56 +203,31 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                 [attr.aria-expanded]="aboutOpen()"
                 [attr.aria-controls]="aboutOpen() ? aboutRegion : null"
                 [attr.aria-label]="
-                  aboutOpen() ? 'Hide the links and notices' : 'Show the links and notices'
+                  aboutOpen() ? 'Hide the trademark notices' : 'Show the trademark notices'
                 "
-                [title]="aboutOpen() ? 'Hide the links and notices' : 'Show the links and notices'"
+                [title]="aboutOpen() ? 'Hide the trademark notices' : 'Show the trademark notices'"
                 (click)="aboutOpen.set(!aboutOpen())"
               >
                 <sc-icon name="chevron-down" [size]="18" />
               </button>
             </div>
             @if (aboutOpen()) {
-              <div class="about-more" [id]="aboutRegion" data-test="about-more">
-                <p class="about-links">
-                  <button
-                    type="button"
-                    class="link"
-                    data-test="about-repository"
-                    (click)="openAbout(repositoryUrl)"
-                  >
-                    <sc-icon name="external" [size]="14" />
-                    Source code on GitHub
-                  </button>
-                  <button
-                    type="button"
-                    class="link"
-                    data-test="about-licence"
-                    (click)="openAbout(licenceUrl)"
-                  >
-                    <sc-icon name="external" [size]="14" />
-                    MIT licence
-                  </button>
-                </p>
-                @if (aboutError(); as error) {
-                  <p class="error" role="alert" data-test="about-error">{{ error }}</p>
-                }
-                <ul class="notices" data-test="trademark-notices">
-                  <li>OpenAI and ChatGPT are trademarks of OpenAI.</li>
-                  <li>Google and Gemini are trademarks of Google.</li>
-                  <li>Anthropic and Claude are trademarks of Anthropic.</li>
-                  <li>OpenRouter is a trademark of OpenRouter, Inc.</li>
-                  <li>Ollama is a trademark of Ollama, Inc.</li>
-                  <li>LM Studio is a trademark of Element Labs, Inc.</li>
-                  <li>
-                    Third-party logos are not covered by Scout's MIT licence and remain their
-                    owners' trademarks.
-                  </li>
-                  <li>
-                    All other product names and logos are trademarks of their respective owners.
-                    Their use identifies the service you connect and does not imply endorsement.
-                  </li>
-                </ul>
-              </div>
+              <ul class="notices" [id]="aboutRegion" data-test="trademark-notices">
+                <li>OpenAI and ChatGPT are trademarks of OpenAI.</li>
+                <li>Google and Gemini are trademarks of Google.</li>
+                <li>Anthropic and Claude are trademarks of Anthropic.</li>
+                <li>OpenRouter is a trademark of OpenRouter, Inc.</li>
+                <li>Ollama is a trademark of Ollama, Inc.</li>
+                <li>LM Studio is a trademark of Element Labs, Inc.</li>
+                <li>
+                  Third-party logos are not covered by Scout's MIT licence and remain their owners'
+                  trademarks.
+                </li>
+                <li>
+                  All other product names and logos are trademarks of their respective owners. Their
+                  use identifies the service you connect and does not imply endorsement.
+                </li>
+              </ul>
             }
           </section>
         </div>
@@ -435,6 +490,20 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                 />
               </div>
             }
+            @if (desktopError(); as error) {
+              <p class="error" role="alert" data-test="desktop-error">{{ error }}</p>
+            }
+          </section>
+          <section class="card" data-test="updates-section" aria-labelledby="s-updates">
+            <h2 id="s-updates">Updates</h2>
+            <p class="lede">Nothing downloads or installs without a click.</p>
+            <div class="version-row">
+              <span class="muted">Current version</span>
+              @if (onPrerelease()) {
+                <span class="chip-pre" data-test="update-current-prerelease">Pre-release</span>
+              }
+              <code data-test="update-current-version">{{ version() ?? 'unknown' }}</code>
+            </div>
             @if (update(); as state) {
               @if (state.packaged) {
                 <div class="switch-row">
@@ -448,6 +517,35 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                     (change)="setCheckEnabled($event)"
                   />
                 </div>
+                <p class="hint" data-test="update-schedule">
+                  Scout checks GitHub Releases 10 seconds after it starts, then once a day.
+                </p>
+                <div class="channel-row">
+                  <span id="lbl-channel" class="switch-label">Channel</span>
+                  <div class="segmented" role="group" aria-labelledby="lbl-channel">
+                    @for (option of channelOptions; track option.value) {
+                      <button
+                        type="button"
+                        class="theme-choice"
+                        [attr.data-test]="'update-channel-' + option.value"
+                        [attr.aria-pressed]="state.channel === option.value"
+                        [disabled]="updateBusy()"
+                        (click)="setChannel(option.value)"
+                      >
+                        {{ option.label }}
+                      </button>
+                    }
+                  </div>
+                </div>
+                <p class="hint" data-test="update-channel-hint">
+                  {{ channelHints[state.channel] }}
+                </p>
+                @if (state.channel === 'stable' && onPrerelease()) {
+                  <p class="back-to-stable" role="status" data-test="update-back-to-stable">
+                    You are on the pre-release {{ version() }}. Stable never installs an older
+                    version: Scout offers the next stable version newer than it.
+                  </p>
+                }
                 <div class="update-row">
                   <span class="muted last-check" data-test="update-last-check">
                     Last check:
@@ -467,14 +565,105 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                     Check now
                   </button>
                 </div>
+                @if (state.notice; as n) {
+                  <div class="update-box" role="status" data-test="settings-update-available">
+                    <div class="update-headline">
+                      <h3 data-test="settings-update-headline">
+                        Scout {{ n.latestVersion }} is available. You have {{ n.currentVersion }}.
+                      </h3>
+                      @if (n.latestVersion.includes('-')) {
+                        <span class="chip-pre" data-test="settings-update-prerelease"
+                          >Pre-release</span
+                        >
+                      }
+                    </div>
+                    @if (!n.canInstall) {
+                      <p data-test="settings-update-cannot">
+                        This package cannot update itself. Download the new version and replace this
+                        copy; your settings stay on this computer.
+                      </p>
+                    }
+                    @if (updateProgress(); as p) {
+                      @switch (p.phase) {
+                        @case ('downloading') {
+                          <div class="update-progress" data-test="settings-update-progress">
+                            <span
+                              >Downloading{{
+                                p.percent === null ? '' : ' ' + p.percent + '%'
+                              }}</span
+                            >
+                            @if (p.percent !== null) {
+                              <progress max="100" [value]="p.percent"></progress>
+                            }
+                          </div>
+                        }
+                        @case ('failed') {
+                          <p class="error" role="alert" data-test="settings-update-failed">
+                            {{ p.message }}
+                          </p>
+                        }
+                        @case ('checking') {
+                          <p data-test="settings-update-progress">Checking the release</p>
+                        }
+                        @default {
+                          <p data-test="settings-update-progress">Restarting to install</p>
+                        }
+                      }
+                    }
+                    <div class="update-actions">
+                      @if (n.canInstall && !installing()) {
+                        <button
+                          type="button"
+                          class="btn btn--primary"
+                          data-test="settings-update-install"
+                          [disabled]="updateBusy()"
+                          (click)="installUpdate()"
+                        >
+                          Update and restart
+                        </button>
+                      }
+                      @if (!n.canInstall || updateProgress()?.phase === 'failed') {
+                        <button
+                          type="button"
+                          class="btn"
+                          [class.btn--primary]="!n.canInstall"
+                          data-test="settings-update-download"
+                          (click)="openUpdateLink(n.downloadUrl)"
+                        >
+                          Download
+                        </button>
+                      }
+                      <button
+                        type="button"
+                        class="link"
+                        data-test="settings-update-release-notes"
+                        (click)="openUpdateLink(n.releaseUrl)"
+                      >
+                        <sc-icon name="external" [size]="14" />
+                        Release notes
+                      </button>
+                    </div>
+                    <p class="hint">
+                      Later and Skip this version are on the bar at the top of the window.
+                    </p>
+                  </div>
+                } @else if (
+                  state.lastResult === 'up-to-date' &&
+                  !(state.channel === 'stable' && onPrerelease())
+                ) {
+                  <div class="update-ok" role="status" data-test="settings-update-up-to-date">
+                    <span class="ok-title">You are up to date</span>
+                    <span
+                      >Scout {{ version() ?? 'unknown' }} is the newest version on the
+                      {{ state.channel === 'beta' ? 'Beta' : 'Stable' }} channel.</span
+                    >
+                  </div>
+                }
               } @else {
                 <p class="hint" data-test="update-dev-build">
                   Update checks run only in the installed app.
                 </p>
               }
-            }
-            @if (desktopError(); as error) {
-              <p class="error" role="alert" data-test="desktop-error">{{ error }}</p>
             }
             @if (updateError(); as error) {
               <p class="error" role="alert" data-test="update-error">{{ error }}</p>
@@ -575,17 +764,151 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
         padding: 2px 6px;
         border-radius: 6px;
       }
-      .about-row {
+      .about-name {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .about-name .name {
+        font-weight: 600;
+      }
+      .about-name .description {
+        font-size: 13px;
+        color: var(--sc-fg-2);
+        line-height: 1.5;
+      }
+      .facts {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        gap: 6px 0;
+        font-size: 13px;
+      }
+      .facts dt {
+        color: var(--sc-muted);
+      }
+      .facts dd {
+        margin: 0;
+      }
+      .facts code,
+      .version-row code {
+        font-size: 13px;
+        padding: 2px 8px;
+      }
+      .about-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .about-label {
+        flex: 0 0 88px;
+        font-size: 13px;
+        color: var(--sc-muted);
+      }
+      .about-note {
+        flex-basis: 100%;
+        padding-left: 100px;
+        font-size: 12px;
+        color: var(--sc-muted);
+      }
+      .about-notices {
         display: flex;
         align-items: center;
         gap: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--sc-line);
       }
-      .about-row h2 {
+      .notices-label {
+        margin-right: auto;
+        font-size: 13px;
+        color: var(--sc-fg-2);
+      }
+      .version-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+      }
+      .version-row .muted {
         margin-right: auto;
       }
-      .about-row code {
+      .update-ok {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
         font-size: 13px;
-        padding: 2px 8px;
+        color: var(--sc-fg-2);
+      }
+      .update-ok .ok-title {
+        font-weight: 600;
+        color: var(--sc-ok);
+      }
+      .update-box {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 10px;
+        background: var(--sc-info-container);
+        font-size: 13px;
+        color: var(--sc-fg-2);
+      }
+      .update-box h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--sc-fg);
+      }
+      .update-box p {
+        margin: 0;
+        line-height: 1.5;
+      }
+      .update-progress {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .update-progress progress {
+        flex: 1;
+      }
+      .channel-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .channel-row .switch-label {
+        margin-right: auto;
+      }
+      .back-to-stable {
+        margin: 0;
+        font-size: 13px;
+        color: var(--sc-fg-2);
+        line-height: 1.5;
+      }
+      .chip-pre {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--sc-warn-container);
+        color: var(--sc-warn);
+      }
+      .update-headline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .update-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
       }
       .icon-btn {
         width: 32px;
@@ -601,17 +924,6 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
       }
       .icon-btn[aria-expanded='true'] sc-icon {
         transform: rotate(180deg);
-      }
-      .about-more {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .about-links {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin: 0;
       }
       .link {
         display: inline-flex;
@@ -854,6 +1166,18 @@ export class SettingsComponent implements OnInit {
   readonly aboutRegion = ABOUT_REGION;
   readonly repositoryUrl = REPOSITORY_URL;
   readonly licenceUrl = LICENCE_URL;
+  readonly changelogUrl = CHANGELOG_URL;
+  readonly securityUrl = SECURITY_URL;
+  readonly updateProgress = signal<UpdateProgress | null>(null);
+  readonly channelOptions = CHANNEL_OPTIONS;
+  readonly channelHints = CHANNEL_HINTS;
+  readonly onPrerelease = computed(() => (this.version() ?? '').includes('-'));
+  readonly installing = computed(() => {
+    const phase = this.updateProgress()?.phase;
+    return (
+      phase === 'checking' || phase === 'downloading' || phase === 'ready' || phase === 'installing'
+    );
+  });
   private pairingTimer: ReturnType<typeof setTimeout> | null = null;
   /** The shortcut main registered and saved. */
   readonly savedShortcut = signal('');
@@ -885,9 +1209,15 @@ export class SettingsComponent implements OnInit {
       }
     });
     const unsubscribeBubble = this.bridge.onLocalBubble((status) => this.bubble.set(status));
+    const unsubscribeNotice = this.bridge.onUpdateNotice((notice) => this.setNotice(notice));
+    const unsubscribeProgress = this.bridge.onUpdateProgress((next) =>
+      this.updateProgress.set(next),
+    );
     inject(DestroyRef).onDestroy(() => {
       unsubscribe();
       unsubscribeBubble();
+      unsubscribeNotice();
+      unsubscribeProgress();
       this.clearPairingTimer();
       this.endRecording();
     });
@@ -1075,6 +1405,22 @@ export class SettingsComponent implements OnInit {
     await this.saveUpdate(() => this.bridge.updateCheckNow());
   }
 
+  /** Moves the update check to Stable or Beta; main stores it and checks again on that channel. */
+  async setChannel(channel: UpdateChannel): Promise<void> {
+    await this.saveUpdate(() => this.bridge.updateSetChannel({ channel }));
+  }
+
+  /** Starts the same install as the bar's Update and restart; the progress arrives on `scout:update.progress`. */
+  async installUpdate(): Promise<void> {
+    this.updateProgress.set(null);
+    await this.saveUpdate(() => this.bridge.updateInstall());
+  }
+
+  private setNotice(notice: UpdateNotice | null): void {
+    const state = this.update();
+    if (state !== null) this.update.set({ ...state, notice });
+  }
+
   private async saveUpdate(call: () => Promise<UpdateState>): Promise<boolean> {
     this.updateBusy.set(true);
     this.updateError.set(null);
@@ -1122,6 +1468,17 @@ export class SettingsComponent implements OnInit {
     return result;
   }
 
+  /** Opens a link of the Updates card; a link main refuses says why in that card. */
+  async openUpdateLink(url: string): Promise<void> {
+    this.updateError.set(null);
+    try {
+      await this.bridge.appOpenExternal({ url });
+    } catch (err: unknown) {
+      this.updateError.set(readIpcError(err).message);
+    }
+  }
+
+  /** Opens a link of the About card; a link main refuses says why under the links. */
   async openAbout(url: string): Promise<void> {
     this.aboutError.set(null);
     try {

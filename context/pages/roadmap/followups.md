@@ -106,7 +106,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1635`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1636`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
@@ -371,7 +371,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1537`, `:1585`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1538`, `:1586`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)
@@ -572,11 +572,6 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 - **Gap:** the 0.55 threshold and the ignored English and Portuguese words of the pick by words are constants tuned on the bundled skills and a hand-written table, not on questions users asked (`src/Scout.Skills/LexicalSkillIndex.cs:18`, `:24`, the table `tests/Scout.Skills.Tests/LexicalSkillIndexTests.cs:39`); a custom skills directory or a new bundled skill changes every score, and "list open pull requests" scores 0.52 for `code-review`, just under it ([[pages/decisions/0054-functions-scoped-per-skill-and-job]]).
 - **Blocker:** no recorded set of real questions yet.
 - **Unblocks with:** real questions in English and Portuguese, each with the skill it should pick or none, collected without names or repository content, run as a table test against the bundled skills; tune the threshold and the word list from the misses, and move the threshold to `SkillsOptions` only if an operator needs it.
-### Betas offered only to users who opt in (2026-11-08)
-
-- **Gap:** the Release workflow can publish a prerelease (`vX.Y.Z-beta.N`, [[pages/decisions/0029-project-site-and-releases]], amendment of 2026-11-08), but no installed Scout Desktop is ever offered one: the update check reads `releases/latest` (`ui/packages/main/src/update/update-notice.ts:19`), drops a release marked prerelease (`ui/packages/main/src/update/update-notice.ts:248`) and sets electron-updater's `allowPrerelease` to false (`ui/packages/main/src/update/update-notice.ts:340`). The owner wants betas offered only to people who opt in.
-- **Blocker:** none.
-- **Unblocks with:** a desktop setting "Offer beta versions", off by default and stored like the update check toggle; with it on, the check reads the release list (`/releases`) instead of `releases/latest` and takes the highest version, prerelease included, and `allowPrerelease` follows the setting; with spec cases for both settings against a list holding a newer beta and an older release. The release side needs nothing: a beta carries `latest-linux.yml` and `latest.yml` like a release.
 
 ### The Ollama pull's ssh-keygen check proves nothing on Windows (2026-11-08)
 
@@ -794,7 +789,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### One-click update covers only the AppImage and Windows (2026-11-02)
 
-- **Blocker:** Update and restart ([[pages/decisions/0031-desktop-self-update]]) needs a package the updater can replace. On macOS, electron-updater applies an update only to a signed and notarized app and reads a `zip` target the build does not produce, and the builds are unsigned (see "Desktop builds are unsigned" below). A `.deb` has no in-place updater: electron-updater's `DebUpdater` installs through `pkexec` or `sudo` and `dpkg`, which is a system package change, not Scout's own file. Both keep the Download button (`canSelfUpdate`, `ui/packages/main/src/update/update-notice.ts:62`).
+- **Blocker:** Update and restart ([[pages/decisions/0031-desktop-self-update]]) needs a package the updater can replace. On macOS, electron-updater applies an update only to a signed and notarized app and reads a `zip` target the build does not produce, and the builds are unsigned (see "Desktop builds are unsigned" below). A `.deb` has no in-place updater: electron-updater's `DebUpdater` installs through `pkexec` or `sudo` and `dpkg`, which is a system package change, not Scout's own file. Both keep the Download button (`canSelfUpdate`, `ui/packages/main/src/update/update-notice.ts:66`).
 - **Unblocks with:** macOS: the signing and notarization in the unsigned-builds entry, plus a `zip` mac target and keeping `latest-mac.yml` and the mac blockmaps in `.github/workflows/release.yml:211`. `.deb`: an apt repository the package manager updates from, which is outside Scout's own installation and needs its own ADR.
 - **Also noted:** an AppImage whose file name carries a version is replaced under the new release's name, and the old file is deleted (electron-updater's `AppImageUpdater.doInstall`); `refreshLoginEntry` (`ui/packages/main/src/shell/login-item.ts:102`) rewrites the start-at-login entry on the next start.
 

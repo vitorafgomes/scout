@@ -316,6 +316,8 @@ export {
   type UpdateProgress,
   type UpdateState,
   type UpdateSkipVersionRequest,
+  type UpdateSetChannelRequest,
+  type UpdateChannel,
   type NotificationKind,
   type AppNotification,
   type NotificationAction,
