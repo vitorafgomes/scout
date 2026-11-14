@@ -85,7 +85,104 @@ describe('LlmConfigStore', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     window.localStorage.removeItem(LLM_CONFIG_STORAGE_KEY);
+    window.localStorage.removeItem('scout:ollama-disconnected');
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  describe('Disconnect Ollama', () => {
+    it('with Ollama the provider in use and no cloud provider connected, writes llm.provider=None, asks Ollama to free its memory and marks Ollama disconnected', async () => {
+      const unload = vi.fn(async () => ({ unloaded: ['llama3.2'], refused: [] }));
+      const { store, vaultStoreCalls } = setup({ vaultHasResult: false, unload });
+      await store.loadFromVault();
+
+      await store.disconnectOllama();
+      await Promise.resolve();
+
+      expect({
+        stored: vaultStoreCalls,
+        provider: store.provider(),
+        disconnected: store.ollamaDisconnected(),
+        kept: window.localStorage.getItem('scout:ollama-disconnected'),
+        freed: unload.mock.calls.length,
+      }).toEqual({
+        stored: [{ key: 'llm.provider', value: 'None' }],
+        provider: 'None',
+        disconnected: true,
+        kept: '1',
+        freed: 1,
+      });
+    });
+
+    it('with Ollama in use and a cloud provider connected, switches to that provider instead of None', async () => {
+      const { store, vaultStoreCalls } = setup();
+      await store.connect('OpenAI', 'sk-test-key');
+      await store.useOllama();
+      vaultStoreCalls.length = 0;
+
+      await store.disconnectOllama();
+
+      expect([store.activeCloudProvider(), vaultStoreCalls.at(-1)]).toEqual([
+        'OpenAI',
+        { key: 'llm.provider', value: 'OpenAI' },
+      ]);
+    });
+
+    it('with a cloud provider in use, keeps it and only marks Ollama disconnected', async () => {
+      const { store, vaultStoreCalls } = setup();
+      await store.connect('OpenAI', 'sk-test-key');
+      await store.use('OpenAI', 'gpt-4o');
+      vaultStoreCalls.length = 0;
+
+      await store.disconnectOllama();
+
+      expect([store.activeCloudProvider(), vaultStoreCalls, store.ollamaDisconnected()]).toEqual([
+        'OpenAI',
+        [],
+        true,
+      ]);
+    });
+
+    it('the choice is read again by a new store, and Connect clears it without making Ollama the provider in use', async () => {
+      const first = setup({ vaultHasResult: false });
+      await first.store.loadFromVault();
+      await first.store.disconnectOllama();
+      TestBed.resetTestingModule();
+
+      const { store } = setup({ vaultHasResult: false, publicValues: { 'llm.provider': 'None' } });
+      await store.loadFromVault();
+      const remembered = store.ollamaDisconnected();
+      store.connectOllama();
+
+      expect([
+        remembered,
+        store.ollamaDisconnected(),
+        window.localStorage.getItem('scout:ollama-disconnected'),
+        store.provider(),
+      ]).toEqual([true, false, null, 'None']);
+    });
+
+    it('when the vault could not say which provider is in use, Disconnect writes nothing and says why', async () => {
+      const { store, vaultStoreCalls } = setup({ vaultHasErrorKeys: ['llm.openai.api-key'] });
+      await store.loadFromVault();
+
+      await expect(store.disconnectOllama()).rejects.toThrow(
+        'Scout could not read which AI Source is in use, so Ollama was not disconnected. Try again.',
+      );
+      expect([vaultStoreCalls, store.ollamaDisconnected()]).toEqual([[], false]);
+    });
+
+    it('when the browser storage refuses the choice, it still holds for this session', async () => {
+      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+      const { store } = setup({ vaultHasResult: false });
+      await store.loadFromVault();
+
+      await store.disconnectOllama();
+      setItem.mockRestore();
+
+      expect(store.ollamaDisconnected()).toBe(true);
+    });
   });
 
   it('starts with default endpoint and no model', () => {

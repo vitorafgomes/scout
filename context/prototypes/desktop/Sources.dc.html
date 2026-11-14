@@ -192,7 +192,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <div style="display: flex; flex-wrap: wrap; gap: 8px">
 <button onClick="{{connectOllama}}" style="height: 40px; padding: 0 16px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; border: 0; background: {{t.primary}}; color: #ffffff"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"></path></svg>Connect</button>
 </div>
+<sc-if value="{{ollamaNotAnswering}}" hint-placeholder-val="{{true}}">
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Ollama is not answering. Open the Ollama app or run ollama serve, then scan again.</p>
+</sc-if>
+<sc-if value="{{ollamaDisconnected}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Scout does not use Ollama. Connect to use it again.</p>
+</sc-if>
 </sc-if>
 <sc-if value="{{checking}}" hint-placeholder-val="{{false}}">
 <div style="display: flex; flex-wrap: wrap; gap: 8px">
@@ -609,6 +614,7 @@ class Component extends DCLogic {
       orGone: false,
       snack: false,
       ollama: true,
+      ollamaGone: false,
       disc: 'openai',
       discInUse: false,
       modelsOpen: false,
@@ -791,7 +797,7 @@ class Component extends DCLogic {
         pv === 'orFailed' ? [note('Balance as of 14:02; the latest read failed.', t.warn)] : [], ''),
     };
     return Object.assign(this.shellVals(t, 'AI Sources', 'AI Sources'), {
-      preview: this.segVals(t, [['normal', 'Normal'], ['checking', 'Checking'], ['limit', 'Plan limit reached'], ['unreported', 'Usage not reported'], ['orFailed', 'OpenRouter read failed'], ['orNoLimit', 'OpenRouter no limit'], ['confirm', 'Disconnect confirm'], ['ollamaNotAnswering', 'Ollama not answering'], ['admin', 'Admin key added'], ['adminRejected', 'Admin key rejected'], ['adminForm', 'Admin key form'], ['signedOut', 'ChatGPT signed out'], ['signingIn', 'Waiting for the browser'], ['noPlan', 'No plan usage'], ['nobody', 'Nobody allowed'], ['openaiInUse', 'OpenAI API in use'], ['keyRejected', 'Key rejected'], ['readFailed', 'Keychain not read'], ['ollamaInUse', 'Ollama in use'], ['ollamaFreed', 'Ollama freed its memory'], ['ollamaNotFreed', 'Ollama not asked to free memory'], ['lmsDetected', 'LM Studio detected'], ['guardOn', 'Read-only guard on'], ['skillMissing', 'Skill model missing'], ['skillFailed', 'Skill model download failed'], ['outside', 'Installed outside Scout'], ['pullEmpty', 'Pull by name empty'], ['pullRefused', 'Pull by name refused'], ['pulling', 'Pulling by name'], ['pullNotFound', 'Pull by name not in the library'], ['pullFailed', 'Pull by name failed'], ['pullDone', 'Pulled by name'], ['noTools', 'No tools'], ['noToolsInUse', 'In use without tools']], s.preview, (id) => this.setState(Object.assign(this.pullPreview(id), { preview: id, disc: 'openai', snack: false, openaiGone: false, orGone: false, skillDl: false, skillPct: 0, skillAdded: false, ollama: ['ollamaInUse', 'ollamaNotAnswering', 'ollamaFreed', 'ollamaNotFreed', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.ollama, modelsOpen: ['ollamaNotAnswering', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.modelsOpen }))),
+      preview: this.segVals(t, [['normal', 'Normal'], ['checking', 'Checking'], ['limit', 'Plan limit reached'], ['unreported', 'Usage not reported'], ['orFailed', 'OpenRouter read failed'], ['orNoLimit', 'OpenRouter no limit'], ['confirm', 'Disconnect confirm'], ['ollamaNotAnswering', 'Ollama not answering'], ['admin', 'Admin key added'], ['adminRejected', 'Admin key rejected'], ['adminForm', 'Admin key form'], ['signedOut', 'ChatGPT signed out'], ['signingIn', 'Waiting for the browser'], ['noPlan', 'No plan usage'], ['nobody', 'Nobody allowed'], ['openaiInUse', 'OpenAI API in use'], ['keyRejected', 'Key rejected'], ['readFailed', 'Keychain not read'], ['ollamaInUse', 'Ollama in use'], ['ollamaDisconnected', 'Ollama disconnected'], ['ollamaFreed', 'Ollama freed its memory'], ['ollamaNotFreed', 'Ollama not asked to free memory'], ['lmsDetected', 'LM Studio detected'], ['guardOn', 'Read-only guard on'], ['skillMissing', 'Skill model missing'], ['skillFailed', 'Skill model download failed'], ['outside', 'Installed outside Scout'], ['pullEmpty', 'Pull by name empty'], ['pullRefused', 'Pull by name refused'], ['pulling', 'Pulling by name'], ['pullNotFound', 'Pull by name not in the library'], ['pullFailed', 'Pull by name failed'], ['pullDone', 'Pulled by name'], ['noTools', 'No tools'], ['noToolsInUse', 'In use without tools']], s.preview, (id) => this.setState(Object.assign(this.pullPreview(id), { preview: id, disc: 'openai', snack: false, openaiGone: false, orGone: false, skillDl: false, skillPct: 0, skillAdded: false, ollama: ['ollamaInUse', 'ollamaNotAnswering', 'ollamaFreed', 'ollamaNotFreed', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.ollama, modelsOpen: ['ollamaNotAnswering', 'outside', 'pullEmpty', 'pullRefused', 'pulling', 'pullNotFound', 'pullFailed', 'pullDone', 'noTools', 'noToolsInUse'].includes(id) ? true : this.state.modelsOpen }))),
       u,
       orOn: !checking && !s.orGone,
       orOff: !checking && s.orGone,
@@ -845,7 +851,7 @@ class Component extends DCLogic {
       checking,
       ready: !checking,
       chips: {
-        ollama: checking ? wait : pv === 'ollamaInUse' ? chip('ok', 'In use') : s.ollama ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
+        ollama: checking ? wait : pv === 'ollamaInUse' ? chip('ok', 'In use') : s.ollama && pv !== 'ollamaDisconnected' ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
         lms: checking ? wait : pv === 'lmsDetected' ? chip('ok', 'Detected') : chip('neutral', 'Not connected'),
         chatgpt: checking ? wait : ['signedOut', 'signingIn'].includes(pv) ? chip('neutral', 'Not connected') : ['openaiInUse', 'ollamaInUse', 'noPlan'].includes(pv) ? chip('ok', 'Connected') : chip('ok', 'In use'),
         openai: checking ? wait : pv === 'openaiInUse' ? chip('ok', 'In use') : openaiConnected ? chip('ok', 'Connected') : chip('neutral', 'Not connected'),
@@ -866,7 +872,7 @@ class Component extends DCLogic {
       confirmOpen: s.preview === 'confirm',
       askDisconnect: () => this.setState({ preview: 'confirm', disc: 'openai', discInUse: this.state.preview === 'openaiInUse', snack: false }),
       closeConfirm: () => this.setState({ preview: 'normal' }),
-      confirmDisconnect: () => this.setState(s.disc === 'ollama' ? { preview: 'normal', ollama: false, modelsOpen: false } : s.disc === 'openrouter' ? { preview: 'normal', orGone: true } : s.disc === 'openai' ? { preview: 'normal', openaiGone: true, snack: true } : { preview: 'normal' }),
+      confirmDisconnect: () => this.setState(s.disc === 'ollama' ? { preview: 'normal', ollama: false, ollamaGone: true, modelsOpen: false } : s.disc === 'openrouter' ? { preview: 'normal', orGone: true } : s.disc === 'openai' ? { preview: 'normal', openaiGone: true, snack: true } : { preview: 'normal' }),
       confirmKey: (e) => { if (e && e.key === 'Escape') this.setState({ preview: 'normal' }); },
       discTitle: { ollama: 'Disconnect Ollama?', openrouter: 'Disconnect OpenRouter?', guard: 'Disconnect TypeSafe (Jev)?', admin: 'Remove the Admin key?', claude: 'Disconnect Claude API?' }[s.disc] || 'Disconnect OpenAI API?',
       discBody: {
@@ -877,10 +883,12 @@ class Component extends DCLogic {
         claude: 'Scout deletes the stored API key from this computer.',
       }[s.disc] || (s.discInUse ? 'Scout deletes the stored API key from this computer. Answers stop using OpenAI until you connect it again with a key.' : 'Scout deletes the stored API key from this computer.'),
       discLabel: s.disc === 'admin' ? 'Remove' : 'Disconnect',
-      ollamaOn: !checking && s.ollama,
-      ollamaOff: !checking && !s.ollama,
+      ollamaOn: !checking && s.ollama && pv !== 'ollamaDisconnected',
+      ollamaOff: !checking && (!s.ollama || pv === 'ollamaDisconnected'),
       swOllama: { checked: s.ollama ? 'true' : 'false', justify: s.ollama ? 'flex-end' : 'flex-start', track: s.ollama ? t.primary : t.surface2, edge: s.ollama ? t.primary : t.line, thumb: s.ollama ? '#ffffff' : t.muted, toggle: () => this.setState({ ollama: !s.ollama, modelsOpen: false }) },
-      connectOllama: () => this.setState({ ollama: true }),
+      connectOllama: () => this.setState({ ollama: true, ollamaGone: false, preview: this.state.preview === 'ollamaDisconnected' ? 'normal' : this.state.preview }),
+      ollamaDisconnected: !checking && (s.ollamaGone || pv === 'ollamaDisconnected'),
+      ollamaNotAnswering: !checking && !s.ollamaGone && pv !== 'ollamaDisconnected',
       askDisconnectOllama: () => this.setState({ preview: 'confirm', disc: 'ollama', snack: false }),
       installedSummary: installed.length + ' · ' + installedGb.toFixed(1) + ' GB',
       installedCount: String(installed.length),
