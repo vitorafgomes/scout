@@ -183,6 +183,8 @@ export const CHANNEL = {
   updateSkipVersion: 'scout:update.skipVersion',
   updateRemindLater: 'scout:update.remindLater',
   updateSetChannel: 'scout:update.setChannel',
+  updateListVersions: 'scout:update.listVersions',
+  updateInstallVersion: 'scout:update.installVersion',
   updateNotice: 'scout:update.notice',
   updateInstall: 'scout:update.install',
   updateProgress: 'scout:update.progress',
@@ -1912,6 +1914,29 @@ export interface UpdateState {
   readonly packaged: boolean;
 }
 
+/** One published Scout Desktop the owner may install from Settings, Updates. */
+export interface UpdateVersion {
+  readonly version: string;
+  readonly publishedAt: string;
+  readonly prerelease: boolean;
+  readonly releaseUrl: string;
+  readonly downloadUrl: string;
+}
+
+/**
+ * The published versions on the owner's channel, newest first; `failure` is the kind of a list GitHub did not
+ * give (`network`, `timeout`, `parse`, `http <status>`), with `versions` empty.
+ */
+export interface UpdateVersionList {
+  readonly versions: readonly UpdateVersion[];
+  readonly canInstall: boolean;
+  readonly failure: string | null;
+}
+
+export interface UpdateInstallVersionRequest {
+  readonly version: string;
+}
+
 export interface UpdateSetChannelRequest {
   readonly channel: UpdateChannel;
 }
@@ -2307,6 +2332,8 @@ export interface ScoutBridge {
   updateSkipVersion(req: UpdateSkipVersionRequest): Promise<UpdateState>;
   updateRemindLater(): Promise<UpdateState>;
   updateSetChannel(req: UpdateSetChannelRequest): Promise<UpdateState>;
+  updateListVersions(): Promise<UpdateVersionList>;
+  updateInstallVersion(req: UpdateInstallVersionRequest): Promise<UpdateState>;
   onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void;
   updateInstall(): Promise<UpdateState>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;

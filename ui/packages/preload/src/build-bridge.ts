@@ -933,6 +933,18 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       return ipc.invoke(CHANNEL.updateRemindLater) as ReturnType<ScoutBridge['updateRemindLater']>;
     },
 
+    updateListVersions() {
+      return ipc.invoke(CHANNEL.updateListVersions) as ReturnType<
+        ScoutBridge['updateListVersions']
+      >;
+    },
+
+    updateInstallVersion(req) {
+      return ipc.invoke(CHANNEL.updateInstallVersion, req) as ReturnType<
+        ScoutBridge['updateInstallVersion']
+      >;
+    },
+
     updateSetChannel(req) {
       return ipc.invoke(CHANNEL.updateSetChannel, req) as ReturnType<
         ScoutBridge['updateSetChannel']

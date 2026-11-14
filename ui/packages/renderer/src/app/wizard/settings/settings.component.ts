@@ -10,6 +10,7 @@ import {
 import { MatDialog } from '@angular/material/dialog';
 import { MatSlideToggleModule, type MatSlideToggleChange } from '@angular/material/slide-toggle';
 import {
+  compareVersions,
   readIpcError,
   type DesktopSettings,
   type LocalBubbleSettings,
@@ -19,6 +20,8 @@ import {
   type UpdateNotice,
   type UpdateProgress,
   type UpdateState,
+  type UpdateVersion,
+  type UpdateVersionList,
 } from '@scout/shared';
 
 import { confirmAction } from '../../core/confirm-dialog.component';
@@ -45,6 +48,12 @@ const CHANNEL_HINTS: Readonly<Record<UpdateChannel, string>> = {
   stable: 'Stable gets released versions only.',
   beta: 'Beta also gets pre-releases, to try changes before they are released. A pre-release can have bugs; keep Stable for daily work.',
 };
+
+const PUBLISHED_DATE = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
 
 const CHECK_FAILURES: Readonly<Record<string, string>> = {
   network: 'no connection to GitHub',
@@ -583,7 +592,7 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                         copy; your settings stay on this computer.
                       </p>
                     }
-                    @if (updateProgress(); as p) {
+                    @if (installingVersion() === null ? updateProgress() : null; as p) {
                       @switch (p.phase) {
                         @case ('downloading') {
                           <div class="update-progress" data-test="settings-update-progress">
@@ -659,6 +668,142 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                     >
                   </div>
                 }
+                <div class="versions" data-test="versions-section">
+                  <div class="versions-head">
+                    <span class="notices-label">Install a specific version</span>
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      data-test="versions-toggle"
+                      [attr.aria-expanded]="versionsOpen()"
+                      [attr.aria-label]="versionsOpen() ? 'Hide the versions' : 'Show the versions'"
+                      [title]="versionsOpen() ? 'Hide the versions' : 'Show the versions'"
+                      (click)="toggleVersions()"
+                    >
+                      <sc-icon name="chevron-down" [size]="18" />
+                    </button>
+                  </div>
+                  @if (versionsOpen()) {
+                    <p class="hint" data-test="versions-lede">
+                      {{
+                        state.channel === 'beta'
+                          ? 'Every published version, newest first, pre-releases included on the Beta channel. A version older than the one you run asks first.'
+                          : 'Every released version, newest first. A version older than the one you run asks first.'
+                      }}
+                    </p>
+                    @if (versionsLoading()) {
+                      <p class="versions-status" role="status" data-test="versions-loading">
+                        Loading the versions...
+                      </p>
+                    } @else if (versionList(); as list) {
+                      @if (list.failure !== null) {
+                        <div class="versions-failed">
+                          <p class="error" role="alert" data-test="versions-failed">
+                            Could not list the versions: {{ failureText(list.failure) }}.
+                          </p>
+                          <button
+                            type="button"
+                            class="btn"
+                            data-test="versions-retry"
+                            (click)="loadVersions()"
+                          >
+                            Try again
+                          </button>
+                        </div>
+                      } @else {
+                        <ul
+                          class="versions-list"
+                          aria-label="Published versions"
+                          data-test="versions-list"
+                        >
+                          @for (item of list.versions; track item.version) {
+                            <li [attr.data-test]="'version-' + item.version">
+                              <code>{{ item.version }}</code>
+                              @if (item.prerelease) {
+                                <span class="chip-pre">Pre-release</span>
+                              }
+                              @if (item.version === version()) {
+                                <span class="chip-running">Running</span>
+                              } @else if (isOlder(item)) {
+                                <span class="chip-older">Older</span>
+                              }
+                              <span class="muted version-date">{{ publishedDate(item) }}</span>
+                              @if (
+                                item.version !== version() &&
+                                ((installingVersion() === null && !installing()) ||
+                                  updateProgress()?.phase === 'failed')
+                              ) {
+                                <button
+                                  type="button"
+                                  class="btn"
+                                  [attr.data-test]="'version-action-' + item.version"
+                                  [attr.aria-label]="
+                                    (list.canInstall ? 'Install' : 'Download') +
+                                    ' Scout ' +
+                                    item.version
+                                  "
+                                  (click)="pickVersion(item, list)"
+                                >
+                                  {{ list.canInstall ? 'Install' : 'Download' }}
+                                </button>
+                              }
+                            </li>
+                          }
+                        </ul>
+                        @if (!list.canInstall) {
+                          <p class="hint" data-test="versions-cannot">
+                            This package cannot replace itself: Download opens that version's page,
+                            and you install it by hand.
+                          </p>
+                        }
+                        @if (installingVersion(); as picked) {
+                          @if (updateProgress(); as p) {
+                            @switch (p.phase) {
+                              @case ('downloading') {
+                                <div
+                                  class="update-progress"
+                                  role="status"
+                                  data-test="versions-progress"
+                                >
+                                  <span
+                                    >Downloading Scout {{ picked
+                                    }}{{ p.percent === null ? '' : ' · ' + p.percent + '%' }}</span
+                                  >
+                                  @if (p.percent !== null) {
+                                    <progress max="100" [value]="p.percent"></progress>
+                                  }
+                                </div>
+                              }
+                              @case ('failed') {
+                                <p class="error" role="alert" data-test="versions-install-failed">
+                                  {{ p.message }}
+                                </p>
+                              }
+                              @case ('checking') {
+                                <p
+                                  class="versions-status"
+                                  role="status"
+                                  data-test="versions-progress"
+                                >
+                                  Checking the release of Scout {{ picked }}
+                                </p>
+                              }
+                              @default {
+                                <p
+                                  class="versions-status"
+                                  role="status"
+                                  data-test="versions-progress"
+                                >
+                                  Restarting to install
+                                </p>
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                </div>
               } @else {
                 <p class="hint" data-test="update-dev-build">
                   Update checks run only in the installed app.
@@ -903,6 +1048,71 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
         flex-wrap: wrap;
         align-items: center;
         gap: 8px;
+      }
+      .versions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--sc-line);
+      }
+      .versions-head,
+      .versions-failed {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .versions-failed .error {
+        margin-right: auto;
+      }
+      .versions-status {
+        margin: 0;
+        font-size: 13px;
+        color: var(--sc-fg-2);
+      }
+      .versions-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        border: 1px solid var(--sc-line);
+        border-radius: 10px;
+      }
+      .versions-list li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+      }
+      .versions-list li + li {
+        border-top: 1px solid var(--sc-line);
+      }
+      .versions-list code {
+        font-size: 13px;
+        padding: 2px 8px;
+      }
+      .version-date {
+        margin-right: auto;
+        font-size: 13px;
+      }
+      .chip-running,
+      .chip-older {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .chip-running {
+        background: var(--sc-ok-container);
+        color: var(--sc-ok);
+      }
+      .chip-older {
+        background: var(--sc-surface-2);
+        color: var(--sc-fg-2);
       }
       .update-actions {
         display: flex;
@@ -1172,6 +1382,11 @@ export class SettingsComponent implements OnInit {
   readonly channelOptions = CHANNEL_OPTIONS;
   readonly channelHints = CHANNEL_HINTS;
   readonly onPrerelease = computed(() => (this.version() ?? '').includes('-'));
+  readonly versionsOpen = signal(false);
+  readonly versionsLoading = signal(false);
+  readonly versionList = signal<UpdateVersionList | null>(null);
+  readonly installingVersion = signal<string | null>(null);
+  private versionReads = 0;
   readonly installing = computed(() => {
     const phase = this.updateProgress()?.phase;
     return (
@@ -1405,9 +1620,73 @@ export class SettingsComponent implements OnInit {
     await this.saveUpdate(() => this.bridge.updateCheckNow());
   }
 
+  /** Opens the list of published versions, reading it from main the first time. */
+  async toggleVersions(): Promise<void> {
+    const open = !this.versionsOpen();
+    this.versionsOpen.set(open);
+    if (open && this.versionList() === null) await this.loadVersions();
+  }
+
+  /** Asks main for the published versions on the owner's channel. */
+  async loadVersions(): Promise<void> {
+    const read = ++this.versionReads;
+    this.versionsLoading.set(true);
+    let list: UpdateVersionList;
+    try {
+      list = await this.bridge.updateListVersions();
+    } catch (err: unknown) {
+      list = { versions: [], canInstall: false, failure: readIpcError(err).message };
+    }
+    if (read !== this.versionReads) return;
+    this.versionList.set(list);
+    this.versionsLoading.set(false);
+  }
+
+  /** A failure kind of the list in words, as the last check says it. */
+  failureText(failure: string): string {
+    if (failure.startsWith('http ')) return `GitHub answered HTTP ${failure.slice(5)}`;
+    return CHECK_FAILURES[failure] ?? failure;
+  }
+
+  isOlder(item: UpdateVersion): boolean {
+    const running = this.version();
+    return running !== null && compareVersions(item.version, running) < 0;
+  }
+
+  publishedDate(item: UpdateVersion): string {
+    return item.publishedAt === '' ? '' : PUBLISHED_DATE.format(new Date(item.publishedAt));
+  }
+
+  /**
+   * Installs the picked version, or opens its page where the package cannot replace itself; an older version
+   * asks first, with Cancel focused.
+   */
+  async pickVersion(item: UpdateVersion, list: UpdateVersionList): Promise<void> {
+    if (!list.canInstall) {
+      await this.openUpdateLink(item.releaseUrl);
+      return;
+    }
+    if (this.version() === null || this.isOlder(item)) {
+      const confirmed = await confirmAction(this.dialog, {
+        title: `Install Scout ${item.version}, an older version?`,
+        body: `You are running ${this.version() ?? 'unknown'}. An older version may not read everything a newer one saved, such as a setting it does not know. Nothing is deleted, and you can update again from this card. Scout restarts once the download ends.`,
+        confirmLabel: `Install ${item.version}`,
+      });
+      if (!confirmed) return;
+    }
+    this.installingVersion.set(item.version);
+    this.updateProgress.set(null);
+    const asked = await this.saveUpdate(() =>
+      this.bridge.updateInstallVersion({ version: item.version }),
+    );
+    if (!asked) this.installingVersion.set(null);
+  }
+
   /** Moves the update check to Stable or Beta; main stores it and checks again on that channel. */
   async setChannel(channel: UpdateChannel): Promise<void> {
     await this.saveUpdate(() => this.bridge.updateSetChannel({ channel }));
+    this.versionList.set(null);
+    if (this.versionsOpen()) await this.loadVersions();
   }
 
   /** Starts the same install as the bar's Update and restart; the progress arrives on `scout:update.progress`. */

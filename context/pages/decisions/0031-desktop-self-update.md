@@ -1,9 +1,9 @@
 ---
 title: "ADR 0031 - Scout Desktop updates itself only on the user's click, and only its own installation"
-version: "1.1"
+version: "1.2"
 date: 2026-11-02
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): amendment, the owner may choose a Beta channel that offers pre-releases."
+changes: "v1.2 (2026-11-14): amended by ADR 0056, a version the owner picks. v1.1 (2026-11-14): amendment, the owner may choose a Beta channel that offers pre-releases."
 page_type: adr
 status: accepted
 description: "The desktop may replace its own executable with a GitHub Release the user chose by clicking Update and restart; the model and the worker never reach that path; macOS and .deb keep a download link until signing or a package repository exist."
@@ -73,12 +73,15 @@ The owner asked for a way to use beta versions for testing, and approved the Set
 
 What it means, and where it now holds:
 
-- **Two channels, Stable by default.** Settings, Updates offers Stable and Beta; the choice is Scout's own vault key `update.channel` (`ui/packages/main/src/update/update-notice.ts:26`, `:145`), and anything stored other than `beta` reads as Stable. `scout:update.setChannel` stores it and checks again on that channel (`ui/packages/main/src/update/update-notice.ts:476`); a value that is neither is refused with nothing stored or fetched. A check still running when the channel changes is dropped when it ends, so nothing of the old channel is shown.
-- **Stable is unchanged.** One GET of `releases/latest`, which GitHub never makes a pre-release, and a release marked prerelease, or whose tag carries a pre-release suffix such as a `-beta.N` tag pushed by hand, still dropped (`ui/packages/main/src/update/update-notice.ts:286`).
-- **Beta reads the list.** One unauthenticated GET of `releases?per_page=30` (`ui/packages/main/src/update/update-notice.ts:22`, `:250`), the highest version that is not a draft, a pre-release included, and electron-updater's `allowPrerelease` on for that install only (`ui/packages/main/src/update/update-notice.ts:379`).
+- **Two channels, Stable by default.** Settings, Updates offers Stable and Beta; the choice is Scout's own vault key `update.channel` (`ui/packages/main/src/update/update-notice.ts:31`, `:154`), and anything stored other than `beta` reads as Stable. `scout:update.setChannel` stores it and checks again on that channel (`ui/packages/main/src/update/update-notice.ts:555`); a value that is neither is refused with nothing stored or fetched. A check still running when the channel changes is dropped when it ends, so nothing of the old channel is shown.
+- **Stable is unchanged.** One GET of `releases/latest`, which GitHub never makes a pre-release, and a release marked prerelease, or whose tag carries a pre-release suffix such as a `-beta.N` tag pushed by hand, still dropped (`ui/packages/main/src/update/update-notice.ts:296`).
+- **Beta reads the list.** One unauthenticated GET of `releases?per_page=30` (`ui/packages/main/src/update/update-notice.ts:25`, `:260`), the highest version that is not a draft, a pre-release included, and electron-updater's `allowPrerelease` on for that install only (`ui/packages/main/src/update/update-notice.ts:458`).
 - **Never older.** Both channels offer only a version higher than the running one, and `allowDowngrade` is never set, so going back to Stable while on a pre-release keeps it until a newer stable version is out; Settings says so.
 - **The metadata a pre-release needs** is already there: with the GitHub provider electron-builder writes `latest*.yml` for a `-beta.N` version as for a release ([[pages/decisions/0029-project-site-and-releases]], checked on 2026-11-08), the release workflow keeps it, and electron-updater on Beta falls back to it when no `beta*.yml` exists.
 - **Tests:** the "the Beta channel" block of `ui/packages/main/test/update-notice.test.ts` (each failing call of the list included), and the Settings specs.
 
 It also narrows the Decision's "allowPrerelease off" and the Enforcement's "the updater options are asserted off": `allowPrerelease` is off on Stable and on for a Beta install; `autoDownload` and `autoInstallOnAppQuit` stay off on both. The rest of the Decision is unchanged: the download and the install still run only on the owner's click, and the model and the worker never reach this path.
 
+## Amended by ADR 0056 (2026-11-14)
+
+The owner may also install a version picked from the published ones, an older one only after confirming it: [[pages/decisions/0056-install-a-version-the-owner-picks]]. It narrows "`allowDowngrade` is never set" above: it is set for an older picked version, for that install only.

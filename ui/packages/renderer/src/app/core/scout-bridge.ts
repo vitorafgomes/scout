@@ -166,6 +166,8 @@ import {
   type UpdateNotice,
   type UpdateProgress,
   type UpdateSetChannelRequest,
+  type UpdateVersionList,
+  type UpdateInstallVersionRequest,
   type UpdateSkipVersionRequest,
   type UpdateState,
   type AppNotification,
@@ -490,6 +492,9 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     updateRemindLater: (): Promise<UpdateState> => rejectNotAvailable(),
     updateSetChannel: (_req: UpdateSetChannelRequest): Promise<UpdateState> => rejectNotAvailable(),
+    updateListVersions: (): Promise<UpdateVersionList> => rejectNotAvailable(),
+    updateInstallVersion: (_req: UpdateInstallVersionRequest): Promise<UpdateState> =>
+      rejectNotAvailable(),
     onUpdateNotice: (_listener: (notice: UpdateNotice | null) => void): (() => void) => {
       return (): void => {
         // no-op
@@ -1236,6 +1241,14 @@ export class ScoutBridgeService {
 
   async updateSetChannel(req: UpdateSetChannelRequest): Promise<UpdateState> {
     return this.bridge.updateSetChannel(req);
+  }
+
+  async updateListVersions(): Promise<UpdateVersionList> {
+    return this.bridge.updateListVersions();
+  }
+
+  async updateInstallVersion(req: UpdateInstallVersionRequest): Promise<UpdateState> {
+    return this.bridge.updateInstallVersion(req);
   }
 
   onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void {

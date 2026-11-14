@@ -503,6 +503,49 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <p style="margin: 0; font-size: 12px; color: {{t.muted}}">Later and Skip this version are on the bar at the top of the window.</p>
 </div>
 </sc-if>
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="font-size: 13px; color: {{t.fg2}}; margin-right: auto">Install a specific version</span>
+<button aria-expanded="{{ver.expanded}}" aria-label="{{ver.label}}" title="{{ver.label}}" onClick="{{ver.toggle}}" style="width: 32px; height: 32px; border-radius: 16px; border: 0; background: transparent; color: {{t.fg2}}; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: {{ver.turn}}"><path d="M6 9l6 6 6-6"></path></svg></button>
+</div>
+<sc-if value="{{ver.open}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{ver.lede}}</p>
+<sc-if value="{{ver.loading}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 13px; color: {{t.fg2}}">Loading the versions...</p>
+</sc-if>
+<sc-if value="{{ver.failed}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}; margin-right: auto">Could not list the versions: no connection to GitHub.</p>
+<button style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-weight: 500">Try again</button>
+</div>
+</sc-if>
+<sc-if value="{{ver.listed}}" hint-placeholder-val="{{true}}">
+<ul aria-label="Published versions" style="list-style: none; margin: 0; padding: 0; border: 1px solid {{t.line}}; border-radius: 10px">
+<sc-for list="{{ver.rows}}" as="r" hint-placeholder-count="4">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-top: {{r.edge}}">
+<code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">{{r.version}}</code>
+<sc-if value="{{r.pre}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}">Pre-release</span></sc-if>
+<sc-if value="{{r.current}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{t.okBg}}; color: {{t.ok}}">Running</span></sc-if>
+<sc-if value="{{r.older}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{t.neutralBg}}; color: {{t.neutral}}">Older</span></sc-if>
+<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">{{r.date}}</span>
+<sc-if value="{{r.canAct}}" hint-placeholder-val="{{true}}">
+<button aria-label="{{r.aria}}" onClick="{{r.pick}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 6px; font-weight: 500">{{r.action}}</button>
+</sc-if>
+</li>
+</sc-for>
+</ul>
+<sc-if value="{{ver.cannot}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">This package cannot replace itself: Download opens that version's page, and you install it by hand.</p>
+</sc-if>
+<sc-if value="{{ver.installing}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: {{t.fg2}}">
+<span>Downloading Scout 0.8.0 · 42%</span>
+<div aria-hidden="true" style="flex: 1; height: 6px; border-radius: 3px; background: {{t.surface2}}"><div style="width: 42%; height: 6px; border-radius: 3px; background: {{t.primary}}"></div></div>
+</div>
+</sc-if>
+</sc-if>
+</sc-if>
+</div>
 </sc-if>
 </section>
 
@@ -572,6 +615,19 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 </sc-if>
 
+<sc-if value="{{ver.confirm}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
+<div role="dialog" aria-modal="true" aria-labelledby="ver-title" aria-describedby="ver-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<h2 id="ver-title" style="margin: 0; font-size: 17px; font-weight: 600">Install Scout 0.8.0, an older version?</h2>
+<p id="ver-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">You are running 0.9.0. An older version may not read everything a newer one saved, such as a setting it does not know. Nothing is deleted, and you can update again from this card. Scout restarts once the download ends.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
+<button autofocus="autofocus" onClick="{{ver.cancel}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{ver.confirmInstall}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500">Install 0.8.0</button>
+</div>
+</div>
+</div>
+</sc-if>
+
 <sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
 <div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
@@ -605,6 +661,7 @@ class Component extends DCLogic {
       startAtLogin: false,
       checkUpdates: true,
       channel: 'stable',
+      verOpen: false,
       aboutOpen: false,
       youtubeConnected: true,
       chats: { discord: true, slack: false, teams: false },
@@ -832,7 +889,7 @@ class Component extends DCLogic {
     }) : [];
     const dlgMissing = dlgDef ? dlgDef.fields.some(([key, , , prefix]) => badField(key, prefix)) : false;
     return Object.assign(this.shellVals(t, 'Settings', 'Settings'), {
-      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['betaUpToDate', 'Beta: up to date'], ['betaAvailable', 'Beta: pre-release available'], ['betaBackToStable', 'Beta: back to Stable on a pre-release'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
+      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['betaUpToDate', 'Beta: up to date'], ['betaAvailable', 'Beta: pre-release available'], ['betaBackToStable', 'Beta: back to Stable on a pre-release'], ['verOpen', 'Versions: list open'], ['verOpenBeta', 'Versions: list on Beta'], ['verLoading', 'Versions: loading'], ['verFailed', 'Versions: could not list'], ['verConfirm', 'Versions: older version asks first'], ['verInstalling', 'Versions: installing an older version'], ['verCannot', 'Versions: package cannot update itself'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
       themeChoices: this.segVals(t, [['light', 'Light', sun], ['dark', 'Dark', moon], ['system', 'System', monitor]], s.theme, (id) => this.setState({ theme: id })),
       worker: {
         chip: wkChip[0],
@@ -901,6 +958,51 @@ class Component extends DCLogic {
         { id: 'U04QF7K2L9P', platform: 'Slack', removeLabel: 'Remove U04QF7K2L9P' },
       ],
       desktopSwitches: desk,
+      ver: (() => {
+        const p = s.preview;
+        const open = s.verOpen || p.startsWith('ver');
+        const beta = p === 'verOpenBeta';
+        const cannot = p === 'verCannot';
+        const listed = open && p !== 'verLoading' && p !== 'verFailed';
+        const data = (beta ? [['0.10.0-beta.3', '13 Nov 2026', true]] : []).concat([
+          ['0.9.0', '7 Nov 2026', false],
+          ['0.8.1', '28 Oct 2026', false],
+          ['0.8.0', '20 Oct 2026', false],
+          ['0.7.0', '9 Oct 2026', false],
+        ]);
+        const rows = data.map(([version, date, pre], i) => {
+          const current = version === '0.9.0';
+          const older = ['0.8.1', '0.8.0', '0.7.0'].includes(version);
+          const action = cannot ? 'Download' : 'Install';
+          return {
+            version, date, pre, current, older,
+            canAct: !current && p !== 'verInstalling',
+            action,
+            aria: action + ' Scout ' + version,
+            edge: i === 0 ? '0' : '1px solid ' + t.line,
+            pick: () => this.setState({ preview: older && !cannot ? 'verConfirm' : s.preview }),
+          };
+        });
+        return {
+          open,
+          expanded: open ? 'true' : 'false',
+          label: open ? 'Hide the versions' : 'Show the versions',
+          turn: open ? 'rotate(180deg)' : 'none',
+          toggle: () => this.setState({ verOpen: !open, preview: p.startsWith('ver') ? 'normal' : p }),
+          lede: beta
+            ? 'Every published version, newest first, pre-releases included on the Beta channel. A version older than the one you run asks first.'
+            : 'Every released version, newest first. A version older than the one you run asks first.',
+          loading: p === 'verLoading',
+          failed: p === 'verFailed',
+          listed,
+          rows,
+          cannot,
+          installing: p === 'verInstalling',
+          confirm: p === 'verConfirm',
+          cancel: () => this.setState({ preview: 'verOpen' }),
+          confirmInstall: () => this.setState({ preview: 'verInstalling' }),
+        };
+      })(),
       updateSwitches: [Object.assign(this.switchVals(t, s.checkUpdates, flip('checkUpdates')), { id: 'u-check', label: 'Check for new versions', free: true, isLocked: false, hasNote: false, note: '' })],
       upd: (() => {
         const p = s.preview;

@@ -10,7 +10,10 @@ import {
   type UpdateNotice,
   type UpdateChannel,
   type UpdateProgress,
+  type UpdateInstallVersionRequest,
   type UpdateSetChannelRequest,
+  type UpdateVersion,
+  type UpdateVersionList,
   type UpdateSkipVersionRequest,
   type UpdateState,
 } from '@scout/shared';
@@ -21,6 +24,8 @@ import type { Logger } from '../util/logger.js';
 const LATEST_RELEASE_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases/latest';
 const RELEASES_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases?per_page=30';
 const RELEASES_PAGE_URL = 'https://github.com/vitorafgomes/scout/releases';
+const RELEASE_DOWNLOAD_URL = 'https://github.com/vitorafgomes/scout/releases/download';
+const GITHUB_FEED = { provider: 'github', owner: 'vitorafgomes', repo: 'scout' } as const;
 const CHECK_ENABLED_KEY = 'update.check-enabled';
 const SKIPPED_VERSION_KEY = 'update.skipped-version';
 const CHANNEL_KEY = 'update.channel';
@@ -48,6 +53,10 @@ export interface Updater {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
   allowPrerelease: boolean;
+  allowDowngrade: boolean;
+  setFeedURL(
+    options: { readonly provider: 'generic'; readonly url: string } | typeof GITHUB_FEED,
+  ): void;
   checkForUpdates(): Promise<{ readonly updateInfo: { readonly version: string } } | null>;
   downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
@@ -158,6 +167,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     lastCheck = null;
   }
   let notice: UpdateNotice | null = null;
+  let listed = new Map<string, { tag: string; entry: UpdateVersion }>();
   let inFlight: Promise<void> | null = null;
   let cancelTimer: (() => void) | null = null;
   let disposed = false;
@@ -293,25 +303,13 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
         setNotice(null);
       } else {
         const releaseUrl = text('html_url') || RELEASES_PAGE_URL;
-        const assets = (Array.isArray(release['assets']) ? release['assets'] : []).filter(
-          (asset): asset is ReleaseAsset =>
-            typeof asset?.name === 'string' && typeof asset?.browser_download_url === 'string',
-        );
         result = `available ${latest}`;
         setNotice({
           currentVersion,
           latestVersion: latest,
           notes: text('body').replace(/\r\n/g, '\n'),
           releaseUrl,
-          downloadUrl: pickDownload(
-            {
-              assets,
-              platform: deps.platform,
-              arch: deps.arch,
-              appImage: (deps.env['APPIMAGE'] ?? '') !== '',
-            },
-            releaseUrl,
-          ),
+          downloadUrl: downloadFor(release, releaseUrl),
           publishedAt: text('published_at'),
           canInstall,
         });
@@ -323,6 +321,89 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       logger.info('update: check failed', { result });
     }
     await record(result);
+  }
+
+  function downloadFor(release: Record<string, unknown>, releaseUrl: string): string {
+    const assets = (Array.isArray(release['assets']) ? release['assets'] : []).filter(
+      (asset): asset is ReleaseAsset =>
+        typeof asset?.name === 'string' && typeof asset?.browser_download_url === 'string',
+    );
+    return pickDownload(
+      {
+        assets,
+        platform: deps.platform,
+        arch: deps.arch,
+        appImage: (deps.env['APPIMAGE'] ?? '') !== '',
+      },
+      releaseUrl,
+    );
+  }
+
+  /** The published versions on the owner's channel, newest first; Stable leaves out every pre-release. */
+  async function listVersions(): Promise<UpdateVersionList> {
+    const on = channel;
+    listed = new Map();
+    let body: unknown;
+    try {
+      body = await fetchJson(RELEASES_URL);
+      if (!Array.isArray(body)) throw new CheckFailed('parse');
+    } catch (err: unknown) {
+      const failure = err instanceof CheckFailed ? err.kind : 'parse';
+      logger.info('update: versions not listed', { failure });
+      return { versions: [], canInstall, failure };
+    }
+    const next = new Map<string, { tag: string; entry: UpdateVersion }>();
+    for (const release of body) {
+      if (!isRelease(release) || release['draft'] === true) continue;
+      const tag = release['tag_name'] as string;
+      const version = normalise(tag);
+      const prerelease = release['prerelease'] === true || version.includes('-');
+      if (on === 'stable' && prerelease) continue;
+      const releaseUrl =
+        typeof release['html_url'] === 'string' ? release['html_url'] : RELEASES_PAGE_URL;
+      next.set(version, {
+        tag,
+        entry: {
+          version,
+          publishedAt: typeof release['published_at'] === 'string' ? release['published_at'] : '',
+          prerelease,
+          releaseUrl,
+          downloadUrl: downloadFor(release, releaseUrl),
+        },
+      });
+    }
+    if (on !== channel) return { versions: [], canInstall, failure: null };
+    listed = next;
+    const versions = [...next.values()]
+      .map((item) => item.entry)
+      .sort((a, b) => compareVersions(b.version, a.version));
+    return { versions, canInstall, failure: null };
+  }
+
+  /**
+   * Installs a version the last list offered, an older one included: the updater reads that release's own
+   * metadata, may go down only for this install, and is pointed back at the GitHub feed whatever happens.
+   */
+  async function installVersion(version: string, updater: Updater): Promise<void> {
+    const chosen = listed.get(version);
+    if (chosen === undefined) return;
+    const target: UpdateNotice = {
+      currentVersion,
+      latestVersion: version,
+      notes: '',
+      releaseUrl: chosen.entry.releaseUrl,
+      downloadUrl: chosen.entry.downloadUrl,
+      publishedAt: chosen.entry.publishedAt,
+      canInstall,
+    };
+    updater.setFeedURL({ provider: 'generic', url: `${RELEASE_DOWNLOAD_URL}/${chosen.tag}` });
+    updater.allowDowngrade = compareVersions(version, currentVersion) < 0;
+    try {
+      await install(target, updater);
+    } finally {
+      updater.allowDowngrade = false;
+      updater.setFeedURL(GITHUB_FEED);
+    }
   }
 
   async function prepareForRestart(): Promise<void> {
@@ -432,7 +513,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
     cancelTimer = null;
   }
 
-  async function relay(name: string, call: () => Promise<UpdateState>): Promise<UpdateState> {
+  async function relay<T>(name: string, call: () => Promise<T>): Promise<T> {
     try {
       return await call();
     } catch (err: unknown) {
@@ -479,6 +560,7 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       if (next !== 'stable' && next !== 'beta') return state();
       if (next === channel) return state();
       channel = next;
+      listed = new Map();
       setNotice(null);
       await vault.store(CHANNEL_KEY, next).catch((err: unknown) => {
         logger.warn('update: channel not stored', { code: serializeError(err).code });
@@ -489,6 +571,35 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       }
       return state();
     }),
+  );
+  ipcMain.handle(CHANNEL.updateListVersions, () =>
+    relay('listVersions', async () => {
+      if (!packaged) return { versions: [], canInstall, failure: null };
+      return listVersions();
+    }),
+  );
+  ipcMain.handle(
+    CHANNEL.updateInstallVersion,
+    (_event, req: UpdateInstallVersionRequest | undefined) =>
+      relay('installVersion', async () => {
+        if (installing) return state();
+        const version = normalise(typeof req?.version === 'string' ? req.version : '');
+        if (!listed.has(version) || compareVersions(version, currentVersion) === 0) {
+          progress('failed', { message: 'Scout did not list that version; nothing was installed' });
+          return state();
+        }
+        if (!canInstall || deps.updater === null) {
+          progress('failed', { message: 'This copy of Scout cannot update itself; use Download' });
+          return state();
+        }
+        installing = true;
+        try {
+          await installVersion(version, deps.updater);
+        } finally {
+          installing = false;
+        }
+        return state();
+      }),
   );
   ipcMain.handle(CHANNEL.updateRemindLater, () =>
     relay('remindLater', async () => {
@@ -530,6 +641,8 @@ export async function registerUpdateNotice(deps: UpdateNoticeDeps): Promise<Upda
       ipcMain.removeHandler(CHANNEL.updateInstall);
       ipcMain.removeHandler(CHANNEL.updateRemindLater);
       ipcMain.removeHandler(CHANNEL.updateSetChannel);
+      ipcMain.removeHandler(CHANNEL.updateListVersions);
+      ipcMain.removeHandler(CHANNEL.updateInstallVersion);
       ipcMain.removeHandler(CHANNEL.updateSkipVersion);
       ipcMain.removeHandler(CHANNEL.updateCheckNow);
       ipcMain.removeHandler(CHANNEL.updateSetCheckEnabled);

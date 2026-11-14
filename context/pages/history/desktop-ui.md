@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.39"
+version: "1.40"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - Updates: install a version the owner picks
+
+The owner asked to choose which version to install, an older one included, to test it. Before, Scout installed only the release the notice offered and never went down. Now Settings, Updates has "Install a specific version": the published versions on the owner's channel, Install on each (Download where the package cannot replace itself), a confirmation before an older one, and the install's progress in the list. Main installs only a version it listed, through that release's own metadata, lets the updater go down only for that install, and points it back at the GitHub feed after. Governed by [[pages/decisions/0056-install-a-version-the-owner-picks]]. Tests changed on purpose: the updater fake gains `allowDowngrade` and `setFeedURL`, and the flags asserted at a normal install now include `allowDowngrade: false`; the IPC contract and preload tests list the two new channels.
 
 ## 2026-11-14 - Updates: a Beta channel
 
