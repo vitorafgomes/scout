@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.43"
+version: "1.44"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - The bell's audit entry: findings so far, every area, running on Continue
+
+The bell's running audit entry reads "Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends" and the owner's pause "Paused by you · area 3 of 8 done · 4 findings so far", as `Main.dc.html` draws them; before, no findings count reached the entry, an area with no findings left the entry and its bar still, and after Continue the entry stayed paused until the next area's notice. Main reads the count from the worker's batch heading, reads the line of an area with no new findings and the resume line as running (`ui/packages/main/src/notifications/sources.ts:118`), and keeps the count when the owner's pause arrives (`ui/packages/main/src/notifications/job-controls.ts:271`); the worker side is in [[pages/history/audit]]. The area's name leaves the entry, as the artboard's running detail has none, and stays in the chat's batch heading. Tests: `ui/packages/main/test/notifications-sources.test.ts:37`, `:41`, `:57`; `ui/packages/main/test/notifications-job-controls.test.ts:320`, `:352`.
 
 ## 2026-11-14 - Disconnect on the Ollama card
 

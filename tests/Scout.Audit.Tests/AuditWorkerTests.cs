@@ -68,15 +68,39 @@ public sealed class AuditWorkerTests : IDisposable
         ]);
         (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
         var posts = notifier.Posts.ToList();
-        posts.Count.ShouldBe(2);
+        posts.Count.ShouldBe(4, "a local audit posts one line for every area, the areas with no new findings included, then its last post");
         posts.ShouldAllBe(p => p.Origin == "local:session");
-        posts[0].Text.ShouldStartWith("Audit of acme/shop, src/Orders (1 of 3):\n\n```scout-findings\n");
+        posts[0].Text.ShouldStartWith("Audit of acme/shop, src/Orders (1 of 3, 1 finding so far):\n\n```scout-findings\n", customMessage: "every batch heading carries the findings so far");
         posts[0].Text.ShouldContain("\"id\":\"swallow\"");
         posts[0].Text.ShouldContain("\"read\":\"src/Orders: 1 of 1 files read\"");
-        posts[1].Text.ShouldBe(
+        posts[1].Text.ShouldBe("Audit of acme/shop, src/Billing (2 of 3, 1 finding so far): no new findings.", "an area with no new findings reports its progress to the local chat");
+        posts[2].Text.ShouldBe("Audit of acme/shop, tests (3 of 3, 1 finding so far): no new findings.", "an area with no new findings reports its progress to the local chat");
+        posts[3].Text.ShouldBe(
             "Audit of acme/shop at abc1234 is done. Verdict: sound after the High findings (1 High, 0 Medium, 0 Low).\n"
             + "Scope: 3 of 3 areas covered; 3 of 3 files read.\n"
             + "Every area was covered.");
+    }
+
+    [Fact]
+    public async Task An_audit_started_from_Discord_posts_only_the_areas_with_findings_each_heading_with_the_findings_so_far_and_no_line_for_an_area_with_none()
+    {
+        var store = Store();
+        var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "discord:1:2", ThreeAreas, null, CancellationToken.None);
+        var chat = new ScriptedChat(ReadingEveryFile(request => request.Contains("area tests", StringComparison.Ordinal)
+            ? Kernels.Block("needs rework", ("flaky", "The checkout test waits on the clock", "tests/CheckoutTests.cs"), ("order", "The tests share one database", "tests/CheckoutTests.cs"))
+            : null));
+        var notifier = new RecordingNotifier();
+
+        await Worker(store, chat, notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
+
+        var posts = notifier.Posts.ToList();
+        posts.ShouldAllBe(p => p.Origin == "discord:1:2");
+        posts.Select(p => FirstLine(p.Text)).ShouldBe(
+            [
+                "Audit of acme/shop, tests (3 of 3, 2 findings so far):",
+                "Audit of acme/shop at abc1234 is done. Verdict: sound after the High findings (2 High, 0 Medium, 0 Low).",
+            ],
+            "a job outside the local chat posts no line for an area with no new findings, and its heading carries the findings so far");
     }
 
     [Fact]
@@ -100,7 +124,7 @@ public sealed class AuditWorkerTests : IDisposable
         var parsed = posts.Select(p => FindingsBlock.Read([p[p.IndexOf(FindingsBlock.Fence, StringComparison.Ordinal)..]], "acme", "shop", "abc1234def")).ToList();
         parsed.ShouldAllBe(p => p.Verdict == "needs rework" && p.Findings.Count > 0);
         parsed.SelectMany(p => p.Findings).Select(f => f.Id).ShouldBe(findings.Select(f => f.id));
-        posts[0].ShouldStartWith($"Audit of acme/shop, src/Orders (1 of 1), part 1 of {posts.Count}:\n\n");
+        posts[0].ShouldStartWith($"Audit of acme/shop, src/Orders (1 of 1, 50 findings so far), part 1 of {posts.Count}:\n\n");
     }
 
     [Fact]
@@ -236,11 +260,14 @@ public sealed class AuditWorkerTests : IDisposable
 
         await Worker(store, new ScriptedChat(ReadingEveryFile()), notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
-        notifier.Posts.ShouldHaveSingleItem().Text.ShouldBe(
+        notifier.Posts.Select(p => p.Text).ShouldBe(
+        [
+            "Audit of acme/shop, src/Orders (1 of 1, 0 findings so far): no new findings.",
             "Audit of acme/shop at abc1234 is done. Verdict: sound (0 High, 0 Medium, 0 Low).\n"
             + "Scope: 1 of 1 areas covered; 1 of 2 files read.\n"
             + "Partly read (first 20,000 characters): src/Orders/Big.cs.\n"
-            + "Every area was covered.");
+            + "Every area was covered.",
+        ]);
     }
 
     [Fact]
@@ -289,6 +316,8 @@ public sealed class AuditWorkerTests : IDisposable
 
         notifier.Posts.Select(p => p.Text).ShouldBe(
         [
+            "Audit of acme/shop, src/Orders (1 of 2, 0 findings so far): no new findings.",
+            "Audit of acme/shop, src/Billing (2 of 2, 0 findings so far): no new findings.",
             "Audit of acme/shop at abc1234 is done. Verdict: incomplete (0 High, 0 Medium, 0 Low).\n"
             + "Scope: 1 of 2 areas covered; 1 of 3 files read.\n"
             + "Not fully read: src/Orders (not read: src/Orders/Checkout.cs, src/Orders/Refund.cs).",
@@ -313,6 +342,7 @@ public sealed class AuditWorkerTests : IDisposable
 
         notifier.Posts.Select(p => p.Text).ShouldBe(
         [
+            "Audit of acme/shop, src/Orders (1 of 1, 0 findings so far): no new findings.",
             "Audit of acme/shop at abc1234 is done. Verdict: incomplete (0 High, 0 Medium, 0 Low).\n"
             + "Scope: 0 of 1 areas covered; 2 of 3 files read.\n"
             + "Not fully read: src/Orders (not read: src/Orders/Refund.cs).",
@@ -408,7 +438,8 @@ public sealed class AuditWorkerTests : IDisposable
         await Worker(store, chat, notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         var posts = notifier.Posts.Select(p => p.Text).ToList();
-        posts.Count.ShouldBe(highFinding ? 2 : 1);
+        posts.Count.ShouldBe(billingFails ? 2 : 3);
+        posts[0].ShouldStartWith(highFinding ? "Audit of acme/shop, src/Orders (1 of 2, 1 finding so far):\n\n```scout-findings" : "Audit of acme/shop, src/Orders (1 of 2, 0 findings so far): no new findings.");
         posts[^1].ShouldBe(finalPost);
         chat.Turns.Count.ShouldBe(billingFails ? 3 : 2);
     }
@@ -440,7 +471,7 @@ public sealed class AuditWorkerTests : IDisposable
         await Worker(store, chat, notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         notifier.Posts.First().Text.ShouldBe(
-            "Audit of acme/shop, src/Orders (1 of 1):\n\n```scout-findings\n"
+            "Audit of acme/shop, src/Orders (1 of 1, 1 finding so far):\n\n```scout-findings\n"
             + "{\"kind\":\"audit\",\"repository\":\"acme/shop\",\"commit\":\"abc1234def\","
             + string.Create(CultureInfo.InvariantCulture, $"\"verdict\":\"{posted}\",\"read\":\"src/Orders: {filesRead} of 2 files read\",")
             + "\"findings\":[{\"id\":\"swallow\",\"severity\":\"block\",\"title\":\"Gateway errors read as no orders\","
@@ -466,10 +497,14 @@ public sealed class AuditWorkerTests : IDisposable
         await Worker(store, chat, notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         chat.Turns.Count.ShouldBe(4);
-        notifier.Posts.ShouldHaveSingleItem().Text.ShouldBe(
+        notifier.Posts.Select(p => p.Text).ShouldBe(
+        [
+            "Audit of acme/shop, src/Orders (1 of 3, 0 findings so far): no new findings.",
+            "Audit of acme/shop, tests (3 of 3, 0 findings so far): no new findings.",
             "Audit of acme/shop at abc1234 is done. Verdict: incomplete (0 High, 0 Medium, 0 Low).\n"
             + "Scope: 2 of 3 areas covered; 2 of 3 files read.\n"
-            + "Not covered: src/Billing (the AI model did not answer (HttpRequestException)).");
+            + "Not covered: src/Billing (the AI model did not answer (HttpRequestException)).",
+        ]);
     }
 
     [Fact]
@@ -495,8 +530,11 @@ public sealed class AuditWorkerTests : IDisposable
         var paused = (await store.JobAsync(job, CancellationToken.None))!;
         (paused.Status, paused.PausedReason).ShouldBe((AuditStatus.Paused, "the AI provider's usage limit was reached"));
         (await store.BatchesAsync(job, CancellationToken.None)).Select(b => b.Status).ShouldBe([AuditStatus.Done, AuditStatus.Pending, AuditStatus.Pending]);
-        notifier.Posts.ShouldHaveSingleItem().Text.ShouldBe(
-            "The audit of acme/shop paused: the AI provider's usage limit was reached. Ask Scout to continue the audit of acme/shop when the AI Source has capacity again.");
+        notifier.Posts.Select(p => p.Text).ShouldBe(
+        [
+            "Audit of acme/shop, src/Orders (1 of 3, 0 findings so far): no new findings.",
+            "The audit of acme/shop paused: the AI provider's usage limit was reached. Ask Scout to continue the audit of acme/shop when the AI Source has capacity again.",
+        ]);
         chat.Turns.Count.ShouldBe(2);
 
         limited = false;
@@ -569,7 +607,14 @@ public sealed class AuditWorkerTests : IDisposable
 
     private const string OwnerPaused = "The audit of acme/shop paused: you paused it. Ask Scout to continue the audit of acme/shop to resume it from the first area not done.";
 
-    private const string OrdersCard = "Audit of acme/shop, src/Orders (1 of 3):";
+    private const string OrdersCard = "Audit of acme/shop, src/Orders (1 of 3, 1 finding so far):";
+
+    private static readonly string[] ThreeAreasWithNone =
+    [
+        "Audit of acme/shop, src/Orders (1 of 3, 0 findings so far): no new findings.",
+        "Audit of acme/shop, src/Billing (2 of 3, 0 findings so far): no new findings.",
+        "Audit of acme/shop, tests (3 of 3, 0 findings so far): no new findings.",
+    ];
 
     private static Func<Microsoft.SemanticKernel.ChatCompletion.ChatHistory, Kernel, int, Task> ReadingWithOneFindingInOrders() =>
         ReadingEveryFile(request => request.Contains("area src/Orders", StringComparison.Ordinal)
@@ -589,13 +634,64 @@ public sealed class AuditWorkerTests : IDisposable
         await Worker(store, chat, notifier).RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         chat.Turns.Count.ShouldBe(1);
-        notifier.Posts.ShouldHaveSingleItem().ShouldBe(("local:session", "The audit of acme/shop ended at your request: 1 of 3 areas done, 0 findings kept on the cards."));
+        notifier.Posts.ToList().ShouldBe([("local:session", ThreeAreasWithNone[0]), ("local:session", "The audit of acme/shop ended at your request: 1 of 3 areas done, 0 findings kept on the cards.")]);
         (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Stopped);
         (await store.BatchesAsync(job, CancellationToken.None)).Select(b => b.Status).ShouldBe([AuditStatus.Done, AuditStatus.Pending, AuditStatus.Pending]);
     }
 
-    private static RepositoryAudits Owner(SqliteAuditStore store, string? origin = "local:session") =>
-        new(store, new AuditSignal(), new AuditOptions(), new FakeSnapshots(), new FakeEnvironment(), () => Kernels.Audit(), () => origin, NullLogger<RepositoryAudits>.Instance);
+    private static RepositoryAudits Owner(SqliteAuditStore store, string? origin = "local:session", RecordingNotifier? notifier = null) =>
+        new(store, new AuditSignal(), new AuditOptions(), new FakeSnapshots(), new FakeEnvironment(), () => Kernels.Audit(), () => origin, NullLogger<RepositoryAudits>.Instance, notifier);
+
+    private static async Task<string> PausedAfterOneAreaAsync(SqliteAuditStore store, string origin)
+    {
+        var job = await store.CreateJobAsync("acme", "shop", null, "abc1234def", origin, ThreeAreas, null, CancellationToken.None);
+        await store.CompleteBatchAsync(job, 1, ["src/Orders/Checkout.cs"], [new("swallow", "block", "Gateway errors read as no orders", "src/Orders/Checkout.cs", 12, null, "Why.", "Fix.", null)], CancellationToken.None);
+        await store.NotCoveredAsync(job, 2, [], "the AI model did not answer", CancellationToken.None);
+        await store.PauseAsync(job, RepositoryAudits.PausedByOwner, CancellationToken.None);
+        return job;
+    }
+
+    [Fact]
+    public async Task Continuing_a_local_audit_from_the_desktop_posts_at_once_one_line_with_the_areas_ended_and_the_findings_so_far()
+    {
+        var store = Store();
+        var job = await PausedAfterOneAreaAsync(store, "local:session");
+        var notifier = new RecordingNotifier();
+
+        var answer = await Owner(store, origin: null, notifier).ContinueAsync("acme", "shop", CancellationToken.None);
+
+        answer.ShouldStartWith("Resuming the audit of acme/shop from the first area not done.");
+        (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running);
+        notifier.Posts.ToList().ShouldBe(
+            [("local:session", "Audit of acme/shop resumed: area 2 of 3 done, 1 finding so far.")],
+            "continuing a local audit posts one line to the local chat as soon as the continue is applied, before any area runs");
+    }
+
+    [Fact]
+    public async Task Continuing_an_audit_started_from_Discord_posts_no_line()
+    {
+        var store = Store();
+        var job = await PausedAfterOneAreaAsync(store, "discord:1:2");
+        var notifier = new RecordingNotifier();
+
+        await Owner(store, origin: null, notifier).ContinueAsync("acme", "shop", CancellationToken.None);
+
+        (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running);
+        notifier.Posts.ShouldBeEmpty("a job outside the local chat posts no resume line");
+    }
+
+    [Fact]
+    public async Task A_resume_line_that_fails_to_post_leaves_the_audit_resumed_and_the_answer_unchanged()
+    {
+        var store = Store();
+        var job = await PausedAfterOneAreaAsync(store, "local:session");
+
+        var answer = await Owner(store, origin: null, new RecordingNotifier(throws: true)).ControlAsync("acme", "shop", RepositoryAudits.Continue, CancellationToken.None);
+
+        answer.Applied.ShouldBeTrue("a resume line that fails to post does not undo the continue");
+        answer.Sentence.ShouldStartWith("Resuming the audit of acme/shop from the first area not done.");
+        (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Running);
+    }
 
     /// <summary>
     /// What the owner does while the audit runs, and every post that follows, in order, as the conversation it went to and
@@ -665,7 +761,12 @@ public sealed class AuditWorkerTests : IDisposable
         { "stop during an area", 1, [("local:session", OrdersCard), ("local:session", "The audit of acme/shop ended at your request: 1 of 3 areas done, 1 findings kept on the cards.")] },
         {
             "pause, then continue before the area ends", 3,
-            [("local:session", OrdersCard), ("local:session", "Audit of acme/shop at abc1234 is done. Verdict: sound after the High findings (1 High, 0 Medium, 0 Low).")]
+            [
+                ("local:session", OrdersCard),
+                ("local:session", "Audit of acme/shop, src/Billing (2 of 3, 1 finding so far): no new findings."),
+                ("local:session", "Audit of acme/shop, tests (3 of 3, 1 finding so far): no new findings."),
+                ("local:session", "Audit of acme/shop at abc1234 is done. Verdict: sound after the High findings (1 High, 0 Medium, 0 Low)."),
+            ]
         },
     };
 
@@ -773,7 +874,7 @@ public sealed class AuditWorkerTests : IDisposable
 
         (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Paused);
         (await store.BatchesAsync(job, CancellationToken.None)).ShouldAllBe(b => b.Status == AuditStatus.Done);
-        notifier.Posts.Select(p => p.Text).ShouldBe([OwnerPaused]);
+        notifier.Posts.Select(p => p.Text).ShouldBe([.. ThreeAreasWithNone, OwnerPaused]);
 
         await Owner(store).StartAsync("acme", "shop", CancellationToken.None);
         await worker.RunAsync((await store.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
@@ -782,6 +883,7 @@ public sealed class AuditWorkerTests : IDisposable
         (await store.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
         notifier.Posts.Select(p => p.Text).ShouldBe(
         [
+            .. ThreeAreasWithNone,
             OwnerPaused,
             "Audit of acme/shop at abc1234 is done. Verdict: sound (0 High, 0 Medium, 0 Low).\n"
             + "Scope: 3 of 3 areas covered; 3 of 3 files read.\n"
@@ -833,13 +935,13 @@ public sealed class AuditWorkerTests : IDisposable
         await worker.RunAsync((await sqlite.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         (await sqlite.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Paused);
-        notifier.Posts.Select(p => p.Text).ShouldBe([OwnerPaused]);
+        notifier.Posts.Select(p => p.Text).ShouldBe([.. ThreeAreasWithNone, OwnerPaused]);
 
         await Owner(sqlite).StartAsync("acme", "shop", CancellationToken.None);
         await worker.RunAsync((await sqlite.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         (await sqlite.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Done);
-        notifier.Posts.Select(p => FirstLine(p.Text)).ShouldBe([OwnerPaused, "Audit of acme/shop at abc1234 is done. Verdict: sound (0 High, 0 Medium, 0 Low)."]);
+        notifier.Posts.Select(p => FirstLine(p.Text)).ShouldBe([.. ThreeAreasWithNone, OwnerPaused, "Audit of acme/shop at abc1234 is done. Verdict: sound (0 High, 0 Medium, 0 Low)."]);
     }
 
     [Fact]
@@ -853,7 +955,7 @@ public sealed class AuditWorkerTests : IDisposable
         await Worker(store, new ScriptedChat(ReadingEveryFile()), notifier).RunAsync((await sqlite.JobAsync(job, CancellationToken.None))!, CancellationToken.None);
 
         (await sqlite.JobAsync(job, CancellationToken.None))!.Status.ShouldBe(AuditStatus.Stopped);
-        notifier.Posts.Select(p => p.Text).ShouldBe(["The audit of acme/shop ended at your request: 3 of 3 areas done, 0 findings kept on the cards."]);
+        notifier.Posts.Select(p => p.Text).ShouldBe([.. ThreeAreasWithNone, "The audit of acme/shop ended at your request: 3 of 3 areas done, 0 findings kept on the cards."]);
     }
 
     [Theory]

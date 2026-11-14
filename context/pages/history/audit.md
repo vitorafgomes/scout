@@ -1,8 +1,9 @@
 ---
 title: "Audit - history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-08
-changes: "Initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
 page_type: reference
 status: artefact
 description: "What changed in the audit job's project and when."
@@ -19,6 +20,12 @@ reliability: high
 # Audit - history
 
 > Dated changes to [[pages/services/audit]]; the service page states how it works now.
+
+## 2026-11-14 - Every local area reports, a resume reports, every heading counts the findings
+
+- **Asked for:** the bell's audit entry as `Main.dc.html` draws it ([[pages/roadmap/prototype-migration]]), with the owner's decisions of 2026-11-14: the extra lines only for a job held by the desktop's local chat, Discord, Slack and Teams unchanged apart from the count in the heading.
+- **What changed:** every batch heading reads `Audit of owner/repo, area (i of n, f findings so far)`, counted in the 30,000-character budget (`src/Scout.Audit/AuditWorker.cs:217`); a local job's area with no new findings posts `...: no new findings.` (`:142`, `:221`); a resume, from the desktop or a chat, posts `Audit of owner/repo resumed: area k of n done, f findings so far.` to a local job before the worker is woken (`src/Scout.Audit/RepositoryAudits.cs:291`), a failed post logged and the resume kept. The local test is one place, the `local:` origin prefix (`src/Scout.Audit/AuditWorker.cs:53`). `RepositoryAudits` takes the origin notifier.
+- **Tests:** `Scout.Audit.Tests` 235 to 239: a Discord-origin audit posts no line for an area with none, three resume tests (local posts, Discord does not, a failing post keeps the resume); the worker tests that list posts now include the local lines.
 
 ## 2026-11-13 - The checks before a review starts, first part
 

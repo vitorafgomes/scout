@@ -1,9 +1,9 @@
 ---
 title: "Prototype migration: the desktop screens brought to the approved artboards"
-version: "1.2"
+version: "1.3"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the four owed Assembly items, the assembly, save and confirmation times and the thumbnail's alt text, are done. v1.1 (2026-11-14): the two owed Docker items, the logs of the runs in the work folder line and the command on the Stack tile, are done. v1.0: initial initiative page: the visual audit of the built desktop against the 17 artboards, and the migration plan, one version per screen"
+changes: "v1.3 (2026-11-14): the four owed items of the bell's audit entry, the findings so far, the progress of an area with no findings, the entry running on Continue and the cards line, are done. v1.2 (2026-11-14): the four owed Assembly items, the assembly, save and confirmation times and the thumbnail's alt text, are done. v1.1 (2026-11-14): the two owed Docker items, the logs of the runs in the work folder line and the command on the Stack tile, are done. v1.0: initial initiative page: the visual audit of the built desktop against the 17 artboards, and the migration plan, one version per screen"
 page_type: roadmap
 status: active
 description: "A screen-by-screen audit of the built Scout Desktop against the approved prototype artboards, with each difference's severity and component, and the order in which the screens migrate to the artboards and to Angular Material, one version per screen."
@@ -89,11 +89,14 @@ S1 and S8 are bug fixes that go before version 1; S3 to S7 are fixed once, in th
   - Each control named for its job as its title writes it ("Stop the tests for Acme/API#41").
   - A verdict entry reads "Verdict given: Approved acme/web#17" (or "Changes requested", "Commented") with "See the review".
   - The four rules the owner settled, and the bell panel of Main in Review, Features, Sources, Models, Logs, Settings, Meetings, Assembly, Production, Reports, Comments and Experiments.
+- **The bell's audit entry, done 2026-11-14** ([[pages/history/audit]], [[pages/history/desktop-ui]]). The owner's decisions of 2026-11-14: the extra lines go only to a job held by the desktop's local chat, and Discord, Slack and Teams keep posting only the areas with findings; every batch heading carries the findings so far.
+  - "4 findings so far" in the running and paused-by-you detail: every batch heading reads "Audit of acme/shop, src/orders (3 of 8, 4 findings so far)" (`src/Scout.Audit/AuditWorker.cs:217`), main reads the count (`ui/packages/main/src/notifications/sources.ts:8`) and keeps it when the owner's pause arrives (`ui/packages/main/src/notifications/job-controls.ts:271`).
+  - An area with no findings reports its progress: a local job posts "Audit of acme/shop, src/orders (3 of 8, 4 findings so far): no new findings." (`src/Scout.Audit/AuditWorker.cs:221`, `:142`), which moves the entry and its bar like a batch with findings.
+  - The entry turns running as soon as Continue is applied: the resume posts "Audit of acme/shop resumed: area 3 of 8 done, 4 findings so far." to a local job (`src/Scout.Audit/RepositoryAudits.cs:291`), and main reads it as running (`ui/packages/main/src/notifications/sources.ts:118`). The area count is the areas that ended, not covered ones included, as the batch heading counts them.
+  - "cards arrive in the chat as each area ends" closes the running detail, true now that every local area reports (`ui/packages/main/src/notifications/sources.ts:12`).
+  - The area's name leaves the entry: the artboard's running and paused-by-you details do not carry it, and its preview state "The area named" drew what the app showed before. The name stays in each batch heading in the chat.
+  - Tests: `tests/Scout.Audit.Tests/AuditWorkerTests.cs:52`, `:85`, `:655`, `:671`, `:684`; `ui/packages/main/test/notifications-sources.test.ts:37`, `:41`, `:57`; `ui/packages/main/test/notifications-job-controls.test.ts:320`, `:352`.
 - **Owed by the bell's job entry, for a second change** (each needs the worker or the contract):
-  - "4 findings so far" in the running and paused-by-you detail: no field of the entry and no part of the batch notice carries the job's findings count; the worker's batch heading or a field of the entry has to bring it.
-  - "cards arrive in the chat as each area ends": not added, because it is not true today: an area with no new findings posts nothing, so no card arrives as it ends ([[pages/services/audit]], Open items). It can be added once every area reports.
-  - An area with no findings reporting its progress: today the entry appears only when an area with findings ends, and its bar and count stay still until the next one; the worker has to notice every area.
-  - The entry turning running as soon as Continue is applied: today it stays paused until the next area's notice, which after 11 minutes without findings gets the note that the job did not report it; the worker has to notice the resume.
   - The test run's command and elapsed time ("npm test in a container · running for 2 min 14 s") and its bar at 60: the entry knows neither the command nor the start of the container run; the bar needs a progress or the owner's choice of an indeterminate bar or none.
   - "See the issues" on an entry for issues opened from the findings, and the verdict's detail "Signed as the Scout bot · the tests line was posted as a comment": the app has no issues-opened entry, and the verdict status carries neither the account it was signed as nor where the tests line went.
 - **Recorded as untrue in the artboard, for the owner:** a stopped test run's "The container was removed; the tests gave no result." The stop cancels the run's token, and the sandbox kills the container (`src/Scout.Sandbox/DockerSandboxRunner.cs:142`) started with `--rm` (`:178`), but the kill ignores its exit code and swallows a failure or a 30-second timeout (`:237`), and a stop that comes before the container exists, while the pull request's head or snapshot is read (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.Tests.cs:101`), has no container to remove. The app keeps "The tests gave no result."

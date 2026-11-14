@@ -22,7 +22,9 @@ internal sealed class AuditSignal
 /// pending batch is always the next one, so a job Scout closed in the middle resumes there on the next start. A batch with
 /// findings new to the job posts their block into the conversation the job was started from, split into several complete
 /// blocks when one would pass <see cref="MaxPostLength"/> characters; the last post, split the same way, carries the
-/// verdict and the scope: the areas covered, the files read, and the areas not covered with why. A post that fails is
+/// verdict and the scope: the areas covered, the files read, and the areas not covered with why. Every batch heading
+/// carries the job's findings so far, and a job held by the desktop's local chat also gets one line for an area that ends
+/// with no new findings, so the desktop's entry moves with every area; no other conversation gets that line. A post that fails is
 /// logged and the job goes on; a batch the provider refused for its usage or rate limit pauses the job, its batch still
 /// pending, and posts one sentence saying so, unless the owner paused or stopped it first, whose row it keeps; the owner's
 /// own pause or stop posts its one notice when the worker leaves the job for it. Every post goes to the conversation the
@@ -43,6 +45,16 @@ internal sealed class AuditWorker(
     internal const string Incomplete = "incomplete";
 
     private const int PartLabelRoom = 40;
+
+    /// <summary>The origin prefix of the desktop's local chat, the one conversation told of every area and of a resume.</summary>
+    private const string LocalOrigin = "local:";
+
+    /// <summary>Whether the job's posts go to the desktop's local chat.</summary>
+    internal static bool IsLocal(AuditJob job) => job.Origin?.StartsWith(LocalOrigin, StringComparison.Ordinal) == true;
+
+    /// <summary>The job's findings so far, as every batch heading and the resume line say them.</summary>
+    internal static string SoFar(int findings) =>
+        string.Create(CultureInfo.InvariantCulture, $"{findings} {(findings == 1 ? "finding" : "findings")} so far");
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -120,7 +132,15 @@ internal sealed class AuditWorker(
             }
 
             var added = await store.CompleteBatchAsync(job.Id, next.Order, outcome.FilesRead, outcome.Findings, ct).ConfigureAwait(false);
-            await PostAllAsync(job.Id, FindingsPosts(job, next, count, outcome, added), ct).ConfigureAwait(false);
+            var total = (await store.FindingsAsync(job.Id, ct).ConfigureAwait(false)).Count;
+            if (added.Count > 0)
+            {
+                await PostAllAsync(job.Id, FindingsPosts(job, next, count, outcome, added, total), ct).ConfigureAwait(false);
+            }
+            else
+            {
+                await PostAllAsync(job.Id, [NoNewFindings(job, next, count, total)], ct, localOnly: true).ConfigureAwait(false);
+            }
         }
 
         await EndedAsync(current, ct).ConfigureAwait(false);
@@ -145,10 +165,13 @@ internal sealed class AuditWorker(
         }
     }
 
-    /// <summary>Post <paramref name="posts"/> in order to the conversation the job holds now, read once before them.</summary>
-    private async Task PostAllAsync(string jobId, IEnumerable<string> posts, CancellationToken ct)
+    /// <summary>
+    /// Post <paramref name="posts"/> in order to the conversation the job holds now, read once before them; with
+    /// <paramref name="localOnly"/>, only when that conversation is the desktop's local chat.
+    /// </summary>
+    private async Task PostAllAsync(string jobId, IEnumerable<string> posts, CancellationToken ct, bool localOnly = false)
     {
-        if (await store.JobAsync(jobId, ct).ConfigureAwait(false) is not { } job)
+        if (await store.JobAsync(jobId, ct).ConfigureAwait(false) is not { } job || (localOnly && !IsLocal(job)))
         {
             return;
         }
@@ -163,13 +186,14 @@ internal sealed class AuditWorker(
     /// The posts of a batch's new findings: one complete <c>scout-findings</c> block per post, each with the same repository,
     /// commit, verdict and read line and its share of the findings, the verdict <see cref="Incomplete"/> whatever the model
     /// said when the batch's outcome names a file it did not read, every post under <see cref="MaxPostLength"/> characters
-    /// heading included, because the chat cuts a longer message and an unclosed fence shows as raw text.
+    /// heading included, because the chat cuts a longer message and an unclosed fence shows as raw text; the heading names
+    /// the job's <paramref name="findings"/> so far.
     /// </summary>
-    internal static IReadOnlyList<string> FindingsPosts(AuditJob job, AuditBatch batch, int batchCount, BatchOutcome outcome, IReadOnlyList<AuditFinding> added)
+    internal static IReadOnlyList<string> FindingsPosts(AuditJob job, AuditBatch batch, int batchCount, BatchOutcome outcome, IReadOnlyList<AuditFinding> added, int findings)
     {
         var read = string.Create(CultureInfo.InvariantCulture, $"{batch.Area}: {outcome.FilesRead.Count} of {batch.Files.Count} files read");
         var verdict = outcome.Unread.Count > 0 ? Incomplete : outcome.Verdict ?? Verdict(added);
-        var heading = string.Create(CultureInfo.InvariantCulture, $"Audit of {job.Owner}/{job.Repo}, {batch.Area} ({batch.Order} of {batchCount})");
+        var heading = Heading(job, batch, batchCount, findings);
         var budget = MaxPostLength - heading.Length - PartLabelRoom;
         var shares = new List<List<AuditFinding>>();
         foreach (var finding in added)
@@ -189,6 +213,17 @@ internal sealed class AuditWorker(
             + (shares.Count == 1 ? ":" : string.Create(CultureInfo.InvariantCulture, $", part {i + 1} of {shares.Count}:"))
             + "\n\n" + FindingsBlock.Write(job.Owner, job.Repo, job.Commit, verdict, read, share))];
     }
+
+    private static string Heading(AuditJob job, AuditBatch batch, int batchCount, int findings) =>
+        string.Create(CultureInfo.InvariantCulture, $"Audit of {job.Owner}/{job.Repo}, {batch.Area} ({batch.Order} of {batchCount}, {SoFar(findings)})");
+
+    /// <summary>The one line of an area that ended with no new findings, in the batch heading's form.</summary>
+    internal static string NoNewFindings(AuditJob job, AuditBatch batch, int batchCount, int findings) =>
+        Heading(job, batch, batchCount, findings) + ": no new findings.";
+
+    /// <summary>The one line of a resumed job: the areas that ended and its findings so far.</summary>
+    internal static string ResumedNotice(AuditJob job, int ended, int areas, int findings) =>
+        string.Create(CultureInfo.InvariantCulture, $"Audit of {job.Owner}/{job.Repo} resumed: area {ended} of {areas} done, {SoFar(findings)}.");
 
     /// <summary>
     /// <paramref name="text"/> as posts under <see cref="MaxPostLength"/> characters, cut between lines and, inside a line

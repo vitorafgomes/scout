@@ -1,8 +1,9 @@
 ---
 title: "Audit: Open items"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Audit service page."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): an area with no new findings posts a line to the local chat; an area not covered still posts nothing. v1.0: split out of the Audit service page."
 page_type: service
 status: active
 description: "Read when a change touches: Open items."
@@ -13,7 +14,7 @@ reliability: high
 ## Open items
 
 - The pause notice ends "when the AI Source has capacity again" for every reason; for a rejected key the owner has to fix the key in Scout Desktop first, and for a missing model install it or wait for its download, which the sentence does not say. The desktop's bell shows its own sentence per reason since 2026-11-12, read from the reason's text ([[pages/services/desktop-ui]], Notification center); the chat still gets the worker's sentence.
-- An area with no new findings posts nothing, so the desktop's bell learns of the audit only when an area with findings ends, and its progress stays where it was until then; the bell's running entry has no findings count to show either. Both are owed to the bell ([[pages/roadmap/prototype-migration]]).
+- An area with no new findings posts one line only to a job the desktop's local chat holds, since 2026-11-14 (the owner's decision); in Discord, Slack and Teams it still posts nothing, so the progress there shows only when an area with findings ends. An area not covered posts nothing anywhere, so the desktop's bar stands still on it until the next area ends.
 - Discord and Slack cut a message well under 30,000 characters; the notifier does not expose the origin's limit, so a block posted there can still arrive cut.
 - The final verdict is computed from the severities and the coverage; the model's per-batch verdicts ride only on the batch posts.
 - A file longer than a read returns, read in its first 20,000 characters, is named as partly read but does not make the verdict `incomplete`; only an area with a file never read, or one not covered, does.
