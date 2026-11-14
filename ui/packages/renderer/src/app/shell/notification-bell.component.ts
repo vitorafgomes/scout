@@ -291,6 +291,15 @@ export function timeAgo(at: number, now: number): string {
                   >
                     <div class="fill" [style.width.%]="n.progress"></div>
                   </div>
+                } @else if (n.indeterminate === true && n.kind === 'running') {
+                  <div
+                    class="progress"
+                    role="progressbar"
+                    data-test="entry-progress"
+                    [attr.aria-label]="n.title"
+                  >
+                    <div class="sweep" data-test="entry-sweep"></div>
+                  </div>
                 }
                 @if (n.url !== undefined) {
                   <button
@@ -576,6 +585,27 @@ export function timeAgo(at: number, now: number): string {
       .fill {
         height: 6px;
         background: var(--sc-accent, #7aa2f7);
+      }
+      .sweep {
+        height: 6px;
+        width: 40%;
+        border-radius: 3px;
+        background: var(--sc-accent, #7aa2f7);
+        animation: sc-sweep 1.4s ease-in-out infinite;
+      }
+      @keyframes sc-sweep {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(250%);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sweep {
+          animation: none;
+          transform: none;
+        }
       }
       .link {
         border: 0;

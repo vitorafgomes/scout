@@ -575,6 +575,7 @@ describe('Docker card', () => {
           reason: null,
           exitCode: 0,
           durationSeconds: 12.5,
+          startedAt: null,
           finishedAt: '2026-11-07T10:05:00+00:00',
         },
       });
@@ -991,6 +992,7 @@ describe('Docker card', () => {
       reason: null,
       exitCode: 0,
       durationSeconds: 12.5,
+      startedAt: null,
       finishedAt: '2026-11-07T10:05:00+00:00',
     };
     const runs: readonly {

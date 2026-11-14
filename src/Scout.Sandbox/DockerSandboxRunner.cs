@@ -13,7 +13,8 @@ namespace Scout.Sandbox;
 /// filesystem with every capability dropped, no new privileges, pids, memory and CPU caps, and only the stack's own
 /// variables; the whole run stops at 20 minutes; the output is cut to its last 200,000 characters and kept in a log
 /// beside the work folder, which is deleted after the run whatever happened; beside the log, a small record of the run
-/// (<c>&lt;id&gt;.run.json</c>) says which repository and pull request it was, the stack, the image and how it ended.
+/// (<c>&lt;id&gt;.run.json</c>) says which repository and pull request it was, the stack, the image and how it ended; it is
+/// first written as <c>running</c> when the test command starts, and a run that ends without a result leaves none.
 /// </summary>
 public sealed partial class DockerSandboxRunner
 {
@@ -101,6 +102,9 @@ public sealed partial class DockerSandboxRunner
         var command = stack.RestoreCommand;
         var note = stack.Note;
         SandboxResult? result = null;
+        DateTimeOffset? testStarted = null;
+        var recordPath = Path.Combine(root, $"{id}.run.json");
+        var running = false;
 
         using var deadline = new CancellationTokenSource(TimeLimit, _time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
@@ -130,6 +134,9 @@ public sealed partial class DockerSandboxRunner
             command = testCommand;
             note = stack.LeftOut is not null && testCommand == stack.TestCommand ? $"{stack.Note} {stack.LeftOut}".TrimStart() : stack.Note;
             container = $"scout-sandbox-{id}-test";
+            testStarted = _time.GetUtcNow();
+            running = await WriteRunRecordAsync(recordPath, new RunRecord(
+                request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, command, "running", null, null, 0, testStarted, null)).ConfigureAwait(false);
             var exit = await RunAsync(container, runFolder, stack, command, network: false, offline: true, output, linked.Token).ConfigureAwait(false);
             container = null;
             return result = new SandboxResult(true, exit is 126 or 127 ? $"The test command could not be started (exit {exit}: a command it names was not found or is not executable)." : null, stack.Image, command, exit, Seconds(started), Last(output, failed: exit != 0), note);
@@ -153,7 +160,13 @@ public sealed partial class DockerSandboxRunner
                     await File.WriteAllTextAsync(Path.Combine(root, $"{id}.log"), output.ToString(), CancellationToken.None).ConfigureAwait(false);
                     if (result is not null)
                     {
-                        await WriteRunRecordAsync(Path.Combine(root, $"{id}.run.json"), request, stack, result).ConfigureAwait(false);
+                        var outcome = !result.Ran ? "notRun" : result.ExitCode == 0 && result.Reason is null ? "passed" : "failed";
+                        await WriteRunRecordAsync(recordPath, new RunRecord(
+                            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, result.Command, outcome, result.Reason, result.ExitCode, result.DurationSeconds, testStarted, _time.GetUtcNow())).ConfigureAwait(false);
+                    }
+                    else if (running)
+                    {
+                        DeleteRunRecord(recordPath);
                     }
                 }
                 finally
@@ -251,18 +264,29 @@ public sealed partial class DockerSandboxRunner
         }
     }
 
-    private async Task WriteRunRecordAsync(string path, SandboxRequest request, SandboxStack stack, SandboxResult result)
+    private async Task<bool> WriteRunRecordAsync(string path, RunRecord record)
     {
-        var outcome = !result.Ran ? "notRun" : result.ExitCode == 0 && result.Reason is null ? "passed" : "failed";
-        var record = new RunRecord(
-            request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, result.Command, outcome, result.Reason, result.ExitCode, result.DurationSeconds, _time.GetUtcNow());
         try
         {
             await File.WriteAllTextAsync(path, JsonSerializer.Serialize(record, RecordJson), CancellationToken.None).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning("The run's record could not be written to {Path}; the run's result is unchanged: {Reason}", path, ex.Message);
+            return false;
+        }
+    }
+
+    private void DeleteRunRecord(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("The record of a run that ended without a result could not be deleted from {Path}: {Reason}", path, ex.Message);
         }
     }
 
@@ -323,7 +347,11 @@ public sealed partial class DockerSandboxRunner
 
     private static readonly JsonSerializerOptions RecordJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    /// <summary>The record of one run, written beside its log: the command that ran last, null when none started, and the result, <c>passed</c>, <c>failed</c> or <c>notRun</c>.</summary>
+    /// <summary>
+    /// The record of one run, written beside its log: the command that ran last, null when none started; the result,
+    /// <c>running</c> while the test command runs, then <c>passed</c>, <c>failed</c> or <c>notRun</c>; when the test command
+    /// started, null when it never did; and when the run ended, null while it runs.
+    /// </summary>
     private sealed record RunRecord(
         string? Repository,
         int? PullRequest,
@@ -334,7 +362,8 @@ public sealed partial class DockerSandboxRunner
         string? Reason,
         int? ExitCode,
         double DurationSeconds,
-        DateTimeOffset FinishedAt);
+        DateTimeOffset? StartedAt,
+        DateTimeOffset? FinishedAt);
 
     /// <summary>The last characters written, bounded while reading so a test that prints without end cannot fill memory.</summary>
     private sealed class OutputTail(int capacity)

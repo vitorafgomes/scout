@@ -1,3 +1,5 @@
+## [2026-11-14] feat | The bell's test run: command, elapsed time, indeterminate bar
+The sandbox writes its run record as running when the test command starts; the bell reads it and shows "npm test in a container · running for 2 min 14 s" over a sweeping bar, and the Docker panel leaves running records out. Pages: desktop-ui Docker card and bell, sandbox public contract, both histories, prototype migration.
 ## [2026-11-14] feat | The bell's audit entry: findings so far, every area, running on Continue
 Every batch heading carries the findings so far; a job held by the desktop's local chat also posts a line for an area with no new findings and one on resume, and the bell's entry reads "Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends" and "Paused by you · area 3 of 8 done · 4 findings so far". Discord, Slack and Teams get only the count. Pages updated: services/audit (batch turn, pause, open items), services/desktop-ui (two notices pages), history/audit, history/desktop-ui, roadmap/prototype-migration.
 ## [2026-11-14] docs | Two pages reworded

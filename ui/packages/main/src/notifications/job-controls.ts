@@ -24,6 +24,11 @@ export interface JobControlsDeps {
   client(): Promise<JobControlClient>;
   /** Runs `callback` once after `ms`; returns the cancel function. */
   setTimer(ms: number, callback: () => void): () => void;
+  /** The command and start of the sandbox's running record of this pull request, or null when there is none. */
+  runningTest(
+    repository: string,
+    pullRequest: number,
+  ): Promise<{ readonly command: string; readonly startedAt: string } | null>;
   now(): number;
   logger: Logger;
 }
@@ -42,6 +47,8 @@ export const RECORD_WAIT_MS = 150_000;
  */
 export const NOTICE_WAIT_MS = 660_000;
 const WRITES_READ = 50;
+/** How often a running test run's entry reads the sandbox's record again and moves its elapsed time on. */
+export const ELAPSED_REFRESH_MS = 2_000;
 
 export const NO_ANSWER =
   'The Scout control plane did not answer, so this click may not have reached Scout. Try again.';
@@ -98,6 +105,14 @@ function targetOf(id: string, action: JobControlAction): JobControlRequest | nul
   return { kind: 'tests', owner: tests[1]!, repo: tests[2]!, number, action };
 }
 
+/** A run's elapsed time as the bell writes it: `14 s`, `2 min 14 s`, `1 h 3 min`. */
+export function elapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+  return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min`;
+}
+
 function isJob(id: string): boolean {
   return id.startsWith('audit:') || id.startsWith('tests:');
 }
@@ -121,6 +136,7 @@ function parse(json: string): Record<string, unknown> {
 export function createJobControls(deps: JobControlsDeps): JobControls {
   const { store, logger } = deps;
   const following = new Map<string, () => void>();
+  const refreshing = new Map<string, () => void>();
   const turns = new Map<string, Set<string>>();
 
   function entry(id: string): AppNotification | undefined {
@@ -306,6 +322,40 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
     }
   }
 
+  function refreshEvery(key: string): void {
+    refreshing.get(key)?.();
+    refreshing.set(
+      key,
+      deps.setTimer(ELAPSED_REFRESH_MS, () => {
+        refreshing.delete(key);
+        void refresh(key);
+      }),
+    );
+  }
+
+  async function refresh(key: string): Promise<void> {
+    const tests = TESTS_ID.exec(key);
+    if (tests === null || entry(key)?.kind !== 'running') return;
+    let run: Awaited<ReturnType<JobControlsDeps['runningTest']>> = null;
+    try {
+      run = await deps.runningTest(`${tests[1]}/${tests[2]}`, Number(tests[3]));
+    } catch (err: unknown) {
+      logger.warn('job controls: the running test record was not read', {
+        code: serializeError(err).code,
+      });
+    }
+    const n = entry(key);
+    if (n?.kind !== 'running') return;
+    if (run !== null) {
+      const { read: _read, ...rest } = n;
+      store.record({
+        ...rest,
+        detail: `${run.command} in a container · running for ${elapsed(deps.now() - Date.parse(run.startedAt))}`,
+      });
+    }
+    if (!refreshing.has(key)) refreshEvery(key);
+  }
+
   function handleWorkerLine(json: string): void {
     const p = parse(json);
     const turnId = p['id'];
@@ -326,8 +376,10 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
       kind: 'running',
       title: `Tests for ${pullRequest}`,
       detail: TESTS_RUNNING,
+      indeterminate: true,
       source: 'worker',
     });
+    void refresh(key);
   }
 
   function workerStopped(): void {
@@ -355,8 +407,9 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
     handleWorkerLine,
     workerStopped,
     dispose(): void {
-      for (const cancel of following.values()) cancel();
+      for (const cancel of [...following.values(), ...refreshing.values()]) cancel();
       following.clear();
+      refreshing.clear();
     },
   };
 }

@@ -259,9 +259,31 @@ export interface Docker {
   clear(): Promise<DockerClearResponse>;
   /** The repositories whose stack the worker recorded, newest first; a record that does not parse is skipped. */
   repositories(): Promise<readonly DockerRepository[]>;
-  /** The newest run's record in the work folder, or null; a record that does not parse is skipped. */
+  /** The newest finished run's record in the work folder, or null; a running record or one that does not parse is skipped. */
   lastRun(): Promise<DockerRun | null>;
+  /**
+   * The command and start of the newest running record of this pull request, its repository compared without case, or
+   * null; a record that does not parse is skipped without a log line, because the bell asks every few seconds. A record
+   * that started longer ago than the sandbox's limit allows is one a stopped worker left behind, and is skipped.
+   */
+  running(repository: string, pullRequest: number): Promise<DockerRunning | null>;
 }
+
+/** A run the sandbox has recorded as running: its test command and when it started. */
+export interface DockerRunning {
+  readonly command: string;
+  readonly startedAt: string;
+}
+
+/** A run's record as the sandbox writes it: finished, or running with no end yet. */
+export type RunRecord =
+  | DockerRun
+  | (Omit<DockerRun, 'result' | 'finishedAt' | 'startedAt' | 'command'> & {
+      readonly result: 'running';
+      readonly command: string;
+      readonly startedAt: string;
+      readonly finishedAt: null;
+    });
 
 export function createDocker(deps: DockerDeps): Docker {
   const { logger } = deps;
@@ -367,11 +389,14 @@ export function createDocker(deps: DockerDeps): Docker {
 
   async function workFolder(): Promise<DockerWorkFolder> {
     const names = await readdir(deps.workFolder).catch((): string[] => []);
-    return {
-      path: deps.workFolder,
-      bytes: await sizeOf(deps.workFolder),
-      runs: names.filter((n) => n.endsWith('.run.json')).length,
-    };
+    let runs = 0;
+    for (const name of names.filter((n) => n.endsWith('.run.json'))) {
+      const record = await readFile(path.join(deps.workFolder, name), 'utf8')
+        .then((text): unknown => JSON.parse(text))
+        .catch(() => null);
+      if (fields(record)?.['result'] !== 'running') runs += 1;
+    }
+    return { path: deps.workFolder, bytes: await sizeOf(deps.workFolder), runs };
   }
 
   async function clear(): Promise<DockerClearResponse> {
@@ -411,6 +436,7 @@ export function createDocker(deps: DockerDeps): Docker {
     folder: string,
     suffix: string,
     read: (value: unknown) => T | null,
+    quiet = false,
   ): Promise<T[]> {
     const names = await readdir(folder).catch(() => []);
     const found: T[] = [];
@@ -420,8 +446,8 @@ export function createDocker(deps: DockerDeps): Docker {
           .then((text): unknown => JSON.parse(text))
           .catch(() => null),
       );
-      if (record === null) logger.warn('docker: skipped a record that does not parse', { name });
-      else found.push(record);
+      if (record !== null) found.push(record);
+      else if (!quiet) logger.warn('docker: skipped a record that does not parse', { name });
     }
     return found;
   }
@@ -435,14 +461,32 @@ export function createDocker(deps: DockerDeps): Docker {
     const found = await records(deps.workFolder, '.run.json', toRun);
     return found.reduce<DockerRun | null>(
       (newest, run) =>
-        newest === null || Date.parse(run.finishedAt) > Date.parse(newest.finishedAt)
+        run.result !== 'running' &&
+        (newest === null || Date.parse(run.finishedAt) > Date.parse(newest.finishedAt))
           ? run
           : newest,
       null,
     );
   }
 
-  return { state, images, pull, pullImage, workFolder, clear, repositories, lastRun };
+  async function running(repository: string, pullRequest: number): Promise<DockerRunning | null> {
+    const found = await records(deps.workFolder, '.run.json', toRun, true);
+    let newest: DockerRunning | null = null;
+    for (const run of found) {
+      if (
+        run.result === 'running' &&
+        deps.now() - Date.parse(run.startedAt) < RUN_IN_PROGRESS_MS &&
+        run.pullRequest === pullRequest &&
+        run.repository?.toLowerCase() === repository.toLowerCase() &&
+        (newest === null || Date.parse(run.startedAt) > Date.parse(newest.startedAt))
+      ) {
+        newest = { command: run.command, startedAt: run.startedAt };
+      }
+    }
+    return newest;
+  }
+
+  return { state, images, pull, pullImage, workFolder, clear, repositories, lastRun, running };
 }
 
 type Fields = Readonly<Record<string, unknown>>;
@@ -503,39 +547,49 @@ export function toRepository(value: unknown): DockerRepository | null {
   };
 }
 
-/** A run's record as the sandbox writes it beside the run's log; a record written before `command` existed reads it as null. */
-export function toRun(value: unknown): DockerRun | null {
+/**
+ * A run's record as the sandbox writes it beside the run's log: running, with its command and start and no end, or
+ * finished; a record written before `command` or `startedAt` existed reads that field as null.
+ */
+export function toRun(value: unknown): RunRecord | null {
   const r = fields(value);
   if (r === null) return null;
   const result = r['result'];
   const command = r['command'] ?? null;
+  const startedAt = r['startedAt'] ?? null;
+  const finishedAt = r['finishedAt'];
   if (
     !textOrNull(r['repository']) ||
     !wholeOrNull(r['pullRequest']) ||
     !text(r['stack']) ||
     !text(r['image']) ||
     !textOrNull(command) ||
-    (result !== 'passed' && result !== 'failed' && result !== 'notRun') ||
+    (startedAt !== null && !time(startedAt)) ||
     !textOrNull(r['reason']) ||
     !wholeOrNull(r['exitCode']) ||
     typeof r['durationSeconds'] !== 'number' ||
-    !Number.isFinite(r['durationSeconds']) ||
-    !time(r['finishedAt'])
+    !Number.isFinite(r['durationSeconds'])
   ) {
     return null;
   }
-  return {
+  const common = {
     repository: r['repository'],
     pullRequest: r['pullRequest'],
     stack: r['stack'],
     image: r['image'],
-    command,
-    result,
     reason: r['reason'],
     exitCode: r['exitCode'],
     durationSeconds: r['durationSeconds'],
-    finishedAt: r['finishedAt'],
   };
+  if (result === 'running') {
+    return command !== null && startedAt !== null && finishedAt === null
+      ? { ...common, command, result, startedAt, finishedAt }
+      : null;
+  }
+  if ((result !== 'passed' && result !== 'failed' && result !== 'notRun') || !time(finishedAt)) {
+    return null;
+  }
+  return { ...common, command, result, startedAt, finishedAt };
 }
 
 function serverVersion(stdout: string): string | null {

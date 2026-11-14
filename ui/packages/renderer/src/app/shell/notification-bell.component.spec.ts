@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -299,6 +301,67 @@ describe('NotificationBellComponent', () => {
     expect(el(fixture, 'entry-when')!.textContent?.trim()).toBe('12 min');
     expect(el(fixture, 'entry-progress')!.getAttribute('aria-valuenow')).toBe('37');
     expect(el(fixture, 'entry-link')).toBeNull();
+  });
+
+  it('a running test run shows "npm test in a container · running for 2 min 14 s" over an indeterminate bar that sweeps, with no value', async () => {
+    const fixture = await render(
+      makeBridge([
+        note('tests:acme/api#41', {
+          kind: 'running',
+          title: 'Tests for acme/api#41',
+          detail: 'npm test in a container · running for 2 min 14 s',
+          indeterminate: true,
+        }),
+      ]),
+    );
+    await click(fixture, 'bell');
+    const bar = el(fixture, 'entry-progress');
+
+    expect(el(fixture, 'entry-detail')!.textContent?.trim()).toBe(
+      'npm test in a container · running for 2 min 14 s',
+    );
+    expect(
+      {
+        role: bar?.getAttribute('role'),
+        label: bar?.getAttribute('aria-label'),
+        valuenow: bar?.getAttribute('aria-valuenow'),
+        valuemin: bar?.getAttribute('aria-valuemin'),
+        sweeps: bar?.querySelector('[data-test="entry-sweep"]') !== null,
+      },
+      'the bar is indeterminate: a progressbar with no value and a sweep inside',
+    ).toEqual({
+      role: 'progressbar',
+      label: 'Tests for acme/api#41',
+      valuenow: null,
+      valuemin: null,
+      sweeps: true,
+    });
+  });
+
+  it('an entry that is no longer running draws no indeterminate bar, and a measured progress wins over it', async () => {
+    const fixture = await render(
+      makeBridge([
+        note('tests:acme/api#41', { kind: 'failed', indeterminate: true }),
+        note('audit:acme/shop', { kind: 'running', indeterminate: true, progress: 37 }),
+      ]),
+    );
+    await click(fixture, 'bell');
+
+    expect(
+      all(fixture, 'entry-progress').map((bar) => bar.getAttribute('aria-valuenow')),
+      'only the measured bar is drawn',
+    ).toEqual(['37']);
+    expect(el(fixture, 'entry-sweep')).toBeNull();
+  });
+
+  it('the sweep moves, and stops when the system asks for reduced motion', () => {
+    const source = readFileSync('src/app/shell/notification-bell.component.ts', 'utf8');
+
+    expect(source, 'the sweep animates').toMatch(/\.sweep \{[^}]*animation: sc-sweep 1\.4s/);
+    expect(source).toMatch(/@keyframes sc-sweep \{\s*0% \{\s*transform: translateX\(-100%\)/);
+    expect(source, 'reduced motion stops the sweep').toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.sweep \{\s*animation: none;/,
+    );
   });
 
   it('a link opens in the browser through the external-link bridge', async () => {

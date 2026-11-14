@@ -12,5 +12,5 @@ reliability: high
 
 ## Hot spots
 
-- `src/Scout.Sandbox/DockerSandboxRunner.cs:176`: every isolation flag is here; a flag added or removed is a change to ADR 0043.
-- `src/Scout.Sandbox/DockerSandboxRunner.cs:310`: makes every directory owner-writable (symbolic links skipped) before the delete, because a tool in the container may leave read-only directories.
+- `src/Scout.Sandbox/DockerSandboxRunner.cs:189`: every isolation flag is here; a flag added or removed is a change to ADR 0043.
+- `src/Scout.Sandbox/DockerSandboxRunner.cs:334`: makes every directory owner-writable (symbolic links skipped) before the delete, because a tool in the container may leave read-only directories.
