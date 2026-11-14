@@ -1,8 +1,8 @@
 ---
 title: "Versions conventions"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Version notes moved out of page headers."
+changes: "The tooling notes v1.11 and v1.12 moved here from the page header (2026-11-14)."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
@@ -46,8 +46,10 @@ The notes kept in the `changes` field of the page header until 2026-11-13, newes
 
 ## Version notes: `pages/conventions/tooling.md`
 
-The notes kept in the `changes` field of the page header until 2026-11-13, newest first.
+The notes kept in the `changes` field of the page header until 2026-11-14, newest first.
 
+- v1.12 (2026-11-14): the graphify section says only the main checkout refreshes the graph and that no .graphifyignore exists.
+- v1.11 (2026-11-13): CodeQL scans actions, C# and TypeScript; Dependabot also proposes NuGet and Bun updates; main takes changes only through a pull request whose build check is green, with no bypass; only an admin creates a release tag; only GitHub-owned actions and setup-bun are allowed. Every workflow declares a read-only GITHUB_TOKEN, pinned by an ArchTest (2026-11-13).
 - v1.10 (2026-11-13): scripts/check-hidden-text.sh fails CI on text a person cannot see but a model reads. scripts/token-usage.sh and the scout-meter agent measure the tokens a session used, per agent, and the size of every Markdown document a model reads.
 - v1.9 (2026-11-13): origin statements removed.
 - v1.8 (2026-11-12): the gate for the pipeline skill is the grader table in tests/Scout.ArchTests and the live eval is advisory, with a test that fails on a grader with no accepted and rejected row; a test that every hook the settings run has a self-test CI runs; the Claude Code compatibility section; the outbound-call and Contracts eval graders reject an answer that denies what they look for; Stryker is a local tool pinned in the manifest; the mechanic proves red on the merge base; the refuter reads the reviewed tree and a finding it cannot locate stays unresolved.

@@ -19,7 +19,7 @@ here.
 | | `release-workflow.test.sh` | Checks the Release workflow file itself | CI |
 | `dev/` | `token-usage.sh` | Tokens a Claude Code session used, per agent, and the size of every document a model reads | A person, the `scout-meter` agent |
 | | `claude-scout.sh` | Opens Claude Code for this repo with only the servers and plugins the work needs: `worker` (default) or `ui` | A person, to start a session |
-| | `install-git-hooks.sh`, `git-hooks/` | Installs the git hooks that refresh the code graph | A person, once per clone |
+| | `install-git-hooks.sh`, `git-hooks/` | Installs the git hooks that refresh the code graph | The session-start hook; a person, on a machine without Claude Code |
 
 A script and its self-test sit side by side: `<name>.sh` and `<name>.test.sh`.
 
