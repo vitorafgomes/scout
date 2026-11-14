@@ -1,4 +1,5 @@
 import type { GitHubVerdictStatus, NoticeRecordRequest, NotificationKind } from '@scout/shared';
+import { ISSUES_TARGET, issueLinks, type LocalTurn } from '@scout/shared';
 import type { NotificationInput } from './notification-store.js';
 
 const MAX_TITLE_CHARS = 200;
@@ -239,5 +240,27 @@ export function noticeNotification(req: NoticeRecordRequest, id: string): Notifi
     title: cut(req.message.trim(), MAX_TITLE_CHARS),
     detail: '',
     source: 'notice',
+  };
+}
+
+export const ISSUES_DETAIL = 'From the audit findings you chose';
+
+/**
+ * The entry of an issues turn that ended done with links to issues of its repository in its reply, one per turn: the
+ * count of distinct links in its title, the repository's issues as its link when two or more were opened and the
+ * issue's own link when one was; null for any other turn.
+ */
+export function issuesNotification(turn: LocalTurn): NotificationInput | null {
+  if (turn.state !== 'done' || turn.issues !== true) return null;
+  const repository = ISSUES_TARGET.exec(turn.question)?.[1];
+  const links = issueLinks(repository, turn.reply);
+  if (repository === undefined || links.length === 0) return null;
+  return {
+    id: `issues:${turn.id}`,
+    kind: 'done',
+    title: `${links.length} ${links.length === 1 ? 'issue' : 'issues'} opened on ${repository}`,
+    detail: ISSUES_DETAIL,
+    url: links.length === 1 ? links[0]! : `https://github.com/${repository}/issues`,
+    source: 'worker',
   };
 }

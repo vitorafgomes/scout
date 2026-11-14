@@ -1,6 +1,8 @@
 import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 
 import {
+  ISSUES_TARGET,
+  issueLinks,
   readIpcError,
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
@@ -74,8 +76,6 @@ type WindowState = Omit<ReviewState, 'picks' | 'edited'>;
 
 const EMPTY: WindowState = { editing: null, preview: false };
 const NO_DECISIONS: Decisions = {};
-const ISSUES_TARGET = / on ([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/;
-const ISSUE_URL = /https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/\d+/g;
 
 /**
  * The owner's decisions and posting state per findings turn. A pick, an undo or an edited text is written to
@@ -421,12 +421,6 @@ export function sentTitles(turns: readonly LocalTurn[]): ReadonlyMap<string, Rea
 
 /** Where a finished post turn left its findings: at the issue links of the target, or null when it gave none. */
 function outcome(target: string | undefined, turn: LocalTurn): Posted | null {
-  const urls = links(target, turn.reply);
+  const urls = issueLinks(target, turn.reply);
   return urls.length === 0 ? null : { urls };
-}
-
-function links(target: string | undefined, reply: string): readonly string[] {
-  if (target === undefined) return [];
-  const found = [...reply.matchAll(ISSUE_URL)].filter((m) => m[1]!.toLowerCase() === target);
-  return [...new Set(found.map((m) => m[0]))];
 }

@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.45"
+version: "1.46"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - The bell: issues opened from the audit findings
+
+When the chat's issues turn ends done with links to issues of the repository it names, the bell gets a done entry, as `Main.dc.html` draws it: "I" on the ok pair, "3 issues opened on acme/shop" ("1 issue opened on acme/shop" for one), "From the audit findings you chose", and See the issues, which opens the repository's issues page, or the issue itself when one was opened, through the existing open-in-browser path. Before, opened issues showed only in the chat's cards. Main records it when a running turn completes, one entry per turn; a failed turn or a reply with no such link records none. The rule that reads the links moved from the renderer to `ui/packages/shared/src/issue-links.ts`, so the cards and the bell count the same links. Tests: `ui/packages/main/test/notifications-sources.test.ts`, `ui/packages/main/test/quick-ask.test.ts`, `ui/packages/renderer/src/app/shell/notification-bell.component.spec.ts`.
 
 ## 2026-11-14 - The bell's test run: its command, how long it has run, an indeterminate bar
 

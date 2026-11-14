@@ -1,3 +1,5 @@
+## [2026-11-14] feat | The bell: issues opened from the audit findings, with See the issues
+An issues turn that ends done with links to issues of its repository makes one bell entry, "3 issues opened on acme/shop", whose See the issues opens the repository's issues or the one issue. Pages: desktop-ui theme and notices, history/desktop-ui, prototype migration; line citations of the touched files re-pointed in active pages.
 ## [2026-11-14] feat | The bell's test run: command, elapsed time, indeterminate bar
 The sandbox writes its run record as running when the test command starts; the bell reads it and shows "npm test in a container · running for 2 min 14 s" over a sweeping bar, and the Docker panel leaves running records out. Pages: desktop-ui Docker card and bell, sandbox public contract, both histories, prototype migration.
 ## [2026-11-14] feat | The bell's audit entry: findings so far, every area, running on Continue

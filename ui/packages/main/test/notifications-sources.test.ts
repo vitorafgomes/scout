@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import type { GitHubVerdictStatus } from '@scout/shared';
+import type { GitHubVerdictStatus, LocalTurn } from '@scout/shared';
 import type { NotificationInput } from '../src/notifications/notification-store.js';
-import { verdictNotification, workerNotice } from '../src/notifications/sources.js';
+import {
+  issuesNotification,
+  verdictNotification,
+  workerNotice,
+} from '../src/notifications/sources.js';
 
 function line(text: string): string {
   return JSON.stringify({ id: null, event: 'notice', text });
@@ -330,4 +334,73 @@ describe('verdict follow', () => {
       ).toEqual([queued, given]);
     });
   }
+});
+
+describe('issues opened from the audit findings', () => {
+  function issuesTurn(reply: string, extra: Partial<LocalTurn> = {}): LocalTurn {
+    return {
+      id: 'q-7',
+      question: 'Open 3 issues on acme/shop',
+      reply,
+      citations: [],
+      state: 'done',
+      issues: true,
+      issueTitles: [
+        'Discounts applied after the sum',
+        'Move has no lock',
+        'Coupon read per request',
+      ],
+      ...extra,
+    };
+  }
+  const issue = (n: number, repository = 'acme/shop'): string =>
+    `https://github.com/${repository}/issues/${n}`;
+
+  it('three issues opened read "3 issues opened on acme/shop", "From the audit findings you chose", and See the issues opens the repository\'s issues', () => {
+    const reply = [
+      `Opened ${issue(12)}, ${issue(13)} and ${issue(14)}.`,
+      `The first again: ${issue(12)}; one elsewhere: ${issue(3, 'acme/web')}.`,
+    ].join('\n');
+
+    expect(
+      issuesNotification(issuesTurn(reply)),
+      'three distinct issue links of acme/shop make one done entry that opens the repository issues',
+    ).toEqual({
+      id: 'issues:q-7',
+      kind: 'done',
+      title: '3 issues opened on acme/shop',
+      detail: 'From the audit findings you chose',
+      url: 'https://github.com/acme/shop/issues',
+      source: 'worker',
+    });
+  });
+
+  it('one issue opened reads "1 issue opened on acme/shop" and See the issues opens that issue', () => {
+    expect(
+      issuesNotification(issuesTurn(`Opened ${issue(12)}.`)),
+      'one issue link makes "1 issue opened on acme/shop" whose link is that issue',
+    ).toEqual({
+      id: 'issues:q-7',
+      kind: 'done',
+      title: '1 issue opened on acme/shop',
+      detail: 'From the audit findings you chose',
+      url: issue(12),
+      source: 'worker',
+    });
+  });
+
+  it('a failed issues turn, one with no issue link, one with links of another repository only and a turn that carried no issues record no entry', () => {
+    const { issues: _carried, ...plain } = issuesTurn(`See ${issue(12)}.`);
+    const turns: readonly [string, LocalTurn][] = [
+      ['failed', issuesTurn(`Opened ${issue(12)}.`, { state: 'failed' })],
+      ['no link', issuesTurn('GitHub refused the issues.')],
+      ['another repository', issuesTurn(`Opened ${issue(3, 'acme/web')}.`)],
+      ['not an issues turn', plain],
+    ];
+
+    expect(
+      turns.map(([name, turn]) => [name, issuesNotification(turn)]),
+      'a failed issues turn, or one with no issue link, records no entry',
+    ).toEqual(turns.map(([name]) => [name, null]));
+  });
 });

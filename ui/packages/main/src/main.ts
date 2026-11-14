@@ -118,7 +118,7 @@ import {
   pushToWindows as pushNotifications,
   registerNotificationHandlers,
 } from './notifications/notification-store.js';
-import { verdictNotification, workerNotice } from './notifications/sources.js';
+import { issuesNotification, verdictNotification, workerNotice } from './notifications/sources.js';
 import { createVoiceNotice, registerNotificationActions } from './notifications/voice-notice.js';
 import {
   createJobControls,
@@ -1115,6 +1115,10 @@ app
       onListeningChanged: (listening) => workerRestart?.listeningChanged(listening),
       onAnsweringChanged: (answering) => workerRestart?.answeringChanged(answering),
       restarting: () => workerRestart?.restarting() ?? false,
+      onTurnDone: (turn) => {
+        const issues = issuesNotification(turn);
+        if (issues !== null) notifications.record(issues);
+      },
     });
     allowScreenCaptureOnlyForApp(
       session.defaultSession,

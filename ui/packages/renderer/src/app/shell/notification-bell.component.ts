@@ -724,7 +724,8 @@ export class NotificationBellComponent implements OnInit {
   /**
    * The entry's icon as the artboard draws it: "A" for an audit and "T" for a test run, on the warn pair when the owner
    * paused it, muted once he stopped it, "!" on the error pair for an audit the AI Source paused; "@" for a mention, "C"
-   * for new activity, a tick for a done entry and "!" for a failed one; any other entry keeps its own drawing.
+   * for new activity, "I" for issues opened, a tick for any other done entry and "!" for a failed one; any other entry
+   * keeps its own drawing.
    */
   iconOf(n: AppNotification): EntryIcon {
     const tone = KIND_TONES[n.kind];
@@ -742,16 +743,19 @@ export class NotificationBellComponent implements OnInit {
         : n.kind === 'github' && n.detail.startsWith('New activity')
           ? 'C'
           : n.kind === 'done'
-            ? '✓'
+            ? n.id.startsWith('issues:')
+              ? 'I'
+              : '✓'
             : n.kind === 'failed'
               ? '!'
               : null;
     return { tone, glyph, path: glyph === null ? (OWN_ICONS[n.kind] ?? null) : null };
   }
 
-  /** The label of the entry's link: GitHub's threads open on GitHub, a verdict opens its review. */
+  /** The label of the entry's link: GitHub's threads open on GitHub, issues opened show them, a verdict its review. */
   linkLabel(n: AppNotification): string {
     if (n.kind === 'github' || n.kind === 'mention') return 'Open on GitHub';
+    if (n.id.startsWith('issues:')) return 'See the issues';
     return n.source === 'verdict' ? 'See the review' : 'Open link';
   }
 

@@ -4,7 +4,15 @@ import { PassThrough } from 'node:stream';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CHANNEL, readIpcError, type LocalTurn, type WorkerEvent } from '@scout/shared';
+import {
+  CHANNEL,
+  ISSUES_MARKER,
+  readIpcError,
+  type LocalTurn,
+  type WorkerEvent,
+} from '@scout/shared';
+import type { NotificationInput } from '../src/notifications/notification-store.js';
+import { issuesNotification } from '../src/notifications/sources.js';
 import type { DesktopCapturerSource, Session, Streams } from 'electron';
 import {
   DEFAULT_QUICK_ASK_SHORTCUT,
@@ -3857,6 +3865,40 @@ describe('quick ask: meetings', () => {
     const pushed = JSON.stringify(pushedTurns(t.mainWindow));
     expect(pushed).not.toContain('The total is wrong.');
     expect(pushed).not.toContain('Two moves lose an item.');
+  });
+
+  it('an issues turn seen complete twice records one bell entry, from the turn as it finished', async () => {
+    const recorded: NotificationInput[] = [];
+    const t = await setup({
+      onTurnDone: (done) => {
+        const entry = issuesNotification(done);
+        if (entry !== null) recorded.push(entry);
+      },
+    });
+    const issues = JSON.stringify({
+      repository: 'acme/shop',
+      issues: [{ title: 'Move has no lock' }],
+    });
+    const reply = 'Opened https://github.com/acme/shop/issues/12.';
+    const complete = JSON.stringify({ id: 'q-1', event: 'complete', text: reply });
+
+    await t.invoke(CHANNEL.localAsk, sender(), {
+      id: 'q-1',
+      text: `Open 1 issue on acme/shop${ISSUES_MARKER}${issues}`,
+    });
+    t.quickAsk.handleWorkerLine(complete);
+    t.quickAsk.handleWorkerLine(complete);
+
+    expect(recorded, 'the same turn seen twice records one entry').toEqual([
+      {
+        id: 'issues:q-1',
+        kind: 'done',
+        title: '1 issue opened on acme/shop',
+        detail: 'From the audit findings you chose',
+        url: 'https://github.com/acme/shop/issues/12',
+        source: 'worker',
+      },
+    ]);
   });
 
   it('keepMeeting validates the title and the caps, sends the meeting to the worker and answers its id', async () => {

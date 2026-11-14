@@ -337,3 +337,5 @@ export {
 export { compareVersions, pickDownload, type ReleaseAsset } from './version.js';
 
 export { kubernetesLabelError } from './kubernetes-labels.js';
+
+export { ISSUES_TARGET, issueLinks } from './issue-links.js';
