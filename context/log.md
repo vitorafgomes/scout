@@ -1,3 +1,5 @@
+## [2026-11-13] chore | Repository security: main behind a ruleset, CodeQL, Dependabot for NuGet and Bun
+main takes changes only through a pull request with a green build check and no bypass; actions must be pinned by commit; fork pull requests wait for the owner's approval; an unused repository secret is removed; CodeQL and the NuGet and Bun Dependabot updates are added ([[pages/conventions/tooling]]).
 ## [2026-11-13] fix | The ChatGPT sign-in cancel test no longer races the fake browser
 The cancel test waited only for the authorize URL and cancelled while the fake browser was still probing the listener, which on the macOS runner held the rejection past one second; it now waits for the fake browser to return ([[pages/history/desktop-ui]]).
 ## [2026-11-13] chore | Every workflow runs with a read-only GITHUB_TOKEN

@@ -227,6 +227,7 @@ jobs:
   publish:
     needs: [check, build]
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:

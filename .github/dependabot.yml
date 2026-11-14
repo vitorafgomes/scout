@@ -4,3 +4,21 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      nuget-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: bun
+    directory: "/ui"
+    schedule:
+      interval: weekly
+    groups:
+      bun-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "@playwright/test"
