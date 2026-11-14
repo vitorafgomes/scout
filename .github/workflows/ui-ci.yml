@@ -219,3 +219,6 @@ jobs:
             ui/e2e/playwright-report/
             ui/e2e/test-results/
           retention-days: 14
+
+permissions:
+  contents: read

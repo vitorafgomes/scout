@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.36"
+version: "1.37"
 date: 2026-11-08
-updated: 2026-11-12
-changes: "v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+updated: 2026-11-13
+changes: "v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-13 - The ChatGPT sign-in cancel test waits for the browser to return
+
+The test "cancelling a sign-in that waits for the browser" in `ui/packages/main/test/oauth-chatgpt.test.ts` failed once on the macOS runner with "still waiting for the browser" after 1 s, and passed on the same code before and on Linux. It cancelled as soon as the fake browser had recorded the authorize URL, while the fake was still probing the loopback listener; `ChatGptAuth.signIn` rejects only after `openExternal` returns, so a probe that outlasted the cancel, most likely slowed by the listener closing under it (not measured on the runner), held the rejection past the test's one second. The test now cancels once the fake browser has returned (`listenerUpWhenBrowserOpened` is set), which is the state its name describes. With a fake browser that waits 1.5 s when the cancel arrives during it, the old wait fails with the CI message and the new one passes. The sign-in code is unchanged.
 
 ## 2026-11-12 - The bell's job entry as the artboard draws it
 

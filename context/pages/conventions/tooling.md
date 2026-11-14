@@ -1,9 +1,9 @@
 ---
 title: "Tooling"
-version: "1.10"
+version: "1.11"
 date: 2026-10-21
 updated: 2026-11-13
-changes: "v1.10 (2026-11-13): tools/checks/check-hidden-text.sh fails CI on text a person cannot see but a model reads. tools/dev/token-usage.sh and the scout-meter agent measure the tokens a session used, per agent, and the size of every Markdown document a model reads."
+changes: "Every workflow declares a read-only GITHUB_TOKEN, pinned by an ArchTest (2026-11-13)."
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow and the diagnostics script fit the gates."
@@ -71,7 +71,7 @@ All seven fail open: a missing `jq`, malformed JSON, or any error exits 0 having
 | `stop-review-gate.sh` | Stop | **Blocks** the turn once when the session edited `src/**/*.cs` without dispatching `scout-reviewer` (an `Agent` call or a `Workflow` run of `scout-review`). `stop_hook_active` passes on the continuation, so no loop. Keyed on what *this* session edited, in `<session>.jsonl` and every `<session>/subagents/*.jsonl`, not on working-tree dirtiness. |
 | `session-end-metrics.sh` | SessionEnd | Appends one JSON line per session to `.claude/metrics/sessions.jsonl` (gitignored): src and test edits, reviewer dispatches, review workflow runs, pipeline invocations, agents, tool calls, `endedUnreviewed`. |
 
-All seven hooks carry a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`; `post-edit-rule-b` and `prompt-router` got theirs on 2026-11-06); CI runs all seven plus `.claude/workflows/scout-review.test.sh`, `tools/checks/check-context-refs.test.sh`, `tools/checks/test-per-project.test.sh`, `tools/release/next-version.test.sh`, `tools/release/with-test-version.test.sh`, `tools/release/release-workflow.test.sh`, `tools/checks/check-diagnostics.test.sh`, `tools/dev/install-git-hooks.test.sh` (both since 2026-11-11) and a real `check-context-refs.sh` run in its first step, before .NET is set up (`.github/workflows/ci.yml:18`). `HarnessDocumentTests.EveryHookTheSettingsRunExistsHasASelfTestAndCiRunsEverySelfTestUnderClaude` reads `.claude/settings.json` and fails when a registered hook command runs anything but a script under `.claude/hooks/`, when that script or its `.test.sh` is missing, or when a `.test.sh` under `.claude/hooks/` or `.claude/workflows/` is not run by `ci.yml`.
+All seven hooks carry a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`); CI runs all seven plus `.claude/workflows/scout-review.test.sh`, `tools/checks/check-context-refs.test.sh`, `tools/checks/test-per-project.test.sh`, `tools/release/next-version.test.sh`, `tools/release/with-test-version.test.sh`, `tools/release/release-workflow.test.sh`, `tools/checks/check-diagnostics.test.sh`, `tools/dev/install-git-hooks.test.sh` (both since 2026-11-11) and a real `check-context-refs.sh` run in its first step, before .NET is set up (`.github/workflows/ci.yml:18`). `HarnessDocumentTests.EveryHookTheSettingsRunExistsHasASelfTestAndCiRunsEverySelfTestUnderClaude` reads `.claude/settings.json` and fails when a registered hook command runs anything but a script under `.claude/hooks/`, when that script or its `.test.sh` is missing, or when a `.test.sh` under `.claude/hooks/` or `.claude/workflows/` is not run by `ci.yml`. `EveryWorkflowDeclaresATopLevelReadOnlyToken` fails on a workflow with no top-level `permissions: contents: read`.
 
 ## The gated rules in `.editorconfig`
 
