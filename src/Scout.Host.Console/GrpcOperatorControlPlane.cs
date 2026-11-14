@@ -704,6 +704,26 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             wire.Error = package.Error;
         }
 
+        if (package.AssembledAt is not null)
+        {
+            wire.AssembledAt = package.AssembledAt;
+        }
+
+        if (package.MetadataSavedAt is not null)
+        {
+            wire.MetadataSavedAt = package.MetadataSavedAt;
+        }
+
+        if (package.RightsConfirmedAt is not null)
+        {
+            wire.RightsConfirmedAt = package.RightsConfirmedAt;
+        }
+
+        if (package.ThumbnailDescription is not null)
+        {
+            wire.ThumbnailDescription = package.ThumbnailDescription;
+        }
+
         wire.Shorts.AddRange(package.Shorts.Select(s => new ShortClip { File = s.File, StartMs = s.StartMs, DurationMs = s.DurationMs, Hook = s.Hook }));
         wire.Checks.AddRange(package.Checks.Select(c => new PackageCheck { Name = c.Name, Result = c.Result, Detail = c.Detail }));
         wire.Tags.AddRange(package.Tags);
@@ -724,7 +744,13 @@ internal sealed class GrpcOperatorControlPlane(GrpcWriteGate gate) : IOperatorCo
             [.. wire.Tags],
             wire.DurationMs,
             wire.HasError ? wire.Error : null,
-            wire.MetadataEdited);
+            wire.MetadataEdited)
+        {
+            AssembledAt = wire.HasAssembledAt ? wire.AssembledAt : null,
+            MetadataSavedAt = wire.HasMetadataSavedAt ? wire.MetadataSavedAt : null,
+            RightsConfirmedAt = wire.HasRightsConfirmedAt ? wire.RightsConfirmedAt : null,
+            ThumbnailDescription = wire.HasThumbnailDescription ? wire.ThumbnailDescription : null,
+        };
 
     public async Task<string> GetVoiceSamplesDirectoryAsync(CancellationToken ct)
     {

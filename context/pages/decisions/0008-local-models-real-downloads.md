@@ -1,9 +1,9 @@
 ---
 title: "Real downloads for local models (Ollama pull + HF Whisper GGML)"
-version: "1.7"
+version: "1.8"
 date: 2026-05-16
 updated: 2026-11-14
-changes: "v1.7 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Third amendment of 2026-11-12: an installed Ollama model whose capabilities lack tools is marked No tools and the model in use says it cannot call tools, without blocking the choice (the owner's design); by default unknown capabilities say nothing and an empty list counts as known.."
+changes: "v1.8 (2026-11-14): citations re-pointed. v1.7 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Third amendment of 2026-11-12: an installed Ollama model whose capabilities lack tools is marked No tools and the model in use says it cannot call tools, without blocking the choice (the owner's design); by default unknown capabilities say nothing and an empty list counts as known.."
 page_type: adr
 status: accepted
 description: "The first iteration of \"Manage Downloaded Models\" used mocked state: clicking Download just flipped a flag in localStorage."
@@ -210,7 +210,7 @@ What the owner approved:
 
 Defaults in force unless the owner says otherwise ([[pages/roadmap/ollama-local-models]], "Defaults in force"):
 
-- **What a name is.** `model`, `model:tag` or `namespace/model:tag`: lower-case letters, digits, dots, dashes and underscores, the tag in any case because the library's own tags carry quantization names such as `q4_K_M`, each part at most 80 characters (`isOllamaModelName`, `ui/packages/shared/src/ipc-contract.ts:2367`). A registry host, a second slash, a scheme, spaces and control characters are refused with "That is not a model name. Use name or name:tag, for example llama3.2:3b.", in the dialog before any request and again in main, which also pulls only from an Ollama on this computer (`localhost`, `127.0.0.1` or `[::1]`) and logs no name it refuses (`ui/packages/main/src/ipc/llm-pull.ts:126`, `:130`). A name without a tag is its `:latest`.
+- **What a name is.** `model`, `model:tag` or `namespace/model:tag`: lower-case letters, digits, dots, dashes and underscores, the tag in any case because the library's own tags carry quantization names such as `q4_K_M`, each part at most 80 characters (`isOllamaModelName`, `ui/packages/shared/src/ipc-contract.ts:2373`). A registry host, a second slash, a scheme, spaces and control characters are refused with "That is not a model name. Use name or name:tag, for example llama3.2:3b.", in the dialog before any request and again in main, which also pulls only from an Ollama on this computer (`localhost`, `127.0.0.1` or `[::1]`) and logs no name it refuses (`ui/packages/main/src/ipc/llm-pull.ts:126`, `:130`). A name without a tag is its `:latest`.
 - **An installed name is pulled again.** Ollama's pull of an installed tag updates it, so Pull stays Pull and the progress shows.
 - **A pull by name never chooses.** It never puts the model in use and never writes `llm.model`; the owner chooses with Use this. A Download of a catalog model keeps making the first model the selection, as before.
 - **One vocabulary for a failed pull.** A Download and a Pull by name that fail say "The Ollama library has no model named <name>." when Ollama answers its not-found error line ("pull model manifest: file does not exist"), "Ollama is not answering. Open the Ollama app or run ollama serve, then scan again." when Ollama does not answer, and otherwise "Ollama could not download <name>: " followed by Ollama's own words, each with See logs; Cancel says nothing. Main carries the reason as a code in the message across IPC (`OLLAMA_MODEL_NOT_FOUND`, `llm/ollama-unreachable`, `OLLAMA_PULL_FAILED`; `ui/packages/main/src/ipc/llm-pull.ts:65`, `:82`); before, a failed Download showed Electron's raw rejection. The not-found line was taken from the server's known wording, not observed on this machine, since no pull was made to write this.

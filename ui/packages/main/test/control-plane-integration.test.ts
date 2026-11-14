@@ -1402,7 +1402,9 @@ describe('operator assembly over UDS', () => {
           shorts: [{ file: 'short-1.mp4', startMs: 0, durationMs: 30000, hook: 'Equal by value.' }],
           thumbnailFile: 'thumbnail.png',
         });
+        expect(Number.isNaN(Date.parse(edited.package?.metadataSavedAt ?? ''))).toBe(false);
         expect(confirmed.package?.rightsConfirmed).toBe(true);
+        expect(Number.isNaN(Date.parse(confirmed.package?.rightsConfirmedAt ?? ''))).toBe(false);
         expect([approved.status, approved.package?.status]).toEqual(['approved', 'approved']);
         expect(Number.isNaN(Date.parse(approved.package?.approvedAt ?? ''))).toBe(false);
       } finally {

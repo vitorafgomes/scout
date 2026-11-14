@@ -1,13 +1,20 @@
 ---
 title: "Control plane contracts"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Version notes moved out of page headers."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `VideoPackage` gains `optional string assembled_at = 14`, `metadata_saved_at = 15`, `rights_confirmed_at = 16` (ISO 8601, like `approved_at`) and `thumbnail_description = 17`. `Proposal`'s `thumbnail_file` is a proposed thumbnail, not the worker's package, and gains nothing.
+- **Tests:** the mapping tests of both hosts and of the desktop's main process (see [[pages/history/host-control-plane]], [[pages/history/host-console]], [[pages/history/desktop-operator]]).
 
 ## Version notes: `pages/services/control-plane-contracts.md`
 

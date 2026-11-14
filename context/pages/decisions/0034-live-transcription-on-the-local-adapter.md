@@ -1,8 +1,9 @@
 ---
 title: "ADR 0034 - Live transcription on the local adapter: PCM16 chunks in, partial and final text out"
-version: "1.8"
+version: "1.9"
 date: 2026-11-04
-changes: "Dated line (2026-11-12): the failed-load live tests run on the model seam and a speech runtime that cannot load is TranscriptionUnavailableException. Earlier: The transcript is not persisted by the desktop; a kept meeting is stored by the worker.."
+updated: 2026-11-14
+changes: "v1.9 (2026-11-14): citations re-pointed. Dated line (2026-11-12): the failed-load live tests run on the model seam and a speech runtime that cannot load is TranscriptionUnavailableException. Earlier: The transcript is not persisted by the desktop; a kept meeting is stored by the worker.."
 page_type: adr
 status: accepted
 description: "The desktop streams 16 kHz PCM16 microphone chunks to the worker over the local adapter's stdin as listen, audio and stop requests; the worker cuts utterances with an RMS energy check, decodes cumulative windows of the utterance, the first at 0.75 s and then every 0.6 s, greedily for partial text, dropping a window while the model is busy, re-decodes each ended utterance with a beam of 5 for its final text, and shares the one loaded Whisper model with voice messages."
@@ -130,7 +131,7 @@ The owner wants the chat to see what is being said ("the chat to see what we say
 
 - **Rule.** The desktop opens at most two sessions, one per lane: `me`, the owner's microphone, and `others`, the system audio. The lane is the desktop's idea only.
   - `scout:local.listen` takes `{ lane }`. Main mints a fresh UUID per listen, keeps an id-to-lane map, and at most one session per lane: a listen on an open lane stops that lane's old id first (`ui/packages/main/src/quick-ask/quick-ask.ts:917`).
-  - The worker still sees only ids; the wire shape above is unchanged. Main echoes the lane on each `scout:local.transcript` event from its map (`ui/packages/shared/src/ipc-contract.ts:1744`).
+  - The worker still sees only ids; the wire shape above is unchanged. Main echoes the lane on each `scout:local.transcript` event from its map (`ui/packages/shared/src/ipc-contract.ts:1750`).
   - A `listen` the worker refuses, "Scout is already listening.", ends only that lane with the sentence.
 - **How the loopback is obtained.**
   - On Linux main adds `PulseaudioLoopbackForScreenShare` and `WebRtcPipeWireCapturer` to any `enable-features` value before the app is ready (`ui/packages/main/src/quick-ask/quick-ask.ts:298`, `ui/packages/main/src/main.ts:370`).

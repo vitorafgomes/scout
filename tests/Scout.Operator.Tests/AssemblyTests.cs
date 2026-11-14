@@ -181,10 +181,35 @@ public sealed class AssemblyTests : IDisposable
     }
 
     [Fact]
+    public async Task The_Package_Says_When_It_Was_Assembled_By_The_Workers_Clock_And_What_Its_Thumbnail_Shows()
+    {
+        var project = Assembling();
+        var controlPlane = Holding(project);
+        var at = new DateTimeOffset(2026, 11, 14, 14, 12, 0, TimeSpan.Zero);
+
+        await Given.Pipeline(
+                controlPlane, Given.YouTube(), ScriptedChat.Answering("{}"), Notifier(), Given.Media(), new FakeTimeProvider(at), new FakeProcessRunner { ProbedMs = 12_000 })
+            .RunAsync(new QueuedProject(project, Origin), CancellationToken.None);
+
+        var save = controlPlane.Saves.ShouldHaveSingleItem().Project;
+        save.Status.ShouldBe("assembled");
+        var package = save.Package.ShouldNotBeNull();
+        (package.VideoFile, package.ThumbnailFile).ShouldBe(("video.mp4", "thumbnail.png"));
+        package.AssembledAt.ShouldBe("2026-11-14T14:12:00.0000000+00:00", "the package carries the time of its assembly, read from the worker's clock");
+        package.ThumbnailDescription.ShouldBe(
+            "A frame from the video at a tenth of its length.", "the package carries what its thumbnail shows, here the frame taken without an image service");
+        (package.MetadataSavedAt, package.RightsConfirmedAt).ShouldBe((null, null), "the worker never sets the owner's times");
+    }
+
+    [Fact]
     public async Task Metadata_The_Owner_Edited_And_The_Owners_Rights_And_Approval_Go_Back_Exactly_As_Read()
     {
         var owners = new OperatorPackage("assembled", "video.mp4", [], null, [], true, "2026-11-03T13:00:00Z",
-            "My own title", "My own description", ["mine"], 1000, null, true);
+            "My own title", "My own description", ["mine"], 1000, null, true)
+        {
+            MetadataSavedAt = "2026-11-03T12:20:00Z",
+            RightsConfirmedAt = "2026-11-03T12:31:00Z",
+        };
         var project = Assembling(owners);
         var controlPlane = Holding(project);
 
@@ -193,6 +218,8 @@ public sealed class AssemblyTests : IDisposable
         var package = controlPlane.Saves.ShouldHaveSingleItem().Project.Package.ShouldNotBeNull();
         (package.Title, package.Description, package.RightsConfirmed, package.ApprovedAt, package.MetadataEdited).ShouldBe(
             ("My own title", "My own description", true, "2026-11-03T13:00:00Z", true));
+        (package.MetadataSavedAt, package.RightsConfirmedAt).ShouldBe(
+            ("2026-11-03T12:20:00Z", "2026-11-03T12:31:00Z"), "when the owner saved the metadata and confirmed the rights goes back exactly as read");
         package.Tags.ShouldBe(["mine"]);
         package.Checks.Single(c => c.Name == "discoverability").Detail.ShouldContain("no chapters list");
     }
@@ -237,7 +264,11 @@ public sealed class AssemblyTests : IDisposable
     public async Task A_Join_That_Fails_Saves_The_Project_Failed_Removes_The_Partial_Files_And_The_Next_Assembly_Renders_Only_The_Join_Again()
     {
         var project = Assembling(new OperatorPackage("assembled", "video.mp4", [new OperatorShort("short-1.mp4", 0, 30_000, "Old")],
-            "thumbnail.png", [new OperatorCheck("duration", "pass", "old")], false, null, "A", "How to bake.", ["bread"], 30_000, null, false));
+            "thumbnail.png", [new OperatorCheck("duration", "pass", "old")], false, null, "A", "How to bake.", ["bread"], 30_000, null, false)
+        {
+            AssembledAt = "2026-11-03T11:00:00.0000000+00:00",
+            ThumbnailDescription = "A frame from the video at a tenth of its length.",
+        });
         File.WriteAllBytes(Path.Combine(_media, "video.mp4"), [9]);
         File.WriteAllBytes(Path.Combine(_media, "short-1.mp4"), [9]);
         var controlPlane = Holding(project);
@@ -256,6 +287,7 @@ public sealed class AssemblyTests : IDisposable
         var package = failed.Package.ShouldNotBeNull();
         (package.Status, package.Error, package.VideoFile, package.ThumbnailFile, package.DurationMs).ShouldBe(("failed", reason, null, null, 0));
         (package.Shorts.Count, package.Checks.Count, package.Title).ShouldBe((0, 0, "A"));
+        (package.AssembledAt, package.ThumbnailDescription).ShouldBe((null, null), "a failed package has no assembly time and no thumbnail to describe");
         Files().Where(f => !f.StartsWith("segment-", StringComparison.Ordinal))
             .ShouldBe(["my-voice.wav", "scene-s1.mp3", "scene-s1.png", "scene-s2.mp3"]);
         Files().Count(f => f.StartsWith("segment-", StringComparison.Ordinal)).ShouldBe(3);

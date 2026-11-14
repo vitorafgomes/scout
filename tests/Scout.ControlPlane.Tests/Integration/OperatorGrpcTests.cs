@@ -858,7 +858,13 @@ public sealed class OperatorGrpcTests
             ["rivers", "geography"],
             61000,
             "Shorts cut skipped.",
-            true);
+            true)
+        {
+            AssembledAt = at.AddMinutes(-18),
+            MetadataSavedAt = at.AddMinutes(-10),
+            RightsConfirmedAt = at.AddMinutes(1),
+            ThumbnailDescription = "A picture made for the video \"Why rivers bend\": one bold, simple subject.",
+        };
         var bare = new Scout.ControlPlane.Operator.VideoPackage(
             "assembly_queued", null, [], null, [], false, null, string.Empty, string.Empty, [], 0, null, false);
         Scout.ControlPlane.Operator.OperatorProject Project(Scout.ControlPlane.Operator.VideoPackage? package) =>
@@ -875,11 +881,19 @@ public sealed class OperatorGrpcTests
         wire.Shorts.Select(s => (s.File, s.StartMs, s.DurationMs, s.Hook)).ShouldBe([("short-1.mp4", 1500, 30000, "Rivers never run straight.")]);
         wire.Checks.Select(c => (c.Name, c.Result, c.Detail)).ShouldBe([("loudness", "warn", "-12 LUFS")]);
         wire.Tags.ShouldBe(["rivers", "geography"]);
+        (wire.AssembledAt, wire.MetadataSavedAt, wire.RightsConfirmedAt, wire.ThumbnailDescription).ShouldBe(
+            ("2026-11-03T10:12:00.0000000+00:00", "2026-11-03T10:20:00.0000000+00:00", "2026-11-03T10:31:00.0000000+00:00",
+                "A picture made for the video \"Why rivers bend\": one bold, simple subject."),
+            "the assembly time, the owner's save and confirmation times, as ISO 8601, and the thumbnail's description reach the wire");
         (bareWire.HasVideoFile, bareWire.HasThumbnailFile, bareWire.HasApprovedAt, bareWire.HasError).ShouldBe((false, false, false, false));
+        (bareWire.HasAssembledAt, bareWire.HasMetadataSavedAt, bareWire.HasRightsConfirmedAt, bareWire.HasThumbnailDescription).ShouldBe(
+            (false, false, false, false), "an absent time or description is left unset on the wire");
         none.Package.ShouldBeNull();
         (back with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(full with { Shorts = [], Checks = [], Tags = [] });
         (back.Shorts.Single(), back.Checks.Single(), string.Join("|", back.Tags)).ShouldBe((full.Shorts[0], full.Checks[0], "rivers|geography"));
         (bareBack.VideoFile, bareBack.ThumbnailFile, bareBack.ApprovedAt, bareBack.Error).ShouldBe(((string?)null, (string?)null, (DateTimeOffset?)null, (string?)null));
+        (bareBack.AssembledAt, bareBack.MetadataSavedAt, bareBack.RightsConfirmedAt, bareBack.ThumbnailDescription).ShouldBe(
+            ((DateTimeOffset?)null, (DateTimeOffset?)null, (DateTimeOffset?)null, (string?)null), "a field absent on the wire reads as null");
     }
 
     private static async Task<Scout.ControlPlane.Operator.OperatorProject> ApprovedAsync(ControlPlaneTestHost host, string? originReference = null)

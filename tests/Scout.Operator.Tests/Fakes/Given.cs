@@ -96,7 +96,7 @@ internal static class Given
             new ScenePlanner(chat),
             narration,
             visuals,
-            Assembly(processes, visuals),
+            Assembly(processes, visuals, clock),
             new TranscriptionStage(Toolset(processes), new MediaProbe(processes), clock, transcriber),
             Presenter(controlPlane, processes, visuals, narration, faces, presenters, clock),
             notifier,
@@ -231,10 +231,11 @@ internal static class Given
     public static FfmpegTools Tools(string encoder = "libopenh264")
         => new("/opt/scout/ffmpeg", "/fonts/NotoSans-Regular.ttf", encoder);
 
-    public static AssemblyStage Assembly(IProcessRunner runner, VisualGenerator visuals)
+    public static AssemblyStage Assembly(IProcessRunner runner, VisualGenerator visuals, TimeProvider? time = null)
     {
         var toolset = Toolset(runner);
-        return new(toolset, new MediaProbe(runner), Assembler(runner), new ShortsCutter(toolset), new ThumbnailMaker(visuals, toolset));
+        return new(
+            toolset, new MediaProbe(runner), Assembler(runner), new ShortsCutter(toolset), new ThumbnailMaker(visuals, toolset), time ?? new FakeTimeProvider(Now));
     }
 
     /// <summary>The assembler over <paramref name="runner"/>, with lip sync through <paramref name="lipSync"/>, none unless given.</summary>

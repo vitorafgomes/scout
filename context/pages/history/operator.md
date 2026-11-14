@@ -1,8 +1,9 @@
 ---
 title: "Operator - history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-05
-changes: "Initial history note: the FaceMouth acceptance run of phase 8c-B"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: reference
 status: artefact
 description: "What changed in the channel operator worker and when, and the dated acceptance runs the service page points to."
@@ -15,6 +16,12 @@ reliability: high
 # Operator - history
 
 > Dated changes and acceptance runs of [[pages/services/operator]]; the service page states how it works now.
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `ThumbnailMaker.MakeAsync` returns the file and what it shows: "A picture made for the video \"<title>\": one bold, simple subject." for a generated picture, and for a picture used again for the same title, beside `VisualGenerator.ThumbnailPrompt` so the two cannot drift; "A frame from the video at a tenth of its length." for the frame (no image service, a refused picture, the owner's own recording). `AssemblyStage` takes a `TimeProvider` and stamps the render's end, ISO 8601, so the package carries `AssembledAt` and `ThumbnailDescription`; a failed package has neither. The owner's `MetadataSavedAt` and `RightsConfirmedAt` go back exactly as read, like the other owner fields. The image prompt is unchanged.
+- **Tests:** `ThumbnailMakerTests` (the generated, reused, frame, refused and own-video descriptions), `AssemblyTests.The_Package_Says_When_It_Was_Assembled_By_The_Workers_Clock_And_What_Its_Thumbnail_Shows`, the owner times in `Metadata_The_Owner_Edited_And_The_Owners_Rights_And_Approval_Go_Back_Exactly_As_Read`, and the cleared time and description in the failed join.
 
 ## 2026-11-05 - FaceMouth acceptance (phase 8c-B)
 

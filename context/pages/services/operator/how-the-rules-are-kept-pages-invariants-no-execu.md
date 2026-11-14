@@ -1,8 +1,9 @@
 ---
 title: "Operator: How the rules are kept: pages/invariants/no-executive-writes: the operator writes nothing outside"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Operator service page."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): package times and thumbnail description; citations re-pointed."
 page_type: service
 status: active
 description: "Read when a change touches: evidence for: Scout performs descriptive writes only."
@@ -30,13 +31,13 @@ reliability: high
 
 - The mandate's blocked topics hold from the first step: `youtube_make_video` and the pipeline refuse a blocked topic before any search (`tests/Scout.Operator.Tests/YouTubeOperatorPluginTests.cs:115`, `tests/Scout.Operator.Tests/OperatorPipelineTests.cs:101`).
 
-- The owner's own video stays on the machine: the recording is read and its sound written only inside the media directory, through `MediaFiles`, and the WAV is removed when the transcription ends, also when it fails (`tests/Scout.Operator.Tests/TranscriptionStageTests.cs:68`, `:113`, `:140`); the transcript is sent only as data in the one chapter request, which offers no function and calls it data, never instructions (`tests/Scout.Operator.Tests/ScenePlannerTests.cs:175`); production asks no speech, image or stock service (`tests/Scout.Operator.Tests/ProductionTests.cs:508`) and the thumbnail no image service (`tests/Scout.Operator.Tests/ThumbnailMakerTests.cs:145`). The transcription calls nothing over the network ([[pages/invariants/local-first-default]]).
+- The owner's own video stays on the machine: the recording is read and its sound written only inside the media directory, through `MediaFiles`, and the WAV is removed when the transcription ends, also when it fails (`tests/Scout.Operator.Tests/TranscriptionStageTests.cs:68`, `:113`, `:140`); the transcript is sent only as data in the one chapter request, which offers no function and calls it data, never instructions (`tests/Scout.Operator.Tests/ScenePlannerTests.cs:175`); production asks no speech, image or stock service (`tests/Scout.Operator.Tests/ProductionTests.cs:508`) and the thumbnail no image service (`tests/Scout.Operator.Tests/ThumbnailMakerTests.cs:148`). The transcription calls nothing over the network ([[pages/invariants/local-first-default]]).
 
 - The screenshot text reader writes no file and passes no path but the language data folder; the image goes in on standard input and the text comes out on standard output (`tests/Scout.Operator.Tests/ScreenText/TesseractScreenReaderTests.cs:97`).
 
-- Assembly writes only inside the media directory, through the same confinement, and reads only scene files that resolve inside it (`tests/Scout.Operator.Tests/AssemblerTests.cs:246`, `tests/Scout.Operator.Tests/MediaProbeTests.cs:44`); ffmpeg gets an argument list, never a shell string, and no standard input, and piper only the narration (`tests/Scout.Operator.Tests/ProcessRunnerTests.cs:10`, `:19`, `:31`); piper runs with exactly its argument list, writes only inside the media directory and leaves no file when it fails or times out (`tests/Scout.Operator.Tests/PiperSpeechTests.cs:90`, `:145`), and a voice id it did not find runs nothing (`:191`); a failed assembly leaves no partial package file, even when a Short fails while the thumbnail is still being made (`tests/Scout.Operator.Tests/AssemblyTests.cs:237`, `:361`).
+- Assembly writes only inside the media directory, through the same confinement, and reads only scene files that resolve inside it (`tests/Scout.Operator.Tests/AssemblerTests.cs:246`, `tests/Scout.Operator.Tests/MediaProbeTests.cs:44`); ffmpeg gets an argument list, never a shell string, and no standard input, and piper only the narration (`tests/Scout.Operator.Tests/ProcessRunnerTests.cs:10`, `:19`, `:31`); piper runs with exactly its argument list, writes only inside the media directory and leaves no file when it fails or times out (`tests/Scout.Operator.Tests/PiperSpeechTests.cs:90`, `:145`), and a voice id it did not find runs nothing (`:191`); a failed assembly leaves no partial package file, even when a Short fails while the thumbnail is still being made (`tests/Scout.Operator.Tests/AssemblyTests.cs:264`, `:393`).
 
-- The owner's package fields, `rights_confirmed`, `approved_at`, `metadata_edited` and edited metadata, go back exactly as read (`tests/Scout.Operator.Tests/AssemblyTests.cs:184`, `tests/Scout.Host.Console.Tests/GrpcOperatorControlPlaneTests.cs:453`), and a last-resort failed save keeps them too (`tests/Scout.Operator.Tests/OperatorWorkerTests.cs:145`).
+- The owner's package fields, `rights_confirmed`, `approved_at`, `metadata_edited`, `metadata_saved_at`, `rights_confirmed_at` and edited metadata, go back exactly as read (`tests/Scout.Operator.Tests/AssemblyTests.cs:205`, `tests/Scout.Host.Console.Tests/GrpcOperatorControlPlaneTests.cs:453`), and a last-resort failed save keeps them too (`tests/Scout.Operator.Tests/OperatorWorkerTests.cs:145`).
 
 - The first metadata always fits YouTube's limits, whatever length the model gives the title or the owner gives the topic, and both sides count tags the same way (`tests/Scout.Operator.Tests/AssemblyTests.cs:161`, `tests/Scout.Host.Console.Tests/OperatorContractTests.cs:235`).
 

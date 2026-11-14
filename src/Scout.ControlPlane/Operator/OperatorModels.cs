@@ -232,9 +232,10 @@ public sealed record Scene(
 
 /// <summary>
 /// The assembled video of a project: the MP4, its Shorts and thumbnail as plain file names inside
-/// the project's media directory, the checks the worker ran, and the upload metadata. Only the owner
-/// confirms the media rights, approves the package or edits its metadata; once the owner edited it,
-/// the worker keeps the title, description and tags as they are.
+/// the project's media directory, the checks the worker ran, when it assembled them, what was asked of the
+/// thumbnail, and the upload metadata. Only the owner confirms the media rights, approves the package or
+/// edits its metadata, and only those edits set when they happened; once the owner edited it, the
+/// worker keeps the title, description and tags as they are.
 /// </summary>
 public sealed record VideoPackage(
     string Status,
@@ -249,7 +250,20 @@ public sealed record VideoPackage(
     IReadOnlyList<string> Tags,
     int DurationMs,
     string? Error,
-    bool MetadataEdited);
+    bool MetadataEdited)
+{
+    /// <summary>When the worker assembled the package; null before an assembly and in a package stored before it was kept.</summary>
+    public DateTimeOffset? AssembledAt { get; init; }
+
+    /// <summary>When the owner last saved the metadata; null until the owner saves it.</summary>
+    public DateTimeOffset? MetadataSavedAt { get; init; }
+
+    /// <summary>When the owner confirmed the media rights; null while they are not confirmed.</summary>
+    public DateTimeOffset? RightsConfirmedAt { get; init; }
+
+    /// <summary>What was asked of the thumbnail, in words for its alt text, as the worker wrote it; null without one.</summary>
+    public string? ThumbnailDescription { get; init; }
+}
 
 /// <summary>One vertical Shorts cut of the video, from <c>StartMs</c> into it, with its hook line.</summary>
 public sealed record ShortClip(string File, int StartMs, int DurationMs, string Hook);

@@ -219,8 +219,11 @@ function length(ms: number): string {
                 >Assembling the video, its Shorts and its thumbnail.</span
               >
             } @else if (again(p)) {
-              <span class="meta" id="asm-again" data-test="assemble-again-help"
-                >Assembling again replaces the video, Shorts and thumbnail below.</span
+              <span class="meta" id="asm-again" data-test="assemble-again-help">
+                @if (p.package?.assembledAt; as at) {
+                  Assembled {{ dayAt(at) }}.
+                }
+                Assembling again replaces the video, Shorts and thumbnail below.</span
               >
             }
             @if (assembleError(); as message) {
@@ -268,7 +271,7 @@ function length(ms: number): string {
                     <img
                       class="thumbnail"
                       data-test="package-thumbnail"
-                      alt="Thumbnail of the video"
+                      [alt]="pkg.thumbnailDescription ?? 'Thumbnail of the video'"
                       [src]="mediaUrl(p, file)"
                     />
                   }
@@ -454,7 +457,9 @@ function length(ms: number): string {
                     <sc-icon name="save" [size]="16" />Save details
                   </button>
                   @if (pkg.metadataEdited) {
-                    <span class="meta" data-test="metadata-saved">Saved</span>
+                    <span class="meta" data-test="metadata-saved">{{
+                      pkg.metadataSavedAt ? 'Saved ' + dayAt(pkg.metadataSavedAt) : 'Saved'
+                    }}</span>
                   }
                 </div>
                 @if (metadataError(); as message) {
@@ -482,7 +487,12 @@ function length(ms: number): string {
                   >
                   @if (pkg.rightsConfirmed) {
                     <span class="meta ok" id="ap-rights-help" data-test="media-rights-help"
-                      >Confirmed. This cannot be undone.</span
+                      >{{
+                        pkg.rightsConfirmedAt
+                          ? 'Confirmed ' + dayAt(pkg.rightsConfirmedAt) + '.'
+                          : 'Confirmed.'
+                      }}
+                      This cannot be undone.</span
                     >
                   } @else {
                     <span class="meta" id="ap-rights-help" data-test="media-rights-help"
@@ -1385,10 +1395,18 @@ export class AssemblyComponent implements OnInit, OnDestroy {
     return `${count} ${count === 1 ? 'scene' : 'scenes'} · ${length(total)}`;
   }
 
+  /** A time on this computer's clock: "today at 14:12", "yesterday at 14:12", else "on 7 Nov 2026 at 14:12". */
   dayAt(iso: string): string {
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const day = formatDate(iso, 'yyyy-MM-dd', 'en-US');
-    const today = formatDate(Date.now(), 'yyyy-MM-dd', 'en-US');
-    return `${day === today ? 'today' : day} at ${formatDate(iso, 'HH:mm', 'en-US')}`;
+    const when =
+      day === formatDate(now, 'yyyy-MM-dd', 'en-US')
+        ? 'today'
+        : day === formatDate(yesterday, 'yyyy-MM-dd', 'en-US')
+          ? 'yesterday'
+          : `on ${formatDate(iso, 'd MMM y', 'en-US')}`;
+    return `${when} at ${formatDate(iso, 'HH:mm', 'en-US')}`;
   }
 
   blockedSentence(reasons: readonly string[]): string {

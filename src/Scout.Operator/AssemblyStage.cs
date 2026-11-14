@@ -1,7 +1,18 @@
+using System.Globalization;
+
 namespace Scout.Operator;
 
-/// <summary>What an assembly rendered: the video, its Shorts, its thumbnail and its measured loudness.</summary>
-internal sealed record AssemblyRender(AssembledVideo Video, IReadOnlyList<OperatorShort> Shorts, string Thumbnail, double? Loudness);
+/// <summary>
+/// What an assembly rendered: the video, its Shorts, its thumbnail and what was asked of it, its measured loudness and when it
+/// ended, ISO 8601.
+/// </summary>
+internal sealed record AssemblyRender(
+    AssembledVideo Video,
+    IReadOnlyList<OperatorShort> Shorts,
+    string Thumbnail,
+    string ThumbnailDescription,
+    double? Loudness,
+    string AssembledAt);
 
 /// <summary>
 /// Renders a project's package in its media directory: the real length of every narration file, the video, then the
@@ -15,7 +26,8 @@ internal sealed class AssemblyStage(
     MediaProbe probe,
     Assembler assembler,
     ShortsCutter shorts,
-    ThumbnailMaker thumbnails)
+    ThumbnailMaker thumbnails,
+    TimeProvider time)
 {
     internal const string Assembled = "assembled";
 
@@ -47,7 +59,14 @@ internal sealed class AssemblyStage(
                 tools, directory, PackageChecks.Title(project.Script, project.Topic), video, project.Format == OperatorPipeline.OwnVideo, ct);
             var loudness = LoudnessAsync(tools, directory, video, ct);
             await Task.WhenAll(cut, thumbnail, loudness).ConfigureAwait(false);
-            return new AssemblyRender(video, await cut.ConfigureAwait(false), await thumbnail.ConfigureAwait(false), await loudness.ConfigureAwait(false));
+            var (thumbnailFile, thumbnailDescription) = await thumbnail.ConfigureAwait(false);
+            return new AssemblyRender(
+                video,
+                await cut.ConfigureAwait(false),
+                thumbnailFile,
+                thumbnailDescription,
+                await loudness.ConfigureAwait(false),
+                time.GetUtcNow().ToString("O", CultureInfo.InvariantCulture));
         }
         catch
         {
@@ -100,7 +119,8 @@ internal sealed class AssemblyStage(
 
     /// <summary>
     /// The package of <paramref name="render"/> on the project as the control plane holds it now: the owner's rights,
-    /// approval and edited metadata exactly as read, the first metadata otherwise, and the checks over the metadata kept.
+    /// approval and edited metadata, and when the owner saved them and confirmed the rights, exactly as read, the first
+    /// metadata otherwise, the checks over the metadata kept, when the render ended and what was asked of the thumbnail.
     /// </summary>
     public static OperatorPackage Package(OperatorProjectState current, AssemblyRender render, OperatorMandate mandate)
     {
@@ -124,10 +144,16 @@ internal sealed class AssemblyStage(
             tags,
             render.Video.DurationMs,
             null,
-            edited);
+            edited)
+        {
+            AssembledAt = render.AssembledAt,
+            MetadataSavedAt = stored?.MetadataSavedAt,
+            RightsConfirmedAt = stored?.RightsConfirmedAt,
+            ThumbnailDescription = render.ThumbnailDescription,
+        };
     }
 
-    /// <summary>The project failed with <paramref name="reason"/>: no files in its package, the owner's fields as read.</summary>
+    /// <summary>The project failed with <paramref name="reason"/>: no files, assembly time or thumbnail description in its package, the owner's fields as read.</summary>
     public static OperatorProjectState Failed(OperatorProjectState current, string reason)
     {
         ArgumentNullException.ThrowIfNull(current);
@@ -146,6 +172,8 @@ internal sealed class AssemblyStage(
                 Checks = [],
                 DurationMs = 0,
                 Error = reason,
+                AssembledAt = null,
+                ThumbnailDescription = null,
             },
         };
     }

@@ -465,8 +465,29 @@ public sealed class GrpcOperatorControlPlaneTests
             ["bread", "sourdough"],
             95_000,
             null,
-            true);
-        var failed = assembled with { Status = "failed", VideoFile = null, ThumbnailFile = null, ApprovedAt = null, Error = "Scout could not render scene 2", Shorts = [], Checks = [], RightsConfirmed = false, MetadataEdited = false };
+            true)
+        {
+            AssembledAt = "2026-11-03T12:12:00.0000000+00:00",
+            MetadataSavedAt = "2026-11-03T12:20:00.0000000+00:00",
+            RightsConfirmedAt = "2026-11-03T12:31:00.0000000+00:00",
+            ThumbnailDescription = "A picture made for the video \"Bread in ten minutes\": one bold, simple subject.",
+        };
+        var failed = assembled with
+        {
+            Status = "failed",
+            VideoFile = null,
+            ThumbnailFile = null,
+            ApprovedAt = null,
+            Error = "Scout could not render scene 2",
+            Shorts = [],
+            Checks = [],
+            RightsConfirmed = false,
+            MetadataEdited = false,
+            AssembledAt = null,
+            MetadataSavedAt = null,
+            RightsConfirmedAt = null,
+            ThumbnailDescription = null,
+        };
         var service = new FakeWorkerGate();
         await using var server = await WorkerGateServer.StartAsync(service);
         using var gate = new GrpcWriteGate(server.SocketPath, Token);
@@ -483,7 +504,13 @@ public sealed class GrpcOperatorControlPlaneTests
         wire.Shorts.ShouldHaveSingleItem().ShouldBe(new ShortClip { File = "short-1.mp4", StartMs = 2000, DurationMs = 30_000, Hook = "Bread in ten minutes?" });
         wire.Checks.ShouldHaveSingleItem().ShouldBe(new PackageCheck { Name = "loudness", Result = "warn", Detail = "The video plays at -20.0 LUFS; aim between -18 and -11 LUFS." });
         wire.Tags.ShouldBe(["bread", "sourdough"]);
+        (wire.AssembledAt, wire.MetadataSavedAt, wire.RightsConfirmedAt, wire.ThumbnailDescription).ShouldBe(
+            ("2026-11-03T12:12:00.0000000+00:00", "2026-11-03T12:20:00.0000000+00:00", "2026-11-03T12:31:00.0000000+00:00",
+                "A picture made for the video \"Bread in ten minutes\": one bold, simple subject."),
+            "the assembly time, the owner's two times and the thumbnail's description travel to the control plane as the worker holds them");
         (failedWire.HasVideoFile, failedWire.HasThumbnailFile, failedWire.HasApprovedAt, failedWire.Error).ShouldBe((false, false, false, "Scout could not render scene 2"));
+        (failedWire.HasAssembledAt, failedWire.HasMetadataSavedAt, failedWire.HasRightsConfirmedAt, failedWire.HasThumbnailDescription).ShouldBe(
+            (false, false, false, false), "an absent time or description stays absent on the wire");
         var back = saved.Package.ShouldNotBeNull();
         (back with { Shorts = [], Checks = [], Tags = [] }).ShouldBe(assembled with { Shorts = [], Checks = [], Tags = [] });
         (back.Shorts.ShouldHaveSingleItem(), back.Checks.ShouldHaveSingleItem()).ShouldBe((assembled.Shorts[0], assembled.Checks[0]));

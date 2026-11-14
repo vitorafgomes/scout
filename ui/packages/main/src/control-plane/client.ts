@@ -398,6 +398,10 @@ interface PackageMessage {
   durationMs: number;
   error?: string;
   metadataEdited: boolean;
+  assembledAt?: string;
+  metadataSavedAt?: string;
+  rightsConfirmedAt?: string;
+  thumbnailDescription?: string;
 }
 
 interface SceneMessage {
@@ -744,6 +748,10 @@ function toPackage(message: PackageMessage): VideoPackageDto {
     durationMs: message.durationMs,
     error: message.error ?? null,
     metadataEdited: message.metadataEdited,
+    assembledAt: message.assembledAt ?? null,
+    metadataSavedAt: message.metadataSavedAt ?? null,
+    rightsConfirmedAt: message.rightsConfirmedAt ?? null,
+    thumbnailDescription: message.thumbnailDescription ?? null,
   };
 }
 

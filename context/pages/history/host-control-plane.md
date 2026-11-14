@@ -1,8 +1,9 @@
 ---
 title: "Host.ControlPlane - history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-09
-changes: "Initial history note: the findings of Scout's own audit on the host's transport and gRPC adapters"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: reference
 status: artefact
 description: "What changed in the control-plane host and when."
@@ -25,6 +26,12 @@ reliability: high
 # Host.ControlPlane - history
 
 > Dated changes to [[pages/services/host-control-plane]]; the service page states how it works now.
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `OperatorMapping` carries the package's three times as ISO 8601 and its thumbnail description both ways, each left unset on the wire when null and read as null when absent.
+- **Tests:** `OperatorGrpcTests.A_Package_Maps_To_The_Wire_And_Back_Field_For_Field_With_Unset_Optionals_For_Absent_Values`.
 
 ## 2026-11-09 - Five findings of Scout's own audit, on the socket and the gRPC adapters
 

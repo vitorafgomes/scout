@@ -1789,6 +1789,8 @@ public sealed partial class OperatorServiceTests : IDisposable
         Description = "Meanders explained.",
         Tags = ["rivers", "geography"],
         DurationMs = 6000,
+        AssembledAt = new DateTimeOffset(2026, 11, 14, 14, 12, 0, TimeSpan.Zero),
+        ThumbnailDescription = "A frame from the video at a tenth of its length.",
     };
 
     private async Task<OperatorProject> AssembledAsync(Func<VideoPackage, VideoPackage>? change = null)
@@ -1953,9 +1955,10 @@ public sealed partial class OperatorServiceTests : IDisposable
     public async Task Assembling_Again_Clears_The_Rights_And_The_Approval_And_Keeps_The_Metadata_Only_When_The_Owner_Edited_It(bool edited)
     {
         var project = await ReadyToApproveAsync();
+        DateTimeOffset? savedAt = null;
         if (edited)
         {
-            await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None);
+            savedAt = (await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None)).Package!.MetadataSavedAt;
             await _operator.ConfirmMediaRightsAsync(project.Id, None);
         }
         await _operator.ApprovePackageAsync(project.Id, None);
@@ -1968,6 +1971,9 @@ public sealed partial class OperatorServiceTests : IDisposable
         (package.Title, package.Description, string.Join("|", package.Tags), package.MetadataEdited).ShouldBe(edited
             ? ("My title", "My description", "mine", true)
             : (string.Empty, string.Empty, string.Empty, false));
+        (package.RightsConfirmedAt, package.AssembledAt, package.ThumbnailDescription).ShouldBe(
+            ((DateTimeOffset?)null, (DateTimeOffset?)null, (string?)null), "a new assembly starts with no rights confirmation time, assembly time or thumbnail description");
+        package.MetadataSavedAt.ShouldBe(savedAt, "when the owner saved the metadata is kept with the metadata, only when the owner edited it");
     }
 
     [Fact]
@@ -2281,6 +2287,140 @@ public sealed partial class OperatorServiceTests : IDisposable
         var ex = await Should.ThrowAsync<OperatorValidationException>(() => _operator.ConfirmMediaRightsAsync(project.Id, None));
 
         ex.Message.ShouldBe($"Project '{project.Id}' has no package yet; assemble it first.");
+    }
+
+    [Fact]
+    public async Task Saving_The_Metadata_Records_When_The_Owner_Saved_It()
+    {
+        var project = await AssembledAsync();
+        var before = DateTimeOffset.UtcNow;
+
+        var edited = await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None);
+
+        project.Package.ShouldNotBeNull().MetadataSavedAt.ShouldBeNull("the worker's first metadata carries no time of an owner's save");
+        edited.Package.ShouldNotBeNull().MetadataSavedAt.ShouldNotBeNull("saving the metadata records when the owner saved it")
+            .ShouldBeInRange(before, DateTimeOffset.UtcNow);
+        (await StoredAsync(project.Id)).Package!.MetadataSavedAt.ShouldBe(edited.Package.MetadataSavedAt);
+    }
+
+    [Fact]
+    public async Task Confirming_The_Media_Rights_Records_When_The_Owner_Confirmed_Them()
+    {
+        var project = await AssembledAsync();
+        var before = DateTimeOffset.UtcNow;
+
+        var confirmed = await _operator.ConfirmMediaRightsAsync(project.Id, None);
+
+        project.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldBeNull("rights not confirmed have no confirmation time");
+        confirmed.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldNotBeNull("confirming the media rights records when the owner confirmed them")
+            .ShouldBeInRange(before, DateTimeOffset.UtcNow);
+        (await StoredAsync(project.Id)).Package!.RightsConfirmedAt.ShouldBe(confirmed.Package.RightsConfirmedAt);
+    }
+
+    [Fact]
+    public async Task An_Edit_That_Changes_The_Video_Takes_Back_The_Rights_With_The_Time_They_Were_Confirmed()
+    {
+        var project = await ReadyToApproveAsync();
+
+        var produced = await _operator.ProduceProjectAsync(project.Id, string.Empty, string.Empty, string.Empty, None);
+
+        project.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldNotBeNull();
+        var package = produced.Package.ShouldNotBeNull();
+        (package.RightsConfirmed, package.RightsConfirmedAt).ShouldBe(
+            (false, (DateTimeOffset?)null), "rights taken back by a change to the video lose the time they were confirmed");
+        (await StoredAsync(project.Id)).Package!.RightsConfirmedAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_Worker_Save_Carrying_Other_Owner_Times_Keeps_The_Stored_Ones()
+    {
+        var project = await AssembledAsync();
+        var edited = await _operator.EditPackageMetadataAsync(project.Id, "My title", "My description", ["mine"], None);
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var forged = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var package = Rendered(taken.Package!) with
+        {
+            Title = "My title",
+            Description = "My description",
+            Tags = ["mine"],
+            MetadataEdited = true,
+            MetadataSavedAt = forged,
+            RightsConfirmedAt = forged,
+        };
+
+        var saved = await _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None);
+
+        var savedAt = edited.Package.ShouldNotBeNull().MetadataSavedAt.ShouldNotBeNull();
+        var stored = (await StoredAsync(project.Id)).Package.ShouldNotBeNull();
+        (stored.MetadataSavedAt, stored.RightsConfirmedAt).ShouldBe(
+            (savedAt, (DateTimeOffset?)null), "only the owner's edits set when the metadata was saved and the rights confirmed; a worker write keeps the stored times");
+        (saved.Package!.MetadataSavedAt, saved.Package.RightsConfirmedAt).ShouldBe((savedAt, (DateTimeOffset?)null));
+        (stored.Status, stored.AssembledAt, stored.ThumbnailDescription).ShouldBe(
+            ("assembled", package.AssembledAt, package.ThumbnailDescription), "the worker sets when it assembled the package and what the thumbnail shows");
+    }
+
+    [Fact]
+    public async Task A_Worker_Save_Is_Refused_Once_The_Owner_Confirmed_The_Rights_Of_An_Assembled_Package()
+    {
+        var project = await AssembledAsync();
+        var confirmed = await _operator.ConfirmMediaRightsAsync(project.Id, None);
+        var confirmedAt = confirmed.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldNotBeNull();
+        var forged = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        await Should.ThrowAsync<OperatorTamperingException>(() => _operator.SaveProjectFromWorkerAsync(
+            confirmed with { Package = confirmed.Package with { RightsConfirmedAt = forged } }, null, None));
+
+        (await StoredAsync(project.Id)).Package.ShouldNotBeNull().RightsConfirmedAt.ShouldBe(
+            confirmedAt, "the worker may only save a package while it assembles, so it never reaches one whose rights the owner confirmed");
+    }
+
+    [Fact]
+    public async Task Confirming_The_Rights_Again_Keeps_The_Time_They_Were_First_Confirmed()
+    {
+        var project = await AssembledAsync();
+        var first = await _operator.ConfirmMediaRightsAsync(project.Id, None);
+        var firstAt = first.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldNotBeNull();
+
+        var again = await _operator.ConfirmMediaRightsAsync(project.Id, None);
+
+        again.Package.ShouldNotBeNull().RightsConfirmedAt.ShouldBe(
+            firstAt, "a repeated confirmation keeps the time the owner first confirmed the rights");
+    }
+
+    [Theory]
+    [InlineData("assembling", true, 0)]
+    [InlineData("assembled", false, 301)]
+    public async Task A_Worker_Save_With_An_Assembly_Time_Before_Assembly_Or_A_Too_Long_Thumbnail_Description_Is_Refused(
+        string status, bool timed, int descriptionLength)
+    {
+        var project = await AssembledAsync();
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var package = Rendered(taken.Package!) with
+        {
+            Status = status,
+            AssembledAt = timed ? new DateTimeOffset(2026, 11, 14, 14, 12, 0, TimeSpan.Zero) : null,
+            ThumbnailDescription = new string('a', descriptionLength),
+        };
+
+        await Should.ThrowAsync<OperatorValidationException>(
+            () => _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembling", Package = package }, null, None),
+            "a package still assembling has no assembly time, and the thumbnail description stays within 300 characters");
+    }
+
+    [Fact]
+    public async Task A_Thumbnail_Description_Of_300_Characters_Is_Accepted()
+    {
+        var project = await AssembledAsync();
+        await _operator.AssembleProjectAsync(project.Id, None);
+        var taken = (await _operator.NextQueuedProjectAsync(None)).ShouldNotBeNull();
+        var package = Rendered(taken.Package!) with { ThumbnailDescription = new string('a', 300) };
+
+        await _operator.SaveProjectFromWorkerAsync(taken with { Status = "assembled", Package = package }, null, None);
+
+        (await StoredAsync(project.Id)).Package.ShouldNotBeNull().ThumbnailDescription.ShouldNotBeNull().Length.ShouldBe(
+            300, "a thumbnail description of exactly 300 characters is within the limit");
     }
 
     [Fact]

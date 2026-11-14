@@ -19,6 +19,7 @@ internal static partial class PackageRules
     private const int MaxDescriptionLength = 5000;
     private const int MaxTagLength = 100;
     private const int MaxTagsLength = 500;
+    private const int MaxThumbnailDescriptionLength = 300;
 
     private const string MetadataCheck = "metadata";
     private const string DiscoverabilityCheck = "discoverability";
@@ -29,11 +30,14 @@ internal static partial class PackageRules
 
     /// <summary>
     /// The package a new assembly starts from: nothing assembled, no rights confirmed, not approved,
-    /// and the owner's metadata kept only when the owner edited it.
+    /// and the owner's metadata, with when the owner saved it, kept only when the owner edited it.
     /// </summary>
     public static VideoPackage Queue(VideoPackage? before) =>
         before is { MetadataEdited: true }
             ? new VideoPackage(AssemblyQueued, null, [], null, [], false, null, before.Title, before.Description, before.Tags, 0, null, true)
+            {
+                MetadataSavedAt = before.MetadataSavedAt,
+            }
             : new VideoPackage(AssemblyQueued, null, [], null, [], false, null, string.Empty, string.Empty, [], 0, null, false);
 
     /// <summary>
@@ -83,11 +87,13 @@ internal static partial class PackageRules
     }
 
     /// <summary>
-    /// The package after a worker save: the stored one when the worker sends none, else the worker's.
+    /// The package after a worker save: the stored one when the worker sends none, else the worker's
+    /// with the stored times of the owner's metadata save and rights confirmation, whatever it sent.
     /// The worker never confirms the rights, approves, queues an assembly, marks the metadata edited,
     /// or changes the title, description or tags once the owner edited them.
     /// </summary>
     /// <exception cref="OperatorTamperingException">The worker changes what only the owner sets.</exception>
+    /// <exception cref="OperatorValidationException">An assembly time on a package still queued or assembling, or a thumbnail description over 300 characters.</exception>
     public static VideoPackage? MergeFromWorker(string projectId, VideoPackage? stored, VideoPackage? incoming)
     {
         if (incoming is null)
@@ -121,7 +127,17 @@ internal static partial class PackageRules
                 $"The owner edited the package metadata of project '{projectId}'; the worker may not change it.");
         }
 
-        return incoming;
+        if (incoming.AssembledAt is not null && incoming.Status is AssemblyQueued or Assembling)
+        {
+            throw new OperatorValidationException($"A package that is {incoming.Status} has no assembly time yet.");
+        }
+        if (incoming.ThumbnailDescription is { Length: > MaxThumbnailDescriptionLength })
+        {
+            throw new OperatorValidationException(
+                $"The thumbnail description is longer than {MaxThumbnailDescriptionLength} characters.");
+        }
+
+        return incoming with { MetadataSavedAt = stored?.MetadataSavedAt, RightsConfirmedAt = stored?.RightsConfirmedAt };
     }
 
     /// <summary>Whether two packages hold the same values, their lists compared item by item.</summary>
@@ -168,13 +184,13 @@ internal static partial class PackageRules
 
     /// <summary>
     /// The package after an owner's scene edit that changes the video: an assembled or approved package
-    /// goes back to assembled without its rights confirmation or approval, one queued for assembly or
+    /// goes back to assembled without its rights confirmation, its time, or approval, one queued for assembly or
     /// assembling goes back to queued for assembly; any other package stays as it is.
     /// </summary>
     public static VideoPackage? AfterSceneEdit(VideoPackage? package) =>
         package switch
         {
-            { Status: Assembled or Approved } => package with { Status = Assembled, RightsConfirmed = false, ApprovedAt = null },
+            { Status: Assembled or Approved } => package with { Status = Assembled, RightsConfirmed = false, RightsConfirmedAt = null, ApprovedAt = null },
             { Status: AssemblyQueued or Assembling } => package with { Status = AssemblyQueued },
             _ => package,
         };
