@@ -1,3 +1,5 @@
+## [2026-11-14] docs | The graphify section of the tooling page matches this clone
+The page said every worktree refreshes the graph and that a `.graphifyignore` excludes the archived first cut; the hooks exit without rebuilding in a linked worktree, a worktree has no graph of its own, and that file left with the archive, so the section now says the main checkout alone refreshes the graph and that the install runs once per clone. Page updated: conventions/tooling.
 ## [2026-11-13] chore | Repository security: main behind a ruleset, CodeQL, Dependabot for NuGet and Bun
 main takes changes only through a pull request with a green build check and no bypass; actions must be pinned by commit; fork pull requests wait for the owner's approval; an unused repository secret is removed; CodeQL and the NuGet and Bun Dependabot updates are added ([[pages/conventions/tooling]]).
 ## [2026-11-13] fix | The ChatGPT sign-in cancel test no longer races the fake browser
