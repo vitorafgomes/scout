@@ -5,6 +5,7 @@ import {
   type UpdateNotice,
   type UpdateProgress,
   type UpdateState,
+  type UpdateVersionList,
 } from '@scout/shared';
 import type { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron';
 import {
@@ -86,16 +87,22 @@ function fakeUpdater(offered = '0.2.0') {
   const emit = (event: string, ...args: unknown[]) => {
     for (const listener of [...(listeners.get(event) ?? [])]) listener(...args);
   };
+  const feeds: unknown[] = [];
   const target = {
     autoDownload: true,
     autoInstallOnAppQuit: true,
     allowPrerelease: true,
+    allowDowngrade: false,
+    setFeedURL(options: unknown) {
+      feeds.push(options);
+    },
     checkForUpdates() {
       calls.push('checkForUpdates');
       flagsAtCheck = {
         autoDownload: target.autoDownload,
         autoInstallOnAppQuit: target.autoInstallOnAppQuit,
         allowPrerelease: target.allowPrerelease,
+        allowDowngrade: target.allowDowngrade,
       };
       return check();
     },
@@ -125,6 +132,7 @@ function fakeUpdater(offered = '0.2.0') {
   }) as unknown as Updater;
   return {
     updater,
+    feeds,
     assigned,
     calls,
     installs,
@@ -699,6 +707,7 @@ describe('Update and restart', () => {
       autoDownload: false,
       autoInstallOnAppQuit: false,
       allowPrerelease: false,
+      allowDowngrade: false,
     });
     expect(fake.assigned).toEqual([
       ['autoDownload', false],
@@ -1214,5 +1223,281 @@ describe('the Beta channel', () => {
     }
 
     expect(results).toEqual([true, false]);
+  });
+});
+
+describe('a version the owner picks', () => {
+  const list =
+    (...releases: unknown[]) =>
+    async () =>
+      json(releases);
+  const beta = (tag: string) => release(tag, { prerelease: true });
+  const RELEASES = [
+    release('v0.0.9'),
+    beta('v0.3.0-beta.1'),
+    release('v0.2.0'),
+    release('v0.0.8', { draft: true }),
+    release('v0.1.0'),
+    release('v0.0.7-rc.1'),
+  ];
+  const listVersions = (app: Awaited<ReturnType<typeof started>>) =>
+    Promise.resolve(
+      app.handlers.get(CHANNEL.updateListVersions)!(NULL_EVENT),
+    ) as Promise<UpdateVersionList>;
+
+  it('on Stable the list is every released version, newest first, with no draft and no pre-release, and the download for this machine', async () => {
+    const app = await started({ answer: list(...RELEASES) });
+
+    const answer = await listVersions(app);
+
+    expect({
+      url: app.requests[0]!.url,
+      versions: answer.versions.map((v) => [v.version, v.prerelease]),
+      download: answer.versions[0]!.downloadUrl,
+      canInstall: answer.canInstall,
+      failure: answer.failure,
+    }).toEqual({
+      url: RELEASES_URL,
+      versions: [
+        ['0.2.0', false],
+        ['0.1.0', false],
+        ['0.0.9', false],
+      ],
+      download: download('v0.2.0', 'Scout-Desktop-0.2.0-linux-x86_64.AppImage'),
+      canInstall: true,
+      failure: null,
+    });
+  });
+
+  it('on Beta the list also carries the pre-releases, marked as such', async () => {
+    const app = await started({
+      entries: new Map([['update.channel', 'beta']]),
+      answer: list(...RELEASES),
+    });
+
+    const answer = await listVersions(app);
+
+    expect(answer.versions.map((v) => [v.version, v.prerelease])).toEqual([
+      ['0.3.0-beta.1', true],
+      ['0.2.0', false],
+      ['0.1.0', false],
+      ['0.0.9', false],
+      ['0.0.7-rc.1', true],
+    ]);
+  });
+
+  it.each([
+    ['a 503', async () => new Response('busy', { status: 503 }), 'http 503'],
+    [
+      'a reset',
+      async () => {
+        throw new TypeError('fetch failed: ECONNRESET');
+      },
+      'network',
+    ],
+    ['a body that is not a list', async () => json({ tag_name: 'v0.2.0' }), 'parse'],
+  ])(
+    'a list GitHub does not give (%s) answers no versions and why',
+    async (_label, answer, failure) => {
+      const app = await started({ answer });
+
+      const result = await listVersions(app);
+
+      expect([result.versions, result.failure]).toEqual([[], failure]);
+    },
+  );
+
+  it('a list GitHub does not answer in time says it timed out', async () => {
+    const app = await started({
+      answer: (signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        }),
+    });
+
+    expect((await listVersions(app)).failure).toBe('timeout');
+  });
+
+  it('a development build lists nothing and fetches nothing', async () => {
+    const app = await started({ packaged: false, answer: list(...RELEASES) });
+
+    const result = await listVersions(app);
+
+    expect([result.versions, app.requests]).toEqual([[], []]);
+  });
+
+  it("installing an older listed version reads that release's own metadata, may go down for this install only, then points the updater back at GitHub", async () => {
+    const fake = fakeUpdater('0.0.9');
+    const app = await started({ updater: fake.updater, answer: list(...RELEASES) });
+    await listVersions(app);
+    fake.downloadsCleanly();
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.0.9' });
+
+    expect({
+      feeds: fake.feeds,
+      atCheck: fake.flagsAtCheck()?.['allowDowngrade'],
+      after: (fake.updater as unknown as { allowDowngrade: boolean }).allowDowngrade,
+      installs: fake.installs,
+    }).toEqual({
+      feeds: [
+        {
+          provider: 'generic',
+          url: 'https://github.com/vitorafgomes/scout/releases/download/v0.0.9',
+        },
+        { provider: 'github', owner: 'vitorafgomes', repo: 'scout' },
+      ],
+      atCheck: true,
+      after: false,
+      installs: [[false, true]],
+    });
+  });
+
+  it('installing a newer listed version never allows going down', async () => {
+    const fake = fakeUpdater('0.2.0');
+    const app = await started({ updater: fake.updater, answer: list(...RELEASES) });
+    await listVersions(app);
+    fake.downloadsCleanly();
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.2.0' });
+
+    expect([fake.flagsAtCheck()?.['allowDowngrade'], fake.installs]).toEqual([
+      false,
+      [[false, true]],
+    ]);
+  });
+
+  it('a failed download of a picked version installs nothing and still points the updater back at GitHub', async () => {
+    const fake = fakeUpdater('0.0.9');
+    const app = await started({ updater: fake.updater, answer: list(...RELEASES) });
+    await listVersions(app);
+    fake.endsDownloadSilently();
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.0.9' });
+
+    expect({
+      installs: fake.installs,
+      lastFeed: fake.feeds[fake.feeds.length - 1],
+      after: (fake.updater as unknown as { allowDowngrade: boolean }).allowDowngrade,
+      last: progressOf(app.windows[0]!).at(-1)?.phase,
+    }).toEqual({
+      installs: [],
+      lastFeed: { provider: 'github', owner: 'vitorafgomes', repo: 'scout' },
+      after: false,
+      last: 'failed',
+    });
+  });
+
+  it.each([
+    ['a version the list did not offer', '0.0.8'],
+    ['a pre-release Stable left out of the list', '0.3.0-beta.1'],
+    ['the version already running', '0.1.0'],
+    ['no version at all', undefined],
+  ])('%s is refused: the updater is not touched', async (_label, version) => {
+    const fake = fakeUpdater('0.0.8');
+    const app = await started({ updater: fake.updater, answer: list(...RELEASES) });
+    await listVersions(app);
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version });
+
+    expect({
+      calls: fake.calls,
+      feeds: fake.feeds,
+      progress: progressOf(app.windows[0]!),
+    }).toEqual({
+      calls: [],
+      feeds: [],
+      progress: [
+        phase('failed', { message: 'Scout did not list that version; nothing was installed' }),
+      ],
+    });
+  });
+
+  it('a version from an earlier list is refused once a new list fails', async () => {
+    const fake = fakeUpdater('0.0.9');
+    const app = await started({ updater: fake.updater, answer: list(...RELEASES) });
+    await listVersions(app);
+    app.answerWith(async () => new Response('busy', { status: 503 }));
+    await listVersions(app);
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.0.9' });
+
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('a pre-release listed on Beta is refused after the owner moves to Stable', async () => {
+    const fake = fakeUpdater('0.3.0-beta.1');
+    const app = await started({
+      updater: fake.updater,
+      entries: new Map([['update.channel', 'beta']]),
+      answer: list(...RELEASES),
+    });
+    await listVersions(app);
+    app.answerWith(async () => json(release('v0.1.0')));
+    await app.invoke(CHANNEL.updateSetChannel, { channel: 'stable' });
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.3.0-beta.1' });
+
+    expect(fake.calls).toEqual([]);
+  });
+
+  it('a Beta list still being read when the owner moves to Stable offers nothing to install', async () => {
+    let answerList: (response: Response) => void = () => undefined;
+    const fake = fakeUpdater('0.3.0-beta.1');
+    const app = await started({
+      updater: fake.updater,
+      entries: new Map([
+        ['update.channel', 'beta'],
+        ['update.check-enabled', 'false'],
+      ]),
+      answer: () =>
+        new Promise<Response>((resolve) => {
+          answerList = resolve;
+        }),
+    });
+    const pending = listVersions(app);
+    await new Promise((r) => setTimeout(r, 0));
+    await app.invoke(CHANNEL.updateSetChannel, { channel: 'stable' });
+    answerList(json(RELEASES));
+    const result = await pending;
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.3.0-beta.1' });
+
+    expect([result.versions, fake.calls]).toEqual([[], []]);
+  });
+
+  it('nothing is installed before the owner has seen a list', async () => {
+    const fake = fakeUpdater('0.2.0');
+    const app = await started({ updater: fake.updater });
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.2.0' });
+
+    expect([fake.calls, app.requests]).toEqual([[], []]);
+  });
+
+  it('a package that cannot replace itself refuses the install and says to use Download', async () => {
+    const fake = fakeUpdater('0.0.9');
+    const app = await started({
+      updater: fake.updater,
+      platform: 'darwin',
+      arch: 'arm64',
+      env: {},
+      answer: list(...RELEASES),
+    });
+    const result = await listVersions(app);
+
+    await app.invoke(CHANNEL.updateInstallVersion, { version: '0.0.9' });
+
+    expect({
+      canInstall: result.canInstall,
+      calls: fake.calls,
+      progress: progressOf(app.windows[0]!),
+    }).toEqual({
+      canInstall: false,
+      calls: [],
+      progress: [
+        phase('failed', { message: 'This copy of Scout cannot update itself; use Download' }),
+      ],
+    });
   });
 });

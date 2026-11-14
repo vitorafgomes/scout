@@ -27,6 +27,8 @@ import type {
   UpdateNotice,
   UpdateProgress,
   UpdateState,
+  UpdateVersion,
+  UpdateVersionList,
   WorkerEvent,
   WorkerStatus,
 } from '@scout/shared';
@@ -46,6 +48,16 @@ const OWNER_MONITORS = [
   { id: 35, name: 'Built-in display 1920×1080', primary: false },
   { id: 33, name: 'External display 3440×1440', primary: true },
 ];
+
+function version(v: string, prerelease = false): UpdateVersion {
+  return {
+    version: v,
+    publishedAt: '2026-11-07T10:00:00.000Z',
+    prerelease,
+    releaseUrl: `https://github.com/vitorafgomes/scout/releases/tag/v${v}`,
+    downloadUrl: `https://github.com/vitorafgomes/scout/releases/download/v${v}/Scout-Desktop-${v}-linux-x86_64.AppImage`,
+  };
+}
 
 function makeBridge(
   initial: readonly string[] = [],
@@ -80,6 +92,14 @@ function makeBridge(
       return () => progressListeners.splice(progressListeners.indexOf(listener), 1);
     }),
     updateInstall: vi.fn(async (): Promise<UpdateState> => updateState),
+    updateListVersions: vi.fn(async (): Promise<UpdateVersionList> => ({
+      versions: [version('1.1.0'), version('1.0.0'), version('0.9.0')],
+      canInstall: true,
+      failure: null,
+    })),
+    updateInstallVersion: vi.fn(
+      async (_req: { version: string }): Promise<UpdateState> => updateState,
+    ),
     updateSetChannel: vi.fn(
       async (req: { channel: UpdateState['channel'] }): Promise<UpdateState> => {
         updateState = { ...updateState, channel: req.channel, notice: null };
@@ -1235,6 +1255,282 @@ describe('Settings: Updates', () => {
     const released = await render(withNotice(NOTICE));
 
     expect([shown, el(released, 'settings-update-prerelease')]).toEqual(['Pre-release', null]);
+  });
+
+  describe('Install a specific version', () => {
+    afterEach(() => {
+      document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove());
+    });
+
+    const open = async (bridge: ReturnType<typeof makeBridge>) => {
+      const fixture = await render(bridge);
+      el(fixture, 'versions-toggle')!.click();
+      await settle(fixture);
+      return fixture;
+    };
+    const rows = (fixture: Awaited<ReturnType<typeof render>>) =>
+      Array.from(
+        el(fixture, 'versions-list')!.querySelectorAll('li') as NodeListOf<HTMLElement>,
+        (li) =>
+          Array.from(li.children, (part) => part.textContent?.trim())
+            .filter((part) => part !== '')
+            .join(' '),
+      );
+
+    it('is folded by default behind "Install a specific version", and asks main for nothing until opened', async () => {
+      const bridge = makeBridge();
+      const fixture = await render(bridge);
+      const toggle = el(fixture, 'versions-toggle')!;
+
+      expect({
+        row: toggle.parentElement?.textContent?.trim(),
+        expanded: toggle.getAttribute('aria-expanded'),
+        label: toggle.getAttribute('aria-label'),
+        list: el(fixture, 'versions-list'),
+        asked: bridge.updateListVersions.mock.calls.length,
+      }).toEqual({
+        row: 'Install a specific version',
+        expanded: 'false',
+        label: 'Show the versions',
+        list: null,
+        asked: 0,
+      });
+    });
+
+    it('opened, lists every released version newest first with its date, Running on the current one and Older below it, Install on the others', async () => {
+      const bridge = makeBridge();
+      const fixture = await open(bridge);
+
+      expect({
+        lede: text(fixture, 'versions-lede'),
+        label: el(fixture, 'versions-toggle')!.getAttribute('aria-label'),
+        rows: rows(fixture),
+        actions: ['1.1.0', '1.0.0', '0.9.0'].map(
+          (v) => el(fixture, `version-action-${v}`)?.getAttribute('aria-label') ?? null,
+        ),
+      }).toEqual({
+        lede: 'Every released version, newest first. A version older than the one you run asks first.',
+        label: 'Hide the versions',
+        rows: [
+          '1.1.0 7 Nov 2026 Install',
+          '1.0.0 Running 7 Nov 2026',
+          '0.9.0 Older 7 Nov 2026 Install',
+        ],
+        actions: ['Install Scout 1.1.0', null, 'Install Scout 0.9.0'],
+      });
+    });
+
+    it('on Beta the lede says pre-releases are included, and a pre-release carries its chip', async () => {
+      const bridge = withNotice(null, 'up-to-date');
+      bridge.updateGetState.mockResolvedValue({
+        checkEnabled: true,
+        channel: 'beta',
+        lastCheckAt: null,
+        lastResult: null,
+        notice: null,
+        packaged: true,
+      });
+      bridge.updateListVersions.mockResolvedValueOnce({
+        versions: [version('1.2.0-beta.1', true), version('1.0.0')],
+        canInstall: true,
+        failure: null,
+      });
+      const fixture = await open(bridge);
+
+      expect([text(fixture, 'versions-lede'), rows(fixture)[0]]).toEqual([
+        'Every published version, newest first, pre-releases included on the Beta channel. A version older than the one you run asks first.',
+        '1.2.0-beta.1 Pre-release 7 Nov 2026 Install',
+      ]);
+    });
+
+    it('says it is loading while main reads the list', async () => {
+      const bridge = makeBridge();
+      bridge.updateListVersions.mockReturnValueOnce(new Promise(() => undefined));
+      const fixture = await open(bridge);
+
+      expect(text(fixture, 'versions-loading')).toBe('Loading the versions...');
+    });
+
+    it('a list GitHub did not give says why, and Try again asks again', async () => {
+      const bridge = makeBridge();
+      bridge.updateListVersions.mockResolvedValueOnce({
+        versions: [],
+        canInstall: true,
+        failure: 'network',
+      });
+      const fixture = await open(bridge);
+      const failed = text(fixture, 'versions-failed');
+
+      el(fixture, 'versions-retry')!.click();
+      await settle(fixture);
+
+      expect({
+        failed,
+        role: 'alert',
+        asked: bridge.updateListVersions.mock.calls.length,
+        listed: rows(fixture).length,
+      }).toEqual({
+        failed: 'Could not list the versions: no connection to GitHub.',
+        role: 'alert',
+        asked: 2,
+        listed: 3,
+      });
+    });
+
+    it('Install on a newer version installs it at once', async () => {
+      const bridge = makeBridge();
+      const fixture = await open(bridge);
+
+      el(fixture, 'version-action-1.1.0')!.click();
+      await settle(fixture);
+
+      expect([
+        bridge.updateInstallVersion.mock.calls,
+        document.querySelector('sc-confirm-dialog'),
+      ]).toEqual([[[{ version: '1.1.0' }]], null]);
+    });
+
+    for (const choice of ['confirm-ok', 'confirm-cancel'] as const) {
+      it(`Install on an older version asks "Install Scout 0.9.0, an older version?" with Cancel focused; ${choice === 'confirm-ok' ? 'Install 0.9.0 installs it' : 'Cancel installs nothing'}`, async () => {
+        const bridge = makeBridge();
+        const fixture = await open(bridge);
+
+        el(fixture, 'version-action-0.9.0')!.click();
+        await settle(fixture);
+        const dialog = {
+          title: document.querySelector('sc-confirm-dialog h2')?.textContent?.trim(),
+          body: document
+            .querySelector('sc-confirm-dialog p')
+            ?.textContent?.replace(/\s+/g, ' ')
+            .trim(),
+          confirm: document.querySelector('[data-test="confirm-ok"]')?.textContent?.trim(),
+          focused: (document.activeElement as HTMLElement | null)?.getAttribute('data-test'),
+        };
+        document.querySelector<HTMLElement>(`[data-test="${choice}"]`)!.click();
+        await settle(fixture);
+        await settle(fixture);
+
+        expect([dialog, bridge.updateInstallVersion.mock.calls]).toEqual([
+          {
+            title: 'Install Scout 0.9.0, an older version?',
+            body: 'You are running 1.0.0. An older version may not read everything a newer one saved, such as a setting it does not know. Nothing is deleted, and you can update again from this card. Scout restarts once the download ends.',
+            confirm: 'Install 0.9.0',
+            focused: 'confirm-cancel',
+          },
+          choice === 'confirm-ok' ? [[{ version: '0.9.0' }]] : [],
+        ]);
+      });
+    }
+
+    it('while the bar installs an update, no version of the list can be installed', async () => {
+      const bridge = makeBridge();
+      const fixture = await open(bridge);
+
+      bridge.emitProgress(progress('downloading', { percent: 10 }));
+      await settle(fixture);
+
+      expect(['1.1.0', '0.9.0'].map((v) => el(fixture, `version-action-${v}`))).toEqual([
+        null,
+        null,
+      ]);
+    });
+
+    it('a list read before a channel change that answers last does not replace the newer one', async () => {
+      const bridge = makeBridge();
+      let answerFirst: (list: UpdateVersionList) => void = () => undefined;
+      bridge.updateListVersions.mockReturnValueOnce(
+        new Promise<UpdateVersionList>((resolve) => {
+          answerFirst = resolve;
+        }),
+      );
+      const fixture = await open(bridge);
+
+      el(fixture, 'update-channel-beta')!.click();
+      await settle(fixture);
+      answerFirst({ versions: [], canInstall: true, failure: null });
+      await settle(fixture);
+
+      expect([rows(fixture).length, el(fixture, 'versions-loading')]).toEqual([3, null]);
+    });
+
+    it('when the running version is unknown, any install asks first, since it may be older', async () => {
+      const bridge = makeBridge();
+      bridge.appGetVersion.mockRejectedValue(new Error('no version'));
+      const fixture = await open(bridge);
+
+      el(fixture, 'version-action-1.1.0')!.click();
+      await settle(fixture);
+
+      expect([
+        document.querySelector('sc-confirm-dialog h2')?.textContent?.trim(),
+        bridge.updateInstallVersion.mock.calls,
+      ]).toEqual(['Install Scout 1.1.0, an older version?', []]);
+    });
+
+    it('follows the install of the picked version: "Downloading Scout 1.1.0 · 42%" with no Install meanwhile, then a failure with the buttons back', async () => {
+      const bridge = makeBridge();
+      const fixture = await open(bridge);
+      el(fixture, 'version-action-1.1.0')!.click();
+      await settle(fixture);
+
+      bridge.emitProgress(progress('downloading', { percent: 42 }));
+      await settle(fixture);
+      const downloading = {
+        line: text(fixture, 'versions-progress'),
+        bar: (el(fixture, 'versions-progress')!.querySelector('progress') as HTMLProgressElement)
+          .value,
+        install: el(fixture, 'version-action-0.9.0'),
+      };
+      bridge.emitProgress(
+        progress('failed', { message: 'The download did not finish; nothing was installed' }),
+      );
+      await settle(fixture);
+
+      expect([
+        downloading,
+        text(fixture, 'versions-install-failed'),
+        el(fixture, 'version-action-0.9.0') !== null,
+      ]).toEqual([
+        { line: 'Downloading Scout 1.1.0 · 42%', bar: 42, install: null },
+        'The download did not finish; nothing was installed',
+        true,
+      ]);
+    });
+
+    it('a package that cannot replace itself offers Download, which opens the version page, and says so', async () => {
+      const bridge = makeBridge();
+      bridge.updateListVersions.mockResolvedValueOnce({
+        versions: [version('1.1.0'), version('1.0.0')],
+        canInstall: false,
+        failure: null,
+      });
+      const fixture = await open(bridge);
+
+      el(fixture, 'version-action-1.1.0')!.click();
+      await settle(fixture);
+
+      expect({
+        label: text(fixture, 'version-action-1.1.0'),
+        hint: text(fixture, 'versions-cannot'),
+        opened: bridge.appOpenExternal.mock.calls.map(([req]) => req.url),
+        installed: bridge.updateInstallVersion.mock.calls,
+      }).toEqual({
+        label: 'Download',
+        hint: "This package cannot replace itself: Download opens that version's page, and you install it by hand.",
+        opened: ['https://github.com/vitorafgomes/scout/releases/tag/v1.1.0'],
+        installed: [],
+      });
+    });
+
+    it('changing the channel reads the list again on the new channel', async () => {
+      const bridge = makeBridge();
+      const fixture = await open(bridge);
+
+      el(fixture, 'update-channel-beta')!.click();
+      await settle(fixture);
+
+      expect(bridge.updateListVersions.mock.calls.length).toBe(2);
+    });
   });
 
   it('a development build still shows the current version beside the line that checks run only in the installed app', async () => {

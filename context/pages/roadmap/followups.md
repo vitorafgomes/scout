@@ -106,7 +106,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1636`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1638`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
@@ -371,7 +371,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1538`, `:1586`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1540`, `:1588`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)
@@ -789,7 +789,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### One-click update covers only the AppImage and Windows (2026-11-02)
 
-- **Blocker:** Update and restart ([[pages/decisions/0031-desktop-self-update]]) needs a package the updater can replace. On macOS, electron-updater applies an update only to a signed and notarized app and reads a `zip` target the build does not produce, and the builds are unsigned (see "Desktop builds are unsigned" below). A `.deb` has no in-place updater: electron-updater's `DebUpdater` installs through `pkexec` or `sudo` and `dpkg`, which is a system package change, not Scout's own file. Both keep the Download button (`canSelfUpdate`, `ui/packages/main/src/update/update-notice.ts:66`).
+- **Blocker:** Update and restart ([[pages/decisions/0031-desktop-self-update]]) needs a package the updater can replace. On macOS, electron-updater applies an update only to a signed and notarized app and reads a `zip` target the build does not produce, and the builds are unsigned (see "Desktop builds are unsigned" below). A `.deb` has no in-place updater: electron-updater's `DebUpdater` installs through `pkexec` or `sudo` and `dpkg`, which is a system package change, not Scout's own file. Both keep the Download button (`canSelfUpdate`, `ui/packages/main/src/update/update-notice.ts:75`).
 - **Unblocks with:** macOS: the signing and notarization in the unsigned-builds entry, plus a `zip` mac target and keeping `latest-mac.yml` and the mac blockmaps in `.github/workflows/release.yml:211`. `.deb`: an apt repository the package manager updates from, which is outside Scout's own installation and needs its own ADR.
 - **Also noted:** an AppImage whose file name carries a version is replaced under the new release's name, and the old file is deleted (electron-updater's `AppImageUpdater.doInstall`); `refreshLoginEntry` (`ui/packages/main/src/shell/login-item.ts:102`) rewrites the start-at-login entry on the next start.
 

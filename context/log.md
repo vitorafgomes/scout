@@ -1,3 +1,5 @@
+## [2026-11-14] feat | Updates: install a version the owner picks
+Settings, Updates lists the published versions on the owner's channel and installs one, an older one after a confirmation; main installs only a listed version and goes down for that install only; ADR 0056 ([[pages/decisions/0056-install-a-version-the-owner-picks]]).
 ## [2026-11-14] chore | The session-start hook installs the graphify hooks and rebuilds a stale graph
 A new clone had no git hooks until a person ran the installer, and a linked worktree never had a graph. `.claude/hooks/session-start.sh` now runs the installer and starts `graphify update . --no-cluster` in the background when the graph is missing or was built at another commit, only on a machine that has graphify and never over a post-commit hook this repo did not install; eight new cases in its self-test. Page updated: conventions/tooling.
 ## [2026-11-14] docs | The graphify section of the tooling page matches this clone

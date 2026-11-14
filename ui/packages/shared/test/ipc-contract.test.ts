@@ -212,6 +212,8 @@ describe('CHANNEL constant', () => {
         'updateProgress',
         'updateRemindLater',
         'updateSetChannel',
+        'updateListVersions',
+        'updateInstallVersion',
         'updateSetCheckEnabled',
         'updateSkipVersion',
         'usageAdminKeyRemove',
@@ -875,6 +877,8 @@ describe('ChannelName type', () => {
       'scout:update.skipVersion': true,
       'scout:update.remindLater': true,
       'scout:update.setChannel': true,
+      'scout:update.listVersions': true,
+      'scout:update.installVersion': true,
       'scout:update.notice': true,
       'scout:update.install': true,
       'scout:update.progress': true,
@@ -925,11 +929,15 @@ describe('no-external-write sanity scan', () => {
     'scout:update.skipVersion',
     'scout:update.remindLater',
     'scout:update.setChannel',
+    'scout:update.listVersions',
     'scout:update.notice',
     // - scout:update.install, progress  -> install replaces Scout's own executable with a release the user chose
     //                                       by clicking Update and restart; nothing outside Scout's own
     //                                       installation is written. progress only reports that install.
     'scout:update.install',
+    // - scout:update.installVersion     -> the same install for a version the owner picked from the list main
+    //                                       gave, an older one included after the owner confirms it.
+    'scout:update.installVersion',
     'scout:update.progress',
     'scout:writes.list',
     'scout:features.writeGrant',
@@ -982,6 +990,8 @@ describe('update channels', () => {
       CHANNEL.updateSkipVersion,
       CHANNEL.updateRemindLater,
       CHANNEL.updateSetChannel,
+      CHANNEL.updateListVersions,
+      CHANNEL.updateInstallVersion,
       CHANNEL.updateNotice,
       CHANNEL.updateInstall,
       CHANNEL.updateProgress,
@@ -992,6 +1002,8 @@ describe('update channels', () => {
       'scout:update.skipVersion',
       'scout:update.remindLater',
       'scout:update.setChannel',
+      'scout:update.listVersions',
+      'scout:update.installVersion',
       'scout:update.notice',
       'scout:update.install',
       'scout:update.progress',
