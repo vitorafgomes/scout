@@ -24,6 +24,8 @@ import type {
   LocalShortcut,
   ThemeChoice,
   ThemeState,
+  UpdateNotice,
+  UpdateProgress,
   UpdateState,
   WorkerEvent,
   WorkerStatus,
@@ -61,9 +63,22 @@ function makeBridge(
   let updateState = update;
   const workerListeners: ((event: WorkerEvent) => void)[] = [];
   const bubbleListeners: ((status: LocalBubbleStatus) => void)[] = [];
+  const noticeListeners: ((notice: UpdateNotice | null) => void)[] = [];
+  const progressListeners: ((progress: UpdateProgress) => void)[] = [];
   const workerCalls: string[] = [];
   const bridge = {
     workerCalls,
+    emitNotice: (notice: UpdateNotice | null) => noticeListeners.forEach((l) => l(notice)),
+    emitProgress: (progress: UpdateProgress) => progressListeners.forEach((l) => l(progress)),
+    onUpdateNotice: vi.fn((listener: (notice: UpdateNotice | null) => void) => {
+      noticeListeners.push(listener);
+      return () => noticeListeners.splice(noticeListeners.indexOf(listener), 1);
+    }),
+    onUpdateProgress: vi.fn((listener: (progress: UpdateProgress) => void) => {
+      progressListeners.push(listener);
+      return () => progressListeners.splice(progressListeners.indexOf(listener), 1);
+    }),
+    updateInstall: vi.fn(async (): Promise<UpdateState> => updateState),
     bubbleListeners,
     emitBubble: (status: LocalBubbleStatus) => bubbleListeners.forEach((l) => l(status)),
     onLocalBubble: vi.fn((listener: (status: LocalBubbleStatus) => void) => {
@@ -243,7 +258,7 @@ describe('Settings: Chat connections', () => {
     TestBed.resetTestingModule();
   });
 
-  it("opens in the prototype's order, Appearance first, then Chat connections, the worker and About, then who can use Scout, the floating button, Audio and Desktop", async () => {
+  it("opens in the prototype's order, Appearance first, then Chat connections, the worker and About, then who can use Scout, the floating button, Audio, Desktop and Updates", async () => {
     const fixture = await render(makeBridge(), makeWizard({}));
 
     const headings = Array.from(
@@ -266,6 +281,7 @@ describe('Settings: Chat connections', () => {
       'Floating button and quick ask',
       'Audio',
       'Desktop',
+      'Updates',
     ]);
     expect(columns).toEqual([headings.slice(0, 4), headings.slice(4)]);
   });
@@ -313,24 +329,56 @@ describe('Settings: Chat connections', () => {
     ]);
   });
 
-  it('About links to the Scout repository and its MIT licence through main', async () => {
+  it('About links to the repository, the changelog, the MIT licence and a private security report through main', async () => {
     const bridge = makeBridge();
     const fixture = await render(bridge);
-    await openAbout(fixture);
+    const links = ['about-repository', 'about-changelog', 'about-licence', 'about-security'];
 
-    el(fixture, 'about-repository')!.click();
-    el(fixture, 'about-licence')!.click();
+    for (const link of links) el(fixture, link)!.click();
     await settle(fixture);
 
     expect({
-      labels: [text(fixture, 'about-repository'), text(fixture, 'about-licence')],
+      labels: links.map((link) => text(fixture, link)),
       opened: bridge.appOpenExternal.mock.calls.map(([req]) => req.url),
     }).toEqual({
-      labels: ['Source code on GitHub', 'MIT licence'],
+      labels: ['Repository', 'Changelog', 'MIT licence', 'Report a security problem privately'],
       opened: [
         'https://github.com/vitorafgomes/scout',
+        'https://github.com/vitorafgomes/scout/releases',
         'https://github.com/vitorafgomes/scout/blob/main/LICENSE',
+        'https://github.com/vitorafgomes/scout/security/advisories/new',
       ],
+    });
+  });
+
+  it('About names Scout, says what it does, lists the version, the licence and what it is built with, and says where links open', async () => {
+    const fixture = await render(makeBridge());
+    const card = section(fixture, 'About');
+    const facts = Array.from(card.querySelectorAll('dt'), (dt) => [
+      dt.textContent?.trim(),
+      (dt.nextElementSibling as HTMLElement).textContent?.trim(),
+    ]);
+    const words = card.textContent?.replace(/\s+/g, ' ') ?? '';
+
+    expect({
+      name: card.querySelector('.about-name .name')?.textContent?.trim(),
+      description: text(fixture, 'about-description'),
+      facts,
+      security: words.includes(
+        'A private report to the maintainers on GitHub, never a public issue.',
+      ),
+      browser: words.includes('Links open in your browser.'),
+    }).toEqual({
+      name: 'Scout',
+      description:
+        'A chat assistant for Discord, Slack and Teams. It reads your repositories and cloud, reports problems as issues and reviews pull requests. It never writes code.',
+      facts: [
+        ['Version', '1.0.0'],
+        ['Licence', 'MIT, open source'],
+        ['Built with', 'Angular, Electron and .NET'],
+      ],
+      security: true,
+      browser: true,
     });
   });
 
@@ -862,6 +910,220 @@ describe('Settings: Desktop, new versions', () => {
   });
 });
 
+describe('Settings: Updates', () => {
+  const DESKTOP = { keepRunning: true, startAtLogin: false, trayAvailable: true };
+  const NOTICE: UpdateNotice = {
+    currentVersion: '1.0.0',
+    latestVersion: '1.1.0',
+    notes: '- A change',
+    releaseUrl: 'https://github.com/vitorafgomes/scout/releases/tag/v1.1.0',
+    downloadUrl: 'https://github.com/vitorafgomes/scout/releases/download/v1.1.0/Scout.AppImage',
+    publishedAt: '2026-11-13T10:00:00.000Z',
+    canInstall: true,
+  };
+  const withNotice = (notice: UpdateNotice | null, lastResult: string | null = 'available 1.1.0') =>
+    makeBridge([], DESKTOP, {
+      checkEnabled: true,
+      lastCheckAt: '2026-11-02T09:30:00.000Z',
+      lastResult,
+      notice,
+      packaged: true,
+    });
+  const progress = (phase: UpdateProgress['phase'], extra: Partial<UpdateProgress> = {}) => ({
+    phase,
+    percent: null,
+    transferred: null,
+    total: null,
+    message: null,
+    ...extra,
+  });
+
+  it('is its own card: "Updates", "Nothing downloads or installs without a click.", the current version, the check toggle, when Scout checks, and the last check', async () => {
+    const fixture = await render(makeBridge());
+    const card = section(fixture, 'Updates');
+
+    expect({
+      lede: card.querySelector('.lede')?.textContent?.trim(),
+      version: text(fixture, 'update-current-version'),
+      versionLabel: card.querySelector('.version-row .muted')?.textContent?.trim(),
+      schedule: text(fixture, 'update-schedule'),
+      holds: ['update-check-enabled', 'update-check-now', 'update-last-check'].map((test) =>
+        card.contains(el(fixture, test)),
+      ),
+      desktopHoldsUpdates: section(fixture, 'Desktop').contains(
+        el(fixture, 'update-check-enabled'),
+      ),
+    }).toEqual({
+      lede: 'Nothing downloads or installs without a click.',
+      version: '1.0.0',
+      versionLabel: 'Current version',
+      schedule: 'Scout checks GitHub Releases 10 seconds after it starts, then once a day.',
+      holds: [true, true, true],
+      desktopHoldsUpdates: false,
+    });
+  });
+
+  it('says "You are up to date" with the newest version after a check that found nothing newer, and says nothing of it after a failed check', async () => {
+    const upToDate = await render(withNotice(null, 'up-to-date'));
+    const shown = Array.from(
+      el(upToDate, 'settings-update-up-to-date')!.querySelectorAll('span'),
+      (span) => span.textContent?.trim(),
+    );
+    TestBed.resetTestingModule();
+    const failed = await render(withNotice(null, 'error network'));
+
+    expect([shown, el(failed, 'settings-update-up-to-date')]).toEqual([
+      ['You are up to date', 'Scout 1.0.0 is the newest version.'],
+      null,
+    ]);
+  });
+
+  it('an available version that can install: the headline, Update and restart starts the install, Release notes opens the release, no Download', async () => {
+    const bridge = withNotice(NOTICE);
+    const fixture = await render(bridge);
+
+    el(fixture, 'settings-update-install')!.click();
+    el(fixture, 'settings-update-release-notes')!.click();
+    await settle(fixture);
+
+    expect({
+      headline: text(fixture, 'settings-update-headline'),
+      installs: bridge.updateInstall.mock.calls.length,
+      opened: bridge.appOpenExternal.mock.calls.map(([req]) => req.url),
+      download: el(fixture, 'settings-update-download'),
+      bar: section(fixture, 'Updates').textContent?.includes(
+        'Later and Skip this version are on the bar at the top of the window.',
+      ),
+    }).toEqual({
+      headline: 'Scout 1.1.0 is available. You have 1.0.0.',
+      installs: 1,
+      opened: [NOTICE.releaseUrl],
+      download: null,
+      bar: true,
+    });
+  });
+
+  it('a package that cannot update itself says so and offers Download, which opens the download, and no Update and restart', async () => {
+    const bridge = withNotice({ ...NOTICE, canInstall: false });
+    const fixture = await render(bridge);
+
+    el(fixture, 'settings-update-download')!.click();
+    await settle(fixture);
+
+    expect({
+      cannot: text(fixture, 'settings-update-cannot'),
+      install: el(fixture, 'settings-update-install'),
+      opened: bridge.appOpenExternal.mock.calls.map(([req]) => req.url),
+    }).toEqual({
+      cannot:
+        'This package cannot update itself. Download the new version and replace this copy; your settings stay on this computer.',
+      install: null,
+      opened: [NOTICE.downloadUrl],
+    });
+  });
+
+  it('follows the install main reports: "Downloading 42%" with its bar, then "Restarting to install", with Update and restart hidden meanwhile', async () => {
+    const bridge = withNotice(NOTICE);
+    const fixture = await render(bridge);
+
+    bridge.emitProgress(progress('downloading', { percent: 42 }));
+    await settle(fixture);
+    const downloading = {
+      line: text(fixture, 'settings-update-progress'),
+      bar: (
+        el(fixture, 'settings-update-progress')!.querySelector('progress') as HTMLProgressElement
+      ).value,
+      install: el(fixture, 'settings-update-install'),
+    };
+    bridge.emitProgress(progress('installing'));
+    await settle(fixture);
+
+    expect([downloading, text(fixture, 'settings-update-progress')]).toEqual([
+      { line: 'Downloading 42%', bar: 42, install: null },
+      'Restarting to install',
+    ]);
+  });
+
+  it("a failed install shows main's reason as an alert and offers Update and restart again and Download", async () => {
+    const bridge = withNotice(NOTICE);
+    const fixture = await render(bridge);
+
+    bridge.emitProgress(
+      progress('failed', { message: 'The download did not finish; nothing was installed' }),
+    );
+    await settle(fixture);
+
+    expect({
+      alert: el(fixture, 'settings-update-failed')?.getAttribute('role'),
+      reason: text(fixture, 'settings-update-failed'),
+      install: el(fixture, 'settings-update-install') !== null,
+      download: el(fixture, 'settings-update-download') !== null,
+    }).toEqual({
+      alert: 'alert',
+      reason: 'The download did not finish; nothing was installed',
+      install: true,
+      download: true,
+    });
+  });
+
+  it('shows a version main announces and drops it when Later or Skip on the bar clears it', async () => {
+    const bridge = withNotice(null, 'up-to-date');
+    const fixture = await render(bridge);
+
+    bridge.emitNotice(NOTICE);
+    await settle(fixture);
+    const announced = text(fixture, 'settings-update-headline');
+    bridge.emitNotice(null);
+    await settle(fixture);
+
+    expect([announced, el(fixture, 'settings-update-available')]).toEqual([
+      'Scout 1.1.0 is available. You have 1.0.0.',
+      null,
+    ]);
+  });
+
+  for (const [link, test] of [
+    ['Release notes', 'settings-update-release-notes'],
+    ['Download', 'settings-update-download'],
+  ] as const) {
+    it(`a ${link} link main refuses says why in the Updates card, not in About`, async () => {
+      const bridge = withNotice({ ...NOTICE, canInstall: false });
+      bridge.appOpenExternal.mockRejectedValueOnce(
+        new Error(
+          "Error invoking remote method 'scout:app.openExternal': Error: [scout:app/external-host-not-allowed] That address is not allowed.",
+        ),
+      );
+      const fixture = await render(bridge);
+
+      el(fixture, test)!.click();
+      await settle(fixture);
+
+      expect({
+        inUpdates: section(fixture, 'Updates').contains(el(fixture, 'update-error')),
+        reason: text(fixture, 'update-error'),
+        about: el(fixture, 'about-error'),
+      }).toEqual({ inUpdates: true, reason: 'That address is not allowed.', about: null });
+    });
+  }
+
+  it('a development build still shows the current version beside the line that checks run only in the installed app', async () => {
+    const fixture = await render(
+      makeBridge([], DESKTOP, {
+        checkEnabled: true,
+        lastCheckAt: null,
+        lastResult: null,
+        notice: null,
+        packaged: false,
+      }),
+    );
+
+    expect([text(fixture, 'update-current-version'), text(fixture, 'update-dev-build')]).toEqual([
+      '1.0.0',
+      'Update checks run only in the installed app.',
+    ]);
+  });
+});
+
 describe('Settings: Floating button', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
@@ -1374,6 +1636,7 @@ describe('Settings as Settings.dc.html draws it, state by state', () => {
     ['Floating button and quick ask', '12px'],
     ['Audio', '12px'],
     ['Desktop', '12px'],
+    ['Updates', '12px'],
   ] as const) {
     it(`the ${heading} card stacks its parts ${gap} apart with the card corners (the 14 px token), as the artboard's card does, with no margins of their own`, async () => {
       const fixture = await render(makeBridge());
@@ -1462,18 +1725,15 @@ describe('Settings as Settings.dc.html draws it, state by state', () => {
     });
   }
 
-  it('About is one collapsed row: the heading, "Version" and the version; its links and notices open under it from the row\'s button', async () => {
+  it('About keeps its trademark notices folded behind the "Trademark notices" button, which opens and closes them', async () => {
     const fixture = await render(makeBridge());
-    const card = section(fixture, 'About');
     const toggle = el(fixture, 'about-toggle') as HTMLButtonElement;
     const closed = {
-      row: Array.from(card.firstElementChild!.children, (part) => part.textContent?.trim())
-        .filter((part) => part !== '')
-        .join(' '),
       expanded: toggle.getAttribute('aria-expanded'),
       controls: toggle.getAttribute('aria-controls'),
       icon: iconOf(toggle),
       label: toggle.getAttribute('aria-label'),
+      row: toggle.parentElement?.textContent?.trim(),
       links: el(fixture, 'about-repository') !== null,
       notices: el(fixture, 'trademark-notices') !== null,
     };
@@ -1487,26 +1747,22 @@ describe('Settings as Settings.dc.html draws it, state by state', () => {
       {
         expanded: toggle.getAttribute('aria-expanded'),
         label: toggle.getAttribute('aria-label'),
-        regionHolds: [
-          region?.contains(el(fixture, 'about-repository')),
-          region?.contains(el(fixture, 'about-licence')),
-          region?.contains(el(fixture, 'trademark-notices')),
-        ],
+        region: region === el(fixture, 'trademark-notices'),
       },
     ]).toEqual([
       {
-        row: 'About Version 1.0.0',
         expanded: 'false',
         controls: null,
         icon: 'chevron-down',
-        label: 'Show the links and notices',
-        links: false,
+        label: 'Show the trademark notices',
+        row: 'Trademark notices',
+        links: true,
         notices: false,
       },
       {
         expanded: 'true',
-        label: 'Hide the links and notices',
-        regionHolds: [true, true, true],
+        label: 'Hide the trademark notices',
+        region: true,
       },
     ]);
   });

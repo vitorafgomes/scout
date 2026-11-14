@@ -228,18 +228,34 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </section>
 
 <section aria-labelledby="s-about" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
-<div style="display: flex; align-items: center; gap: 8px">
-<h2 id="s-about" style="margin: 0; font-size: 15px; font-weight: 600; margin-right: auto">About</h2>
-<span style="font-size: 13px; color: {{t.muted}}">Version</span><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">0.9.0</code>
+<h2 id="s-about" style="margin: 0; font-size: 15px; font-weight: 600">About</h2>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600">Scout</span>
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.5">A chat assistant for Discord, Slack and Teams. It reads your repositories and cloud, reports problems as issues and reviews pull requests. It never writes code.</span>
+</div>
+<dl style="margin: 0; display: grid; grid-template-columns: 88px 1fr; gap: 6px 0; font-size: 13px">
+<dt style="color: {{t.muted}}">Version</dt><dd style="margin: 0"><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">0.9.0</code></dd>
+<dt style="color: {{t.muted}}">Licence</dt><dd style="margin: 0">MIT, open source</dd>
+<dt style="color: {{t.muted}}">Built with</dt><dd style="margin: 0">Angular, Electron and .NET</dd>
+</dl>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<span style="flex: 0 0 88px; font-size: 13px; color: {{t.muted}}">Project</span>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Repository</button>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Changelog</button>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>MIT licence</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<span style="flex: 0 0 88px; font-size: 13px; color: {{t.muted}}">Security</span>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Report a security problem privately</button>
+<span style="flex-basis: 100%; padding-left: 100px; font-size: 12px; color: {{t.muted}}">A private report to the maintainers on GitHub, never a public issue.</span>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Links open in your browser.</p>
+<div style="display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<span style="font-size: 13px; color: {{t.fg2}}; margin-right: auto">Trademark notices</span>
 <button aria-expanded="{{about.expanded}}" aria-label="{{about.label}}" title="{{about.label}}" onClick="{{about.toggle}}" style="width: 32px; height: 32px; border-radius: 16px; border: 0; background: transparent; color: {{t.fg2}}; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transform: {{about.turn}}"><path d="M6 9l6 6 6-6"></path></svg></button>
 </div>
 <sc-if value="{{about.open}}" hint-placeholder-val="{{false}}">
-<div id="about-more" style="display: flex; flex-direction: column; gap: 8px">
-<p style="display: flex; flex-wrap: wrap; gap: 12px; margin: 0">
-<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Source code on GitHub</button>
-<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>MIT licence</button>
-</p>
-<ul style="margin: 0; padding-left: 18px; font-size: 12px; color: {{t.muted}}; line-height: 1.6">
+<ul id="about-more" style="margin: 0; padding-left: 18px; font-size: 12px; color: {{t.muted}}; line-height: 1.6">
 <li>OpenAI and ChatGPT are trademarks of OpenAI.</li>
 <li>Google and Gemini are trademarks of Google.</li>
 <li>Anthropic and Claude are trademarks of Anthropic.</li>
@@ -249,7 +265,6 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <li>Third-party logos are not covered by Scout's MIT licence and remain their owners' trademarks.</li>
 <li>All other product names and logos are trademarks of their respective owners. Their use identifies the service you connect and does not imply endorsement.</li>
 </ul>
-</div>
 </sc-if>
 </section>
 
@@ -406,14 +421,76 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{sw.note}}</p>
 </sc-if>
 </sc-for>
+</section>
+
+<section aria-labelledby="s-updates" style="background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="s-updates" style="margin: 0; font-size: 15px; font-weight: 600">Updates</h2>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Nothing downloads or installs without a click.</p>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px">
+<span style="color: {{t.muted}}; margin-right: auto">Current version</span><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">0.9.0</code>
+</div>
 <sc-if value="{{devBuild}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Update checks run only in the installed app.</p>
 </sc-if>
 <sc-if value="{{installed}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{updateSwitches}}" as="sw" hint-placeholder-count="1">
+<div style="display: flex; align-items: center; gap: 12px">
+<span id="{{sw.id}}" style="margin-right: auto">{{sw.label}}</span>
+<sc-if value="{{sw.free}}" hint-placeholder-val="{{true}}">
+<button role="switch" aria-checked="{{sw.checked}}" aria-labelledby="{{sw.id}}" onClick="{{sw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{sw.justify}}; background: {{sw.track}}; border: 1px solid {{sw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{sw.thumb}}"></span></span></button>
+</sc-if>
+<sc-if value="{{sw.isLocked}}" hint-placeholder-val="{{false}}">
+<button role="switch" aria-checked="{{sw.checked}}" aria-labelledby="{{sw.id}}" disabled="disabled" onClick="{{sw.toggle}}" style="border: 0; padding: 0; background: transparent; display: flex; opacity: 0.5; cursor: not-allowed"><span style="width: 40px; height: 24px; border-radius: 12px; padding: 3px; box-sizing: border-box; display: flex; justify-content: {{sw.justify}}; background: {{sw.track}}; border: 1px solid {{sw.edge}}"><span style="width: 16px; height: 16px; border-radius: 8px; background: {{sw.thumb}}"></span></span></button>
+</sc-if>
+</div>
+<sc-if value="{{sw.hasNote}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{sw.note}}</p>
+</sc-if>
+</sc-for>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Scout checks GitHub Releases 10 seconds after it starts, then once a day.</p>
 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid {{t.line}}">
-<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">Last check: 7 Nov 2026, 14:02 · You have the latest version</span>
+<span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">Last check: 7 Nov 2026, 14:02 · {{upd.result}}</span>
 <button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Check now</button>
 </div>
+<sc-if value="{{upd.upToDate}}" hint-placeholder-val="{{true}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 2px; font-size: 13px">
+<span style="font-weight: 600; color: {{t.ok}}">You are up to date</span>
+<span style="color: {{t.fg2}}">Scout 0.9.0 is the newest version.</span>
+</div>
+</sc-if>
+<sc-if value="{{upd.available}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: {{t.infoBg}}">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">Scout 0.10.0 is available. You have 0.9.0.</h3>
+<sc-if value="{{upd.cannot}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">This package cannot update itself. Download the new version and replace this copy; your settings stay on this computer.</p>
+</sc-if>
+<sc-if value="{{upd.downloading}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px; color: {{t.fg2}}">
+<span>Downloading 42%</span>
+<div aria-hidden="true" style="flex: 1; height: 6px; border-radius: 3px; background: {{t.surface2}}"><div style="width: 42%; height: 6px; border-radius: 3px; background: {{t.primary}}"></div></div>
+</div>
+</sc-if>
+<sc-if value="{{upd.installing}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">Restarting to install</p>
+</sc-if>
+<sc-if value="{{upd.failed}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; font-size: 13px; color: {{t.err}}">The download did not finish; nothing was installed</p>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<sc-if value="{{upd.canInstall}}" hint-placeholder-val="{{true}}">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500">Update and restart</button>
+</sc-if>
+<sc-if value="{{upd.cannot}}" hint-placeholder-val="{{false}}">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.primary}}; color: #ffffff; display: inline-flex; align-items: center; gap: 8px; font-weight: 500">Download</button>
+</sc-if>
+<sc-if value="{{upd.failed}}" hint-placeholder-val="{{false}}">
+<button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500">Download</button>
+</sc-if>
+<button style="display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font-size: 13px; color: {{t.accent}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg>Release notes</button>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}">Later and Skip this version are on the bar at the top of the window.</p>
+</div>
+</sc-if>
 </sc-if>
 </section>
 
@@ -670,8 +747,7 @@ class Component extends DCLogic {
     const desk = [
       ['d-keep', 'Keep Scout running when the window is closed', 'keepRunning'],
       ['d-login', 'Start Scout when I log in', 'startAtLogin'],
-      ['d-updates', 'Check for new versions', 'checkUpdates'],
-    ].filter(([id]) => id !== 'd-updates' || s.preview !== 'devBuild').map(([id, label, key]) => {
+    ].map(([id, label, key]) => {
       const locked = id === 'd-keep' && s.preview === 'noTray';
       return Object.assign(this.switchVals(t, locked ? false : s[key], locked ? () => {} : flip(key)), {
         id, label, free: !locked, isLocked: locked,
@@ -743,7 +819,7 @@ class Component extends DCLogic {
     }) : [];
     const dlgMissing = dlgDef ? dlgDef.fields.some(([key, , , prefix]) => badField(key, prefix)) : false;
     return Object.assign(this.shellVals(t, 'Settings', 'Settings'), {
-      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About open'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
+      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
       themeChoices: this.segVals(t, [['light', 'Light', sun], ['dark', 'Dark', moon], ['system', 'System', monitor]], s.theme, (id) => this.setState({ theme: id })),
       worker: {
         chip: wkChip[0],
@@ -798,7 +874,7 @@ class Component extends DCLogic {
       about: {
         open: s.aboutOpen || s.preview === 'aboutOpen',
         expanded: s.aboutOpen || s.preview === 'aboutOpen' ? 'true' : 'false',
-        label: s.aboutOpen || s.preview === 'aboutOpen' ? 'Hide the links and notices' : 'Show the links and notices',
+        label: s.aboutOpen || s.preview === 'aboutOpen' ? 'Hide the trademark notices' : 'Show the trademark notices',
         turn: s.aboutOpen || s.preview === 'aboutOpen' ? 'rotate(180deg)' : 'none',
         toggle: () => this.setState({ aboutOpen: !(s.aboutOpen || s.preview === 'aboutOpen'), preview: s.preview === 'aboutOpen' ? 'normal' : s.preview }),
       },
@@ -812,6 +888,22 @@ class Component extends DCLogic {
         { id: 'U04QF7K2L9P', platform: 'Slack', removeLabel: 'Remove U04QF7K2L9P' },
       ],
       desktopSwitches: desk,
+      updateSwitches: [Object.assign(this.switchVals(t, s.checkUpdates, flip('checkUpdates')), { id: 'u-check', label: 'Check for new versions', free: true, isLocked: false, hasNote: false, note: '' })],
+      upd: (() => {
+        const p = s.preview;
+        const available = ['updAvailable', 'updCannot', 'updDownloading', 'updInstalling', 'updFailed'].includes(p);
+        const cannot = p === 'updCannot';
+        return {
+          result: p === 'updCheckFailed' ? 'Could not check for updates (no connection to GitHub)' : available ? 'Version 0.10.0 is available' : 'You have the latest version',
+          upToDate: !available && p !== 'updCheckFailed',
+          available,
+          cannot,
+          downloading: p === 'updDownloading',
+          installing: p === 'updInstalling',
+          failed: p === 'updFailed',
+          canInstall: available && !cannot && p !== 'updDownloading' && p !== 'updInstalling',
+        };
+      })(),
       snackOpen: failed,
       confirmOpen: s.preview === 'confirm',
       closeConfirm: () => this.setState({ preview: 'normal' }),

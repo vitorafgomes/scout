@@ -2,6 +2,8 @@
 A new clone had no git hooks until a person ran the installer, and a linked worktree never had a graph. `.claude/hooks/session-start.sh` now runs the installer and starts `graphify update . --no-cluster` in the background when the graph is missing or was built at another commit, only on a machine that has graphify and never over a post-commit hook this repo did not install; eight new cases in its self-test. Page updated: conventions/tooling.
 ## [2026-11-14] docs | The graphify section of the tooling page matches this clone
 The page said every worktree refreshes the graph and that a `.graphifyignore` excludes the archived first cut; the hooks exit without rebuilding in a linked worktree, a worktree has no graph of its own, and that file left with the archive, so the section now says the main checkout alone refreshes the graph and that the install runs once per clone. Page updated: conventions/tooling.
+## [2026-11-14] feat | Settings: About as a fact sheet, Updates as its own card
+About names Scout, lists its version, licence and stack, and links the repository, the changelog, the licence and a private security report; Updates shows the version, the check, and the bar's update state; the Settings artboard draws each state first ([[pages/history/desktop-ui]]).
 ## [2026-11-13] chore | Repository security: main behind a ruleset, CodeQL, Dependabot for NuGet and Bun
 main takes changes only through a pull request with a green build check and no bypass; actions must be pinned by commit; fork pull requests wait for the owner's approval; an unused repository secret is removed; CodeQL and the NuGet and Bun Dependabot updates are added ([[pages/conventions/tooling]]).
 ## [2026-11-13] fix | The ChatGPT sign-in cancel test no longer races the fake browser
