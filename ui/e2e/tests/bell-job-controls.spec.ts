@@ -60,7 +60,7 @@ test.describe('an audit the control plane cannot name', () => {
     script: {
       replies: [
         {
-          events: [notice('Audit of ./.., src (1 of 2):')],
+          events: [notice('Audit of ./.., src (1 of 2, 0 findings so far):')],
           updates: ['Auditing.'],
           holdUntilCancel: true,
         },
@@ -127,7 +127,7 @@ test.describe('an audit in progress', () => {
     script: {
       replies: [
         {
-          events: [notice('Audit of acme/shop, src/orders (3 of 8):')],
+          events: [notice('Audit of acme/shop, src/orders (3 of 8, 4 findings so far):')],
           updates: ['Auditing.'],
           holdUntilCancel: true,
         },
@@ -145,7 +145,9 @@ test.describe('an audit in progress', () => {
 
     const entry = page.getByTestId('entry').filter({ hasText: 'Audit of acme/shop' });
     await expect(entry.locator('.icon')).toHaveText('A');
-    await expect(entry.getByTestId('entry-detail')).toHaveText('Area 3 of 8 done: src/orders');
+    await expect(entry.getByTestId('entry-detail')).toHaveText(
+      'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
+    );
     await expect(entry.getByTestId('entry-progress')).toHaveAttribute('aria-valuenow', '37');
     await expect(entry.getByRole('button', { name: 'Pause the audit of acme/shop' })).toBeVisible();
     await expect(entry.getByRole('button', { name: 'Stop the audit of acme/shop' })).toBeVisible();
@@ -159,7 +161,7 @@ test.describe('an audit you paused', () => {
       replies: [
         {
           events: [
-            notice('Audit of acme/shop, src/orders (3 of 8):'),
+            notice('Audit of acme/shop, src/orders (3 of 8, 4 findings so far):'),
             notice(
               'The audit of acme/shop paused: you paused it. Ask Scout to continue the audit of acme/shop to resume it from the first area not done.',
             ),
@@ -179,7 +181,9 @@ test.describe('an audit you paused', () => {
     await ask(page, 'Audit acme/shop');
     await openInProgress(page);
     const entry = page.getByTestId('entry').filter({ hasText: 'Audit of acme/shop paused' });
-    await expect(entry.getByTestId('entry-detail')).toHaveText('Paused by you · area 3 of 8 done');
+    await expect(entry.getByTestId('entry-detail')).toHaveText(
+      'Paused by you · area 3 of 8 done · 4 findings so far',
+    );
 
     await entry.getByRole('button', { name: 'Stop the audit of acme/shop' }).click();
 
