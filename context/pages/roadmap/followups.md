@@ -322,7 +322,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Doc summaries on functions that are not exported (2026-11-10)
 
-- **Gap:** `stopRunning` in main and `outcome` in the findings store carry a doc summary although neither is exported (`ui/packages/main/src/quick-ask/quick-ask.ts:1375`, `ui/packages/renderer/src/app/core/review-findings.store.ts:422`); both files already had such summaries on local functions, so the lane followed the precedent, which is wider than the rule that allows a summary on a public type or member.
+- **Gap:** `stopRunning` in main and `outcome` in the findings store carry a doc summary although neither is exported (`ui/packages/main/src/quick-ask/quick-ask.ts:1377`, `ui/packages/renderer/src/app/core/review-findings.store.ts:422`); both files already had such summaries on local functions, so the lane followed the precedent, which is wider than the rule that allows a summary on a public type or member.
 - **Unblocks with:** a decision on local functions in `ui/`, then one sweep of the two files.
 
 ### No GitHub action goes through the one-minute release window in a test (2026-11-10)
@@ -597,7 +597,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Main re-sends the whole conversation to every window on every event (2026-11-06)
 
-- **Gap:** each event reshapes one turn and broadcasts the whole list, up to 200 turns with their replies, to every window (`ui/packages/main/src/quick-ask/quick-ask.ts:763`); with replies now rendered from Markdown each push costs more on the renderer side ([[pages/services/desktop-quick-ask]]).
+- **Gap:** each event reshapes one turn and broadcasts the whole list, up to 200 turns with their replies, to every window (`ui/packages/main/src/quick-ask/quick-ask.ts:765`); with replies now rendered from Markdown each push costs more on the renderer side ([[pages/services/desktop-quick-ask]]).
 - **Unblocks with:** a per-turn push (`scout:local.turn` with the one turn that changed) that the renderer patches into its list, the full list kept for the first load and a clear; measured first with a long conversation open in both windows.
 
 ### The presenter description cannot be given from the chat (2026-11-04)
@@ -815,7 +815,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 - **Fix:** none expected; what remains open is the owner confirming on screen that the bubble stays above native Wayland windows. If it does not, record it under ADR 0028.
 - **Measured 2026-10-31 with Electron 45 under `--ozone-platform=x11`:** every window COSMIC's X window manager manages, whatever its type, is placed where COSMIC chooses, ignores `setPosition` and `setBounds` before and after `show`, reports not always-on-top and gets a server-side frame. A window created with `focusable: false`, shown, then made focusable and focused stays unmanaged, keeps its position and always-on-top, and `document.hasFocus()` reported focus to its page, but that was not real X keyboard focus (see the last bullet).
 - **Measured 2026-10-31 on the owner's COSMIC session** (AppImage started with `--ozone-platform=x11`, read with `xwininfo` and `xprop` on `DISPLAY=:1`): the bubble window was 64x64 at +1840+1190, the bottom-right corner of the 1920x1080 laptop display (offset +0+190) minus the 16 px margin, so the corner and the display choice hold. COSMIC's X window manager reports itself as "Smithay X WM" and lists `_NET_WM_STATE_ABOVE` and `_NET_WM_STATE_SKIP_TASKBAR` in `_NET_SUPPORTED`. The bubble carries no `WM_STATE` and is absent from `_NET_CLIENT_LIST_STACKING`: with `focusable: false` Electron creates it as a window the X window manager does not manage, which the compositor draws above managed windows. Whether that holds above native Wayland windows is only visible on screen.
-- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:1097`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
+- **Measured 2026-10-31 on the owner's COSMIC session:** an unmanaged window never receives keyboard focus there: `_NET_ACTIVE_WINDOW` on the root window stays 0 while it is shown, and Electron's `focus()` on X11 only asks the window manager, which ignores a window it does not manage. The owner could not type in the quick-ask window or close it. The quick-ask window is now managed on Linux (`ui/packages/main/src/quick-ask/quick-ask.ts:1099`), so on COSMIC it loses the corner and gets a frame, while the bubble keeps the corner. Keeping the corner and the keyboard there needs a window the compositor positions (a Wayland layer-shell surface or a COSMIC-specific protocol), which Electron does not offer.
 
 ### Voice transcript shown inside the reply, not as the question (2026-10-31)
 
@@ -832,12 +832,12 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Floating button does not follow display changes (2026-10-31)
 
-- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:623`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
+- **Blocker:** none. The bubble is placed when it is created, when its settings change and each time the quick-ask window hides (`ui/packages/main/src/quick-ask/quick-ask.ts:625`); unplugging a display, or a resolution or scale change, can leave it off screen or away from its corner until then.
 - **Fix:** reposition it on `screen`'s `display-metrics-changed` and `display-removed` events, removing the listeners on dispose, with a test that emits each event on the fake screen.
 
 ### Clear on the Chat screen keeps the worker's local memory (2026-10-30)
 
-- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:875`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
+- **Blocker:** no channel for it. Clear empties only the conversation main holds for the quick-ask window and the Chat screen (`ui/packages/main/src/quick-ask/quick-ask.ts:877`); the worker keeps the `local` channel's turns in `IConversationMemoryStore` until they expire or the worker restarts, so a question after Clear can still draw on the cleared conversation ([[pages/decisions/0028-local-quick-ask-assistant]]).
 - **Fix:** let Clear also reset the worker's memory for the local channel, for example a `reset` request on the quick-ask stdin protocol that the local adapter turns into a memory reset; it touches only Scout's own state.
 - **Done (2026-11-07):** Clear writes `{"type":"reset"}` to the worker, which clears the `local` conversation's memory (gap plan G6; [[pages/services/adapter-local]]).
 

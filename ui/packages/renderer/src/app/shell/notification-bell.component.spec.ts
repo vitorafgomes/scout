@@ -379,6 +379,26 @@ describe('NotificationBellComponent', () => {
     ]);
   });
 
+  it("See the issues opens the opened issues' link in the browser through the external-link bridge", async () => {
+    const bridge = makeBridge([
+      note('issues:q-7', {
+        title: '3 issues opened on acme/shop',
+        url: 'https://github.com/acme/shop/issues',
+      }),
+    ]);
+    const fixture = await render(bridge);
+    await click(fixture, 'bell');
+
+    expect(el(fixture, 'entry-link')!.textContent?.trim(), 'the action reads See the issues').toBe(
+      'See the issues',
+    );
+    await click(fixture, 'entry-link');
+
+    expect(bridge.appOpenExternal.mock.calls, 'See the issues opens the issues').toEqual([
+      [{ url: 'https://github.com/acme/shop/issues' }],
+    ]);
+  });
+
   it('a link main refuses shows why in the panel', async () => {
     const bridge = makeBridge([note('w', { url: 'https://example.com/report' })]);
     bridge.appOpenExternal.mockRejectedValueOnce(
@@ -1271,6 +1291,23 @@ const STATES: readonly [string, AppNotification, Drawn][] = [
       detail: null,
       when: 'now',
       link: 'See the review',
+    },
+  ],
+  [
+    'artboard: issues opened from the audit findings',
+    note('issues:q-7', {
+      title: '3 issues opened on acme/shop',
+      detail: 'From the audit findings you chose',
+      url: 'https://github.com/acme/shop/issues',
+    }),
+    {
+      ...NONE,
+      glyph: 'I',
+      tone: 'ok',
+      title: '3 issues opened on acme/shop',
+      detail: 'From the audit findings you chose',
+      when: 'now',
+      link: 'See the issues',
     },
   ],
   [

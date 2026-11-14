@@ -1,6 +1,6 @@
 import { expect, jest, setSystemTime } from 'bun:test';
 import { EventEmitter } from 'node:events';
-import { readIpcError, type WorkerEvent, type WorkerStatus } from '@scout/shared';
+import { readIpcError, type LocalTurn, type WorkerEvent, type WorkerStatus } from '@scout/shared';
 import type { BrowserWindow, Display, IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerQuickAsk, type QuickAskDeps } from '../src/quick-ask/quick-ask.js';
 import { windowBackground } from '../src/shell/theme.js';
@@ -193,6 +193,7 @@ export async function setup(
     onListeningChanged?: (listening: boolean) => void;
     onAnsweringChanged?: (answering: boolean) => void;
     restarting?: () => boolean;
+    onTurnDone?: (turn: LocalTurn) => void;
     supervisor?: Supervisor;
     createWindowFails?: (options: Record<string, unknown>) => boolean;
   } = {},
@@ -342,6 +343,7 @@ export async function setup(
       ? {}
       : { onAnsweringChanged: options.onAnsweringChanged }),
     ...(options.restarting === undefined ? {} : { restarting: options.restarting }),
+    ...(options.onTurnDone === undefined ? {} : { onTurnDone: options.onTurnDone }),
   };
   const quickAsk = await registerQuickAsk(deps);
   const given = options.supervisor ?? options.worker;

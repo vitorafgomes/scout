@@ -223,6 +223,8 @@ export interface QuickAskDeps {
   onAnsweringChanged?: (answering: boolean) => void;
   /** True while main restarts the worker; a question asked or held meanwhile waits for the worker to run. */
   restarting?: () => boolean;
+  /** Called once when a running turn completes, with the finished turn. */
+  onTurnDone?: (turn: LocalTurn) => void;
 }
 
 /** Brackets one pending display-media request, so the quick-ask window can stay up while the system picker is open. */
@@ -1870,6 +1872,7 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
         if (activity.length > 0) reshape(event.id, (turn) => ({ ...turn, activity }));
         return;
       }
+      const completes = event.event === 'complete' && isRunning(event.id);
       reshape(event.id, ({ activity: _cleared, ...turn }) =>
         event.event === 'fail'
           ? failed(turn, event.text ?? turn.reply)
@@ -1880,6 +1883,8 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
               state: event.event === 'complete' ? 'done' : 'running',
             },
       );
+      const done = completes ? turns.find((turn) => turn.id === event.id) : undefined;
+      if (done !== undefined) deps.onTurnDone?.(done);
     },
     dispose(): void {
       openCurrent = null;
