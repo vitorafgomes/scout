@@ -275,7 +275,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A partly read batch's card drops a worse verdict the model gave (2026-11-10)
 
-- **Gap:** the card of an area whose outcome names an unread file says `incomplete` whatever the model said (`src/Scout.Audit/AuditWorker.cs:171`), so a model's `needs rework` is not shown on that card; the findings and their severities stay.
+- **Gap:** the card of an area whose outcome names an unread file says `incomplete` whatever the model said (`src/Scout.Audit/AuditWorker.cs:195`), so a model's `needs rework` is not shown on that card; the findings and their severities stay.
 - **Unblocks with:** a decision on the card's words when both apply (for example `incomplete, needs rework`), with a row in `The_card_of_an_area_read_in_part_says_incomplete_whatever_verdict_the_model_gave`.
 
 ### Project discovery checks cancellation only after the whole listing (2026-11-10)

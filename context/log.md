@@ -1,3 +1,5 @@
+## [2026-11-14] feat | The bell's audit entry: findings so far, every area, running on Continue
+Every batch heading carries the findings so far; a job held by the desktop's local chat also posts a line for an area with no new findings and one on resume, and the bell's entry reads "Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends" and "Paused by you · area 3 of 8 done · 4 findings so far". Discord, Slack and Teams get only the count. Pages updated: services/audit (batch turn, pause, open items), services/desktop-ui (two notices pages), history/audit, history/desktop-ui, roadmap/prototype-migration.
 ## [2026-11-14] docs | Two pages reworded
 ADR 0031 and the desktop-ui history state the owner's request in plain words, with no quote of a conversation.
 ## [2026-11-14] feat | Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows

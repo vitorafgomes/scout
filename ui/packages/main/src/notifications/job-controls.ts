@@ -36,9 +36,9 @@ export const RECORD_POLL_MS = 2_000;
  */
 export const RECORD_WAIT_MS = 150_000;
 /**
- * How long main waits for the worker's notice once the record says the click was applied: an audit's pause, stop and
- * continue are noticed only when the area in progress ends, which the worker gives ten minutes by default, plus a minute
- * for the notice to arrive.
+ * How long main waits for the worker's notice once the record says the click was applied: an audit's pause and stop are
+ * noticed only when the area in progress ends, which the worker gives ten minutes by default, plus a minute for the
+ * notice to arrive; a continue is noticed at once, by the worker's resume line.
  */
 export const NOTICE_WAIT_MS = 660_000;
 const WRITES_READ = 50;
@@ -61,7 +61,7 @@ const NAME = '[A-Za-z0-9_.-]+';
 const RUN_TESTS = new RegExp(`^Run pull request tests: (${NAME}) (${NAME}) (\\d+)$`);
 const AUDIT_ID = new RegExp(`^audit:(${NAME})/(${NAME})$`);
 const TESTS_ID = new RegExp(`^tests:(${NAME})/(${NAME})#(\\d+)$`);
-const AREA = /^Area (\d+) of (\d+) done/;
+const AREA = /^Area (\d+) of (\d+) done · (\d+ findings? so far)/;
 const STOP_COUNTS = /(\d+) of (\d+) areas done, \d+ not covered, (\d+) findings/;
 
 /** The bell's pause, continue and stop of the jobs it shows, and the entries of the test runs a local turn starts. */
@@ -268,7 +268,7 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
     const area = AREA.exec(previous.detail);
     const detail =
       input.kind === 'paused' && input.detail === PAUSED_BY_YOU && area !== null
-        ? `${PAUSED_BY_YOU} · area ${area[1]} of ${area[2]} done`
+        ? `${PAUSED_BY_YOU} · area ${area[1]} of ${area[2]} done · ${area[3]}`
         : input.detail;
     if (input.kind === 'paused' && previous.control?.action === 'stop') {
       store.record({ ...input, detail, control: previous.control });

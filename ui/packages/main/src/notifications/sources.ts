@@ -4,7 +4,12 @@ import type { NotificationInput } from './notification-store.js';
 const MAX_TITLE_CHARS = 200;
 const MAX_DETAIL_CHARS = 400;
 const REPOSITORY = '([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)';
-const AUDIT_BATCH = new RegExp(`^Audit of ${REPOSITORY}, (.+) \\((\\d+) of (\\d+)\\)`);
+const SO_FAR = '(\\d+ findings? so far)';
+const AUDIT_BATCH = new RegExp(`^Audit of ${REPOSITORY}, .+ \\((\\d+) of (\\d+), ${SO_FAR}\\)`);
+const AUDIT_RESUMED = new RegExp(
+  `^Audit of ${REPOSITORY} resumed: area (\\d+) of (\\d+) done, ${SO_FAR}\\.`,
+);
+export const CARDS_ARRIVE = 'cards arrive in the chat as each area ends';
 const AUDIT_PAUSED = new RegExp(`^The audit of ${REPOSITORY} paused: (.+)$`, 's');
 const AUDIT_DONE = new RegExp(`^Audit of ${REPOSITORY} at [0-9a-f]+ is done\\.\\s*(.*)$`);
 const AUDIT_STOPPED = new RegExp(`^The audit of ${REPOSITORY} ended at your request: (.+)$`);
@@ -87,8 +92,9 @@ function kindOf(firstLine: string): NotificationKind {
 }
 
 /**
- * The entry for one `SCOUT_LOCAL` line when it is a worker notice: an audit's batches, pause, stop and end update one
- * entry per repository, with the batch's progress rounded down, the owner's own pause read as Paused by you and the AI
+ * The entry for one `SCOUT_LOCAL` line when it is a worker notice: an audit's batches, resume, pause, stop and end update
+ * one entry per repository, a batch and a resume as running with the areas done, the findings so far and the progress
+ * rounded down, the owner's own pause read as Paused by you and the AI
  * Source's in the artboard's sentence for its reason; the stop of a pull
  * request's test run ends that run's entry; any other notice is its own entry, its kind read from the text.
  */
@@ -109,9 +115,9 @@ export function workerNotice(json: string, nextId: () => string): NotificationIn
   const first = lines[0];
   if (first === undefined) return null;
 
-  const batch = AUDIT_BATCH.exec(first);
+  const batch = AUDIT_BATCH.exec(first) ?? AUDIT_RESUMED.exec(first);
   if (batch !== null) {
-    const [, repository, area, done, total] = batch as unknown as [
+    const [, repository, done, total, soFar] = batch as unknown as [
       string,
       string,
       string,
@@ -123,7 +129,7 @@ export function workerNotice(json: string, nextId: () => string): NotificationIn
       id: `audit:${repository}`,
       kind: 'running',
       title: `Audit of ${repository}`,
-      detail: cut(`Area ${done} of ${total} done: ${area}`, MAX_DETAIL_CHARS),
+      detail: `Area ${done} of ${total} done · ${soFar} · ${CARDS_ARRIVE}`,
       progress,
       source: 'worker',
     };

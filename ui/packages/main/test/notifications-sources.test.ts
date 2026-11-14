@@ -10,7 +10,7 @@ function line(text: string): string {
 const nextId = (): string => 'notice:1';
 
 const BATCH = [
-  'Audit of acme/shop, src/orders (3 of 8):',
+  'Audit of acme/shop, src/orders (3 of 8, 4 findings so far):',
   '',
   '```scout-findings',
   '{"repository":"acme/shop","link":"https://github.com/acme/shop/blob/x"}',
@@ -25,15 +25,42 @@ const DONE = [
 ].join('\n');
 
 describe('worker notices', () => {
-  it('an audit batch is the audit entry in progress, with the share of areas done and no link', () => {
-    expect(workerNotice(line(BATCH), nextId)).toEqual({
+  const RUNNING_3_OF_8: NotificationInput = {
+    id: 'audit:acme/shop',
+    kind: 'running',
+    title: 'Audit of acme/shop',
+    detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
+    progress: 37,
+    source: 'worker',
+  };
+
+  it('an audit batch is the audit entry in progress, with the areas done, the findings so far, the share of areas done and no link', () => {
+    expect(workerNotice(line(BATCH), nextId)).toEqual(RUNNING_3_OF_8);
+  });
+
+  it('an area that ended with no new findings moves the running entry and its bar like a batch with findings', () => {
+    expect(
+      workerNotice(
+        line('Audit of acme/shop, src/billing (4 of 8, 1 finding so far): no new findings.'),
+        nextId,
+      ),
+    ).toEqual({
       id: 'audit:acme/shop',
       kind: 'running',
       title: 'Audit of acme/shop',
-      detail: 'Area 3 of 8 done: src/orders',
-      progress: 37,
+      detail: 'Area 4 of 8 done · 1 finding so far · cards arrive in the chat as each area ends',
+      progress: 50,
       source: 'worker',
     });
+  });
+
+  it('the resume line turns the audit entry running at once, with the areas done and the findings so far', () => {
+    expect(
+      workerNotice(
+        line('Audit of acme/shop resumed: area 3 of 8 done, 4 findings so far.'),
+        nextId,
+      ),
+    ).toEqual(RUNNING_3_OF_8);
   });
 
   const shares: readonly [number, number, number][] = [
@@ -48,7 +75,10 @@ describe('worker notices', () => {
   for (const [done, total, progress] of shares) {
     it(`the share of ${done} of ${total} areas done is ${progress}, rounded down as the artboard draws it`, () => {
       expect(
-        workerNotice(line(`Audit of acme/shop, src (${done} of ${total}):`), nextId)?.progress,
+        workerNotice(
+          line(`Audit of acme/shop, src (${done} of ${total}, 0 findings so far):`),
+          nextId,
+        )?.progress,
       ).toBe(progress);
     });
   }

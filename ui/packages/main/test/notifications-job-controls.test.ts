@@ -42,7 +42,7 @@ const RUNNING_AUDIT: NotificationInput = {
   id: 'audit:acme/shop',
   kind: 'running',
   title: 'Audit of acme/shop',
-  detail: 'Area 3 of 8 done: src/orders',
+  detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
   progress: 38,
   at: 100,
   source: 'worker',
@@ -51,7 +51,7 @@ const PAUSED_AUDIT: NotificationInput = {
   id: 'audit:acme/shop',
   kind: 'paused',
   title: 'Audit of acme/shop paused',
-  detail: 'Paused by you · area 3 of 8 done',
+  detail: 'Paused by you · area 3 of 8 done · 4 findings so far',
   at: 100,
   source: 'worker',
 };
@@ -325,7 +325,7 @@ describe('what the worker says after a click was queued', () => {
       {
         kind: 'paused',
         title: 'Audit of acme/shop paused',
-        detail: 'Paused by you · area 3 of 8 done',
+        detail: 'Paused by you · area 3 of 8 done · 4 findings so far',
         progress: null,
         control: null,
         note: null,
@@ -349,16 +349,16 @@ describe('what the worker says after a click was queued', () => {
       },
     ],
     [
-      'a continue applied on a paused audit keeps the entry paused until the next area, then running',
+      'a continue applied on a paused audit keeps Continuing until the resume line, then the entry is running with the areas done and the findings so far',
       PAUSED_AUDIT,
       'continue',
       record('applied', 'Resuming the audit of acme/shop from the first area not done.'),
-      'Audit of acme/shop, src/billing (4 of 8):',
+      'Audit of acme/shop resumed: area 3 of 8 done, 4 findings so far.',
       {
         kind: 'running',
         title: 'Audit of acme/shop',
-        detail: 'Area 4 of 8 done: src/billing',
-        progress: 50,
+        detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
+        progress: 37,
         control: null,
         note: null,
         offered: 'pause stop',
@@ -520,12 +520,12 @@ describe('what the worker says after a click was queued', () => {
     await t.jobs.control(RUNNING_AUDIT.id, 'stop');
     await t.tick();
 
-    t.workerLine(notice('Audit of acme/shop, src/billing (4 of 8):'));
+    t.workerLine(notice('Audit of acme/shop, src/billing (4 of 8, 5 findings so far):'));
 
     expect(shown(t.get(RUNNING_AUDIT.id))).toEqual({
       kind: 'running',
       title: 'Audit of acme/shop',
-      detail: 'Area 4 of 8 done: src/billing',
+      detail: 'Area 4 of 8 done · 5 findings so far · cards arrive in the chat as each area ends',
       progress: 50,
       control: { action: 'stop', phase: 'waiting' },
       note: null,
@@ -716,7 +716,7 @@ describe(`a click recorded as applied whose notice does not come within ${NOTICE
     expect(shown(t.get(RUNNING_AUDIT.id))).toEqual({
       kind: 'paused',
       title: 'Audit of acme/shop paused',
-      detail: 'Paused by you · area 3 of 8 done',
+      detail: 'Paused by you · area 3 of 8 done · 4 findings so far',
       progress: null,
       control: null,
       note: null,
@@ -936,12 +936,13 @@ describe('when a job entry the owner has read becomes unread again, and the badg
     [
       'an area ends',
       'audit',
-      async (t) => t.workerLine(notice('Audit of acme/shop, src/billing (4 of 8):')),
+      async (t) =>
+        t.workerLine(notice('Audit of acme/shop, src/billing (4 of 8, 5 findings so far):')),
       {
         read: true,
         kind: 'running',
         title: 'Audit of acme/shop',
-        detail: 'Area 4 of 8 done: src/billing',
+        detail: 'Area 4 of 8 done · 5 findings so far · cards arrive in the chat as each area ends',
       },
     ],
     [
@@ -957,7 +958,7 @@ describe('when a job entry the owner has read becomes unread again, and the badg
         read: false,
         kind: 'paused',
         title: 'Audit of acme/shop paused',
-        detail: 'Paused by you · area 3 of 8 done',
+        detail: 'Paused by you · area 3 of 8 done · 4 findings so far',
       },
     ],
     ...(
@@ -1005,13 +1006,13 @@ describe('when a job entry the owner has read becomes unread again, and the badg
       clicked(
         'continue',
         record('applied', 'Resuming the audit of acme/shop from the first area not done.'),
-        'Audit of acme/shop, src/billing (4 of 8):',
+        'Audit of acme/shop, src/billing (4 of 8, 5 findings so far):',
       ),
       {
         read: true,
         kind: 'running',
         title: 'Audit of acme/shop',
-        detail: 'Area 4 of 8 done: src/billing',
+        detail: 'Area 4 of 8 done · 5 findings so far · cards arrive in the chat as each area ends',
       },
     ],
     [
@@ -1122,7 +1123,7 @@ describe('when a job entry the owner has read becomes unread again, and the badg
         read: false,
         kind: 'running',
         title: 'Audit of acme/shop',
-        detail: 'Area 3 of 8 done: src/orders',
+        detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
       },
     ],
     [

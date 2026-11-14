@@ -2,13 +2,15 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
+using Scout.Conversation.Abstractions;
 
 namespace Scout.Audit;
 
 /// <summary>
 /// Starts, pauses, stops and reports on the whole-repository audit Scout runs as a job, in sentences the model relays to the
 /// owner. Starting takes the repository's snapshot through the GitHub plugin's declared snapshot write, plans the
-/// batches and keeps the job under Scout's data folder, or resumes a paused job from its first batch not done; pausing and
+/// batches and keeps the job under Scout's data folder, or resumes a paused job from its first batch not done, with one
+/// line to the desktop's local chat when that chat holds the job; pausing and
 /// stopping write the job's status and nothing else; the status is read from the job's rows. None of the four makes a call
 /// to GitHub of its own.
 /// </summary>
@@ -62,7 +64,8 @@ internal sealed partial class RepositoryAudits(
     IReviewEnvironment environment,
     Func<Kernel> kernel,
     Func<string?> origin,
-    ILogger<RepositoryAudits> logger) : IRepositoryAudits
+    ILogger<RepositoryAudits> logger,
+    IOriginNotifier? notifier = null) : IRepositoryAudits
 {
     internal const string ActionsPlugin = "GitHubActions";
     internal const string SnapshotRepository = "snapshot_repository";
@@ -276,8 +279,41 @@ internal sealed partial class RepositoryAudits(
     private async Task<string> ResumeAsync(AuditJob paused, CancellationToken ct)
     {
         await store.ResumeAsync(paused.Id, origin(), ct).ConfigureAwait(false);
+        await PostResumedAsync(paused.Id, ct).ConfigureAwait(false);
         signal.Wake();
         return $"Resuming the audit of {paused.Owner}/{paused.Repo} from the first area not done. {await ProgressAsync(paused, ct).ConfigureAwait(false)} Findings arrive here as each area is done.";
+    }
+
+    /// <summary>
+    /// The resume line, only to a job the desktop's local chat holds after the resume, so its entry turns running at once; a
+    /// post or a read that fails is logged and the resume stands.
+    /// </summary>
+    private async Task PostResumedAsync(string jobId, CancellationToken ct)
+    {
+        if (notifier is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await store.JobAsync(jobId, ct).ConfigureAwait(false) is not { } job || !AuditWorker.IsLocal(job))
+            {
+                return;
+            }
+
+            var batches = await store.BatchesAsync(jobId, ct).ConfigureAwait(false);
+            var findings = await store.FindingsAsync(jobId, ct).ConfigureAwait(false);
+            var ended = batches.Count(b => b.Status is AuditStatus.Done or AuditStatus.NotCovered);
+            if (!await notifier.PostAsync(job.Origin!, AuditWorker.ResumedNotice(job, ended, batches.Count, findings.Count), ct).ConfigureAwait(false))
+            {
+                logger.LogWarning("Audit {JobId} could not post its resume to the conversation it holds.", jobId);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning("Audit {JobId} could not post its resume to the conversation it holds ({ExceptionType}).", jobId, ex.GetType().Name);
+        }
     }
 
     private async Task<string> ProgressAsync(AuditJob job, CancellationToken ct)
