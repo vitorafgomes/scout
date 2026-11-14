@@ -1,3 +1,5 @@
+## [2026-11-14] docs | Two pages reworded
+ADR 0031 and the desktop-ui history state the owner's request in plain words, with no quote of a conversation.
 ## [2026-11-14] feat | Docker panel: the logs of the runs and the command on the Stack tile
 The work folder line counts the run records ("the logs of 12 runs") and the last run's Stack tile names the command (".NET (dotnet test)"): the sandbox's run record gains `command`, main counts the records and copies the command, and the two owed Docker items of the Features artboard are done. Pages updated: services/desktop-ui (Docker card, the panel), services/sandbox (public contract), history/desktop-ui, history/sandbox, roadmap/prototype-migration.
 ## [2026-11-14] feat | Disconnect on the Ollama card
