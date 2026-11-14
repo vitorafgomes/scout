@@ -1,8 +1,9 @@
 ---
 title: "ADR 0031 - Scout Desktop updates itself only on the user's click, and only its own installation"
-version: "1.0"
+version: "1.1"
 date: 2026-11-02
-changes: "Initial ADR"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): amendment, the owner may choose a Beta channel that offers pre-releases."
 page_type: adr
 status: accepted
 description: "The desktop may replace its own executable with a GitHub Release the user chose by clicking Update and restart; the model and the worker never reach that path; macOS and .deb keep a download link until signing or a package repository exist."
@@ -63,3 +64,21 @@ Constraints: the builds are unsigned ([[pages/roadmap/followups]], "Desktop buil
 - `ui/packages/main/test/update-notice.test.ts`: the updater options are asserted off; `quitAndInstall` is called once and only after `update-downloaded`; a sha512 error, a different version, a network failure, a timeout, a 404 and a 403 install nothing; `canInstall` is true only for an AppImage and for Windows; a second click during an install is ignored.
 - `ui/packages/shared/test/ipc-contract.test.ts`: the write-verb scan names the two install channels with the reason above and refuses any other write-sounding channel.
 - The review gate's `read-only` lens on every change to `ui/packages/main/src/update/`.
+
+## Amendment of 2026-11-14: a Beta channel the owner chooses
+
+The owner asked for a way to use beta versions for testing, and approved the Settings artboard that draws it ("aprovado, pode seguir com o código do beta"). This amendment replaces one sentence of the Decision, "No background download, no install on quit, no update from a prerelease or a draft, no update when the API, the metadata or the checksum disagree, no token", with:
+
+> "No background download, no install on quit, no update from a draft, no update from a prerelease unless the owner chose the Beta channel in Settings, no update when the API, the metadata or the checksum disagree, no token."
+
+What it means, and where it now holds:
+
+- **Two channels, Stable by default.** Settings, Updates offers Stable and Beta; the choice is Scout's own vault key `update.channel` (`ui/packages/main/src/update/update-notice.ts:26`, `:145`), and anything stored other than `beta` reads as Stable. `scout:update.setChannel` stores it and checks again on that channel (`ui/packages/main/src/update/update-notice.ts:476`); a value that is neither is refused with nothing stored or fetched. A check still running when the channel changes is dropped when it ends, so nothing of the old channel is shown.
+- **Stable is unchanged.** One GET of `releases/latest`, which GitHub never makes a pre-release, and a release marked prerelease, or whose tag carries a pre-release suffix such as a `-beta.N` tag pushed by hand, still dropped (`ui/packages/main/src/update/update-notice.ts:286`).
+- **Beta reads the list.** One unauthenticated GET of `releases?per_page=30` (`ui/packages/main/src/update/update-notice.ts:22`, `:250`), the highest version that is not a draft, a pre-release included, and electron-updater's `allowPrerelease` on for that install only (`ui/packages/main/src/update/update-notice.ts:379`).
+- **Never older.** Both channels offer only a version higher than the running one, and `allowDowngrade` is never set, so going back to Stable while on a pre-release keeps it until a newer stable version is out; Settings says so.
+- **The metadata a pre-release needs** is already there: with the GitHub provider electron-builder writes `latest*.yml` for a `-beta.N` version as for a release ([[pages/decisions/0029-project-site-and-releases]], checked on 2026-11-08), the release workflow keeps it, and electron-updater on Beta falls back to it when no `beta*.yml` exists.
+- **Tests:** the "the Beta channel" block of `ui/packages/main/test/update-notice.test.ts` (each failing call of the list included), and the Settings specs.
+
+It also narrows the Decision's "allowPrerelease off" and the Enforcement's "the updater options are asserted off": `allowPrerelease` is off on Stable and on for a Beta install; `autoDownload` and `autoInstallOnAppQuit` stay off on both. The rest of the Decision is unchanged: the download and the install still run only on the owner's click, and the model and the worker never reach this path.
+

@@ -18,6 +18,7 @@ type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
 const NULL_EVENT = null as unknown as IpcMainInvokeEvent;
 const LATEST_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases/latest';
+const RELEASES_URL = 'https://api.github.com/repos/vitorafgomes/scout/releases?per_page=30';
 const NOW = new Date('2026-11-02T09:30:00.000Z');
 const MOUNT = '/tmp/.mount_ScoutAb12';
 const APPIMAGE_ENV = { APPIMAGE: '/home/owner/Applications/Scout.AppImage', APPDIR: MOUNT };
@@ -193,6 +194,7 @@ function setup(
     arch?: string;
     execPath?: string;
     prepareForRestart?: () => Promise<void>;
+    currentVersion?: string;
   } = {},
 ) {
   const handlers = new Map<string, IpcHandler>();
@@ -231,7 +233,7 @@ function setup(
     fetch,
     requestTimeoutMs: 20,
     logger,
-    currentVersion: '0.1.0',
+    currentVersion: options.currentVersion ?? '0.1.0',
     packaged: options.packaged ?? true,
     platform: options.platform ?? 'linux',
     arch: options.arch ?? 'x64',
@@ -314,6 +316,7 @@ describe('the update notice', () => {
 
     expect(state).toEqual({
       checkEnabled: true,
+      channel: 'stable',
       lastCheckAt: NOW.toISOString(),
       lastResult: 'available 0.2.0',
       notice: EXPECTED_NOTICE,
@@ -419,6 +422,7 @@ describe('the update notice', () => {
     expect(app.requests).toEqual([]);
     expect(state).toEqual({
       checkEnabled: true,
+      channel: 'stable',
       lastCheckAt: null,
       lastResult: null,
       notice: null,
@@ -925,4 +929,290 @@ describe('Update and restart', () => {
       expect(state.notice?.canInstall).toBe(expected);
     },
   );
+});
+
+describe('the Beta channel', () => {
+  const list =
+    (...releases: unknown[]) =>
+    async () =>
+      json(releases);
+  const beta = (tag: string, extra: Record<string, unknown> = {}) =>
+    release(tag, { prerelease: true, ...extra });
+  const onChannel = (value: string) => new Map([['update.channel', value]]);
+
+  it('starts on Stable, which reads only the latest release and offers no pre-release', async () => {
+    const app = await started({ answer: async () => json(beta('v0.3.0-beta.1')) });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect({
+      channel: state.channel,
+      url: app.requests[0]!.url,
+      result: state.lastResult,
+      notice: state.notice,
+    }).toEqual({ channel: 'stable', url: LATEST_URL, result: 'up-to-date', notice: null });
+  });
+
+  it('Beta reads the recent releases and offers the highest version, a pre-release included, skipping drafts', async () => {
+    const app = await started({
+      entries: onChannel('beta'),
+      answer: list(
+        release('v0.2.0'),
+        beta('v0.3.0-beta.2'),
+        beta('v0.3.0-beta.10'),
+        release('v0.4.0', { draft: true }),
+      ),
+    });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect({
+      url: app.requests[0]!.url,
+      method: app.requests[0]!.init?.method,
+      headers: app.requests[0]!.init?.headers,
+      result: state.lastResult,
+      latest: state.notice?.latestVersion,
+    }).toEqual({
+      url: RELEASES_URL,
+      method: 'GET',
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Scout-Desktop/0.1.0' },
+      result: 'available 0.3.0-beta.10',
+      latest: '0.3.0-beta.10',
+    });
+  });
+
+  it('Beta still prefers a released version that is higher than every pre-release', async () => {
+    const app = await started({
+      entries: onChannel('beta'),
+      answer: list(beta('v0.3.0-beta.1'), release('v0.3.0')),
+    });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect(state.notice?.latestVersion).toBe('0.3.0');
+  });
+
+  it('back on Stable while running a pre-release, nothing older is offered', async () => {
+    const app = await started({
+      currentVersion: '0.3.0-beta.2',
+      answer: async () => json(release('v0.2.0')),
+    });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect([state.lastResult, state.notice]).toEqual(['up-to-date', null]);
+  });
+
+  it('setChannel stores the choice, drops the notice of the other channel and checks again on the new one', async () => {
+    const app = await started();
+    await app.invoke(CHANNEL.updateCheckNow);
+    app.answerWith(list(beta('v0.3.0-beta.1')));
+
+    const state = await app.invoke(CHANNEL.updateSetChannel, { channel: 'beta' });
+
+    expect({
+      stored: app.entries.get('update.channel'),
+      channel: state.channel,
+      urls: app.requests.map((r) => r.url),
+      latest: state.notice?.latestVersion,
+      cleared: app.windows[0]!.sent.filter(([c]) => c === CHANNEL.updateNotice).map(
+        ([, n]) => n === null,
+      ),
+    }).toEqual({
+      stored: 'beta',
+      channel: 'beta',
+      urls: [LATEST_URL, RELEASES_URL],
+      latest: '0.3.0-beta.1',
+      cleared: [false, true, false],
+    });
+  });
+
+  it('a channel switch while a check is still waiting for GitHub checks again on the new channel once that check ends', async () => {
+    let releaseStable: (response: Response) => void = () => undefined;
+    const app = await started({
+      answer: () =>
+        new Promise<Response>((resolve) => {
+          releaseStable = resolve;
+        }),
+    });
+    const pending = app.invoke(CHANNEL.updateCheckNow);
+    await new Promise((r) => setTimeout(r, 0));
+
+    app.answerWith(list(beta('v0.3.0-beta.1')));
+    const switched = app.invoke(CHANNEL.updateSetChannel, { channel: 'beta' });
+    releaseStable(json(release('v0.2.0')));
+    await pending;
+    const state = await switched;
+
+    expect({
+      urls: app.requests.map((r) => r.url),
+      latest: state.notice?.latestVersion,
+      result: state.lastResult,
+    }).toEqual({
+      urls: [LATEST_URL, RELEASES_URL],
+      latest: '0.3.0-beta.1',
+      result: 'available 0.3.0-beta.1',
+    });
+  });
+
+  it('with the check switched off, a Check now still waiting when the channel changes shows nothing of the old channel', async () => {
+    let answerBeta: (response: Response) => void = () => undefined;
+    const app = await started({
+      entries: new Map([
+        ['update.channel', 'beta'],
+        ['update.check-enabled', 'false'],
+      ]),
+      answer: () =>
+        new Promise<Response>((resolve) => {
+          answerBeta = resolve;
+        }),
+    });
+    const pending = app.invoke(CHANNEL.updateCheckNow);
+    await new Promise((r) => setTimeout(r, 0));
+
+    const switched = await app.invoke(CHANNEL.updateSetChannel, { channel: 'stable' });
+    answerBeta(json([beta('v0.3.0-beta.1')]));
+    const after = await pending;
+
+    expect({
+      urls: app.requests.map((r) => r.url),
+      notice: after.notice,
+      channel: switched.channel,
+      announced: app.windows[0]!.sent.filter(([c, n]) => c === CHANNEL.updateNotice && n !== null),
+    }).toEqual({ urls: [RELEASES_URL], notice: null, channel: 'stable', announced: [] });
+  });
+
+  it("when the new channel's check fails, the old channel's release is not left on offer", async () => {
+    let answerBeta: (response: Response) => void = () => undefined;
+    const app = await started({
+      entries: onChannel('beta'),
+      answer: () =>
+        new Promise<Response>((resolve) => {
+          answerBeta = resolve;
+        }),
+    });
+    const pending = app.invoke(CHANNEL.updateCheckNow);
+    await new Promise((r) => setTimeout(r, 0));
+
+    app.answerWith(async () => new Response('busy', { status: 503 }));
+    const switched = app.invoke(CHANNEL.updateSetChannel, { channel: 'stable' });
+    answerBeta(json([beta('v0.3.0-beta.1')]));
+    await pending;
+    const state = await switched;
+
+    expect([state.notice, state.lastResult]).toEqual([null, 'error http 503']);
+  });
+
+  it('on Stable, a tag with a pre-release suffix GitHub did not mark as a pre-release is still not offered', async () => {
+    const app = await started({ answer: async () => json(release('v0.3.0-beta.1')) });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect([state.lastResult, state.notice]).toEqual(['up-to-date', null]);
+  });
+
+  it('a channel the vault cannot store still applies for this session, is logged, and the check runs on it', async () => {
+    const app = await started({
+      vault: {
+        get: async () => null,
+        store: async () => {
+          throw new VaultUnavailableError();
+        },
+      },
+      answer: list(beta('v0.3.0-beta.1')),
+    });
+
+    const state = await app.invoke(CHANNEL.updateSetChannel, { channel: 'beta' });
+
+    expect({
+      channel: state.channel,
+      urls: app.requests.map((r) => r.url),
+      warned: app.lines.some((line) => line.includes('update: channel not stored')),
+    }).toEqual({ channel: 'beta', urls: [RELEASES_URL], warned: true });
+  });
+
+  it.each([['alpha'], [''], [undefined], [42]])(
+    'setChannel refuses a channel that is neither stable nor beta (%p): nothing is stored and nothing is fetched',
+    async (value) => {
+      const app = await started();
+
+      const state = await app.invoke(CHANNEL.updateSetChannel, { channel: value });
+
+      expect([state.channel, app.entries.has('update.channel'), app.requests]).toEqual([
+        'stable',
+        false,
+        [],
+      ]);
+    },
+  );
+
+  it('a stored channel that is not beta reads as Stable', async () => {
+    const app = await started({ entries: onChannel('nightly') });
+
+    const state = await app.invoke(CHANNEL.updateGetState);
+
+    expect(state.channel).toBe('stable');
+  });
+
+  it.each([
+    ['a 503', async () => new Response('busy', { status: 503 }), 'error http 503'],
+    [
+      'a reset',
+      async () => {
+        throw new TypeError('fetch failed: ECONNRESET');
+      },
+      'error network',
+    ],
+    ['a body that is not a list', async () => json({ tag_name: 'v0.3.0' }), 'error parse'],
+    [
+      'a list with no usable release',
+      async () => json([{ draft: true, tag_name: 'v0.3.0' }]),
+      'error parse',
+    ],
+  ])(
+    'on Beta, %s leaves Scout on its version with no notice and says why',
+    async (_label, answer, result) => {
+      const app = await started({ entries: onChannel('beta'), answer });
+
+      const state = await app.invoke(CHANNEL.updateCheckNow);
+
+      expect([state.lastResult, state.notice]).toEqual([result, null]);
+    },
+  );
+
+  it('on Beta, a list GitHub does not answer in time says the check timed out', async () => {
+    const app = await started({
+      entries: onChannel('beta'),
+      answer: (signal) =>
+        new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => reject(signal.reason));
+        }),
+    });
+
+    const state = await app.invoke(CHANNEL.updateCheckNow);
+
+    expect(state.lastResult).toBe('error timeout');
+  });
+
+  it('on Beta, Update and restart lets the updater take pre-releases; on Stable it does not', async () => {
+    const results: unknown[] = [];
+    for (const [entries, offered] of [
+      [onChannel('beta'), '0.3.0-beta.1'],
+      [new Map<string, string>(), '0.2.0'],
+    ] as const) {
+      const fake = fakeUpdater(offered);
+      const app = await started({
+        entries,
+        updater: fake.updater,
+        answer:
+          offered === '0.2.0' ? async () => json(release('v0.2.0')) : list(beta(`v${offered}`)),
+      });
+      await app.invoke(CHANNEL.updateCheckNow);
+      fake.downloadsCleanly();
+      await app.invoke(CHANNEL.updateInstall);
+      results.push(fake.flagsAtCheck()?.['allowPrerelease']);
+    }
+
+    expect(results).toEqual([true, false]);
+  });
 });

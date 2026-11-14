@@ -15,6 +15,7 @@ import {
   type LocalBubbleSettings,
   type LocalBubbleStatus,
   type LocalMonitor,
+  type UpdateChannel,
   type UpdateNotice,
   type UpdateProgress,
   type UpdateState,
@@ -34,6 +35,16 @@ const REPOSITORY_URL = 'https://github.com/vitorafgomes/scout';
 const LICENCE_URL = 'https://github.com/vitorafgomes/scout/blob/main/LICENSE';
 const CHANGELOG_URL = 'https://github.com/vitorafgomes/scout/releases';
 const SECURITY_URL = 'https://github.com/vitorafgomes/scout/security/advisories/new';
+
+const CHANNEL_OPTIONS: readonly { value: UpdateChannel; label: string }[] = [
+  { value: 'stable', label: 'Stable' },
+  { value: 'beta', label: 'Beta' },
+];
+
+const CHANNEL_HINTS: Readonly<Record<UpdateChannel, string>> = {
+  stable: 'Stable gets released versions only.',
+  beta: 'Beta also gets pre-releases, to try changes before they are released. A pre-release can have bugs; keep Stable for daily work.',
+};
 
 const CHECK_FAILURES: Readonly<Record<string, string>> = {
   network: 'no connection to GitHub',
@@ -488,6 +499,9 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
             <p class="lede">Nothing downloads or installs without a click.</p>
             <div class="version-row">
               <span class="muted">Current version</span>
+              @if (onPrerelease()) {
+                <span class="chip-pre" data-test="update-current-prerelease">Pre-release</span>
+              }
               <code data-test="update-current-version">{{ version() ?? 'unknown' }}</code>
             </div>
             @if (update(); as state) {
@@ -506,6 +520,32 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                 <p class="hint" data-test="update-schedule">
                   Scout checks GitHub Releases 10 seconds after it starts, then once a day.
                 </p>
+                <div class="channel-row">
+                  <span id="lbl-channel" class="switch-label">Channel</span>
+                  <div class="segmented" role="group" aria-labelledby="lbl-channel">
+                    @for (option of channelOptions; track option.value) {
+                      <button
+                        type="button"
+                        class="theme-choice"
+                        [attr.data-test]="'update-channel-' + option.value"
+                        [attr.aria-pressed]="state.channel === option.value"
+                        [disabled]="updateBusy()"
+                        (click)="setChannel(option.value)"
+                      >
+                        {{ option.label }}
+                      </button>
+                    }
+                  </div>
+                </div>
+                <p class="hint" data-test="update-channel-hint">
+                  {{ channelHints[state.channel] }}
+                </p>
+                @if (state.channel === 'stable' && onPrerelease()) {
+                  <p class="back-to-stable" role="status" data-test="update-back-to-stable">
+                    You are on the pre-release {{ version() }}. Stable never installs an older
+                    version: Scout offers the next stable version newer than it.
+                  </p>
+                }
                 <div class="update-row">
                   <span class="muted last-check" data-test="update-last-check">
                     Last check:
@@ -527,9 +567,16 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                 </div>
                 @if (state.notice; as n) {
                   <div class="update-box" role="status" data-test="settings-update-available">
-                    <h3 data-test="settings-update-headline">
-                      Scout {{ n.latestVersion }} is available. You have {{ n.currentVersion }}.
-                    </h3>
+                    <div class="update-headline">
+                      <h3 data-test="settings-update-headline">
+                        Scout {{ n.latestVersion }} is available. You have {{ n.currentVersion }}.
+                      </h3>
+                      @if (n.latestVersion.includes('-')) {
+                        <span class="chip-pre" data-test="settings-update-prerelease"
+                          >Pre-release</span
+                        >
+                      }
+                    </div>
                     @if (!n.canInstall) {
                       <p data-test="settings-update-cannot">
                         This package cannot update itself. Download the new version and replace this
@@ -600,10 +647,16 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
                       Later and Skip this version are on the bar at the top of the window.
                     </p>
                   </div>
-                } @else if (state.lastResult === 'up-to-date') {
+                } @else if (
+                  state.lastResult === 'up-to-date' &&
+                  !(state.channel === 'stable' && onPrerelease())
+                ) {
                   <div class="update-ok" role="status" data-test="settings-update-up-to-date">
                     <span class="ok-title">You are up to date</span>
-                    <span>Scout {{ version() ?? 'unknown' }} is the newest version.</span>
+                    <span
+                      >Scout {{ version() ?? 'unknown' }} is the newest version on the
+                      {{ state.channel === 'beta' ? 'Beta' : 'Stable' }} channel.</span
+                    >
                   </div>
                 }
               } @else {
@@ -818,6 +871,38 @@ const RECORDING_LINE = 'Recording. Press the new shortcut, or Esc to cancel.';
       }
       .update-progress progress {
         flex: 1;
+      }
+      .channel-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 12px;
+      }
+      .channel-row .switch-label {
+        margin-right: auto;
+      }
+      .back-to-stable {
+        margin: 0;
+        font-size: 13px;
+        color: var(--sc-fg-2);
+        line-height: 1.5;
+      }
+      .chip-pre {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 11px;
+        font-size: 12px;
+        font-weight: 500;
+        background: var(--sc-warn-container);
+        color: var(--sc-warn);
+      }
+      .update-headline {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
       }
       .update-actions {
         display: flex;
@@ -1084,6 +1169,9 @@ export class SettingsComponent implements OnInit {
   readonly changelogUrl = CHANGELOG_URL;
   readonly securityUrl = SECURITY_URL;
   readonly updateProgress = signal<UpdateProgress | null>(null);
+  readonly channelOptions = CHANNEL_OPTIONS;
+  readonly channelHints = CHANNEL_HINTS;
+  readonly onPrerelease = computed(() => (this.version() ?? '').includes('-'));
   readonly installing = computed(() => {
     const phase = this.updateProgress()?.phase;
     return (
@@ -1315,6 +1403,11 @@ export class SettingsComponent implements OnInit {
 
   async checkNow(): Promise<void> {
     await this.saveUpdate(() => this.bridge.updateCheckNow());
+  }
+
+  /** Moves the update check to Stable or Beta; main stores it and checks again on that channel. */
+  async setChannel(channel: UpdateChannel): Promise<void> {
+    await this.saveUpdate(() => this.bridge.updateSetChannel({ channel }));
   }
 
   /** Starts the same install as the bar's Update and restart; the progress arrives on `scout:update.progress`. */

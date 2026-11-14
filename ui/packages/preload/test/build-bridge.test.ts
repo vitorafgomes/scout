@@ -203,6 +203,7 @@ describe('buildBridge', () => {
       'updateCheckNow',
       'updateSkipVersion',
       'updateRemindLater',
+      'updateSetChannel',
       'onUpdateNotice',
       'updateInstall',
       'onUpdateProgress',
@@ -1370,6 +1371,7 @@ describe('buildBridge', () => {
     await bridge.updateCheckNow();
     await bridge.updateSkipVersion({ version: '0.2.0' });
     await bridge.updateRemindLater();
+    await bridge.updateSetChannel({ channel: 'beta' });
     await bridge.updateInstall();
 
     expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
@@ -1378,6 +1380,7 @@ describe('buildBridge', () => {
       [CHANNEL.updateCheckNow],
       [CHANNEL.updateSkipVersion, { version: '0.2.0' }],
       [CHANNEL.updateRemindLater],
+      [CHANNEL.updateSetChannel, { channel: 'beta' }],
       [CHANNEL.updateInstall],
     ]);
   });

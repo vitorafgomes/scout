@@ -427,7 +427,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <h2 id="s-updates" style="margin: 0; font-size: 15px; font-weight: 600">Updates</h2>
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">Nothing downloads or installs without a click.</p>
 <div style="display: flex; align-items: center; gap: 8px; font-size: 13px">
-<span style="color: {{t.muted}}; margin-right: auto">Current version</span><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">0.9.0</code>
+<span style="color: {{t.muted}}; margin-right: auto">Current version</span><sc-if value="{{upd.onBeta}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}">Pre-release</span></sc-if><code style="font-size: 13px; padding: 2px 8px; border-radius: 6px; background: {{t.surface2}}; color: {{t.fg}}">{{upd.current}}</code>
 </div>
 <sc-if value="{{devBuild}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Update checks run only in the installed app.</p>
@@ -448,6 +448,18 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </sc-if>
 </sc-for>
 <p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">Scout checks GitHub Releases 10 seconds after it starts, then once a day.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<span id="u-channel" style="margin-right: auto">Channel</span>
+<div role="group" aria-labelledby="u-channel" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 22px; background: {{t.bg}}">
+<sc-for list="{{upd.channels}}" as="ch" hint-placeholder-count="2">
+<button aria-pressed="{{ch.pressed}}" onClick="{{ch.pick}}" style="height: 34px; padding: 0 14px; border: 0; border-radius: 18px; display: flex; align-items: center; gap: 8px; background: {{ch.bg}}; color: {{ch.fg}}; font-weight: {{ch.weight}}">{{ch.label}}</button>
+</sc-for>
+</div>
+</div>
+<p style="margin: 0; font-size: 12px; color: {{t.muted}}; line-height: 1.5">{{upd.channelHint}}</p>
+<sc-if value="{{upd.backToStable}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">You are on the pre-release 0.10.0-beta.2. Stable never installs an older version: Scout offers the next stable version newer than it.</p>
+</sc-if>
 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid {{t.line}}">
 <span style="font-size: 13px; color: {{t.muted}}; margin-right: auto">Last check: 7 Nov 2026, 14:02 · {{upd.result}}</span>
 <button style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Check now</button>
@@ -455,12 +467,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <sc-if value="{{upd.upToDate}}" hint-placeholder-val="{{true}}">
 <div role="status" style="display: flex; flex-direction: column; gap: 2px; font-size: 13px">
 <span style="font-weight: 600; color: {{t.ok}}">You are up to date</span>
-<span style="color: {{t.fg2}}">Scout 0.9.0 is the newest version.</span>
+<span style="color: {{t.fg2}}">Scout {{upd.current}} is the newest version on the {{upd.channelName}} channel.</span>
 </div>
 </sc-if>
 <sc-if value="{{upd.available}}" hint-placeholder-val="{{false}}">
 <div role="status" style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: {{t.infoBg}}">
-<h3 style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">Scout 0.10.0 is available. You have 0.9.0.</h3>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><h3 style="margin: 0; font-size: 14px; font-weight: 600; color: {{t.fg}}">{{upd.headline}}</h3><sc-if value="{{upd.offerBeta}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}">Pre-release</span></sc-if></div>
 <sc-if value="{{upd.cannot}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}; line-height: 1.5">This package cannot update itself. Download the new version and replace this copy; your settings stay on this computer.</p>
 </sc-if>
@@ -592,6 +604,7 @@ class Component extends DCLogic {
       keepRunning: true,
       startAtLogin: false,
       checkUpdates: true,
+      channel: 'stable',
       aboutOpen: false,
       youtubeConnected: true,
       chats: { discord: true, slack: false, teams: false },
@@ -819,7 +832,7 @@ class Component extends DCLogic {
     }) : [];
     const dlgMissing = dlgDef ? dlgDef.fields.some(([key, , , prefix]) => badField(key, prefix)) : false;
     return Object.assign(this.shellVals(t, 'Settings', 'Settings'), {
-      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
+      preview: this.segVals(t, [['normal', 'Normal'], ['workerIdle', 'Worker: Not started'], ['workerStarting', 'Worker: Starting'], ['workerRunning', 'Worker: Running'], ['workerStopped', 'Worker: Stopped'], ['workerCrashed', 'Worker: Stopped unexpectedly'], ['stopFailed', 'Stop failed'], ['confirm', 'Disconnect confirm'], ['needsServer', 'Discord needs a server'], ['slackDlg', 'Connect Slack'], ['teamsDlg', 'Connect Teams'], ['cursorStale', 'Cursor not followed'], ['monitorGone', 'Monitor unplugged'], ['monitorGoneOneLeft', 'Monitor unplugged, one left'], ['oneMonitor', 'One monitor'], ['shortcutRecording', 'Shortcut: recording'], ['shortcutRefused', 'Shortcut: key refused'], ['shortcutTaken', 'Shortcut: save refused'], ['shortcutLost', 'Shortcut: not given back'], ['shortcutWayland', 'Shortcut: Wayland'], ['aboutOpen', 'About: trademark notices open'], ['updAvailable', 'Update available'], ['updCannot', 'Update: this package cannot update itself'], ['updDownloading', 'Update: downloading'], ['updInstalling', 'Update: restarting'], ['updFailed', 'Update: download failed'], ['updCheckFailed', 'Update: check failed'], ['betaUpToDate', 'Beta: up to date'], ['betaAvailable', 'Beta: pre-release available'], ['betaBackToStable', 'Beta: back to Stable on a pre-release'], ['nobodyListed', 'Nobody listed'], ['pairingExpired', 'Pairing expired'], ['disconnectFailed', 'Disconnect failed'], ['restartWaits', 'Restart waits'], ['noTray', 'No system tray'], ['devBuild', 'Development build'], ['audioHidden', 'Audio: devices hidden'], ['audioTest', 'Audio: Test held'], ['audioDenied', 'Audio: not allowed'], ['audioMissing', 'Audio: no microphone'], ['audioBusy', 'Audio: busy'], ['audioUnplugged', 'Audio: unplugged']], s.chatDlg === 'slack' ? 'slackDlg' : s.chatDlg === 'teams' ? 'teamsDlg' : s.preview, (id) => this.setState(id === 'slackDlg' || id === 'teamsDlg' ? { preview: 'normal', chatDlg: id === 'slackDlg' ? 'slack' : 'teams', tokens: {}, tried: false, reveal: false } : { preview: id, chatDlg: null, disc: id === 'confirm' ? 'discord' : s.disc })),
       themeChoices: this.segVals(t, [['light', 'Light', sun], ['dark', 'Dark', moon], ['system', 'System', monitor]], s.theme, (id) => this.setState({ theme: id })),
       worker: {
         chip: wkChip[0],
@@ -891,12 +904,27 @@ class Component extends DCLogic {
       updateSwitches: [Object.assign(this.switchVals(t, s.checkUpdates, flip('checkUpdates')), { id: 'u-check', label: 'Check for new versions', free: true, isLocked: false, hasNote: false, note: '' })],
       upd: (() => {
         const p = s.preview;
-        const available = ['updAvailable', 'updCannot', 'updDownloading', 'updInstalling', 'updFailed'].includes(p);
+        const channel = p === 'betaUpToDate' || p === 'betaAvailable' ? 'beta' : p === 'betaBackToStable' ? 'stable' : s.channel;
+        const onBeta = p === 'betaUpToDate' || p === 'betaBackToStable';
+        const current = onBeta ? '0.10.0-beta.2' : '0.9.0';
+        const offerBeta = p === 'betaAvailable';
+        const latest = offerBeta ? '0.10.0-beta.3' : '0.10.0';
+        const available = ['updAvailable', 'updCannot', 'updDownloading', 'updInstalling', 'updFailed', 'betaAvailable'].includes(p);
         const cannot = p === 'updCannot';
         return {
-          result: p === 'updCheckFailed' ? 'Could not check for updates (no connection to GitHub)' : available ? 'Version 0.10.0 is available' : 'You have the latest version',
-          upToDate: !available && p !== 'updCheckFailed',
+          result: p === 'updCheckFailed' ? 'Could not check for updates (no connection to GitHub)' : available ? 'Version ' + latest + ' is available' : 'You have the latest version',
+          upToDate: !available && p !== 'updCheckFailed' && p !== 'betaBackToStable',
           available,
+          current,
+          onBeta,
+          offerBeta,
+          backToStable: p === 'betaBackToStable',
+          headline: 'Scout ' + latest + ' is available. You have ' + current + '.',
+          channelName: channel === 'beta' ? 'Beta' : 'Stable',
+          channelHint: channel === 'beta'
+            ? 'Beta also gets pre-releases, to try changes before they are released. A pre-release can have bugs; keep Stable for daily work.'
+            : 'Stable gets released versions only.',
+          channels: this.segVals(t, [['stable', 'Stable'], ['beta', 'Beta']], channel, (id) => this.setState({ channel: id, preview: p.startsWith('beta') ? 'normal' : p })),
           cannot,
           downloading: p === 'updDownloading',
           installing: p === 'updInstalling',

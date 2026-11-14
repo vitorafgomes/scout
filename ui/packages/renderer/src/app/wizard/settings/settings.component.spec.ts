@@ -52,6 +52,7 @@ function makeBridge(
   desktop: DesktopSettings = { keepRunning: true, startAtLogin: false, trayAvailable: true },
   update: UpdateState = {
     checkEnabled: true,
+    channel: 'stable',
     lastCheckAt: '2026-11-02T09:30:00.000Z',
     lastResult: 'up-to-date',
     notice: null,
@@ -79,6 +80,12 @@ function makeBridge(
       return () => progressListeners.splice(progressListeners.indexOf(listener), 1);
     }),
     updateInstall: vi.fn(async (): Promise<UpdateState> => updateState),
+    updateSetChannel: vi.fn(
+      async (req: { channel: UpdateState['channel'] }): Promise<UpdateState> => {
+        updateState = { ...updateState, channel: req.channel, notice: null };
+        return updateState;
+      },
+    ),
     bubbleListeners,
     emitBubble: (status: LocalBubbleStatus) => bubbleListeners.forEach((l) => l(status)),
     onLocalBubble: vi.fn((listener: (status: LocalBubbleStatus) => void) => {
@@ -862,6 +869,7 @@ describe('Settings: Desktop, new versions', () => {
           { keepRunning: true, startAtLogin: false, trayAvailable: true },
           {
             checkEnabled: true,
+            channel: 'stable',
             lastCheckAt: '2026-11-02T09:30:00.000Z',
             lastResult: result,
             notice: null,
@@ -900,7 +908,14 @@ describe('Settings: Desktop, new versions', () => {
       makeBridge(
         [],
         { keepRunning: true, startAtLogin: false, trayAvailable: true },
-        { checkEnabled: true, lastCheckAt: null, lastResult: null, notice: null, packaged: false },
+        {
+          checkEnabled: true,
+          channel: 'stable',
+          lastCheckAt: null,
+          lastResult: null,
+          notice: null,
+          packaged: false,
+        },
       ),
     );
 
@@ -924,6 +939,7 @@ describe('Settings: Updates', () => {
   const withNotice = (notice: UpdateNotice | null, lastResult: string | null = 'available 1.1.0') =>
     makeBridge([], DESKTOP, {
       checkEnabled: true,
+      channel: 'stable',
       lastCheckAt: '2026-11-02T09:30:00.000Z',
       lastResult,
       notice,
@@ -973,7 +989,7 @@ describe('Settings: Updates', () => {
     const failed = await render(withNotice(null, 'error network'));
 
     expect([shown, el(failed, 'settings-update-up-to-date')]).toEqual([
-      ['You are up to date', 'Scout 1.0.0 is the newest version.'],
+      ['You are up to date', 'Scout 1.0.0 is the newest version on the Stable channel.'],
       null,
     ]);
   });
@@ -1106,10 +1122,126 @@ describe('Settings: Updates', () => {
     });
   }
 
+  it('the Channel row offers Stable and Beta, Stable pressed by default, with the line that says what Stable gets', async () => {
+    const fixture = await render(makeBridge());
+    const card = section(fixture, 'Updates');
+    const group = card.querySelector('[aria-labelledby="lbl-channel"]')!;
+
+    expect({
+      label: card.querySelector('#lbl-channel')?.textContent?.trim(),
+      buttons: Array.from(group.querySelectorAll('button'), (b) => [
+        b.textContent?.trim(),
+        b.getAttribute('aria-pressed'),
+      ]),
+      hint: text(fixture, 'update-channel-hint'),
+      backToStable: el(fixture, 'update-back-to-stable'),
+    }).toEqual({
+      label: 'Channel',
+      buttons: [
+        ['Stable', 'true'],
+        ['Beta', 'false'],
+      ],
+      hint: 'Stable gets released versions only.',
+      backToStable: null,
+    });
+  });
+
+  it('pressing Beta asks main for the Beta channel, then Beta is pressed and the line says pre-releases can have bugs', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge);
+
+    el(fixture, 'update-channel-beta')!.click();
+    await settle(fixture);
+
+    expect({
+      asked: bridge.updateSetChannel.mock.calls.map(([req]) => req),
+      pressed: el(fixture, 'update-channel-beta')!.getAttribute('aria-pressed'),
+      hint: text(fixture, 'update-channel-hint'),
+    }).toEqual({
+      asked: [{ channel: 'beta' }],
+      pressed: 'true',
+      hint: 'Beta also gets pre-releases, to try changes before they are released. A pre-release can have bugs; keep Stable for daily work.',
+    });
+  });
+
+  it('a channel change main refuses says why in the Updates card and keeps the channel pressed before', async () => {
+    const bridge = makeBridge();
+    bridge.updateSetChannel.mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'scout:update.setChannel': Error: [scout:vault/unavailable] The credential store is not available.",
+      ),
+    );
+    const fixture = await render(bridge);
+
+    el(fixture, 'update-channel-beta')!.click();
+    await settle(fixture);
+
+    expect({
+      reason: text(fixture, 'update-error'),
+      inUpdates: section(fixture, 'Updates').contains(el(fixture, 'update-error')),
+      stable: el(fixture, 'update-channel-stable')!.getAttribute('aria-pressed'),
+    }).toEqual({
+      reason: 'The credential store is not available.',
+      inUpdates: true,
+      stable: 'true',
+    });
+  });
+
+  it('running a pre-release marks the current version and, on Stable, says Stable never installs an older version instead of "You are up to date"', async () => {
+    const bridge = makeBridge();
+    bridge.appGetVersion.mockResolvedValue({ version: '1.1.0-beta.2' });
+    const fixture = await render(bridge);
+
+    expect([
+      text(fixture, 'update-current-prerelease'),
+      text(fixture, 'update-back-to-stable'),
+      el(fixture, 'settings-update-up-to-date'),
+    ]).toEqual([
+      'Pre-release',
+      'You are on the pre-release 1.1.0-beta.2. Stable never installs an older version: Scout offers the next stable version newer than it.',
+      null,
+    ]);
+  });
+
+  it('up to date on Beta while running a pre-release: the Pre-release chip and "newest version on the Beta channel"', async () => {
+    const bridge = makeBridge([], DESKTOP, {
+      checkEnabled: true,
+      channel: 'beta',
+      lastCheckAt: '2026-11-02T09:30:00.000Z',
+      lastResult: 'up-to-date',
+      notice: null,
+      packaged: true,
+    });
+    bridge.appGetVersion.mockResolvedValue({ version: '0.10.0-beta.2' });
+    const fixture = await render(bridge);
+
+    expect([
+      text(fixture, 'update-current-prerelease'),
+      Array.from(el(fixture, 'settings-update-up-to-date')!.querySelectorAll('span'), (span) =>
+        span.textContent?.replace(/\s+/g, ' ').trim(),
+      ),
+      el(fixture, 'update-back-to-stable'),
+    ]).toEqual([
+      'Pre-release',
+      ['You are up to date', 'Scout 0.10.0-beta.2 is the newest version on the Beta channel.'],
+      null,
+    ]);
+  });
+
+  it('a pre-release on offer is marked Pre-release beside its headline; a released version is not', async () => {
+    const preRelease = await render(withNotice({ ...NOTICE, latestVersion: '1.1.0-beta.3' }));
+    const shown = text(preRelease, 'settings-update-prerelease');
+    TestBed.resetTestingModule();
+    const released = await render(withNotice(NOTICE));
+
+    expect([shown, el(released, 'settings-update-prerelease')]).toEqual(['Pre-release', null]);
+  });
+
   it('a development build still shows the current version beside the line that checks run only in the installed app', async () => {
     const fixture = await render(
       makeBridge([], DESKTOP, {
         checkEnabled: true,
+        channel: 'stable',
         lastCheckAt: null,
         lastResult: null,
         notice: null,
@@ -1967,6 +2099,7 @@ describe('Settings as Settings.dc.html draws it, state by state', () => {
     const fixture = await render(
       makeBridge([], undefined, {
         checkEnabled: true,
+        channel: 'stable',
         lastCheckAt: at,
         lastResult: 'up-to-date',
         notice: null,

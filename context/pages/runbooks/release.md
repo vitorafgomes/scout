@@ -1,9 +1,9 @@
 ---
 title: "Release - cut a Scout Desktop release"
-version: "1.5"
+version: "1.6"
 date: 2026-11-08
-updated: 2026-11-11
-changes: "The smoke test checks the launcher entry against the running app, and the verification checks the dock shows Scout's icon for the running window. Earlier: the Release workflow runs the CI and UI CI workflows before it packages.."
+updated: 2026-11-14
+changes: "A prerelease is offered to desktops on the Beta channel. Earlier: The smoke test checks the launcher entry against the running app, and the verification checks the dock shows Scout's icon for the running window. Earlier: the Release workflow runs the CI and UI CI workflows before it packages.."
 page_type: runbook
 status: active
 description: "Preview the computed version, run the Release workflow from main as a release or a prerelease, and check the packages on the release page and the project site; a version tag pushed by hand still works."
@@ -71,7 +71,7 @@ Expected: `6 passed` in under a minute, among them the launcher entry: the AppIm
 
 ## Steps
 
-1. **Run the Release workflow from `main`, choosing the kind.** The owner decides what reaches users: `release` publishes `vX.Y.Z`, marked Latest, which the site and the updater offer; `prerelease` publishes `vX.Y.Z-beta.N`, marked Pre-release, which neither the site nor the updater offers. `version` replaces the computed version when set (`1.0.0` for a release, `1.0.0-beta.1` for a prerelease).
+1. **Run the Release workflow from `main`, choosing the kind.** The owner decides what reaches users: `release` publishes `vX.Y.Z`, marked Latest, which the site and the updater offer; `prerelease` publishes `vX.Y.Z-beta.N`, marked Pre-release, which the site and the Stable channel skip and the Beta channel offers. `version` replaces the computed version when set (`1.0.0` for a release, `1.0.0-beta.1` for a prerelease).
    ```bash
    gh workflow run release.yml --ref main -f kind=release
    # a beta:            gh workflow run release.yml --ref main -f kind=prerelease
@@ -94,7 +94,7 @@ Expected: `6 passed` in under a minute, among them the launcher entry: the AppIm
    ```
    Expected for a release: not a draft, not a prerelease, marked Latest, with the notes from the preview (a pushed tag gets GitHub's generated notes), four packages, three checksum files and the updater metadata:
    `Scout-Desktop-0.3.0-linux-x86_64.AppImage`, `Scout-Desktop-0.3.0-linux-amd64.deb`, `Scout-Desktop-0.3.0-mac-arm64.dmg`, `Scout-Desktop-0.3.0-win-x64.exe`, `SHA256SUMS-linux.txt`, `SHA256SUMS-mac.txt`, `SHA256SUMS-windows.txt`, `latest-linux.yml`, `latest.yml` and `Scout-Desktop-0.3.0-win-x64.exe.blockmap`. No `latest-mac.yml`, no mac blockmap, no Intel dmg.
-   A prerelease is marked Pre-release and not Latest, with the same files, `latest-linux.yml` and `latest.yml` included (electron-builder writes `latest-linux.yml` for a `-beta.N` version too, checked on 2026-11-08). The site and the updater skip it.
+   A prerelease is marked Pre-release and not Latest, with the same files, `latest-linux.yml` and `latest.yml` included (electron-builder writes `latest-linux.yml` for a `-beta.N` version too, checked on 2026-11-08). The site and desktops on the Stable channel skip it; desktops on the Beta channel are offered it.
    The two `latest*.yml` files and the blockmap are what Update and restart reads ([[pages/decisions/0031-desktop-self-update]]); never delete them from a release. A release without them leaves AppImage and Windows users with a failed install ("This release has no update for this package") until they use the Release notes link. The checksum files cover the packages only, not the metadata.
 
 4. **Check the site.** Open https://vitorafgomes.github.io/scout/.

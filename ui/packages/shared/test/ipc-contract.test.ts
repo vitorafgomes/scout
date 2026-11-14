@@ -211,6 +211,7 @@ describe('CHANNEL constant', () => {
         'updateNotice',
         'updateProgress',
         'updateRemindLater',
+        'updateSetChannel',
         'updateSetCheckEnabled',
         'updateSkipVersion',
         'usageAdminKeyRemove',
@@ -873,6 +874,7 @@ describe('ChannelName type', () => {
       'scout:update.checkNow': true,
       'scout:update.skipVersion': true,
       'scout:update.remindLater': true,
+      'scout:update.setChannel': true,
       'scout:update.notice': true,
       'scout:update.install': true,
       'scout:update.progress': true,
@@ -915,12 +917,14 @@ describe('no-external-write sanity scan', () => {
     'scout:features.deleteCredentials',
     // - scout:update.getState .. notice  -> "update" names Scout's own version check: one unauthenticated GET of
     //                                       public release metadata and Scout's own vault keys; nothing is
-    //                                       written outside Scout's config.
+    //                                       written outside Scout's config. setChannel stores Stable or Beta
+    //                                       in update.channel and checks again on that channel.
     'scout:update.getState',
     'scout:update.setCheckEnabled',
     'scout:update.checkNow',
     'scout:update.skipVersion',
     'scout:update.remindLater',
+    'scout:update.setChannel',
     'scout:update.notice',
     // - scout:update.install, progress  -> install replaces Scout's own executable with a release the user chose
     //                                       by clicking Update and restart; nothing outside Scout's own
@@ -977,6 +981,7 @@ describe('update channels', () => {
       CHANNEL.updateCheckNow,
       CHANNEL.updateSkipVersion,
       CHANNEL.updateRemindLater,
+      CHANNEL.updateSetChannel,
       CHANNEL.updateNotice,
       CHANNEL.updateInstall,
       CHANNEL.updateProgress,
@@ -986,6 +991,7 @@ describe('update channels', () => {
       'scout:update.checkNow',
       'scout:update.skipVersion',
       'scout:update.remindLater',
+      'scout:update.setChannel',
       'scout:update.notice',
       'scout:update.install',
       'scout:update.progress',

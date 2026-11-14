@@ -182,6 +182,7 @@ export const CHANNEL = {
   updateCheckNow: 'scout:update.checkNow',
   updateSkipVersion: 'scout:update.skipVersion',
   updateRemindLater: 'scout:update.remindLater',
+  updateSetChannel: 'scout:update.setChannel',
   updateNotice: 'scout:update.notice',
   updateInstall: 'scout:update.install',
   updateProgress: 'scout:update.progress',
@@ -1898,13 +1899,21 @@ export interface UpdateProgress {
   readonly message: string | null;
 }
 
+/** Which releases the update check offers: `stable` released versions only, `beta` pre-releases as well. */
+export type UpdateChannel = 'stable' | 'beta';
+
 /** The update check as Settings shows it; `packaged` is false in a development build, which never checks. */
 export interface UpdateState {
   readonly checkEnabled: boolean;
+  readonly channel: UpdateChannel;
   readonly lastCheckAt: string | null;
   readonly lastResult: string | null;
   readonly notice: UpdateNotice | null;
   readonly packaged: boolean;
+}
+
+export interface UpdateSetChannelRequest {
+  readonly channel: UpdateChannel;
 }
 
 export interface UpdateSkipVersionRequest {
@@ -2297,6 +2306,7 @@ export interface ScoutBridge {
   updateCheckNow(): Promise<UpdateState>;
   updateSkipVersion(req: UpdateSkipVersionRequest): Promise<UpdateState>;
   updateRemindLater(): Promise<UpdateState>;
+  updateSetChannel(req: UpdateSetChannelRequest): Promise<UpdateState>;
   onUpdateNotice(listener: (notice: UpdateNotice | null) => void): () => void;
   updateInstall(): Promise<UpdateState>;
   onUpdateProgress(listener: (progress: UpdateProgress) => void): () => void;

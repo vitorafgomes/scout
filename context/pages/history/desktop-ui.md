@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.38"
+version: "1.39"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - Updates: a Beta channel
+
+The owner asked for beta versions to test with. Before, the update check read `releases/latest` and dropped any pre-release, so no installed Scout was ever offered one. Now Settings, Updates has a Channel row, Stable (the default) or Beta; Beta reads the release list and offers the highest version that is not a draft, a pre-release included, and lets electron-updater take pre-releases for that install. Neither channel offers an older version, and Settings says so when the owner goes back to Stable on a pre-release. A pre-release build already writes `latest*.yml`, the metadata the release workflow keeps, so the release side is unchanged. Governed by [[pages/decisions/0031-desktop-self-update]], amendment of 2026-11-14. Tests changed on purpose: the full-state assertions of `ui/packages/main/test/update-notice.test.ts` and the Settings and update-notice specs carry `channel: 'stable'`, the IPC contract and preload tests list `scout:update.setChannel`.
 
 ## 2026-11-14 - Settings: About as a fact sheet, and Updates as its own card
 
