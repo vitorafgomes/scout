@@ -306,6 +306,7 @@ public sealed class OperatorService(JsonFileOperatorStore store, WriteGateServic
     /// is no longer presenting, or a presenter job's save that keeps the request, adds more than one version or changes
     /// one. A project created more than 30 days ago may have its topic candidates and its claims' sources cleared.
     /// </exception>
+    /// <exception cref="OperatorValidationException">A package the operator does not accept, an assembly time before the package is assembled included.</exception>
     /// <exception cref="OperatorNotFoundException">No project has the id.</exception>
     public async Task<OperatorProject> SaveProjectFromWorkerAsync(
         OperatorProject project,
@@ -1248,21 +1249,21 @@ public sealed class OperatorService(JsonFileOperatorStore store, WriteGateServic
         return ForDesktop(queued);
     }
 
-    /// <summary>Record the owner's confirmation that they hold the rights to every medium of an assembled package.</summary>
+    /// <summary>Record the owner's confirmation that they hold the rights to every medium of an assembled package, and when it was given.</summary>
     /// <exception cref="OperatorValidationException">The project is not assembled.</exception>
     /// <exception cref="OperatorNotFoundException">No project has <paramref name="id"/>.</exception>
     public Task<OperatorProject> ConfirmMediaRightsAsync(string id, CancellationToken ct) =>
         ChangePackageAsync(
             id,
             (project, package) => project.Status == Assembled
-                ? project with { Package = package with { RightsConfirmed = true } }
+                ? project with { Package = package with { RightsConfirmed = true, RightsConfirmedAt = package.RightsConfirmedAt ?? DateTimeOffset.UtcNow } }
                 : throw new OperatorValidationException(
                     $"Media rights are confirmed on an assembled package; this one is {project.Status}."),
             ct);
 
     /// <summary>
     /// Replace the package's title, description and tags with the owner's, trimmed, within YouTube's
-    /// limits, and mark them the owner's; the metadata and discoverability checks are run again over
+    /// limits, and mark them the owner's, saved now; the metadata and discoverability checks are run again over
     /// them against the project's topic and the mandate's pillars. An approved package goes back to
     /// assembled and loses its approval.
     /// </summary>
@@ -1298,6 +1299,7 @@ public sealed class OperatorService(JsonFileOperatorStore store, WriteGateServic
                         Checks = PackageRules.WithMetadataChecks(
                             package.Checks, trimmedTitle, trimmedDescription, trimmedTags, project.Topic, pillars),
                         MetadataEdited = true,
+                        MetadataSavedAt = DateTimeOffset.UtcNow,
                     },
                 }
                 : throw new OperatorValidationException(

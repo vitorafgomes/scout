@@ -226,6 +226,46 @@ public sealed class JsonFileOperatorStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Package_Stored_Before_Its_Times_And_Thumbnail_Description_Reads_With_Nulls_And_Its_Times_Survive_A_Reopen()
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(_directory, "projects.json"),
+            """[{"id":"p1","topic":"Why rivers meander","status":"assembled","origin":"desktop","createdAt":"2026-11-01T00:00:00+00:00","updatedAt":"2026-11-01T00:00:00+00:00","candidates":[],"claims":[],"package":{"status":"assembled","videoFile":"video.mp4","shorts":[],"thumbnailFile":"thumbnail.png","checks":[],"rightsConfirmed":true,"title":"Why rivers bend","description":"Meanders explained.","tags":["rivers"],"durationMs":61000,"metadataEdited":true}}]""");
+        var at = new DateTimeOffset(2026, 11, 14, 14, 12, 0, TimeSpan.Zero);
+
+        using (var store = Store())
+        {
+            var package = (await store.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem().Package.ShouldNotBeNull();
+            (package.Status, package.VideoFile, package.RightsConfirmed, package.MetadataEdited).ShouldBe(("assembled", "video.mp4", true, true));
+            (package.AssembledAt, package.MetadataSavedAt, package.RightsConfirmedAt, package.ThumbnailDescription).ShouldBe(
+                ((DateTimeOffset?)null, (DateTimeOffset?)null, (DateTimeOffset?)null, (string?)null),
+                "a package stored before its times and thumbnail description were kept reads them as null");
+            await store.UpdateProjectsAsync(
+                projects =>
+                {
+                    projects[0] = projects[0] with
+                    {
+                        Package = package with
+                        {
+                            AssembledAt = at,
+                            MetadataSavedAt = at.AddMinutes(8),
+                            RightsConfirmedAt = at.AddMinutes(19),
+                            ThumbnailDescription = "A frame from the video at a tenth of its length.",
+                        },
+                    };
+                    return 0;
+                },
+                CancellationToken.None);
+        }
+
+        using var reopened = Store();
+        var kept = (await reopened.ReadProjectsAsync(CancellationToken.None)).ShouldHaveSingleItem().Package.ShouldNotBeNull();
+        (kept.AssembledAt, kept.MetadataSavedAt, kept.RightsConfirmedAt, kept.ThumbnailDescription).ShouldBe(
+            (at, at.AddMinutes(8), at.AddMinutes(19), "A frame from the video at a tenth of its length."),
+            "the times and the description survive a reopen");
+    }
+
+    [Fact]
     public async Task A_Projects_File_From_Before_Formats_Reads_As_Generated_Pictures_With_Its_Visual_Brief_As_The_Direction()
     {
         await File.WriteAllTextAsync(

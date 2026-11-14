@@ -157,4 +157,11 @@ internal sealed class VisualGenerator(Kernel kernel, MediaCapabilities media, Ti
 
     internal static string ThumbnailPrompt(string title) =>
         $"A YouTube thumbnail picture for a video titled \"{title}\": one bold, simple subject, strong contrast, {NoRealPerson}";
+
+    /// <summary>
+    /// What a picture made from <see cref="ThumbnailPrompt"/> shows, in words for a screen reader: what was asked of the
+    /// picture, never the prompt itself.
+    /// </summary>
+    internal static string ThumbnailDescription(string title) =>
+        $"A picture made for the video \"{title}\": one bold, simple subject.";
 }

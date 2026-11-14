@@ -1,9 +1,9 @@
 ---
 title: "Follow-ups"
-version: "1.1"
+version: "1.2"
 date: 2026-10-21
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Initial tracker page"
+changes: "v1.2 (2026-11-14): citations re-pointed. v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Initial tracker page"
 page_type: roadmap
 status: active
 description: "Deferred work found while doing something else: each entry names the blocker, the evidence and what unblocks it."
@@ -107,7 +107,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1638`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1644`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
@@ -372,7 +372,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1540`, `:1588`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1546`, `:1594`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)
@@ -449,7 +449,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A publication left publish_approved with no action to run refuses every later publish (2026-11-09)
 
-- **Gap:** when the owner revokes YouTube writes, disables YouTube or deletes its credentials while an upload is queued, the approved actions are rejected and the publication is left `publish_approved` (`src/Scout.ControlPlane/Operator/OperatorService.cs:1711`); after a new grant every publish is refused with "The video of this project is publish_approved; wait for the upload to end." (`src/Scout.ControlPlane/Operator/OperatorService.cs:1416`) and nothing resets it. It predates the change of 2026-11-09, which returns the project only when the publish's own actions cannot be queued or logged ([[pages/history/control-plane]]).
+- **Gap:** when the owner revokes YouTube writes, disables YouTube or deletes its credentials while an upload is queued, the approved actions are rejected and the publication is left `publish_approved` (`src/Scout.ControlPlane/Operator/OperatorService.cs:1712`); after a new grant every publish is refused with "The video of this project is publish_approved; wait for the upload to end." (`src/Scout.ControlPlane/Operator/OperatorService.cs:1417`) and nothing resets it. It predates the change of 2026-11-09, which returns the project only when the publish's own actions cannot be queued or logged ([[pages/history/control-plane]]).
 - **Blocker:** none.
 - **Unblocks with:** the revoke returns such a publication to none, or to `failed` with the revoke as its error, in the same pass that ends the running experiments; with a test where, after a revoke with an upload queued and a new grant, the owner publishes again and it is queued once.
 
@@ -927,7 +927,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Raw gRPC text for feature validation errors (2026-10-23)
 
-- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:459`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
+- **Blocker:** none. The desktop control-plane client maps only `UNAVAILABLE`, `DEADLINE_EXCEEDED`, `UNAUTHENTICATED` and `UNIMPLEMENTED` (`ui/packages/main/src/control-plane/client.ts:463`). `INVALID_ARGUMENT` (a missing credential or setting), `FAILED_PRECONDITION` and `NOT_FOUND` reach the Features card as text like `3 INVALID_ARGUMENT: credentials.pat: ...`.
 - **Fix:** typed errors for those codes and card copy per code, with a client test for each.
 
 ### Kubernetes pod logs: owner decision (2026-10-23)

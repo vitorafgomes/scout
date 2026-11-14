@@ -1019,7 +1019,9 @@ export interface IdeaDecisionRequest {
 
 /**
  * The assembled video of a project: the MP4, its Shorts and thumbnail named inside the project's media directory,
- * the checks the worker ran, the owner's media-rights confirmation and approval, and the upload metadata.
+ * the checks the worker ran, the owner's media-rights confirmation and approval, and the upload metadata. The times
+ * are ISO 8601: when the worker assembled it, when the owner last saved the metadata and when the owner confirmed
+ * the rights, each null until it happened; `thumbnailDescription` says what the thumbnail shows, for its alt text.
  */
 export interface VideoPackageDto {
   readonly status: string;
@@ -1035,6 +1037,10 @@ export interface VideoPackageDto {
   readonly durationMs: number;
   readonly error: string | null;
   readonly metadataEdited: boolean;
+  readonly assembledAt: string | null;
+  readonly metadataSavedAt: string | null;
+  readonly rightsConfirmedAt: string | null;
+  readonly thumbnailDescription: string | null;
 }
 
 /** One vertical Shorts cut, `startMs` into the video, with its hook line. */

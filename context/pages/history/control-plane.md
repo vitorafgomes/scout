@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-09
-updated: 2026-11-11
-changes: "v1.1 (2026-11-11) a project deletion and an approval of its actions no longer overlap."
+updated: 2026-11-14
+changes: "v1.2 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: reference
 status: artefact
 description: "What changed in Scout.ControlPlane and when; the service page states how it works now."
@@ -32,6 +32,12 @@ reliability: high
 # ControlPlane - history
 
 > Dated changes to [[pages/services/control-plane]]; the service page states how it works now.
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `VideoPackage` gains the init-only `AssembledAt`, `MetadataSavedAt`, `RightsConfirmedAt` and `ThumbnailDescription`. The worker sets the assembly time and the description; `EditPackageMetadataAsync` sets `MetadataSavedAt` and `ConfirmMediaRightsAsync` sets `RightsConfirmedAt`, both to the time of the owner's call. A worker save keeps the stored owner times whatever it sends. A new assembly keeps `MetadataSavedAt` only with edited metadata and starts without the other three; an edit that changes the video takes back the rights with their time. A package stored before these fields reads them as null.
+- **Tests:** `OperatorServiceTests` (`Saving_The_Metadata_Records_When_The_Owner_Saved_It`, `Confirming_The_Media_Rights_Records_When_The_Owner_Confirmed_Them`, `An_Edit_That_Changes_The_Video_Takes_Back_The_Rights_With_The_Time_They_Were_Confirmed`, `A_Worker_Save_Carrying_Other_Owner_Times_Keeps_The_Stored_Ones`, and the new assembly in `Assembling_Again_Clears_The_Rights_And_The_Approval_And_Keeps_The_Metadata_Only_When_The_Owner_Edited_It`), `JsonFileOperatorStoreTests.A_Package_Stored_Before_Its_Times_And_Thumbnail_Description_Reads_With_Nulls_And_Its_Times_Survive_A_Reopen`.
 
 ## 2026-11-11 - Approve together, phase 1, review round 1: a card's issue is keyed on its own, a reported group stays closed
 

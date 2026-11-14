@@ -329,6 +329,10 @@ message VideoPackage {
   int32 duration_ms = 11;
   optional string error = 12;
   bool metadata_edited = 13;
+  optional string assembled_at = 14;
+  optional string metadata_saved_at = 15;
+  optional string rights_confirmed_at = 16;
+  optional string thumbnail_description = 17;
 }
 
 message ShortClip {

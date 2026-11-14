@@ -421,6 +421,22 @@ internal static class OperatorMapping
         {
             wire.Error = package.Error;
         }
+        if (package.AssembledAt is { } assembledAt)
+        {
+            wire.AssembledAt = Iso(assembledAt);
+        }
+        if (package.MetadataSavedAt is { } metadataSavedAt)
+        {
+            wire.MetadataSavedAt = Iso(metadataSavedAt);
+        }
+        if (package.RightsConfirmedAt is { } rightsConfirmedAt)
+        {
+            wire.RightsConfirmedAt = Iso(rightsConfirmedAt);
+        }
+        if (package.ThumbnailDescription is not null)
+        {
+            wire.ThumbnailDescription = package.ThumbnailDescription;
+        }
         wire.Shorts.AddRange(package.Shorts.Select(s => new WireShortClip
         {
             File = s.File,
@@ -446,7 +462,13 @@ internal static class OperatorMapping
         wire.Tags.ToList(),
         wire.DurationMs,
         wire.HasError ? wire.Error : null,
-        wire.MetadataEdited);
+        wire.MetadataEdited)
+    {
+        AssembledAt = ToDomainTime(wire.HasAssembledAt, wire.AssembledAt),
+        MetadataSavedAt = ToDomainTime(wire.HasMetadataSavedAt, wire.MetadataSavedAt),
+        RightsConfirmedAt = ToDomainTime(wire.HasRightsConfirmedAt, wire.RightsConfirmedAt),
+        ThumbnailDescription = wire.HasThumbnailDescription ? wire.ThumbnailDescription : null,
+    };
 
     private static WirePublication ToWire(DomainPublication publication)
     {

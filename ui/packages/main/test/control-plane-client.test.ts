@@ -1165,6 +1165,11 @@ const packageWire = {
   tags: ['dotnet', 'span'],
   durationMs: 98000,
   metadataEdited: false,
+  assembledAt: '2026-11-03T10:12:00.0000000+00:00',
+  metadataSavedAt: '2026-11-03T10:20:00.0000000+00:00',
+  rightsConfirmedAt: '2026-11-03T10:31:00.0000000+00:00',
+  thumbnailDescription:
+    'A picture made for the video "Span<T> explained": one bold, simple subject.',
 };
 
 const assembledWire = { ...projectWire, status: 'assembled', package: packageWire };
@@ -2447,6 +2452,10 @@ describe('createControlPlaneClient operator', () => {
         durationMs: 0,
         error: 'The last assembly failed.',
         metadataEdited: false,
+        assembledAt: null,
+        metadataSavedAt: null,
+        rightsConfirmedAt: null,
+        thumbnailDescription: null,
       },
     ]);
     expect(confirmed.package).toEqual({ ...packageWire, approvedAt: null, error: null });

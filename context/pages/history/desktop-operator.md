@@ -1,13 +1,20 @@
 ---
 title: "Desktop operator"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Version notes moved out of page headers."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `VideoPackageDto` gains `assembledAt`, `metadataSavedAt`, `rightsConfirmedAt` and `thumbnailDescription`, each `string | null`, mapped by main from the wire. The Assembly page reads "Assembled <when>. Assembling again replaces the video, Shorts and thumbnail below.", "Saved <when>" and "Confirmed <when>. This cannot be undone.", where <when> is "today at 14:12", "yesterday at 14:12" or "on 7 Nov 2026 at 14:12" in this computer's time; a line without its time keeps its earlier words. The thumbnail's alt text is the package's description, "Thumbnail of the video" without one. `dayAt`, the page's one time helper, gained "yesterday" and the "on <d MMM y>" form, so "Approved" follows it too.
+- **Tests:** in `assembly.component.spec.ts`, the three "Assembled with its times", "Assembled on earlier days" and "Assembled without its times" states; `control-plane-client.test.ts` (the four fields mapped, absent ones null) and the real host in `control-plane-integration.test.ts` (both owner times set).
 
 ## Version notes: `pages/services/desktop-operator.md`
 

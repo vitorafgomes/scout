@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane"
-version: "1.54"
+version: "1.55"
 date: 2026-10-21
-updated: 2026-11-12
-changes: "Started entries (2026-11-12, issue #323): RequestToRunAsync appends a started entry to the write log before it answers a reversible write allowed and answers its id, RequestAsync stays a pure decision for the in-process grant checks, RecordAsync appends the outcome against a started id and refuses."
+updated: 2026-11-14
+changes: "v1.55 (2026-11-14): citations re-pointed. Started entries (2026-11-12, issue #323): RequestToRunAsync appends a started entry to the write log before it answers a reversible write allowed and answers its id, RequestAsync stays a pure decision for the in-process grant checks, RecordAsync appends the outcome against a started id and refuses."
 page_type: service
 status: active
 description: "Domain logic behind the desktop UI: manage the local Ollama runtime and its models, keep the catalog, state, credentials and write grants of optional features, the approval queue and the write log, answer the worker's write requests, and keep the channel operator's mandate, projects, scenes, packages, publications, proposals and experiments, media directories, the worker's readiness, and the comments on the owner's channel with the owner's replies, holds and ideas."
@@ -39,7 +39,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/control-plane/how-it-works-the-desktop-side-getmandateasync-an\|How it works: The desktop side: GetMandateAsync answers the]] | The desktop side: GetMandateAsync answers the; The worker side: SaveProjectFromWorkerAsync, GetProjectForWorkerAsync, ListProjectsForWorkerAsync | 10577 |
 | [[pages/services/control-plane/how-it-works-production-and-scenes\|How it works: Production and scenes]] | Production and scenes | 12880 |
 | [[pages/services/control-plane/how-it-works-the-animated-character\|How it works: The animated character]] | The animated character | 6414 |
-| [[pages/services/control-plane/how-it-works-the-automatic-presenter\|How it works: The automatic presenter]] | The automatic presenter; RequestPresenterAsync(projectId, feedback, prompt) (src/Scout.ControlPlane/Operator/OperatorService.cs:2601) cleans both | 11267 |
+| [[pages/services/control-plane/how-it-works-the-automatic-presenter\|How it works: The automatic presenter]] | The automatic presenter; RequestPresenterAsync(projectId, feedback, prompt) (src/Scout.ControlPlane/Operator/OperatorService.cs:2602) cleans both | 11267 |
 | [[pages/services/control-plane/how-it-works-removepresenterversionasync-removes\|How it works: RemovePresenterVersionAsync(projectId, versionId) removes a presenter version]] | RemovePresenterVersionAsync(projectId, versionId) removes a presenter version; A media file name is a; A worker save checks the scenes; The owner's edits from the chat | 11190 |
 | [[pages/services/control-plane/how-it-works-deletion\|How it works: Deletion]] | Deletion; Assembly and the package; A worker save that carries a; The owner's package edits need a; An owner scene edit that changes | 11258 |
 | [[pages/services/control-plane/how-it-works-delegation\|How it works: Delegation]] | Delegation; Publication; Proposals and experiments | 9875 |

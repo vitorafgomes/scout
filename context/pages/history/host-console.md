@@ -1,13 +1,20 @@
 ---
 title: "Host console"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Version notes moved out of page headers."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+
+- **Asked for:** the four owed features of the Assembly artboard ([[pages/roadmap/prototype-migration]], Operator pages): "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail described in its alt text. The description is what was asked of the picture, never its prompt (the owner's decision of 2026-11-14).
+- **What changed:** `GrpcOperatorControlPlane` sends and reads the package's `assembled_at`, `metadata_saved_at`, `rights_confirmed_at` and `thumbnail_description`, each only when it has a value, and sends the owner's two times back as read.
+- **Tests:** `GrpcOperatorControlPlaneTests.A_Package_Travels_Field_By_Field_With_The_Owners_Fields_As_Read_And_An_Absent_File_Or_Error_Stays_Absent_On_The_Wire`.
 
 ## Version notes: `pages/services/host-console.md`
 

@@ -17,13 +17,18 @@ internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmp
 
     internal const string FrameFailed = "Scout could not take the thumbnail from the video";
 
-    /// <summary>Make the thumbnail and return its file name; <paramref name="frameOnly"/> takes the frame without asking the image service.</summary>
-    public async Task<string> MakeAsync(FfmpegTools tools, string directory, string title, AssembledVideo video, bool frameOnly, CancellationToken ct)
+    internal const string FrameDescription = "A frame from the video at a tenth of its length.";
+
+    /// <summary>
+    /// Make the thumbnail and return its file name and what was asked of it in words; <paramref name="frameOnly"/> takes the frame
+    /// without asking the image service.
+    /// </summary>
+    public async Task<(string File, string Description)> MakeAsync(FfmpegTools tools, string directory, string title, AssembledVideo video, bool frameOnly, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(video);
         if (MediaFiles.Exists(directory, FileName) && await MadeForAsync(directory, ct).ConfigureAwait(false) == title)
         {
-            return FileName;
+            return (FileName, VisualGenerator.ThumbnailDescription(title));
         }
 
         if (!frameOnly && await visuals.ThumbnailAsync(title, directory, FileName, ct).ConfigureAwait(false))
@@ -37,7 +42,7 @@ internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmp
                 MediaFiles.Delete(directory, TitleFile);
             }
 
-            return FileName;
+            return (FileName, VisualGenerator.ThumbnailDescription(title));
         }
 
         MediaFiles.Delete(directory, TitleFile);
@@ -48,7 +53,7 @@ internal sealed class ThumbnailMaker(VisualGenerator visuals, FfmpegToolset ffmp
             FrameFailed,
             temp => ffmpeg.RunAsync(tools, FrameArguments(source, video.DurationMs / 10, temp), 0, FrameFailed, ct),
             ct).ConfigureAwait(false);
-        return FileName;
+        return (FileName, FrameDescription);
     }
 
     internal static List<string> FrameArguments(string video, int atMs, string output)

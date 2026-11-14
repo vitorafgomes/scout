@@ -1,5 +1,7 @@
 ## [2026-11-14] docs | Two pages reworded
 ADR 0031 and the desktop-ui history state the owner's request in plain words, with no quote of a conversation.
+## [2026-11-14] feat | Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
+The video package carries `assembled_at`, `metadata_saved_at`, `rights_confirmed_at` and `thumbnail_description`: the worker sets the first and the last, only the owner's edits set the other two and a worker save keeps them, and the Assembly page reads "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31" and the thumbnail's alt text, the four owed Assembly items. Pages updated: services/operator, services/control-plane, services/control-plane-contracts, services/host-console, services/desktop-operator (Assembly), the six history pages, roadmap/prototype-migration.
 ## [2026-11-14] feat | Docker panel: the logs of the runs and the command on the Stack tile
 The work folder line counts the run records ("the logs of 12 runs") and the last run's Stack tile names the command (".NET (dotnet test)"): the sandbox's run record gains `command`, main counts the records and copies the command, and the two owed Docker items of the Features artboard are done. Pages updated: services/desktop-ui (Docker card, the panel), services/sandbox (public contract), history/desktop-ui, history/sandbox, roadmap/prototype-migration.
 ## [2026-11-14] feat | Disconnect on the Ollama card

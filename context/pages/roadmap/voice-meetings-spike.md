@@ -1,8 +1,9 @@
 ---
 title: "Voice and meetings spike"
-version: "1.0"
+version: "1.1"
 date: 2026-11-07
-changes: "Initial research page"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): citations re-pointed. Initial research page"
 page_type: roadmap
 status: active
 description: "Research: voice and meeting mechanisms from an open-source dictation app (mechanisms only), mapped to the quick-ask window and the Chat screen, with the owner's machine findings, items 0 to 11, sizes and a phase order."
@@ -64,7 +65,7 @@ The quick-ask window holds every capture tool ([[pages/services/desktop-quick-as
 
 ## 0. Audio time on finals
 
-The enabler for 2, 3 and 11. Each `heard` final gains `start` and `end` in milliseconds of session audio time (the segmenter knows the first and last sample); main stamps each session's wall-clock start so both lanes share one time base; a `retract { id, seq }` event is added. Today `LocalHeardEvent` carries `text`, `final` and `seq` and no time (`ui/packages/shared/src/ipc-contract.ts:1741`). Owners: `Scout.Transcription.Whisper`, `Scout.Adapter.Local`, `ui/packages/shared`. Size S, goes first.
+The enabler for 2, 3 and 11. Each `heard` final gains `start` and `end` in milliseconds of session audio time (the segmenter knows the first and last sample); main stamps each session's wall-clock start so both lanes share one time base; a `retract { id, seq }` event is added. Today `LocalHeardEvent` carries `text`, `final` and `seq` and no time (`ui/packages/shared/src/ipc-contract.ts:1747`). Owners: `Scout.Transcription.Whisper`, `Scout.Adapter.Local`, `ui/packages/shared`. Size S, goes first.
 
 ## 1. Meeting detection and the start prompt
 

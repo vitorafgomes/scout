@@ -42,6 +42,10 @@ const pkg: VideoPackageDto = {
   durationMs: 492000,
   error: null,
   metadataEdited: false,
+  assembledAt: null,
+  metadataSavedAt: null,
+  rightsConfirmedAt: null,
+  thumbnailDescription: null,
 };
 
 function proposal(overrides: Partial<ProposalDto> = {}): ProposalDto {

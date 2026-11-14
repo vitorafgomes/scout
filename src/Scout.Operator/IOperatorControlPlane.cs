@@ -472,9 +472,11 @@ public sealed record OperatorVoice(string Id, string Label, string Source, strin
 
 /// <summary>
 /// The assembled video, as the control plane's <c>VideoPackage</c> message carries it. Files are plain names inside the
-/// project's media directory. The worker sets the status, the files, the checks, the duration and the error, and the
-/// title, description and tags only while <see cref="MetadataEdited"/> is false; <see cref="RightsConfirmed"/>,
-/// <see cref="ApprovedAt"/> and <see cref="MetadataEdited"/> are the owner's and go back exactly as read.
+/// project's media directory. The worker sets the status, the files, the checks, the duration, the error, when it
+/// assembled the package and what its thumbnail shows, and the title, description and tags only while
+/// <see cref="MetadataEdited"/> is false; <see cref="RightsConfirmed"/>, <see cref="ApprovedAt"/>,
+/// <see cref="MetadataEdited"/>, <see cref="MetadataSavedAt"/> and <see cref="RightsConfirmedAt"/> are the owner's and go
+/// back exactly as read.
 /// </summary>
 public sealed record OperatorPackage(
     string Status,
@@ -489,7 +491,20 @@ public sealed record OperatorPackage(
     IReadOnlyList<string> Tags,
     int DurationMs,
     string? Error,
-    bool MetadataEdited);
+    bool MetadataEdited)
+{
+    /// <summary>When the worker assembled the package, ISO 8601; null before an assembly.</summary>
+    public string? AssembledAt { get; init; }
+
+    /// <summary>When the owner last saved the metadata, ISO 8601; null until the owner saves it.</summary>
+    public string? MetadataSavedAt { get; init; }
+
+    /// <summary>When the owner confirmed the media rights, ISO 8601; null while they are not confirmed.</summary>
+    public string? RightsConfirmedAt { get; init; }
+
+    /// <summary>What was asked of the thumbnail, in words for its alt text; null without a thumbnail.</summary>
+    public string? ThumbnailDescription { get; init; }
+}
 
 /// <summary>One vertical Short cut from the video: its file, where it starts in the video, its length and its hook.</summary>
 public sealed record OperatorShort(string File, int StartMs, int DurationMs, string Hook);

@@ -67,6 +67,10 @@ function videoPackage(overrides: Partial<VideoPackageDto> = {}): VideoPackageDto
     durationMs: 98000,
     error: null,
     metadataEdited: false,
+    assembledAt: null,
+    metadataSavedAt: null,
+    rightsConfirmedAt: null,
+    thumbnailDescription: null,
     ...overrides,
   };
 }
@@ -592,7 +596,7 @@ describe('AssemblyComponent', () => {
 
     expect(bridge.operatorApprovePackage.mock.calls).toEqual([[{ id: 'p1' }]]);
     expect(text(fixture, 'package-approved')).toBe(
-      `Approved ${formatDate('2026-11-03T11:00:00Z', 'yyyy-MM-dd', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
+      `Approved on ${formatDate('2026-11-03T11:00:00Z', 'd MMM y', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
     );
     expect(el(fixture, 'package-approve')).toBeNull();
   });
@@ -1003,7 +1007,13 @@ describe('Assembly as Assembly.dc.html draws it, state by state', () => {
 
   afterEach(() => {
     TestBed.inject(MatDialog).closeAll();
+    vi.useRealTimers();
   });
+
+  /** A time on this computer's clock, as the control plane sends it: ISO 8601 in UTC. */
+  function local(day: number, hours: number, minutes: number): string {
+    return new Date(2026, 10, day, hours, minutes).toISOString();
+  }
 
   const head = ['h1: Assembly', 'link /operator/production: Open in Production'];
 
@@ -1116,6 +1126,83 @@ describe('Assembly as Assembly.dc.html draws it, state by state', () => {
     ]).toEqual(['asm-again', 'Add tags, separated by commas', '']);
   });
 
+  it('Assembled with its times: "Assembled today at 14:12", "Saved today at 14:20", "Confirmed today at 14:31", and the thumbnail described in its alt text', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 14, 16, 0));
+    const fixture = await mount(
+      makeBridge([
+        assembled({
+          assembledAt: local(14, 14, 12),
+          metadataEdited: true,
+          metadataSavedAt: local(14, 14, 20),
+          rightsConfirmed: true,
+          rightsConfirmedAt: local(14, 14, 31),
+          thumbnailDescription:
+            'A picture made for the video "Span<T> explained": one bold, simple subject.',
+        }),
+      ]),
+      'p1',
+    );
+
+    expect([
+      text(fixture, 'assemble-again-help'),
+      text(fixture, 'metadata-saved'),
+      text(fixture, 'media-rights-help'),
+      el<HTMLImageElement>(fixture, 'package-thumbnail')!.alt,
+    ]).toEqual([
+      'Assembled today at 14:12. Assembling again replaces the video, Shorts and thumbnail below.',
+      'Saved today at 14:20',
+      'Confirmed today at 14:31. This cannot be undone.',
+      'A picture made for the video "Span<T> explained": one bold, simple subject.',
+    ]);
+  });
+
+  it('Assembled on earlier days: "yesterday at" for the day before, "on 7 Nov 2026 at" before that, in local time', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 30));
+    const fixture = await mount(
+      makeBridge([
+        assembled({
+          assembledAt: local(13, 23, 50),
+          metadataEdited: true,
+          metadataSavedAt: local(7, 14, 12),
+          rightsConfirmed: true,
+          rightsConfirmedAt: local(14, 0, 5),
+        }),
+      ]),
+      'p1',
+    );
+
+    expect([
+      text(fixture, 'assemble-again-help'),
+      text(fixture, 'metadata-saved'),
+      text(fixture, 'media-rights-help'),
+    ]).toEqual([
+      'Assembled yesterday at 23:50. Assembling again replaces the video, Shorts and thumbnail below.',
+      'Saved on 7 Nov 2026 at 14:12',
+      'Confirmed today at 00:05. This cannot be undone.',
+    ]);
+  });
+
+  it('Assembled without its times or a thumbnail description: each line keeps its words without a time, and the thumbnail is "Thumbnail of the video"', async () => {
+    const fixture = await mount(
+      makeBridge([assembled({ metadataEdited: true, rightsConfirmed: true })]),
+      'p1',
+    );
+
+    expect([
+      text(fixture, 'assemble-again-help'),
+      text(fixture, 'metadata-saved'),
+      text(fixture, 'media-rights-help'),
+      el<HTMLImageElement>(fixture, 'package-thumbnail')!.alt,
+    ]).toEqual([
+      'Assembling again replaces the video, Shorts and thumbnail below.',
+      'Saved',
+      'Confirmed. This cannot be undone.',
+      'Thumbnail of the video',
+    ]);
+  });
+
   it('Rights confirm step: ticking the box opens "Confirm the media rights?" as an alert dialog on the theme card, with Cancel focused and Confirm the rights', async () => {
     const fixture = await mount(makeBridge([assembled()]), 'p1');
 
@@ -1154,7 +1241,7 @@ describe('Assembly as Assembly.dc.html draws it, state by state', () => {
       'h2: Approval',
       'input(on,disabled): I own or have the rights to every image, recording and music in this video',
       'text: Confirmed. This cannot be undone.',
-      `text: Approved ${formatDate('2026-11-03T11:00:00Z', 'yyyy-MM-dd', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
+      `text: Approved on ${formatDate('2026-11-03T11:00:00Z', 'd MMM y', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
       'button: Publish',
     ]);
     expect(seen(fixture).slice(page.length)).toEqual([
@@ -1208,7 +1295,7 @@ describe('Assembly as Assembly.dc.html draws it, state by state', () => {
     );
 
     expect(seen(fixture).slice(-3)).toEqual([
-      `text: Approved ${formatDate('2026-11-03T11:00:00Z', 'yyyy-MM-dd', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
+      `text: Approved on ${formatDate('2026-11-03T11:00:00Z', 'd MMM y', 'en-US')} at ${formatDate('2026-11-03T11:00:00Z', 'HH:mm', 'en-US')}`,
       'h2: Publication',
       'button: https://www.youtube.com/watch?v=Xb2kq9Lr0aQ',
     ]);
