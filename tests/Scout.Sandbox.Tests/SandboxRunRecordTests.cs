@@ -41,12 +41,12 @@ public sealed class SandboxRunRecordTests : IDisposable
     }
 
     [Theory]
-    [InlineData("passed", 0, 0, "passed", 0, null)]
-    [InlineData("tests failed", 0, 1, "failed", 1, null)]
-    [InlineData("restore failed", 1, 0, "failed", 1, "The restore exited with code 1; the tests did not run.")]
-    [InlineData("mount refused", 125, 0, "notRun", null, "Docker cannot see Scout's work folder {0}; with Docker Desktop, add it under Settings, Resources, File sharing.")]
-    public async Task Each_run_writes_a_record_beside_its_log_naming_the_repository_the_pull_request_the_stack_the_image_and_how_it_ended(
-        string kind, int restoreExit, int testExit, string expected, int? exitCode, string? reason)
+    [InlineData("passed", 0, 0, "passed", 0, null, "npm test")]
+    [InlineData("tests failed", 0, 1, "failed", 1, null, "npm test")]
+    [InlineData("restore failed", 1, 0, "failed", 1, "The restore exited with code 1; the tests did not run.", "npm ci")]
+    [InlineData("mount refused", 125, 0, "notRun", null, "Docker cannot see Scout's work folder {0}; with Docker Desktop, add it under Settings, Resources, File sharing.", null)]
+    public async Task Each_run_writes_a_record_beside_its_log_naming_the_repository_the_pull_request_the_stack_the_image_the_command_and_how_it_ended(
+        string kind, int restoreExit, int testExit, string expected, int? exitCode, string? reason, string? command)
     {
         _processes.Behaviour = (call, onOutput, _) =>
         {
@@ -65,13 +65,14 @@ public sealed class SandboxRunRecordTests : IDisposable
         record.GetProperty("pullRequest").GetInt32().ShouldBe(42, kind);
         record.GetProperty("stack").GetString().ShouldBe("Node", kind);
         record.GetProperty("image").GetString().ShouldBe(SandboxImages.Node, kind);
+        record.GetProperty("command").GetString().ShouldBe(command, $"{kind}: the sandbox records the command it ran, the restore's when the restore failed, none when Docker refused the mount");
         record.GetProperty("result").GetString().ShouldBe(expected, kind);
         (record.GetProperty("exitCode").ValueKind == JsonValueKind.Null ? (int?)null : record.GetProperty("exitCode").GetInt32()).ShouldBe(exitCode, kind);
         record.GetProperty("reason").GetString().ShouldBe(reason is null ? null : string.Format(CultureInfo.InvariantCulture, reason, WorkRoot), kind);
         record.GetProperty("durationSeconds").GetDouble().ShouldBe(0, kind);
         record.GetProperty("finishedAt").GetDateTimeOffset().ShouldBe(Now, kind);
         record.EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["repository", "pullRequest", "stack", "image", "result", "reason", "exitCode", "durationSeconds", "finishedAt"], kind);
+            ["repository", "pullRequest", "stack", "image", "command", "result", "reason", "exitCode", "durationSeconds", "finishedAt"], kind);
     }
 
     [Fact]
@@ -96,6 +97,7 @@ public sealed class SandboxRunRecordTests : IDisposable
 
         var record = Record();
         record.GetProperty("result").GetString().ShouldBe("notRun");
+        record.GetProperty("command").GetString().ShouldBe("npm test", "the record names the command that was running at the time limit");
         record.GetProperty("reason").GetString().ShouldBe("The tests ran past the 20-minute limit.");
         record.GetProperty("exitCode").ValueKind.ShouldBe(JsonValueKind.Null);
         record.GetProperty("durationSeconds").GetDouble().ShouldBe(1200);

@@ -2075,10 +2075,11 @@ export interface DockerPullProgress {
   readonly state: 'pulling' | 'done' | 'failed';
 }
 
-/** The folder the sandbox runs in, which main owns and passes to the worker, and the bytes it holds. */
+/** The folder the sandbox runs in, which main owns and passes to the worker, the bytes it holds and the run records in it. */
 export interface DockerWorkFolder {
   readonly path: string;
   readonly bytes: number;
+  readonly runs: number;
 }
 
 /** `refused` is the sentence that says why nothing was deleted, or null once the folder's contents are gone. */
@@ -2122,6 +2123,8 @@ export interface DockerRun {
   readonly pullRequest: number | null;
   readonly stack: string;
   readonly image: string;
+  /** The command that ran last, the restore's after a failed restore; null when none started or the record predates it. */
+  readonly command: string | null;
   readonly result: DockerRunResult;
   readonly reason: string | null;
   readonly exitCode: number | null;

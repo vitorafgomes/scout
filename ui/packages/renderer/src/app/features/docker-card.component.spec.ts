@@ -32,6 +32,7 @@ const RUNNING: DockerState = { state: 'running', version: '28.5.1' };
 const FOLDER: DockerWorkFolder = {
   path: '/home/owner/.local/share/Scout/sandbox',
   bytes: 184 * 1024 * 1024,
+  runs: 12,
 };
 
 const image = (stack: string, tag: string, present: boolean): DockerImage => ({
@@ -106,7 +107,7 @@ function makeBridge(o: Options = {}) {
     }),
     dockerClear: vi.fn(async () => ({
       refused: null as string | null,
-      folder: { path: FOLDER.path, bytes: 0 },
+      folder: { path: FOLDER.path, bytes: 0, runs: 0 },
     })),
     vaultGetPublic: vi.fn(async () => ({ value: o.enabled ?? null })),
     vaultStore: vi.fn(async () => {
@@ -513,14 +514,22 @@ describe('Docker card', () => {
       return mounted;
     }
 
-    it("shows the path, its size and that each run's copy of the code is deleted after it", async () => {
-      const { fixture } = await openFolder();
+    const lines: readonly [number, string][] = [
+      [12, "184 MB used · the logs of 12 runs; each run's copy of the code is deleted after it"],
+      [1, "184 MB used · the logs of 1 run; each run's copy of the code is deleted after it"],
+      [0, "184 MB used · each run's copy of the code is deleted after it"],
+    ];
+    for (const [runs, line] of lines) {
+      it(`shows the path and, for a folder holding ${runs} run records, "${line}"`, async () => {
+        const { fixture } = await openFolder({ folder: { ...FOLDER, runs } });
 
-      expect(text(fixture, 'docker-folder-path')).toBe(FOLDER.path);
-      expect(text(fixture, 'docker-folder-size')).toBe(
-        "184 MB used · each run's copy of the code is deleted after it",
-      );
-    });
+        expect(text(fixture, 'docker-folder-path')).toBe(FOLDER.path);
+        expect(
+          text(fixture, 'docker-folder-size'),
+          'the work folder line gives its size and the logs of the runs it holds, and none when it holds no run',
+        ).toBe(line);
+      });
+    }
 
     it('Clear asks first with Cancel focused, and Cancel deletes nothing', async () => {
       const { fixture, bridge } = await openFolder();
@@ -561,6 +570,7 @@ describe('Docker card', () => {
           pullRequest: 42,
           stack: 'Node',
           image: 'node:22@sha256:0123456789abcdef0123456789abcdef',
+          command: 'npm test',
           result: 'passed',
           reason: null,
           exitCode: 0,
@@ -586,7 +596,7 @@ describe('Docker card', () => {
 
       expect(text(fixture, 'docker-clear-refused')).toBe(refused);
       expect(text(fixture, 'docker-folder-size')).toBe(
-        "184 MB used · each run's copy of the code is deleted after it",
+        "184 MB used · the logs of 12 runs; each run's copy of the code is deleted after it",
       );
     });
   });
@@ -976,6 +986,7 @@ describe('Docker card', () => {
       pullRequest: 42,
       stack: 'Node',
       image: 'node:22@sha256:0123456789abcdef0123456789abcdef',
+      command: null,
       result: 'passed',
       reason: null,
       exitCode: 0,
@@ -1070,6 +1081,23 @@ describe('Docker card', () => {
         reason: null,
         summary: 'Last run: a repository, passed',
       },
+      {
+        name: 'a .NET run that names the command it ran',
+        run: {
+          ...RUN,
+          stack: '.NET',
+          image: 'dotnet/sdk:10.0@sha256:0123456789abcdef0123456789abcdef',
+          command: 'dotnet test',
+        },
+        what: 'octocat/hello',
+        pr: '#42',
+        chip: 'Passed',
+        tone: 'chip--ok',
+        stack: '.NET (dotnet test)',
+        duration: '12.5 s',
+        reason: null,
+        summary: 'Last run: octocat/hello #42, passed',
+      },
     ];
     for (const r of runs) {
       it(`${r.name}: the tiles show ${r.what}${r.pr === null ? '' : ' ' + r.pr}, the result "${r.chip}", the stack, duration and time${r.reason === null ? '' : ', and the reason under them'}`, async () => {
@@ -1086,7 +1114,10 @@ describe('Docker card', () => {
         expect(el(fixture, 'docker-last-pr')?.textContent?.trim() ?? null).toBe(r.pr);
         expect(text(fixture, 'docker-last-result')).toBe(r.chip);
         expect(el(fixture, 'docker-last-result')!.classList.contains(r.tone)).toBe(true);
-        expect(text(fixture, 'docker-last-stack')).toBe(r.stack);
+        expect(
+          text(fixture, 'docker-last-stack'),
+          'the Stack tile names the command it ran, or the stack alone when the record has none',
+        ).toBe(r.stack);
         expect(text(fixture, 'docker-last-duration')).toBe(r.duration);
         expect(text(fixture, 'docker-last-finished')).toContain(
           new Intl.DateTimeFormat('en-US', {
@@ -1223,7 +1254,7 @@ describe('Docker card', () => {
       ['images', { state: { state: 'notRunning' } }, 'Images: Docker is not running'],
       ['repositories', {}, 'Repositories: none read yet'],
       ['folder', {}, 'Work folder: 184 MB'],
-      ['folder', { folder: { path: FOLDER.path, bytes: 0 } }, 'Work folder: empty'],
+      ['folder', { folder: { path: FOLDER.path, bytes: 0, runs: 0 } }, 'Work folder: empty'],
       ['last', {}, 'Last run: none yet'],
     ];
     for (const [id, o, summary] of summaries) {
@@ -1281,7 +1312,8 @@ describe('Docker card', () => {
     };
     const LIMITED = 'Docker Hub is limiting downloads; try again later.';
     const UNREADABLE = 'Scout could not ask Docker for its state. Try Refresh.';
-    const KEPT = "184 MB used · each run's copy of the code is deleted after it";
+    const KEPT =
+      "184 MB used · the logs of 12 runs; each run's copy of the code is deleted after it";
     const shownText = (fixture: ComponentFixture<DockerCardComponent>, test: string) =>
       el(fixture, test)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
 

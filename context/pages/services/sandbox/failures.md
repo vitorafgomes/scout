@@ -1,8 +1,9 @@
 ---
 title: "Sandbox: Failures (Rule I)"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Sandbox service page."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Split out of the Sandbox service page."
 page_type: service
 status: active
 description: "Read when a change touches: Failures (Rule I)."
@@ -20,7 +21,7 @@ reliability: high
 | Docker cannot mount the work folder (exit 125, "bind source path does not exist" or "mounts denied": Docker Desktop on Linux runs its engine in a VM that sees only the folders under Settings, Resources, File sharing, by default the home folder) | `Ran=false`, "Docker cannot see Scout's work folder <WorkDirectory>; with Docker Desktop, add it under Settings, Resources, File sharing.", never the daemon's text as the reason | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:444` |
 | The test command exits 126 or 127 (not executable, not found: a runner the image lacks, a script that is not there) | `Ran=true`, the exit code, "The test command could not be started (exit N: a command it names was not found or is not executable)."; the record's `result` stays `failed` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:644` |
 | Past 20 minutes | `docker kill`, `Ran=false`, "The tests ran past the 20-minute limit." | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:489` |
-| The run's record cannot be written | a `Warning` log line; the result, the log and the deleted work folder as without it | `tests/Scout.Sandbox.Tests/SandboxRunRecordTests.cs:129` |
+| The run's record cannot be written | a `Warning` log line; the result, the log and the deleted work folder as without it | `tests/Scout.Sandbox.Tests/SandboxRunRecordTests.cs:131` |
 | The caller cancels | `docker kill`, the folder deleted, `OperationCanceledException` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:521` |
 | The owner stops the run from Scout Desktop, which cancels the caller's token during the tests (2026-11-10) | `docker kill` of the test container on a token of its own, the container started with `--rm` so Docker removes it, the folder deleted, no `.run.json` written because a stopped run is no result, `OperationCanceledException` | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:542` |
 | `WorkDirectory` inside the snapshot (the copy would copy itself until the path is too long) | `Ran=false`, "The sandbox folder is inside the repository snapshot, so the copy would never end.", before any process or copy (`src/Scout.Sandbox/DockerSandboxRunner.cs:93`) | `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:609`; a sibling folder with the same prefix still runs, `tests/Scout.Sandbox.Tests/DockerSandboxRunnerTests.cs:625` |

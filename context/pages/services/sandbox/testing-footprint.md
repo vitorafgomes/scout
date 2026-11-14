@@ -1,8 +1,9 @@
 ---
 title: "Sandbox: Testing footprint"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Sandbox service page."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Split out of the Sandbox service page."
 page_type: service
 status: active
 description: "Read when a change touches: Testing footprint."
@@ -15,7 +16,7 @@ reliability: high
 `tests/Scout.Sandbox.Tests`, twelve test files (136 test attributes, 292 cases, 12 of them `Category=Docker`; counted 2026-11-13) plus the recording fakes (`FakeProcessRunner.cs`, `RecordingLogger.cs`):
 
 - `SandboxDetectionTests.cs`: table-driven rows over Node from `.nvmrc`, Bun from `packageManager`, Python with nothing declared, Go from its toolchain line, .NET from `global.json` and from the target frameworks, Maven from `.java-version` and Gradle from the build file and the wrapper, each with its stack, image, version and declared versions (`tests/Scout.Sandbox.Tests/SandboxDetectionTests.cs:63`); a refused version naming the stack that refused and no image (`:81`); no manifest (`:97`).
-- `SandboxRunRecordTests.cs`: the record beside the log for a run that passed, whose tests failed, whose restore failed and whose mount Docker refused, with every field and nothing else (`tests/Scout.Sandbox.Tests/SandboxRunRecordTests.cs:48`); the 20-minute limit as `notRun` with its duration (`:78`); no repository named (`:106`); Docker not answering leaves none (`:118`); a record that cannot be written is logged and the run is unchanged (`:129`).
+- `SandboxRunRecordTests.cs`: the record beside the log for a run that passed, whose tests failed, whose restore failed and whose mount Docker refused, with every field and nothing else (`tests/Scout.Sandbox.Tests/SandboxRunRecordTests.cs:48`); the 20-minute limit as `notRun` with its duration (`:79`); no repository named (`:108`); Docker not answering leaves none (`:120`); a record that cannot be written is logged and the run is unchanged (`:131`).
 
 - `SandboxStacksTests.cs`: every manifest, lockfile, hint and refusal above, Bun with and without a `test` script (`tests/Scout.Sandbox.Tests/SandboxStacksTests.cs:83`), the undeclared .NET note and roll-forward, a refusing stack ending the detection (`tests/Scout.Sandbox.Tests/SandboxStacksTests.cs:169`), the order ending in Java, the `java` hint, and the allowlist pinned by digest.
 - `SandboxDotNetTests.cs`: table-driven rows for each `rollForward` policy the image's SDK satisfies (`tests/Scout.Sandbox.Tests/SandboxDotNetTests.cs:59`) and each it does not, named in the refusal (`:78`), `DOTNET_ROLL_FORWARD` only under `major`/`latestMajor` (`:92`), the NuGet marker on the SDK 8 restore only (`:119`), the target framework of a project, `Directory.Build.props` at the root, the nearest one that declares, the project's own value winning, and one above the snapshot, linked, imported or with an entity never read (`:195` to `:235`), an `.slnx` and an `.sln` with backslashes, numeric comparison, the lower frameworks named in the note, the refused frameworks, unreadable projects and `global.json` files, a document type declaration never expanded, and a listed path outside the snapshot or rooted never read (`:271`); since 2026-11-12 a repository whose `*.cs` files mark tests `Category=Docker` getting the filtered command and the sentence with the count, the four skipped folders and a file over 1 MB not counted (`tests/Scout.Sandbox.Tests/SandboxDotNetTests.cs:285`), and the failing read (Rule I): a file that cannot be read, a linked file and a linked folder declaring nothing (`:306`).

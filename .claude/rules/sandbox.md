@@ -10,7 +10,7 @@ Owns one operation, `DockerSandboxRunner.RunTestsAsync(SandboxRequest, Cancellat
 
 ## Rules this project must keep
 
-- [[pages/invariants/no-executive-writes]]: the only writes are the work folder, the log and the run's record under `WorkDirectory`, Scout's data folder (the record is descriptive: the repository, the pull request, the stack, the image and how the run ended, never the output or a credential); the container writes only the work folder, which is deleted. The library declares no function the model can call; the GitHub plugin's `run_pull_request_tests` declares the `Local container` row and runs it under the owner's grant.
+- [[pages/invariants/no-executive-writes]]: the only writes are the work folder, the log and the run's record under `WorkDirectory`, Scout's data folder (the record is descriptive: the repository, the pull request, the stack, the image, the command and how the run ended, never the output or a credential); the container writes only the work folder, which is deleted. The library declares no function the model can call; the GitHub plugin's `run_pull_request_tests` declares the `Local container` row and runs it under the owner's grant.
 - [[pages/invariants/secrets-never-in-source]]: no credential is read or passed; the owner's environment does not reach the container or the `docker` process beyond the client variables above.
 - [[pages/invariants/pluggable-boundaries]]: no vendor SDK; the `docker` command line is the one dependency, which Podman's compatible command line can take later through `DockerPath`.
 

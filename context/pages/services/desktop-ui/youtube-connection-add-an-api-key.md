@@ -1,8 +1,9 @@
 ---
 title: "Desktop UI: YouTube connection: Add an API key"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-changes: "Split out of the Desktop UI service page."
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): citations into the Docker files the run count and the run command shifted re-pointed by content. Split out of the Desktop UI service page."
 page_type: service
 status: active
 description: "Read when a change touches: Add an API key; Pending; Connected; Open YouTube operator; Failed; Tests; Like the GitHub card, it sits; Disconnect asks first."
@@ -22,7 +23,7 @@ reliability: high
 
 - **Failed:** the reason above Sign in with Google, for example "Google could not finish the sign-in (HTTP 503). Sign in again in a moment." or "The Google sign-in was cancelled or timed out. Click Sign in with Google to try again."
 
-- **Tests:** the state (not connected, connected with Google, connected with an API key, waiting for the browser, failed) by action (Add an API key, Save, Cancel, Esc, Disconnect) table, one row per failure the save can return, and the key kept out of every text, attribute, log line and closed field, in `ui/packages/renderer/src/app/features/youtube-connect.component.spec.ts:706`, `:735`, and Enter (saves, refuses an empty field, sends once while a save is on its way) at the end of the same block; one row per Preview state of the YouTube panel and of the Connect YouTube dialog in `ui/packages/renderer/src/app/features/features.prototype.spec.ts:2585`, `:2701`; the dialog opened and cancelled in the built app by `ui/e2e/tests/features-loaded.spec.ts:203`.
+- **Tests:** the state (not connected, connected with Google, connected with an API key, waiting for the browser, failed) by action (Add an API key, Save, Cancel, Esc, Disconnect) table, one row per failure the save can return, and the key kept out of every text, attribute, log line and closed field, in `ui/packages/renderer/src/app/features/youtube-connect.component.spec.ts:706`, `:735`, and Enter (saves, refuses an empty field, sends once while a save is on its way) at the end of the same block; one row per Preview state of the YouTube panel and of the Connect YouTube dialog in `ui/packages/renderer/src/app/features/features.prototype.spec.ts:2589`, `:2705`; the dialog opened and cancelled in the built app by `ui/e2e/tests/features-loaded.spec.ts:203`.
 
 Like the GitHub card, it sits in the Features grid and is hidden with the grid when the control plane is not running.
 

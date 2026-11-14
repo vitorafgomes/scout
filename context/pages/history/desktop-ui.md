@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.40"
+version: "1.41"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - Docker: the logs of the runs and the command on the Stack tile
+
+Two items the Features artboard draws in the Docker panel and the app lacked ([[pages/roadmap/prototype-migration]], Features). The work folder line read "<size> used · each run's copy of the code is deleted after it" because nothing counted the runs; main's `workFolder()` now counts the `<id>.run.json` records (0 when the folder is missing or cannot be listed), `DockerWorkFolder` carries `runs`, and the line reads "184 MB used · the logs of 12 runs; each run's copy of the code is deleted after it", "the logs of 1 run" for one, without the count when no record is there; "Empty · run logs are deleted" is unchanged. The last run's Stack tile read ".NET" because the record did not carry the command; the sandbox now writes `command` ([[pages/history/sandbox]]), main's `toRun` copies it, an older record without one reading as null, `DockerRun` carries it, and the tile reads ".NET (dotnet test)", or the stack alone when the record has none. Nothing new is written and no call leaves the process: the count is a listing of Scout's own work folder in main. Tests changed on purpose: every work folder fixture carries `runs`, every run fixture `command`, and the folder line expected at 184 MB and in the prototype spec's Clear refused state names the logs of 12 runs.
 
 ## 2026-11-14 - Updates: install a version the owner picks
 

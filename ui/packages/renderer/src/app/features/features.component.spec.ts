@@ -1134,7 +1134,7 @@ describe('the Features grid and its side panel', () => {
           { stack: 'Node', reference: 'node:22', present: false },
         ],
       })),
-      dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0 })),
+      dockerWorkFolder: vi.fn(async () => ({ path: '/w', bytes: 0, runs: 0 })),
       dockerRepositories: vi.fn(async () => ({ repositories: [] })),
       dockerLastRun: vi.fn(async () => ({ run: null })),
       vaultGetPublic: vi.fn(async () => ({ value: null })),
