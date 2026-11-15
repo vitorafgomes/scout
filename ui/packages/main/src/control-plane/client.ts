@@ -1041,11 +1041,22 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
     rejectAction: (id, reason) => decide('RejectAction', id, reason),
     async giveVerdict(request): Promise<GitHubVerdictAction> {
       const { comments, ...rest } = request;
-      const response = await call<{ actionId: string }>(features, 'GiveVerdict', {
-        ...rest,
-        commentsJson: JSON.stringify(comments),
-      });
-      return { actionId: response.actionId };
+      try {
+        const response = await call<{ actionId: string }>(features, 'GiveVerdict', {
+          ...rest,
+          commentsJson: JSON.stringify(comments),
+        });
+        return { actionId: response.actionId };
+      } catch (err: unknown) {
+        const { code, details } = err as Partial<grpc.ServiceError>;
+        if (code === grpc.status.FAILED_PRECONDITION) {
+          throw new ControlPlanePermissionDeniedError(
+            details ?? 'The owner has not allowed this feature to write.',
+            { cause: err },
+          );
+        }
+        throw err;
+      }
     },
     async getVerdict(actionId): Promise<GitHubVerdictProgress> {
       const response = await call<{

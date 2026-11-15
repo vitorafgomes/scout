@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.48"
+version: "1.49"
 date: 2026-11-08
 updated: 2026-11-15
-changes: "v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-15 - An update that fails, and a refused verdict, say their own reason
+
+The owner's update from the app failed with "The update failed (network); nothing was installed" while the network was fine: every error the updater did not recognise was called the network, and nothing kept the real one. A failure is now the network only when the error is one of the connection (`ECONNRESET`, `ENOTFOUND`, `net::ERR_...`, `fetch failed`); otherwise the notice and the last result show the error's own code, "The update failed (EACCES); nothing was installed", or "The update failed for a reason Scout does not recognise; nothing was installed" when it carries none (`ui/packages/main/src/update/update-notice.ts:95`). Tests: five rows of the updater's failure table (`ui/packages/main/test/update-notice.test.ts:792`). The same day a verdict clicked while GitHub may not write showed "Error invoking remote method ... 9 FAILED_PRECONDITION" on the review card: the verdict call now turns that refusal into the control plane's own sentence, "The owner has not allowed github to write; allow it on the Features screen of Scout Desktop.", as the approval calls already did (`ui/packages/main/src/control-plane/client.ts:1042`; test against the real control plane, `ui/packages/main/test/control-plane-integration.test.ts:149`). The control plane integration test waits 20 seconds for the socket, where 5 failed once on a loaded runner during a release.
 
 ## 2026-11-15 - The owner's mention of the Scout bot starts the review
 

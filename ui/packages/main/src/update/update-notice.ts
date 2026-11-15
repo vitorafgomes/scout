@@ -40,6 +40,7 @@ const FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   'no asset': 'This release has no update for this package; nothing was installed',
   incomplete: 'The download did not finish; nothing was installed',
   apply: 'Scout could not replace its own file; it keeps running this version',
+  unexpected: 'The update failed for a reason Scout does not recognise; nothing was installed',
 };
 
 export interface UpdaterProgress {
@@ -82,6 +83,15 @@ export function canSelfUpdate(
   return platform === 'win32' || (platform === 'linux' && ownAppImage(env, execPath) !== null);
 }
 
+const NETWORK_FAILURE =
+  /\bnet::ERR_|\bE(?:CONNRESET|CONNREFUSED|CONNABORTED|NOTFOUND|AI_AGAIN|NETUNREACH|HOSTUNREACH|PIPE)\b|fetch failed|socket hang up/i;
+const FAILURE_CODE = /^[A-Z][A-Z0-9_]{2,59}$/;
+
+/**
+ * Why a check or an install failed, in the word the notice shows: a known kind, the network when the error is one of
+ * the connection, the error's own code (`EACCES`, `ERR_UPDATER_INVALID_VERSION`) when it carries one, else
+ * `unexpected`. An error that is not of the network is never called one.
+ */
 function failureKind(err: unknown): string {
   const { code, statusCode, message } = (err ?? {}) as Record<string, unknown>;
   const text = typeof message === 'string' ? message : String(err);
@@ -93,7 +103,9 @@ function failureKind(err: unknown): string {
   const status = /\bstatus (\d{3})\b/.exec(text);
   if (status !== null) return `http ${status[1]}`;
   if (/timed?[ _]?out/i.test(text)) return 'timeout';
-  return 'network';
+  if (NETWORK_FAILURE.test(`${typeof code === 'string' ? code : ''} ${text}`)) return 'network';
+  if (typeof code === 'string' && FAILURE_CODE.test(code)) return code;
+  return 'unexpected';
 }
 
 export interface UpdateNoticeDeps {

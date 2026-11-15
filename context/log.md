@@ -1,3 +1,5 @@
+## [2026-11-15] fix | An update that fails, and a refused verdict, say their own reason
+An updater error that is not of the connection is no longer called the network: the notice shows the error's code, or says Scout does not recognise the reason. A verdict refused because GitHub may not write shows the control plane's sentence, not a gRPC status. The control plane integration test waits 20 seconds for the socket. Pages: desktop-channels update notice, history/desktop-ui.
 ## [2026-11-15] feat | The owner's mention of the Scout bot starts the review by itself
 Main asks the chat for the review when the owner mentions the bot on a pull request: once per mention, within an hour, one at a time and only while the chat is idle, shown under In progress while it runs; a mention whose pull request was merged, closed or approved by the bot loses Review it. Pages: ADR 0057 (new), ADR 0045 (dated line), desktop-github mentions and activity, history/desktop-ui, the desktop-github rules; line citations of the touched files re-pointed.
 ## [2026-11-15] fix | The worker starts again with GitHub connected and the local chat on

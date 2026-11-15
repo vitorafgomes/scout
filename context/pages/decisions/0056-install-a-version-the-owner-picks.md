@@ -31,9 +31,9 @@ The owner asked to choose which version to install, an older one included, to te
 
 ## The decision
 
-- **The list.** `scout:update.listVersions` (`ui/packages/main/src/update/update-notice.ts:575`, `listVersions`, `:343`) reads the published versions on the owner's channel, newest first: no draft, and on Stable no pre-release, marked by GitHub or by a suffix in its tag. A list GitHub does not give answers no versions and the kind of the failure, and a list read on a channel the owner has since left answers nothing.
-- **Only a listed version.** `scout:update.installVersion` (`:582`) installs only a version of the last list main gave, never the running one, and only where the package can replace itself; anything else answers a failed progress and touches nothing. A failed list and a channel change forget the earlier list.
-- **Down for that install only.** The updater reads the chosen release's own metadata, the `latest*.yml` under its tag, and may go down only when that version is older than the running one (`:400`); whatever happens, it is pointed back at the GitHub feed with going down off (`:405`). The checksum and the same-version check of [[pages/decisions/0031-desktop-self-update]] still apply.
+- **The list.** `scout:update.listVersions` (`ui/packages/main/src/update/update-notice.ts:587`, `listVersions`, `:355`) reads the published versions on the owner's channel, newest first: no draft, and on Stable no pre-release, marked by GitHub or by a suffix in its tag. A list GitHub does not give answers no versions and the kind of the failure, and a list read on a channel the owner has since left answers nothing.
+- **Only a listed version.** `scout:update.installVersion` (`:594`) installs only a version of the last list main gave, never the running one, and only where the package can replace itself; anything else answers a failed progress and touches nothing. A failed list and a channel change forget the earlier list.
+- **Down for that install only.** The updater reads the chosen release's own metadata, the `latest*.yml` under its tag, and may go down only when that version is older than the running one (`:412`); whatever happens, it is pointed back at the GitHub feed with going down off (`:417`). The checksum and the same-version check of [[pages/decisions/0031-desktop-self-update]] still apply.
 - **Asks first.** Settings asks "Install Scout <version>, an older version?" with Cancel focused before an older install, and before any install when the running version is unknown (`ui/packages/renderer/src/app/wizard/settings/settings.component.ts:1664`). Where the package cannot replace itself the button is Download and opens that version's page.
 
 ## Calls that leave the process
@@ -55,7 +55,7 @@ The owner asked to choose which version to install, an older one included, to te
 
 ## How it is held
 
-- The "a version the owner picks" block of `ui/packages/main/test/update-notice.test.ts:1229`: the list per channel, each failing call, a refused unlisted, excluded, running or missing version, a stale list after a failed list or a channel change, going down only for an older install, the feed put back after a success and after a failure.
+- The "a version the owner picks" block of `ui/packages/main/test/update-notice.test.ts:1261`: the list per channel, each failing call, a refused unlisted, excluded, running or missing version, a stale list after a failed list or a channel change, going down only for an older install, the feed put back after a success and after a failure.
 - The "Install a specific version" specs of `ui/packages/renderer/src/app/wizard/settings/settings.component.spec.ts`.
 - The write-verb scan of `ui/packages/shared/test/ipc-contract.test.ts`, which names `scout:update.installVersion` with its reason.
 

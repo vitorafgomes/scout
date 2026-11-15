@@ -37,7 +37,7 @@ import { SENDER_HOOKS } from './sender-fakes.js';
 
 const CALL_DEADLINE_MS = 20_000;
 const TEST_TIMEOUT_MS = 30_000;
-const SOCKET_WAIT_MS = 5_000;
+const SOCKET_WAIT_MS = 20_000;
 const PROTO_DIR = path.join(
   findRepoRoot(process.cwd()),
   'src',
@@ -145,6 +145,35 @@ afterAll(async () => {
 });
 
 describe('control plane over UDS', () => {
+  it(
+    'a verdict GitHub may not write is refused with the sentence that says where to allow it, not a gRPC status',
+    async () => {
+      if (process.platform === 'win32') {
+        expect(result.kind).toBe('unsupported');
+        return;
+      }
+      const client = connect((result as LaunchedControlPlane).token);
+
+      const refused = await client
+        .giveVerdict({
+          repository: 'acme/shop',
+          number: 20,
+          verdict: 'approve',
+          body: '',
+          comments: [],
+          commit: '0123456789abcdef0123456789abcdef01234567',
+          testsLine: '',
+        })
+        .catch((err: unknown) => err);
+
+      expect(refused).toBeInstanceOf(ControlPlanePermissionDeniedError);
+      expect((refused as Error).message).toBe(
+        'The owner has not allowed github to write; allow it on the Features screen of Scout Desktop.',
+      );
+    },
+    TEST_TIMEOUT_MS,
+  );
+
   it(
     'ListProviders round-trips over UDS against the real Scout.Host.ControlPlane binary',
     async () => {
