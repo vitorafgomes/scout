@@ -400,8 +400,8 @@ describe('main.ts wiring of the one restart path', () => {
     const main = await readFile(path.join(import.meta.dirname, '../src/main.ts'), 'utf8');
 
     expect(main).toContain('answering: () => quickAsk?.isAnswering() ?? false,');
-    expect(main).toContain(
-      'onAnsweringChanged: (answering) => workerRestart?.answeringChanged(answering),',
+    expect(main).toMatch(
+      /onAnsweringChanged: \(answering\) => \{\s*workerRestart\?\.answeringChanged\(answering\);\s*if \(!answering\) mentionReviews\.idle\(\);/,
     );
     expect(main).toContain('restarting: () => workerRestart?.restarting() ?? false,');
     expect(main).toContain('onRestartSettled: () => quickAsk?.restartSettled(),');

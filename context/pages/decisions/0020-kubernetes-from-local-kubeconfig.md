@@ -48,7 +48,7 @@ The owner asked that Scout use the Kubernetes configuration already in `~/.kube`
 
 - **Better:** no pasted kubeconfig, no copy of credentials, and the owner sees exactly which clusters and which commands Scout will use before anything runs. Read-only holds in code by the GET-only plugin, whatever the credentials allow.
 - **Worse:** the owner's own credentials usually allow writes; read-only rests on the plugin alone unless the owner creates the recommended read-only user. Consent covers context names only: the worker re-reads the live file each time it builds a client, so a context whose user later gains or changes an exec command runs the new command without a new disclosure. Only the first `KUBECONFIG` entry is read, so a merged multi-file setup shows only the first file's contexts.
-- **Neutral but noteworthy:** the control plane's Kubernetes catalog entry asks for no credentials (`tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:138`): the desktop card replaces the pasted-kubeconfig fields, as the GitHub card replaces its token dialog ([[pages/decisions/0019-github-app-device-flow]]). A host without the desktop sets `Scout:Plugins:Kubernetes` in its configuration instead.
+- **Neutral but noteworthy:** the control plane's Kubernetes catalog entry asks for no credentials (`tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:139`): the desktop card replaces the pasted-kubeconfig fields, as the GitHub card replaces its token dialog ([[pages/decisions/0019-github-app-device-flow]]). A host without the desktop sets `Scout:Plugins:Kubernetes` in its configuration instead.
 
 ## Alternatives considered
 

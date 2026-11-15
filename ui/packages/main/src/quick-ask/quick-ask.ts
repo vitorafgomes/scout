@@ -246,6 +246,10 @@ export interface QuickAsk {
   isListening(): boolean;
   /** True while a turn runs, a question held for the worker included. */
   isAnswering(): boolean;
+  /** Asks `text` as a new turn when no turn runs and answers its id; null while one runs or when it is refused. */
+  askWhenIdle(text: string): string | null;
+  /** True when a turn the conversation keeps asked exactly `text` at or after `since`. */
+  askedSince(text: string, since: number): boolean;
   /** Main's restart settled: a question held through it is sent if the worker runs, else refused. */
   restartSettled(): void;
   /** Which of this module's windows `sender`, an IPC call's webContents, belongs to, or null for neither. */
@@ -1819,6 +1823,28 @@ export async function registerQuickAsk(deps: QuickAskDeps): Promise<QuickAsk> {
     },
     isListening: () => sessions.size > 0,
     isAnswering: () => turns.some((turn) => turn.state === 'running'),
+    askWhenIdle(text: string): string | null {
+      if (supervisor.status.state !== 'running' || turns.some((turn) => turn.state === 'running')) {
+        return null;
+      }
+      const id = randomUUID();
+      try {
+        ask({ id, text });
+        return id;
+      } catch (err: unknown) {
+        logger.warn('quick-ask: a question asked by Scout itself was refused', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        const refused = turns.findIndex((turn) => turn.id === id);
+        if (refused !== -1) {
+          turns.splice(refused, 1);
+          broadcast();
+        }
+        return null;
+      }
+    },
+    askedSince: (text, since) =>
+      turns.some((turn) => turn.question === text && (turn.askedAt ?? 0) >= since),
     restartSettled: () => releaseHeld(supervisor.status),
     screenCapture: {
       begin(): void {

@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.47"
+version: "1.48"
 date: 2026-11-08
-updated: 2026-11-14
-changes: "v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+updated: 2026-11-15
+changes: "v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-15 - The owner's mention of the Scout bot starts the review
+
+The owner asked that a review start as soon as the bot is mentioned on a pull request; until now the mention made a bell entry and the review waited for Review it. Main now asks the chat by itself for the owner's own mention written within the last hour, once per mention, one at a time and only while the worker runs and no turn is running, so the owner's own turn is never stopped; the entry then reads "Review started by the mention. The answer is in the chat." and loses Review it. Another login's mention, an older one and one with no pull request link keep Review it. The question is the one Review it asks, now one function the window and main share. Nothing is posted without the owner's approval ([[pages/decisions/0057-the-owners-mention-starts-the-review]]). While the review's turn runs the bell shows "Reviewing owner/repo#n" under In progress, then "Review of owner/repo#n is ready", or "did not finish" with Review it back when the turn stopped. Disconnect drops the waiting mentions, and a mention the owner already asked about is not asked again. The owner also asked that a pull request already merged stop offering Review it: after each read the poll reads the pull request of every kept mention that still offers it, and one merged, closed or approved by the bot at its head commit loses it and reads why. Tests: fifteen for the queue, two for asking only when idle, ten for the settling.
 
 ## 2026-11-14 - The bell: who signed a verdict and where its tests line went
 

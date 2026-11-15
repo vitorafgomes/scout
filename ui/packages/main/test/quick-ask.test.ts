@@ -69,6 +69,56 @@ describe('quick ask: questions to the worker', () => {
     expect(t.written).toEqual(['{"type":"ask","id":"q-1","text":"is the nightly build green?"}']);
   });
 
+  it('askWhenIdle asks as a new turn when no turn runs and answers its id, and asks nothing while one runs or the worker is not running', async () => {
+    const t = await setup();
+
+    const idle = t.quickAsk.askWhenIdle(
+      'Review the pull request https://github.com/acme/api/pull/44',
+    );
+    const busy = t.quickAsk.askWhenIdle(
+      'Review the pull request https://github.com/acme/api/pull/45',
+    );
+    const stopped = await setup({ state: 'stopped' });
+    const notRunning = stopped.quickAsk.askWhenIdle(
+      'Review the pull request https://github.com/acme/api/pull/44',
+    );
+
+    expect([typeof idle, busy, notRunning]).toEqual(['string', null, null]);
+    expect(await t.invoke(CHANNEL.localGetTurns, sender())).toMatchObject([
+      { id: idle, state: 'running' },
+    ]);
+    expect(t.written.map((line) => (JSON.parse(line) as { text: string }).text)).toEqual([
+      'Review the pull request https://github.com/acme/api/pull/44',
+    ]);
+    expect(stopped.written).toEqual([]);
+    expect(await stopped.invoke(CHANNEL.localGetTurns, sender())).toEqual([]);
+  });
+
+  it('askWhenIdle answers null and leaves no turn when the worker refuses the line, and askedSince finds a question by its text and time', async () => {
+    const refusing = await setup({ writable: false });
+    const refusedAsk = refusing.quickAsk.askWhenIdle(
+      'Review the pull request https://github.com/acme/api/pull/44',
+    );
+    const t = await setup();
+    const before = Date.now();
+    await t.invoke(CHANNEL.localAsk, sender(), {
+      id: 'q-1',
+      text: 'Review the pull request https://github.com/acme/api/pull/44',
+    });
+
+    expect(refusedAsk).toBeNull();
+    expect(refusing.written).toEqual([]);
+    expect(await refusing.invoke(CHANNEL.localGetTurns, sender())).toEqual([]);
+    expect([
+      t.quickAsk.askedSince('Review the pull request https://github.com/acme/api/pull/44', before),
+      t.quickAsk.askedSince('Review the pull request https://github.com/acme/api/pull/45', before),
+      t.quickAsk.askedSince(
+        'Review the pull request https://github.com/acme/api/pull/44',
+        Date.now() + 60_000,
+      ),
+    ]).toEqual([true, false, false]);
+  });
+
   it('refuses a recording: the desktop dictates text, so no audio question reaches the worker and no "(voice message)" turn exists', async () => {
     const t = await setup();
 

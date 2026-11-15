@@ -57,7 +57,7 @@ public sealed class FeatureWritesGrpcTests
         github.ScopeMatrix.Where(r => r.Scope is "Contents" or "Notifications").Select(r => (r.Scope, r.Summary, r.Actions.Count))
             .ShouldBe([
                 ("Contents", "Read files, directories and languages; list and search every file to audit a project", 3),
-                ("Notifications", "Search every five minutes for your mentions, review requests and replies; read the pull requests that mention your Scout bot and the bot's own name", 3),
+                ("Notifications", "Search every five minutes for your mentions, review requests and replies; read the pull requests that mention your Scout bot and the bot's own name", 4),
             ]);
 
         var enabled = await client.EnableAsync(new EnableRequest { Id = FeatureCatalog.YouTubeId, ConfirmWrites = true });

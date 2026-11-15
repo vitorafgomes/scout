@@ -126,6 +126,7 @@ import {
   type JobControls,
 } from './notifications/job-controls.js';
 import { GitHubActivityPoll } from './notifications/github-activity.js';
+import { MentionReviews } from './notifications/mention-review.js';
 import { watchPendingApprovals, type PendingApprovals } from './notifications/pending-approvals.js';
 import { watchWorkerHealth } from './notifications/worker-health.js';
 import { createTrayController, type TrayController } from './tray/tray.js';
@@ -584,6 +585,16 @@ app
     auth.start().catch((err: unknown) => {
       gitHubLogger.warn('github: start failed', { err: String(err) });
     });
+    const mentionReviews = new MentionReviews({
+      login: () => auth.login(),
+      ask: (question) => quickAsk?.askWhenIdle(question) ?? null,
+      asked: (question, since) => quickAsk?.askedSince(question, since) ?? false,
+      kept: (id) => notifications.list().find((n) => n.id === id),
+      record: (entry) => notifications.record(entry),
+      now: () => Date.now(),
+      setTimer,
+      logger: logger.child({ module: 'mention-review' }),
+    });
     gitHubActivity = new GitHubActivityPoll({
       fetch: globalThis.fetch,
       account: async () => {
@@ -592,8 +603,21 @@ app
         return token === null || login === null ? null : { token, login };
       },
       bot: async () => (await gitHubBot?.mentionTarget()) ?? null,
-      record: (entry) => notifications.record(entry),
-      clearEntries: () => notifications.remove((n) => n.source === 'github'),
+      record: (entry) => {
+        void mentionReviews.record(entry);
+      },
+      reviewable: () =>
+        notifications
+          .list()
+          .filter(
+            (n) =>
+              n.kind === 'mention' &&
+              n.actions?.some((action) => action.id === 'review-pull-request') === true,
+          ),
+      clearEntries: () => {
+        mentionReviews.clear();
+        notifications.remove((n) => n.source === 'github');
+      },
       now: () => Date.now(),
       setTimer,
       logger: logger.child({ module: 'github-activity' }),
@@ -1113,11 +1137,15 @@ app
       documentsDir: () => app.getPath('documents'),
       background: () => windowBackground(nativeTheme),
       onListeningChanged: (listening) => workerRestart?.listeningChanged(listening),
-      onAnsweringChanged: (answering) => workerRestart?.answeringChanged(answering),
+      onAnsweringChanged: (answering) => {
+        workerRestart?.answeringChanged(answering);
+        if (!answering) mentionReviews.idle();
+      },
       restarting: () => workerRestart?.restarting() ?? false,
       onTurnDone: (turn) => {
         const issues = issuesNotification(turn);
         if (issues !== null) notifications.record(issues);
+        mentionReviews.turnDone(turn.id);
       },
     });
     allowScreenCaptureOnlyForApp(
