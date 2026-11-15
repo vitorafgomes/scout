@@ -9,6 +9,7 @@ import {
   type GitHubVerdictRequest,
   type GitHubVerdictProgress,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type LocalAskRequest,
   type LocalFindingDecision,
   type LocalSetDecisionsRequest,
@@ -202,6 +203,7 @@ function makeBridge() {
   ];
   const listeners: ((turns: readonly LocalTurn[]) => void)[] = [];
   const verdictListeners: ((status: GitHubVerdictStatus) => void)[] = [];
+  const waitingListeners: ((status: GitHubWaitingApproval) => void)[] = [];
   let actions = 0;
   let key: Omit<GitHubVerdictStatus, keyof GitHubVerdictProgress> = VERDICT_KEY;
   const push = (next: readonly LocalTurn[]) => {
@@ -269,6 +271,27 @@ function makeBridge() {
       verdictListeners.push(listener);
       return () => undefined;
     }),
+    githubWaitingApprovalFor: vi.fn(
+      async (_req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null> => null,
+    ),
+    githubApproveWhenChecksPass: vi.fn(
+      async (req: GitHubVerdictRequest): Promise<GitHubWaitingApproval> => ({
+        repository: req.repository,
+        number: req.number,
+        commit: req.commit,
+        state: 'waiting',
+        running: 0,
+        reason: null,
+        detail: null,
+        askedAt: 1,
+      }),
+    ),
+    githubCancelWaitingApproval: vi.fn(async (_req: GitHubVerdictKey): Promise<void> => undefined),
+    onGitHubWaitingApproval: vi.fn((listener: (status: GitHubWaitingApproval) => void) => {
+      waitingListeners.push(listener);
+      return () => undefined;
+    }),
+    waiting: (status: GitHubWaitingApproval) => waitingListeners.forEach((l) => l(status)),
     pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...status })),
     verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
@@ -633,6 +656,12 @@ const TESTS_SENTENCE: Readonly<Record<ChecksCase, string | null>> = {
   'one failing': 'Checks: build passed, lint failed',
   pending: 'Checks: build passed, lint pending',
 };
+const CHECK_LINE: Readonly<Record<ChecksCase, string | null>> = {
+  absent: null,
+  'all pass': null,
+  'one failing': 'lint did not pass. Scout approves only when every check passed.',
+  pending: '1 check is still running. Scout approves only when every check passed.',
+};
 const VERDICT: Readonly<Record<VerdictButton, GitHubVerdictRequest['verdict']>> = {
   Approve: 'approve',
   'Request changes': 'request_changes',
@@ -678,6 +707,9 @@ function possibleVerdict(row: VerdictRow): boolean {
     );
   }
   if (row.clean && row.button === 'Request changes' && row.clicked === 'this window') return false;
+  if (row.button === 'Approve' && row.phase !== 'none' && CHECK_LINE[row.checks] !== null) {
+    return false;
+  }
   if (row.phase === 'none') return row.button === 'Approve' && row.clicked === 'this window';
   return !(row.selfAuthored && row.button === 'Approve');
 }
@@ -804,6 +836,8 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
     });
     expect({
       approve: enabled('approve'),
+      approveWhenGreen: enabled('approve-when-green'),
+      checkLine: text(all(root, 'check-line')[0]),
       requestChanges: enabled('request-changes'),
       post: enabled('post'),
       giving: text(all(root, 'verdict-giving')[0]),
@@ -813,7 +847,11 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
       posted: all(root, 'posted').length,
       cardButtons: all(root, 'yes').length > 0,
     }).toEqual({
-      approve: open && !row.selfAuthored && !giving ? [true] : [],
+      approve:
+        open && !row.selfAuthored && !giving && CHECK_LINE[row.checks] === null ? [true] : [],
+      approveWhenGreen:
+        open && !row.selfAuthored && !giving && row.checks === 'pending' ? [true] : [],
+      checkLine: row.phase === 'given' ? null : CHECK_LINE[row.checks],
       requestChanges: open && !giving && !row.clean ? [true] : [],
       post: row.phase === 'given' || row.clean ? [] : [!giving],
       giving: giving ? 'Giving the verdict…' : null,

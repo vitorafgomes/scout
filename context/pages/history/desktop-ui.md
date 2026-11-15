@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.49"
+version: "1.50"
 date: 2026-11-08
 updated: 2026-11-15
-changes: "v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.50 (2026-11-15): Approve when the checks pass. v1.49 (2026-11-15): an update that fails says its own reason, never the network by default. v1.48 (2026-11-15): the owner's mention of the Scout bot starts the review by itself. v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-15 - Approve when the checks pass
+
+The owner asked whether Scout could check the pipeline later by itself, once an approval clicked too early is refused ([[pages/decisions/0058-an-approval-needs-every-check-passed]]), and chose one click that Scout carries out ([[pages/decisions/0059-approve-when-the-checks-pass]]). The artboard drew the states first. On a card with checks still running the button reads "Approve when the checks pass"; main keeps the request, reads the pull request, its check runs and its statuses every minute, and gives exactly that request once every check passed. A failed check, a new commit, a closed pull request and two hours each end it with a bell entry and a line on the card; Cancel on the card or on the bell ends it silently. A card with a check that failed offers no approval. The waiting approvals are kept in the vault across a restart, at most twenty wait, and only the main and quick-ask windows may ask or cancel. Tests: `ui/packages/main/test/github-waiting-approvals.test.ts`, the verdict IPC and bell tests, eighteen rows on the card, the bridge, and one end-to-end spec.
 
 ## 2026-11-15 - An update that fails, and a refused verdict, say their own reason
 

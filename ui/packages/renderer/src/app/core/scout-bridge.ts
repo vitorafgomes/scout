@@ -110,6 +110,7 @@ import {
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type LocalSetDecisionsRequest,
   type YouTubeSaveApiKeyRequest,
   type YouTubeStatus,
@@ -384,6 +385,15 @@ function createFakeBridge(): ScoutBridge {
       rejectNotAvailable(),
     onGitHubVerdict:
       (_listener: (status: GitHubVerdictStatus) => void): (() => void) =>
+      () =>
+        undefined,
+    githubApproveWhenChecksPass: (_req: GitHubVerdictRequest): Promise<GitHubWaitingApproval> =>
+      rejectNotAvailable(),
+    githubCancelWaitingApproval: (_req: GitHubVerdictKey): Promise<void> => rejectNotAvailable(),
+    githubWaitingApprovalFor: (_req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null> =>
+      rejectNotAvailable(),
+    onGitHubWaitingApproval:
+      (_listener: (status: GitHubWaitingApproval) => void): (() => void) =>
       () =>
         undefined,
     githubBotCreate: (_req: GitHubBotCreateRequest): Promise<GitHubBotStatus> =>
@@ -956,6 +966,22 @@ export class ScoutBridgeService {
 
   onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void {
     return this.bridge.onGitHubVerdict(listener);
+  }
+
+  async githubApproveWhenChecksPass(req: GitHubVerdictRequest): Promise<GitHubWaitingApproval> {
+    return this.bridge.githubApproveWhenChecksPass(req);
+  }
+
+  async githubCancelWaitingApproval(req: GitHubVerdictKey): Promise<void> {
+    return this.bridge.githubCancelWaitingApproval(req);
+  }
+
+  async githubWaitingApprovalFor(req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null> {
+    return this.bridge.githubWaitingApprovalFor(req);
+  }
+
+  onGitHubWaitingApproval(listener: (status: GitHubWaitingApproval) => void): () => void {
+    return this.bridge.onGitHubWaitingApproval(listener);
   }
 
   async githubBotCreate(req: GitHubBotCreateRequest): Promise<GitHubBotStatus> {

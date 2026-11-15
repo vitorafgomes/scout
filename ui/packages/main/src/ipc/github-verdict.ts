@@ -11,8 +11,15 @@ import {
   type GitHubVerdictStatus,
 } from '@scout/shared';
 import type { ControlPlaneClient } from '../control-plane/client.js';
+import type { WaitingApprovals } from '../github/waiting-approvals.js';
 import type { Logger } from '../util/logger.js';
-import { guardChannels, senderCheck, type SenderHooks, type SenderKind } from './sender-check.js';
+import {
+  guardChannels,
+  senderCheck,
+  type RefuseUnlessFrom,
+  type SenderHooks,
+  type SenderKind,
+} from './sender-check.js';
 
 export type VerdictClient = Pick<ControlPlaneClient, 'giveVerdict' | 'getVerdict'>;
 
@@ -32,6 +39,7 @@ const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 const COMMIT_PATTERN = /^[0-9a-f]{7,40}$/;
 const ACTION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const REFUSED = 'Scout could not read that verdict.';
+const ALREADY_SENT = 'A verdict or a review was already sent on this commit.';
 
 function invalid(): never {
   throw new ScoutError('github/invalid-verdict', REFUSED);
@@ -68,6 +76,7 @@ export function toVerdictRequest(raw: unknown): GitHubVerdictRequest {
   if (
     typeof repository !== 'string' ||
     !REPOSITORY_PATTERN.test(repository) ||
+    repository.split('/').some((part) => part === '.' || part === '..') ||
     typeof number !== 'number' ||
     !Number.isInteger(number) ||
     number < 1 ||
@@ -92,19 +101,32 @@ export function toVerdictRequest(raw: unknown): GitHubVerdictRequest {
   };
 }
 
+/** Refuses a call that acts on a verdict or a waiting approval unless it comes from the Scout window or quick ask. */
+export function refuseUnlessVerdictWindow(
+  refuseUnlessFrom: RefuseUnlessFrom,
+  event: unknown,
+  channel: string,
+): void {
+  refuseUnlessFrom(FROM_VERDICT_WINDOWS.allowed, event, channel, FROM_VERDICT_WINDOWS.refusal);
+}
+
 /** A window main can push to; Electron's BrowserWindow is one. */
 export interface VerdictWindow {
   isDestroyed(): boolean;
   readonly webContents: { send(channel: string, payload: unknown): void };
 }
 
-/** Sends a verdict's status to every open window, so the card shows it whichever window asked. */
-export function pushToWindows(
+/**
+ * Sends a verdict's status, or on `channel` a waiting approval's, to every open window, so the card shows it whichever
+ * window asked.
+ */
+export function pushToWindows<T = GitHubVerdictStatus>(
   windows: () => readonly VerdictWindow[],
-): (status: GitHubVerdictStatus) => void {
+  channel: string = CHANNEL.githubVerdict,
+): (status: T) => void {
   return (status) => {
     for (const target of windows()) {
-      if (!target.isDestroyed()) target.webContents.send(CHANNEL.githubVerdict, status);
+      if (!target.isDestroyed()) target.webContents.send(channel, status);
     }
   };
 }
@@ -130,11 +152,28 @@ function toVerdictKey(raw: unknown): GitHubVerdictKey {
   return { repository, number, commit };
 }
 
+/** What main keeps of the verdict handlers: the verdict as the card gives it, and their removal. */
+export interface GitHubVerdictHandlers {
+  /** Gives a verdict as the card's click does; `afterChecks` marks every status of that action as given by Scout once every check passed. */
+  give(request: GitHubVerdictRequest, afterChecks?: boolean): Promise<GitHubVerdictAction>;
+  dispose(): void;
+}
+
+const FROM_VERDICT_WINDOWS = {
+  allowed: VERDICT_WINDOWS,
+  refusal: () =>
+    new ScoutError(
+      'github/not-verdict-window',
+      'A verdict can be given only from the Scout window or quick ask.',
+    ),
+};
+
 /**
  * The card's verdict, or its Post as the verdict `comment`: the owner's click goes to the control plane as an already-approved action, and main follows
  * that action every 2 seconds, pushing each change to every window, until it is given or failed. One pull request
  * at one reviewed commit gets one action: a click from either window while it is queued, running or given answers
- * that action instead of asking again; a failed one allows a new click.
+ * that action instead of asking again; a failed one allows a new click. Approve when the checks pass hands an approval
+ * to `waiting`, and only the windows that give verdicts may ask for it or cancel it.
  */
 export function registerGitHubVerdictHandlers(
   ownIpcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
@@ -142,17 +181,13 @@ export function registerGitHubVerdictHandlers(
   push: (status: GitHubVerdictStatus) => void,
   logger: Logger,
   senders: SenderHooks,
+  waiting: Pick<WaitingApprovals, 'start' | 'cancel' | 'statusFor'>,
   timers: VerdictTimers = { setTimeout, clearTimeout },
-): () => void {
+): GitHubVerdictHandlers {
   const ipcMain = guardChannels(ownIpcMain, senderCheck(senders, logger), {
-    [CHANNEL.githubGiveVerdict]: {
-      allowed: VERDICT_WINDOWS,
-      refusal: () =>
-        new ScoutError(
-          'github/not-verdict-window',
-          'A verdict can be given only from the Scout window or quick ask.',
-        ),
-    },
+    [CHANNEL.githubGiveVerdict]: FROM_VERDICT_WINDOWS,
+    [CHANNEL.githubApproveWhenChecksPass]: FROM_VERDICT_WINDOWS,
+    [CHANNEL.githubCancelWaitingApproval]: FROM_VERDICT_WINDOWS,
   });
   const following = new Map<string, unknown>();
   const verdicts = new Map<string, GitHubVerdictStatus>();
@@ -195,7 +230,10 @@ export function registerGitHubVerdictHandlers(
     );
   }
 
-  async function give(request: GitHubVerdictRequest): Promise<GitHubVerdictAction> {
+  async function give(
+    request: GitHubVerdictRequest,
+    afterChecks = false,
+  ): Promise<GitHubVerdictAction> {
     const key = keyOf(request);
     const existing = verdicts.get(byKey.get(key) ?? '');
     if (existing !== undefined && existing.state !== 'failed') {
@@ -222,6 +260,7 @@ export function registerGitHubVerdictHandlers(
           number: request.number,
           commit: request.commit,
           verdict: request.verdict,
+          ...(afterChecks ? { afterChecks: true as const } : {}),
         });
       }
       if (!following.has(action.actionId)) follow(action.actionId, 0);
@@ -237,7 +276,13 @@ export function registerGitHubVerdictHandlers(
 
   ipcMain.handle(CHANNEL.githubGiveVerdict, async (_event, raw: unknown) => {
     try {
-      return await give(toVerdictRequest(raw));
+      const request = toVerdictRequest(raw);
+      waiting.cancel({
+        repository: request.repository,
+        number: request.number,
+        commit: request.commit,
+      });
+      return await give(request);
     } catch (err: unknown) {
       logger.warn('github: verdict not sent', { code: serializeError(err).code, err: String(err) });
       relayError(err);
@@ -271,11 +316,50 @@ export function registerGitHubVerdictHandlers(
     }
   });
 
-  return () => {
-    for (const handle of following.values()) timers.clearTimeout(handle);
-    following.clear();
-    ipcMain.removeHandler(CHANNEL.githubVerdictFor);
-    ipcMain.removeHandler(CHANNEL.githubVerdictStatus);
-    ipcMain.removeHandler(CHANNEL.githubGiveVerdict);
+  ipcMain.handle(CHANNEL.githubApproveWhenChecksPass, (_event, raw: unknown) => {
+    try {
+      const request = toVerdictRequest(raw);
+      if (request.verdict !== 'approve') invalid();
+      const sent = verdicts.get(byKey.get(keyOf(request)) ?? '');
+      if (sent !== undefined && sent.state !== 'failed') {
+        throw new ScoutError('github/verdict-exists', ALREADY_SENT);
+      }
+      return waiting.start(request);
+    } catch (err: unknown) {
+      logger.warn('github: approval when the checks pass not started', {
+        code: serializeError(err).code,
+      });
+      relayError(err);
+    }
+  });
+
+  ipcMain.handle(CHANNEL.githubCancelWaitingApproval, (_event, raw: unknown) => {
+    try {
+      waiting.cancel(toVerdictKey(raw));
+    } catch (err: unknown) {
+      relayError(err);
+    }
+  });
+
+  ipcMain.handle(CHANNEL.githubWaitingApprovalFor, (_event, raw: unknown) => {
+    try {
+      return waiting.statusFor(toVerdictKey(raw));
+    } catch (err: unknown) {
+      relayError(err);
+    }
+  });
+
+  return {
+    give,
+    dispose() {
+      for (const handle of following.values()) timers.clearTimeout(handle);
+      following.clear();
+      ipcMain.removeHandler(CHANNEL.githubWaitingApprovalFor);
+      ipcMain.removeHandler(CHANNEL.githubCancelWaitingApproval);
+      ipcMain.removeHandler(CHANNEL.githubApproveWhenChecksPass);
+      ipcMain.removeHandler(CHANNEL.githubVerdictFor);
+      ipcMain.removeHandler(CHANNEL.githubVerdictStatus);
+      ipcMain.removeHandler(CHANNEL.githubGiveVerdict);
+    },
   };
 }

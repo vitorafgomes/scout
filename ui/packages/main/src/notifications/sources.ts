@@ -1,4 +1,9 @@
-import type { GitHubVerdictStatus, NoticeRecordRequest, NotificationKind } from '@scout/shared';
+import type {
+  GitHubVerdictStatus,
+  GitHubWaitingApproval,
+  NoticeRecordRequest,
+  NotificationKind,
+} from '@scout/shared';
 import { ISSUES_TARGET, issueLinks, signerInWords, type LocalTurn } from '@scout/shared';
 import type { NotificationInput } from './notification-store.js';
 
@@ -226,7 +231,10 @@ export function verdictNotification(status: GitHubVerdictStatus): NotificationIn
       return {
         id,
         kind: 'done',
-        title: `Verdict given: ${given} ${pr}`,
+        title:
+          status.afterChecks === true
+            ? `Approved ${pr} after its checks passed`
+            : `Verdict given: ${given} ${pr}`,
         detail: givenDetail(status),
         ...(status.url === null ? {} : { url: status.url }),
         source: 'verdict',
@@ -247,6 +255,56 @@ export function verdictNotification(status: GitHubVerdictStatus): NotificationIn
         detail: `${label}: ${status.state}`,
         source: 'verdict',
       };
+  }
+}
+
+/** The one entry of an approval that waits for the checks of its pull request at its reviewed commit. */
+export function waitingApprovalId(status: GitHubWaitingApproval): string {
+  return `approval:${status.repository}#${status.number}@${status.commit}`;
+}
+
+/**
+ * The entry of an approval that waits for the checks: running with Cancel while it waits, failed with the reason once
+ * a check failed, a new commit arrived, two hours passed or the pull request was closed; null once cancelled or
+ * approved, when the entry is removed and the verdict's own entry tells the rest.
+ */
+export function waitingApprovalNotification(
+  status: GitHubWaitingApproval,
+): NotificationInput | null {
+  const id = waitingApprovalId(status);
+  const pr = `${status.repository}#${status.number}`;
+  const failed = (title: string, detail = ''): NotificationInput => ({
+    id,
+    kind: 'failed',
+    title,
+    detail,
+    source: 'verdict',
+  });
+  if (status.state === 'waiting') {
+    return {
+      id,
+      kind: 'running',
+      title: `Waiting to approve ${pr}`,
+      detail:
+        status.running === 0
+          ? 'Waiting for the checks'
+          : `${status.running} ${status.running === 1 ? 'check' : 'checks'} still running`,
+      indeterminate: true,
+      actions: [{ id: 'cancel-waiting-approval', label: 'Cancel' }],
+      source: 'verdict',
+    };
+  }
+  switch (status.reason) {
+    case 'check-failed':
+      return failed(`Not approved: a check failed on ${pr}`, `${status.detail ?? ''} did not pass`);
+    case 'new-commit':
+      return failed(`Not approved: ${pr} changed after the review`);
+    case 'timed-out':
+      return failed('Not approved: the checks did not finish within 2 hours', pr);
+    case 'closed':
+      return failed(`Not approved: ${pr} was closed`);
+    default:
+      return null;
   }
 }
 

@@ -15,7 +15,7 @@ Owns the GitHub card on the Features screen, the owner's GitHub session or token
 ## Rules this project must keep
 
 - [[pages/invariants/secrets-never-in-source]]: the session, the pasted token, the bot's private key and its installation token stay in the vault or the 0600 token files; never in a log line or the renderer. The activity poll reads the token per tick and never logs or keeps it; the App's JSON Web Token for `GET /app` is made per read and never logged.
-- [[pages/invariants/no-executive-writes]]: the bot's creation and every verdict start from the owner's click in the desktop; the verdict runs as an approved action under ADR 0032. The mention search, the comment reads, `GET /app` and the count of the App's repositories (one new call from main to api.github.com, of the kind the `Metadata` row already declares, made only with a browser session and reaching the renderer only as a number in the status) are reads; Review it, and the owner's own fresh mention by itself (ADR 0057), only ask the chat, and posting the review stays the approved write it is. The reads of a kept mention's pull request and its reviews are reads of the same kind.
+- [[pages/invariants/no-executive-writes]]: the bot's creation and every verdict start from the owner's click in the desktop; the verdict runs as an approved action under ADR 0032. The mention search, the comment reads, `GET /app` and the count of the App's repositories (one new call from main to api.github.com, of the kind the `Metadata` row already declares, made only with a browser session and reaching the renderer only as a number in the status) are reads; Review it, and the owner's own fresh mention by itself (ADR 0057), only ask the chat, and posting the review stays the approved write it is. The reads of a kept mention's pull request and its reviews are reads of the same kind, and so are the reads of a waiting approval's pull request and checks; Approve when the checks pass is the owner's approval of that one verdict, which main gives later unchanged (ADR 0059).
 
 ## Pages that govern this project
 
@@ -26,6 +26,7 @@ Read one when your change touches what its title names.
 - [[pages/decisions/0043-the-verdict-on-a-pull-request|ADR 0043 - The verdict on a pull request, with the project's tests in an isolated container]] - the verdict, v1.1: the card click is the approval
 - [[pages/decisions/0045-theme-and-notification-center|ADR 0045 - The desktop's theme switch and notification center]] - v1.1: the bell's GitHub activity through the search API; v1.4: the mention of the Scout bot
 - [[pages/decisions/0057-the-owners-mention-starts-the-review|ADR 0057 - The owner's mention of the Scout bot starts the review by itself]]
+- [[pages/decisions/0059-approve-when-the-checks-pass|ADR 0059 - The owner approves once, and Scout gives the approval when the checks pass]]
 - [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 - Features declare what they write, and the owner grants each one]]
 - [[pages/invariants/secrets-never-in-source|Secrets never live in source]]
 - [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]]

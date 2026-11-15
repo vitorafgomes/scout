@@ -362,7 +362,7 @@ describe('GitHub IPC', () => {
     const features = main.slice(main.indexOf('unregisterFeatures = registerFeaturesHandlers('));
 
     expect(gitHub).toContain(
-      'onConnectionChanged: () => {\n        gitHubActivity?.reconnected();\n        sendToAllWindows(CHANNEL.featuresChanged, gitHubLogger);',
+      'onConnectionChanged: () => {\n        waitingApprovals?.cancelAll();\n        gitHubActivity?.reconnected();\n        sendToAllWindows(CHANNEL.featuresChanged, gitHubLogger);',
     );
     expect(gitHub).toContain(
       "revokeWriteGrant: () =>\n        revokeFeatureWriteGrant(\n          'github',",

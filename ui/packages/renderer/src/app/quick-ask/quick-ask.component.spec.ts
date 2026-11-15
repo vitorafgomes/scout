@@ -150,6 +150,8 @@ function makeBridge() {
     localSetDecisions: vi.fn(async (): Promise<void> => undefined),
     onGitHubVerdict: vi.fn(() => () => undefined),
     githubVerdictFor: vi.fn(async () => null),
+    onGitHubWaitingApproval: vi.fn(() => () => undefined),
+    githubWaitingApprovalFor: vi.fn(async () => null),
     localClearTurns: vi.fn(async (): Promise<void> => undefined),
     localAsk,
     vaultPublic,

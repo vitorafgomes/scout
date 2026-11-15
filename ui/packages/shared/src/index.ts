@@ -231,6 +231,7 @@ export {
   type GitHubVerdictProgress,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type YouTubeSaveApiKeyRequest,
   type YouTubeStatus,
   type KubernetesAuthKind,

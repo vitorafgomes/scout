@@ -89,7 +89,12 @@ import {
   restartWorkerIfRunning,
 } from './ipc/github.js';
 import { GitHubBot } from './oauth/github-bot.js';
-import { pushToWindows, registerGitHubVerdictHandlers } from './ipc/github-verdict.js';
+import {
+  pushToWindows,
+  refuseUnlessVerdictWindow,
+  registerGitHubVerdictHandlers,
+} from './ipc/github-verdict.js';
+import { WaitingApprovals } from './github/waiting-approvals.js';
 import {
   registerYouTubeHandlers,
   deleteYouTubeData,
@@ -154,7 +159,7 @@ import {
   resolveTrayIcon,
   resolveWorkerBinaryWithOverride,
 } from './worker/resolve-binary.js';
-import { CHANNEL, ControlPlaneUnavailableError } from '@scout/shared';
+import { CHANNEL, ControlPlaneUnavailableError, type GitHubWaitingApproval } from '@scout/shared';
 import { connectControlPlane, type ControlPlaneConnection } from './control-plane/launcher.js';
 import type { ControlPlaneClient } from './control-plane/client.js';
 import { buildEnv, migrateLegacyApiKey, readGrantedWriteFeatures } from './worker/build-env.js';
@@ -274,6 +279,7 @@ let gitHubAuth: GitHubAuth | null = null;
 let gitHubBot: GitHubBot | null = null;
 let unregisterGitHubBot: (() => void) | null = null;
 let unregisterGitHubVerdict: (() => void) | null = null;
+let waitingApprovals: WaitingApprovals | null = null;
 let unregisterYouTube: (() => void) | null = null;
 let googleAuth: GoogleAuth | null = null;
 let quickAsk: QuickAsk | null = null;
@@ -346,6 +352,7 @@ function disposeAll(): void {
   unregisterAccess?.();
   unregisterSlack?.();
   unregisterFeatures?.();
+  waitingApprovals?.dispose();
   unregisterGitHubVerdict?.();
   unregisterOperator?.();
   unregisterWhisper?.();
@@ -488,7 +495,15 @@ app
       download: whisperDownloads,
       logger: logger.child({ module: 'voice-notice' }),
     });
-    unregisterNotificationActions = registerNotificationActions(ipcMain, voiceNotice);
+    unregisterNotificationActions = registerNotificationActions(ipcMain, voiceNotice, {
+      cancel: (key) => waitingApprovals?.cancel(key),
+      mayCancel: (event) =>
+        refuseUnlessVerdictWindow(
+          senderCheck(senders, logger.child({ module: 'notifications' })),
+          event,
+          CHANNEL.notificationsAct,
+        ),
+    });
 
     await migrateLegacyApiKey(vault).catch((err: unknown) => {
       logger.warn('vault: legacy API key not migrated', {
@@ -558,6 +573,7 @@ app
       clientId: process.env['SCOUT_GITHUB_APP_CLIENT_ID'] || GITHUB_APP_CLIENT_ID,
       appSlug: process.env['SCOUT_GITHUB_APP_SLUG'] || GITHUB_APP_SLUG,
       onConnectionChanged: () => {
+        waitingApprovals?.cancelAll();
         gitHubActivity?.reconnected();
         sendToAllWindows(CHANNEL.featuresChanged, gitHubLogger);
         if (workerRestart !== null) void restartWorkerIfRunning(workerRestart, gitHubLogger);
@@ -1018,7 +1034,24 @@ app
     void pendingApprovals.check();
     const verdictLogger = logger.child({ module: 'github-verdict' });
     const pushVerdict = pushToWindows(() => BrowserWindow.getAllWindows());
-    unregisterGitHubVerdict = registerGitHubVerdictHandlers(
+    const waiting = new WaitingApprovals({
+      fetch: globalThis.fetch,
+      token: () => auth.accessToken(),
+      give: (request) => verdicts.give(request, true),
+      push: pushToWindows<GitHubWaitingApproval>(
+        () => BrowserWindow.getAllWindows(),
+        CHANNEL.githubWaitingApproval,
+      ),
+      record: (entry) => notifications.record(entry),
+      remove: (id) => notifications.remove((n) => n.id === id),
+      load: () => vault.get('github.waiting-approvals'),
+      save: (json) => vault.store('github.waiting-approvals', json),
+      now: () => Date.now(),
+      setTimer,
+      logger: logger.child({ module: 'waiting-approvals' }),
+    });
+    waitingApprovals = waiting;
+    const verdicts = registerGitHubVerdictHandlers(
       ipcMain,
       () => connection.client,
       (status) => {
@@ -1027,7 +1060,10 @@ app
       },
       verdictLogger,
       senders,
+      waiting,
     );
+    unregisterGitHubVerdict = verdicts.dispose;
+    void waiting.resume();
     unregisterOperator = registerOperatorHandlers(
       ipcMain,
       () => connection.client,

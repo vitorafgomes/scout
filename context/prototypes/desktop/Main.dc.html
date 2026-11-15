@@ -200,6 +200,13 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-for>
 <span>A design for the owner, not built: a mention by you or by a login on your allowed users starts the review by itself, and one ok posts the whole review.</span>
 </div>
+<div role="group" aria-labelledby="pv-approve-wait" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-approve-wait">Approve when checks pass</span>
+<sc-for list="{{awStates}}" as="ps" hint-placeholder-count="9">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>A design for the owner, not built: Scout approves only when every check of the reviewed commit passed. One click on Approve when the checks pass is your approval; Scout cancels it when a check fails, a new commit arrives or 2 hours pass.</span>
+</div>
 <sc-if value="{{hasTurns}}" hint-placeholder-val="{{true}}">
 <div style="align-self: flex-end; max-width: 520px; background: {{t.accentStrong}}; color: #ffffff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; line-height: 1.45">{{turnQuestion}}</div>
 <div style="display: flex; flex-direction: column; gap: 12px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px">
@@ -214,6 +221,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <a href="#" title="{{tc.title}}" style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; text-decoration: none; background: {{tc.bg}}; color: {{tc.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{tc.icon}}"></path></svg>{{tc.label}}</a>
 </sc-for>
 </div>
+<sc-if value="{{awHasCheckLine}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{t.fg2}}">{{awCheckLine}}</p>
+</sc-if>
 </sc-if>
 <sc-for list="{{chatFindings}}" as="cf" hint-placeholder-count="2">
 <article aria-label="{{cf.aria}}" style="border: 1px solid {{t.line}}; border-radius: 12px; background: {{t.surface}}; padding: 12px; display: flex; flex-direction: column; gap: 8px">
@@ -237,7 +247,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <sc-if value="{{cardOpen}}" hint-placeholder-val="{{true}}">
 <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
 <sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
-<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">acme/shop · PR #5 · commit ec7f951</span>
+<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">{{cardTarget}}</span>
 </sc-if>
 <sc-if value="{{cardClean}}" hint-placeholder-val="{{false}}">
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}">No findings.</p>
@@ -266,18 +276,37 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-for>
 </sc-if>
 <sc-if value="{{cardIsReview}}" hint-placeholder-val="{{true}}">
+<sc-if value="{{awShowVerdict}}" hint-placeholder-val="{{true}}">
 <div role="group" aria-label="Verdict" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
 <span style="font-size: 12px; color: {{t.muted}}; margin-right: auto">Verdict on the reviewed commit</span>
+<sc-if value="{{awPlainApprove}}" hint-placeholder-val="{{true}}">
 <button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve</button>
+</sc-if>
+<sc-if value="{{awOffersWait}}" hint-placeholder-val="{{false}}">
+<button type="button" aria-label="Approve acme/api#44 when its checks pass" onClick="{{awArm}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve when the checks pass</button>
+</sc-if>
 <sc-if value="{{cardDecides}}" hint-placeholder-val="{{true}}">
 <button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Request changes</button>
 </sc-if>
 </div>
 </sc-if>
+<sc-if value="{{awWaiting}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
+<p role="status" style="margin: 0 auto 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg>Waiting for the checks: 2 still running. Scout approves when they pass.</p>
+<button type="button" aria-label="Cancel the approval of acme/api#44" onClick="{{awCancel}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+</div>
+</sc-if>
+<sc-if value="{{awHasAlert}}" hint-placeholder-val="{{false}}">
+<p role="alert" style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.err}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5"></path></svg>{{awAlert}}</p>
+</sc-if>
+</sc-if>
 </div>
 </sc-if>
 <sc-if value="{{cardAllSent}}" hint-placeholder-val="{{false}}">
 <div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}"><strong>Every chosen issue is queued on acme/shop</strong><span style="font-size: 13px; color: {{t.fg2}}">Each waits for your approval, here and in Approvals; nothing is left to open.</span></div>
+</sc-if>
+<sc-if value="{{awApproved}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}"><strong>Approved on PR #44</strong><span style="font-size: 13px; color: {{t.fg2}}">Approved after the checks passed.</span><span style="font-size: 13px; color: {{t.fg2}}">Signed as Bot (scout[bot])</span><a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">See the review on GitHub<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a></div>
 </sc-if>
 <sc-if value="{{cardPosting}}" hint-placeholder-val="{{false}}">
 <p role="status" style="margin: 0; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}; font-size: 13px; color: {{t.fg2}}">{{cardPostingLine}}</p>
@@ -786,6 +815,8 @@ class Component extends DCLogic {
   }
   cardVals(t) {
     const card = this.state.card || 'review';
+    const aw = this.awState();
+    const pr = aw === 'off' ? ['acme/shop', 5, 'ec7f951'] : ['acme/api', 44, '3f2a91c'];
     const audit = card === 'audit' || card === 'auditSending' || card === 'auditDone' || card === 'auditNewBatch' || card === 'auditAllSent';
     const picks = this.state.picks || {};
     const clean = card === 'reviewClean';
@@ -793,7 +824,7 @@ class Component extends DCLogic {
     const sentIds = card === 'auditNewBatch' ? findings.slice(0, 4).map((f) => f.id) : card === 'auditAllSent' ? findings.map((f) => f.id) : [];
     const unsent = findings.filter((f) => !sentIds.includes(f.id));
     const allSent = sentIds.length > 0 && unsent.every((f) => picks[f.id] === 'no');
-    const open = (card === 'review' || clean || card === 'audit' || card === 'auditNewBatch') && !allSent;
+    const open = (card === 'review' || clean || card === 'audit' || card === 'auditNewBatch') && !allSent && aw !== 'awApproved';
     const sevTone = { Blocking: [t.errBg, t.err], Fix: [t.warnBg, t.warn], Suggestion: [t.surface2, t.fg2] };
     const pick = (id, how) => () => { if (open) this.setState({ picks: { ...picks, [id]: picks[id] === how ? undefined : how } }); };
     const chatFindings = findings.map((f) => {
@@ -818,7 +849,7 @@ class Component extends DCLogic {
     const summary = decided === 0 ? 'Nothing selected yet. Decide item by item, or Yes to all.' : n + ' of ' + kept + ' selected' + (undecided > 0 ? ' · ' + undecided + ' undecided' : '');
     const label = audit
       ? (n === 0 ? 'Open issues on acme/shop' : 'Open ' + n + ' issue' + (n === 1 ? '' : 's') + ' on acme/shop')
-      : (n === 0 ? 'Post on PR #5' : 'Post a review with ' + n + ' comment' + (n === 1 ? '' : 's') + ' on PR #5');
+      : (n === 0 ? 'Post on PR #' + pr[1] : 'Post a review with ' + n + ' comment' + (n === 1 ? '' : 's') + ' on PR #' + pr[1]);
     const sent = this.state.cardSent || 0;
     const failId = 'i4';
     const ok = [t.okBg, t.ok, 'M20 6L9 17l-5-5'];
@@ -842,7 +873,8 @@ class Component extends DCLogic {
     const previewOpen = this.state.cardPreview === true && audit && open;
     const picksAll = (ids) => { const p = {}; ids.forEach((id) => { p[id] = 'yes'; }); return p; };
     return {
-      turnQuestion: audit ? 'Audit acme/shop' : 'Review acme/shop#5 and run its tests',
+      turnQuestion: audit ? 'Audit acme/shop' : 'Review ' + pr[0] + '#' + pr[1] + ' and run its tests',
+      cardTarget: pr[0] + ' · PR #' + pr[1] + ' · commit ' + pr[2],
       cardIsReview: !audit,
       cardIsAudit: audit,
       cardOpen: open,
@@ -875,8 +907,56 @@ class Component extends DCLogic {
       cardProgress: progress,
       cardStates: [['review', 'Review: Post'], ['reviewClean', 'Review: no findings'], ['audit', 'Audit: Open issues'], ['auditSending', 'Audit: sending'], ['auditDone', 'Audit: one failed'], ['auditNewBatch', 'Audit: new batch after sending'], ['auditAllSent', 'Audit: every chosen issue sent']].map(([id, lbl]) => ({
         label: lbl, pressed: card === id ? 'true' : 'false', bg: card === id ? t.surface2 : 'transparent', fg: card === id ? t.fg : t.muted,
-        pick: () => this.setState({ mention: 'off', mr: {}, card: id, cardPreview: false, cardSent: id === 'auditSending' ? 2 : id === 'auditDone' ? 6 : 0, picks: id === 'review' || id === 'reviewClean' ? {} : picksAll(this.cardFindings(true).map((f) => f.id)) }),
+        pick: () => this.setState({ aw: 'off', mention: 'off', mr: {}, card: id, cardPreview: false, cardSent: id === 'auditSending' ? 2 : id === 'auditDone' ? 6 : 0, picks: id === 'review' || id === 'reviewClean' ? {} : picksAll(this.cardFindings(true).map((f) => f.id)) }),
       })),
+    };
+  }
+  awState() {
+    return (this.state.card || 'review') === 'review' ? this.state.aw || 'off' : 'off';
+  }
+  awBell() {
+    const failed = { id: 'w44', kind: 'failed', glyph: '!', tone: 'err', detail: '', when: 'now', progress: null, action: '', controls: [] };
+    const entry = {
+      awWaiting: { ...failed, kind: 'running', glyph: '', path: 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2', tone: 'accent', title: 'Waiting to approve acme/api#44', detail: '2 checks still running', indeterminate: true, controls: [{ label: 'Cancel the approval of acme/api#44', path: 'M7 7h10v10H7z', act: () => this.setState({ aw: 'awPending' }) }] },
+      awApproved: { ...failed, kind: 'done', glyph: '✓', tone: 'ok', title: 'Approved acme/api#44 after its checks passed', detail: 'Signed as Bot (scout[bot])', action: 'See the review' },
+      awCheckFailed: { ...failed, title: 'Not approved: a check failed on acme/api#44', detail: 'lint did not pass' },
+      awNewCommit: { ...failed, title: 'Not approved: acme/api#44 changed after the review' },
+      awTimedOut: { ...failed, title: 'Not approved: the checks did not finish within 2 hours', detail: 'acme/api#44' },
+    }[this.awState()];
+    return entry ? [entry] : [];
+  }
+  awVals(t) {
+    const aw = this.awState();
+    const tones = { passed: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], pending: [t.warnBg, t.warn, 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2'], failed: [t.errBg, t.err, 'M6 6l12 12M18 6L6 18'] };
+    const marks = ['awApproved', 'awRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
+    const chip = (label, title, mark) => ({ label, title, bg: tones[mark][0], fg: tones[mark][1], icon: tones[mark][2] });
+    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.' }[aw] || '';
+    const alert = {
+      awCheckFailed: 'Not approved: lint did not pass. Review it again once it is fixed.',
+      awNewCommit: 'Not approved: a new commit arrived after the review. Review it again.',
+      awTimedOut: 'Not approved: the checks did not finish within 2 hours.',
+      awRefused: 'Scout approves only when every check of the commit passed: 1 still running (build).',
+    }[aw] || '';
+    const states = [['off', 'Off'], ['awPending', 'Checks pending: Approve when the checks pass'], ['awWaiting', 'Waiting for the checks'], ['awApproved', 'Approved after the checks passed'], ['awCheckFailed', 'Not approved: a check failed'], ['awNewCommit', 'Not approved: a new commit'], ['awTimedOut', 'Not approved: waited 2 hours'], ['awFailedAtReview', 'Checks failed at review time'], ['awRefused', "Approval refused by GitHub's state"]];
+    const drawn = { card: 'review', picks: {}, cardPreview: false, mention: 'off', mr: {}, bell: 'entries', bellTab: 'all', reply: 'done', conversation: 'turns' };
+    const inBell = ['awWaiting', 'awApproved', 'awCheckFailed', 'awNewCommit', 'awTimedOut'];
+    return {
+      ...(aw === 'off' ? {} : { chatTestChips: [...['build', 'e2e', 'lint'].map((name, i) => chip(name + ' ' + marks[i], 'Details of ' + name, marks[i])), chip('tests passed in 41 s (dotnet test)', '', 'passed')] }),
+      awStates: states.map(([id, label]) => ({
+        label, pressed: aw === id ? 'true' : 'false', bg: aw === id ? t.surface2 : 'transparent', fg: aw === id ? t.fg : t.muted,
+        pick: () => this.setState(id === 'off' ? { aw: id } : { ...drawn, aw: id, bellOpen: inBell.includes(id) }),
+      })),
+      awHasCheckLine: checkLine !== '',
+      awCheckLine: checkLine,
+      awShowVerdict: aw !== 'awWaiting',
+      awPlainApprove: aw === 'off',
+      awOffersWait: ['awPending', 'awTimedOut', 'awRefused'].includes(aw),
+      awArm: () => this.setState({ aw: 'awWaiting', bellOpen: true, bellTab: 'all' }),
+      awWaiting: aw === 'awWaiting',
+      awCancel: () => this.setState({ aw: 'awPending' }),
+      awHasAlert: alert !== '',
+      awAlert: alert,
+      awApproved: aw === 'awApproved',
     };
   }
   bellItems() {
@@ -1016,7 +1096,7 @@ class Component extends DCLogic {
     return {
       mentionStates: ids.map((id, i) => ({
         label: labels[i], pressed: s === id ? 'true' : 'false', bg: s === id ? t.surface2 : 'transparent', fg: s === id ? t.fg : t.muted,
-        pick: () => this.setState({ mention: id, mr: seeds[id] || {}, ...(id === 'off' ? { approval: 'waiting', grp: {}, mixedSingle: 'waiting' } : { bell: 'entries', bellOpen: bellFirst.includes(id) }), ...(ids.indexOf(id) >= 3 ? { approval: 'none' } : {}) }),
+        pick: () => this.setState({ aw: 'off', mention: id, mr: seeds[id] || {}, ...(id === 'off' ? { approval: 'waiting', grp: {}, mixedSingle: 'waiting' } : { bell: 'entries', bellOpen: bellFirst.includes(id) }), ...(ids.indexOf(id) >= 3 ? { approval: 'none' } : {}) }),
       })),
       mrCard: this.mentionCard(),
       mr: {
@@ -1151,7 +1231,7 @@ class Component extends DCLogic {
     const read = this.state.bellRead || {};
     const tab = this.state.bellTab || 'all';
     const bell = this.state.bell || 'entries';
-    const added = Object.values(this.bellPreview()).filter((n) => n.id === 'h1');
+    const added = [...this.awBell(), ...Object.values(this.bellPreview()).filter((n) => n.id === 'h1')];
     const all = bell === 'empty' ? [] : [...added, ...this.bellItems().map((n) => this.mentionBell(this.bellPreview(this.bellLive(n))))];
     const unread = all.filter((n) => !read[n.id]).length;
     const tone = (n) => n.tone === 'ok' ? [t.okBg, t.ok] : n.tone === 'warn' ? [t.warnBg, t.warn] : n.tone === 'err' ? [t.errBg, t.err] : n.tone === 'muted' ? [t.surface2, t.fg2] : [t.surface2, t.accent];
@@ -1179,7 +1259,7 @@ class Component extends DCLogic {
     }));
     const states = [['entries', 'Entries'], ['empty', 'Empty'], ['refused', 'Review it refused'], ['asking', 'Asking'], ['pausing', 'Pausing after this area'], ['continuing', 'Continuing'], ['stoppingPaused', 'Stop on a paused audit'], ['stoppingTests', 'Stopping the tests'], ['noteNoAnswer', 'Note: no answer'], ['noteNotConfirmed', 'Note: not confirmed'], ['noteNotReported', 'Note: not reported'], ['noteWorkerStopped', 'Note: Scout stopped'], ['noteDropped', 'Note: dropped'], ['pausedCredit', 'Paused: out of credit'], ['pausedRate', 'Paused: rate limit'], ['pausedSignIn', 'Paused: sign in again'], ['pausedKey', 'Paused: key rejected'], ['pausedModel', 'Paused: model missing'], ['areaName', 'The area named'], ['finished', 'Audit done'], ['testsFinished', 'Tests finished'], ['testsNotFinished', 'Tests did not finish'], ['healthRestarting', 'Scout restarting'], ['healthGaveUp', 'Scout not restarting']];
     return {
-      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true, mention: 'off', mr: {} }) })),
+      bellStates: states.map(([id, label]) => ({ label, pressed: bell === id ? 'true' : 'false', bg: bell === id ? t.surface2 : 'transparent', fg: bell === id ? t.fg : t.muted, pick: () => this.setState({ bell: id, bellOpen: true, aw: 'off', mention: 'off', mr: {} }) })),
       bellTabs: [['all', 'All'], ['running', 'In progress'], ['github', 'GitHub'], ['done', 'Done']].map(([id, label]) => {
         const on = tab === id;
         return { label, selected: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted, border: on ? t.line : 'transparent', pick: () => this.setState({ bellTab: id }) };
@@ -1282,6 +1362,7 @@ class Component extends DCLogic {
         { label: 'tests passed in 41 s (dotnet test)', title: '', bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' },
       ],
       ...this.cardVals(t),
+      ...this.awVals(t),
       ...this.mentionVals(t),
       answerStates: seg([['idle', 'Idle'], ['answering', 'Answering'], ['streaming', 'Streaming'], ['asked', 'Stopped by a new question'], ['posting', 'Queuing for approval']], answer, 'answer'),
       answerRunning,
@@ -1290,7 +1371,7 @@ class Component extends DCLogic {
       replyIsReview: reply === 'done',
       replyInterrupted: reply === 'interrupted',
       replyNotRunning: reply === 'notRunning',
-      replyText: reply === 'notRunning' ? 'Scout is not running. Start it from the tray or the app.' : reply === 'done' && (this.state.card || 'review').startsWith('audit') ? 'Six findings on acme/shop at ec7f951. Choose the ones to open as issues.' : reply === 'interrupted' ? 'Two findings on acme/shop#5. The checks passed;' : (this.state.card === 'reviewClean' ? 'No findings' : 'Two findings') + ' on acme/shop#5. The checks passed; the tests ran in a container and passed in 41 s.',
+      replyText: reply === 'notRunning' ? 'Scout is not running. Start it from the tray or the app.' : reply === 'done' && (this.state.card || 'review').startsWith('audit') ? 'Six findings on acme/shop at ec7f951. Choose the ones to open as issues.' : reply === 'interrupted' ? 'Two findings on acme/shop#5. The checks passed;' : this.awState() !== 'off' ? 'Two findings on acme/api#44. The tests ran in a container and passed in 41 s.' : (this.state.card === 'reviewClean' ? 'No findings' : 'Two findings') + ' on acme/shop#5. The checks passed; the tests ran in a container and passed in 41 s.',
       replyColor: reply === 'notRunning' ? t.err : t.fg2,
       dictationStates: seg([['off', 'Off'], ['holding', 'Holding the microphone'], ['nothing', 'Nothing heard'], ['readAloud', 'Read aloud failed'], ['refused', 'Question refused']], dictation, 'dictation'),
       holding: dictation === 'holding',

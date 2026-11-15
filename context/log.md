@@ -1,3 +1,5 @@
+## [2026-11-15] feat | Approve when the checks pass
+On a review card whose checks still run the owner approves once; the desktop keeps the approval, reads the checks every minute and gives it when they pass, and a failed check, a new commit, a closed pull request, two hours or Cancel end it. Pages: ADR 0059 (new), desktop-github verdict and public contract, desktop-channels, history/desktop-ui, the desktop-github rules; line citations re-pointed.
 ## [2026-11-15] feat | An approval needs every check of the commit passed
 Before an approval Scout reads the head commit's check runs and statuses and refuses while one runs, did not pass or could not be read; requesting changes and commenting are not held back. Pages: ADR 0058 (new), plugin-github the writes, history/plugin-github.
 ## [2026-11-15] fix | An update that fails, and a refused verdict, say their own reason

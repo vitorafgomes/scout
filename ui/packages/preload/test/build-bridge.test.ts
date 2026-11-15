@@ -137,6 +137,10 @@ describe('buildBridge', () => {
       'githubVerdictStatus',
       'githubVerdictFor',
       'onGitHubVerdict',
+      'githubApproveWhenChecksPass',
+      'githubCancelWaitingApproval',
+      'githubWaitingApprovalFor',
+      'onGitHubWaitingApproval',
       'youtubeSignIn',
       'youtubeStatus',
       'youtubeCancelSignIn',
@@ -1111,6 +1115,50 @@ describe('buildBridge', () => {
     expect(channel).toBe(CHANNEL.theme);
     expect(received).toEqual([{ choice: 'system', resolved: 'dark' }]);
     expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.theme, handler);
+  });
+
+  it('the waiting approval methods reach main only through their own channels with their request, and onGitHubWaitingApproval forwards what main pushes and unsubscribes the same handler', async () => {
+    const ipc = makeFakeIpc();
+    const bridge = buildBridge(ipc);
+    const key = { repository: 'acme/api', number: 7, commit: 'abc1234' };
+    const request = {
+      ...key,
+      verdict: 'approve' as const,
+      body: 'Looks good.',
+      comments: [],
+      testsLine: '',
+    };
+    const status = {
+      ...key,
+      state: 'waiting' as const,
+      running: 2,
+      reason: null,
+      detail: null,
+      askedAt: 1,
+    };
+    const received: unknown[] = [];
+
+    await bridge.githubApproveWhenChecksPass(request);
+    await bridge.githubCancelWaitingApproval(key);
+    await bridge.githubWaitingApprovalFor(key);
+    const unsubscribe = bridge.onGitHubWaitingApproval((pushed) => received.push(pushed));
+    const [channel, handler] = (
+      (ipc.on as ReturnType<typeof mock>).mock.calls as [
+        string,
+        (event: unknown, payload: unknown) => void,
+      ][]
+    )[0]!;
+    handler({}, status);
+    unsubscribe();
+
+    expect((ipc.invoke as ReturnType<typeof mock>).mock.calls).toEqual([
+      [CHANNEL.githubApproveWhenChecksPass, request],
+      [CHANNEL.githubCancelWaitingApproval, key],
+      [CHANNEL.githubWaitingApprovalFor, key],
+    ]);
+    expect(channel).toBe(CHANNEL.githubWaitingApproval);
+    expect(received).toEqual([status]);
+    expect(ipc.removeListener).toHaveBeenCalledWith(CHANNEL.githubWaitingApproval, handler);
   });
 
   it('the quick-ask methods reach main only through their own channels with their payloads', async () => {

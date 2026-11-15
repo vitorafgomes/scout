@@ -12,6 +12,6 @@ reliability: high
 
 ## Public contract
 
-- **Channels:** `scout:github.signIn`, `status`, `cancel`, `signOut`, `saveToken`; `scout:github.bot.status`, `create`, `cancel`, `remove`, `setWrites`; `scout:github.giveVerdict`, `scout:github.verdictStatus`, `scout:github.verdictFor`, and the push `scout:github.verdict`.
+- **Channels:** `scout:github.signIn`, `status`, `cancel`, `signOut`, `saveToken`; `scout:github.bot.status`, `create`, `cancel`, `remove`, `setWrites`; `scout:github.giveVerdict`, `scout:github.verdictStatus`, `scout:github.verdictFor`, and the push `scout:github.verdict`; since 2026-11-15 `scout:github.approveWhenChecksPass`, `scout:github.cancelWaitingApproval`, `scout:github.waitingApprovalFor` and the push `scout:github.waitingApproval` ([[pages/decisions/0059-approve-when-the-checks-pass]]), and the main-only vault key `github.waiting-approvals`.
 - **Worker variables:** `SCOUT__PLUGINS__GITHUB__TOKENFILE` or `SCOUT__PLUGINS__GITHUB__TOKEN`, and with a bot token `SCOUT__PLUGINS__GITHUB__BOTTOKENFILE`, `BOTWRITES`, `BOTLOGIN` and `BOTREPOS` (comma-separated `owner/repo` names the installation covers; `ui/packages/main/src/worker/build-env.ts:88`).
 - **External boundaries:** github.com's device flow and api.github.com from main only, every one of `GitHubAuth`'s calls there a GET (since 2026-11-11 also one repository count per installation of the App); the control plane over gRPC for the verdict.

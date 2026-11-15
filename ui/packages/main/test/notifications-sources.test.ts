@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'bun:test';
-import type { GitHubVerdictStatus, LocalTurn } from '@scout/shared';
+import type {
+  GitHubVerdictStatus,
+  GitHubWaitingApproval,
+  LocalTurn,
+  NotificationAction,
+} from '@scout/shared';
 import type { NotificationInput } from '../src/notifications/notification-store.js';
 import {
   issuesNotification,
   verdictNotification,
+  waitingApprovalNotification,
   workerNotice,
 } from '../src/notifications/sources.js';
 
@@ -366,6 +372,146 @@ describe('verdict follow', () => {
       });
     });
   }
+});
+
+describe('an approval that waits for the checks', () => {
+  const ID = 'approval:acme/shop#5@3f2a9c1';
+  const CANCEL: readonly NotificationAction[] = [
+    { id: 'cancel-waiting-approval', label: 'Cancel' },
+  ];
+  function waiting(
+    state: GitHubWaitingApproval['state'],
+    reason: GitHubWaitingApproval['reason'] = null,
+    running = 0,
+    detail: string | null = null,
+  ): GitHubWaitingApproval {
+    return {
+      repository: 'acme/shop',
+      number: 5,
+      commit: '3f2a9c1',
+      state,
+      running,
+      reason,
+      detail,
+      askedAt: 1_000,
+    };
+  }
+
+  const rows: readonly [string, GitHubWaitingApproval, NotificationInput | null][] = [
+    [
+      'waiting with two checks running is a running entry with a sweeping bar, the count and Cancel',
+      waiting('waiting', null, 2),
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Waiting to approve acme/shop#5',
+        detail: '2 checks still running',
+        indeterminate: true,
+        actions: CANCEL,
+        source: 'verdict',
+      },
+    ],
+    [
+      'waiting with one check running counts it in the singular',
+      waiting('waiting', null, 1),
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Waiting to approve acme/shop#5',
+        detail: '1 check still running',
+        indeterminate: true,
+        actions: CANCEL,
+        source: 'verdict',
+      },
+    ],
+    [
+      'waiting before any check was read says it waits for the checks',
+      waiting('waiting'),
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Waiting to approve acme/shop#5',
+        detail: 'Waiting for the checks',
+        indeterminate: true,
+        actions: CANCEL,
+        source: 'verdict',
+      },
+    ],
+    [
+      'a failed check ends it as failed, naming the check',
+      waiting('ended', 'check-failed', 0, 'lint'),
+      {
+        id: ID,
+        kind: 'failed',
+        title: 'Not approved: a check failed on acme/shop#5',
+        detail: 'lint did not pass',
+        source: 'verdict',
+      },
+    ],
+    [
+      'a new commit ends it as failed, saying the pull request changed',
+      waiting('ended', 'new-commit'),
+      {
+        id: ID,
+        kind: 'failed',
+        title: 'Not approved: acme/shop#5 changed after the review',
+        detail: '',
+        source: 'verdict',
+      },
+    ],
+    [
+      'two hours ends it as failed, naming the pull request',
+      waiting('ended', 'timed-out'),
+      {
+        id: ID,
+        kind: 'failed',
+        title: 'Not approved: the checks did not finish within 2 hours',
+        detail: 'acme/shop#5',
+        source: 'verdict',
+      },
+    ],
+    [
+      'a closed pull request ends it as failed',
+      waiting('ended', 'closed'),
+      {
+        id: ID,
+        kind: 'failed',
+        title: 'Not approved: acme/shop#5 was closed',
+        detail: '',
+        source: 'verdict',
+      },
+    ],
+    ['a cancel removes the entry', waiting('ended', 'cancelled'), null],
+    [
+      'an approval handed to the verdict removes the entry, the verdict tells the rest',
+      waiting('ended', 'approved'),
+      null,
+    ],
+  ];
+  for (const [name, status, entry] of rows) {
+    it(name, () => {
+      expect(
+        waitingApprovalNotification(status),
+        `the bell tells the outcome of the approval that waits for the checks: ${name}`,
+      ).toEqual(entry);
+    });
+  }
+
+  it('a verdict Scout gave after the checks passed reads "Approved acme/shop#5 after its checks passed"', () => {
+    const review = 'https://github.com/acme/shop/pull/5#pullrequestreview-1';
+
+    expect(
+      verdictNotification({ ...verdict('given', review), afterChecks: true }),
+      'the bell tells the approval was given once every check passed',
+    ).toEqual({
+      id: 'verdict:act-1',
+      kind: 'done',
+      title: 'Approved acme/shop#5 after its checks passed',
+      detail: '',
+      url: review,
+      source: 'verdict',
+    });
+  });
 });
 
 describe('issues opened from the audit findings', () => {

@@ -8,6 +8,7 @@ import {
 } from '@scout/shared';
 
 import {
+  checksOutcome,
   commentBody,
   issueBody,
   issuesAsk,
@@ -332,6 +333,59 @@ describe('review findings', () => {
     expect(verdictRequest(withoutCommit, chosen, 'approve')).toBeNull();
     expect(verdictRequest(audit, chosen, 'approve')).toBeNull();
   });
+
+  it.each<{
+    name: string;
+    checks: readonly ReviewCheck[] | undefined;
+    running: number;
+    failed: string | null;
+  }>([
+    { name: 'no checks', checks: undefined, running: 0, failed: null },
+    {
+      name: 'success, neutral and skipped all passed',
+      checks: [
+        { name: 'build', status: 'completed', conclusion: 'success', url: '' },
+        { name: 'docs', status: 'completed', conclusion: 'neutral', url: '' },
+        { name: 'e2e', status: 'completed', conclusion: 'skipped', url: '' },
+      ],
+      running: 0,
+      failed: null,
+    },
+    {
+      name: 'queued and in progress are running',
+      checks: [
+        { name: 'build', status: 'completed', conclusion: 'success', url: '' },
+        { name: 'e2e', status: 'queued', conclusion: null, url: '' },
+        { name: 'lint', status: 'in_progress', conclusion: null, url: '' },
+      ],
+      running: 2,
+      failed: null,
+    },
+    {
+      name: 'a completed check that did not succeed failed, the first one named, beside one running',
+      checks: [
+        { name: 'e2e', status: 'in_progress', conclusion: null, url: '' },
+        { name: 'lint', status: 'completed', conclusion: 'failure', url: '' },
+        { name: 'deploy', status: 'completed', conclusion: 'cancelled', url: '' },
+      ],
+      running: 1,
+      failed: 'lint',
+    },
+    {
+      name: 'a completed check with no conclusion failed, as the worker reads it',
+      checks: [{ name: 'build', status: 'completed', conclusion: null, url: '' }],
+      running: 0,
+      failed: 'build',
+    },
+  ])(
+    'checksOutcome reads the checks as the worker judges an approval: $name',
+    ({ checks, running, failed }) => {
+      expect(
+        checksOutcome(checks),
+        'running counts the checks not completed; failed names the first completed one that is not success, neutral or skipped',
+      ).toEqual({ running, failed });
+    },
+  );
 
   it('verdictTestsLine is the checks with their marks, then the container run, each on its line; empty with neither', () => {
     expect([

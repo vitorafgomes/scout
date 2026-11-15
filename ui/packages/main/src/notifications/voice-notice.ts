@@ -7,6 +7,7 @@ import {
   type AppNotification,
   type NotificationAction,
 } from '@scout/shared';
+import type { WaitingApprovals } from '../github/waiting-approvals.js';
 import type { Logger } from '../util/logger.js';
 import type { WhisperDownloader } from '../ipc/whisper.js';
 import type { NotificationStore } from './notification-store.js';
@@ -31,6 +32,8 @@ const PLATFORMS: Readonly<Record<string, string>> = {
   desktop: 'this computer',
 };
 const REFUSED = 'Scout could not run that action.';
+const WAITING_APPROVAL_ID =
+  /^approval:([A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100})#(\d{1,9})@([0-9a-f]{7,40})$/;
 
 export interface VoiceNoticeDeps {
   store: Pick<NotificationStore, 'list' | 'record' | 'nextId'>;
@@ -182,18 +185,42 @@ export function createVoiceNotice(deps: VoiceNoticeDeps): VoiceNotice {
   return { handleWorkerLine, downloadBase, modelInstalled, restarted };
 }
 
-/** `scout:notifications.act`: an entry's action main runs; the Models action runs in the window, never here. */
+/**
+ * `scout:notifications.act`: an entry's action main runs, the base model's download or the cancel of an approval that
+ * waits for the checks of the pull request and commit its entry names, which only a window that may give a verdict
+ * may ask for; the Models action runs in the window, never here.
+ */
 export function registerNotificationActions(
   ipcMain: Pick<IpcMain, 'handle' | 'removeHandler'>,
   voice: Pick<VoiceNotice, 'downloadBase'>,
+  waiting?: Pick<WaitingApprovals, 'cancel'> & {
+    /** Throws the refusal when the call's sender may not cancel an approval; checked before anything is cancelled. */
+    mayCancel(event: unknown): void;
+  },
 ): () => void {
-  ipcMain.handle(CHANNEL.notificationsAct, (_event, raw: unknown) => {
+  ipcMain.handle(CHANNEL.notificationsAct, (event, raw: unknown) => {
+    if (
+      waiting !== undefined &&
+      (raw as { action?: unknown } | null)?.action === 'cancel-waiting-approval'
+    ) {
+      waiting.mayCancel(event);
+    }
     try {
       const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-      if (typeof r['id'] !== 'string' || r['action'] !== 'whisper-download-base') {
+      const id = r['id'];
+      const approval = typeof id === 'string' ? WAITING_APPROVAL_ID.exec(id) : null;
+      if (r['action'] === 'cancel-waiting-approval' && approval !== null && waiting !== undefined) {
+        waiting.cancel({
+          repository: approval[1]!,
+          number: Number(approval[2]),
+          commit: approval[3]!,
+        });
+        return;
+      }
+      if (typeof id !== 'string' || r['action'] !== 'whisper-download-base') {
         throw new ScoutError('notifications/invalid-request', REFUSED);
       }
-      voice.downloadBase(r['id']);
+      voice.downloadBase(id);
     } catch (err: unknown) {
       const serialized = serializeError(err);
       throw Object.assign(new Error(encodeIpcErrorMessage(serialized)), {

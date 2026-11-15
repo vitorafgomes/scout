@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { CHANNEL, readIpcError, type AppNotification } from '@scout/shared';
+import { CHANNEL, readIpcError, type AppNotification, type GitHubVerdictKey } from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { createWhisperDownloader, registerWhisperHandlers } from '../src/ipc/whisper.js';
 import { NotificationStore } from '../src/notifications/notification-store.js';
@@ -87,7 +87,14 @@ describe('the voice message notice in the notification center', () => {
       handle: (channel: string, handler: IpcHandler) => void handlers.set(channel, handler),
       removeHandler: (channel: string) => void handlers.delete(channel),
     };
-    const dispose = registerNotificationActions(ipcMain, voice);
+    const cancelled: GitHubVerdictKey[] = [];
+    const refusals = { next: null as Error | null };
+    const dispose = registerNotificationActions(ipcMain, voice, {
+      cancel: (key) => void cancelled.push(key),
+      mayCancel: () => {
+        if (refusals.next !== null) throw refusals.next;
+      },
+    });
     registerWhisperHandlers(ipcMain, fetchFn, logger, dir, TABLE, download);
     const act = async (req: unknown): Promise<unknown> =>
       handlers.get(CHANNEL.notificationsAct)!(null as unknown as IpcMainInvokeEvent, req);
@@ -95,7 +102,19 @@ describe('the voice message notice in the notification center', () => {
       for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
     };
     const voiceEntries = () => store.list().filter((n) => n.id.startsWith('voice-no-model:'));
-    return { clock, store, voice, act, settled, voiceEntries, lines, handlers, dispose };
+    return {
+      clock,
+      store,
+      voice,
+      act,
+      settled,
+      voiceEntries,
+      lines,
+      handlers,
+      dispose,
+      cancelled,
+      refusals,
+    };
   }
 
   it('a voice message without a model becomes one unread entry with the two actions', () => {
@@ -349,6 +368,40 @@ describe('the voice message notice in the notification center', () => {
     });
   }
 
+  it("the bell's Cancel stops the approval that waits for the checks of the pull request and commit its entry names", async () => {
+    const t = setup();
+
+    await t.act({ id: 'approval:acme/shop#5@3f2a9c1', action: 'cancel-waiting-approval' });
+
+    expect(t.cancelled, 'the owner can cancel the waiting approval from the bell').toEqual([
+      { repository: 'acme/shop', number: 5, commit: '3f2a9c1' },
+    ]);
+    expect(fetched).toEqual([]);
+  });
+
+  it("the bell's Cancel from a window that may not give a verdict is refused before anything is cancelled", async () => {
+    const t = setup();
+    t.refusals.next = Object.assign(new Error('refused'), { code: 'github/not-verdict-window' });
+
+    const error = await t
+      .act({ id: 'approval:acme/shop#5@3f2a9c1', action: 'cancel-waiting-approval' })
+      .catch((e: unknown) => e);
+
+    expect((error as { code?: string }).code).toBe('github/not-verdict-window');
+    expect(t.cancelled, 'a refused sender cancels nothing').toEqual([]);
+  });
+
+  for (const id of ['voice-no-model:1', 'approval:acme/shop#5@main', 'approval:acme#5@3f2a9c1']) {
+    it(`refuses the cancel of an approval on the entry ${id} and cancels nothing`, async () => {
+      const t = setup();
+
+      const error = await t.act({ id, action: 'cancel-waiting-approval' }).catch((e) => e);
+
+      expect(readIpcError(error).code).toBe('notifications/invalid-request');
+      expect(t.cancelled).toEqual([]);
+    });
+  }
+
   it('refuses an entry without the download action, such as a GitHub entry', async () => {
     const t = setup();
     t.store.record({ id: 'github:1', kind: 'github', title: 'PR', detail: '', source: 'github' });
@@ -380,7 +433,9 @@ describe('main.ts wiring of the voice notice', () => {
       /createWhisperDownloader\([\s\S]*?\(\) => \{\s*voiceNotice\.modelInstalled\(\);/,
     );
     expect(main).toMatch(/registerWhisperHandlers\([\s\S]*?whisperDownloads,/);
-    expect(main).toContain('registerNotificationActions(ipcMain, voiceNotice);');
+    expect(main).toMatch(
+      /registerNotificationActions\(ipcMain, voiceNotice, \{\s*cancel: \(key\) => waitingApprovals\?\.cancel\(key\),/,
+    );
     expect(main).toContain('unregisterNotificationActions?.();');
   });
 });

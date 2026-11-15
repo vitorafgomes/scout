@@ -21,6 +21,7 @@ import { LocalConversation } from './local-conversation';
 import { MarkdownPipe } from './markdown.pipe';
 import {
   checkMark,
+  checksOutcome,
   commentBody,
   issueBody,
   issuesAsk,
@@ -37,6 +38,9 @@ const SEVERITY_LABELS: Readonly<Record<ReviewFinding['severity'], string>> = {
   nit: 'Suggestion',
 };
 const MAX_COMMENT_CHARS = 2000;
+const CHECKS_REFUSAL = 'Scout approves only when every check of the commit passed:';
+const SHIELD = 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5';
+const ALERT = 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 8v5M12 16v.5';
 /** `reply | reviewFindings`: the reply's findings block and the text around it, parsed once per reply. */
 @Pipe({ name: 'reviewFindings', standalone: true, pure: true })
 export class ReviewFindingsPipe implements PipeTransform {
@@ -94,6 +98,9 @@ export class ReviewFindingsPipe implements PipeTransform {
             >
           }
         </div>
+        @if (checkLine(); as line) {
+          <p class="check-line" data-test="check-line">{{ line }}</p>
+        }
         @if (review().tests; as tests) {
           @if (tests.ran && tests.exitCode !== 0 && tests.output) {
             <details class="output" data-test="tests-output">
@@ -286,6 +293,11 @@ export class ReviewFindingsPipe implements PipeTransform {
             ? 'Approved on PR #' + review().number
             : 'Changes requested on PR #' + review().number
         }}</strong>
+        @if (done.afterChecks) {
+          <span class="posted-line" data-test="after-checks"
+            >Approved after the checks passed.</span
+          >
+        }
         @if (done.url) {
           <a href="#" (click)="$event.preventDefault(); open(done.url)">{{ done.url }}</a>
         }
@@ -366,10 +378,46 @@ export class ReviewFindingsPipe implements PipeTransform {
             }
           </div>
         }
-        @if (!audit() && !giving() && !(clean() && review().selfAuthored === true)) {
+        @if (!audit() && waitingNow()) {
+          <div class="verdict" data-test="waiting">
+            <p class="waiting-line" role="status" data-test="waiting-line">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg
+              >{{ waitingLine() }}
+            </p>
+            <button
+              type="button"
+              data-test="cancel-waiting"
+              [attr.aria-label]="
+                'Cancel the approval of ' + review().repository + '#' + review().number
+              "
+              (click)="cancelWaiting()"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18"></path>
+              </svg>
+              <span class="lbl">Cancel</span>
+            </button>
+          </div>
+        } @else if (!audit() && !giving() && (approveOffer() !== null || !clean())) {
           <div class="verdict" role="group" aria-label="Verdict">
             <span class="verdict-label">Verdict on the reviewed commit</span>
-            @if (review().selfAuthored !== true) {
+            @if (approveOffer() === 'wait') {
+              <button
+                type="button"
+                class="primary"
+                data-test="approve-when-green"
+                [disabled]="verdictLocked()"
+                [attr.title]="review().commit ? null : noCommit"
+                [attr.aria-label]="
+                  'Approve ' + review().repository + '#' + review().number + ' when its checks pass'
+                "
+                (click)="approveWhenGreen()"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="shield"></path></svg>
+                <span class="lbl">Approve when the checks pass</span>
+              </button>
+            } @else if (approveOffer() === 'approve') {
               <button
                 type="button"
                 class="approve"
@@ -416,6 +464,12 @@ export class ReviewFindingsPipe implements PipeTransform {
                   ? 'The review was not posted.'
                   : 'The verdict was not given.')
             }}
+          </p>
+        }
+        @if (endedLine(); as line) {
+          <p class="error" role="alert" data-test="waiting-ended">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="alert"></path></svg
+            >{{ line }}
           </p>
         }
       </div>
@@ -725,6 +779,28 @@ export class ReviewFindingsPipe implements PipeTransform {
     .verdict button {
       min-height: 30px;
       font-size: 12px;
+    }
+    .check-line {
+      margin: 0;
+      font-size: 12px;
+      color: var(--sc-fg-2);
+    }
+    .waiting-line {
+      margin: 0 auto 0 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--sc-fg-2);
+    }
+    .waiting-line svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .tests {
       display: flex;
@@ -1149,6 +1225,66 @@ export class ReviewFindingsComponent {
   readonly closed = computed(() => this.posted() !== null || this.given() !== null);
   readonly writing = computed(() => this.posting() || this.busy() || this.giving());
   readonly verdictLocked = computed(() => this.giving() || this.posting() || !this.review().commit);
+  /** The checks of the reviewed commit as the worker judges an approval: how many still run, and the first that failed. */
+  readonly checks = computed(() => checksOutcome(this.review().checks));
+  /** The approval waiting for the checks of this pull request and commit, or the reason it ended; null when none, cancelled or handed to the verdict. */
+  readonly waiting = computed(() => {
+    const { kind, repository, number, commit } = this.review();
+    if (kind === 'audit' || number === undefined || !commit) return null;
+    const status = this.store.waiting(repository, number, commit);
+    return status === null || status.reason === 'cancelled' || status.reason === 'approved'
+      ? null
+      : status;
+  });
+  readonly waitingNow = computed(() => this.waiting()?.state === 'waiting');
+  /**
+   * Which approval the Verdict group offers: Approve once every check passed or the review has none, Approve when the
+   * checks pass while some still run, after the worker refused an approval for its checks or after a wait timed out,
+   * and none once a check failed, the head moved, the pull request closed, or on the owner's own pull request.
+   */
+  readonly approveOffer = computed((): 'approve' | 'wait' | null => {
+    if (this.review().selfAuthored === true) return null;
+    const waiting = this.waiting();
+    if (waiting !== null) return waiting.reason === 'timed-out' ? 'wait' : null;
+    const verdict = this.verdict();
+    if (verdict?.state === 'failed' && verdict.reason?.startsWith(CHECKS_REFUSAL)) return 'wait';
+    const { running, failed } = this.checks();
+    if (failed !== null) return null;
+    return running > 0 ? 'wait' : 'approve';
+  });
+  /** The line under the checks while no approval waits: the check that failed, or how many still run. */
+  readonly checkLine = computed(() => {
+    if (this.audit() || this.waiting() !== null || this.given() !== null) return null;
+    const { running, failed } = this.checks();
+    if (failed !== null)
+      return `${failed} did not pass. Scout approves only when every check passed.`;
+    if (running === 0) return null;
+    const still = running === 1 ? '1 check is' : `${running} checks are`;
+    return `${still} still running. Scout approves only when every check passed.`;
+  });
+  readonly waitingLine = computed(() => {
+    const running = this.waiting()?.running || this.checks().running;
+    return running > 0
+      ? `Waiting for the checks: ${running} still running. Scout approves when they pass.`
+      : 'Waiting for the checks. Scout approves when they pass.';
+  });
+  /** Why an approval that waited for the checks was not given. */
+  readonly endedLine = computed(() => {
+    const waiting = this.waiting();
+    if (waiting?.state !== 'ended') return null;
+    switch (waiting.reason) {
+      case 'check-failed':
+        return `Not approved: ${waiting.detail ?? 'a check'} did not pass. Review it again once it is fixed.`;
+      case 'new-commit':
+        return 'Not approved: a new commit arrived after the review. Review it again.';
+      case 'timed-out':
+        return 'Not approved: the checks did not finish within 2 hours.';
+      case 'closed':
+        return 'Not approved: the pull request was closed.';
+      default:
+        return null;
+    }
+  });
   readonly audit = computed(() => this.review().kind === 'audit');
   /** True on a review that found nothing: the card shows what was checked and offers Approve alone. */
   readonly clean = computed(() => !this.audit() && this.review().findings.length === 0);
@@ -1220,6 +1356,8 @@ export class ReviewFindingsComponent {
 
   protected readonly noCommit = 'The review names no commit to pin the verdict to.';
   protected readonly checkMark = checkMark;
+  protected readonly shield = SHIELD;
+  protected readonly alert = ALERT;
 
   protected runTone(tests: ReviewTests): 'passed' | 'failed' | 'notrun' {
     if (!tests.ran) return 'notrun';
@@ -1295,6 +1433,28 @@ export class ReviewFindingsComponent {
     if (verdict === 'approve' && this.review().selfAuthored === true) return;
     const request = verdictRequest(this.review(), this.selected(), verdict);
     if (request !== null) void this.store.giveVerdict(request);
+  }
+
+  /**
+   * Asks main to give this approval, pinned to the reviewed commit with the chosen findings as its comments, once
+   * every check passed; this click is the owner's approval of that one request. A refusal shows as the card's error.
+   */
+  async approveWhenGreen(): Promise<void> {
+    if (this.closed() || this.verdictLocked() || this.approveOffer() !== 'wait') return;
+    const request = verdictRequest(this.review(), this.selected(), 'approve');
+    if (request === null) return;
+    this.error.set(null);
+    const refusal = await this.store.approveWhenChecksPass(request);
+    if (refusal !== null) this.error.set(refusal);
+  }
+
+  /** Stops waiting for the checks; nothing is given and the card offers the approval again. */
+  async cancelWaiting(): Promise<void> {
+    const { repository, number, commit } = this.review();
+    if (number === undefined || !commit) return;
+    this.error.set(null);
+    const refusal = await this.store.cancelWaiting({ repository, number, commit });
+    if (refusal !== null) this.error.set(refusal);
   }
 
   private bodyOf(finding: ReviewFinding): string {
