@@ -1,3 +1,5 @@
+## [2026-11-15] docs | The templates on the prototype, in a friendlier style
+The GitHub notes artboard draws its 15 templates with an emoji shortcode on each section heading, checklists and the kind of change as boxes to tick, hints as comments, and a summary line on the bot's notes. Design for the owner's approval; nothing is built.
 ## [2026-11-15] fix | A release made from a tag with a suffix is a prerelease
 The release workflow marked a beta rebuilt from its tag as a full release, Latest; it now marks prerelease any tag whose version has a suffix, on the tag path as on the path from main. The runbook says how to rebuild after a failed publish.
 ## [2026-11-15] docs | Merge after approving, on the prototype
