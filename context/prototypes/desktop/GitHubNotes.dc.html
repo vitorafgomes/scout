@@ -55,7 +55,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #7a
 <div style="display: flex; flex-direction: column; gap: 4px">
 <h2 style="margin: 0; font-size: 16px; font-weight: 600">{{label}}</h2>
 <span style="font-size: 13px; color: {{t.fg2}}">{{where}}</span>
-<span style="font-size: 13px; color: {{t.muted}}">{{posted}} Values are sample data. In the source, a name in braces is a value Scout measures or reads; after "model:" it is text the AI source writes; after "author:" it is text the author writes.</span>
+<span style="font-size: 13px; color: {{t.muted}}">{{posted}} Values are sample data. In the source, a name in braces is a value Scout measures or reads; after "model:" it is text the AI source writes; after "author:" it is text the author writes. A name that ends in "_icon" is the shortcode of the word beside it.</span>
 </div>
 </div>
 
@@ -430,7 +430,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #7a
 <div style="min-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; color: {{sn.fg}}">{{sn.text}}</div>
 </sc-for>
 </div>
-<p style="margin: 8px 0 0; font-size: 12px; color: {{t.muted}}">A line in <span style="color: {{t.accent}}">this colour</span> is written once for each item of a list. A line in <span style="color: {{t.warn}}">this colour</span> is a field of the post, not part of its body.</p>
+<p style="margin: 8px 0 0; font-size: 12px; color: {{t.muted}}">A line in <span style="color: {{t.accent}}">this colour</span> is written once for each item of a list. A line in <span style="color: {{t.warn}}">this colour</span> is a field of the post, not part of its body. A word between colons is a GitHub emoji shortcode, drawn as its emoji on the page.<sc-if value="{{src.hasHints}}" hint-placeholder-val="{{false}}"><span> A line in <span style="color: {{t.muted}}">this colour</span> is a comment: a hint to the author, which GitHub does not show. This is the empty template a repository adopts: the boxes are ticked by the author.</span></sc-if></p>
 </details>
 </sc-for>
 
@@ -506,23 +506,75 @@ class Component extends DCLogic {
     const shop = 'https://github.com/acme/shop';
     const at = (path, line) => api + '/blob/4f2a9c1/' + path + '#L' + line;
     const each = (list, ...lines) => ({ each: list, lines });
-    const section = (title, ...lines) => ['#### ' + title, '', ...lines, ''];
-    const h3 = (line) => (typeof line === 'string' && line.startsWith('#### ') ? line.slice(1) : line);
+    const code = Object.fromEntries(Object.entries({
+      clipboard: ['Checklist'],
+      gear: ['What kind of change is this?', 'What kind of problem is this?'],
+      dart: ['What was asked', 'What is asked', 'What was asked and what was done'],
+      hammer_and_wrench: ['What was done'],
+      construction: ['Not done, and why'],
+      heavy_plus_sign: ['Done beyond what was asked, and why'],
+      test_tube: ['Tests implemented', 'Tests expected', 'Tests in this pull request', 'Tests to add'],
+      arrow_forward: ['Tests Scout ran'],
+      raised_hand: ['Tests to run by hand', 'Tests for a person to run before merging', 'How to verify the fix by hand'],
+      books: ['Documentation', 'Documentation expected', 'Related documents and decision records'],
+      rocket: ['How to run it', 'Release notes'],
+      warning: ['Risk and impact', 'Impact and risk', 'Constraints and risk', 'Impact and who is affected'],
+      eyes: ['For the reviewer'],
+      thumbsup: ['Reviewers'],
+      sparkles: ['What is needed, and who needs it'],
+      question: ['Why'],
+      white_check_mark: ['Acceptance criteria'],
+      no_entry_sign: ['Out of scope'],
+      round_pushpin: ['Where', 'Where it probably lives'],
+      link: ['References', 'Related issues and pull requests'],
+      bug: ['What happens, and what should happen', 'Expected and actual'],
+      footprints: ['Steps to reproduce'],
+      page_facing_up: ['Evidence'],
+      bar_chart: ['How often, who is affected, and severity'],
+      calendar: ['Since when'],
+      repeat: ['What was already tried'],
+      balance_scale: ['Reasons for the verdict'],
+      memo: ['Summary', 'Summary of the change'],
+      mag: ['What changed, by area', 'What Scout reads'],
+      vertical_traffic_light: ['Checks on the commit', 'Checks still running'],
+      triangular_flag_on_post: ['Findings'],
+      bulb: ['Suggested practices for this repository', 'Suggested fix'],
+      microscope: ['How this review was made', 'How Scout found it'],
+      arrow_right: ['What happens next', 'What happens on each outcome', 'Two ways forward'],
+      x: ['The failing checks', 'The step that failed'],
+      twisted_rightwards_arrows: ['Files in conflict'],
+      scroll: ['Commits on the base branch that touch them'],
+      keyboard: ['Commands to rebase', 'The test command'],
+      hourglass_flowing_sand: ['What Scout does now'],
+      inbox_tray: ['What the description gives'],
+      see_no_evil: ['What Scout leaves out', 'What was not checked as a result'],
+      arrows_counterclockwise: ['Cancel or run again'],
+      stop_sign: ['Cancel'],
+      speech_balloon: ['The error, in plain words'],
+      ballot_box_with_check: ['What was completed before'],
+      rotating_light: ['Severity and why'],
+      label: ['Labels suggested'],
+    }).flatMap(([shortcode, titles]) => titles.map((title) => [title, shortcode])));
+    const section = (title, ...lines) => ['#### :' + code[title] + ': ' + title, '', ...lines, ''];
+    const h2 = (line) => (typeof line === 'string' && line.startsWith('#### ') ? line.slice(2) : line);
     const details = (summary, ...lines) => ['<details><summary>' + summary + '</summary>', '', ...lines, '', '</details>'];
-    const header = (verdict) => [
-      '### Scout review: ' + verdict,
+    const bar = '> {verdict_icon} **{verdict}** · {requests_total} requests, {requests_not_done} not done · tests: {tests_passed} passed, {tests_failed} failed · checks: {checks_passed} of {checks_total} passed · findings: {findings_blocking} blocking, {findings_fix} to fix, {findings_optional} optional';
+    const header = (verdict, top) => [
+      '### :robot: Scout review: ' + verdict,
+      '',
+      top,
       '',
       'Commit `{commit}` · {reviewed_at} UTC · reviewed with {ai_source}, model `{ai_model}`',
       '',
     ];
     const sections = {
-      reasons: section('Verdict and reasons', '**Verdict: {verdict}.**', '', each('reasons', '1. {model:reason}')),
+      reasons: section('Reasons for the verdict', each('reasons', '1. {model:reason}')),
       asked: section('What was asked and what was done',
         '{requests_total} requests: {requests_covered} done and covered by tests, {requests_untested} done without a test, {requests_not_done} not done. Requests taken from {requests_source}.',
         '',
         '| Asked | What was done | Tests that cover it | Tests to run by hand to prove it | Author\'s claim checked |',
         '|---|---|---|---|---|',
-        each('requests', '| **{id}** {model:asked} ([{where}]({where_url})) | {model:done} [`{path}:{line}`]({url}) | {covering_tests} | {manual_case} | {claim} |'),
+        each('requests', '| **{id}** {model:asked} ([{where}]({where_url})) | {model:done} [`{path}:{line}`]({url}) | {covering_tests} | {manual_case} | {claim_icon} {claim} |'),
         '',
         '**Asked and not done:**',
         '',
@@ -580,7 +632,7 @@ class Component extends DCLogic {
         ...details('The {pr_tests_count} tests',
           '| Test | File | What it proves | State |',
           '|---|---|---|---|',
-          each('pr_tests', '| `{name}` | `{file}` | {model:proves} | {state} |')),
+          each('pr_tests', '| `{name}` | `{file}` | {model:proves} | {state_icon} {state} |')),
         '',
         '**Changed code no test reaches:**',
         '',
@@ -590,9 +642,9 @@ class Component extends DCLogic {
         '|---|---|',
         '| Command | `{test_command}` |',
         '| Where | Isolated container, no network, image `{test_image}` |',
-        '| Result | {test_result} |',
+        '| Result | {test_result_icon} {test_result} |',
         '| Duration | {test_seconds} s |',
-        '| Counts | {tests_passed} passed, {tests_failed} failed, {tests_skipped} skipped |',
+        '| Counts | :white_check_mark: {tests_passed} passed, :x: {tests_failed} failed, :fast_forward: {tests_skipped} skipped |',
         '',
         ...details('Counts per project and the slowest tests',
           '| Project | Passed | Failed | Skipped | Duration |',
@@ -615,11 +667,12 @@ class Component extends DCLogic {
         '',
         each('regressions', '- [ ] {model:what} Look at `{where}`.')),
       checks: section('Checks on the commit',
-        '{checks_passed} passed, {checks_failed} failed, {checks_skipped} skipped, of {checks_total} on `{commit}`.',
+        ':white_check_mark: {checks_passed} passed, :x: {checks_failed} failed, :fast_forward: {checks_skipped} skipped, of {checks_total} on `{commit}`.',
         '',
-        '| Check | Result | Duration | Link |',
-        '|---|---|---|---|',
-        each('checks', '| {name} | {result} | {took} | [job]({url}) |'),
+        ...details('The {checks_total} checks',
+          '| Check | Result | Duration | Link |',
+          '|---|---|---|---|',
+          each('checks', '| {name} | {result_icon} {result} | {took} | [job]({url}) |')),
         '',
         '**Not covered by any check:**',
         '',
@@ -662,7 +715,7 @@ class Component extends DCLogic {
         '',
         '| Severity | Where | What is wrong | Rule it breaks |',
         '|---|---|---|---|',
-        each('findings', '| {severity} | [`{path}:{line}`]({url}) | {model:what} | {rule} |')),
+        each('findings', '| {severity_icon} {severity} | [`{path}:{line}`]({url}) | {model:what} | {rule} |')),
       practices: section('Suggested practices for this repository',
         'Suggested once: Scout remembers them and does not repeat them in the next review.',
         '',
@@ -678,16 +731,16 @@ class Component extends DCLogic {
         '| Convention pages read | {convention_pages} |',
         '| Unchanged files read for context | {context_files} |',
         '',
-        'Scout cannot see how the application behaves when it runs, the secrets of the repository or a private dependency it could not restore.',
-        '',
-        'Counts, paths, lines, durations, commands and check results are measured by code. The summaries, the requests and what was done for each, the reasons, the findings and the manual cases are written by the AI source from what it read.'),
+        '- **Scout cannot see:** how the application behaves when it runs, the secrets of the repository, a private dependency it could not restore.',
+        '- **Measured by code:** counts, paths, lines, durations, commands and check results.',
+        '- **Written by the AI source from what it read:** the summaries, the requests and what was done for each, the reasons, the findings and the manual cases.'),
       next: section('What happens next', 'Push a fix and mention @{bot} again. Scout reviews the new commit from the start.'),
     };
     const order = ['reasons', 'asked', 'summary', 'changed', 'docs', 'prTests', 'ran', 'manual', 'checks', 'impact', 'release', 'findings', 'practices', 'how', 'next'];
-    const review = (verdict, over = {}) => [...header(verdict), ...order.flatMap((key) => over[key] || sections[key]), '---', '', "Posted after the owner's approval in Scout Desktop · signed as @{bot}"];
+    const review = (verdict, over = {}) => [...header(verdict, over.bar || bar), ...order.flatMap((key) => over[key] || sections[key]), '---', '', "Posted after the owner's approval in Scout Desktop · signed as @{bot}"];
     const none = (title, sentence) => section(title, sentence);
     const inline = [
-      '**{severity}** · {model:finding_title}',
+      '{severity_icon} **{severity}** · {model:finding_title}',
       '',
       '**What is wrong:** {model:what_is_wrong}',
       '',
@@ -710,13 +763,15 @@ class Component extends DCLogic {
       each('related', '- [`{path}:{line}`]({url}): {model:why}'),
     ];
     const issue = (found) => [
+      '> {severity_icon} **{severity}** · area: {area} · places in the code: {places_count} · acceptance criteria: {criteria_count} · tests to add: {tests_count}',
+      '',
       ...section('Summary', '{model:summary}'),
       ...section('Where', each('places', '- [`{path}:{line}`]({url})'), '', 'At commit `{commit}`.'),
       ...section('Evidence', '```text', '{evidence}', '```'),
       ...section('Steps to reproduce', each('steps', '1. {model:step}')),
       ...section('Expected and actual', '- Expected: {model:expected}', '- Actual: {model:actual}'),
       ...section('Impact and who is affected', '{model:impact}'),
-      ...section('Severity and why', '**{severity}.** {model:severity_why}'),
+      ...section('Severity and why', '{severity_icon} **{severity}.** {model:severity_why}'),
       ...section('Suggested fix', '{model:fix_summary}'),
       ...section('Acceptance criteria', each('criteria', '- [ ] {model:criterion}')),
       ...section('Tests to add', each('tests_to_add', '- `{name}`: {model:asserts}')),
@@ -963,70 +1018,79 @@ class Component extends DCLogic {
       {
         id: 'prDescription', label: 'Pull request description: what the author writes', where: pull,
         posted: "Written by the author from the repository's template; Scout reads it and checks each claim against the code.",
-        notes: ['The repository adopts it as `.github/pull_request_template.md`. The author is a person or a coding agent.', 'Each request cites the issue and the number it has there, so the review can follow it from the issue to the code.', 'A section the author leaves empty is said in the review, and Scout infers what it lacks: the requests from the title, the linked issue and the diff, the manual cases from what the tests do not cover.', 'The last line is the mention that starts the review.'],
+        notes: ['The repository adopts it as `.github/pull_request_template.md`. The author is a person or a coding agent.', 'Each request cites the issue and the number it has there, so the review can follow it from the issue to the code.', 'A section the author leaves empty is said in the review, and Scout infers what it lacks: the requests from the title, the linked issue and the diff, the manual cases from what the tests do not cover.', 'The last line is the mention that starts the review.', 'The page shows the template filled by the author. The Markdown source shows the file the repository adopts: every box empty, and a hint to the author in a comment under each heading.'],
         items: [{
           who: 'dev-one', isBot: false, action: 'commented', when: 'yesterday', name: 'pull request description',
           tpl: [
-            '### What was asked',
-            '',
-            each('asked', '- **{id}** {author:request} ([{where}]({where_url}))'),
-            '',
-            '### What was done',
-            '',
-            each('done', '- **{id}** {author:change} Main files: {files}.'),
-            '',
-            '### Not done, and why',
-            '',
-            each('not_done', '- {author:what}'),
-            '',
-            '### Done beyond what was asked, and why',
-            '',
-            each('beyond', '- {author:what}'),
-            '',
-            '### Tests implemented',
-            '',
-            '| Request | Test | File | What it proves | Seen failing before the change |',
-            '|---|---|---|---|---|',
-            each('tests', '| {id} | `{name}` | `{file}` | {author:proves} | {author:seen_failing} |'),
-            '',
-            '### Tests to run by hand to prove it',
-            '',
-            each('manual', '- [ ] **{number}. {author:title}** (proves {id})', '  - Set up: {author:setup}', '  - Steps: {author:steps}', '  - Expected: {author:expected}'),
-            '',
-            '### Documentation',
-            '',
-            '- Updated: {author:docs_updated}',
-            '- Decision record followed: {author:decision}',
-            '- Deliberately not documented: {author:not_documented}',
-            '',
-            '### How to run it',
-            '',
-            '```text',
-            '{author:commands}',
-            '```',
-            '',
-            '### Risk and impact',
-            '',
-            '| Item | Answer |',
-            '|---|---|',
-            '| Public contract | {author:risk_contract} |',
-            '| Data | {author:risk_data} |',
-            '| Settings | {author:risk_settings} |',
-            '| Dependencies | {author:risk_dependencies} |',
-            '| Security | {author:risk_security} |',
-            '| How to roll back | {author:risk_rollback} |',
-            '',
-            '### For the reviewer',
-            '',
-            '- Start reading at: {author:start_at}',
-            '- Look hardest at: {author:look_hardest}',
-            '- Out of scope: {author:out_of_scope}',
-            '- Known weak points: {author:weak_points}',
-            '',
-            '@{bot} please review this pull request.',
-          ],
+            ...section('Checklist',
+              '<!-- Tick what is true. A box left empty is explained under "Not done, and why". -->',
+              "- [ ] My commits follow the project's guidelines",
+              '- [ ] Tests for the change were added',
+              '- [ ] Documentation was updated, or none is needed',
+              '- [ ] This description names every request'),
+            ...section('What kind of change is this?',
+              '<!-- Tick the main kind. -->',
+              '- [ ] Bugfix',
+              '- [ ] Feature',
+              '- [ ] Code style',
+              '- [ ] Refactoring, no functional change',
+              '- [ ] Build',
+              '- [ ] Documentation',
+              '- [ ] Tests',
+              '- [ ] Other (describe)'),
+            ...section('What was asked',
+              '<!-- One line per request: its number, what was asked, the issue it comes from. -->',
+              each('asked', '- **{id}** {author:request} ([{where}]({where_url}))')),
+            ...section('What was done',
+              '<!-- One line per request, then its main files. -->',
+              each('done', '- **{id}** {author:change}', '  - Main files: {files}')),
+            ...section('Not done, and why',
+              '<!-- A request left out and the reason, or "Nothing". -->',
+              each('not_done', '- {author:what}')),
+            ...section('Done beyond what was asked, and why',
+              '<!-- Anything in the diff that no request asked for. -->',
+              each('beyond', '- {author:what}')),
+            ...section('Tests implemented',
+              '<!-- One row per test. Say whether it was seen failing before the change. -->',
+              '| Request | Test | File | What it proves | Seen failing before the change |',
+              '|---|---|---|---|---|',
+              each('tests', '| {id} | `{name}` | `{file}` | {author:proves} | {author:seen_failing} |')),
+            ...section('Tests to run by hand',
+              '<!-- What the tests do not cover, as steps a person can follow. The reviewer ticks them. -->',
+              each('manual', '- [ ] **{number}. {author:title}** (proves {id})', '  - Set up: {author:setup}', '  - Steps: {author:steps}', '  - Expected: {author:expected}')),
+            ...section('Documentation',
+              '<!-- "None" is an answer. -->',
+              '- Updated: {author:docs_updated}',
+              '- Decision record followed: {author:decision}',
+              '- Deliberately not documented: {author:not_documented}'),
+            ...section('How to run it',
+              '<!-- The commands, one per line. -->',
+              '```text',
+              '{author:commands}',
+              '```'),
+            ...section('Risk and impact',
+              '<!-- "Not touched" and "None" are answers. -->',
+              '| Item | Answer |',
+              '|---|---|',
+              '| Public contract | {author:risk_contract} |',
+              '| Data | {author:risk_data} |',
+              '| Settings | {author:risk_settings} |',
+              '| Dependencies | {author:risk_dependencies} |',
+              '| Security | {author:risk_security} |',
+              '| How to roll back | {author:risk_rollback} |'),
+            ...section('For the reviewer',
+              '<!-- Where to start and where to look hardest. -->',
+              '- Start reading at: {author:start_at}',
+              '- Look hardest at: {author:look_hardest}',
+              '- Out of scope: {author:out_of_scope}',
+              '- Known weak points: {author:weak_points}'),
+            ...section('Reviewers',
+              '<!-- The mention below starts the Scout review. -->',
+              '@{bot} please review this pull request.'),
+          ].map(h2),
           vals: {
             bot: 'scout-acme', files_changed: '21', checks_total: '6',
+            ticked: ["My commits follow the project's guidelines", 'Tests for the change were added', 'Documentation was updated, or none is needed', 'This description names every request', 'Bugfix'],
             asked: [
               { id: 'R1', request: 'The sync stops retrying an order after five attempts.', where: 'acme/api#198, R1', where_url: api + '/issues/198' },
               { id: 'R2', request: 'An order that reached the limit is kept for a person to look at, not dropped.', where: 'acme/api#198, R2', where_url: api + '/issues/198' },
@@ -1065,31 +1129,45 @@ class Component extends DCLogic {
       {
         id: 'issueRequest', label: 'Issue: a request for a change, what the author writes', where: 'acme/api, issue #201',
         posted: "Written by the author from the repository's issue template; Scout reads it when a pull request links the issue.",
-        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'Each request is one behaviour that can be checked; its number is the one the pull request description and the review cite.', 'In Scout, a criterion is met, not met or not checked, each with the reason.'],
+        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'Each request is one behaviour that can be checked; its number is the one the pull request description and the review cite.', 'In Scout, a criterion is met, not met or not checked, each with the reason.', 'The page shows the template filled by the author. The Markdown source shows the file the repository adopts: every box empty, and a hint to the author in a comment under each heading.'],
         items: [{
           who: 'dev-two', isBot: false, action: 'commented', when: '3 days ago', name: 'issue', number: '#201',
           titleTpl: '{author:title}',
           tpl: [
-            ...section('What is needed, and who needs it', '{author:need}').map(h3),
-            ...section('Why', '{author:problem}', '', '**Evidence:**', '', each('evidence', '- {author:what}')).map(h3),
-            ...section('What is asked', each('asked', '- **{id}** {author:request}')).map(h3),
-            ...section('Acceptance criteria', each('criteria', '- [ ] {id}: {author:criterion}')).map(h3),
-            ...section('Out of scope', each('out_of_scope', '- {author:what}')).map(h3),
-            ...section('Where it probably lives', '- Files: {author:where_files}', '- Module: {author:where_module}', '- Documentation that describes it today: {author:where_docs}').map(h3),
-            ...section('Tests expected', '**Automated:**', '', each('tests_expected', '- {author:what}'), '', '**By hand:**', '', each('manual_expected', '- {author:what}')).map(h3),
-            ...section('Documentation expected', '- Pages to change: {author:docs_pages}', '- Decision record: {author:docs_decision}').map(h3),
+            ...section('Checklist',
+              '<!-- Tick what is true before opening the issue. -->',
+              '- [ ] I searched the open issues and found no duplicate',
+              '- [ ] Each request is one behaviour that can be checked',
+              '- [ ] Each acceptance criterion names its request'),
+            ...section('What kind of change is this?',
+              '<!-- Tick the main kind. -->',
+              '- [ ] Feature',
+              '- [ ] Improvement of something that exists',
+              '- [ ] Documentation',
+              '- [ ] Build or tooling',
+              '- [ ] Other (describe)'),
+            ...section('What is needed, and who needs it', '<!-- One or two sentences. -->', '{author:need}'),
+            ...section('Why', '<!-- The problem today, then one fact per line. -->', '{author:problem}', '', '**Evidence:**', '', each('evidence', '- {author:what}')),
+            ...section('What is asked', '<!-- One behaviour per line, numbered R1, R2 and so on. The pull request and the review cite these numbers. -->', each('asked', '- **{id}** {author:request}')),
+            ...section('Acceptance criteria', '<!-- How anyone can check each request. -->', each('criteria', '- [ ] {id}: {author:criterion}')),
+            ...section('Out of scope', '<!-- What this issue does not ask for. -->', each('out_of_scope', '- {author:what}')),
+            ...section('Where it probably lives', '<!-- A guess is welcome. -->', '- Files: {author:where_files}', '- Module: {author:where_module}', '- Documentation that describes it today: {author:where_docs}'),
+            ...section('Tests expected', '<!-- What a test must prove, and what a person checks by hand. -->', '**Automated:**', '', each('tests_expected', '- {author:what}'), '', '**By hand:**', '', each('manual_expected', '- {author:what}')),
+            ...section('Documentation expected', '<!-- "None" is an answer. -->', '- Pages to change: {author:docs_pages}', '- Decision record: {author:docs_decision}'),
             ...section('Constraints and risk',
+              '<!-- "Not touched" and "None" are answers. -->',
               '| Item | Answer |',
               '|---|---|',
               '| Public contract | {author:risk_contract} |',
               '| Data | {author:risk_data} |',
               '| Settings | {author:risk_settings} |',
               '| Security | {author:risk_security} |',
-              '| Deadline | {author:deadline} |').map(h3),
-            ...section('References', each('refs', '- [{ref}]({url}): {author:why}')).map(h3),
-          ],
+              '| Deadline | {author:deadline} |'),
+            ...section('References', '<!-- Issues, pull requests and pages, each with why it matters. -->', each('refs', '- [{ref}]({url}): {author:why}')),
+          ].map(h2),
           vals: {
             repo: 'acme/api', labels: '`enhancement`, `sync`', development: 'Fixed by acme/api#214',
+            ticked: ['I searched the open issues and found no duplicate', 'Each request is one behaviour that can be checked', 'Each acceptance criterion names its request', 'Improvement of something that exists'],
             title: 'Make the retry limit of the order sync a setting and count parked orders',
             need: 'The operations team needs to change how many times the order sync retries without a release, and to see how many orders were parked.',
             problem: 'The limit asked for in acme/api#198 would be a constant in the code. The warehouse of the north region answers slowly and needs more attempts than the others.',
@@ -1125,14 +1203,28 @@ class Component extends DCLogic {
       {
         id: 'issueBug', label: 'Issue: a bug report, what the author writes', where: 'acme/api, issue #198',
         posted: "Written by the author from the repository's issue template; Scout reads it when a pull request links the issue.",
-        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'The acceptance criteria include the test that must fail before the fix. Scout does not run the tests on the base branch, so it marks that criterion not checked.', 'A section left empty is said in the Scout card; Scout does not fill it.'],
+        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'The acceptance criteria include the test that must fail before the fix. Scout does not run the tests on the base branch, so it marks that criterion not checked.', 'A section left empty is said in the Scout card; Scout does not fill it.', 'The page shows the template filled by the author. The Markdown source shows the file the repository adopts: every box empty, and a hint to the author in a comment under each heading.'],
         items: [{
           who: 'dev-one', isBot: false, action: 'commented', when: '6 days ago', name: 'issue', number: '#198',
           titleTpl: '{author:title}',
           tpl: [
-            ...section('What happens, and what should happen', '- What happens: {author:actual}', '- What should happen: {author:expected}').map(h3),
-            ...section('Steps to reproduce', each('steps', '1. {author:step}')).map(h3),
+            ...section('Checklist',
+              '<!-- Tick what is true before opening the issue. -->',
+              '- [ ] I searched the open issues and found no duplicate',
+              '- [ ] The steps reproduce the problem on the version named under Evidence',
+              '- [ ] Each acceptance criterion names its request'),
+            ...section('What kind of problem is this?',
+              '<!-- Tick the main kind. -->',
+              '- [ ] Wrong result',
+              '- [ ] Error or crash',
+              '- [ ] Stops or never ends',
+              '- [ ] Slow',
+              '- [ ] Security',
+              '- [ ] Other (describe)'),
+            ...section('What happens, and what should happen', '<!-- One sentence each. -->', '- What happens: {author:actual}', '- What should happen: {author:expected}'),
+            ...section('Steps to reproduce', '<!-- The shortest steps that show the problem. -->', each('steps', '1. {author:step}')),
             ...section('Evidence',
+              '<!-- A log, an error or a screenshot, then where it was seen. -->',
               '```text',
               '{author:log}',
               '```',
@@ -1140,17 +1232,18 @@ class Component extends DCLogic {
               '| Item | Value |',
               '|---|---|',
               '| Version or commit | {author:version} |',
-              '| Environment | {author:environment} |').map(h3),
-            ...section('How often, who is affected, and severity', '- How often: {author:how_often}', '- Who is affected: {author:affected}', '- Severity: {author:severity}, because {author:severity_why}').map(h3),
-            ...section('Since when', '{author:since}').map(h3),
-            ...section('What was already tried', each('tried', '- {author:what}')).map(h3),
-            ...section('What is asked', each('asked', '- **{id}** {author:request}')).map(h3),
-            ...section('Acceptance criteria', each('criteria', '- [ ] {id}: {author:criterion}')).map(h3),
-            ...section('Where it probably lives', '- Code: {author:where_code}', '- Documentation that describes the behaviour: {author:where_docs}').map(h3),
-            ...section('References', each('refs', '- [{ref}]({url}): {author:why}')).map(h3),
-          ],
+              '| Environment | {author:environment} |'),
+            ...section('How often, who is affected, and severity', '<!-- Numbers where there are any. -->', '- How often: {author:how_often}', '- Who is affected: {author:affected}', '- Severity: {author:severity}, because {author:severity_why}'),
+            ...section('Since when', '<!-- A version, a date, or "Not known". -->', '{author:since}'),
+            ...section('What was already tried', '<!-- Each attempt and what it did. -->', each('tried', '- {author:what}')),
+            ...section('What is asked', '<!-- One behaviour per line, numbered R1, R2 and so on. The pull request and the review cite these numbers. -->', each('asked', '- **{id}** {author:request}')),
+            ...section('Acceptance criteria', '<!-- How anyone can check each request, with the test that fails before the fix. -->', each('criteria', '- [ ] {id}: {author:criterion}')),
+            ...section('Where it probably lives', '<!-- A guess is welcome. -->', '- Code: {author:where_code}', '- Documentation that describes the behaviour: {author:where_docs}'),
+            ...section('References', '<!-- Issues, pull requests and pages, each with why it matters. -->', each('refs', '- [{ref}]({url}): {author:why}')),
+          ].map(h2),
           vals: {
             repo: 'acme/api', labels: '`bug`, `sync`', development: 'Fixed by acme/api#214',
+            ticked: ['I searched the open issues and found no duplicate', 'The steps reproduce the problem on the version named under Evidence', 'Each acceptance criterion names its request', 'Stops or never ends'],
             title: 'Order sync retries a refused order forever',
             actual: 'When the warehouse refuses an order with a 503 answer, the sync sends it again every 10 seconds without end, and no order queued behind it is sent.',
             expected: 'The sync gives up on that order after a few attempts and goes on with the next one.',
@@ -1191,11 +1284,13 @@ class Component extends DCLogic {
       {
         id: 'started', label: 'Pull request opened: review started', where: pull,
         posted: "Posted as a comment on the pull request's conversation.",
-        notes: ['Only a mention by the owner or by a login on the allowed users starts a review; the line names that login.', 'The row of the checks is left out when the commit has no check, the row of the tests when the owner did not grant the local container.', 'A description without the sections reads "The description has no sections: Scout infers the requests from the title, the linked issue and the diff."', 'Cancelling by a comment is new: today a review is stopped in Scout Desktop only.'],
+        notes: ['Only a mention by the owner or by a login on the allowed users starts a review; the line names that login.', 'The row of the checks is left out when the commit has no check, the row of the tests when the owner did not grant the local container.', 'A section the author left empty reads ":x: Empty" in the table.', 'A description without the sections reads "The description has no sections: Scout infers the requests from the title, the linked issue and the diff."', 'Cancelling by a comment is new: today a review is stopped in Scout Desktop only.'],
         items: [{
           ...scout('commented'), name: 'comment',
           tpl: [
-            '### Scout review: started',
+            '### :robot: Scout review: started',
+            '',
+            '> :hourglass_flowing_sand: **Started** · {files_changed} files to read · {checks_total} checks to read · description: {sections_filled} of {sections_total} sections filled · expected at about {expected_at} UTC',
             '',
             'Commit `{commit}` · {started_at} UTC · asked by @{requester}, who mentioned @{bot} on this pull request',
             '',
@@ -1205,15 +1300,14 @@ class Component extends DCLogic {
               '| 1 | Reads the description, the {files_changed} changed files, +{lines_added} -{lines_removed} lines, and the files they refer to | {estimate_read} |',
               '| 2 | Runs the tests in an isolated container without network | {estimate_tests} |',
               '| 3 | Reads the {checks_total} checks on `{commit}` | {estimate_checks} |',
-              '| 4 | Writes the review and waits for the owner in Scout Desktop | {estimate_write} |',
-              '',
-              'The review is expected at about {expected_at} UTC.'),
+              '| 4 | Writes the review and waits for the owner in Scout Desktop | {estimate_write} |'),
             ...section('What the description gives',
               '{sections_filled} of {sections_total} sections of the description are filled.',
               '',
-              '| Section | Found |',
-              '|---|---|',
-              each('description_sections', '| {section} | {found} |')),
+              ...details('The {sections_total} sections',
+                '| Section | Found |',
+                '|---|---|',
+                each('description_sections', '| {section} | {found_icon} {found} |'))),
             ...section('What Scout reads', 'Rule files and convention pages found in the repository:', '', each('rule_files_found', '- `{path}`: {what}')),
             ...section('The test command', '`{test_command}`, chosen because {test_command_why}'),
             ...section('What Scout leaves out', each('will_skip', '- {what}: {why}')),
@@ -1226,8 +1320,10 @@ class Component extends DCLogic {
             ...common, started_at: '2026-11-15 14:21', requester: 'dev-one',
             estimate_read: 'About 3 min', estimate_tests: 'About 7 min, from the last run of this command', estimate_checks: 'Under 1 min', estimate_write: 'About 1 min',
             expected_at: '2026-11-15 14:33',
-            sections_filled: '9', sections_total: '9',
+            sections_filled: '11', sections_total: '11',
             description_sections: [
+              { section: 'Checklist', found: 'Filled: 4 of 4 boxes ticked' },
+              { section: 'What kind of change is this?', found: 'Filled: Bugfix' },
               { section: 'What was asked', found: 'Filled: 4 requests, R1 to R4' },
               { section: 'What was done', found: 'Filled: one line for each request' },
               { section: 'Not done, and done beyond what was asked', found: 'Filled: 1 change beyond what was asked' },
@@ -1256,7 +1352,7 @@ class Component extends DCLogic {
       {
         id: 'approved', label: 'Pull request approved', where: pull,
         posted: 'Posted as a review that approves.',
-        notes: ['Every section is always present. An empty one says so in words, as Findings does here.', 'A description without the section "What was asked" changes one sentence: "The description does not list what was asked. The requests below were inferred from the title, the linked issue and the diff.", and the last column reads "No claim to check".', 'When the owner did not grant the local container, Tests Scout ran holds one line: "Not run: the local container is not granted."', 'A commit with no check reads "No checks on this commit."', 'The practices are suggested once, at most three; the third is written only for a repository without the templates.'],
+        notes: ['The line under the title is the summary: the verdict, then the counts of requests, tests, checks and findings.', 'A result is written as its shortcode and its word, the shortcode never alone: passed, failed, skipped, confirmed, not confirmed.', 'Every section is always present. An empty one says so in words, as Findings does here.', 'A description without the section "What was asked" changes one sentence: "The description does not list what was asked. The requests below were inferred from the title, the linked issue and the diff.", and the last column reads "No claim to check".', 'When the owner did not grant the local container, Tests Scout ran holds one line: "Not run: the local container is not granted."', 'A commit with no check reads "No checks on this commit."', 'The practices are suggested once, at most three; the third is written only for a repository without the templates.'],
         items: [{
           ...scout('approved these changes', 'approved'), name: 'review body',
           tpl: review('approved', {
@@ -1350,6 +1446,7 @@ class Component extends DCLogic {
         items: [{
           ...scout('requested changes', 'changes'), name: 'review body',
           tpl: review('changes requested', {
+            bar: '> {verdict_icon} **{verdict}** · {conflict_count} files in conflict with `{base_branch}` · nothing was reviewed · tests not run · checks: {checks_passed} of {checks_total} passed',
             reasons: [
               ...sections.reasons,
               ...section('Files in conflict', each('conflicts', '- `{path}`: changed on `{base_branch}` by `{sha}`')),
@@ -1424,7 +1521,7 @@ class Component extends DCLogic {
       {
         id: 'inline', label: 'Inline comment on a line', where: pull,
         posted: 'Posted as a review comment on a line of the diff.',
-        notes: ['Severity is Blocking, Fix or Suggestion, written in bold: GitHub Markdown has no coloured chip.', 'The line "Rule or document" is left out when the finding rests on no written rule, and "Related lines" when there is none.'],
+        notes: ['Severity is Blocking, Fix or Suggestion, written in bold beside its shortcode: GitHub Markdown has no coloured chip.', 'The line "Rule or document" is left out when the finding rests on no written rule, and "Related lines" when there is none.'],
         items: [{ ...scout('commented on line 34'), name: 'comment on src/orders/OrderLog.cs:34', diff: logDiff, tpl: inline, vals: logVals }],
       },
       {
@@ -1434,7 +1531,9 @@ class Component extends DCLogic {
         items: [{
           ...scout('commented'), name: 'comment',
           tpl: [
-            '### Scout review: approval waiting for the checks',
+            '### :robot: Scout review: approval waiting for the checks',
+            '',
+            '> :hourglass_flowing_sand: **Approval waiting** · checks: {checks_done} of {checks_total} passed, {checks_running} still running · gives up at {deadline} UTC',
             '',
             'Commit `{commit}` · {approved_at} UTC · approved by the owner in Scout Desktop',
             '',
@@ -1443,7 +1542,7 @@ class Component extends DCLogic {
               '',
               '| Check | State | Elapsed | Link |',
               '|---|---|---|---|',
-              each('running', '| {name} | {state} | {elapsed} | [job]({url}) |')),
+              each('running', '| {name} | {state_icon} {state} | {elapsed} | [job]({url}) |')),
             ...section('What happens on each outcome',
               '| Outcome | What Scout does |',
               '|---|---|',
@@ -1506,7 +1605,7 @@ class Component extends DCLogic {
               { path: 'docs/decisions/0007-payment-provider.md', why: 'records that only the signed event is trusted.' },
             ],
             related_items: [{ ref: 'acme/shop#62', url: shop + '/pull/62', title: 'Verify the signature of the webhook, the pull request that added line 41' }],
-            found_on: '2026-11-10', finding_number: '3', findings_total: '11', labels: '`bug`, `security`, `payments`',
+            places_count: '2', criteria_count: '3', tests_count: '2', found_on: '2026-11-10', finding_number: '3', findings_total: '11', labels: '`bug`, `security`, `payments`',
           },
         }],
       },
@@ -1551,7 +1650,7 @@ class Component extends DCLogic {
               { ref: 'acme/api#214', url: api + '/pull/214', title: 'Stop order sync retries after five attempts, the pull request under review' },
               { ref: 'acme/api#198', url: api + '/issues/198', title: 'Order sync retries a refused order forever' },
             ],
-            found_on: '2026-11-15', pull_number: '214', pull_url: api + '/pull/214', review_url: api + '/pull/214#pullrequestreview-2810044', labels: '`bug`, `sync`',
+            places_count: '1', criteria_count: '3', tests_count: '1', found_on: '2026-11-15', pull_number: '214', pull_url: api + '/pull/214', review_url: api + '/pull/214#pullrequestreview-2810044', labels: '`bug`, `sync`',
           },
         }],
       },
@@ -1609,7 +1708,9 @@ class Component extends DCLogic {
         items: [{
           ...scout('commented'), name: 'comment',
           tpl: [
-            '### Scout review: not finished',
+            '### :robot: Scout review: not finished',
+            '',
+            '> :warning: **Not finished** · no verdict · stopped at step {failed_step} of {steps_total} · {files_read} of {files_changed} files read · try again after {retry_after} UTC',
             '',
             'Commit `{commit}` · {stopped_at} UTC · stopped after {ran_for}',
             '',
@@ -1620,7 +1721,7 @@ class Component extends DCLogic {
             ...section('What was completed before',
               '| Step | State | Detail |',
               '|---|---|---|',
-              each('steps', '| {name} | {state} | {detail} |'),
+              each('steps', '| {name} | {state_icon} {state} | {detail} |'),
               '',
               ...details('{files_unread} files not reached', '```text', each('unread', '{path}'), '```')),
             ...section('What was not checked as a result', each('not_checked', '- {what}')),
@@ -1652,14 +1753,47 @@ class Component extends DCLogic {
       },
     ];
   }
+  shortcodes() {
+    return {
+      clipboard: [0x1F4CB], gear: [0x2699, 0xFE0F], dart: [0x1F3AF], hammer_and_wrench: [0x1F6E0, 0xFE0F], construction: [0x1F6A7],
+      heavy_plus_sign: [0x2795], test_tube: [0x1F9EA], arrow_forward: [0x25B6, 0xFE0F], raised_hand: [0x270B], books: [0x1F4DA],
+      rocket: [0x1F680], warning: [0x26A0, 0xFE0F], eyes: [0x1F440], thumbsup: [0x1F44D], sparkles: [0x2728], question: [0x2753],
+      white_check_mark: [0x2705], no_entry_sign: [0x1F6AB], round_pushpin: [0x1F4CD], link: [0x1F517], bug: [0x1F41B],
+      footprints: [0x1F463], page_facing_up: [0x1F4C4], bar_chart: [0x1F4CA], calendar: [0x1F4C6], repeat: [0x1F501],
+      robot: [0x1F916], balance_scale: [0x2696, 0xFE0F], memo: [0x1F4DD], mag: [0x1F50D], vertical_traffic_light: [0x1F6A6],
+      triangular_flag_on_post: [0x1F6A9], bulb: [0x1F4A1], microscope: [0x1F52C], arrow_right: [0x27A1, 0xFE0F], x: [0x274C],
+      twisted_rightwards_arrows: [0x1F500], scroll: [0x1F4DC], keyboard: [0x2328, 0xFE0F], hourglass_flowing_sand: [0x23F3],
+      hourglass: [0x231B], inbox_tray: [0x1F4E5], see_no_evil: [0x1F648], arrows_counterclockwise: [0x1F504], stop_sign: [0x1F6D1],
+      speech_balloon: [0x1F4AC], ballot_box_with_check: [0x2611, 0xFE0F], rotating_light: [0x1F6A8], label: [0x1F3F7, 0xFE0F],
+      fast_forward: [0x23E9], new: [0x1F195], pencil2: [0x270F, 0xFE0F], no_entry: [0x26D4], wrench: [0x1F527], white_circle: [0x26AA],
+    };
+  }
+  statusCodes() {
+    return [
+      ['Passed', 'white_check_mark'], ['Failed', 'x'], ['Skipped', 'fast_forward'],
+      ['Confirmed', 'white_check_mark'], ['Not confirmed', 'x'], ['Filled', 'white_check_mark'], ['Empty', 'x'],
+      ['Done', 'white_check_mark'], ['Stopped', 'x'], ['Not started', 'white_circle'], ['Running', 'hourglass_flowing_sand'], ['Queued', 'hourglass'],
+      ['New', 'new'], ['Changed', 'pencil2'],
+      ['Blocking', 'no_entry'], ['Fix', 'wrench'], ['Suggestion', 'bulb'],
+      ['Approved', 'white_check_mark'], ['Changes requested', 'x'], ['Commented', 'speech_balloon'],
+    ];
+  }
   fill(tpl, vals) {
-    const sub = (line, v) => line.replace(/\{(?:model:|author:)?([a-z0-9_]+)\}/g, (hole, key) => (key in v ? v[key] : hole));
+    const status = this.statusCodes();
+    const sub = (line, v) => line.replace(/\{(?:model:|author:)?([a-z0-9_]+)\}/g, (hole, key) => {
+      if (key in v) return v[key];
+      const word = key.endsWith('_icon') ? v[key.slice(0, -5)] : undefined;
+      const found = word === undefined ? undefined : status.find(([prefix]) => String(word).startsWith(prefix));
+      return found ? ':' + found[1] + ':' : hole;
+    });
+    const ticked = vals.ticked || [];
     const source = [];
     const md = [];
     tpl.forEach((entry) => {
       if (typeof entry === 'string') {
-        source.push({ text: entry, kind: 'body' });
-        md.push(...sub(entry, vals).split('\n'));
+        source.push({ text: entry, kind: entry.startsWith('<!--') ? 'hint' : 'body' });
+        const line = entry.startsWith('- [ ] ') && ticked.includes(entry.slice(6)) ? '- [x] ' + entry.slice(6) : entry;
+        md.push(...sub(line, vals).split('\n'));
         return;
       }
       entry.lines.forEach((line) => source.push({ text: line, kind: 'repeat' }));
@@ -1670,7 +1804,8 @@ class Component extends DCLogic {
   inline(text, mp) {
     const span = (value, o = {}) => ({ text: value, font: o.mono ? mp.mono : 'inherit', size: o.mono ? '85%' : 'inherit', weight: o.bold ? 600 : 'inherit', fg: o.link ? mp.link : 'inherit', bg: o.mono && !o.link ? mp.codeBg : 'transparent', pad: o.mono && !o.link ? '0.2em 0.4em' : '0' });
     const out = [];
-    const re = /\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(@[A-Za-z0-9-]+)|\b([0-9a-f]{7,40})\b/g;
+    const emoji = this.shortcodes();
+    const re = /\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(@[A-Za-z0-9-]+)|\b([0-9a-f]{7,40})\b|:([a-z][a-z0-9_]*):/g;
     let last = 0;
     let m = re.exec(text);
     while (m !== null) {
@@ -1681,14 +1816,16 @@ class Component extends DCLogic {
       } else if (m[3] !== undefined) out.push(span(m[3], { bold: true }));
       else if (m[4] !== undefined) out.push(span(m[4], { mono: true }));
       else if (m[5] !== undefined) out.push(span(m[5], { bold: true }));
-      else out.push(span(m[6], /\d/.test(m[6]) && /[a-f]/.test(m[6]) ? { link: true, mono: true } : {}));
+      else if (m[6] !== undefined) out.push(span(m[6], /\d/.test(m[6]) && /[a-f]/.test(m[6]) ? { link: true, mono: true } : {}));
+      else out.push(span(emoji[m[7]] ? String.fromCodePoint(...emoji[m[7]]) : m[0]));
       last = re.lastIndex;
       m = re.exec(text);
     }
     if (last < text.length) out.push(span(text.slice(last)));
     return out;
   }
-  parse(md, mp, ctx) {
+  parse(source, mp, ctx) {
+    const md = source.join('\n').replace(/<!--[\s\S]*?-->/g, '').split('\n');
     const anchor = ctx.anchor;
     const special = /^(```|<details>|#{1,4} |\||\s*- |\d+\. |> |---$)/;
     const kinds = ['isH', 'isP', 'isLi', 'isTable', 'isCode', 'isSugg', 'isSummary', 'isQuote', 'isHr'];
@@ -2095,9 +2232,9 @@ class Component extends DCLogic {
     const rows = isGh ? this.githubRows(current, boxes, vals, g, t, page) : boxes;
     const scout = this.scoutView(current, vals, t, page, boxes);
     const hasSidebar = isGh && page.kind !== 'files';
-    const tone = { body: t.fg2, repeat: t.accent, field: t.warn };
+    const tone = { body: t.fg2, repeat: t.accent, field: t.warn, hint: t.muted };
     const sources = filled.filter(({ item }) => !item.plain).map(({ item, source }) => ({
-      name: item.name,
+      name: item.name, hasHints: source.some((ln) => ln.kind === 'hint'),
       lines: [...(item.titleTpl !== undefined ? [{ text: 'title: ' + item.titleTpl, kind: 'field' }, { text: '', kind: 'body' }] : []), ...source].map((ln) => ({ text: ln.text, fg: tone[ln.kind] })),
     }));
     const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
