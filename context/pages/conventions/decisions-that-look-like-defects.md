@@ -62,7 +62,7 @@ Not on this page: a limitation that is real and accepted for now. Those are in [
 
 **The read-only guard trusts the probability it is given and lets the request through when its service fails.** The guard is advisory (`src/Scout.Llm/Guard/ReadOnlyGuardChatCompletionService.cs:123`); writes are governed by the write gate, which fails closed.
 
-**A listing of comments that returns nothing cannot lead to a second post.** The verdict runner treats a null list as empty (`src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:72`), and the listing returns null only for an HTTP 404 (`src/Scout.Plugin.GitHub/GitHubClient.Reads.cs:127`); every other failing status throws (`:134`). A pull request that answers 404 to the read answers 404 to the comment that would follow, so nothing is posted twice.
+**A listing of comments that returns nothing cannot lead to a second post.** The verdict runner treats a null list as empty (`src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:76`), and the listing returns null only for an HTTP 404 (`src/Scout.Plugin.GitHub/GitHubClient.Reads.cs:127`); every other failing status throws (`:134`). A pull request that answers 404 to the read answers 404 to the comment that would follow, so nothing is posted twice.
 
 **The mark that a read returned no content is shared by every call that runs under one scope.** The scope is begun once per function invocation by the filter (`src/Scout.Audit/AuditBatchRunner.cs:227`) on that invocation's own async flow, and the one place that marks it is the read function itself (`src/Scout.Plugin.GitHub/GitHubPlugin.Reads.cs:290`), which starts no parallel read inside one call; concurrent invocations each hold their own box (`src/Scout.Llm/Abstractions/ReadOutcome.cs:19`).
 

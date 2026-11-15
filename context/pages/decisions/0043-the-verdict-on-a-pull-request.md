@@ -1,8 +1,9 @@
 ---
 title: "ADR 0043 - The verdict on a pull request, with the project's tests in an isolated container"
-version: "1.3"
+version: "1.4"
 date: 2026-11-07
-changes: "v1.3 (2026-11-12) amendment: the .NET default test command leaves out the tests the repository marks Category=Docker and the run's note says so; a caller's command is never altered."
+updated: 2026-11-14
+changes: "v1.4 (2026-11-14): the tests line's outcome is in the verdict's row."
 page_type: adr
 status: accepted
 description: "Scout comments on pull requests and issues, replies to review comments, and approves a pull request or requests changes as a declared write the owner approves per action, and the verdict carries the project's tests: the pull request's check runs first, then the project's own test command run in a disposable container on the owner's machine under fixed isolation rules."
@@ -27,7 +28,7 @@ reliability: high
 - [x] Accepted
 - [ ] Deprecated / superseded by
 
-Updated: 2026-11-07. Gap plan G8, the next deliverable after G3 ([[pages/roadmap/gap-plan]]). Waits for the owner's approval before any code; two choices are his to confirm: Docker as the one supported runtime at first, and no network inside the container once the dependencies are restored.
+Updated: 2026-11-07. Gap plan G8, the next deliverable after G3 ([[pages/roadmap/gap-plan]]).
 
 ## Context
 
@@ -44,6 +45,7 @@ Three facts shape the decision:
 - **The verdict is an event on the existing review.** `submit_review` gains a `verdict` argument: `comment` (today's behaviour), `approve` or `request_changes`, mapped to the GitHub review event. `comment` stays a `Write` under the feature's grant; `approve` and `request_changes` are `IrreversibleWrite` on the `Pull requests` row of the `github` feature and run only after the owner approves that action, which is his click on the card's Approve or Request changes button in the desktop, recorded in the write log like the operator's approvals ([[pages/decisions/0033-channel-operator-architecture]]). The model never chooses the verdict that goes out: it proposes one in the card's summary, the owner's click decides. GitHub refuses an approval by the pull request's own author, so on the owner's own pull requests the card offers Request changes and Comment only.
 - **Comments, three new declared writes.** The owner on 2026-11-07, of commenting on a pull request's conversation, on an existing issue and replying to a review comment: "it has to allow them". Three functions on the `GitHubActions` plugin, each declared with `AddWriteFunction` on the `github` feature: `comment_on_pull_request(owner, repo, number, body)` and `comment_on_issue(owner, repo, number, body)` (both `POST repos/{o}/{r}/issues/{n}/comments`, the conversation of a pull request being an issue's), and `reply_to_review_comment(owner, repo, number, comment_id, body)` (`POST repos/{o}/{r}/pulls/{n}/comments/{comment_id}/replies`). A comment can be edited or deleted on GitHub, so each is a `Write` on new catalog rows ("Pull request comments", "Issue comments") and runs under the feature's grant, without a per-action approval; the body is capped at 65,000 characters (GitHub's limit) and refused, before any call, when empty. The model calls them only when the user asks in chat, as `create_issue` today; the verdict's summary and the tests line go to the pull request's conversation through `comment_on_pull_request` when the owner clicks a verdict.
   - Amended 2026-11-09 by [[pages/decisions/0032-per-feature-write-permissions]]: after a turn posted 31 comments on one pull request under the grant alone, the three comment functions are `write (irreversible)`: each call is queued with its arguments and posted by the executor only after the owner approves that comment. The tests line of an approved verdict is still posted by the executor as part of that verdict.
+  - Amended 2026-11-14 by the owner, over a row of its own: the tests line is posted before the verdict is recorded, its outcome (posted, not posted, none) in that row; it rides on the verdict's grant check, so a revoke after the verdict does not stop it ([[pages/history/host-console]]).
 - **The tests line comes first from the pull request's checks.** A new read function `get_pull_request_checks(owner, repo, number)` reads the head commit's check runs and statuses (`GET repos/{o}/{r}/commits/{sha}/check-runs` and `/status`, both GETs on the Pull requests scope, read access) and answers each check's name, conclusion and link. `present_review_findings` gains `checks_json`, so the card shows passed, failed with its link, or pending, per check. A pull request whose checks run the tests needs nothing on the owner's machine.
 - **Then, when asked, the project's own tests in a container.** A new library `src/Scout.Sandbox` (with `tests/Scout.Sandbox.Tests`) runs one operation: the project's test command inside a disposable container on the owner's machine, driven by the `docker` command line, the one requirement (Podman's compatible command line comes later, through the same seam). The GitHub plugin calls it for a pull request when the repository has no check that runs the tests, or when the review asks for one more check, and only when the owner granted the feature's new `Local container` row (`Write`: it writes under Scout's data folder and nowhere else; reversible, so no per-action approval; without the grant, nothing runs and the verdict says so).
 - **The container's rules are the security boundary.** Fixed in code, not in configuration, and tested one by one:

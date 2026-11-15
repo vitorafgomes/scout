@@ -135,9 +135,16 @@ export function actionInWords(action: string, summary?: string): string {
   return ACTIONS_IN_WORDS.get(action) ?? action;
 }
 
-/** How a write ended, in words: `succeeded` reads Done, every other outcome with its first letter capitalised. */
+/**
+ * How a write ended, in words: `succeeded` reads Done, with what follows its colon or comma kept, "Done, tests line
+ * posted as a comment"; every other outcome with its first letter capitalised.
+ */
 export function outcomeInWords(outcome: string): string {
-  if (outcome === 'succeeded' || outcome.startsWith('succeeded: ')) {
+  if (
+    outcome === 'succeeded' ||
+    outcome.startsWith('succeeded: ') ||
+    outcome.startsWith('succeeded, ')
+  ) {
     return `Done${outcome.slice('succeeded'.length)}`;
   }
   return outcome.charAt(0).toUpperCase() + outcome.slice(1);

@@ -318,6 +318,8 @@ public sealed class FeaturesGrpcService(
                 Number = state.Number,
                 Commit = state.Commit,
                 Verdict = state.Verdict,
+                SignedAs = state.SignedAs,
+                TestsLine = state.TestsLine,
             };
         });
 

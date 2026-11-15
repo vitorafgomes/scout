@@ -12,6 +12,7 @@ import { ActivatedRoute } from '@angular/router';
 
 import {
   readIpcError,
+  signerInWords,
   type PendingActionDto,
   type WorkerStatus,
   type WriteLogEntryDto,
@@ -666,10 +667,7 @@ export class ReviewComponent implements OnInit, OnDestroy {
 
   /** Who signed a write: the Scout bot when its login is a bot's, else the owner; a dash when the worker did not say. */
   signedAs(entry: WriteLogEntryDto): string {
-    if (entry.signedAs === null) return '-';
-    return entry.signedAs.endsWith('[bot]')
-      ? `Bot (${entry.signedAs})`
-      : `Owner (${entry.signedAs})`;
+    return entry.signedAs === null ? '-' : signerInWords(entry.signedAs);
   }
 
   /**

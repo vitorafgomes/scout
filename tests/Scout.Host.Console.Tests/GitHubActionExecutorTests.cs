@@ -110,20 +110,23 @@ public sealed class GitHubActionExecutorTests : IDisposable
     }
 
     [Fact]
-    public async Task An_Approved_Verdict_Is_Sent_Pinned_To_The_Commit_Reviewed_Recorded_With_Its_Link_Then_Its_Tests_Line_Posted()
+    public async Task An_Approved_Verdict_Is_Sent_Pinned_To_The_Commit_Reviewed_Its_Tests_Line_Posted_Then_Recorded_Once_As_Posted_As_A_Comment()
     {
         _gate.Claims.Enqueue(Verdict(CardPayload()));
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "succeeded", "act-1", ReviewUrl));
+        _gate.Records.ShouldHaveSingleItem("the verdict is recorded once, in one write-log row")
+            .ShouldBe(
+                ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line posted as a comment", "act-1", ReviewUrl),
+                "a verdict with a tests line that posts records succeeded, tests line posted as a comment");
         var review = JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem()).RootElement;
         review.GetProperty("event").GetString().ShouldBe("APPROVE");
         review.GetProperty("commit_id").GetString().ShouldBe(Sha);
         review.GetProperty("body").GetString().ShouldBe("Ready to merge.");
         var tests = JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldHaveSingleItem()).RootElement;
         tests.GetProperty("body").GetString().ShouldBe("Tests: 3 checks passed.");
-        _github.Order.IndexOf("POST repos/octocat/hello/issues/42/comments").ShouldBeGreaterThanOrEqualTo(_gate.RecordedAtStep, "the tests line is posted only after the verdict is recorded");
+        _github.Order.IndexOf("POST repos/octocat/hello/issues/42/comments").ShouldBeLessThan(_gate.RecordedAtStep, "the tests line is posted before the verdict is recorded");
     }
 
     [Fact]
@@ -305,18 +308,19 @@ public sealed class GitHubActionExecutorTests : IDisposable
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded, tests line posted as a comment");
         _gate.Signers.ShouldBe(["octocat"]);
     }
 
     [Fact]
-    public async Task A_Verdict_The_Model_Asked_For_In_Chat_Runs_From_The_Function_s_Arguments()
+    public async Task A_Verdict_The_Model_Asked_For_In_Chat_Runs_From_The_Function_s_Arguments_And_Without_A_Tests_Line_Records_Succeeded()
     {
         _gate.Claims.Enqueue(Verdict("""{"body":"Fix the sum.","comments_json":"[]","commit":"0123456","number":"42","owner":"octocat","repo":"hello","verdict":"request_changes"}"""));
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+        _gate.Records.ShouldHaveSingleItem("the verdict is recorded once, in one write-log row")
+            .Outcome.ShouldBe("succeeded", "a verdict without a tests line records succeeded");
         JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem()).RootElement
             .GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES");
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
@@ -378,11 +382,12 @@ public sealed class GitHubActionExecutorTests : IDisposable
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
             $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+        _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "succeeded", "act-1", ReviewUrl));
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "succeeded, tests line posted as a comment", "act-1", ReviewUrl));
         _github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldBeEmpty();
     }
 
@@ -395,11 +400,12 @@ public sealed class GitHubActionExecutorTests : IDisposable
             $"<https://api.github.com/{Reviews}?per_page=100&page=2>; rel=\"next\", <https://api.github.com/{Reviews}?per_page=100&page=2>; rel=\"last\"");
         _github.On("GET", Reviews + "?per_page=100&page=2", HttpStatusCode.OK,
             $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
+        _github.On("GET", "repos/octocat/hello/issues/42/comments?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
 
         await Executor().RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "succeeded", "act-1", ReviewUrl));
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "succeeded, tests line posted as a comment", "act-1", ReviewUrl));
         _github.Sent("POST", Reviews).ShouldBeEmpty();
     }
 
@@ -407,7 +413,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
     [InlineData("octocat", false)]
     [InlineData("OCTOCAT", false)]
     [InlineData("alice", true)]
-    public async Task A_Verdict_Found_Already_Given_Posts_Its_Tests_Line_Only_When_The_Signer_Has_Not_Posted_It(string commenter, bool posted)
+    public async Task A_Verdict_Found_Already_Given_Posts_Its_Tests_Line_Only_When_The_Signer_Has_Not_Posted_It_And_Either_Way_Records_It_As_Posted(string commenter, bool posted)
     {
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK,
             $$$"""[{"id":88,"user":{"login":"octocat"},"state":"APPROVED","commit_id":"{{{Sha}}}","html_url":"{{{ReviewUrl}}}"}]""");
@@ -418,7 +424,8 @@ public sealed class GitHubActionExecutorTests : IDisposable
         await Executor().RunOnceAsync(CancellationToken.None);
 
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").Count.ShouldBe(posted ? 1 : 0);
-        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe(
+            "succeeded, tests line posted as a comment", "an AlreadyGiven verdict whose line is already on the pull request counts as posted");
     }
 
     [Theory]
@@ -435,6 +442,9 @@ public sealed class GitHubActionExecutorTests : IDisposable
         await Executor(logger).RunOnceAsync(CancellationToken.None);
 
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(
+            ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line not posted", "act-1", ReviewUrl),
+            "a tests line that could not be posted still records the verdict as given, outcome succeeded, tests line not posted");
         logger.Messages.ShouldContain("The verdict of GitHub action act-1 was given, but its tests line was not posted (GitHubApiException).");
     }
 
@@ -450,6 +460,9 @@ public sealed class GitHubActionExecutorTests : IDisposable
         await Executor(logger).RunOnceAsync(CancellationToken.None);
 
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(
+            ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line not posted", "act-1", ReviewUrl),
+            "a tests line that could not be posted still records the verdict as given, outcome succeeded, tests line not posted");
         logger.Messages.ShouldContain("The verdict of GitHub action act-1 was given, but its tests line was not posted (TaskCanceledException).");
     }
 
@@ -466,28 +479,85 @@ public sealed class GitHubActionExecutorTests : IDisposable
     }
 
     [Fact]
-    public async Task A_Record_The_Control_Plane_Refuses_After_A_Revoke_Posts_No_Tests_Line()
+    public async Task A_Record_The_Control_Plane_Refuses_After_A_Revoke_Comes_After_The_Verdict_And_Its_Tests_Line_And_Is_Logged()
     {
         _gate.RecordFailure = new RpcException(new Status(StatusCode.FailedPrecondition, "The owner revoked github's write permission before this action ran."));
         _gate.Claims.Enqueue(Verdict(CardPayload()));
+        var logger = new RecordingLogger();
 
-        await Executor().RunOnceAsync(CancellationToken.None);
+        var ran = await Executor(logger).RunOnceAsync(CancellationToken.None);
 
         _github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem();
-        _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
+        _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldHaveSingleItem();
+        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded, tests line posted as a comment");
+        ran.ShouldBe(GitHubActionExecutor.Ran.Nothing);
+        logger.Messages.ShouldContain("GitHub action act-1 ran (succeeded, tests line posted as a comment) but could not be recorded (RpcException).");
     }
 
-    [Fact]
-    public async Task A_Tests_Line_GitHub_Refuses_Never_Fails_The_Verdict_Given()
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    public async Task A_Tests_Line_GitHub_Refuses_Never_Fails_The_Verdict_Given_And_Records_It_As_Not_Posted(HttpStatusCode status)
     {
-        _github.On("POST", "repos/octocat/hello/issues/42/comments", HttpStatusCode.Forbidden, "");
+        _github.On("POST", "repos/octocat/hello/issues/42/comments", status, "");
         _gate.Claims.Enqueue(Verdict(CardPayload()));
         var logger = new RecordingLogger();
 
         await Executor(logger).RunOnceAsync(CancellationToken.None);
 
-        _gate.Records.ShouldHaveSingleItem().Outcome.ShouldBe("succeeded");
+        _gate.Records.ShouldHaveSingleItem("the verdict is recorded once, in one write-log row")
+            .ShouldBe(
+                ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line not posted", "act-1", ReviewUrl),
+                "a tests line that fails still records the verdict as given, outcome succeeded, tests line not posted");
         logger.Messages.ShouldContain("The verdict of GitHub action act-1 was given, but its tests line was not posted (GitHubApiException).");
+    }
+
+    [Fact]
+    public async Task A_Tests_Line_Post_That_Times_Out_Never_Fails_The_Verdict_Given_And_Records_It_As_Not_Posted()
+    {
+        _github.Throw("POST", "repos/octocat/hello/issues/42/comments", new TaskCanceledException("timed out"));
+        _gate.Claims.Enqueue(Verdict(CardPayload()));
+        var logger = new RecordingLogger();
+
+        await Executor(logger).RunOnceAsync(CancellationToken.None);
+
+        _gate.Records.ShouldHaveSingleItem("the verdict is recorded once, in one write-log row")
+            .ShouldBe(
+                ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line not posted", "act-1", ReviewUrl),
+                "a tests line that fails still records the verdict as given, outcome succeeded, tests line not posted");
+        logger.Messages.ShouldContain("The verdict of GitHub action act-1 was given, but its tests line was not posted (TaskCanceledException).");
+    }
+
+    [Fact]
+    public async Task A_Worker_Stopping_While_The_Tests_Line_Posts_Still_Records_The_Verdict_GitHub_Took_As_Given()
+    {
+        using var stop = new CancellationTokenSource();
+        _github.Throw("POST", "repos/octocat/hello/issues/42/comments", () =>
+        {
+            stop.Cancel();
+            return new OperationCanceledException(stop.Token);
+        });
+        _gate.Claims.Enqueue(Verdict(CardPayload()));
+
+        await Executor(new RecordingLogger()).RunOnceAsync(stop.Token);
+
+        _gate.Records.ShouldHaveSingleItem("a verdict GitHub took is recorded even when the worker stops during its tests line")
+            .ShouldBe(
+                ("Pull request verdicts", "octocat/hello#42", "succeeded, tests line not posted", "act-1", ReviewUrl),
+                "the stop leaves the verdict given, its tests line not posted");
+    }
+
+    [Fact]
+    public async Task A_Worker_Stopping_While_A_Given_Verdict_Is_Recorded_Leaves_The_Record_Running_On_A_Token_Of_Its_Own()
+    {
+        using var stop = new CancellationTokenSource();
+        _gate.OnRecord = stop.Cancel;
+        _gate.Claims.Enqueue(Verdict(CardPayload()));
+
+        await Executor().RunOnceAsync(stop.Token);
+
+        _gate.RecordTokens.ShouldHaveSingleItem().IsCancellationRequested
+            .ShouldBeFalse("the record of a verdict GitHub took runs on its own bounded token, so a stop during the record never drops it");
     }
 
     [Theory]
@@ -683,6 +753,10 @@ public sealed class GitHubActionExecutorTests : IDisposable
 
         public Exception? RecordFailure { get; set; }
 
+        public Action? OnRecord { get; set; }
+
+        public List<CancellationToken> RecordTokens { get; } = [];
+
         public List<(string Scope, string Target, string Outcome, string? ActionId, string? Result)> Records { get; } = [];
 
         public List<string?> Signers { get; } = [];
@@ -729,6 +803,8 @@ public sealed class GitHubActionExecutorTests : IDisposable
 
         public Task RecordAsync(string featureId, string scope, string target, string outcome, string? actionId, string? result, string? signedAs, CancellationToken cancellationToken)
         {
+            OnRecord?.Invoke();
+            RecordTokens.Add(cancellationToken);
             Signers.Add(signedAs);
             featureId.ShouldBe("github");
             Records.Add((scope, target, outcome, actionId, result));
@@ -772,6 +848,9 @@ public sealed class GitHubActionExecutorTests : IDisposable
 
         public void Throw(string method, string path, Exception exception) =>
             _routes[$"{method} {path}"] = () => throw exception;
+
+        public void Throw(string method, string path, Func<Exception> exception) =>
+            _routes[$"{method} {path}"] = () => throw exception();
 
         public IReadOnlyList<string> Sent(string method, string path) =>
             _sent.Where(s => s.Route == $"{method} {path}").Select(s => s.Body).ToList();

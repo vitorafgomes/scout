@@ -269,6 +269,8 @@ function verdict(
     state,
     url,
     reason,
+    signedAs: null,
+    testsLine: null,
     repository: 'acme/shop',
     number: 5,
     commit: '3f2a9c1',
@@ -332,6 +334,36 @@ describe('verdict follow', () => {
           .map(verdictNotification)
           .map((n) => (n.kind === 'running' ? n.detail : n.title)),
       ).toEqual([queued, given]);
+    });
+  }
+
+  const signed: readonly [
+    GitHubVerdictStatus['signedAs'],
+    GitHubVerdictStatus['testsLine'],
+    string,
+  ][] = [
+    ['scout[bot]', 'posted', 'Signed as Bot (scout[bot]) · the tests line was posted as a comment'],
+    ['octocat', 'notPosted', 'Signed as Owner (octocat) · the tests line was not posted'],
+    ['scout[bot]', 'none', 'Signed as Bot (scout[bot])'],
+    [null, 'posted', 'The tests line was posted as a comment'],
+    [null, 'notPosted', 'The tests line was not posted'],
+    [null, 'none', ''],
+  ];
+  for (const [signedAs, testsLine, detail] of signed) {
+    it(`a given verdict signed as ${signedAs ?? 'nobody known'} with the tests line ${testsLine ?? 'unknown'} reads "${detail}"`, () => {
+      const review = 'https://github.com/acme/shop/pull/5#pullrequestreview-1';
+
+      expect(
+        verdictNotification({ ...verdict('given', review), signedAs, testsLine }),
+        `the given entry's detail says who signed the verdict and what became of the tests line: "${detail}"`,
+      ).toEqual({
+        id: 'verdict:act-1',
+        kind: 'done',
+        title: 'Verdict given: Approved acme/shop#5',
+        detail,
+        url: review,
+        source: 'verdict',
+      });
     });
   }
 });

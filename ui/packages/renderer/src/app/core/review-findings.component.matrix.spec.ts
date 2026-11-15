@@ -262,14 +262,17 @@ function makeBridge() {
       state: 'queued',
       url: null,
       reason: null,
+      signedAs: null,
+      testsLine: null,
     })),
     onGitHubVerdict: vi.fn((listener: (status: GitHubVerdictStatus) => void) => {
       verdictListeners.push(listener);
       return () => undefined;
     }),
-    pushStatus: (status: GitHubVerdictStatus) => verdictListeners.forEach((l) => l(status)),
-    verdict: (status: GitHubVerdictProgress) =>
-      verdictListeners.forEach((l) => l({ ...key, ...status })),
+    pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
+      verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...status })),
+    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
+      verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
     appOpenExternal: vi.fn(async (): Promise<void> => undefined),
   };
 }
@@ -357,7 +360,10 @@ const POST_KEY = {
   verdict: 'comment',
 } as const;
 
-function postProgress(phase: Phase, actionId: string): GitHubVerdictProgress {
+function postProgress(
+  phase: Phase,
+  actionId: string,
+): Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'> {
   return phase === 'posted'
     ? { actionId, state: 'given', url: PR_URL, reason: null }
     : phase === 'failed'
@@ -735,6 +741,8 @@ describe(`review findings tests line and verdict matrix (${VERDICT_ROWS.length} 
       state: row.phase === 'none' ? 'queued' : row.phase,
       url: row.phase === 'given' ? PR_URL : null,
       reason: row.phase === 'failed' ? FAILED_REASON : null,
+      signedAs: null,
+      testsLine: null,
     } as const;
     if (row.phase !== 'none' && row.clicked === 'a window opened after the click') {
       bridge.githubVerdictFor.mockResolvedValue(elsewhere);

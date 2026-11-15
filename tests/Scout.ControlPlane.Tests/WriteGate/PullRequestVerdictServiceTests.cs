@@ -254,6 +254,42 @@ public sealed class PullRequestVerdictServiceTests : IDisposable
             .ShouldBe((PendingActionStatus.Executed, "succeeded", "https://github.com/octocat/hello/pull/42#pullrequestreview-88"));
     }
 
+    [Theory]
+    [InlineData("succeeded, tests line posted as a comment", "posted")]
+    [InlineData("succeeded, tests line not posted", "notPosted")]
+    [InlineData("succeeded", "none")]
+    [InlineData("succeeded, tests line posted as a comment after revoke", "posted")]
+    public async Task A_Given_Verdict_Reads_Who_Signed_It_And_What_Became_Of_Its_Tests_Line_And_One_Not_Given_Yet_Reads_Neither(
+        string outcome, string testsLine)
+    {
+        const string ReviewUrl = "https://github.com/octocat/hello/pull/42#pullrequestreview-88";
+        await GrantGitHubAsync();
+        var given = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+        var queued = (await Verdicts().ReadAsync(given.Id, CancellationToken.None)).ShouldNotBeNull();
+
+        await Gate().RecordAsync("github", "Pull request verdicts", "octocat/hello#42", outcome, given.Id, ReviewUrl, "scout-bot", CancellationToken.None);
+
+        var expected = new VerdictState("given", ReviewUrl, "", "octocat/hello", 42, Sha, "approve", "scout-bot", testsLine);
+        (queued.SignedAs, queued.TestsLine).ShouldBe(("", ""), "a verdict not given yet answers signed as and tests line empty");
+        (await Verdicts().ReadAsync(given.Id, CancellationToken.None)).ShouldBe(
+            expected, "a given verdict answers the login the write log keeps for it and its tests line as posted, notPosted or none");
+        (await Verdicts().FindAsync("octocat/hello", 42, Sha, CancellationToken.None)).ShouldNotBeNull().State.ShouldBe(
+            expected, "the verdict found by its commit answers the same signer and tests line");
+    }
+
+    [Fact]
+    public async Task A_Failed_Verdict_Reads_No_Signer_And_No_Tests_Line()
+    {
+        await GrantGitHubAsync();
+        var given = await Verdicts().GiveAsync(Approve(), CancellationToken.None);
+
+        await Gate().RecordAsync("github", "Pull request verdicts", "octocat/hello#42", "failed: github 403", given.Id, "GitHub denied the request.", "scout-bot", CancellationToken.None);
+
+        (await Verdicts().ReadAsync(given.Id, CancellationToken.None)).ShouldBe(
+            new VerdictState("failed", "", "GitHub denied the request.", "octocat/hello", 42, Sha, "approve"),
+            "a verdict that was not given answers signed as and tests line empty");
+    }
+
     [Fact]
     public async Task The_Payload_Survives_A_Restart_Of_The_Queue()
     {

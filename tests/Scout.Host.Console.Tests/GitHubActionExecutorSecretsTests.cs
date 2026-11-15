@@ -74,7 +74,7 @@ public sealed class GitHubActionExecutorSecretsTests : IDisposable
         await executor.RunOnceAsync(CancellationToken.None);
 
         logger.Messages.Count.ShouldBeGreaterThanOrEqualTo(2, "the tests line refused and the record lost are both logged");
-        gate.Records.Select(r => r.Outcome).ShouldBe(["succeeded", "failed: refused", "failed: github 401"]);
+        gate.Records.Select(r => r.Outcome).ShouldBe(["succeeded, tests line not posted", "failed: refused", "failed: github 401"]);
         foreach (var text in logger.Messages.Concat(gate.Records.SelectMany(r => new[] { r.Outcome, r.Result ?? string.Empty })))
         {
             text.ShouldNotContain(OwnerToken);

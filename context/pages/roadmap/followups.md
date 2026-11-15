@@ -107,7 +107,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1644`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1649`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:207`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
@@ -202,13 +202,13 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A pull request verdict given again may be sent twice after a claim that was not confirmed (2026-11-11)
 
-- **Gap:** the verdict card's once-only enqueue, `EnqueueApprovedOnceAsync` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:155`, called from `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:185`), answers an earlier action unless it was rejected or executed with an outcome starting with `failed` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:178`). That queues a verdict again when its earlier action was recorded `failed: not confirmed`, or rejected by the claim path as not confirmed after a lapsed claim across a revoke or a new grant; both mean it may already be on GitHub. The findings card's issues stopped doing this in review round 2 of [[pages/roadmap/approve-together]] phase 1, where such a row answers the click ([[pages/services/control-plane]], The findings card's issues).
+- **Gap:** the verdict card's once-only enqueue, `EnqueueApprovedOnceAsync` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:155`, called from `src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:195`), answers an earlier action unless it was rejected or executed with an outcome starting with `failed` (`src/Scout.ControlPlane/Actions/JsonFileActionQueue.cs:178`). That queues a verdict again when its earlier action was recorded `failed: not confirmed`, or rejected by the claim path as not confirmed after a lapsed claim across a revoke or a new grant; both mean it may already be on GitHub. The findings card's issues stopped doing this in review round 2 of [[pages/roadmap/approve-together]] phase 1, where such a row answers the click ([[pages/services/control-plane]], The findings card's issues).
 - **Blocker:** none; out of the scope of that review, which was the card.
 - **Unblocks with:** the same rule on the verdict path, through `WriteGateService.NotConfirmedOutcome` and `WriteGateService.IsNotConfirmed`, with a test that drives the lapse through the real claim; the verdict's own check on GitHub for one already given may cover part of it, which the change should read first.
 
 ### Six name rules still accept a trailing newline (2026-11-11)
 
-- **Gap:** a .NET regex `$` also matches before a final newline, so a value such as `main` followed by a newline passes these rules: the git reference and file extension rules of the GitHub plugin (`src/Scout.Plugin.GitHub/GitHubNames.cs:39`, `:33`), the verdict card's repository part and commit rules (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:126`, `:129`), the owner control's name rule (`src/Scout.ControlPlane/Controls/OwnerControlService.cs:65`) and the comment rules' name rule (`src/Scout.ControlPlane/Operator/CommentRules.cs:311`). The repository name rules of the plugin and of the findings card were anchored with `\z` in review round 1 of [[pages/roadmap/approve-together]] phase 1.
+- **Gap:** a .NET regex `$` also matches before a final newline, so a value such as `main` followed by a newline passes these rules: the git reference and file extension rules of the GitHub plugin (`src/Scout.Plugin.GitHub/GitHubNames.cs:39`, `:33`), the verdict card's repository part and commit rules (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:136`, `:139`), the owner control's name rule (`src/Scout.ControlPlane/Controls/OwnerControlService.cs:65`) and the comment rules' name rule (`src/Scout.ControlPlane/Operator/CommentRules.cs:311`). The repository name rules of the plugin and of the findings card were anchored with `\z` in review round 1 of [[pages/roadmap/approve-together]] phase 1.
 - **Blocker:** none; none was named by a finding of that review.
 - **Unblocks with:** `\A` and `\z` in each, one row per rule with a trailing newline in its existing test, as the repository rules got.
 - **Done (2026-11-12):** the verdict card's repository part and commit rules, the owner control's name rule and the comment rules' name rule are anchored with `\A` and `\z`, and so are the findings card's finding id rule (`src/Scout.Plugin.GitHub/ReviewFindings.cs:55`) and the comment desk's id rule for fetched comments (`src/Scout.Operator/CommentDesk.cs:368`), each with a trailing-newline row (`tests/Scout.Operator.Tests/CommentDeskTests.cs:90`, `tests/Scout.ControlPlane.Tests/WriteGate/PullRequestVerdictServiceTests.cs:198`, `tests/Scout.ControlPlane.Tests/Controls/OwnerControlServiceTests.cs:39`, `tests/Scout.ControlPlane.Tests/Operator/CommentServiceTests.cs:186`, `tests/Scout.Plugin.GitHub.Tests/GitHubPluginFindingsTests.cs:129`). Still open: the plugin's git reference and file extension rules, which feed only reads and a snapshot into Scout's own folder.
@@ -307,7 +307,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A rate limit answer from GitHub fails the action and the rest keep being sent (2026-11-10)
 
-- **Gap:** the executor sends approved actions one second apart (`src/Scout.Host.Console/GitHubActionExecutor.cs:36`), which is GitHub's guidance for requests that create content, not a guarantee. A 403 or 429 that names a time to wait is recorded as failed with the rate-limit sentence like any other refusal, so the owner has to ask and approve again, and the actions still approved are sent a second apart into the same limit. The tests line of a verdict is also posted right after the verdict, with no pause between the two.
+- **Gap:** the executor sends approved actions one second apart (`src/Scout.Host.Console/GitHubActionExecutor.cs:37`), which is GitHub's guidance for requests that create content, not a guarantee. A 403 or 429 that names a time to wait is recorded as failed with the rate-limit sentence like any other refusal, so the owner has to ask and approve again, and the actions still approved are sent a second apart into the same limit. The tests line of a verdict is also posted right after the verdict, with no pause between the two.
 - **Unblocks with:** the executor waiting the time GitHub names before it takes the next action, and a decision on the refused one (left approved for one more run, or failed as now); with a test on the fake clock where the second of three actions is answered 429 with a retry-after and the third is not sent before it has passed.
 
 ### What the audit cards still take from the model after the sent titles (2026-11-12)
@@ -317,7 +317,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A short and a full hash of one commit are two keys (2026-11-10)
 
-- **Gap:** one action per pull request and commit compares the commit as text, in the renderer's store, in main and in the control plane (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:327`). A review that names `ec7f951` and a later one that names the full hash of the same commit are two keys, so a second Post or verdict is accepted.
+- **Gap:** one action per pull request and commit compares the commit as text, in the renderer's store, in main and in the control plane (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:348`). A review that names `ec7f951` and a later one that names the full hash of the same commit are two keys, so a second Post or verdict is accepted.
 - **Unblocks with:** comparing by prefix when one side is a prefix of the other, at least seven characters, in the three places, with a row per place.
 
 ### Doc summaries on functions that are not exported (2026-11-10)
@@ -332,17 +332,17 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### No timeout test for a comment or a reply (2026-11-10)
 
-- **Gap:** a request that times out after it left is tested for an issue, a review and a verdict (`tests/Scout.Host.Console.Tests/GitHubActionExecutorTests.cs:227`, `:184`); `comment_on_pull_request`, `comment_on_issue` and `reply_to_review_comment` have a 502 test only, and `comment_on_issue` shares the pull request comment's route.
+- **Gap:** a request that times out after it left is tested for an issue, a review and a verdict (`tests/Scout.Host.Console.Tests/GitHubActionExecutorTests.cs:230`, `:187`); `comment_on_pull_request`, `comment_on_issue` and `reply_to_review_comment` have a 502 test only, and `comment_on_issue` shares the pull request comment's route.
 - **Unblocks with:** the timeout rows for the three, asserting the "may already be there" sentence.
 
 ### A GitHub action claimed and never handed to the worker is also recorded as not confirmed (2026-11-10)
 
-- **Gap:** the claim marks an action executing before it reads the write log (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:150`). When that read fails, or the action cannot be returned to the queue while its approval is still on its way to the log, the action stays executing without ever reaching a worker. The same happens when the claim's reply never reaches the worker, and when the worker's read of the grant just before the send throws, which sends nothing and records nothing (`src/Scout.Host.Console/GitHubActionExecutor.cs:128`). For YouTube it is handed out after the lease, as the control plane's tests pin; for GitHub, since 2026-11-10, the lapsed claim is recorded as `failed: not confirmed`, "may already be on GitHub", although nothing was sent (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:179`), and the owner has to ask again.
+- **Gap:** the claim marks an action executing before it reads the write log (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:150`). When that read fails, or the action cannot be returned to the queue while its approval is still on its way to the log, the action stays executing without ever reaching a worker. The same happens when the claim's reply never reaches the worker, and when the worker's read of the grant just before the send throws, which sends nothing and records nothing (`src/Scout.Host.Console/GitHubActionExecutor.cs:136`). For YouTube it is handed out after the lease, as the control plane's tests pin; for GitHub, since 2026-11-10, the lapsed claim is recorded as `failed: not confirmed`, "may already be on GitHub", although nothing was sent (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:179`), and the owner has to ask again.
 - **Unblocks with:** a mark on the action set only when the claim returns it to the worker, the not-confirmed rule applying only to actions that carry it; with a test where the log read fails on a GitHub claim and the action is handed out after its lease.
 
 ### A lost record of a GitHub write is reported as not confirmed although the worker knew how it ended (2026-11-10)
 
-- **Gap:** when the control plane cannot take the record of a write the worker just sent, the worker logs it and keeps nothing (`src/Scout.Host.Console/GitHubActionExecutor.cs:177`), the action stays executing and is never handed out again ([[pages/invariants/no-executive-writes]], once means at most once): 30 minutes later it is recorded as `failed: not confirmed` (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:69`) and the owner is told to look on GitHub, although the worker, still running, knew the write succeeded and its link.
+- **Gap:** when the control plane cannot take the record of a write the worker just sent, the worker logs it and keeps nothing (`src/Scout.Host.Console/GitHubActionExecutor.cs:186`), the action stays executing and is never handed out again ([[pages/invariants/no-executive-writes]], once means at most once): 30 minutes later it is recorded as `failed: not confirmed` (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:69`) and the owner is told to look on GitHub, although the worker, still running, knew the write succeeded and its link.
 - **Unblocks with:** the worker retrying the record itself, by action id, at each tick until the control plane takes it, which needs no new claim; with a test where the record fails once and the action ends recorded with its link and no second send.
 
 ### A queued GitHub write is checked only after the owner approved it (2026-11-10)
@@ -362,7 +362,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The two GitHub runners each parse a payload with their own helpers (2026-11-10)
 
-- **Gap:** `GitHubWriteRunner` and `GitHubVerdictRunner` each carry a `Read`, a `Text` and a `Number` over the payload's JSON (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:124`, `src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:83`), written twice with small differences.
+- **Gap:** `GitHubWriteRunner` and `GitHubVerdictRunner` each carry a `Read`, a `Text` and a `Number` over the payload's JSON (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:124`, `src/Scout.Plugin.GitHub/GitHubVerdictRunner.cs:88`), written twice with small differences.
 - **Unblocks with:** a third reader of an action's payload; until then two copies are cheaper than a shared type (Rule C).
 
 ### The five GitHub write functions still carry a body that sends (2026-11-10)
@@ -372,7 +372,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### What is left of the review turn nothing builds (2026-11-10)
 
-- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1546`, `:1594`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
+- **Gap:** a review's Post goes to the control plane since 2026-11-09 and main no longer reads a `Review to post` block since 2026-11-10, but the contract still has the turn's `review` flag and the marker (`ui/packages/shared/src/ipc-contract.ts:1551`, `:1599`), and the Chat screen and the quick-ask window still have the "with the review" tag for it, with a spec each.
 - **Unblocks with:** deleting the flag, the marker, the two tags and their specs in one change; the compiler names every use.
 
 ### The conductor's own failure write is not bounded (2026-11-10)
@@ -443,7 +443,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### An action settled from the write log carries no result (2026-11-09)
 
-- **Gap:** an action whose write is already in the write log is marked executed with the logged outcome and no result (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:226`), because the write-log entry keeps the outcome only. A GitHub verdict settled that way reads as given with an empty link, and a settled failure shows "not recorded" in place of the failure text (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:219`, `:220`).
+- **Gap:** an action whose write is already in the write log is marked executed with the logged outcome and no result (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:226`), because the write-log entry keeps the outcome only. A GitHub verdict settled that way reads as given with an empty link, and a settled failure shows "not recorded" in place of the failure text (`src/Scout.ControlPlane/WriteGate/PullRequestVerdictService.cs:228`, `:229`).
 - **Blocker:** a decision on where the result is kept: on the write-log entry, or on the action before it is marked.
 - **Unblocks with:** the result kept where the settle can read it and passed to the mark, with a test where a verdict logged but never marked is settled and its state carries the link, and one where a settled failure carries its text.
 
@@ -520,7 +520,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### Approvals' History says nothing was written while the first read failed (2026-11-09)
 
-- **Gap:** when the first read of the approvals fails, the History tab prints "Scout has not written anything yet." under the alert (`ui/packages/renderer/src/app/review/review.component.ts:258`). The write log was never read, so the sentence states something Scout does not know. The Waiting for you tab already holds its empty sentence back while an error stands (`ui/packages/renderer/src/app/review/review.component.ts:123`); History has no such guard, and had none before the prototype migration's version 9. The artboard's Error state shows no panel at all ([[pages/roadmap/prototype-migration]], Approvals).
+- **Gap:** when the first read of the approvals fails, the History tab prints "Scout has not written anything yet." under the alert (`ui/packages/renderer/src/app/review/review.component.ts:259`). The write log was never read, so the sentence states something Scout does not know. The Waiting for you tab already holds its empty sentence back while an error stands (`ui/packages/renderer/src/app/review/review.component.ts:124`); History has no such guard, and had none before the prototype migration's version 9. The artboard's Error state shows no panel at all ([[pages/roadmap/prototype-migration]], Approvals).
 - **Blocker:** none; it is behaviour, so it was left out of a change of appearance.
 - **Unblocks with:** the sentence shown only when a read answered with no writes, with a spec that fails the first read and opens History. The Error row of "Approvals shows each state of the prototype" in `ui/packages/renderer/src/app/review/review.component.spec.ts` lists `writes-empty` on the History tab today and changes with the fix.
 

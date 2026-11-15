@@ -216,6 +216,8 @@ export function registerGitHubVerdictHandlers(
           state: 'queued',
           url: null,
           reason: null,
+          signedAs: null,
+          testsLine: null,
           repository: request.repository,
           number: request.number,
           commit: request.commit,

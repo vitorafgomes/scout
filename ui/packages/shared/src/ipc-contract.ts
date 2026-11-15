@@ -1349,12 +1349,17 @@ export interface GitHubVerdictKey {
   readonly commit: string;
 }
 
-/** Where a verdict's action stands, as the control plane reports it: the review's link once given, or why it failed. */
+/**
+ * Where a verdict's action stands, as the control plane reports it: the review's link once given, or why it failed;
+ * once given, the login that signed it and whether its tests line was posted, null when not given or not known.
+ */
 export interface GitHubVerdictProgress {
   readonly actionId: string;
   readonly state: 'queued' | 'running' | 'given' | 'failed';
   readonly url: string | null;
   readonly reason: string | null;
+  readonly signedAs: string | null;
+  readonly testsLine: 'posted' | 'notPosted' | 'none' | null;
 }
 
 /** A verdict's action with the pull request, commit and verdict it is for, as every window receives it. */

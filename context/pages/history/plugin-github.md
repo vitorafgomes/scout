@@ -1,8 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-10
-changes: "Initial history note: the test command run_pull_request_tests takes from CI"
+updated: 2026-11-14
+changes: "v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -17,6 +18,12 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
+
+- **Asked for:** the bell shows a given verdict's detail, "Signed as <account> · the tests line was posted as a comment", "... · the tests line was not posted", or just "Signed as <account>" when the verdict carried no tests line. The owner chose to keep the tests line's outcome in the verdict's own record, one approval and one log row ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14), over a row of its own.
+- **What changed:** `GitHubVerdictRunner.PostTestsLineAsync` answers true when the tests line is on the pull request's conversation, posted now or found already there for a verdict given before, and false when the verdict carried none; what it posts and reads is unchanged.
+- **Tests:** through the executor, `tests/Scout.Host.Console.Tests/GitHubActionExecutorTests.cs` (`A_Verdict_Found_Already_Given_Posts_Its_Tests_Line_Only_When_The_Signer_Has_Not_Posted_It_And_Either_Way_Records_It_As_Posted`).
 
 ## 2026-11-10 - The owner stops a test run from Scout Desktop
 

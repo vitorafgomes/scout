@@ -173,6 +173,8 @@ message GetVerdictResponse {
   int32 number = 5;
   string commit = 6;
   string verdict = 7;
+  string signed_as = 8;
+  string tests_line = 9;
 }
 
 message ListPendingActionsRequest {}

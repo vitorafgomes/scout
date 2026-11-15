@@ -12,12 +12,13 @@ namespace Scout.Host.Console;
 /// in chat, an issue, a comment or a reply asked in chat and run from the arguments queued with it, each approved on its card
 /// or the Review screen. A review, an issue, a comment or a reply is recorded with its link, or with the sentence that says
 /// why it failed. An action is handed to this executor once: the control plane never hands out a claimed action again.
-/// The verdict is sent pinned to the commit reviewed and refused when the pull request moved past it; the run is recorded
-/// at once with the review's link, or with the sentence that says why it failed, which consumes the action, and only once
-/// recorded is the tests line posted on the pull request's conversation, a failure there being logged and never failing the
-/// verdict; a record the control plane refuses, as after the owner revoked GitHub writes, posts no tests line. Just before a
-/// verdict is sent the owner's grant is read once more: a grant gone, which the control plane answers by rejecting the action
-/// as writes were revoked, or a read that fails, sends nothing. The record names the login that signed the verdict.
+/// The verdict is sent pinned to the commit reviewed and refused when the pull request moved past it; once GitHub took it,
+/// its tests line is posted on the pull request's conversation, a failure there being logged and never failing the
+/// verdict, and then the verdict is recorded once, which consumes the action: with the review's link and an outcome that
+/// says whether the tests line was posted as a comment, was not posted, or there was none, or with the sentence that says
+/// why the verdict failed. Just before a verdict is sent the owner's grant is read once more: a grant gone, which the
+/// control plane answers by rejecting the action as writes were revoked, or a read that fails, sends nothing. The record
+/// names the login that signed the verdict.
 /// </summary>
 internal sealed class GitHubActionExecutor(
     IApprovedActions approved,
@@ -46,6 +47,13 @@ internal sealed class GitHubActionExecutor(
     internal const string WriteUnexpected = "The write failed in Scout before GitHub answered; ask for it again in chat.";
 
     private const string RefusedOutcome = "failed: refused";
+
+    internal const string TestsLinePosted = "succeeded, tests line posted as a comment";
+
+    internal const string TestsLineNotPosted = "succeeded, tests line not posted";
+
+    /// <summary>How long the record of a verdict GitHub already took may run, on a token of its own so a stopping worker never drops it.</summary>
+    internal static readonly TimeSpan RecordGrace = TimeSpan.FromSeconds(10);
 
     internal static string Unsupported(string scope) => $"Scout does not run {scope} on GitHub.";
 
@@ -110,10 +118,10 @@ internal sealed class GitHubActionExecutor(
             return Ran.Nothing;
         }
 
-        GivenVerdict? given = null;
         string? signer = null;
         string outcome;
         string result;
+        GivenVerdict? given = null;
         var isVerdict = action.Scope == VerdictScope;
         var isReview = action.Scope == ReviewScope;
         if (!isVerdict && !isReview && !GitHubWriteRunner.Runs(action.Target))
@@ -147,7 +155,7 @@ internal sealed class GitHubActionExecutor(
                 if (isVerdict)
                 {
                     given = await verdicts.GiveAsync(action.Payload, ct).ConfigureAwait(false);
-                    (outcome, result, signer) = ("succeeded", given.Url, given.Signer);
+                    (outcome, result, signer) = (await PostTestsLineAsync(action, given, ct).ConfigureAwait(false), given.Url, given.Signer);
                 }
                 else
                 {
@@ -167,33 +175,32 @@ internal sealed class GitHubActionExecutor(
             }
         }
 
+        using var grace = given is not null ? new CancellationTokenSource(RecordGrace, time) : null;
         try
         {
-            await gate.RecordAsync(FeatureId, action.Scope, action.Target, outcome, action.Id, result, signer, ct).ConfigureAwait(false);
+            await gate.RecordAsync(FeatureId, action.Scope, action.Target, outcome, action.Id, result, signer, grace?.Token ?? ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (grace is not null || !ct.IsCancellationRequested)
         {
             logger.LogWarning(
                 "GitHub action {ActionId} ran ({Outcome}) but could not be recorded ({ExceptionType}).", action.Id, outcome, ex.GetType().Name);
             return Ran.Nothing;
         }
 
-        var ran = outcome == RefusedOutcome ? Ran.Refused : Ran.Sent;
-        if (given is null)
-        {
-            return ran;
-        }
+        return outcome == RefusedOutcome ? Ran.Refused : Ran.Sent;
+    }
 
+    private async Task<string> PostTestsLineAsync(ApprovedAction action, GivenVerdict given, CancellationToken ct)
+    {
         try
         {
-            await verdicts.PostTestsLineAsync(given, ct).ConfigureAwait(false);
+            return await verdicts.PostTestsLineAsync(given, ct).ConfigureAwait(false) ? TestsLinePosted : "succeeded";
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        catch (Exception ex)
         {
             logger.LogWarning(
                 "The verdict of GitHub action {ActionId} was given, but its tests line was not posted ({ExceptionType}).", action.Id, ex.GetType().Name);
+            return TestsLineNotPosted;
         }
-
-        return ran;
     }
 }

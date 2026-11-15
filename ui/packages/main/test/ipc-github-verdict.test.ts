@@ -37,7 +37,7 @@ function status(
   reason: string | null = null,
   actionId = 'act-1',
 ): GitHubVerdictProgress {
-  return { actionId, state, url, reason };
+  return { actionId, state, url, reason, signedAs: null, testsLine: null };
 }
 
 function full(
@@ -179,6 +179,8 @@ describe('GitHub verdict IPC', () => {
       state: 'given',
       url: REVIEW_URL,
       reason: null,
+      signedAs: null,
+      testsLine: null,
     });
   });
 

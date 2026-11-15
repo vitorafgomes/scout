@@ -534,7 +534,8 @@ public sealed class WriteGateService(
     public static string Approval(string? reason) =>
         string.IsNullOrWhiteSpace(reason) ? ApprovedOutcome : $"{ApprovedOutcome}: {reason}";
 
-    private static bool IsRecordOf(WriteLogEntry entry, PendingAction action) =>
+    /// <summary>Whether <paramref name="entry"/> is the record of <paramref name="action"/>: its write, not its approval.</summary>
+    internal static bool IsRecordOf(WriteLogEntry entry, PendingAction action) =>
         string.Equals(entry.ActionId, action.Id, StringComparison.Ordinal) && !IsApproval(entry.Outcome);
 
     private FeatureScopeRow? FindRow(string featureId, string scope) =>

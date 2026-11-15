@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane - history"
-version: "1.2"
+version: "1.3"
 date: 2026-11-09
 updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
+changes: "v1.3 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in Scout.ControlPlane and when; the service page states how it works now."
@@ -32,6 +32,12 @@ reliability: high
 # ControlPlane - history
 
 > Dated changes to [[pages/services/control-plane]]; the service page states how it works now.
+
+## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
+
+- **Asked for:** the bell shows a given verdict's detail, "Signed as <account> · the tests line was posted as a comment", "... · the tests line was not posted", or just "Signed as <account>" when the verdict carried no tests line. The owner chose to keep the tests line's outcome in the verdict's own record, one approval and one log row ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14), over a row of its own.
+- **What changed:** `VerdictState` gains `SignedAs`, the login the write log keeps on the verdict's record, and `TestsLine`, `posted`, `notPosted` or `none`, read from the start of the recorded outcome; both empty until the verdict is given. No new storage: the signer was already on the write log entry.
+- **Tests:** `PullRequestVerdictServiceTests` (`A_Given_Verdict_Reads_Who_Signed_It_And_What_Became_Of_Its_Tests_Line_And_One_Not_Given_Yet_Reads_Neither`, `A_Failed_Verdict_Reads_No_Signer_And_No_Tests_Line`).
 
 ## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
 

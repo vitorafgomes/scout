@@ -1,9 +1,9 @@
 ---
 title: "Desktop UI - history"
-version: "1.46"
+version: "1.47"
 date: 2026-11-08
 updated: 2026-11-14
-changes: "v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
+changes: "v1.47 (2026-11-14): the bell's given verdict says who signed it and where its tests line went. v1.46 (2026-11-14): issues opened from the audit findings make a bell entry with See the issues. v1.45 (2026-11-14): the bell's test run names its command and elapsed time over an indeterminate bar. v1.44 (2026-11-14): the bell's audit entry carries the findings so far, moves with every area and turns running on Continue. v1.43 (2026-11-14): wording of the About entry. v1.42 (2026-11-14): Disconnect on the Ollama card. v1.41 (2026-11-14): the Docker panel counts the logs of the runs and names the command on the Stack tile. v1.40 (2026-11-14): a version the owner picks. v1.39 (2026-11-14): the Beta channel. v1.38 (2026-11-14): Settings gains an About fact sheet and an Updates card. v1.37 (2026-11-13): the ChatGPT sign-in cancel test waits for the fake browser to return before it cancels. v1.36 (2026-11-12): the bell's job entry as Main.dc.html draws it, and the owner's unread and reopen rules."
 page_type: reference
 status: artefact
 description: "What changed in the desktop's main window, shell and shared renderer styles, and when."
@@ -57,6 +57,10 @@ reliability: high
 # Desktop UI - history
 
 > Dated changes of [[pages/services/desktop-ui]]; the service page states how it works now.
+
+## 2026-11-14 - The bell: who signed a verdict and where its tests line went
+
+A given verdict's entry, "Verdict given: Approved acme/web#17", had no detail. It now reads "Signed as Bot (scout[bot]) · the tests line was posted as a comment", or "the tests line was not posted", the signer alone when no tests line was asked for, and the tests line alone when the control plane does not know the signer. Main reads both from `GetVerdict`, an empty answer as unknown. The signer reads by the rule the Review page already used under Signed as, now one function both call. The write log reads a verdict's new outcomes, "succeeded, tests line posted as a comment" and "succeeded, tests line not posted", as Done with the tests line kept, where they read "Succeeded, ...". The artboard draws "Signed as the Scout bot"; the app keeps the Review page's wording, for the owner to decide.
 
 ## 2026-11-14 - The bell: issues opened from the audit findings
 
