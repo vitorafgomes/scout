@@ -789,6 +789,45 @@ describe('Update and restart', () => {
       'The update failed (network); nothing was installed',
     ],
     [
+      'a connection reset, by its code',
+      'download',
+      Object.assign(new Error('read failed'), { code: 'ECONNRESET' }),
+      'network',
+      'The update failed (network); nothing was installed',
+    ],
+    [
+      'a file Scout may not write, by its code and never as the network',
+      'download',
+      Object.assign(new Error("EACCES: permission denied, open '/opt/Scout.AppImage'"), {
+        code: 'EACCES',
+      }),
+      'EACCES',
+      'The update failed (EACCES); nothing was installed',
+    ],
+    [
+      "an updater error, by electron-updater's code",
+      'check',
+      Object.assign(new Error('New version 0.1.0 is not newer'), {
+        code: 'ERR_UPDATER_INVALID_VERSION',
+      }),
+      'ERR_UPDATER_INVALID_VERSION',
+      'The update failed (ERR_UPDATER_INVALID_VERSION); nothing was installed',
+    ],
+    [
+      'a code that is not a plain error code, which is never shown',
+      'download',
+      Object.assign(new Error('write failed'), { code: '/home/owner/.config/scout: denied' }),
+      'unexpected',
+      'The update failed for a reason Scout does not recognise; nothing was installed',
+    ],
+    [
+      'an error with no code that is not of the network',
+      'download',
+      new Error('APPIMAGE env is not defined'),
+      'unexpected',
+      'The update failed for a reason Scout does not recognise; nothing was installed',
+    ],
+    [
       'a timeout',
       'download',
       new Error('Request timed out'),
