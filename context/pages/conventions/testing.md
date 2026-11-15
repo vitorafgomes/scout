@@ -90,12 +90,12 @@ One test project per source project, named `<Project>.Tests`, except the control
 
 `.github/workflows/ci.yml`, triggered on push and pull request to `main`:
 
-1. The seven hook self-tests, the self-test of the review workflow (`.claude/workflows/scout-review.test.sh`), the seven script self-tests (`check-context-refs`, `test-per-project`, `next-version`, `with-test-version`, `release-workflow`, `check-diagnostics`, `install-git-hooks`), then `tools/checks/check-context-refs.sh` (`.github/workflows/ci.yml:18`), which resolves every `path:line` citation in `context/pages`.
+1. The seven hook self-tests, the self-test of the review workflow (`.claude/workflows/scout-review.test.sh`), the seven script self-tests (`check-context-refs`, `test-per-project`, `next-version`, `with-test-version`, `release-workflow`, `check-diagnostics`, `install-git-hooks`), then `tools/checks/check-context-refs.sh` (`.github/workflows/ci.yml:35`), which resolves every `path:line` citation in `context/pages`.
 2. Setup .NET from `global.json`, then `dotnet restore`.
-3. A second SDK, 10.0.2xx, which `global.json`'s `latestMinor` roll-forward then selects for the rest of the job, and `dotnet format Scout.slnx --verify-no-changes --no-restore` (`.github/workflows/ci.yml:54`): the 10.0.1xx band cannot open the workspace `dotnet format` needs.
-4. One build, through the gate: `tools/checks/check-diagnostics.sh Scout.slnx info Release` (`.github/workflows/ci.yml:62`) rebuilds the solution in Release with the documentation file and the IDE rules forced on, and fails on any diagnostic at any severity.
-5. `tools/checks/test-per-project.sh --configuration Release --no-build` with the trx logger and XPlat coverage (`.github/workflows/ci.yml:67`), on the gate's output: one verdict per project, Skipped must be 0.
-6. The `Category=Docker` tests of `Scout.Sandbox.Tests` again, on their own (`.github/workflows/ci.yml:72`): the script above leaves them out when no daemon answers, and ubuntu runners have one, so a missing daemon fails the job instead of thinning the suite.
+3. A second SDK, 10.0.2xx, which `global.json`'s `latestMinor` roll-forward then selects for the rest of the job, and `dotnet format Scout.slnx --verify-no-changes --no-restore` (`.github/workflows/ci.yml:74`): the 10.0.1xx band cannot open the workspace `dotnet format` needs.
+4. One build, through the gate: `tools/checks/check-diagnostics.sh Scout.slnx info Release` (`.github/workflows/ci.yml:84`) rebuilds the solution in Release with the documentation file and the IDE rules forced on, and fails on any diagnostic at any severity.
+5. `tools/checks/test-per-project.sh --configuration Release --no-build` with the trx logger and XPlat coverage (`.github/workflows/ci.yml:89`), on the gate's output: one verdict per project, Skipped must be 0.
+6. The `Category=Docker` tests of `Scout.Sandbox.Tests` again, on their own (`.github/workflows/ci.yml:95`): the script above leaves them out when no daemon answers, and ubuntu runners have one, so a missing daemon fails the job instead of thinning the suite.
 
 The format check was disabled from 2026-10-21 to 2026-11-06 because `dotnet format --verify-no-changes` times out on the 10.0.1xx SDK; it runs again under 10.0.2xx. Locally, the same SDK from `$HOME/.dotnet` runs it (tooling page); `dotnet format whitespace --folder` is the fallback under the pinned one.
 
