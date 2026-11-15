@@ -1,0 +1,2133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scout Desktop: GitHub notes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1fa}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:default}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #7aa2f7;outline-offset:2px}
+</style>
+</helmet>
+<div style="min-height: 9000px; font-family: Inter, -apple-system, 'Segoe UI', sans-serif; background: {{t.bg}}; color: {{t.fg}}; font-size: 14px">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid {{t.line}}; background: {{t.surface}}">
+<div style="display: flex; align-items: center; gap: 10px; margin-right: auto; min-width: 0">
+<div aria-hidden="true" style="width: 28px; height: 28px; border-radius: 8px; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-weight: 700">S</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-size: 18px; font-weight: 600">GitHub notes: what the bot writes</h1>
+<span style="font-size: 12px; color: {{t.muted}}">Every text the Scout bot posts on GitHub, as a template, on the GitHub page it lands on and in Scout Desktop. Design, not built.</span>
+</div>
+</div>
+<div role="group" aria-label="Theme" style="display: flex; gap: 2px; padding: 3px; border: 1px solid {{t.line}}; border-radius: 20px; background: {{t.bg}}">
+<button aria-label="Light theme" aria-pressed="{{themeLight.pressed}}" onClick="{{setLight}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeLight.bg}}; color: {{themeLight.fg}}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></button>
+<button aria-label="Dark theme" aria-pressed="{{themeDark.pressed}}" onClick="{{setDark}}" style="width: 34px; height: 30px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{themeDark.bg}}; color: {{themeDark.fg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg></button>
+</div>
+</header>
+
+<main style="display: flex; flex-direction: column; gap: 16px; padding: 20px 0 40px">
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 32px">
+<div role="group" aria-label="Preview state" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: {{t.muted}}">
+<span>Preview state</span>
+<div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px dashed {{t.line}}; border-radius: 16px">
+<sc-for list="{{previews}}" as="p" hint-placeholder-count="12">
+<button aria-pressed="{{p.pressed}}" onClick="{{p.pick}}" style="border: 0; border-radius: 12px; padding: 4px 10px; font-size: 12px; background: {{p.bg}}; color: {{p.fg}}">{{p.label}}</button>
+</sc-for>
+</div>
+</div>
+<div role="group" aria-label="View" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: {{t.muted}}">
+<span>View</span>
+<div style="display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px dashed {{t.line}}; border-radius: 16px">
+<sc-for list="{{views}}" as="vw" hint-placeholder-count="2">
+<button aria-pressed="{{vw.pressed}}" onClick="{{vw.pick}}" style="border: 0; border-radius: 12px; padding: 4px 10px; font-size: 12px; background: {{vw.bg}}; color: {{vw.fg}}">{{vw.label}}</button>
+</sc-for>
+</div>
+<span>{{viewNote}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">{{label}}</h2>
+<span style="font-size: 13px; color: {{t.fg2}}">{{where}}</span>
+<span style="font-size: 13px; color: {{t.muted}}">{{posted}} Values are sample data. In the source, a name in braces is a value Scout measures or reads; after "model:" it is text the AI source writes; after "author:" it is text the author writes.</span>
+</div>
+</div>
+
+<section aria-label="{{frame.aria}}" style="background: {{frame.bg}}; color: {{frame.fg}}; font-family: {{frame.font}}; font-size: 14px; line-height: 1.5; padding: 24px 32px 32px; border-top: 1px solid {{frame.line}}; border-bottom: 1px solid {{frame.line}}">
+
+<sc-if value="{{isGh}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid {{g.borderMuted}}; font-size: 16px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{g.muted}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{gh.repoIcon}}"></path></svg>
+<span style="color: {{g.link}}">{{gh.owner}}</span><span style="color: {{g.muted}}">/</span><span style="color: {{g.link}}; font-weight: 600">{{gh.repo}}</span>
+<span style="padding: 0 7px; border: 1px solid {{g.border}}; border-radius: 2em; font-size: 12px; font-weight: 500; line-height: 18px; color: {{g.muted}}">Public</span>
+</div>
+<h2 style="margin: 0 0 8px; font-size: 32px; font-weight: 400; line-height: 1.25; overflow-wrap: anywhere">{{gh.title}} <span style="color: {{g.muted}}; font-weight: 300">{{gh.number}}</span></h2>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 16px; margin-bottom: {{gh.metaGap}}; border-bottom: {{gh.metaLine}}; color: {{g.muted}}">
+<span style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 2em; background: {{gh.stateBg}}; color: #ffffff; font-weight: 500; line-height: 20px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{gh.stateIcon}}"></path></svg>{{gh.state}}</span>
+<sc-if value="{{gh.isPull}}" hint-placeholder-val="{{true}}">
+<span><span style="font-weight: 600">{{gh.author}}</span> wants to merge {{gh.commits}} commits into <span style="padding: 2px 6px; border-radius: 6px; background: {{g.branchBg}}; color: {{g.link}}; font-family: {{g.mono}}; font-size: 12px">{{gh.base}}</span> from <span style="padding: 2px 6px; border-radius: 6px; background: {{g.branchBg}}; color: {{g.link}}; font-family: {{g.mono}}; font-size: 12px">{{gh.head}}</span></span>
+</sc-if>
+<sc-if value="{{gh.isIssue}}" hint-placeholder-val="{{false}}">
+<span><span style="font-weight: 600">{{gh.opener}}</span> <sc-if value="{{gh.openerIsBot}}" hint-placeholder-val="{{true}}"><span style="padding: 0 7px; border: 1px solid {{g.border}}; border-radius: 2em; font-size: 12px; font-weight: 500">bot</span></sc-if> opened this issue {{gh.openedWhen}} · 0 comments</span>
+</sc-if>
+</div>
+<sc-if value="{{gh.isPull}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; align-items: flex-end; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid {{g.border}}">
+<sc-for list="{{gh.tabs}}" as="tb" hint-placeholder-count="4">
+<span aria-current="{{tb.current}}" style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: -1px; padding: 8px 16px; border: 1px solid {{tb.border}}; border-bottom: 1px solid {{tb.bottom}}; border-radius: 6px 6px 0 0; background: {{tb.bg}}; color: {{tb.fg}}; font-weight: {{tb.weight}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{g.muted}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{tb.icon}}"></path></svg>{{tb.label}}<span style="padding: 0 6px; border-radius: 2em; background: {{g.counterBg}}; font-size: 12px; font-weight: 500; line-height: 18px">{{tb.count}}</span></span>
+</sc-for>
+<span style="margin-left: auto; padding-bottom: 10px; font-size: 12px; font-weight: 600"><span style="color: {{g.green}}">{{gh.added}}</span> <span style="color: {{g.red}}">{{gh.removed}}</span></span>
+</div>
+</sc-if>
+</sc-if>
+
+<div style="display: grid; grid-template-columns: {{frame.cols}}; gap: 24px; align-items: start">
+<div style="min-width: 0; display: flex; flex-direction: column; gap: {{frame.cardGap}}; background: {{frame.cardBg}}; border: {{frame.cardBorder}}; border-radius: {{frame.cardRadius}}; padding: {{frame.cardPad}}">
+
+<sc-if value="{{isScout}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-weight: 600">Scout</span><span style="font-size: 12px; color: {{t.muted}}">{{sc.time}}</span>
+<span style="margin-left: auto; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.surface2}}; color: {{t.fg2}}">GitHub</span>
+<sc-if value="{{sc.irreversible}}" hint-placeholder-val="{{true}}">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{t.warnBg}}; color: {{t.warn}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l10 18H2zM12 10v5M12 18v.5"></path></svg>Cannot be undone</span>
+</sc-if>
+</div>
+<h2 style="margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere">{{sc.heading}}</h2>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{sc.originFg}}">{{sc.origin}}</p>
+<sc-if value="{{sc.hasRead}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="gn-read-h" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<h3 id="gn-read-h" style="margin: 0; font-size: 14px; font-weight: 600">What Scout read, ran and left out</h3>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{sc.readLine}}</p>
+<sc-if value="{{sc.hasTrace}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{sc.requestLine}}</p>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{sc.docLine}}</p>
+</sc-if>
+<sc-if value="{{sc.hasChips}}" hint-placeholder-val="{{true}}">
+<ul aria-label="Tests and checks" style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{sc.chips}}" as="ck" hint-placeholder-count="3">
+<li style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; background: {{ck.bg}}; color: {{ck.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ck.icon}}"></path></svg>{{ck.label}}</li>
+</sc-for>
+</ul>
+</sc-if>
+</section>
+</sc-if>
+<sc-if value="{{sc.hasClaims}}" hint-placeholder-val="{{false}}">
+<section aria-labelledby="gn-claims-h" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<h3 id="gn-claims-h" style="margin: 0; font-size: 14px; font-weight: 600">{{sc.claimsTitle}}</h3>
+<p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{sc.claimsLine}}</p>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{sc.claims}}" as="cl" hint-placeholder-count="4">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: 8px; background: {{t.surface}}; font-size: 13px">
+<span style="font-weight: 600">{{cl.id}}</span>
+<span style="flex: 1 1 260px; min-width: 0; color: {{t.fg2}}">{{cl.text}}</span>
+<sc-for list="{{cl.chips}}" as="cc" hint-placeholder-count="2">
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px; font-size: 12px; background: {{cc.bg}}; color: {{cc.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{cc.icon}}"></path></svg>{{cc.label}}</span>
+</sc-for>
+</li>
+</sc-for>
+</ul>
+<h4 style="margin: 4px 0 0; font-size: 12px; font-weight: 600; color: {{t.muted}}">{{sc.gapsTitle}}</h4>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}">
+<sc-for list="{{sc.gaps}}" as="gp" hint-placeholder-count="2">
+<li>{{gp.text}}</li>
+</sc-for>
+</ul>
+</section>
+</sc-if>
+<sc-if value="{{sc.hasChange}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="gn-change-h" style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}">
+<h3 id="gn-change-h" style="margin: 0; font-size: 14px; font-weight: 600">What the pull request changes</h3>
+<p style="margin: 0; font-size: 13px; line-height: 1.5; color: {{t.fg2}}">{{sc.changeSummary}}</p>
+<span style="font-size: 12px; color: {{t.muted}}">{{sc.changeLine}}</span>
+</section>
+</sc-if>
+</sc-if>
+
+<div style="position: relative; min-width: 0; display: flex; flex-direction: column; gap: {{frame.postGap}}; padding: {{frame.postPad}}; border: {{frame.postBorder}}; border-left: {{frame.postLeft}}; border-radius: {{frame.postRadius}}">
+<sc-if value="{{isScout}}" hint-placeholder-val="{{false}}">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">{{sc.postHeading}}</h3>
+<span style="font-size: 13px; color: {{t.fg}}; overflow-wrap: anywhere">{{sc.target}}</span>
+<span style="font-size: 12px; color: {{t.muted}}">{{sc.signed}}</span>
+<sc-if value="{{sc.hasVerdict}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 12px; color: {{t.muted}}">Verdict</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{sc.verdictBg}}; color: {{sc.verdictFg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{sc.verdictIcon}}"></path></svg>{{sc.verdict}}</span>
+<span style="font-size: 12px; color: {{t.fg2}}">{{sc.verdictWhy}}</span>
+</div>
+</sc-if>
+<sc-if value="{{sc.hasTitle}}" hint-placeholder-val="{{false}}">
+<h4 style="margin: 4px 0 0; font-size: 12px; font-weight: 600; color: {{t.muted}}">Title</h4>
+<span style="font-size: 14px; font-weight: 600; overflow-wrap: anywhere">{{sc.title}}</span>
+<h4 style="margin: 4px 0 0; font-size: 12px; font-weight: 600; color: {{t.muted}}">Labels suggested in the body, not set by Scout</h4>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{sc.labels}}" as="sl" hint-placeholder-count="2">
+<span style="padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; background: {{t.surface2}}; color: {{t.fg2}}">{{sl.text}}</span>
+</sc-for>
+</div>
+</sc-if>
+</sc-if>
+<sc-if value="{{hasLine}}" hint-placeholder-val="{{true}}">
+<div aria-hidden="true" style="position: absolute; top: 0; bottom: 0; left: 71px; width: 2px; background: {{g.borderMuted}}"></div>
+</sc-if>
+
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+<sc-if value="{{r.isEvent}}" hint-placeholder-val="{{false}}">
+<div style="position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: {{r.margin}}; padding-left: 56px; color: {{g.muted}}">
+<span aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; box-sizing: border-box; margin-right: 2px; border-radius: 50%; border: 2px solid {{g.canvas}}; background: {{r.badgeBg}}; color: {{r.badgeFg}}; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{r.icon}}"></path></svg></span>
+<span aria-hidden="true" style="width: 20px; height: 20px; flex: 0 0 20px; border-radius: {{r.avatarRadius}}; background: {{r.avatarBg}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">{{r.initial}}</span>
+<span style="font-weight: 600; color: {{g.fg}}">{{r.who}}</span>
+<sc-if value="{{r.isBot}}" hint-placeholder-val="{{false}}">
+<span style="padding: 0 7px; border: 1px solid {{g.border}}; border-radius: 2em; font-size: 12px; font-weight: 500; line-height: 18px">bot</span>
+</sc-if>
+<span>{{r.text}}</span>
+<span>{{r.when}}</span>
+</div>
+</sc-if>
+
+<sc-if value="{{r.isBox}}" hint-placeholder-val="{{true}}">
+<div style="position: relative; z-index: 1; display: flex; gap: 16px; margin: {{r.margin}}; min-width: 0">
+<sc-if value="{{r.hasGutter}}" hint-placeholder-val="{{true}}">
+<div style="flex: 0 0 40px">
+<sc-if value="{{r.hasAvatar}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="width: 40px; height: 40px; border-radius: {{r.avatarRadius}}; background: {{r.avatarBg}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600">{{r.initial}}</span>
+</sc-if>
+</div>
+</sc-if>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+<sc-if value="{{r.hasLabel}}" hint-placeholder-val="{{false}}">
+<h4 style="margin: 4px 0 0; font-size: 12px; font-weight: 600; color: {{t.muted}}">{{r.label}}</h4>
+</sc-if>
+<div style="position: relative; min-width: 0; border: 1px solid {{m.border}}; border-radius: {{m.radius}}; background: {{m.canvas}}">
+<sc-if value="{{r.hasCaret}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="position: absolute; left: -6px; top: 13px; width: 10px; height: 10px; transform: rotate(45deg); background: {{m.subtle}}; border-left: 1px solid {{m.border}}; border-bottom: 1px solid {{m.border}}"></span>
+</sc-if>
+<sc-if value="{{r.hasFile}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 8px; padding: 6px 16px; background: {{m.subtle}}; border-bottom: 1px solid {{m.border}}; border-radius: {{m.radiusTop}}; font-family: {{m.mono}}; font-size: 12px; color: {{m.fg}}">
+<sc-if value="{{r.isFileView}}" hint-placeholder-val="{{false}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{m.muted}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+</sc-if>
+<span style="overflow-wrap: anywhere">{{r.file}}</span>
+<sc-if value="{{r.isFileView}}" hint-placeholder-val="{{false}}">
+<span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-family: {{m.font}}; color: {{m.muted}}"><span aria-hidden="true" style="width: 13px; height: 13px; box-sizing: border-box; border: 1px solid {{m.muted}}; border-radius: 3px"></span>Viewed</span>
+</sc-if>
+</div>
+<div style="font-family: {{m.mono}}; font-size: 12px; line-height: 20px; overflow-x: auto; color: {{m.fg}}">
+<sc-for list="{{r.lines}}" as="ln" hint-placeholder-count="4">
+<div style="display: flex; background: {{ln.bg}}; min-width: 0"><span style="flex: 0 0 50px; box-sizing: border-box; padding: 0 10px; text-align: right; color: {{m.muted}}; background: {{ln.numBg}}">{{ln.old}}</span><span style="flex: 0 0 50px; box-sizing: border-box; padding: 0 10px; text-align: right; color: {{m.muted}}; background: {{ln.numBg}}">{{ln.num}}</span><span style="flex: 0 0 22px; text-align: center">{{ln.sign}}</span><span style="white-space: pre-wrap; overflow-wrap: anywhere">{{ln.text}}</span></div>
+</sc-for>
+</div>
+</sc-if>
+<sc-for list="{{r.comments}}" as="c" hint-placeholder-count="1">
+<div style="border-top: {{c.topLine}}; opacity: {{r.opacity}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: {{c.headPad}}; background: {{c.headBg}}; border-bottom: {{c.headLine}}; border-radius: {{c.headRadius}}; color: {{m.muted}}">
+<sc-if value="{{c.hasSmallAvatar}}" hint-placeholder-val="{{false}}">
+<span aria-hidden="true" style="width: 24px; height: 24px; flex: 0 0 24px; border-radius: {{c.avatarRadius}}; background: {{c.avatarBg}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600">{{c.initial}}</span>
+</sc-if>
+<span style="font-weight: 600; color: {{m.fg}}">{{c.who}}</span>
+<sc-if value="{{c.isBot}}" hint-placeholder-val="{{true}}">
+<span style="padding: 0 7px; border: 1px solid {{m.border}}; border-radius: 2em; font-size: 12px; font-weight: 500; line-height: 18px">bot</span>
+</sc-if>
+<span>{{c.action}} {{c.when}}</span>
+<sc-if value="{{c.hasBadge}}" hint-placeholder-val="{{false}}">
+<span style="margin-left: auto; padding: 0 7px; border: 1px solid {{m.border}}; border-radius: 2em; font-size: 12px; font-weight: 500; line-height: 18px">{{c.badge}}</span>
+</sc-if>
+</div>
+<div style="padding: {{c.bodyPad}}; color: {{m.fg}}; overflow-wrap: anywhere; min-width: 0">
+<sc-for list="{{c.blocks}}" as="b" hint-placeholder-count="6">
+<div style="display: {{b.show}}">
+<sc-if value="{{b.isH}}" hint-placeholder-val="{{false}}">
+<div role="heading" aria-level="{{b.level}}" style="margin: {{b.margin}}; padding-bottom: {{b.rule}}; border-bottom: {{b.ruleLine}}; font-size: {{b.size}}; font-weight: 600; line-height: 1.25"><sc-for list="{{b.spans}}" as="s" hint-placeholder-count="1"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; color: {{s.fg}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></div>
+</sc-if>
+<sc-if value="{{b.isP}}" hint-placeholder-val="{{true}}">
+<p style="margin: {{b.margin}}"><sc-for list="{{b.spans}}" as="s" hint-placeholder-count="2"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; color: {{s.fg}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></p>
+</sc-if>
+<sc-if value="{{b.isLi}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; gap: 8px; margin: {{b.margin}}; padding-left: {{b.indent}}">
+<sc-if value="{{b.hasTask}}" hint-placeholder-val="{{false}}">
+<span role="checkbox" aria-checked="{{b.checked}}" aria-disabled="true" style="flex: 0 0 13px; width: 13px; height: 13px; box-sizing: border-box; margin: 4px 0 0 7px; border: 1px solid {{b.boxLine}}; border-radius: 3px; background: {{b.boxBg}}; color: #ffffff; font-size: 10px; line-height: 11px; text-align: center">{{b.tick}}</span>
+</sc-if>
+<sc-if value="{{b.hasMarker}}" hint-placeholder-val="{{true}}">
+<span style="flex: 0 0 20px; text-align: right">{{b.marker}}</span>
+</sc-if>
+<span style="min-width: 0"><sc-for list="{{b.spans}}" as="s" hint-placeholder-count="2"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; color: {{s.fg}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></span>
+</div>
+</sc-if>
+<sc-if value="{{b.isTable}}" hint-placeholder-val="{{false}}">
+<div style="margin: {{b.margin}}; overflow-x: auto">
+<div role="table" style="display: inline-grid; grid-template-columns: {{b.cols}}; gap: 1px; padding: 1px; box-sizing: border-box; max-width: 100%; background: {{m.border}}">
+<sc-for list="{{b.cells}}" as="cell" hint-placeholder-count="6">
+<div role="cell" style="min-width: 0; padding: 6px 13px; background: {{cell.bg}}; font-weight: {{cell.weight}}"><sc-for list="{{cell.spans}}" as="s" hint-placeholder-count="1"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; color: {{s.fg}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{b.isCode}}" hint-placeholder-val="{{false}}">
+<pre style="margin: {{b.margin}}; padding: 16px; border-radius: 6px; background: {{m.subtle}}; font-family: {{m.mono}}; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere">{{b.text}}</pre>
+</sc-if>
+<sc-if value="{{b.isSugg}}" hint-placeholder-val="{{false}}">
+<div style="margin: {{b.margin}}; border: 1px solid {{m.border}}; border-radius: 6px; overflow: hidden">
+<div style="padding: 8px 12px; background: {{m.subtle}}; border-bottom: 1px solid {{m.border}}; font-size: 12px; color: {{m.muted}}">Suggested change</div>
+<div style="font-family: {{m.mono}}; font-size: 12px; line-height: 20px">
+<sc-for list="{{b.del}}" as="dl" hint-placeholder-count="1">
+<div style="display: flex; background: {{m.delBg}}; min-width: 0"><span style="flex: 0 0 50px; box-sizing: border-box; padding: 0 10px; text-align: right; color: {{m.muted}}; background: {{m.delNum}}">{{dl.num}}</span><span style="flex: 0 0 50px; background: {{m.delNum}}"></span><span style="flex: 0 0 22px; text-align: center">-</span><span style="white-space: pre-wrap; overflow-wrap: anywhere">{{dl.text}}</span></div>
+</sc-for>
+<sc-for list="{{b.add}}" as="al" hint-placeholder-count="1">
+<div style="display: flex; background: {{m.addBg}}; min-width: 0"><span style="flex: 0 0 50px; background: {{m.addNum}}"></span><span style="flex: 0 0 50px; box-sizing: border-box; padding: 0 10px; text-align: right; color: {{m.muted}}; background: {{m.addNum}}">{{al.num}}</span><span style="flex: 0 0 22px; text-align: center">+</span><span style="white-space: pre-wrap; overflow-wrap: anywhere">{{al.text}}</span></div>
+</sc-for>
+</div>
+<div style="display: flex; justify-content: flex-end; padding: 8px; border-top: 1px solid {{m.border}}">
+<button type="button" disabled style="padding: 3px 12px; border: 1px solid {{m.border}}; border-radius: 6px; background: {{m.subtle}}; color: {{m.muted}}; font-size: 12px; font-weight: 500">Commit suggestion</button>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{b.isSummary}}" hint-placeholder-val="{{false}}">
+<button type="button" aria-expanded="{{b.expanded}}" onClick="{{b.toggle}}" style="display: flex; align-items: flex-start; gap: 6px; width: 100%; margin: {{b.margin}}; padding: 0; border: 0; background: transparent; color: inherit; text-align: left"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="flex: 0 0 16px; margin-top: 3px"><path d="{{b.icon}}"></path></svg><span style="min-width: 0"><sc-for list="{{b.spans}}" as="s" hint-placeholder-count="1"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; color: {{s.fg}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></span></button>
+</sc-if>
+<sc-if value="{{b.isQuote}}" hint-placeholder-val="{{false}}">
+<div style="margin: {{b.margin}}; padding: 0 1em; border-left: 0.25em solid {{m.border}}; color: {{m.muted}}"><sc-for list="{{b.spans}}" as="s" hint-placeholder-count="1"><span style="font-family: {{s.font}}; font-size: {{s.size}}; font-weight: {{s.weight}}; background: {{s.bg}}; padding: {{s.pad}}; border-radius: 6px">{{s.text}}</span></sc-for></div>
+</sc-if>
+<sc-if value="{{b.isHr}}" hint-placeholder-val="{{false}}">
+<div role="separator" style="margin: {{b.margin}}; height: 4px; background: {{m.border}}"></div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{r.hasReply}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-top: 1px solid {{m.border}}; background: {{m.subtle}}; border-radius: {{m.radiusBottom}}">
+<span style="flex: 1; padding: 5px 12px; border: 1px solid {{m.border}}; border-radius: 6px; background: {{m.canvas}}; color: {{m.muted}}">Reply...</span>
+<button type="button" disabled style="padding: 5px 16px; border: 1px solid {{m.border}}; border-radius: 6px; background: {{m.subtle}}; color: {{m.fg}}; font-weight: 500">Resolve conversation</button>
+</div>
+</sc-if>
+<sc-if value="{{r.decidable}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-top: 1px solid {{t.line}}">
+<button type="button" aria-label="{{r.keepAria}}" aria-pressed="{{r.keepPressed}}" onClick="{{r.keep}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{r.keepBorder}}; background: {{r.keepBg}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Keep</button>
+<button type="button" aria-label="{{r.dropAria}}" aria-pressed="{{r.dropPressed}}" onClick="{{r.drop}}" style="min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid {{r.dropBorder}}; background: {{r.dropBg}}; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Drop</button>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{r.isMerge}}" hint-placeholder-val="{{false}}">
+<div style="position: relative; z-index: 1; display: flex; gap: 16px; margin: {{r.margin}}; padding-top: 16px; border-top: 2px solid {{g.border}}; background: {{g.canvas}}">
+<span aria-hidden="true" style="width: 40px; height: 40px; flex: 0 0 40px; border-radius: 6px; background: {{r.badgeBg}}; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{r.icon}}"></path></svg></span>
+<div style="position: relative; flex: 1; min-width: 0; border: 1px solid {{g.border}}; border-radius: 6px; background: {{g.canvas}}">
+<span aria-hidden="true" style="position: absolute; left: -6px; top: 14px; width: 10px; height: 10px; transform: rotate(45deg); background: {{g.canvas}}; border-left: 1px solid {{g.border}}; border-bottom: 1px solid {{g.border}}"></span>
+<sc-for list="{{r.sections}}" as="sx" hint-placeholder-count="3">
+<div style="display: flex; align-items: flex-start; gap: 12px; padding: 16px; border-bottom: 1px solid {{g.border}}">
+<span aria-hidden="true" style="width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: {{sx.iconBg}}; color: #ffffff; display: flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="{{sx.icon}}"></path></svg></span>
+<div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 600">{{sx.title}}</span>
+<span style="color: {{g.muted}}">{{sx.sub}}</span>
+<sc-for list="{{sx.files}}" as="fl" hint-placeholder-count="0">
+<span style="font-family: {{g.mono}}; font-size: 12px; overflow-wrap: anywhere">{{fl.path}}</span>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px; background: {{g.subtle}}; border-radius: 0 0 6px 6px">
+<button type="button" disabled style="padding: 5px 16px; border: 1px solid {{r.buttonLine}}; border-radius: 6px; background: {{r.buttonBg}}; color: {{r.buttonFg}}; font-weight: 500">Merge pull request</button>
+<span style="font-size: 12px; color: {{g.muted}}">{{r.foot}}</span>
+</div>
+</div>
+</div>
+</sc-if>
+</sc-for>
+</div>
+
+<sc-if value="{{isScout}}" hint-placeholder-val="{{false}}">
+<sc-if value="{{sc.pending}}" hint-placeholder-val="{{true}}">
+<p style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{sc.pendingLine}}</p>
+<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px">
+<button type="button" aria-label="{{sc.rejectAria}}" style="height: 40px; padding: 0 18px; border-radius: 20px; border: 1px solid {{t.err}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Reject</button>
+<button type="button" aria-label="{{sc.approveAria}}" style="height: 40px; padding: 0 18px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"></path></svg>{{sc.approveLabel}}</button>
+</div>
+</sc-if>
+<sc-if value="{{sc.hasStatus}}" hint-placeholder-val="{{false}}">
+<p role="status" style="margin: 0; padding: 10px 12px; border-radius: 12px; background: {{sc.statusBg}}; font-size: 13px; color: {{sc.statusFg}}">{{sc.status}}</p>
+</sc-if>
+</sc-if>
+</div>
+
+<sc-if value="{{hasSidebar}}" hint-placeholder-val="{{true}}">
+<aside aria-label="Sidebar" style="display: flex; flex-direction: column; font-size: 12px; color: {{g.muted}}">
+<sc-for list="{{gh.side}}" as="sd" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid {{g.borderMuted}}">
+<span style="font-weight: 600">{{sd.title}}</span>
+<sc-if value="{{sd.hasNone}}" hint-placeholder-val="{{false}}">
+<span>{{sd.none}}</span>
+</sc-if>
+<sc-for list="{{sd.people}}" as="pe" hint-placeholder-count="1">
+<div style="display: flex; align-items: center; gap: 6px; color: {{g.fg}}">
+<span aria-hidden="true" style="width: 20px; height: 20px; flex: 0 0 20px; border-radius: {{pe.radius}}; background: {{pe.bg}}; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600">{{pe.initial}}</span>
+<span style="font-weight: 600">{{pe.name}}</span>
+<span role="img" aria-label="{{pe.state}}" title="{{pe.state}}" style="margin-left: auto; display: flex; color: {{pe.iconFg}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pe.icon}}"></path></svg></span>
+</div>
+</sc-for>
+<sc-if value="{{sd.hasLabels}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; gap: 4px">
+<sc-for list="{{sd.labels}}" as="lb" hint-placeholder-count="2">
+<span style="padding: 0 7px; border: 1px solid {{lb.line}}; border-radius: 2em; background: {{lb.bg}}; color: {{lb.fg}}; font-size: 12px; font-weight: 500; line-height: 18px">{{lb.text}}</span>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</aside>
+</sc-if>
+
+<sc-if value="{{isScout}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<span style="font-size: 12px; color: {{t.muted}}">{{sc.bellCaption}}</span>
+<section aria-label="Notifications" style="display: flex; flex-direction: column; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; overflow: hidden">
+<div style="padding: 14px 16px 10px; border-bottom: 1px solid {{t.line}}; font-weight: 600; font-size: 15px">Notifications</div>
+<sc-for list="{{bell}}" as="n" hint-placeholder-count="1">
+<div style="display: flex; gap: 12px; padding: 12px 16px; background: {{t.unreadBg}}">
+<div aria-hidden="true" style="width: 32px; height: 32px; flex: 0 0 32px; border-radius: 16px; display: flex; align-items: center; justify-content: center; background: {{n.iconBg}}; color: {{n.iconFg}}; font-size: 13px; font-weight: 700">{{n.glyph}}</div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+<div style="display: flex; gap: 8px; align-items: baseline">
+<span style="font-size: 14px; font-weight: 600; line-height: 1.35; margin-right: auto">{{n.title}}</span>
+<span style="font-size: 12px; color: {{t.muted}}; white-space: nowrap">{{n.when}}</span>
+</div>
+<span style="font-size: 13px; color: {{t.fg2}}; line-height: 1.4">{{n.detail}}</span>
+<sc-if value="{{n.indeterminate}}" hint-placeholder-val="{{false}}">
+<div role="progressbar" aria-label="{{n.title}}" style="height: 6px; border-radius: 3px; background: {{t.surface2}}; overflow: hidden"><div style="height: 6px; width: 40%; border-radius: 3px; background: {{t.accent}}"></div></div>
+</sc-if>
+<sc-if value="{{n.hasAction}}" hint-placeholder-val="{{false}}">
+<a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">{{n.action}}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a>
+</sc-if>
+<sc-if value="{{n.hasButtons}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px">
+<sc-for list="{{n.buttons}}" as="nb" hint-placeholder-count="1">
+<button type="button" style="border: 1px solid {{t.line}}; background: {{t.surface2}}; color: {{t.fg}}; border-radius: 8px; padding: 5px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{nb.path}}"></path></svg>{{nb.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</section>
+</div>
+</sc-if>
+</div>
+</section>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 0 32px; max-width: 1000px; box-sizing: border-box">
+<sc-for list="{{sources}}" as="src" hint-placeholder-count="1">
+<details style="border: 1px solid {{t.line}}; border-radius: 6px; padding: 10px 16px">
+<summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: {{t.fg2}}">Markdown source: {{src.name}}</summary>
+<div style="margin-top: 10px; padding: 12px 14px; border-radius: 6px; background: {{t.codeBg}}; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.55">
+<sc-for list="{{src.lines}}" as="sn" hint-placeholder-count="8">
+<div style="min-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; color: {{sn.fg}}">{{sn.text}}</div>
+</sc-for>
+</div>
+<p style="margin: 8px 0 0; font-size: 12px; color: {{t.muted}}">A line in <span style="color: {{t.accent}}">this colour</span> is written once for each item of a list. A line in <span style="color: {{t.warn}}">this colour</span> is a field of the post, not part of its body.</p>
+</details>
+</sc-for>
+
+<sc-if value="{{hasNotes}}" hint-placeholder-val="{{true}}">
+<section aria-labelledby="gn-notes" style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px dashed {{t.line}}; border-radius: 10px">
+<h2 id="gn-notes" style="margin: 0; font-size: 13px; font-weight: 600; color: {{t.fg2}}">Conditions and variants</h2>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}">
+<sc-for list="{{notes}}" as="nt" hint-placeholder-count="2">
+<li>{{nt.text}}</li>
+</sc-for>
+</ul>
+</section>
+</sc-if>
+</div>
+
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":9000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: 'dark', preview: 'prDescription', view: 'github', drops: {}, open: {} };
+  }
+  palette(mode) {
+    if (mode === 'light') {
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', neutral: '#4a5468', neutralBg: '#eceff5', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', codeBg: '#eef1f7' };
+    }
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', neutral: '#9aa3b6', neutralBg: '#1f2a3d', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', codeBg: '#0b111c' };
+  }
+  github(mode) {
+    const shared = {
+      font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif",
+      mono: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+      radius: '6px', radiusTop: '6px 6px 0 0', radiusBottom: '0 0 6px 6px',
+    };
+    if (mode === 'light') {
+      return { ...shared, canvas: '#ffffff', subtle: '#f6f8fa', border: '#d0d7de', borderMuted: '#d8dee4', fg: '#1f2328', muted: '#656d76', link: '#0969da', green: '#1a7f37', greenEmph: '#1f883d', red: '#d1242f', redEmph: '#cf222e', purpleEmph: '#8250df', yellow: '#9a6700', yellowEmph: '#bf8700', neutralEmph: '#6e7781', badge: '#eaeef2', codeBg: 'rgba(175,184,193,0.2)', counterBg: 'rgba(175,184,193,0.2)', branchBg: '#ddf4ff', addBg: '#e6ffec', addNum: '#ccffd8', delBg: '#ffebe9', delNum: '#ffd7d5', person: '#6e7781' };
+    }
+    return { ...shared, canvas: '#0d1117', subtle: '#161b22', border: '#30363d', borderMuted: '#21262d', fg: '#e6edf3', muted: '#8d96a0', link: '#4493f8', green: '#3fb950', greenEmph: '#238636', red: '#f85149', redEmph: '#da3633', purpleEmph: '#8957e5', yellow: '#d29922', yellowEmph: '#9e6a03', neutralEmph: '#6e7681', badge: '#21262d', codeBg: 'rgba(110,118,129,0.4)', counterBg: 'rgba(110,118,129,0.4)', branchBg: 'rgba(56,139,253,0.15)', addBg: 'rgba(46,160,67,0.15)', addNum: 'rgba(63,185,80,0.3)', delBg: 'rgba(248,81,73,0.1)', delNum: 'rgba(248,81,73,0.3)', person: '#6e7681' };
+  }
+  scoutMarkdown(t) {
+    return {
+      font: "Inter, -apple-system, 'Segoe UI', sans-serif", mono: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
+      radius: '8px', radiusTop: '8px 8px 0 0', radiusBottom: '0 0 8px 8px',
+      canvas: t.bg, subtle: t.surface2, border: t.line, fg: t.fg2, muted: t.muted, link: t.accent, codeBg: t.surface2,
+      addBg: t.okBg, addNum: t.okBg, delBg: t.errBg, delNum: t.errBg, person: t.neutral,
+    };
+  }
+  icons() {
+    return {
+      check: 'M20 6L9 17l-5-5',
+      cross: 'M6 6l12 12M18 6L6 18',
+      dot: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      skip: 'M5 12h14',
+      eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+      fileDiff: 'M6 3h9l4 4v14H6zM12 8v6M9 11h6M9 17h6',
+      alert: 'M12 3l10 18H2zM12 10v5M12 18v.5',
+      mention: 'M16 12a4 4 0 1 0-8 0 4 4 0 0 0 8 0zM16 8v5a2.5 2.5 0 0 0 5 0v-1a9 9 0 1 0-4 7.5',
+      comment: 'M4 5h16v11H11l-4 4v-4H4z',
+      commits: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3 12h6M15 12h6',
+      checks: 'M4 6l2 2 3-3M4 14l2 2 3-3M13 7h7M13 15h7',
+      repo: 'M5 4h13v16H7a2 2 0 0 1-2-2zM5 18a2 2 0 0 1 2-2h11M9 8h5',
+      pull: 'M6 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 8v8M11 6h4a3 3 0 0 1 3 3v7M13 3l-3 3 3 3',
+      merge: 'M6 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 8v8M6 8c0 4 4 4 10 4',
+      issue: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11a1 1 0 1 0 0 2 1 1 0 0 0 0-2z',
+      pencil: 'M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z',
+      chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+    };
+  }
+  templates() {
+    const api = 'https://github.com/acme/api';
+    const shop = 'https://github.com/acme/shop';
+    const at = (path, line) => api + '/blob/4f2a9c1/' + path + '#L' + line;
+    const each = (list, ...lines) => ({ each: list, lines });
+    const section = (title, ...lines) => ['#### ' + title, '', ...lines, ''];
+    const h3 = (line) => (typeof line === 'string' && line.startsWith('#### ') ? line.slice(1) : line);
+    const details = (summary, ...lines) => ['<details><summary>' + summary + '</summary>', '', ...lines, '', '</details>'];
+    const header = (verdict) => [
+      '### Scout review: ' + verdict,
+      '',
+      'Commit `{commit}` · {reviewed_at} UTC · reviewed with {ai_source}, model `{ai_model}`',
+      '',
+    ];
+    const sections = {
+      reasons: section('Verdict and reasons', '**Verdict: {verdict}.**', '', each('reasons', '1. {model:reason}')),
+      asked: section('What was asked and what was done',
+        '{requests_total} requests: {requests_covered} done and covered by tests, {requests_untested} done without a test, {requests_not_done} not done. Requests taken from {requests_source}.',
+        '',
+        '| Asked | What was done | Tests that cover it | Tests to run by hand to prove it | Author\'s claim checked |',
+        '|---|---|---|---|---|',
+        each('requests', '| **{id}** {model:asked} ([{where}]({where_url})) | {model:done} [`{path}:{line}`]({url}) | {covering_tests} | {manual_case} | {claim} |'),
+        '',
+        '**Asked and not done:**',
+        '',
+        each('not_done', '- {model:what}'),
+        '',
+        '**Done and not asked:**',
+        '',
+        each('not_asked', '- {model:what}')),
+      summary: section('Summary of the change',
+        '{model:change_summary}',
+        '',
+        '| Item | Value |',
+        '|---|---|',
+        '| Kind | {model:change_kind} |',
+        '| Linked issue | [{issue_ref}]({issue_url}): {issue_title} |',
+        '| Areas touched | {areas_touched} |',
+        '| Size | {files_changed} files, +{lines_added} -{lines_removed} lines |',
+        '| Public contract touched | {contract_touched} |',
+        '| Data migration | {data_migration} |',
+        '| New dependency | {new_dependency} |'),
+      changed: section('What changed, by area',
+        '{files_read} of {files_changed} changed files read.',
+        '',
+        '| Area | File | What changed |',
+        '|---|---|---|',
+        each('main_files', '| {area} | `{path}` (+{added} -{removed}) | {model:what} |'),
+        '',
+        ...details('The other {other_files_count} files read',
+          '| Area | File | What changed |',
+          '|---|---|---|',
+          each('other_files', '| {area} | `{path}` (+{added} -{removed}) | {model:what} |')),
+        '',
+        '**Not read:** {not_read_total} files.',
+        '',
+        each('not_read', '- {kind}: {count} ({paths}), {reason}')),
+      docs: section('Documentation',
+        '{docs_changed_count} documents changed, {docs_stale_count} not updated, {docs_missing_count} missing.',
+        '',
+        '**Changed in this pull request:**',
+        '',
+        each('docs_changed', '- `{path}`: {model:what}'),
+        '',
+        '**Describe the changed code and were not updated:**',
+        '',
+        each('docs_stale', '- `{path}`, section "{section}": {model:why}'),
+        '',
+        '**Missing:**',
+        '',
+        each('docs_missing', '- {model:what}'),
+        '',
+        '**Decision record followed:** [`{decision_path}`]({decision_url}), "{decision_title}".'),
+      prTests: section('Tests in this pull request',
+        '{tests_added} new, {tests_changed} changed, {tests_removed} removed, in {test_files_changed} test files.',
+        '',
+        ...details('The {pr_tests_count} tests',
+          '| Test | File | What it proves | State |',
+          '|---|---|---|---|',
+          each('pr_tests', '| `{name}` | `{file}` | {model:proves} | {state} |')),
+        '',
+        '**Changed code no test reaches:**',
+        '',
+        each('untested', '- [`{path}:{line}`]({url}): {model:what}')),
+      ran: section('Tests Scout ran',
+        '| Item | Measured |',
+        '|---|---|',
+        '| Command | `{test_command}` |',
+        '| Where | Isolated container, no network, image `{test_image}` |',
+        '| Result | {test_result} |',
+        '| Duration | {test_seconds} s |',
+        '| Counts | {tests_passed} passed, {tests_failed} failed, {tests_skipped} skipped |',
+        '',
+        ...details('Counts per project and the slowest tests',
+          '| Project | Passed | Failed | Skipped | Duration |',
+          '|---|---|---|---|---|',
+          each('test_projects', '| `{project}` | {passed} | {failed} | {skipped} | {seconds} s |'),
+          '',
+          'Slowest tests:',
+          '',
+          each('slowest', '1. `{name}`, {seconds} s')),
+        '',
+        '**Left out:**',
+        '',
+        each('left_out', '- {what}: {why}')),
+      manual: section('Tests for a person to run before merging',
+        '{manual_count} cases, numbered as the table above points at them. Tick each one as it is done.',
+        '',
+        each('manual', '- [ ] **{number}. {model:title}** (proves {id}, {origin})', '  - Set up: {model:setup}', '  - Steps: {model:steps}', '  - Expected: {model:expected}', '  - Covers: {model:covers}'),
+        '',
+        '**Also check for regressions:**',
+        '',
+        each('regressions', '- [ ] {model:what} Look at `{where}`.')),
+      checks: section('Checks on the commit',
+        '{checks_passed} passed, {checks_failed} failed, {checks_skipped} skipped, of {checks_total} on `{commit}`.',
+        '',
+        '| Check | Result | Duration | Link |',
+        '|---|---|---|---|',
+        each('checks', '| {name} | {result} | {took} | [job]({url}) |'),
+        '',
+        '**Not covered by any check:**',
+        '',
+        each('unchecked', '- {model:what}')),
+      impact: section('Impact and risk',
+        ...details('Who calls the changed code: {callers_count} callers in {caller_files} files',
+          each('callers', '- `{symbol}`: called from {callers}')),
+        '',
+        '**Behaviour a user would notice:**',
+        '',
+        each('behaviour', '- {model:what}'),
+        '',
+        '**Settings and environment variables:**',
+        '',
+        '| Name | Change | Default |',
+        '|---|---|---|',
+        each('settings', '| `{name}` | {change} | `{default}` |'),
+        '',
+        '**Dependencies:**',
+        '',
+        each('dependencies', '- `{name}` from {from} to {to}, licence {licence}'),
+        '',
+        '**Security:**',
+        '',
+        '- Secrets: {secrets_outcome}, {secret_patterns} patterns searched in the {lines_added} added lines.',
+        '- Input from outside: {model:outside_input}',
+        '- Permissions: {model:permissions_note}',
+        '',
+        '**Performance:** {model:performance_note}'),
+      release: section('Release notes',
+        '**Deploy:** {model:deploy}',
+        '',
+        '**Roll back:** {model:rollback}',
+        '',
+        '**Watch after the deploy:**',
+        '',
+        each('watch', '- {model:what}')),
+      findings: section('Findings',
+        '{findings_blocking} blocking, {findings_fix} to fix, {findings_optional} optional. Each one is also a comment on its line.',
+        '',
+        '| Severity | Where | What is wrong | Rule it breaks |',
+        '|---|---|---|---|',
+        each('findings', '| {severity} | [`{path}:{line}`]({url}) | {model:what} | {rule} |')),
+      practices: section('Suggested practices for this repository',
+        'Suggested once: Scout remembers them and does not repeat them in the next review.',
+        '',
+        each('practices', '1. {model:practice}')),
+      how: section('How this review was made',
+        '| Item | Value |',
+        '|---|---|',
+        '| Commit | `{commit}` |',
+        '| Time taken | {review_minutes} min, of which {test_seconds} s running the tests |',
+        '| AI source and model | {ai_source}, `{ai_model}` |',
+        '| Scout version | {scout_version} |',
+        '| Rule files read | {rule_files} |',
+        '| Convention pages read | {convention_pages} |',
+        '| Unchanged files read for context | {context_files} |',
+        '',
+        'Scout cannot see how the application behaves when it runs, the secrets of the repository or a private dependency it could not restore.',
+        '',
+        'Counts, paths, lines, durations, commands and check results are measured by code. The summaries, the requests and what was done for each, the reasons, the findings and the manual cases are written by the AI source from what it read.'),
+      next: section('What happens next', 'Push a fix and mention @{bot} again. Scout reviews the new commit from the start.'),
+    };
+    const order = ['reasons', 'asked', 'summary', 'changed', 'docs', 'prTests', 'ran', 'manual', 'checks', 'impact', 'release', 'findings', 'practices', 'how', 'next'];
+    const review = (verdict, over = {}) => [...header(verdict), ...order.flatMap((key) => over[key] || sections[key]), '---', '', "Posted after the owner's approval in Scout Desktop · signed as @{bot}"];
+    const none = (title, sentence) => section(title, sentence);
+    const inline = [
+      '**{severity}** · {model:finding_title}',
+      '',
+      '**What is wrong:** {model:what_is_wrong}',
+      '',
+      '**Why it matters:** {model:why_it_matters}',
+      '',
+      '**How to reproduce:** {model:reproduce}',
+      '',
+      '**Proposed fix:** {model:fix_summary}',
+      '',
+      '```suggestion',
+      '{model:suggested_lines}',
+      '```',
+      '',
+      '**Test to add:** {model:test_to_add}',
+      '',
+      '**Rule or document:** {rule_source}, "{rule_text}"',
+      '',
+      '**Related lines:**',
+      '',
+      each('related', '- [`{path}:{line}`]({url}): {model:why}'),
+    ];
+    const issue = (found) => [
+      ...section('Summary', '{model:summary}'),
+      ...section('Where', each('places', '- [`{path}:{line}`]({url})'), '', 'At commit `{commit}`.'),
+      ...section('Evidence', '```text', '{evidence}', '```'),
+      ...section('Steps to reproduce', each('steps', '1. {model:step}')),
+      ...section('Expected and actual', '- Expected: {model:expected}', '- Actual: {model:actual}'),
+      ...section('Impact and who is affected', '{model:impact}'),
+      ...section('Severity and why', '**{severity}.** {model:severity_why}'),
+      ...section('Suggested fix', '{model:fix_summary}'),
+      ...section('Acceptance criteria', each('criteria', '- [ ] {model:criterion}')),
+      ...section('Tests to add', each('tests_to_add', '- `{name}`: {model:asserts}')),
+      ...section('How to verify the fix by hand', each('verify', '1. {model:step}')),
+      ...section('Related documents and decision records', each('related_docs', '- `{path}`: {model:why}')),
+      ...section('Related issues and pull requests', each('related_items', '- [{ref}]({url}): {title}')),
+      ...section('How Scout found it', found),
+      ...section('Labels suggested', '{labels}'),
+      '---',
+      '',
+      "Opened after the owner's approval in Scout Desktop · signed as @{bot}",
+    ];
+
+    const pull = 'acme/api, pull request #214: Stop order sync retries after five attempts';
+    const file = (area, path, added, removed, what) => ({ area, path, added, removed, what });
+    const place = (path, line, extra = {}) => ({ path, line, url: at(path, line), ...extra });
+    const stubCase = { number: '1', id: 'R1', origin: 'from the description', title: 'A warehouse that refuses one order', setup: 'Start the API with the warehouse stub refusing order 1001: `WAREHOUSE_STUB_FAIL=1001`.', steps: 'Queue the orders 1001, 1002 and 1003, then wait one minute.', expected: 'Order 1001 is in the parked list after five attempts. Orders 1002 and 1003 are sent.', covers: 'The real host and its timers, which the tests replace.' };
+    const settingCase = { number: '2', id: 'R3', origin: 'from the description', title: 'The limit read from the environment', setup: 'Start the API with `Sync__MaxAttempts=2` and the stub refusing order 1001.', steps: 'Queue order 1001 and read the log.', expected: 'The log reads "Order 1001 parked after 2 attempts".', covers: 'The binding of the setting at start-up, `src/Program.cs:47`, which no test starts.' };
+    const requests = [
+      { id: 'R1', asked: 'The sync stops retrying an order after five attempts.', where: 'acme/api#198, R1', where_url: api + '/issues/198', done: 'Each attempt is counted and the loop stops at the limit,', ...place('src/sync/OrderSync.cs', '138'), covering_tests: '`Stops_after_five_attempts`, `Counts_a_503_answer_as_an_attempt`, `Counts_a_timeout_as_an_attempt`', manual_case: 'Case 1', claim: 'Confirmed' },
+      { id: 'R2', asked: 'An order that reached the limit is kept for a person to look at, not dropped.', where: 'acme/api#198, R2', where_url: api + '/issues/198', done: 'The order goes to a parked list with its last error, and the queue moves on,', ...place('src/sync/ParkedOrders.cs', '21'), covering_tests: '`Parks_the_order_with_its_last_error`, `Sends_the_next_order_after_a_parked_one`', manual_case: 'None needed, covered by the tests', claim: 'Confirmed' },
+      { id: 'R3', asked: 'The limit is a setting, 5 by default.', where: 'acme/api#201, R1', where_url: api + '/issues/201', done: '`Sync:MaxAttempts` is read at start-up,', ...place('src/sync/SyncOptions.cs', '12'), covering_tests: '`Reads_the_limit_from_the_options`', manual_case: 'Case 2', claim: 'Confirmed' },
+      { id: 'R4', asked: 'Parked orders are counted in a metric.', where: 'acme/api#201, R2', where_url: api + '/issues/201', done: 'The counter `orders_parked_total` is raised for each parked order,', ...place('src/sync/SyncMetrics.cs', '18'), covering_tests: 'None', manual_case: 'Case 3', claim: 'Confirmed, the author named no test' },
+    ];
+    const prTests = [
+      { name: 'Stops_after_five_attempts', file: 'tests/sync/OrderSyncTests.cs', proves: 'The sixth call to the warehouse is never made', state: 'New' },
+      { name: 'Counts_a_503_answer_as_an_attempt', file: 'tests/sync/OrderSyncTests.cs', proves: 'A 5xx answer raises the count of attempts', state: 'New' },
+      { name: 'Counts_a_timeout_as_an_attempt', file: 'tests/sync/OrderSyncTests.cs', proves: 'A timeout raises the count; renamed from `Retries_on_timeout`', state: 'Changed' },
+      { name: 'Parks_the_order_with_its_last_error', file: 'tests/sync/ParkedOrdersTests.cs', proves: 'The parked order keeps its id and the last answer', state: 'New' },
+      { name: 'Lists_parked_orders_oldest_first', file: 'tests/sync/ParkedOrdersTests.cs', proves: 'The order of the parked list', state: 'New' },
+      { name: 'Sends_the_next_order_after_a_parked_one', file: 'tests/orders/OrderQueueTests.cs', proves: 'The queue does not wait behind a parked order', state: 'New' },
+      { name: 'Reads_the_limit_from_the_options', file: 'tests/sync/RetryPolicyTests.cs', proves: 'The limit comes from `Sync:MaxAttempts`', state: 'New' },
+      { name: 'Waits_the_delay_between_attempts', file: 'tests/sync/RetryPolicyTests.cs', proves: 'The delay between two attempts', state: 'New' },
+    ];
+    const check = (result, name, job, took) => ({ result, name, url: api + '/actions/runs/9120441/job/' + job, took });
+    const common = {
+      commit: '4f2a9c1', reviewed_at: '2026-11-15 14:32', ai_source: 'Local LLM', ai_model: 'example-coder:7b', bot: 'scout-acme',
+      files_read: '19', files_changed: '21', lines_added: '412', lines_removed: '97',
+      requests_total: '4', requests_covered: '3', requests_untested: '1', requests_not_done: '0',
+      requests_source: 'the section "What was asked" of the pull request description, R1 to R4, which point at acme/api#198 and acme/api#201',
+      requests,
+      not_done: [{ what: 'None: the four requests are done.' }],
+      not_asked: [
+        { what: 'The timeout of the unit-tests job goes from 10 to 15 minutes, `.github/workflows/ci.yml:31`. The description explains it under "Done beyond what was asked".' },
+        { what: '`Acme.Resilience` goes from 2.3.0 to 2.4.0, `Directory.Packages.props:14`. No request and no line of the description explains it.' },
+      ],
+      change_summary: 'The order sync retried an order the warehouse refused without a limit, so one refused order held every order queued behind it. This pull request counts each attempt, stops after `Sync:MaxAttempts`, 5 by default, and moves the order to a parked list a person can look at. It also counts parked orders in a metric.',
+      change_kind: 'Fix',
+      issue_ref: 'acme/api#198', issue_url: api + '/issues/198', issue_title: 'Order sync retries a refused order forever',
+      areas_touched: 'Source (9 files), tests (5), documentation (2), configuration (3)',
+      contract_touched: 'No: no endpoint, message or public type changes', data_migration: 'No', new_dependency: 'No, 1 bumped',
+      main_files: [
+        file('Source', 'src/sync/OrderSync.cs', '96', '31', 'Counts each attempt, stops at the limit and hands the order to the parked list'),
+        file('Source', 'src/sync/RetryPolicy.cs', '58', '0', 'New: holds the limit and the delay between attempts'),
+        file('Source', 'src/sync/ParkedOrders.cs', '31', '0', 'New: the orders that reached the limit, each with its last error'),
+        file('Source', 'src/orders/OrderQueue.cs', '7', '6', 'Takes the next order when the one in front is parked'),
+        file('Tests', 'tests/sync/OrderSyncTests.cs', '84', '14', 'Three tests of the limit, with a timeout and with a 503 answer'),
+        file('Tests', 'tests/sync/RetryPolicyTests.cs', '47', '0', 'New: the limit read from the options and the delay'),
+        file('Documentation', 'docs/sync.md', '12', '9', 'The section "Retries" states the limit and the parked list'),
+        file('Configuration', 'appsettings.json', '3', '1', 'Adds `Sync:MaxAttempts` with the value 5'),
+      ],
+      other_files_count: '11',
+      other_files: [
+        file('Source', 'src/sync/SyncOptions.cs', '8', '2', 'Adds `MaxAttempts`'),
+        file('Source', 'src/sync/SyncMetrics.cs', '6', '1', 'Adds the counter `orders_parked_total`'),
+        file('Source', 'src/sync/WarehouseClient.cs', '5', '4', 'Returns the status of the answer instead of throwing on 5xx'),
+        file('Source', 'src/orders/OrderLog.cs', '3', '1', 'Logs a parked order'),
+        file('Source', 'src/Program.cs', '2', '0', 'Registers `RetryPolicy` and `ParkedOrders`'),
+        file('Tests', 'tests/sync/ParkedOrdersTests.cs', '22', '0', 'New: two tests of the parked list'),
+        file('Tests', 'tests/orders/OrderQueueTests.cs', '6', '4', 'One test of the queue behind a parked order'),
+        file('Tests', 'tests/sync/WarehouseStub.cs', '9', '2', 'Counts the calls it receives'),
+        file('Documentation', 'CHANGELOG.md', '3', '0', 'An entry under "Unreleased"'),
+        file('Configuration', '.github/workflows/ci.yml', '3', '3', 'Raises the timeout of the unit-tests job from 10 to 15 minutes'),
+        file('Configuration', 'Directory.Packages.props', '1', '1', 'Bumps `Acme.Resilience` from 2.3.0 to 2.4.0'),
+      ],
+      files: ['src/Program.cs', 'src/orders/OrderLog.cs', 'src/orders/OrderQueue.cs', 'src/sync/OrderSync.cs', 'src/sync/ParkedOrders.cs', 'src/sync/RetryPolicy.cs', 'src/sync/SyncMetrics.cs', 'src/sync/SyncOptions.cs', 'src/sync/WarehouseClient.cs', 'tests/orders/OrderQueueTests.cs', 'tests/sync/OrderSyncTests.cs', 'tests/sync/ParkedOrdersTests.cs', 'tests/sync/RetryPolicyTests.cs', 'tests/sync/WarehouseStub.cs', 'CHANGELOG.md', 'docs/sync.md', '.github/workflows/ci.yml', 'Directory.Packages.props', 'appsettings.json'].map((path) => ({ path })),
+      not_read_total: '2',
+      not_read: [
+        { kind: 'Lock files', count: '1', paths: '`packages.lock.json`', reason: 'written by the package manager' },
+        { kind: 'Binary files', count: '1', paths: '`docs/img/retry-flow.png`', reason: 'not text' },
+      ],
+      docs_changed_count: '2', docs_stale_count: '2', docs_missing_count: '1',
+      docs_changed: [
+        { path: 'docs/sync.md', what: 'the section "Retries" states the limit of five attempts and the parked list.' },
+        { path: 'CHANGELOG.md', what: 'an entry under "Unreleased", Fixed.' },
+      ],
+      docs_stale: [
+        { path: 'docs/operations/runbook.md', section: 'Stuck orders', why: 'it tells the operator to restart the worker. After this change the order is parked and a restart loses the parked list.' },
+        { path: 'README.md', section: 'Configuration', why: 'the table of `Sync` settings has no row for `Sync:MaxAttempts`.' },
+      ],
+      docs_missing: [{ what: 'No page says how a person reads or empties the parked list.' }],
+      decision_path: 'docs/decisions/0012-order-sync-retries.md', decision_url: at('docs/decisions/0012-order-sync-retries.md', '1'), decision_title: 'Order sync retries are bounded',
+      tests_added: '7', tests_changed: '1', tests_removed: '0', test_files_changed: '4', pr_tests_count: '8', pr_tests: prTests,
+      untested: [
+        place('src/sync/SyncMetrics.cs', '18', { what: 'the counter of parked orders is raised and no test reads it.' }),
+        place('src/Program.cs', '47', { what: 'the options are bound at start-up and no test starts the host.' }),
+      ],
+      test_command: 'dotnet test Acme.Api.slnx --no-restore', test_image: 'dotnet-sdk:10.0@sha256:9c1e04ab', test_result: 'Passed', test_seconds: '411',
+      tests_passed: '1,284', tests_failed: '0', tests_skipped: '0',
+      test_projects: [
+        { project: 'Acme.Api.Tests', passed: '1,102', failed: '0', skipped: '0', seconds: '318' },
+        { project: 'Acme.Api.ContractTests', passed: '182', failed: '0', skipped: '0', seconds: '93' },
+      ],
+      slowest: [
+        { name: 'OrderSyncTests.Stops_after_five_attempts', seconds: '4.1' },
+        { name: 'ContractTests.Publishes_the_order_schema', seconds: '3.6' },
+        { name: 'OrderQueueTests.Drains_a_queue_of_500_orders', seconds: '2.9' },
+      ],
+      left_out: [
+        { what: 'Tests that need a Docker daemon', why: '2 projects (`tests/Acme.Api.IntegrationTests`, `tests/Acme.Api.StorageTests`), the container has no daemon' },
+        { what: 'Tests under `ui/`', why: '`npm test` was not run, Scout runs the first stack it detects, here .NET' },
+      ],
+      manual_count: '3',
+      manual: [
+        stubCase,
+        settingCase,
+        { number: '3', id: 'R4', origin: 'proposed by Scout', title: 'The metric of parked orders', setup: 'Start the API as in case 1.', steps: 'Park order 1001, then read `/metrics`.', expected: '`orders_parked_total` is 1.', covers: 'The counter at `src/sync/SyncMetrics.cs:18`, which no test reads.' },
+      ],
+      regressions: [
+        { what: 'A slow warehouse that answers after 20 seconds still gets its order: the timeout branch was rewritten.', where: 'src/sync/OrderSync.cs:118' },
+        { what: 'A restart keeps the orders that were queued: `OrderQueue` changed how it takes the next order.', where: 'src/orders/OrderQueue.cs:64' },
+      ],
+      checks_passed: '5', checks_failed: '0', checks_skipped: '1', checks_total: '6',
+      checks: [
+        check('Passed', 'build', '1', '3m 12s'),
+        check('Passed', 'unit-tests', '2', '6m 51s'),
+        check('Passed', 'integration-tests', '3', '9m 04s'),
+        check('Passed', 'lint', '4', '48s'),
+        check('Passed', 'format', '5', '31s'),
+        check('Skipped', 'docs-links', '6', 'not run'),
+      ],
+      unchecked: [
+        { what: 'No check starts the application, so the binding of `Sync:MaxAttempts` is not exercised.' },
+        { what: 'The links of `docs/sync.md` were not checked: `docs-links` was skipped.' },
+      ],
+      callers_count: '6', caller_files: '4',
+      callers: [
+        { symbol: 'OrderSync.RunAsync', callers: '`src/orders/OrderWorker.cs:52`, `src/admin/ResyncEndpoint.cs:31`' },
+        { symbol: 'RetryPolicy.MaxAttempts', callers: '`src/sync/OrderSync.cs:138`, `src/sync/OrderSync.cs:142`, `src/sync/ParkedOrders.cs:21`' },
+        { symbol: 'OrderQueue.TakeNext', callers: '`src/orders/OrderWorker.cs:47`' },
+      ],
+      behaviour: [
+        { what: 'An order the warehouse keeps refusing stops after five attempts and shows in the parked list. Before, it was retried until the process restarted.' },
+        { what: 'The orders queued behind it are sent without waiting.' },
+      ],
+      settings: [
+        { name: 'Sync:MaxAttempts', change: 'Added', default: '5' },
+        { name: 'Sync:RetryDelaySeconds', change: 'Unchanged, now read once at start-up', default: '10' },
+      ],
+      dependencies: [{ name: 'Acme.Resilience', from: '2.3.0', to: '2.4.0', licence: 'MIT' }],
+      secrets_outcome: 'none found', secret_patterns: '38',
+      outside_input: 'none new. The answer of the warehouse was already read; only its status is now used.',
+      permissions_note: 'no change to workflow permissions, tokens or scopes.',
+      performance_note: 'One integer per order in flight. The parked list is kept in memory and has no limit of its own.',
+      deploy: 'No order between services, no migration and no flag. Set `Sync__MaxAttempts` only to change the default of 5.',
+      rollback: 'Deploy the previous version. The orders parked in memory are lost on the restart and are retried from the queue.',
+      watch: [
+        { what: 'The log line "Order 1001 parked after 5 attempts": more than a few an hour means the warehouse is refusing orders.' },
+        { what: 'The metric `orders_parked_total`.' },
+      ],
+      findings_blocking: '0', findings_fix: '0', findings_optional: '0',
+      practices: [
+        { practice: 'Give every list kept in memory a limit, as `OrderQueue` has: `ParkedOrders` has none.' },
+        { practice: 'Add the row to the settings table of `README.md` in the pull request that adds the setting.' },
+        { practice: 'For a repository without them: adopt the pull request description template and the issue templates, `.github/pull_request_template.md` and `.github/ISSUE_TEMPLATE/`, so each request reaches the review with its number.' },
+      ],
+      review_minutes: '11', scout_version: '0.9.0', rule_files: '`CONTRIBUTING.md`, `AGENTS.md`', convention_pages: '`docs/conventions/testing.md`, `docs/conventions/logging.md`', context_files: '6',
+    };
+    const broken = {
+      requests_covered: '2', requests_not_done: '1',
+      requests: [
+        { ...requests[0], done: 'A timeout is counted and a 503 answer is not, so the loop does not stop,', ...place('src/sync/OrderSync.cs', '142'), covering_tests: '`Stops_after_five_attempts`, which does not prove it', manual_case: 'Case 1', claim: 'Not confirmed' },
+        ...requests.slice(1),
+      ],
+      not_done: [{ what: 'R1: a 503 answer from the warehouse is still retried without a limit.' }],
+      tests_added: '6', pr_tests_count: '7', pr_tests: prTests.filter((x) => x.name !== 'Counts_a_503_answer_as_an_attempt'),
+    };
+    const related = (path, line, why) => place(path, line, { why });
+    const retryDiff = { path: 'src/sync/OrderSync.cs', lines: [['139', ' ', '        while (true)'], ['140', ' ', '        {'], ['141', '+', '            var answer = await warehouse.SendAsync(order, ct);'], ['142', '+', '            if (answer.Status >= 500) continue;']] };
+    const retryVals = {
+      severity: 'Blocking', finding_title: 'A 503 answer is retried without a limit',
+      what_is_wrong: '`attempts` is raised only in the timeout branch. A 5xx answer reaches `continue` on this line and is never counted.',
+      why_it_matters: 'One order the warehouse keeps refusing holds every order queued behind it, which is what R1 asks to stop.',
+      reproduce: 'Make `WarehouseStub` answer 503 on every call and queue one order: `WarehouseStub.Calls` passes 5 and keeps rising.',
+      fix_summary: 'Count the attempt before retrying.',
+      suggested_lines: '            if (answer.Status >= 500 && ++attempts < policy.MaxAttempts) continue;',
+      test_to_add: '`Counts_a_503_answer_as_an_attempt` in `tests/sync/OrderSyncTests.cs`, which asserts that the stub received exactly 5 calls when every answer is 503.',
+      rule_source: '`CONTRIBUTING.md`', rule_text: 'Every retry has a limit',
+      related: [related('src/sync/OrderSync.cs', '118', 'the timeout branch, where `attempts` is raised.')],
+    };
+    const testDiff = { path: 'tests/sync/OrderSyncTests.cs', lines: [['56', '+', '    [Fact]'], ['57', '+', '    public async Task Stops_after_five_attempts()'], ['58', '+', '    {'], ['59', '+', '        await sync.RunAsync(order, CancellationToken.None);']] };
+    const testVals = {
+      severity: 'Blocking', finding_title: 'The test asserts nothing',
+      what_is_wrong: '`Stops_after_five_attempts` awaits the run and ends. It passes with and without the limit.',
+      why_it_matters: 'The description of the pull request names this test as the proof of R1.',
+      reproduce: 'Set `MaxAttempts` to 50 in the test and run it: it still passes.',
+      fix_summary: 'Assert the number of calls the warehouse stub received.',
+      suggested_lines: '        await sync.RunAsync(order, CancellationToken.None);\n        Assert.Equal(5, warehouse.Calls);',
+      test_to_add: 'None: this test, once it asserts that `warehouse.Calls` is 5.',
+      rule_source: '`CONTRIBUTING.md`', rule_text: 'A change ships with a test that fails without it',
+      related: [related('tests/sync/WarehouseStub.cs', '14', 'where `Calls` is counted.')],
+    };
+    const logDiff = { path: 'src/orders/OrderLog.cs', lines: [['32', ' ', '        var customer = order.Customer;'], ['33', ' ', '        parked.Add(order.Id);'], ['34', '+', '        logger.LogInformation("Order {OrderId} parked for {Email}", order.Id, customer.Email);']] };
+    const logVals = {
+      severity: 'Fix', finding_title: 'A log line prints the customer email',
+      what_is_wrong: 'The line writes `customer.Email` in clear text at Information level.',
+      why_it_matters: '`appsettings.json` ships Information logs to the shared log service, so the address leaves the application.',
+      reproduce: 'Park any order and read the log: the line holds the address.',
+      fix_summary: 'Log the customer id.',
+      suggested_lines: '        logger.LogInformation("Order {OrderId} parked for customer {CustomerId}", order.Id, customer.Id);',
+      test_to_add: '`Parked_order_log_has_no_email` in `tests/orders/OrderLogTests.cs`, which asserts that no logged value contains the address of the customer.',
+      rule_source: '`docs/conventions/logging.md`', rule_text: 'Logs carry ids, never personal data',
+      related: [related('src/orders/OrderLog.cs', '21', 'the same address is logged when an order is queued.')],
+    };
+    const nameDiff = { path: 'src/sync/RetryPolicy.cs', lines: [['16', ' ', '    {'], ['17', '+', '        private const int Max = 5;']] };
+    const nameVals = {
+      severity: 'Suggestion, optional', finding_title: 'Name the limit after what it limits',
+      what_is_wrong: '`Max` does not say what it limits.',
+      why_it_matters: 'The value is read in 3 places under `src/sync/`.',
+      reproduce: 'Not applicable: nothing breaks, the name misleads.',
+      fix_summary: 'Rename the constant.',
+      suggested_lines: '        private const int MaxAttempts = 5;',
+      test_to_add: 'None: a rename changes no behaviour.',
+      rule_source: '`docs/sync.md`', rule_text: 'the attempt limit',
+      related: [related('src/sync/OrderSync.cs', '138', 'reads the constant.'), related('src/sync/ParkedOrders.cs', '21', 'reads the constant.')],
+    };
+    const docDiff = { path: 'docs/sync.md', lines: [['40', ' ', '## Retries'], ['41', '+', 'The sync retrys an order until the warehouse answers.']] };
+    const docVals = {
+      severity: 'Suggestion, optional', finding_title: 'The page still describes the old behaviour',
+      what_is_wrong: 'The sentence says the sync retries until the warehouse answers, and "retrys" is misspelt.',
+      why_it_matters: 'The code in this pull request stops after `MaxAttempts` and parks the order.',
+      reproduce: 'Read the sentence beside `src/sync/OrderSync.cs:138`: the code stops, the page says it does not.',
+      fix_summary: 'State the limit.',
+      suggested_lines: 'The sync retries an order five times, then parks it for a person to look at.',
+      test_to_add: 'None: the page is not built or tested.',
+      rule_source: '`docs/decisions/0012-order-sync-retries.md`', rule_text: 'Order sync retries are bounded',
+      related: [related('src/sync/OrderSync.cs', '138', 'the code the sentence describes.')],
+    };
+    const scout = (action, state) => ({ who: 'scout-acme', isBot: true, action, state, when: 'now' });
+    const finding = (severity, path, line, anchor, what, rule) => ({ severity, path, line, url: api + '/pull/214/files#' + anchor, what, rule });
+    const notDone = 'Not done: the diff changes once the conflicts are resolved, so the review waits for the new commit.';
+
+    return [
+      {
+        id: 'prDescription', label: 'Pull request description: what the author writes', where: pull,
+        posted: "Written by the author from the repository's template; Scout reads it and checks each claim against the code.",
+        notes: ['The repository adopts it as `.github/pull_request_template.md`. The author is a person or a coding agent.', 'Each request cites the issue and the number it has there, so the review can follow it from the issue to the code.', 'A section the author leaves empty is said in the review, and Scout infers what it lacks: the requests from the title, the linked issue and the diff, the manual cases from what the tests do not cover.', 'The last line is the mention that starts the review.'],
+        items: [{
+          who: 'dev-one', isBot: false, action: 'commented', when: 'yesterday', name: 'pull request description',
+          tpl: [
+            '### What was asked',
+            '',
+            each('asked', '- **{id}** {author:request} ([{where}]({where_url}))'),
+            '',
+            '### What was done',
+            '',
+            each('done', '- **{id}** {author:change} Main files: {files}.'),
+            '',
+            '### Not done, and why',
+            '',
+            each('not_done', '- {author:what}'),
+            '',
+            '### Done beyond what was asked, and why',
+            '',
+            each('beyond', '- {author:what}'),
+            '',
+            '### Tests implemented',
+            '',
+            '| Request | Test | File | What it proves | Seen failing before the change |',
+            '|---|---|---|---|---|',
+            each('tests', '| {id} | `{name}` | `{file}` | {author:proves} | {author:seen_failing} |'),
+            '',
+            '### Tests to run by hand to prove it',
+            '',
+            each('manual', '- [ ] **{number}. {author:title}** (proves {id})', '  - Set up: {author:setup}', '  - Steps: {author:steps}', '  - Expected: {author:expected}'),
+            '',
+            '### Documentation',
+            '',
+            '- Updated: {author:docs_updated}',
+            '- Decision record followed: {author:decision}',
+            '- Deliberately not documented: {author:not_documented}',
+            '',
+            '### How to run it',
+            '',
+            '```text',
+            '{author:commands}',
+            '```',
+            '',
+            '### Risk and impact',
+            '',
+            '| Item | Answer |',
+            '|---|---|',
+            '| Public contract | {author:risk_contract} |',
+            '| Data | {author:risk_data} |',
+            '| Settings | {author:risk_settings} |',
+            '| Dependencies | {author:risk_dependencies} |',
+            '| Security | {author:risk_security} |',
+            '| How to roll back | {author:risk_rollback} |',
+            '',
+            '### For the reviewer',
+            '',
+            '- Start reading at: {author:start_at}',
+            '- Look hardest at: {author:look_hardest}',
+            '- Out of scope: {author:out_of_scope}',
+            '- Known weak points: {author:weak_points}',
+            '',
+            '@{bot} please review this pull request.',
+          ],
+          vals: {
+            bot: 'scout-acme', files_changed: '21', checks_total: '6',
+            asked: [
+              { id: 'R1', request: 'The sync stops retrying an order after five attempts.', where: 'acme/api#198, R1', where_url: api + '/issues/198' },
+              { id: 'R2', request: 'An order that reached the limit is kept for a person to look at, not dropped.', where: 'acme/api#198, R2', where_url: api + '/issues/198' },
+              { id: 'R3', request: 'The limit is a setting, 5 by default.', where: 'acme/api#201, R1', where_url: api + '/issues/201' },
+              { id: 'R4', request: 'Parked orders are counted in a metric.', where: 'acme/api#201, R2', where_url: api + '/issues/201' },
+            ],
+            done: [
+              { id: 'R1', change: 'Each attempt is counted, a timeout or a 5xx answer, and the sync stops at the limit.', files: '`src/sync/OrderSync.cs`, `src/sync/RetryPolicy.cs`' },
+              { id: 'R2', change: 'The order goes to a parked list with its last error, and the queue moves on.', files: '`src/sync/ParkedOrders.cs`, `src/orders/OrderQueue.cs`' },
+              { id: 'R3', change: '`Sync:MaxAttempts` is read at start-up.', files: '`src/sync/SyncOptions.cs`, `appsettings.json`' },
+              { id: 'R4', change: 'The counter `orders_parked_total` is raised for each parked order.', files: '`src/sync/SyncMetrics.cs`' },
+            ],
+            not_done: [{ what: 'Nothing: R1 to R4 are done.' }],
+            beyond: [{ what: 'The timeout of the unit-tests job goes from 10 to 15 minutes in `.github/workflows/ci.yml`: the new tests wait for real delays.' }],
+            tests: [
+              { id: 'R1', name: 'Stops_after_five_attempts', file: 'tests/sync/OrderSyncTests.cs', proves: 'The sixth call to the warehouse is never made', seen_failing: 'Yes' },
+              { id: 'R1', name: 'Counts_a_503_answer_as_an_attempt', file: 'tests/sync/OrderSyncTests.cs', proves: 'A 5xx answer raises the count', seen_failing: 'Yes' },
+              { id: 'R2', name: 'Parks_the_order_with_its_last_error', file: 'tests/sync/ParkedOrdersTests.cs', proves: 'The parked order keeps its id and the last answer', seen_failing: 'Yes' },
+              { id: 'R2', name: 'Sends_the_next_order_after_a_parked_one', file: 'tests/orders/OrderQueueTests.cs', proves: 'The queue does not wait behind a parked order', seen_failing: 'Yes' },
+              { id: 'R3', name: 'Reads_the_limit_from_the_options', file: 'tests/sync/RetryPolicyTests.cs', proves: 'The limit comes from the setting', seen_failing: 'No: written after the change' },
+            ],
+            manual: [stubCase, settingCase],
+            docs_updated: '`docs/sync.md`, section "Retries"; `CHANGELOG.md`, under "Unreleased".',
+            decision: '`docs/decisions/0012-order-sync-retries.md`.',
+            not_documented: 'The metric `orders_parked_total`: the metrics page is generated from the code.',
+            commands: 'dotnet build Acme.Api.slnx\ndotnet test Acme.Api.slnx --no-restore\nWAREHOUSE_STUB_FAIL=1001 dotnet run --project src',
+            risk_contract: 'Not touched', risk_data: 'No migration. Parked orders are kept in memory and lost on a restart',
+            risk_settings: 'Adds `Sync:MaxAttempts`, default 5', risk_dependencies: 'None added', risk_security: 'No secret and no new input from outside',
+            risk_rollback: 'Deploy the previous version. There is no data to restore',
+            start_at: '`src/sync/OrderSync.cs`, the loop at line 110.', look_hardest: 'The branch that handles a 5xx answer, line 142.',
+            out_of_scope: 'A screen to empty the parked list, left for acme/api#221.', weak_points: 'The parked list has no limit of its own.',
+            gaps: ['No test is named for R4: Scout looks for one and proposes a case to run by hand.', 'No case to run by hand is given for R2 and R4: Scout proposes one where the tests do not cover the request.', 'The bump of `Acme.Resilience` is in the diff and not in the description: the review lists it under "Done and not asked".'],
+          },
+        }],
+      },
+      {
+        id: 'issueRequest', label: 'Issue: a request for a change, what the author writes', where: 'acme/api, issue #201',
+        posted: "Written by the author from the repository's issue template; Scout reads it when a pull request links the issue.",
+        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'Each request is one behaviour that can be checked; its number is the one the pull request description and the review cite.', 'In Scout, a criterion is met, not met or not checked, each with the reason.'],
+        items: [{
+          who: 'dev-two', isBot: false, action: 'commented', when: '3 days ago', name: 'issue', number: '#201',
+          titleTpl: '{author:title}',
+          tpl: [
+            ...section('What is needed, and who needs it', '{author:need}').map(h3),
+            ...section('Why', '{author:problem}', '', '**Evidence:**', '', each('evidence', '- {author:what}')).map(h3),
+            ...section('What is asked', each('asked', '- **{id}** {author:request}')).map(h3),
+            ...section('Acceptance criteria', each('criteria', '- [ ] {id}: {author:criterion}')).map(h3),
+            ...section('Out of scope', each('out_of_scope', '- {author:what}')).map(h3),
+            ...section('Where it probably lives', '- Files: {author:where_files}', '- Module: {author:where_module}', '- Documentation that describes it today: {author:where_docs}').map(h3),
+            ...section('Tests expected', '**Automated:**', '', each('tests_expected', '- {author:what}'), '', '**By hand:**', '', each('manual_expected', '- {author:what}')).map(h3),
+            ...section('Documentation expected', '- Pages to change: {author:docs_pages}', '- Decision record: {author:docs_decision}').map(h3),
+            ...section('Constraints and risk',
+              '| Item | Answer |',
+              '|---|---|',
+              '| Public contract | {author:risk_contract} |',
+              '| Data | {author:risk_data} |',
+              '| Settings | {author:risk_settings} |',
+              '| Security | {author:risk_security} |',
+              '| Deadline | {author:deadline} |').map(h3),
+            ...section('References', each('refs', '- [{ref}]({url}): {author:why}')).map(h3),
+          ],
+          vals: {
+            repo: 'acme/api', labels: '`enhancement`, `sync`', development: 'Fixed by acme/api#214',
+            title: 'Make the retry limit of the order sync a setting and count parked orders',
+            need: 'The operations team needs to change how many times the order sync retries without a release, and to see how many orders were parked.',
+            problem: 'The limit asked for in acme/api#198 would be a constant in the code. The warehouse of the north region answers slowly and needs more attempts than the others.',
+            evidence: [
+              { what: 'On 2026-11-09 the north region timed out on 14 of 1,900 orders and answered on the second or third attempt.' },
+              { what: 'No number says how many orders gave up: the log line is the only trace.' },
+            ],
+            asked: [
+              { id: 'R1', request: 'The limit is a setting, 5 by default.' },
+              { id: 'R2', request: 'Parked orders are counted in a metric.' },
+            ],
+            criteria: [
+              { id: 'R1', criterion: 'Starting the API with `Sync__MaxAttempts=2` parks a refused order after two attempts.', found: 'Not checked', found_why: 'no test starts the host; case 2 of the manual plan' },
+              { id: 'R1', criterion: 'The setting has a row in the settings table of `README.md`.', found: 'Not met', found_why: 'the table has no row for it' },
+              { id: 'R2', criterion: '`/metrics` shows `orders_parked_total` rising by one for each parked order.', found: 'Not checked', found_why: 'no test reads the counter; case 3 of the manual plan' },
+            ],
+            out_of_scope: [{ what: 'A screen to read or empty the parked list.' }, { what: 'A limit of its own for each region.' }],
+            where_files: '`src/sync/SyncOptions.cs`, `src/sync/SyncMetrics.cs`.', where_module: 'the order sync, `src/sync/`.',
+            where_docs: '`README.md`, section "Configuration", and `docs/sync.md`, section "Retries".',
+            tests_expected: [{ what: 'A test that reads the limit from the options.' }, { what: 'A test that the counter rises when an order is parked.' }],
+            manual_expected: [{ what: 'Start the API with the setting changed in the environment and see the new limit applied.' }],
+            docs_pages: '`README.md`, the settings table; `docs/sync.md`, section "Retries".',
+            docs_decision: 'Not needed: `docs/decisions/0012-order-sync-retries.md` covers the limit.',
+            risk_contract: 'Not touched', risk_data: 'None', risk_settings: 'One new setting, `Sync:MaxAttempts`', risk_security: 'None', deadline: 'None',
+            refs: [
+              { ref: 'acme/api#198', url: api + '/issues/198', why: 'the bug this request follows.' },
+              { ref: 'acme/api#214', url: api + '/pull/214', why: 'the pull request that does it, as its R3 and R4.' },
+            ],
+            gaps: ['No deadline is given: Scout says nothing about time.', 'The second criterion of R1 names a document: Scout reads the file, it runs nothing for it.'],
+          },
+        }],
+      },
+      {
+        id: 'issueBug', label: 'Issue: a bug report, what the author writes', where: 'acme/api, issue #198',
+        posted: "Written by the author from the repository's issue template; Scout reads it when a pull request links the issue.",
+        notes: ['The repository adopts it under `.github/ISSUE_TEMPLATE/`. The author is a person or an agent.', 'The acceptance criteria include the test that must fail before the fix. Scout does not run the tests on the base branch, so it marks that criterion not checked.', 'A section left empty is said in the Scout card; Scout does not fill it.'],
+        items: [{
+          who: 'dev-one', isBot: false, action: 'commented', when: '6 days ago', name: 'issue', number: '#198',
+          titleTpl: '{author:title}',
+          tpl: [
+            ...section('What happens, and what should happen', '- What happens: {author:actual}', '- What should happen: {author:expected}').map(h3),
+            ...section('Steps to reproduce', each('steps', '1. {author:step}')).map(h3),
+            ...section('Evidence',
+              '```text',
+              '{author:log}',
+              '```',
+              '',
+              '| Item | Value |',
+              '|---|---|',
+              '| Version or commit | {author:version} |',
+              '| Environment | {author:environment} |').map(h3),
+            ...section('How often, who is affected, and severity', '- How often: {author:how_often}', '- Who is affected: {author:affected}', '- Severity: {author:severity}, because {author:severity_why}').map(h3),
+            ...section('Since when', '{author:since}').map(h3),
+            ...section('What was already tried', each('tried', '- {author:what}')).map(h3),
+            ...section('What is asked', each('asked', '- **{id}** {author:request}')).map(h3),
+            ...section('Acceptance criteria', each('criteria', '- [ ] {id}: {author:criterion}')).map(h3),
+            ...section('Where it probably lives', '- Code: {author:where_code}', '- Documentation that describes the behaviour: {author:where_docs}').map(h3),
+            ...section('References', each('refs', '- [{ref}]({url}): {author:why}')).map(h3),
+          ],
+          vals: {
+            repo: 'acme/api', labels: '`bug`, `sync`', development: 'Fixed by acme/api#214',
+            title: 'Order sync retries a refused order forever',
+            actual: 'When the warehouse refuses an order with a 503 answer, the sync sends it again every 10 seconds without end, and no order queued behind it is sent.',
+            expected: 'The sync gives up on that order after a few attempts and goes on with the next one.',
+            steps: [
+              { step: 'Start the API with the warehouse stub refusing order 1001: `WAREHOUSE_STUB_FAIL=1001`.' },
+              { step: 'Queue the orders 1001, 1002 and 1003.' },
+              { step: 'Wait five minutes and read the log.' },
+            ],
+            log: '14:02:10 Sending order 1001, attempt 31\n14:02:10 Warehouse answered 503\n14:02:20 Sending order 1001, attempt 32\n14:02:20 Warehouse answered 503',
+            version: 'Version 4.11.2, commit `0c7be15`', environment: 'Production, and the local stub',
+            how_often: 'Every time the warehouse refuses an order: 3 times in the last week.',
+            affected: 'Every customer whose order is queued behind the refused one. On 2026-11-09, 212 orders waited 4 hours.',
+            severity: 'Blocking', severity_why: 'orders stop until someone restarts the worker.',
+            since: 'Not known.',
+            tried: [
+              { what: 'Restarting the worker: the refused order is sent again and holds the queue once more.' },
+              { what: 'Removing the order from the queue by hand: it works, and it is not something to do every week.' },
+            ],
+            asked: [
+              { id: 'R1', request: 'The sync stops retrying an order after five attempts.' },
+              { id: 'R2', request: 'An order that reached the limit is kept for a person to look at, not dropped.' },
+            ],
+            criteria: [
+              { id: 'R1', criterion: 'After five refused attempts the log shows no sixth "Sending order 1001".', found: 'Met', found_why: '`Stops_after_five_attempts` and `Counts_a_503_answer_as_an_attempt` pass' },
+              { id: 'R1', criterion: 'A test that sends five refused attempts fails on `main` before the fix and passes after it.', found: 'Not checked', found_why: 'Scout does not run the tests on the base branch; the author says it was seen failing' },
+              { id: 'R2', criterion: 'Order 1001 is in the parked list with the last answer, and the orders 1002 and 1003 are sent.', found: 'Met', found_why: '`Parks_the_order_with_its_last_error` and `Sends_the_next_order_after_a_parked_one` pass' },
+            ],
+            where_code: '`src/sync/OrderSync.cs`, the loop that sends an order.',
+            where_docs: '`docs/sync.md`, section "Retries", and `docs/operations/runbook.md`, section "Stuck orders".',
+            refs: [
+              { ref: 'acme/api#201', url: api + '/issues/201', why: 'the request to make the limit a setting.' },
+              { ref: 'acme/api#214', url: api + '/pull/214', why: 'the pull request that fixes this, as its R1 and R2.' },
+            ],
+            gaps: ['Since when: not known. Scout does not search the history for the change that started it.'],
+          },
+        }],
+      },
+      {
+        id: 'started', label: 'Pull request opened: review started', where: pull,
+        posted: "Posted as a comment on the pull request's conversation.",
+        notes: ['Only a mention by the owner or by a login on the allowed users starts a review; the line names that login.', 'The row of the checks is left out when the commit has no check, the row of the tests when the owner did not grant the local container.', 'A description without the sections reads "The description has no sections: Scout infers the requests from the title, the linked issue and the diff."', 'Cancelling by a comment is new: today a review is stopped in Scout Desktop only.'],
+        items: [{
+          ...scout('commented'), name: 'comment',
+          tpl: [
+            '### Scout review: started',
+            '',
+            'Commit `{commit}` · {started_at} UTC · asked by @{requester}, who mentioned @{bot} on this pull request',
+            '',
+            ...section('What Scout does now',
+              '| Step | What | Estimate |',
+              '|---|---|---|',
+              '| 1 | Reads the description, the {files_changed} changed files, +{lines_added} -{lines_removed} lines, and the files they refer to | {estimate_read} |',
+              '| 2 | Runs the tests in an isolated container without network | {estimate_tests} |',
+              '| 3 | Reads the {checks_total} checks on `{commit}` | {estimate_checks} |',
+              '| 4 | Writes the review and waits for the owner in Scout Desktop | {estimate_write} |',
+              '',
+              'The review is expected at about {expected_at} UTC.'),
+            ...section('What the description gives',
+              '{sections_filled} of {sections_total} sections of the description are filled.',
+              '',
+              '| Section | Found |',
+              '|---|---|',
+              each('description_sections', '| {section} | {found} |')),
+            ...section('What Scout reads', 'Rule files and convention pages found in the repository:', '', each('rule_files_found', '- `{path}`: {what}')),
+            ...section('The test command', '`{test_command}`, chosen because {test_command_why}'),
+            ...section('What Scout leaves out', each('will_skip', '- {what}: {why}')),
+            ...section('Cancel or run again',
+              '- To cancel: comment `@{bot} cancel` on this pull request, or press Stop in Scout Desktop.',
+              '- To run again: mention @{bot} again. A new commit does not restart the review by itself.'),
+            'Nothing is approved before every check passed. The owner gives the verdict in Scout Desktop.',
+          ],
+          vals: {
+            ...common, started_at: '2026-11-15 14:21', requester: 'dev-one',
+            estimate_read: 'About 3 min', estimate_tests: 'About 7 min, from the last run of this command', estimate_checks: 'Under 1 min', estimate_write: 'About 1 min',
+            expected_at: '2026-11-15 14:33',
+            sections_filled: '9', sections_total: '9',
+            description_sections: [
+              { section: 'What was asked', found: 'Filled: 4 requests, R1 to R4' },
+              { section: 'What was done', found: 'Filled: one line for each request' },
+              { section: 'Not done, and done beyond what was asked', found: 'Filled: 1 change beyond what was asked' },
+              { section: 'Tests implemented', found: 'Filled: 5 tests, none for R4' },
+              { section: 'Tests to run by hand', found: 'Filled: 2 cases, for R1 and R3' },
+              { section: 'Documentation', found: 'Filled' },
+              { section: 'How to run it', found: 'Filled: 3 commands' },
+              { section: 'Risk and impact', found: 'Filled' },
+              { section: 'For the reviewer', found: 'Filled' },
+            ],
+            rule_files_found: [
+              { path: 'CONTRIBUTING.md', what: 'the rules of the repository, 14 rules' },
+              { path: 'AGENTS.md', what: 'the commands to build and test' },
+              { path: 'docs/conventions/testing.md', what: 'how a test is named and what it must assert' },
+              { path: 'docs/conventions/logging.md', what: 'what a log line may carry' },
+            ],
+            test_command_why: 'the repository has one solution file, `Acme.Api.slnx`, and `AGENTS.md` names this command.',
+            will_skip: [
+              { what: 'Lock files and binary files', why: '`packages.lock.json` and `docs/img/retry-flow.png`, one written by the package manager and one not text' },
+              { what: 'Tests that need a Docker daemon', why: '2 projects, the container has no daemon' },
+              { what: 'Tests under `ui/`', why: 'Scout runs the first stack it detects, here .NET' },
+            ],
+          },
+        }],
+      },
+      {
+        id: 'approved', label: 'Pull request approved', where: pull,
+        posted: 'Posted as a review that approves.',
+        notes: ['Every section is always present. An empty one says so in words, as Findings does here.', 'A description without the section "What was asked" changes one sentence: "The description does not list what was asked. The requests below were inferred from the title, the linked issue and the diff.", and the last column reads "No claim to check".', 'When the owner did not grant the local container, Tests Scout ran holds one line: "Not run: the local container is not granted."', 'A commit with no check reads "No checks on this commit."', 'The practices are suggested once, at most three; the third is written only for a repository without the templates.'],
+        items: [{
+          ...scout('approved these changes', 'approved'), name: 'review body',
+          tpl: review('approved', {
+            findings: none('Findings', 'None.'),
+            next: section('What happens next', 'Nothing is asked of the author. Merge when the {manual_count} manual cases are ticked. A new commit makes this approval stale: mention @{bot} again.'),
+          }),
+          vals: {
+            ...common, verdict: 'Approved',
+            reasons: [
+              { reason: 'The four requests are done, and the author\'s claim holds for each.' },
+              { reason: 'Three requests are covered by tests that fail without the change. The fourth, the metric, is case 3 of the manual plan.' },
+              { reason: 'Every check on the commit passed and the tests Scout ran passed.' },
+              { reason: 'No finding.' },
+            ],
+          },
+        }],
+      },
+      {
+        id: 'problems', label: 'Changes requested: problems found', where: pull,
+        posted: 'Posted as a review that requests changes, with one comment on a line for each finding.',
+        notes: ['Severity is Blocking or Fix. One Blocking finding is enough to request changes.', 'A request whose claim is not confirmed is listed under "Asked and not done".', 'A suggestion block is written only for a fix inside the lines the comment sits on.'],
+        items: [
+          {
+            ...scout('requested changes', 'changes'), name: 'review body',
+            tpl: review('changes requested'),
+            vals: {
+              ...common, ...broken, verdict: 'Changes requested', findings_blocking: '2', findings_fix: '2',
+              reasons: [
+                { reason: 'R1 is not done: a 503 answer from the warehouse is still retried without a limit.' },
+                { reason: 'The test named as the proof of R1 asserts nothing.' },
+                { reason: '2 smaller problems to fix in the same change.' },
+              ],
+              findings: [
+                finding('Blocking', 'src/sync/OrderSync.cs', '142', 'r1', 'A 503 answer is retried without a limit', '`CONTRIBUTING.md`, "Every retry has a limit"'),
+                finding('Blocking', 'tests/sync/OrderSyncTests.cs', '59', 'r2', 'The test asserts nothing', '`CONTRIBUTING.md`, "A change ships with a test that fails without it"'),
+                finding('Fix', 'src/orders/OrderLog.cs', '34', 'r3', 'A log line prints the customer email', '`docs/conventions/logging.md`, "Logs carry ids, never personal data"'),
+                finding('Fix', 'src/sync/SyncOptions.cs', '12', 'r4', 'The attempt limit accepts 0 and negative values', '`CONTRIBUTING.md`, "A setting is validated at start-up"'),
+              ],
+            },
+          },
+          { ...scout('commented on line 142'), name: 'comment on src/sync/OrderSync.cs:142', diff: retryDiff, tpl: inline, vals: retryVals },
+          { ...scout('commented on line 59'), name: 'comment on tests/sync/OrderSyncTests.cs:59', diff: testDiff, tpl: inline, vals: testVals },
+        ],
+      },
+      {
+        id: 'checkFailed', label: 'Changes requested: a check failed', where: pull,
+        posted: 'Posted as a review that requests changes.',
+        notes: ['At most the last 40 lines of each failed check, for at most 3 checks; the rest are linked only.', "Reading a check's output is a read Scout does not make today."],
+        items: [{
+          ...scout('requested changes', 'changes'), name: 'review body',
+          tpl: review('changes requested', {
+            reasons: [
+              ...sections.reasons,
+              ...section('The failing checks',
+                each('failed_checks', '**{name}**, job `{job}`, step "{step}", [log]({url})', '', '```text', '{log_tail}', '```', '', '- Likely cause: {model:cause}', '- Reproduce locally: `{repro}`', '')),
+            ],
+            findings: none('Findings', 'None beyond the failing checks.'),
+          }),
+          vals: {
+            ...common, ...broken, verdict: 'Changes requested',
+            reasons: [
+              { reason: '2 of 6 checks failed on `4f2a9c1`: unit-tests and lint. Scout approves only when every check passed.' },
+              { reason: 'R1 is not proven: the test that covers it fails, in the check and in the run Scout made.' },
+            ],
+            checks_passed: '3', checks_failed: '2', checks_skipped: '1',
+            checks: [
+              check('Failed', 'unit-tests', '2', '6m 51s'),
+              check('Failed', 'lint', '4', '48s'),
+              check('Passed', 'build', '1', '3m 12s'),
+              check('Passed', 'integration-tests', '3', '9m 04s'),
+              check('Passed', 'format', '5', '31s'),
+              check('Skipped', 'docs-links', '6', 'not run'),
+            ],
+            failed_checks: [
+              { name: 'unit-tests', job: 'test (ubuntu, net10.0)', step: 'Run the tests', url: api + '/actions/runs/9120441/job/2', log_tail: 'Failed Acme.Api.Tests.Sync.OrderSyncTests.Stops_after_five_attempts [38 ms]\n  Assert.Equal() Failure\n  Expected: 5\n  Actual:   6\nFailed!  - Failed: 1, Passed: 1283, Skipped: 0, Total: 1284, Duration: 6 m 51 s', cause: 'the loop makes a sixth call: a 503 answer is not counted at `src/sync/OrderSync.cs:142`.', repro: 'dotnet test Acme.Api.slnx --filter "FullyQualifiedName~Stops_after_five_attempts"' },
+              { name: 'lint', job: 'lint', step: 'Build with warnings as errors', url: api + '/actions/runs/9120441/job/4', log_tail: 'src/sync/SyncMetrics.cs(18,9): warning CA1848: Use the LoggerMessage delegates\nBuild FAILED: 1 warning treated as an error', cause: 'the new log call beside the counter uses the extension method the rule forbids.', repro: 'dotnet build Acme.Api.slnx -warnaserror' },
+            ],
+            test_result: 'Failed', tests_passed: '1,283', tests_failed: '1',
+            test_projects: [
+              { project: 'Acme.Api.Tests', passed: '1,101', failed: '1', skipped: '0', seconds: '318' },
+              { project: 'Acme.Api.ContractTests', passed: '182', failed: '0', skipped: '0', seconds: '93' },
+            ],
+            pr_tests_count: '8', tests_added: '7', pr_tests: prTests,
+          },
+        }],
+      },
+      {
+        id: 'conflicts', label: 'Changes requested: conflicts with the base branch', where: pull,
+        posted: 'Posted as a review that requests changes.',
+        notes: ['GitHub says only that the pull request cannot be merged. The files and the commits are listed when Scout tried the merge in its own copy; otherwise the section reads "GitHub did not say which files conflict."', 'The sections that need the diff stay in the note and say they were not done.'],
+        items: [{
+          ...scout('requested changes', 'changes'), name: 'review body',
+          tpl: review('changes requested', {
+            reasons: [
+              ...sections.reasons,
+              ...section('Files in conflict', each('conflicts', '- `{path}`: changed on `{base_branch}` by `{sha}`')),
+              ...section('Commits on the base branch that touch them',
+                '| Commit | Author | Title | Files |',
+                '|---|---|---|---|',
+                each('base_commits', '| `{sha}` | @{author} | {title} | `{files}` |')),
+              ...section('Commands to rebase',
+                '```text',
+                'git fetch origin',
+                'git rebase origin/{base_branch}',
+                '# resolve the {conflict_count} files, then',
+                'git add {conflict_paths}',
+                'git rebase --continue',
+                'git push --force-with-lease origin {head_branch}',
+                '```'),
+            ],
+            asked: none('What was asked and what was done', notDone),
+            summary: none('Summary of the change', notDone),
+            changed: none('What changed, by area', 'Nothing was read. ' + notDone),
+            docs: none('Documentation', notDone),
+            prTests: none('Tests in this pull request', notDone),
+            ran: none('Tests Scout ran', 'Not run: the branch cannot be merged into `{base_branch}`.'),
+            manual: none('Tests for a person to run before merging', 'None proposed: ' + notDone.slice(10)),
+            impact: none('Impact and risk', notDone),
+            release: none('Release notes', notDone),
+            findings: none('Findings', 'None: nothing was read.'),
+            practices: none('Suggested practices for this repository', 'None.'),
+            next: section('What happens next', 'Rebase onto `{base_branch}` with the commands above, resolve the {conflict_count} files, push, and mention @{bot} again.'),
+          }),
+          vals: {
+            ...common, verdict: 'Changes requested', review_minutes: '1', test_seconds: '0', context_files: '0',
+            reasons: [
+              { reason: 'This pull request cannot be merged: `fix/order-sync-retries` conflicts with `main` at `b71d3e0`.' },
+              { reason: 'The diff changes once the conflicts are resolved, so nothing was reviewed.' },
+            ],
+            head_branch: 'fix/order-sync-retries', base_branch: 'main', base_commit: 'b71d3e0', conflict_count: '2', conflict_paths: 'src/sync/OrderSync.cs CHANGELOG.md',
+            conflicts: [{ path: 'src/sync/OrderSync.cs', sha: 'b71d3e0' }, { path: 'CHANGELOG.md', sha: 'a94c2f7' }],
+            base_commits: [
+              { sha: 'b71d3e0', author: 'dev-two', title: 'Log the answer of the warehouse on every attempt', files: 'src/sync/OrderSync.cs' },
+              { sha: 'a94c2f7', author: 'dev-three', title: 'Release 4.12.0', files: 'CHANGELOG.md' },
+            ],
+          },
+        }],
+      },
+      {
+        id: 'suggestions', label: 'Suggestions only: commented, not approved', where: pull,
+        posted: 'Posted as a review that comments, with one comment on a line for each suggestion.',
+        notes: ['GitHub applies a suggestion block only from a comment on a line, so each suggestion is a comment and the Findings table lists them as optional.'],
+        items: [
+          {
+            ...scout('reviewed', 'commented'), name: 'review body',
+            tpl: review('commented, not approved', {
+              next: section('What happens next', 'Apply the suggestions you agree with, or leave them. Scout did not approve: a person approves, or mention @{bot} after a new commit.'),
+            }),
+            vals: {
+              ...common, verdict: 'Commented, not approved', findings_optional: '2',
+              reasons: [
+                { reason: 'The four requests are done and every check passed.' },
+                { reason: '2 suggestions, none blocking. Scout approves only a change with no finding, so it leaves the approval to a person.' },
+              ],
+              findings: [
+                finding('Suggestion, optional', 'src/sync/RetryPolicy.cs', '17', 'r5', 'Name the limit after what it limits', 'None, optional'),
+                finding('Suggestion, optional', 'docs/sync.md', '41', 'r6', 'The page still describes the old behaviour', 'None, optional'),
+              ],
+            },
+          },
+          { ...scout('commented on line 17'), name: 'comment on src/sync/RetryPolicy.cs:17', diff: nameDiff, tpl: inline, vals: nameVals },
+          { ...scout('commented on line 41'), name: 'comment on docs/sync.md:41', diff: docDiff, tpl: inline, vals: docVals },
+        ],
+      },
+      {
+        id: 'inline', label: 'Inline comment on a line', where: pull,
+        posted: 'Posted as a review comment on a line of the diff.',
+        notes: ['Severity is Blocking, Fix or Suggestion, written in bold: GitHub Markdown has no coloured chip.', 'The line "Rule or document" is left out when the finding rests on no written rule, and "Related lines" when there is none.'],
+        items: [{ ...scout('commented on line 34'), name: 'comment on src/orders/OrderLog.cs:34', diff: logDiff, tpl: inline, vals: logVals }],
+      },
+      {
+        id: 'waiting', label: 'Approval waiting for the checks', where: pull,
+        posted: "Posted as a comment on the pull request's conversation.",
+        notes: ['Today an approval given while a check runs is refused and has to be clicked again; waiting for the checks is a change of its own.'],
+        items: [{
+          ...scout('commented'), name: 'comment',
+          tpl: [
+            '### Scout review: approval waiting for the checks',
+            '',
+            'Commit `{commit}` · {approved_at} UTC · approved by the owner in Scout Desktop',
+            '',
+            ...section('Checks still running',
+              '{checks_running} of {checks_total} checks have no result yet. The other {checks_done} passed.',
+              '',
+              '| Check | State | Elapsed | Link |',
+              '|---|---|---|---|',
+              each('running', '| {name} | {state} | {elapsed} | [job]({url}) |')),
+            ...section('What happens on each outcome',
+              '| Outcome | What Scout does |',
+              '|---|---|',
+              '| Every check passes | Posts the approval as a review, with the note the owner read |',
+              '| A check fails | Cancels the approval, names the check here and tells the owner in Scout Desktop |',
+              '| A new commit is pushed | Cancels the approval. Mention @{bot} to review the new commit |',
+              '| No result in {wait_hours} hours, at {deadline} UTC | Cancels the approval and says so here |'),
+            ...section('Cancel', 'The owner cancels the wait in Scout Desktop, under Approvals. Nothing is posted after that.'),
+          ],
+          vals: {
+            ...common, approved_at: '2026-11-15 14:36', checks_running: '2', checks_done: '4', wait_hours: '2', deadline: '2026-11-15 16:36',
+            running: [
+              { name: 'integration-tests', url: api + '/actions/runs/9120441/job/3', state: 'Running', elapsed: '6m 40s' },
+              { name: 'docs-links', url: api + '/actions/runs/9120441/job/6', state: 'Queued', elapsed: 'Not started' },
+            ],
+          },
+        }],
+      },
+      {
+        id: 'auditIssue', label: 'Issue Scout opens: an audit finding', where: 'acme/shop, a new issue',
+        posted: 'Posted as an issue. The labels are a suggestion in the body; Scout sets none.',
+        notes: ['The title is "[severity] area: what is wrong", at most 120 characters.', 'Every link under Where points at the audited commit, so it keeps showing the lines the audit read.', 'A section with nothing to say reads "None."'],
+        items: [{
+          ...scout('opened this issue'), name: 'issue', number: '#87',
+          titleTpl: '[{severity}] {area}: {model:finding_title}',
+          tpl: issue('Audit of `{repo}` at `{commit}` on {found_on}, area {area}, finding {finding_number} of {findings_total}. Read with {ai_source}, model `{ai_model}`. Scout read the code and did not run it.'),
+          vals: {
+            ...common, repo: 'acme/shop', commit: 'c03e7b2', severity: 'Blocking', area: 'payments', finding_title: 'the webhook trusts the amount in the request',
+            summary: 'The payment webhook marks an order paid for the amount in the request body, not the amount the payment provider confirmed.',
+            places: [
+              { path: 'src/payments/Webhook.cs', line: '57', url: shop + '/blob/c03e7b2/src/payments/Webhook.cs#L57' },
+              { path: 'src/payments/Webhook.cs', line: '71', url: shop + '/blob/c03e7b2/src/payments/Webhook.cs#L71' },
+            ],
+            evidence: '41:        provider.VerifySignature(request.Headers, request.Body);\n57:        order.MarkPaid(request.Amount);\n71:        var signed = provider.ParseSigned(request.Body);',
+            steps: [
+              { step: 'Take a signed event of the provider for order 5001, whose total is 80.00.' },
+              { step: 'Change `amount` in the unsigned part of the body to 1.00 and send it to `/webhooks/payment`.' },
+              { step: 'Read order 5001.' },
+            ],
+            expected: 'The order stays unpaid and the webhook answers 400, because 1.00 is not the total of the order.',
+            actual: 'The order is marked paid for 1.00.',
+            impact: 'Every order paid through the webhook. Whoever holds one signed event can mark that order paid for any amount. `MarkPaid` has 1 caller, this one.',
+            severity_why: 'Money is involved, and `tests/payments/WebhookTests.cs` has 6 tests, none in which the two amounts differ.',
+            fix_summary: "Read the amount from the provider's signed event and compare it with the total of the order before marking the order paid.",
+            criteria: [
+              { criterion: 'The amount comes from the signed event.' },
+              { criterion: 'An amount that differs from the total leaves the order unpaid and answers 400.' },
+              { criterion: 'The refused request is logged with the order id and without its body.' },
+            ],
+            tests_to_add: [
+              { name: 'Rejects_an_amount_that_differs_from_the_signed_event', asserts: 'the order stays unpaid and the answer is 400.' },
+              { name: 'Marks_paid_with_the_signed_amount', asserts: 'the amount stored is the one of the signed event.' },
+            ],
+            verify: [
+              { step: 'Repeat the steps to reproduce: the webhook answers 400 and order 5001 stays unpaid.' },
+              { step: 'Send the unchanged event: order 5001 is marked paid for 80.00.' },
+            ],
+            related_docs: [
+              { path: 'docs/payments.md', why: 'the section "Webhook" says the amount is verified, which the code does not do.' },
+              { path: 'docs/decisions/0007-payment-provider.md', why: 'records that only the signed event is trusted.' },
+            ],
+            related_items: [{ ref: 'acme/shop#62', url: shop + '/pull/62', title: 'Verify the signature of the webhook, the pull request that added line 41' }],
+            found_on: '2026-11-10', finding_number: '3', findings_total: '11', labels: '`bug`, `security`, `payments`',
+          },
+        }],
+      },
+      {
+        id: 'reviewIssue', label: 'Issue Scout opens: a review finding outside the pull request', where: 'acme/api, a new issue',
+        posted: 'Posted as an issue. The labels are a suggestion in the body; Scout sets none.',
+        notes: ['Written for a finding in a file the pull request does not change; it does not count in the verdict.', 'A section with nothing to say reads "None."'],
+        items: [{
+          ...scout('opened this issue'), name: 'issue', number: '#219',
+          titleTpl: '[{severity}] {area}: {model:finding_title}',
+          tpl: issue('Review of [{repo}#{pull_number}]({pull_url}) at `{commit}` on {found_on}, in [this review]({review_url}). The pull request does not change this file, so the finding is not part of its verdict. Read with {ai_source}, model `{ai_model}`.'),
+          vals: {
+            ...common, repo: 'acme/api', severity: 'Fix', area: 'sync', finding_title: 'the warehouse session opens without a timeout',
+            summary: '`WarehouseSession.OpenAsync` opens the connection to the warehouse without a timeout.',
+            places: [place('src/sync/WarehouseSession.cs', '31')],
+            evidence: '31:        await socket.ConnectAsync(options.Host, options.Port);',
+            steps: [
+              { step: 'Point `Warehouse:Host` at an address that accepts no connection.' },
+              { step: 'Queue one order.' },
+              { step: 'Read the log after one minute.' },
+            ],
+            expected: 'The connection gives up after a timeout, the attempt is counted and the order is parked after five.',
+            actual: 'No attempt is counted and no order is parked. The sync waits until the process restarts.',
+            impact: 'Every order, while the warehouse cannot be reached. The limit of acme/api#214 counts answers and timeouts, and this call produces neither.',
+            severity_why: 'It needs a warehouse that cannot be reached, and a restart clears it.',
+            fix_summary: 'Pass a timeout from `SyncOptions` to `ConnectAsync`, and count a connection that does not open as an attempt.',
+            criteria: [
+              { criterion: 'A connection that does not open in `Sync:ConnectTimeoutSeconds` is abandoned.' },
+              { criterion: 'It counts as an attempt of the order.' },
+              { criterion: 'The setting is in `README.md` and in `docs/sync.md`.' },
+            ],
+            tests_to_add: [{ name: 'Counts_a_connection_that_never_opens_as_an_attempt', asserts: 'the order is parked after five connections that time out.' }],
+            verify: [
+              { step: 'Repeat the steps to reproduce: the log reads "Order 1001 parked after 5 attempts".' },
+              { step: 'Point `Warehouse:Host` back at the warehouse: the next order is sent.' },
+            ],
+            related_docs: [
+              { path: 'docs/sync.md', why: 'the section "Retries" says every failed attempt is counted.' },
+              { path: 'docs/decisions/0012-order-sync-retries.md', why: 'the decision this finding falls under.' },
+            ],
+            related_items: [
+              { ref: 'acme/api#214', url: api + '/pull/214', title: 'Stop order sync retries after five attempts, the pull request under review' },
+              { ref: 'acme/api#198', url: api + '/issues/198', title: 'Order sync retries a refused order forever' },
+            ],
+            found_on: '2026-11-15', pull_number: '214', pull_url: api + '/pull/214', review_url: api + '/pull/214#pullrequestreview-2810044', labels: '`bug`, `sync`',
+          },
+        }],
+      },
+      {
+        id: 'reply', label: 'Reply to a review comment', where: pull,
+        posted: 'Posted as a reply in the thread of a review comment.',
+        notes: ['The answer is the one free text here: the AI source writes it, and the lines under it list the evidence and what was read again.', 'The finding stands, is withdrawn or changes severity; a withdrawn finding is also struck from the review body.', 'Scout answers only a question under one of its own comments, after the owner approved the reply.'],
+        items: [
+          { ...scout('commented on line 142'), when: '25 minutes ago', name: '', diff: retryDiff, plain: true, tpl: inline, vals: retryVals },
+          { who: 'dev-two', isBot: false, action: 'replied', when: '12 minutes ago', name: '', thread: true, plain: true, tpl: ['Would a circuit breaker fit better here than a counter?'], vals: {} },
+          {
+            ...scout('replied'), name: 'reply', thread: true,
+            tpl: [
+              '> {question}',
+              '',
+              '**What was asked:** {model:asked}',
+              '',
+              '**Answer:** {model:answer}',
+              '',
+              '**Evidence:**',
+              '',
+              each('answer_sources', '- [`{path}:{line}`]({url}): {model:shows}'),
+              '',
+              '**The finding:** {finding_outcome}. {model:outcome_why}',
+              '',
+              '**Read again or run again for this answer, at `{commit}`:**',
+              '',
+              each('rechecked', '- {what}'),
+              '',
+              "Answered with {ai_source}, model `{ai_model}` · posted after the owner's approval in Scout Desktop",
+            ],
+            vals: {
+              ...common, question: 'Would a circuit breaker fit better here than a counter?',
+              asked: 'Whether a circuit breaker should replace the counter of attempts.',
+              answer: 'A counter covers what R1 asks: stop after five attempts and park the order. A circuit breaker would also stop the calls for other orders while the warehouse is down, which no request asks for, and `src/sync/` has none today.',
+              answer_sources: [
+                place('src/sync/OrderSync.cs', '142', { shows: 'the 5xx branch, which does not count the attempt.' }),
+                place('src/sync/RetryPolicy.cs', '17', { shows: 'the limit exists and is read in the timeout branch.' }),
+              ],
+              finding_outcome: 'Stands, severity unchanged, Blocking',
+              outcome_why: 'With a circuit breaker or with a counter, a 503 answer on this line is still retried without a limit.',
+              rechecked: [
+                { what: 'Read again `src/sync/OrderSync.cs`, lines 110 to 150, and `src/sync/RetryPolicy.cs`.' },
+                { what: 'Searched `src/` for a circuit breaker: none found.' },
+                { what: 'The tests were not run again: no commit since the review.' },
+              ],
+            },
+          },
+        ],
+      },
+      {
+        id: 'notFinished', label: 'Review could not finish', where: pull,
+        posted: "Posted as a comment on the pull request's conversation.",
+        notes: ['The error is one of three sentences: the usage limit of the AI source with the time it resets, "The review ran longer than 30 minutes.", or "The Scout worker stopped."'],
+        items: [{
+          ...scout('commented'), name: 'comment',
+          tpl: [
+            '### Scout review: not finished',
+            '',
+            'Commit `{commit}` · {stopped_at} UTC · stopped after {ran_for}',
+            '',
+            'No verdict was given. Nothing here is an approval or a request for changes.',
+            '',
+            ...section('The step that failed', 'Step {failed_step} of {steps_total}, "{failed_step_name}".'),
+            ...section('The error, in plain words', '{stop_reason}'),
+            ...section('What was completed before',
+              '| Step | State | Detail |',
+              '|---|---|---|',
+              each('steps', '| {name} | {state} | {detail} |'),
+              '',
+              ...details('{files_unread} files not reached', '```text', each('unread', '{path}'), '```')),
+            ...section('What was not checked as a result', each('not_checked', '- {what}')),
+            ...section('Two ways forward',
+              '1. Mention @{bot} again after {retry_after} UTC. Scout starts the review from the beginning.',
+              '2. Review by hand, starting with the {files_unread} files Scout did not reach.'),
+            'The findings of this attempt were not posted.',
+          ],
+          vals: {
+            ...common, stopped_at: '2026-11-15 14:39', ran_for: '7m 12s', files_read: '11', files_unread: '10',
+            failed_step: '1', steps_total: '4', failed_step_name: 'Read the changed files',
+            steps: [
+              { name: 'Read the description and the changed files', state: 'Stopped', detail: '11 of 21 files read' },
+              { name: 'Run the tests', state: 'Not started', detail: 'The container was not created' },
+              { name: 'Read the checks', state: 'Done', detail: '6 checks: 5 passed, 1 skipped' },
+              { name: 'Write the review', state: 'Not started', detail: 'No verdict' },
+            ],
+            unread: common.files.slice(11).concat([{ path: 'packages.lock.json' }, { path: 'docs/img/retry-flow.png' }]),
+            stop_reason: 'The usage limit of the AI source, Local LLM, was reached. It resets at 16:00 UTC.',
+            not_checked: [
+              { what: 'The four requests of the description were not traced to the code or to tests.' },
+              { what: 'The tests were not run.' },
+              { what: 'The documentation was not compared with the code.' },
+              { what: 'The 10 files not reached, among them 3 of the 5 test files.' },
+            ],
+            retry_after: '16:00',
+          },
+        }],
+      },
+    ];
+  }
+  fill(tpl, vals) {
+    const sub = (line, v) => line.replace(/\{(?:model:|author:)?([a-z0-9_]+)\}/g, (hole, key) => (key in v ? v[key] : hole));
+    const source = [];
+    const md = [];
+    tpl.forEach((entry) => {
+      if (typeof entry === 'string') {
+        source.push({ text: entry, kind: 'body' });
+        md.push(...sub(entry, vals).split('\n'));
+        return;
+      }
+      entry.lines.forEach((line) => source.push({ text: line, kind: 'repeat' }));
+      (vals[entry.each] || []).forEach((row) => entry.lines.forEach((line) => md.push(...sub(line, { ...vals, ...row }).split('\n'))));
+    });
+    return { source, md };
+  }
+  inline(text, mp) {
+    const span = (value, o = {}) => ({ text: value, font: o.mono ? mp.mono : 'inherit', size: o.mono ? '85%' : 'inherit', weight: o.bold ? 600 : 'inherit', fg: o.link ? mp.link : 'inherit', bg: o.mono && !o.link ? mp.codeBg : 'transparent', pad: o.mono && !o.link ? '0.2em 0.4em' : '0' });
+    const out = [];
+    const re = /\[([^\]]+)\]\(([^)]+)\)|\*\*(.+?)\*\*|`([^`]+)`|(@[A-Za-z0-9-]+)|\b([0-9a-f]{7,40})\b/g;
+    let last = 0;
+    let m = re.exec(text);
+    while (m !== null) {
+      if (m.index > last) out.push(span(text.slice(last, m.index)));
+      if (m[1] !== undefined) {
+        const code = /^`(.+)`$/.exec(m[1]);
+        out.push(span(code ? code[1] : m[1], { link: true, mono: code !== null }));
+      } else if (m[3] !== undefined) out.push(span(m[3], { bold: true }));
+      else if (m[4] !== undefined) out.push(span(m[4], { mono: true }));
+      else if (m[5] !== undefined) out.push(span(m[5], { bold: true }));
+      else out.push(span(m[6], /\d/.test(m[6]) && /[a-f]/.test(m[6]) ? { link: true, mono: true } : {}));
+      last = re.lastIndex;
+      m = re.exec(text);
+    }
+    if (last < text.length) out.push(span(text.slice(last)));
+    return out;
+  }
+  parse(md, mp, ctx) {
+    const anchor = ctx.anchor;
+    const special = /^(```|<details>|#{1,4} |\||\s*- |\d+\. |> |---$)/;
+    const kinds = ['isH', 'isP', 'isLi', 'isTable', 'isCode', 'isSugg', 'isSummary', 'isQuote', 'isHr'];
+    const flags = Object.fromEntries(kinds.map((k) => [k, false]));
+    const blocks = [];
+    const push = (kind, o) => {
+      const prev = blocks[blocks.length - 1];
+      const top = prev === undefined ? 0 : kind === 'isH' || kind === 'isHr' || prev.isHr ? 24 : kind === 'isLi' && prev.isLi ? 4 : 16;
+      blocks.push({ ...flags, show: 'block', ...o, [kind]: true, margin: top + 'px 0 0' });
+    };
+    const cells = (line) => line.replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map((c) => this.inline(c.trim(), mp));
+    let i = 0;
+    let ordinal = 0;
+    while (i < md.length) {
+      const line = md[i];
+      const ordered = /^\d+\. (.*)$/.exec(line);
+      if (!ordered && line.trim() !== '') ordinal = 0;
+      if (line.trim() === '') { i += 1; continue; }
+      if (line.startsWith('```')) {
+        const body = [];
+        i += 1;
+        while (i < md.length && !md[i].startsWith('```')) { body.push(md[i]); i += 1; }
+        i += 1;
+        if (line.slice(3) !== 'suggestion') { push('isCode', { text: body.join('\n') }); continue; }
+        const first = anchor ? Number(anchor[0]) : 1;
+        push('isSugg', { del: anchor ? [{ num: anchor[0], text: anchor[2] }] : [], add: body.map((text, n) => ({ num: String(first + n), text })) });
+        continue;
+      }
+      if (line.startsWith('<details>')) {
+        const body = [];
+        i += 1;
+        while (i < md.length && md[i] !== '</details>') { body.push(md[i]); i += 1; }
+        i += 1;
+        const key = ctx.key + '/' + blocks.length;
+        const open = this.state.open[key] === true;
+        push('isSummary', {
+          spans: this.inline((/<summary>(.*)<\/summary>/.exec(line) || ['', ''])[1], mp),
+          expanded: open ? 'true' : 'false', icon: open ? 'M6 9h12l-6 8z' : 'M9 6v12l8-6z',
+          toggle: () => this.setState({ open: { ...this.state.open, [key]: !open } }),
+        });
+        this.parse(body, mp, { anchor, key }).forEach((inner, n) => blocks.push({ ...inner, show: open ? inner.show : 'none', margin: n === 0 ? '8px 0 0' : inner.margin }));
+        continue;
+      }
+      const h = /^(#{1,4}) (.*)$/.exec(line);
+      if (h) {
+        const level = h[1].length;
+        push('isH', { spans: this.inline(h[2], mp), level: String(level), size: ['28px', '21px', '17.5px', '14px'][level - 1], rule: level < 3 ? '0.3em' : '0', ruleLine: level < 3 ? '1px solid ' + mp.border : '0' });
+        i += 1;
+        continue;
+      }
+      if (line === '---') { push('isHr', {}); i += 1; continue; }
+      if (line.startsWith('|')) {
+        const rows = [cells(line)];
+        i += 2;
+        while (i < md.length && md[i].startsWith('|')) { rows.push(cells(md[i])); i += 1; }
+        const width = rows[0].length;
+        push('isTable', {
+          cols: 'repeat(' + width + ', auto)',
+          cells: rows.flatMap((row, r) => Array.from({ length: width }, (_, c) => ({ spans: row[c] || [], weight: r === 0 ? 600 : 400, bg: r > 0 && r % 2 === 0 ? mp.subtle : mp.canvas }))),
+        });
+        continue;
+      }
+      const nested = /^\s+- (.*)$/.exec(line);
+      if (ordered || nested || line.startsWith('- ')) {
+        if (ordered) ordinal += 1;
+        const task = ordered || nested ? null : /^- \[([ xX])\] (.*)$/.exec(line);
+        const done = task !== null && task[1] !== ' ';
+        push('isLi', {
+          hasTask: task !== null, hasMarker: task === null, marker: ordered ? ordinal + '.' : nested ? '◦' : '•', indent: nested ? '36px' : '8px',
+          checked: done ? 'true' : 'false', tick: done ? '✓' : '', boxBg: done ? mp.link : 'transparent', boxLine: done ? mp.link : mp.muted,
+          spans: this.inline(ordered ? ordered[1] : nested ? nested[1] : task ? task[2] : line.slice(2), mp),
+        });
+        i += 1;
+        continue;
+      }
+      if (line.startsWith('> ')) { push('isQuote', { spans: this.inline(line.slice(2), mp) }); i += 1; continue; }
+      const para = [line];
+      i += 1;
+      while (i < md.length && md[i].trim() !== '' && !special.test(md[i])) { para.push(md[i]); i += 1; }
+      push('isP', { spans: this.inline(para.join(' '), mp) });
+    }
+    return blocks;
+  }
+  pageOf(current, vals) {
+    const first = current.items[0];
+    if (first.titleTpl !== undefined) {
+      const [owner, repo] = vals.repo.split('/');
+      return { kind: 'issue', owner, repo, number: first.number, title: this.fill([first.titleTpl], first.vals).md[0], ref: vals.repo + first.number };
+    }
+    return { kind: current.id === 'inline' ? 'files' : 'pull', owner: 'acme', repo: 'api', number: '#214', title: 'Stop order sync retries after five attempts', ref: 'acme/api#214' };
+  }
+  boxesOf(current, filled, mp, t, isGh, kind) {
+    const review = current.items[0].state !== undefined;
+    const alreadyPosted = ['started', 'waiting', 'notFinished'].includes(current.id);
+    const drops = this.state.drops;
+    const labelOf = (name) => (name === 'issue' ? 'Issue body' : name.charAt(0).toUpperCase() + name.slice(1));
+    const boxes = [];
+    filled.forEach(({ item, md }, index) => {
+      const inDiff = item.diff !== undefined || item.thread === true;
+      const decidable = !isGh && review && item.diff !== undefined;
+      const dropped = decidable && drops[item.name] === true;
+      const decide = (drop) => () => this.setState({ drops: { ...drops, [item.name]: drop } });
+      const person = { initial: item.who.charAt(0).toUpperCase(), avatarBg: item.isBot ? '#3b6ff2' : mp.person, avatarRadius: item.isBot ? '6px' : '50%' };
+      const comment = {
+        ...person, who: item.who, isBot: item.isBot,
+        action: !isGh ? item.action : inDiff ? '' : review ? 'left a comment' : 'commented',
+        when: isGh || item.plain || !item.isBot ? item.when : alreadyPosted ? 'now' : 'not posted yet',
+        hasSmallAvatar: isGh && inDiff,
+        headPad: inDiff ? '12px 16px 4px' : '8px 16px', headBg: inDiff ? 'transparent' : mp.subtle,
+        headLine: inDiff ? '0' : '1px solid ' + mp.border, headRadius: inDiff ? '0' : mp.radiusTop,
+        bodyPad: !inDiff ? '16px' : isGh ? '4px 16px 12px 46px' : '4px 16px 12px',
+        topLine: item.diff !== undefined ? '1px solid ' + mp.border : '0',
+        hasBadge: dropped, badge: dropped ? 'Dropped, not posted' : '',
+        blocks: this.parse(md, mp, { key: current.id + '/' + index, anchor: item.diff ? item.diff.lines[item.diff.lines.length - 1] : undefined }),
+      };
+      const last = boxes[boxes.length - 1];
+      if (item.thread === true && last !== undefined) {
+        last.comments.push(comment);
+        if (!item.plain) { last.hasLabel = !isGh; last.label = labelOf(item.name); }
+        return;
+      }
+      boxes.push({
+        ...person, isBox: true, isEvent: false, isMerge: false, margin: isGh ? '0 0 16px' : '0',
+        hasGutter: isGh && kind !== 'files', hasAvatar: isGh && !inDiff && !review, hasCaret: isGh && !inDiff && !review,
+        hasLabel: !isGh && !item.plain, label: labelOf(item.name),
+        hasFile: item.diff !== undefined, isFileView: isGh && kind === 'files', file: item.diff ? item.diff.path : '',
+        lines: item.diff ? item.diff.lines.map(([num, sign, text]) => ({ old: sign === '+' ? '' : num, num, sign, text, bg: sign === '+' ? mp.addBg : 'transparent', numBg: sign === '+' ? mp.addNum : 'transparent' })) : [],
+        comments: [comment], hasReply: isGh && item.diff !== undefined,
+        decidable, opacity: dropped ? '0.55' : '1',
+        keepAria: 'Keep the ' + item.name, dropAria: 'Drop the ' + item.name,
+        keepPressed: dropped ? 'false' : 'true', keepBg: dropped ? 'transparent' : t.surface2, keepBorder: dropped ? t.line : t.accent,
+        dropPressed: dropped ? 'true' : 'false', dropBg: dropped ? t.surface2 : 'transparent', dropBorder: dropped ? t.accent : t.line,
+        keep: decide(false), drop: decide(true),
+      });
+    });
+    return boxes;
+  }
+  checksSummary(vals, id) {
+    const part = (count, word) => (count > 0 ? [count + ' ' + word] : []);
+    if (id === 'waiting') {
+      const queued = vals.running.filter((x) => x.state === 'Queued').length;
+      const running = vals.running.length - queued;
+      return [...part(queued, 'queued'), ...part(running, 'in progress'), ...part(Number(vals.checks_total) - vals.running.length, 'successful')].join(', ') + ' checks';
+    }
+    const count = (result) => vals.checks.filter((x) => x.result === result).length;
+    return [...part(count('Failed'), 'failing'), ...part(count('Skipped'), 'skipped'), ...part(count('Passed'), 'successful')].join(', ') + ' checks';
+  }
+  mergeBox(id, vals, g) {
+    const ic = this.icons();
+    const tones = { ok: [g.greenEmph, ic.check], bad: [g.redEmph, ic.cross], wait: [g.yellowEmph, ic.dot], conflict: [g.neutralEmph, ic.alert] };
+    const section = (tone, title, sub, files = []) => ({ iconBg: tones[tone][0], icon: tones[tone][1], title, sub, files });
+    const requested = section('bad', 'Changes requested', '1 review requesting changes by reviewers with write access.');
+    const blocked = section('bad', 'Merging is blocked', 'Merging can be performed automatically once the requested changes are addressed.');
+    const noConflicts = section('ok', 'No conflicts with base branch', 'Merging can be performed automatically.');
+    const checks = this.checksSummary(vals, id);
+    const sections = {
+      approved: [section('ok', 'Changes approved', '1 approving review by reviewers with write access.'), section('ok', 'All checks have passed', checks), noConflicts],
+      problems: [requested, section('ok', 'All checks have passed', checks), blocked],
+      checkFailed: [requested, section('bad', 'Some checks were not successful', checks), blocked],
+      conflicts: [requested, section('conflict', 'This branch has conflicts that must be resolved', 'Use the command line to resolve conflicts before continuing.', vals.conflicts || [])],
+      waiting: [section('wait', "Some checks haven't completed yet", checks), noConflicts],
+    }[id];
+    if (sections === undefined) return [];
+    const ready = id === 'approved';
+    return [{
+      isBox: false, isEvent: false, isMerge: true, margin: '8px 0 0', icon: ic.merge,
+      badgeBg: ready ? g.greenEmph : id === 'waiting' ? g.yellowEmph : id === 'conflicts' ? g.neutralEmph : g.redEmph,
+      sections,
+      buttonBg: ready ? g.greenEmph : g.subtle, buttonFg: ready ? '#ffffff' : g.muted, buttonLine: ready ? g.greenEmph : g.border,
+      foot: ready ? 'You can also merge this with the command line.' : id === 'waiting' ? 'The checks are still running.' : 'The pull request cannot be merged as it is.',
+    }];
+  }
+  githubRows(current, boxes, vals, g, t, page) {
+    if (page.kind !== 'pull') return boxes;
+    if (current.id === 'prDescription') {
+      boxes[0].comments[0].hasBadge = true;
+      boxes[0].comments[0].badge = 'Author';
+      return boxes;
+    }
+    const ic = this.icons();
+    const state = current.items[0].state;
+    const isReply = current.id === 'reply';
+    const event = (o) => ({ isBox: false, isEvent: true, isMerge: false, margin: '0 0 16px', isBot: false, initial: o.who.charAt(0).toUpperCase(), avatarBg: g.person, avatarRadius: '50%', ...o });
+    const bot = { who: 'scout-acme', isBot: true, avatarBg: '#3b6ff2', avatarRadius: '6px' };
+    const opening = { who: 'dev-one', isBot: false, action: '', when: 'yesterday', name: '', plain: true };
+    const openingBox = this.boxesOf({ id: '', items: [opening] }, [{ item: opening, md: ['The order sync retried a refused order without a limit. This change stops after five attempts and parks the order for a person to look at. Follows 9d2c47e; `Stops_after_five_attempts` is the proof of the fix.'] }], g, t, true, 'pull')[0];
+    openingBox.comments[0].hasBadge = true;
+    openingBox.comments[0].badge = 'Author';
+    const reviews = {
+      approved: { badgeBg: g.greenEmph, badgeFg: '#ffffff', icon: ic.check, text: 'approved these changes' },
+      changes: { badgeBg: g.redEmph, badgeFg: '#ffffff', icon: ic.fileDiff, text: 'requested changes' },
+      commented: { badgeBg: g.badge, badgeFg: g.muted, icon: ic.eye, text: 'reviewed' },
+    };
+    return [
+      openingBox,
+      event({ who: 'dev-one', badgeBg: g.badge, badgeFg: g.muted, icon: ic.mention, text: 'mentioned scout-acme', when: isReply ? '40 minutes ago' : '11 minutes ago' }),
+      ...(isReply ? [event({ ...bot, ...reviews.changes, when: '25 minutes ago' })] : []),
+      ...(state !== undefined ? [event({ ...bot, ...reviews[state], when: 'now' })] : []),
+      ...boxes,
+      ...this.mergeBox(current.id, vals, g),
+    ];
+  }
+  githubPage(current, vals, g, page, rows) {
+    const ic = this.icons();
+    const isPull = page.kind !== 'issue';
+    const state = current.items[0].state;
+    const pills = { open: ['Open', g.greenEmph, isPull ? ic.pull : ic.issue], merged: ['Merged', g.purpleEmph, ic.merge], closed: ['Closed', g.redEmph, isPull ? ic.pull : ic.issue] };
+    const pill = pills.open;
+    const tab = (label, icon, count, on) => ({ label, icon, count, current: on ? 'page' : 'false', border: on ? g.border : 'transparent', bottom: on ? g.canvas : 'transparent', bg: on ? g.canvas : 'transparent', fg: g.fg, weight: on ? 600 : 400 });
+    const palette = { enhancement: ['#0e8a8a', '#56d4dd'], bug: ['#d73a4a', '#ff7b72'], security: ['#b35900', '#ffa657'], payments: ['#0969da', '#79c0ff'], sync: ['#8250df', '#d2a8ff'] };
+    const label = (text) => {
+      const [solid, soft] = palette[text] || [g.neutralEmph, g.muted];
+      return g.canvas === '#ffffff' ? { text, bg: solid, fg: '#ffffff', line: 'transparent' } : { text, bg: 'transparent', fg: soft, line: soft };
+    };
+    const reviewer = {
+      approved: [ic.check, g.green, 'scout-acme approved these changes'],
+      changes: [ic.fileDiff, g.red, 'scout-acme requested changes'],
+      commented: [ic.comment, g.muted, 'scout-acme left review comments'],
+    }[current.id === 'reply' ? 'changes' : state] || [ic.dot, g.yellow, 'Awaiting requested review from scout-acme'];
+    const block = (title, o) => ({ title, hasNone: false, none: '', people: [], hasLabels: false, labels: [], ...o });
+    const names = (vals.labels || '').split(',').map((x) => x.replace(/`/g, '').trim()).filter((x) => x !== '');
+    const side = current.id === 'prDescription'
+      ? [block('Reviewers', { hasNone: true, none: 'No reviews' }), block('Labels', { hasLabels: true, labels: ['bug', 'sync'].map(label) })]
+      : isPull
+      ? [block('Reviewers', { people: [{ name: 'scout-acme', initial: 'S', bg: '#3b6ff2', radius: '6px', icon: reviewer[0], iconFg: reviewer[1], state: reviewer[2] }] }), block('Labels', { hasLabels: true, labels: ['bug', 'sync'].map(label) })]
+      : [block('Assignees', { hasNone: true, none: 'No one assigned' }), block('Labels', { hasLabels: true, labels: names.map(label) }), ...(vals.development ? [block('Development', { hasNone: true, none: vals.development })] : [])];
+    const comments = rows.reduce((sum, r) => sum + (r.isBox ? r.comments.length : 0), 0);
+    return {
+      repoIcon: ic.repo, owner: page.owner, repo: page.repo, title: page.title, number: page.number,
+      state: pill[0], stateBg: pill[1], stateIcon: pill[2],
+      isPull, isIssue: !isPull, opener: current.items[0].who, openerIsBot: current.items[0].isBot, openedWhen: current.items[0].when, author: 'dev-one', commits: '3', base: 'main', head: 'fix/order-sync-retries',
+      metaGap: isPull ? '0' : '24px', metaLine: isPull ? '0' : '1px solid ' + g.border,
+      tabs: isPull ? [
+        tab('Conversation', ic.comment, page.kind === 'files' ? '3' : String(comments), page.kind === 'pull'),
+        tab('Commits', ic.commits, '3', false),
+        tab('Checks', ic.checks, String(vals.checks_total || '6'), false),
+        tab('Files changed', ic.fileDiff, String(vals.files_changed || '21'), page.kind === 'files'),
+      ] : [],
+      added: '+412', removed: '−97',
+      side,
+    };
+  }
+  scoutView(current, vals, t, page, boxes) {
+    const ic = this.icons();
+    const id = current.id;
+    const ref = page.ref;
+    const state = current.items[0].state;
+    const tone = { ok: [t.okBg, t.ok], warn: [t.warnBg, t.warn], err: [t.errBg, t.err], muted: [t.surface2, t.fg2], accent: [t.surface2, t.accent] };
+    const chip = (kind, icon, label) => ({ label, icon, bg: tone[kind][0], fg: tone[kind][1] });
+    const many = (count, word) => count + ' ' + word + (count === 1 ? '' : 's');
+    const number = (key) => Number(vals[key] || 0);
+    const checkChips = vals.checks === undefined ? [] : [
+      ...(number('checks_passed') > 0 ? [chip('ok', ic.check, many(number('checks_passed'), 'check') + ' passed')] : []),
+      ...(number('checks_failed') > 0 ? [chip('err', ic.cross, many(number('checks_failed'), 'check') + ' failed')] : []),
+      ...(number('checks_skipped') > 0 ? [chip('muted', ic.skip, many(number('checks_skipped'), 'check') + ' skipped')] : []),
+    ];
+    const testsChip = number('tests_failed') > 0 ? chip('err', ic.cross, 'Tests: ' + vals.tests_passed + ' passed, ' + vals.tests_failed + ' failed') : chip('ok', ic.check, 'Tests passed: ' + vals.tests_passed);
+    const decidable = boxes.filter((b) => b.decidable);
+    const kept = decidable.filter((b) => b.keepPressed === 'true').length;
+    const verdicts = { approved: ['Approve', 'ok', ic.check], changes: ['Request changes', 'warn', ic.pencil], commented: ['Comment', 'muted', ic.comment] };
+    const verdict = verdicts[state] || ['', 'muted', ic.skip];
+    const why = {
+      approved: 'Scout found nothing to change and every check passed.',
+      problems: 'Because ' + many(kept, 'comment') + (kept === 1 ? ' is' : ' are') + ' kept.',
+      checkFailed: 'Because ' + vals.checks_failed + ' of ' + vals.checks_total + ' checks failed.',
+      conflicts: 'Because the pull request cannot be merged.',
+      suggestions: 'Suggestions only: Scout neither approves nor requests changes.',
+    }[id] || '';
+    const ready = 'Nothing is posted on GitHub before you approve it in the chat.';
+    const open = [{ label: 'Open in the chat', path: ic.chat }];
+    const entry = (kind, o) => ({ glyph: '@', when: 'now', detail: '', action: '', buttons: [], indeterminate: false, ...o, iconBg: tone[kind][0], iconFg: tone[kind][1], hasAction: Boolean(o.action), hasButtons: (o.buttons || []).length > 0 });
+    const base = {
+      time: 'now', irreversible: false, heading: '', origin: '', originFg: t.fg2,
+      hasRead: false, readLine: '', hasTrace: false, requestLine: '', docLine: '', hasChips: false, chips: [], hasChange: false, changeSummary: '', changeLine: '',
+      hasClaims: false, claimsTitle: 'What the pull request says', gapsTitle: 'What the description leaves out', claimsLine: '', claims: [], gaps: [], signed: 'Signed as Bot (scout-acme[bot])',
+      postHeading: 'What will be posted on GitHub', target: 'acme/api · PR #214' + (vals.commit ? ' · commit ' + vals.commit : ''),
+      hasVerdict: false, verdict: verdict[0], verdictBg: tone[verdict[1]][0], verdictFg: tone[verdict[1]][1], verdictIcon: verdict[2], verdictWhy: why,
+      hasTitle: false, title: '', labels: [],
+      pending: false, pendingLine: '', approveLabel: 'Approve and post', rejectAria: '', approveAria: '',
+      hasStatus: false, status: '', statusBg: t.surface2, statusFg: t.fg2,
+      bellCaption: 'The bell at this moment',
+    };
+    const asks = (what, line) => ({ irreversible: true, pending: true, pendingLine: 'Nothing goes to GitHub before you approve. This ' + what + ' also waits in Approvals.', rejectAria: 'Reject the ' + line, approveAria: 'Approve and post the ' + line });
+    if (state !== undefined) {
+      const conflicts = id === 'conflicts';
+      return {
+        sc: {
+          ...base, ...asks('review', 'review of ' + ref), hasVerdict: true,
+          heading: 'Review of ' + ref + ': ' + page.title,
+          origin: "Started by @dev-one's mention of @scout-acme on " + ref + '. @dev-one is on your allowed users, so Scout did not wait for Review it.',
+          hasRead: true,
+          readLine: conflicts ? 'Nothing read: the review waits for a commit without conflicts.' : vals.files_read + ' of ' + vals.files_changed + ' changed files read · ' + vals.checks_total + ' checks read · ' + vals.not_read_total + ' files left out',
+          hasTrace: !conflicts,
+          requestLine: many(number('requests_total'), 'request') + ': ' + vals.requests_covered + ' done and covered, ' + vals.requests_untested + ' done without a test' + (number('requests_not_done') > 0 ? ', ' + vals.requests_not_done + ' not done' : ''),
+          docLine: many(number('docs_changed_count'), 'document') + ' changed, ' + vals.docs_stale_count + ' not updated, ' + vals.docs_missing_count + ' missing · ' + many(number('manual_count'), 'manual test') + ' proposed',
+          hasChips: !conflicts, chips: conflicts ? [] : [testsChip, ...checkChips],
+          hasChange: true, changeSummary: 'The order sync stops retrying an order after five attempts and parks it for a person to look at.',
+          changeLine: vals.files_changed + ' files changed · +' + vals.lines_added + ' −' + vals.lines_removed,
+        },
+        bell: [entry('warn', { title: 'Review of ' + ref + ' ready for your ok: ' + (kept > 0 ? many(kept, 'comment') : 'no comments') + ', ' + verdict[0], detail: ready, buttons: open })],
+      };
+    }
+    if (page.kind === 'issue' && !current.items[0].isBot) {
+      const found = { Met: ['ok', ic.check], 'Not met': ['err', ic.cross], 'Not checked': ['muted', ic.skip] };
+      return {
+        sc: {
+          ...base, heading: ref + ': ' + page.title,
+          origin: 'Scout reads the issue when a pull request links it, here acme/api#214, and looks for each acceptance criterion in that pull request. Nothing here is posted by Scout.',
+          postHeading: 'What the author wrote on GitHub', target: page.owner + '/' + page.repo + ' · issue ' + page.number, signed: 'Written by ' + current.items[0].who + ', from .github/ISSUE_TEMPLATE/',
+          hasClaims: true, claimsTitle: 'What the issue asks', gapsTitle: 'What the issue leaves out',
+          claimsLine: many(vals.asked.length, 'request') + ' and ' + many(vals.criteria.length, 'acceptance criterion').replace('criterions', 'criteria') + ', looked for in acme/api#214.',
+          claims: vals.criteria.map((x) => ({ id: x.id, text: x.criterion.replace(/`/g, '') + ' (' + x.found_why.replace(/`/g, '') + ')', chips: [chip(found[x.found][0], found[x.found][1], x.found)] })),
+          gaps: (vals.gaps || []).map((text) => ({ text })),
+        },
+        bell: [],
+        bellCaption: 'The bell shows nothing: an issue alone starts no work in Scout',
+      };
+    }
+    if (page.kind === 'issue') {
+      const names = (vals.labels || '').split(',').map((x) => x.replace(/`/g, '').trim()).filter((x) => x !== '');
+      const repo = page.owner + '/' + page.repo;
+      return {
+        sc: {
+          ...base, ...asks('issue', 'issue on ' + repo), approveLabel: 'Open the issue', approveAria: 'Open the issue on ' + repo,
+          heading: 'Open an issue on ' + repo,
+          origin: id === 'auditIssue' ? 'From the audit of ' + repo + ', finding ' + vals.finding_number + ' of ' + vals.findings_total + '.' : 'From the review of acme/api#214: a finding in a file the pull request does not change.',
+          postHeading: 'What will be opened on GitHub', target: repo + ' · new issue',
+          hasTitle: true, title: page.title, labels: names.map((text) => ({ text })),
+        },
+        bell: [entry('ok', { glyph: 'I', title: 'Issue opened on ' + repo + ': ' + page.number, detail: page.title, action: 'See the issue' })],
+        bellCaption: 'The bell after the issue is opened',
+      };
+    }
+    const variants = {
+      prDescription: {
+        sc: {
+          heading: ref + ': ' + page.title,
+          origin: 'Scout reads the description first and checks each claim against the code. Nothing here is posted by Scout.',
+          postHeading: 'What the author wrote on GitHub', target: 'acme/api · PR #214 · description', signed: 'Written by dev-one, from .github/pull_request_template.md',
+          hasClaims: true,
+          claimsLine: many((Array.isArray(vals.asked) ? vals.asked : []).length, 'request') + ' read from the section "What was asked".',
+          claims: (Array.isArray(vals.asked) ? vals.asked : []).map((x) => {
+            const named = (vals.tests || []).filter((y) => y.id === x.id).length;
+            return { id: x.id, text: x.request, chips: [chip('ok', ic.check, 'Change found'), named > 0 ? chip('ok', ic.check, many(named, 'test') + ' named, found') : chip('warn', ic.alert, 'No test named')] };
+          }),
+          gaps: (vals.gaps || []).map((text) => ({ text: text.replace(/`/g, '') })),
+        },
+        bell: entry('warn', { title: '@dev-one mentioned @scout-acme on ' + ref + ': @scout-acme please review this pull request.', detail: page.title, action: 'Open on GitHub' }),
+        caption: 'The bell when the description is posted',
+      },
+      started: {
+        sc: {
+          heading: 'Reviewing ' + ref + ': ' + page.title,
+          origin: "Started by @dev-one's mention of @scout-acme on " + ref + '. @dev-one is on your allowed users, so Scout did not wait for Review it.',
+          postHeading: 'What was posted on GitHub',
+          hasStatus: true, status: 'Reading ' + vals.files_changed + ' files · running the tests in a container',
+        },
+        bell: entry('accent', { title: 'Reviewing ' + ref + ', asked by @dev-one', detail: 'Reading ' + vals.files_changed + ' files · running the tests in a container', indeterminate: true }),
+        caption: 'The bell, In progress',
+      },
+      waiting: {
+        sc: {
+          heading: 'Review of ' + ref + ': approved, waiting for the checks',
+          origin: 'You approved at ' + vals.approved_at + ' UTC. ' + vals.checks_running + ' of ' + vals.checks_total + ' checks are still running, so the approval is not posted yet.',
+          postHeading: 'What was posted on GitHub',
+          hasStatus: true, status: 'Scout posts the approval when every check passed.',
+        },
+        bell: entry('accent', { title: 'Waiting to approve ' + ref, detail: vals.checks_running + ' of ' + vals.checks_total + ' checks still running · cancelled at ' + vals.deadline + ' UTC without a result', indeterminate: true }),
+        caption: 'The bell, In progress',
+      },
+      notFinished: {
+        sc: {
+          heading: 'Review of ' + ref + ' did not finish', origin: String(vals.stop_reason), originFg: t.err,
+          postHeading: 'What was posted on GitHub',
+          hasStatus: true, status: 'No verdict was given. The findings of this attempt were not posted.', statusBg: t.errBg, statusFg: t.err,
+        },
+        bell: entry('err', { glyph: '!', title: 'Review of ' + ref + ' did not finish', detail: String(vals.stop_reason) }),
+        caption: 'The bell at this moment',
+      },
+      inline: {
+        sc: { ...asks('comment', 'comment on ' + ref), heading: 'Comment on ' + ref + ': ' + (boxes[0] ? boxes[0].file : '') + ':' + (boxes[0] && boxes[0].lines.length ? boxes[0].lines[boxes[0].lines.length - 1].num : ''), origin: 'One comment on a line of the diff, from the review of ' + ref + '.' },
+        bell: entry('warn', { title: 'Comment on ' + ref + ' ready for your ok', detail: ready, buttons: open }),
+        caption: 'The bell at this moment',
+      },
+      reply: {
+        sc: { ...asks('reply', 'reply on ' + ref), heading: 'Reply on ' + ref + ' to @dev-two', origin: '@dev-two asked a question under a comment Scout posted on ' + ref + '.' },
+        bell: entry('warn', { title: 'Reply on ' + ref + ' ready for your ok', detail: ready, buttons: open }),
+        caption: 'The bell at this moment',
+      },
+    }[id];
+    return { sc: { ...base, ...variants.sc, bellCaption: variants.caption }, bell: [variants.bell] };
+  }
+  renderVals() {
+    const t = this.palette(this.state.theme);
+    const g = this.github(this.state.theme);
+    const all = this.templates();
+    const current = all.find((x) => x.id === this.state.preview) || all[0];
+    const isGh = this.state.view !== 'scout';
+    const m = isGh ? g : this.scoutMarkdown(t);
+    const vals = Object.assign({}, ...current.items.map((item) => item.vals));
+    const page = this.pageOf(current, vals);
+    const filled = current.items.map((item) => ({ item, ...this.fill(item.tpl, item.vals) }));
+    const boxes = this.boxesOf(current, filled, m, t, isGh, page.kind);
+    const rows = isGh ? this.githubRows(current, boxes, vals, g, t, page) : boxes;
+    const scout = this.scoutView(current, vals, t, page, boxes);
+    const hasSidebar = isGh && page.kind !== 'files';
+    const tone = { body: t.fg2, repeat: t.accent, field: t.warn };
+    const sources = filled.filter(({ item }) => !item.plain).map(({ item, source }) => ({
+      name: item.name,
+      lines: [...(item.titleTpl !== undefined ? [{ text: 'title: ' + item.titleTpl, kind: 'field' }, { text: '', kind: 'body' }] : []), ...source].map((ln) => ({ text: ln.text, fg: tone[ln.kind] })),
+    }));
+    const pill = (on) => ({ bg: on ? t.pressedBg : 'transparent', fg: on ? t.pressedFg : t.idleFg, pressed: on ? 'true' : 'false' });
+    const choice = (on, label, pick) => ({ label, pick, pressed: on ? 'true' : 'false', bg: on ? t.surface2 : 'transparent', fg: on ? t.fg : t.muted });
+    const frame = isGh
+      ? { aria: 'The page on GitHub', bg: g.canvas, fg: g.fg, font: g.font, line: g.border, cols: hasSidebar ? 'minmax(0, 1fr) 296px' : 'minmax(0, 1fr)', cardGap: '0', cardBg: 'transparent', cardBorder: '0', cardRadius: '0', cardPad: '0', postGap: '0', postPad: '0', postBorder: '0', postLeft: '0', postRadius: '0' }
+      : { aria: 'The chat and the bell in Scout Desktop', bg: t.bg, fg: t.fg, font: m.font, line: t.line, cols: 'minmax(0, 1fr) 400px', cardGap: '12px', cardBg: t.surface, cardBorder: '1px solid ' + t.line, cardRadius: '14px', cardPad: '16px', postGap: '8px', postPad: '12px 14px', postBorder: '1px solid ' + t.line, postLeft: '3px solid ' + t.accent, postRadius: '12px' };
+    return {
+      t, g, m, frame,
+      isGh, isScout: !isGh, hasSidebar, hasLine: isGh && page.kind === 'pull',
+      previews: all.map((x) => choice(x.id === current.id, x.label, () => this.setState({ preview: x.id, drops: {} }))),
+      views: [choice(isGh, 'On GitHub', () => this.setState({ view: 'github' })), choice(!isGh, 'In Scout', () => this.setState({ view: 'scout' }))],
+      viewNote: isGh ? 'The page on GitHub after the note is posted.' : 'The chat card and the bell entry in Scout Desktop, with the same note.',
+      label: current.label,
+      where: current.where,
+      posted: current.posted,
+      gh: this.githubPage(current, vals, g, page, rows),
+      sc: { ...scout.sc, ...(scout.bellCaption ? { bellCaption: scout.bellCaption } : {}) },
+      bell: scout.bell,
+      rows,
+      sources,
+      notes: current.notes.map((text) => ({ text })),
+      hasNotes: current.notes.length > 0,
+      themeLight: pill(this.state.theme === 'light'),
+      themeDark: pill(this.state.theme === 'dark'),
+      setLight: () => this.setState({ theme: 'light' }),
+      setDark: () => this.setState({ theme: 'dark' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

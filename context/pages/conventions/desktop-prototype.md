@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.15"
+version: "1.16"
 date: 2026-11-07
-updated: 2026-11-12
-changes: "v1.15 (2026-11-12): the Main artboard draws a review that found nothing."
+updated: 2026-11-15
+changes: "v1.16 (2026-11-15): a new artboard draws the templates of what is written on GitHub."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."
@@ -46,6 +46,7 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 | `context/prototypes/desktop/Comments.dc.html` | Operator: Comments |
 | `context/prototypes/desktop/Reports.dc.html` | Operator: Reports |
 | `context/prototypes/desktop/Experiments.dc.html` | Operator: Experiments |
+| `context/prototypes/desktop/GitHubNotes.dc.html` | GitHub notes: what the bot writes |
 
 2026-11-08: the Models, Features, Main, Quick ask, Approvals, Logs and Settings artboards were brought in line with the code of the phase-2 branch: the Speech tab states, the GitHub panel's bot name, handle and review request, the bell's mention entry, the conversation partial and errors, the Rejected-before-the-grant card, the Approvals badge, History's approved actions and Signed as column, the partial copy count and Discord's Needs a server card.
 
@@ -78,5 +79,7 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 2026-11-12: the Features artboard's panel rows take the catalog's one sentence per row where the drawn sentence left out something the row does or said something untrue, and the GitHub panel draws its fifth read, Notifications, so the card reads Read 5 (the owner's resolution: the app shows the artboard's short sentences, the artboard gains the row Scout really reads); each rewritten sentence is listed on [[pages/roadmap/prototype-migration]] (Features, K2). The Kubernetes path pill draws `k8sDetectedPath`, sample data for the path the app detects, where it wrote `~/.kube/config` (the owner's decision). The artboard's Allow writes card draws each write's lines as a list, one line per action, and a Preview state, "Allow writes confirmation (GitHub), every action of a write on its own line, as the app lists them", draws GitHub's full actions as the app shows them; its default still draws the short sentence per write, a difference that waits for the owner.
 
 2026-11-12: the Main artboard draws, before the code, a review that found nothing as the Findings card state "Review: no findings": the tests chips, the target line, the line "No findings." and, under it, "What Scout says it read: ...", labelled as the model's report, no finding card, no Yes to all or Post row, and the Verdict group with Approve alone, Request changes not shown. It draws no count of files read, which Scout does not measure. Request changes hidden, the read sentence on that line only and Approve under today's rules are defaults waiting for the owner's approval of the state ([[pages/roadmap/followups]]).
+
+2026-11-15: a new artboard, GitHub notes, draws before the code and for the owner's approval 15 templates of what is written on GitHub around a review: the pull request description and two issues an author writes from templates a repository adopts, and the twelve texts the Scout bot posts. A View control shows each on its GitHub page and in Scout Desktop, from the same text. Design, not built.
 
 Related: [[pages/services/desktop-ui]], [[pages/decisions/0047-the-docker-card]], [[pages/decisions/0046-ai-source-usage-on-the-cards]].
