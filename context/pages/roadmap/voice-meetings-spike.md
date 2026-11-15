@@ -129,7 +129,7 @@ The enabler for 2, 3 and 11. Each `heard` final gains `start` and `end` in milli
 
 ## 8. Scheduled provider canaries
 
-Weekly `schedule` plus `workflow_dispatch` in a new `.github/workflows/canary.yml`, never on a pull request: Whisper (`ggml-tiny.bin` checked against its pin, an openly licensed WAV, key words asserted), Ollama with a tiny model, OpenRouter with a low-credit key bound as environment variables, GitHub with the workflow's read-only token. The ChatGPT plan is excluded ([[pages/decisions/0018-chatgpt-plan-sign-in]]). On failure one labelled issue, after the owner says yes to `issues: write`; `::add-mask::`, one retry. Today: `ci.yml`, `ui-ci.yml`, `release.yml` (`.github/workflows/release.yml:201`), no scheduled job. Size S.
+Weekly `schedule` plus `workflow_dispatch` in a new `.github/workflows/canary.yml`, never on a pull request: Whisper (`ggml-tiny.bin` checked against its pin, an openly licensed WAV, key words asserted), Ollama with a tiny model, OpenRouter with a low-credit key bound as environment variables, GitHub with the workflow's read-only token. The ChatGPT plan is excluded ([[pages/decisions/0018-chatgpt-plan-sign-in]]). On failure one labelled issue, after the owner says yes to `issues: write`; `::add-mask::`, one retry. Today: `ci.yml`, `ui-ci.yml`, `release.yml` (`.github/workflows/release.yml:202`), no scheduled job. Size S.
 
 ## 9. Model lifecycle and a signed remote catalog
 

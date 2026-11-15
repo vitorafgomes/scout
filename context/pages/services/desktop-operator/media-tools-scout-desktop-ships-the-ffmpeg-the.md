@@ -36,4 +36,4 @@ Scout Desktop ships the `ffmpeg` the worker assembles with, the font it draws ca
 
 - **macOS.** BtbN publishes no LGPL macOS build, so no `ffmpeg` is bundled: the worker runs the one on the system path, or the Homebrew or `/usr/local/bin` one when the app was started without the shell's path, with the bundled Noto Sans as its font. That ffmpeg must have every filter the assembly uses (`gblur` and `drawtext` among them); the readiness note names the first one missing.
 
-- **CI.** `release.yml` and `ui-ci.yml` cache `ui/build/media-cache` keyed by the hash of `ui/build/media-tools.json` on every OS, so macOS caches the fonts (`.github/workflows/release.yml:180`, `.github/workflows/ui-ci.yml:124`); the fetch itself runs in the existing Package step.
+- **CI.** `release.yml` and `ui-ci.yml` cache `ui/build/media-cache` keyed by the hash of `ui/build/media-tools.json` on every OS, so macOS caches the fonts (`.github/workflows/release.yml:181`, `.github/workflows/ui-ci.yml:124`); the fetch itself runs in the existing Package step.
