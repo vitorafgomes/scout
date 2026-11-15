@@ -5,6 +5,7 @@ import {
   type LocalListeningResponse,
   type LocalTranscriptEvent,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type LocalTurn,
   type ScoutBridge,
   type ThemeState,
@@ -594,6 +595,29 @@ export function buildBridge(ipc: IpcSubset): ScoutBridge {
       ipc.on(CHANNEL.githubVerdict, handler);
       return () => {
         ipc.removeListener(CHANNEL.githubVerdict, handler);
+      };
+    },
+    githubApproveWhenChecksPass(req) {
+      return ipc.invoke(CHANNEL.githubApproveWhenChecksPass, req) as ReturnType<
+        ScoutBridge['githubApproveWhenChecksPass']
+      >;
+    },
+    githubCancelWaitingApproval(req) {
+      return ipc.invoke(CHANNEL.githubCancelWaitingApproval, req) as ReturnType<
+        ScoutBridge['githubCancelWaitingApproval']
+      >;
+    },
+    githubWaitingApprovalFor(req) {
+      return ipc.invoke(CHANNEL.githubWaitingApprovalFor, req) as ReturnType<
+        ScoutBridge['githubWaitingApprovalFor']
+      >;
+    },
+    onGitHubWaitingApproval(listener) {
+      const handler = (_event: unknown, ...args: unknown[]) =>
+        listener(args[0] as GitHubWaitingApproval);
+      ipc.on(CHANNEL.githubWaitingApproval, handler);
+      return () => {
+        ipc.removeListener(CHANNEL.githubWaitingApproval, handler);
       };
     },
     githubBotSetWrites(req) {

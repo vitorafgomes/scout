@@ -780,6 +780,61 @@ function controlsIn(entry: HTMLElement): string[] {
   );
 }
 
+const WAITING_APPROVAL = note('approval:acme/api#44@abc1234', {
+  kind: 'running',
+  title: 'Waiting to approve acme/api#44',
+  detail: '2 checks still running',
+  indeterminate: true,
+  source: 'verdict',
+  actions: [{ id: 'cancel-waiting-approval', label: 'Cancel' }],
+});
+
+describe('NotificationBellComponent: Cancel on an approval waiting for its checks', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+    document.body.innerHTML = '';
+  });
+
+  it('a waiting approval offers Cancel in the round control the running tests use for Stop, and its click asks main to cancel that entry and marks it read', async () => {
+    const bridge = makeBridge([WAITING_APPROVAL, RUNNING_TESTS]);
+    const fixture = await render(bridge);
+    await click(fixture, 'bell');
+    const [waiting, tests] = all(fixture, 'entry');
+    const control = (entry: HTMLElement) => entry.querySelector('[data-test^="entry-control-"]');
+    const drawingOf = (entry: HTMLElement) => ({
+      className: control(entry)?.className ?? null,
+      drawing: control(entry)?.querySelector('path')?.getAttribute('d') ?? null,
+    });
+
+    expect(
+      drawingOf(tests!),
+      'the running tests draw Stop as the round control with the square',
+    ).toEqual({ className: 'control', drawing: 'M7 7h10v10H7z' });
+    expect(
+      {
+        labels: controlsIn(waiting!),
+        ...drawingOf(waiting!),
+        buttonsUnder: waiting!.querySelectorAll('[data-test^="entry-action-"]').length,
+      },
+      'the waiting approval draws one round Cancel control as the tests draw Stop, and no button under it',
+    ).toEqual({
+      labels: ['Cancel the approval of acme/api#44'],
+      className: 'control',
+      drawing: 'M7 7h10v10H7z',
+      buttonsUnder: 0,
+    });
+
+    await click(fixture, 'entry-control-cancel-waiting-approval');
+
+    expect(
+      bridge.notificationsAct.mock.calls,
+      'the click asks main to cancel the waiting approval of that entry, and nothing else',
+    ).toEqual([[{ id: 'approval:acme/api#44@abc1234', action: 'cancel-waiting-approval' }]]);
+    expect(bridge.notificationsControl, 'a cancel is not a job control').not.toHaveBeenCalled();
+    expect(bridge.notificationsMarkRead.mock.calls).toEqual([[['approval:acme/api#44@abc1234']]]);
+  });
+});
+
 describe('NotificationBellComponent: Pause, Continue and Stop on a running job', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();

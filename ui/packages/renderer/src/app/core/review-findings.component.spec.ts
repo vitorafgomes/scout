@@ -10,11 +10,13 @@ import {
   type GitHubVerdictRequest,
   type GitHubVerdictProgress,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type LocalAskRequest,
   type LocalFindingDecision,
   type LocalSetDecisionsRequest,
   type LocalEvent,
   type LocalTurn,
+  type ReviewCheck,
   type ReviewFinding,
   type ReviewFindings,
 } from '@scout/shared';
@@ -139,6 +141,7 @@ function makeBridge() {
   ];
   const listeners: ((turns: readonly LocalTurn[]) => void)[] = [];
   const verdictListeners: ((status: GitHubVerdictStatus) => void)[] = [];
+  const waitingListeners: ((status: GitHubWaitingApproval) => void)[] = [];
   let actions = 0;
   let key: Omit<GitHubVerdictStatus, keyof GitHubVerdictProgress> = VERDICT_KEY;
   const push = (next: readonly LocalTurn[]) => {
@@ -219,6 +222,27 @@ function makeBridge() {
       verdictListeners.push(listener);
       return () => undefined;
     }),
+    githubWaitingApprovalFor: vi.fn(
+      async (_req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null> => null,
+    ),
+    githubApproveWhenChecksPass: vi.fn(
+      async (req: GitHubVerdictRequest): Promise<GitHubWaitingApproval> => ({
+        repository: req.repository,
+        number: req.number,
+        commit: req.commit,
+        state: 'waiting',
+        running: 0,
+        reason: null,
+        detail: null,
+        askedAt: 1,
+      }),
+    ),
+    githubCancelWaitingApproval: vi.fn(async (_req: GitHubVerdictKey): Promise<void> => undefined),
+    onGitHubWaitingApproval: vi.fn((listener: (status: GitHubWaitingApproval) => void) => {
+      waitingListeners.push(listener);
+      return () => undefined;
+    }),
+    waiting: (status: GitHubWaitingApproval) => waitingListeners.forEach((l) => l(status)),
     verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
       verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
     pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
@@ -1738,6 +1762,334 @@ describe('review findings cards', () => {
         (test) => all(fixture, test).length,
       ),
     }).toEqual({ title: 'Approved on PR #5', link: URL, buttons: [0, 0, 0, 0] });
+  });
+});
+
+const PASSED_CHECKS: readonly ReviewCheck[] = [
+  { name: 'build', status: 'completed', conclusion: 'success', url: '' },
+  { name: 'lint', status: 'completed', conclusion: 'success', url: '' },
+];
+const PENDING_CHECKS: readonly ReviewCheck[] = [
+  { name: 'build', status: 'completed', conclusion: 'success', url: '' },
+  { name: 'e2e', status: 'in_progress', conclusion: null, url: '' },
+  { name: 'lint', status: 'queued', conclusion: null, url: '' },
+];
+const FAILED_CHECKS: readonly ReviewCheck[] = [
+  { name: 'build', status: 'completed', conclusion: 'success', url: '' },
+  { name: 'lint', status: 'completed', conclusion: 'failure', url: '' },
+];
+const WAIT_KEY = { repository: 'acme/shop', number: 5, commit: 'ec7f951' } as const;
+const CHECKS_REFUSED =
+  'Scout approves only when every check of the commit passed: 1 still running (build).';
+
+function waitingStatus(
+  state: GitHubWaitingApproval['state'],
+  reason: GitHubWaitingApproval['reason'] = null,
+  running = 0,
+  detail: string | null = null,
+): GitHubWaitingApproval {
+  return { ...WAIT_KEY, state, running, reason, detail, askedAt: 1 };
+}
+
+interface CardDrawing {
+  readonly approve: number;
+  readonly approveWhenGreen: number;
+  readonly requestChanges: number;
+  readonly post: number;
+  readonly checkLine: string | null;
+  readonly waiting: string | null;
+  readonly waitingRole: string | null;
+  readonly cancel: number;
+  readonly ended: string | null;
+  readonly endedRole: string | null;
+  readonly given: string | null;
+  readonly afterChecks: string | null;
+  readonly failed: string | null;
+  readonly error: string | null;
+  readonly asked: number;
+  readonly cancelled: number;
+  readonly gave: number;
+}
+
+const PENDING_DRAWING: CardDrawing = {
+  approve: 0,
+  approveWhenGreen: 1,
+  requestChanges: 1,
+  post: 1,
+  checkLine: '2 checks are still running. Scout approves only when every check passed.',
+  waiting: null,
+  waitingRole: null,
+  cancel: 0,
+  ended: null,
+  endedRole: null,
+  given: null,
+  afterChecks: null,
+  failed: null,
+  error: null,
+  asked: 0,
+  cancelled: 0,
+  gave: 0,
+};
+const WAITING_DRAWING: CardDrawing = {
+  ...PENDING_DRAWING,
+  approveWhenGreen: 0,
+  requestChanges: 0,
+  checkLine: null,
+  waiting: 'Waiting for the checks: 2 still running. Scout approves when they pass.',
+  waitingRole: 'status',
+  cancel: 1,
+};
+const NOT_APPROVED: CardDrawing = {
+  ...PENDING_DRAWING,
+  approveWhenGreen: 0,
+  checkLine: null,
+  endedRole: 'alert',
+};
+
+interface CardStateRow {
+  readonly name: string;
+  readonly checks?: readonly ReviewCheck[] | 'none';
+  readonly before?: (bridge: ReturnType<typeof makeBridge>) => void;
+  readonly act: (bridge: ReturnType<typeof makeBridge>, fixture: Fixture) => Promise<void>;
+  readonly drawing: CardDrawing;
+}
+
+async function approveWhenGreen(
+  bridge: ReturnType<typeof makeBridge>,
+  fixture: Fixture,
+): Promise<void> {
+  await click(fixture, el(fixture, 'approve-when-green'));
+}
+
+async function pushWaiting(
+  fixture: Fixture,
+  bridge: ReturnType<typeof makeBridge>,
+  status: GitHubWaitingApproval,
+) {
+  bridge.waiting(status);
+  await settle(fixture);
+}
+
+const CARD_STATES: readonly CardStateRow[] = [
+  {
+    name: 'every check passed: Approve as today',
+    checks: PASSED_CHECKS,
+    act: async () => undefined,
+    drawing: { ...PENDING_DRAWING, approve: 1, approveWhenGreen: 0, checkLine: null },
+  },
+  {
+    name: 'the review has no checks: Approve as today',
+    checks: 'none',
+    act: async () => undefined,
+    drawing: { ...PENDING_DRAWING, approve: 1, approveWhenGreen: 0, checkLine: null },
+  },
+  {
+    name: 'a check failed at review time: no Approve, the line names it, Request changes offered',
+    checks: FAILED_CHECKS,
+    act: async () => undefined,
+    drawing: {
+      ...PENDING_DRAWING,
+      approveWhenGreen: 0,
+      checkLine: 'lint did not pass. Scout approves only when every check passed.',
+    },
+  },
+  {
+    name: 'checks still running: the button reads Approve when the checks pass and the line counts them',
+    act: async () => undefined,
+    drawing: PENDING_DRAWING,
+  },
+  {
+    name: 'one check still running: the line is singular',
+    checks: [PASSED_CHECKS[0]!, { ...PENDING_CHECKS[1]! }],
+    act: async () => undefined,
+    drawing: {
+      ...PENDING_DRAWING,
+      checkLine: '1 check is still running. Scout approves only when every check passed.',
+    },
+  },
+  {
+    name: 'the click asks main once and the card waits: the status line and Cancel, no Approve or Request changes, Post stays',
+    act: approveWhenGreen,
+    drawing: { ...WAITING_DRAWING, asked: 1 },
+  },
+  {
+    name: 'a waiting approval main pushes counts the checks it read',
+    act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('waiting', null, 1)),
+    drawing: {
+      ...WAITING_DRAWING,
+      waiting: 'Waiting for the checks: 1 still running. Scout approves when they pass.',
+    },
+  },
+  {
+    name: 'a waiting approval main holds shows when the card loads, with no click',
+    before: (bridge) =>
+      bridge.githubWaitingApprovalFor.mockResolvedValue(waitingStatus('waiting', null, 2)),
+    act: async () => undefined,
+    drawing: WAITING_DRAWING,
+  },
+  {
+    name: 'Cancel asks main to stop waiting and the card offers the approval again',
+    act: async (bridge, fixture) => {
+      await approveWhenGreen(bridge, fixture);
+      await click(fixture, el(fixture, 'cancel-waiting'));
+    },
+    drawing: { ...PENDING_DRAWING, asked: 1, cancelled: 1 },
+  },
+  {
+    name: 'cancelled from the bell: the card offers the approval again',
+    act: async (bridge, fixture) => {
+      await approveWhenGreen(bridge, fixture);
+      await pushWaiting(fixture, bridge, waitingStatus('ended', 'cancelled'));
+    },
+    drawing: { ...PENDING_DRAWING, asked: 1 },
+  },
+  {
+    name: 'a check failed while waiting: Not approved names it, Request changes offered, no approve button',
+    act: (bridge, fixture) =>
+      pushWaiting(fixture, bridge, waitingStatus('ended', 'check-failed', 0, 'lint')),
+    drawing: {
+      ...NOT_APPROVED,
+      ended: 'Not approved: lint did not pass. Review it again once it is fixed.',
+    },
+  },
+  {
+    name: 'a new commit arrived while waiting: Not approved, no approve button',
+    act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('ended', 'new-commit')),
+    drawing: {
+      ...NOT_APPROVED,
+      ended: 'Not approved: a new commit arrived after the review. Review it again.',
+    },
+  },
+  {
+    name: 'the checks did not finish within 2 hours: Not approved, Approve when the checks pass offered again',
+    act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('ended', 'timed-out')),
+    drawing: {
+      ...NOT_APPROVED,
+      approveWhenGreen: 1,
+      ended: 'Not approved: the checks did not finish within 2 hours.',
+    },
+  },
+  {
+    name: 'the pull request was closed while waiting: Not approved, no approve button',
+    act: (bridge, fixture) => pushWaiting(fixture, bridge, waitingStatus('ended', 'closed')),
+    drawing: { ...NOT_APPROVED, ended: 'Not approved: the pull request was closed.' },
+  },
+  {
+    name: 'the approval given once the checks passed says so under Approved on PR #5',
+    act: async (bridge, fixture) => {
+      await pushWaiting(fixture, bridge, waitingStatus('ended', 'approved'));
+      bridge.pushStatus({
+        ...VERDICT_KEY,
+        actionId: 'action-9',
+        state: 'given',
+        url: URL,
+        reason: null,
+        afterChecks: true,
+      });
+      await settle(fixture);
+    },
+    drawing: {
+      ...PENDING_DRAWING,
+      approveWhenGreen: 0,
+      requestChanges: 0,
+      post: 0,
+      checkLine: null,
+      given: 'Approved on PR #5',
+      afterChecks: 'Approved after the checks passed.',
+    },
+  },
+  {
+    name: 'an approval the worker refused for its checks shows the reason and offers Approve when the checks pass',
+    checks: PASSED_CHECKS,
+    act: async (bridge, fixture) => {
+      bridge.pushStatus({
+        ...VERDICT_KEY,
+        actionId: 'action-9',
+        state: 'failed',
+        url: null,
+        reason: CHECKS_REFUSED,
+      });
+      await settle(fixture);
+    },
+    drawing: { ...PENDING_DRAWING, checkLine: null, failed: CHECKS_REFUSED },
+  },
+  {
+    name: 'a click main refuses shows the refusal as the card error and the approval is still offered',
+    act: async (bridge, fixture) => {
+      bridge.githubApproveWhenChecksPass.mockRejectedValueOnce(
+        new Error(
+          '[scout:github/verdict-exists] A verdict or a review was already sent on this commit.',
+        ),
+      );
+      await approveWhenGreen(bridge, fixture);
+    },
+    drawing: {
+      ...PENDING_DRAWING,
+      asked: 1,
+      error: 'A verdict or a review was already sent on this commit.',
+    },
+  },
+];
+
+describe('review findings cards: approve when the checks pass, as the artboard draws each state', () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it.each(CARD_STATES)('$name', async ({ checks = PENDING_CHECKS, before, act, drawing }) => {
+    const bridge = makeBridge();
+    before?.(bridge);
+    const fixture = await render(bridge, checks === 'none' ? reviewed : { ...reviewed, checks });
+    await act(bridge, fixture);
+    const role = (test: string) => el(fixture, test)?.getAttribute('role') ?? null;
+    const line = (test: string) => text(el(fixture, test)) || null;
+
+    expect(
+      {
+        approve: all(fixture, 'approve').length,
+        approveWhenGreen: all(fixture, 'approve-when-green').length,
+        requestChanges: all(fixture, 'request-changes').length,
+        post: all(fixture, 'post').length,
+        checkLine: line('check-line'),
+        waiting: line('waiting-line'),
+        waitingRole: role('waiting-line'),
+        cancel: all(fixture, 'cancel-waiting').length,
+        ended: line('waiting-ended'),
+        endedRole: role('waiting-ended'),
+        given: text(el(fixture, 'verdict-given')?.querySelector('strong') ?? null) || null,
+        afterChecks: line('after-checks'),
+        failed: line('verdict-failed'),
+        error: line('post-error'),
+        asked: bridge.githubApproveWhenChecksPass.mock.calls.length,
+        cancelled: bridge.githubCancelWaitingApproval.mock.calls.length,
+        gave: bridge.githubGiveVerdict.mock.calls.length,
+      },
+      'the card draws the artboard state: its buttons, its lines and what it asked main',
+    ).toEqual(drawing);
+  });
+
+  it('the click on Approve when the checks pass gives main exactly the approval the owner clicked: approve, pinned to the reviewed commit, the review body, the chosen findings as comments and the tests line; nothing before the click', async () => {
+    const bridge = makeBridge();
+    const fixture = await render(bridge, { ...reviewed, checks: PENDING_CHECKS });
+    await click(fixture, el(fixture, 'yes', card(fixture, 0)));
+    const before = bridge.githubApproveWhenChecksPass.mock.calls.length;
+
+    await click(fixture, el(fixture, 'approve-when-green'));
+
+    expect(before, 'nothing is asked before the click').toBe(0);
+    expect(
+      bridge.githubApproveWhenChecksPass.mock.calls.map(([request]) => request),
+      'the request main stores is the approval the owner clicked, and only that one',
+    ).toEqual([
+      {
+        repository: 'acme/shop',
+        number: 5,
+        verdict: 'approve',
+        body: reviewBody({ ...reviewed, checks: PENDING_CHECKS }, [total]),
+        comments: [{ path: total.path, line: total.line, body: commentBody(total) }],
+        commit: 'ec7f951',
+        testsLine: 'Checks: build passed, e2e pending, lint pending',
+      },
+    ]);
+    expect(bridge.githubGiveVerdict, 'no verdict is given at the click').not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,7 @@ import {
   type GitHubVerdictKey,
   type GitHubVerdictRequest,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
   type LocalFindingDecision,
   type LocalTurn,
   type ReviewFindings,
@@ -52,6 +53,7 @@ export interface VerdictView {
   readonly actionId?: string;
   readonly url?: string | null;
   readonly reason?: string | null;
+  readonly afterChecks?: true;
 }
 
 /**
@@ -84,13 +86,14 @@ const NO_DECISIONS: Decisions = {};
  * a finished issues turn marks the findings whose titles it carried as sent, whatever the reply says, one with
  * issue links of the audited repository marks the cards opened, one that fails sends nothing and brings the buttons
  * back, and a findings turn that leaves the list, as on Clear, is forgotten. A verdict, and a review's Post, which is the
- * verdict `comment`, follows its action.
+ * verdict `comment`, follows its action; an approval waiting for the checks follows what main pushes for its key.
  */
 @Injectable({ providedIn: 'root' })
 export class ReviewFindingsStore {
   private readonly states = signal<Readonly<Record<string, WindowState>>>({});
   private readonly pending = signal<Readonly<Record<string, Decisions>>>({});
   private readonly verdicts = signal<Readonly<Record<string, VerdictView>>>({});
+  private readonly waitings = signal<Readonly<Record<string, GitHubWaitingApproval>>>({});
   private readonly lookedUp = new Set<string>();
 
   private readonly conversation = inject(LocalConversation);
@@ -108,6 +111,7 @@ export class ReviewFindingsStore {
       untracked(() => this.observe(turns));
     });
     this.bridge.onGitHubVerdict((status) => this.applyVerdict(status));
+    this.bridge.onGitHubWaitingApproval((status) => this.applyWaiting(status));
   }
 
   state(turnId: string): ReviewState {
@@ -172,8 +176,9 @@ export class ReviewFindingsStore {
   }
 
   /**
-   * Asks main once per findings turn and pull request whether a verdict on it is in progress or given, so a window
-   * opened after the click, or a new findings turn, shows it; a push or a click this window saw first wins.
+   * Asks main once per findings turn and pull request whether a verdict on it is in progress or given, and whether
+   * an approval waits for its checks, so a window opened after the click, or a new findings turn, shows it; a push or
+   * a click this window saw first wins.
    */
   lookUpVerdict(turnId: string, key: GitHubVerdictKey): void {
     const memo = `${turnId}|${verdictKey(key.repository, key.number, key.commit)}`;
@@ -185,6 +190,51 @@ export class ReviewFindingsStore {
         if (status !== null) this.applyVerdict(status);
       })
       .catch(() => undefined);
+    this.bridge
+      .githubWaitingApprovalFor(key)
+      .then((status) => {
+        const memoKey = verdictKey(key.repository, key.number, key.commit);
+        if (status !== null && this.waitings()[memoKey] === undefined) this.applyWaiting(status);
+      })
+      .catch(() => undefined);
+  }
+
+  /** The approval waiting for the checks of a pull request at the reviewed commit, or the last one that ended. */
+  waiting(repository: string, number: number, commit: string): GitHubWaitingApproval | null {
+    return this.waitings()[verdictKey(repository, number, commit)] ?? null;
+  }
+
+  /**
+   * Asks main to give this approval once every check of the commit passed; the click is the owner's approval of
+   * exactly this request. A verdict that failed on the key gives way to the waiting approval. Answers main's refusal,
+   * or null.
+   */
+  async approveWhenChecksPass(request: GitHubVerdictRequest): Promise<string | null> {
+    try {
+      const status = await this.bridge.githubApproveWhenChecksPass(request);
+      const key = verdictKey(request.repository, request.number, request.commit);
+      this.verdicts.update(({ [key]: current, ...rest }) =>
+        current === undefined || current.state === 'failed' ? rest : { ...rest, [key]: current },
+      );
+      this.applyWaiting(status);
+      return null;
+    } catch (err: unknown) {
+      return readIpcError(err).message;
+    }
+  }
+
+  /** Asks main to stop waiting and give nothing; the card draws the review as before the click. Answers main's refusal, or null. */
+  async cancelWaiting(key: GitHubVerdictKey): Promise<string | null> {
+    try {
+      await this.bridge.githubCancelWaitingApproval(key);
+      const current = this.waiting(key.repository, key.number, key.commit);
+      if (current?.state === 'waiting') {
+        this.applyWaiting({ ...current, state: 'ended', reason: 'cancelled', detail: null });
+      }
+      return null;
+    } catch (err: unknown) {
+      return readIpcError(err).message;
+    }
   }
 
   /** The verdict on a pull request at the reviewed commit, as this window last saw its action. */
@@ -293,9 +343,17 @@ export class ReviewFindingsStore {
       ) {
         return verdicts;
       }
-      const { verdict, actionId, state, url, reason } = status;
-      return { ...verdicts, [key]: { verdict, actionId, state, url, reason } };
+      const { verdict, actionId, state, url, reason, afterChecks } = status;
+      return {
+        ...verdicts,
+        [key]: { verdict, actionId, state, url, reason, ...(afterChecks ? { afterChecks } : {}) },
+      };
     });
+  }
+
+  private applyWaiting(status: GitHubWaitingApproval): void {
+    const key = verdictKey(status.repository, status.number, status.commit);
+    this.waitings.update((waitings) => ({ ...waitings, [key]: status }));
   }
 
   private update(turnId: string, change: (state: WindowState) => WindowState): void {

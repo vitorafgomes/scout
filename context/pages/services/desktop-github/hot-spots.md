@@ -13,4 +13,4 @@ reliability: high
 ## Hot spots
 
 - `ui/packages/main/src/oauth/github-bot.ts:103` - the bot's custody and token refresh.
-- `ui/packages/main/src/ipc/github-verdict.ts:136` - one action per key and following it.
+- `ui/packages/main/src/ipc/github-verdict.ts:174` - one action per key and following it.

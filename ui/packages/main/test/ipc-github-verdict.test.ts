@@ -5,7 +5,9 @@ import {
   readIpcError,
   type GitHubVerdictProgress,
   type GitHubVerdictRequest,
+  type GitHubVerdictKey,
   type GitHubVerdictStatus,
+  type GitHubWaitingApproval,
 } from '@scout/shared';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import {
@@ -29,6 +31,14 @@ const VERDICT: GitHubVerdictRequest = {
 };
 
 const KEY = { repository: VERDICT.repository, number: VERDICT.number, commit: VERDICT.commit };
+const WAITING: GitHubWaitingApproval = {
+  ...KEY,
+  state: 'waiting',
+  running: 2,
+  reason: null,
+  detail: null,
+  askedAt: 1_000,
+};
 const REVIEW_URL = 'https://github.com/acme/shop/pull/5#pullrequestreview-1';
 
 function status(
@@ -81,12 +91,27 @@ function setup(replies: Array<GitHubVerdictProgress | Error> = [], gate?: Promis
   const pending: Array<{ callback: () => void; ms: number; cleared: boolean }> = [];
   const pushed: GitHubVerdictStatus[] = [];
   const { logger, lines } = recordingLogger();
-  const dispose = registerGitHubVerdictHandlers(
+  const started: GitHubVerdictRequest[] = [];
+  const cancelled: GitHubVerdictKey[] = [];
+  const waiting = {
+    start(request: GitHubVerdictRequest): GitHubWaitingApproval {
+      started.push(request);
+      return WAITING;
+    },
+    cancel(key: GitHubVerdictKey): void {
+      cancelled.push(key);
+    },
+    statusFor(key: GitHubVerdictKey): GitHubWaitingApproval | null {
+      return key.number === WAITING.number ? WAITING : null;
+    },
+  };
+  const verdicts = registerGitHubVerdictHandlers(
     ipc,
     async () => client,
     (s) => pushed.push(s),
     logger,
     SENDER_HOOKS,
+    waiting,
     {
       setTimeout(callback, ms) {
         const timer = { callback, ms, cleared: false };
@@ -131,7 +156,10 @@ function setup(replies: Array<GitHubVerdictProgress | Error> = [], gate?: Promis
     tick,
     invoke,
     invokeFrom,
-    dispose,
+    started,
+    cancelled,
+    give: verdicts.give,
+    dispose: verdicts.dispose,
     failGive(err: Error): void {
       giveFailure = err;
     },
@@ -401,6 +429,134 @@ describe('GitHub verdict IPC', () => {
             ctx: { channel: CHANNEL.githubGiveVerdict, sender: kind },
           },
         ]);
+        t.dispose();
+      });
+    }
+  }
+
+  it('Approve when the checks pass hands the approval the owner clicked to the waiting approvals and answers its state', async () => {
+    const t = setup();
+
+    const answered = await t.invoke(CHANNEL.githubApproveWhenChecksPass, VERDICT);
+
+    expect(answered).toEqual(WAITING);
+    expect(t.started, 'the approval waits exactly as the owner clicked it').toEqual([VERDICT]);
+    expect(t.given, 'nothing is given before the checks pass').toEqual([]);
+  });
+
+  it('an approval does not wait for the checks once a verdict or a review was sent on that commit, and it may wait again after one that failed', async () => {
+    const sent = setup([status('given', REVIEW_URL)]);
+    await sent.invoke(CHANNEL.githubGiveVerdict, { ...VERDICT, verdict: 'comment' });
+    const refused = await sent.invoke(CHANNEL.githubApproveWhenChecksPass, VERDICT).then(
+      () => ({ code: 'none', message: 'none' }),
+      (err: unknown) => readIpcError(err),
+    );
+    const failed = setup([status('failed', null, 'The pull request moved since the review.')]);
+    await failed.invoke(CHANNEL.githubGiveVerdict, VERDICT);
+    await failed.tick();
+    await failed.invoke(CHANNEL.githubApproveWhenChecksPass, VERDICT);
+
+    expect([refused.code, refused.message]).toEqual([
+      'github/verdict-exists',
+      'A verdict or a review was already sent on this commit.',
+    ]);
+    expect(sent.started).toEqual([]);
+    expect(failed.started).toEqual([VERDICT]);
+  });
+
+  it('a verdict or a review the owner sends from the card ends the approval that waited on that commit', async () => {
+    const t = setup([status('running')]);
+
+    await t.invoke(CHANNEL.githubGiveVerdict, { ...VERDICT, verdict: 'request_changes' });
+
+    expect(t.cancelled).toEqual([KEY]);
+    expect(t.given).toHaveLength(1);
+  });
+
+  it('Approve when the checks pass refuses any verdict but approve, and a request it cannot read, starting nothing', async () => {
+    const t = setup();
+
+    const refused = await Promise.all(
+      [
+        { ...VERDICT, verdict: 'request_changes' },
+        { ...VERDICT, verdict: 'comment' },
+        { ...VERDICT, commit: 'main' },
+        { ...VERDICT, repository: '../..' },
+        { ...VERDICT, repository: 'acme/..' },
+      ].map((request) =>
+        t.invoke(CHANNEL.githubApproveWhenChecksPass, request).then(
+          () => null,
+          (err: unknown) => readIpcError(err).code,
+        ),
+      ),
+    );
+
+    expect(refused, 'Approve when the checks pass refuses any verdict but approve').toEqual([
+      'github/invalid-verdict',
+      'github/invalid-verdict',
+      'github/invalid-verdict',
+      'github/invalid-verdict',
+      'github/invalid-verdict',
+    ]);
+    expect(t.started, 'only an approval may wait for the checks').toEqual([]);
+  });
+
+  it('Cancel stops the waiting approval of that pull request and commit, and a window finds a waiting approval by its key', async () => {
+    const t = setup();
+
+    await t.invoke(CHANNEL.githubCancelWaitingApproval, KEY);
+    const found = await t.invoke(CHANNEL.githubWaitingApprovalFor, KEY);
+    const other = await t.invoke(CHANNEL.githubWaitingApprovalFor, { ...KEY, number: 6 });
+    const bad = await refusal(t.invoke(CHANNEL.githubCancelWaitingApproval, { ...KEY, number: 0 }));
+
+    expect(t.cancelled, 'the owner can cancel the approval from the card').toEqual([KEY]);
+    expect([found, other]).toEqual([WAITING, null]);
+    expect(bad).toBe('Scout could not read that verdict.');
+  });
+
+  it('a verdict Scout gives after the checks passed marks every status of that action, and a click does not', async () => {
+    const t = setup([status('running'), status('given', REVIEW_URL)]);
+
+    await t.give(VERDICT, true);
+    await t.tick();
+    await t.tick();
+    await t.invoke(CHANNEL.githubGiveVerdict, { ...VERDICT, number: 6 });
+
+    expect(
+      t.pushed.map((s) => [s.number, s.state, s.afterChecks]),
+      'the card and the bell can tell the approval was given once every check passed',
+    ).toEqual([
+      [5, 'queued', true],
+      [5, 'running', true],
+      [5, 'given', true],
+      [6, 'queued', undefined],
+    ]);
+    expect(t.given).toEqual([VERDICT, { ...VERDICT, number: 6 }]);
+  });
+
+  for (const channel of [
+    CHANNEL.githubApproveWhenChecksPass,
+    CHANNEL.githubCancelWaitingApproval,
+  ]) {
+    for (const [from, event, kind] of SENDERS) {
+      const allowed = kind === 'main' || kind === 'quick-ask';
+      it(`${channel} from ${from} is ${allowed ? 'run' : 'refused with github/not-verdict-window and reaches nothing'}`, async () => {
+        const t = setup([]);
+
+        const refused = await t.invokeFrom(event, channel, VERDICT).then(
+          () => null,
+          (err: unknown) => readIpcError(err).code,
+        );
+
+        expect(
+          { refused, reached: t.started.length + t.cancelled.length },
+          'only the Scout window and quick ask may ask for or cancel an approval that waits for the checks',
+        ).toEqual(
+          allowed
+            ? { refused: null, reached: 1 }
+            : { refused: 'github/not-verdict-window', reached: 0 },
+        );
+        expect(t.given).toEqual([]);
         t.dispose();
       });
     }

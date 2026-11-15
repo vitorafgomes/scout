@@ -78,6 +78,24 @@ export function checkMark(check: ReviewCheck): CheckMark {
   return PASSING_CONCLUSIONS.has(check.conclusion) ? 'Passed' : 'Failed';
 }
 
+/**
+ * The checks of the reviewed commit as the worker judges an approval: one is running while its status is not
+ * `completed`; one failed once completed with a conclusion other than success, neutral or skipped. `failed` names the
+ * first that failed, or is null.
+ */
+export function checksOutcome(checks: readonly ReviewCheck[] | undefined): {
+  readonly running: number;
+  readonly failed: string | null;
+} {
+  const all = checks ?? [];
+  return {
+    running: all.filter((c) => c.status !== 'completed').length,
+    failed:
+      all.find((c) => c.status === 'completed' && !PASSING_CONCLUSIONS.has(c.conclusion))?.name ??
+      null,
+  };
+}
+
 /** The line the container run reads as: passed with its time and command, failed with its exit code, or why it did not run. */
 export function testsLine(tests: ReviewTests): string {
   if (!tests.ran) return `Tests did not run: ${tests.reason}`;

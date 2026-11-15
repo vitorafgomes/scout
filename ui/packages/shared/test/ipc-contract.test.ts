@@ -101,8 +101,10 @@ describe('CHANNEL constant', () => {
         'githubBotCreate',
         'githubBotRemove',
         'githubBotSetWrites',
+        'githubApproveWhenChecksPass',
         'githubBotStatus',
         'githubCancel',
+        'githubCancelWaitingApproval',
         'githubGiveVerdict',
         'githubSaveToken',
         'githubSignIn',
@@ -111,6 +113,8 @@ describe('CHANNEL constant', () => {
         'githubVerdict',
         'githubVerdictFor',
         'githubVerdictStatus',
+        'githubWaitingApproval',
+        'githubWaitingApprovalFor',
         'kubernetesDetect',
         'kubernetesDisconnect',
         'kubernetesStatus',
@@ -810,6 +814,10 @@ describe('ChannelName type', () => {
       'scout:github.verdictStatus': true,
       'scout:github.verdictFor': true,
       'scout:github.verdict': true,
+      'scout:github.approveWhenChecksPass': true,
+      'scout:github.cancelWaitingApproval': true,
+      'scout:github.waitingApprovalFor': true,
+      'scout:github.waitingApproval': true,
       'scout:local.setDecisions': true,
       'scout:youtube.signIn': true,
       'scout:youtube.status': true,
@@ -1012,6 +1020,23 @@ describe('update channels', () => {
 });
 
 describe('the verdict on a pull request', () => {
+  test('approving when the checks pass, cancelling it, finding it and its pushed state have their own scout:github channels, named without a write verb because only the verdict the owner clicked is ever given', () => {
+    const channels = [
+      CHANNEL.githubApproveWhenChecksPass,
+      CHANNEL.githubCancelWaitingApproval,
+      CHANNEL.githubWaitingApprovalFor,
+      CHANNEL.githubWaitingApproval,
+    ];
+
+    expect(channels).toEqual([
+      'scout:github.approveWhenChecksPass',
+      'scout:github.cancelWaitingApproval',
+      'scout:github.waitingApprovalFor',
+      'scout:github.waitingApproval',
+    ]);
+    expect(namedWithWriteVerb(channels)).toEqual([]);
+  });
+
   test('a review carries the checks, the container run and whether the owner wrote the pull request, all optional and last (compile-time check)', () => {
     const reviewFields: Record<keyof ReviewFindings, true> = {
       kind: true,

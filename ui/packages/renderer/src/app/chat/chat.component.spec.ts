@@ -112,6 +112,8 @@ function makeBridge() {
     ),
     onGitHubVerdict: vi.fn(() => () => undefined),
     githubVerdictFor: vi.fn(async () => null),
+    onGitHubWaitingApproval: vi.fn(() => () => undefined),
+    githubWaitingApprovalFor: vi.fn(async () => null),
     localClearTurns: vi.fn(async (): Promise<void> => {
       if (turns.some((turn) => turn.state === 'running' && turn.issues)) {
         throw new Error(`[scout:local/busy] ${BUSY}`);

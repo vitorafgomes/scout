@@ -19,7 +19,7 @@ Does not own: any conversation, LLM call or plugin; those live in [[pages/servic
 
 ## Rules this project must keep
 
-- **Secrets never live in source.** Here: `ui/packages/main/src/vault/safe-storage-vault.ts:164` encrypts with the OS keychain; the renderer never receives a secret back, only `has`, `isAvailable` and the two non-secret keys of `scout:vault.getPublic`.
+- **Secrets never live in source.** Here: `ui/packages/main/src/vault/safe-storage-vault.ts:165` encrypts with the OS keychain; the renderer never receives a secret back, only `has`, `isAvailable` and the two non-secret keys of `scout:vault.getPublic`.
 - **Secrets never live in source.** Here: GitHub tokens and the device code stay in main: the status and sign-in payloads carry the user code, the login and flags only, and no log line carries a token.
 - **Secrets never live in source.** Here: the kubeconfig stays where it is: main stores only its path and the allowed context names, and no detect, use, status or disconnect payload and no log line carries a token, key, certificate, password or exec env value.
 - **Secrets never live in source.** Here: the Slack tokens travel renderer to main once, in `scout:slack.save`; the status answer carries the team and bot user names only, and no log line, answer or error message carries a token or the Socket Mode URL `apps.connections.open` returns.

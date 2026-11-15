@@ -71,6 +71,8 @@ function makeBridge() {
     localHide: vi.fn(async () => undefined),
     onGitHubVerdict: vi.fn(() => () => undefined),
     githubVerdictFor: vi.fn(async () => null),
+    onGitHubWaitingApproval: vi.fn(() => () => undefined),
+    githubWaitingApprovalFor: vi.fn(async () => null),
     vaultHas: vi.fn(async () => ({ exists: false })),
     vaultGetPublic: vi.fn(async () => ({ value: null })),
     whisperListInstalled: vi.fn(async () => ({

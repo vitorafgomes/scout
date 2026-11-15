@@ -10,6 +10,7 @@ export type MainOnlyVaultKey =
   | 'github.session'
   | 'github.token'
   | 'github.bot'
+  | 'github.waiting-approvals'
   | 'youtube.session'
   | 'youtube.api-key'
   | 'llm.openai.admin-key'

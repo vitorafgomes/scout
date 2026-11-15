@@ -78,7 +78,10 @@ const ACTION_ICONS: Readonly<Record<NotificationActionId, string>> = {
   'open-models-transcription': 'M3 10v4M7 7v10M11 5v14M15 8v8M19 10v4',
   'open-approvals': 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
   'review-pull-request': 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+  'cancel-waiting-approval': STOP_PATH,
 };
+
+const CANCEL_WAITING: NotificationActionId = 'cancel-waiting-approval';
 
 const CONTROL_ICONS: Readonly<Record<JobControlAction, string>> = {
   pause: 'M9 5v14M15 5v14',
@@ -125,7 +128,8 @@ export function timeAgo(at: number, now: number): string {
  * asked of main, which runs it and shows its progress and outcome in the entry. Opening a link or running an action
  * marks that entry read. A running audit offers Pause and Stop at the right of its title, a paused one Continue and
  * Stop, a running test run Stop; main sends the click and the entry shows what Scout does with it, the buttons
- * inactive while main asks and replaced by what Scout does once the click is queued, focus then on that line.
+ * inactive while main asks and replaced by what Scout does once the click is queued, focus then on that line. An
+ * approval waiting for its checks offers Cancel in the same round control, asked of main as its action.
  */
 @Component({
   selector: 'sc-notification-bell',
@@ -264,6 +268,32 @@ export function timeAgo(at: number, now: number): string {
                       }
                     </span>
                   }
+                  @if (cancelLabel(n); as label) {
+                    <span class="controls">
+                      <button
+                        type="button"
+                        class="control"
+                        data-test="entry-control-cancel-waiting-approval"
+                        [attr.aria-label]="label"
+                        [attr.title]="label"
+                        (click)="act(n.id, cancelWaiting)"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path [attr.d]="actionIcons[cancelWaiting]"></path>
+                        </svg>
+                      </button>
+                    </span>
+                  }
                   @if (n.control?.phase === 'waiting') {
                     <span class="status" role="status" tabindex="-1" data-test="entry-status">{{
                       waitingText(n)
@@ -323,9 +353,9 @@ export function timeAgo(at: number, now: number): string {
                     </svg>
                   </button>
                 }
-                @if (n.actions !== undefined && n.actions.length > 0) {
+                @if (buttonsOf(n); as buttons) {
                   <div class="actions">
-                    @for (a of n.actions; track a.id) {
+                    @for (a of buttons; track a.id) {
                       <button
                         type="button"
                         class="action"
@@ -664,6 +694,7 @@ export class NotificationBellComponent implements OnInit {
 
   readonly filters = FILTERS;
   readonly actionIcons = ACTION_ICONS;
+  protected readonly cancelWaiting = CANCEL_WAITING;
   readonly controlIcons = CONTROL_ICONS;
   readonly notifications = signal<readonly AppNotification[]>([]);
   readonly open = signal(false);
@@ -708,6 +739,19 @@ export class NotificationBellComponent implements OnInit {
     const name =
       JOB_NAME.exec(n.title)?.[1] ?? n.id.slice(tests ? 'tests:'.length : 'audit:'.length);
     return `${CONTROL_VERBS[action]} ${tests ? 'the tests for' : 'the audit of'} ${name}`;
+  }
+
+  /** The name of the round Cancel on an approval waiting for its checks, as "Cancel the approval of acme/api#44"; null on any other entry. */
+  cancelLabel(n: AppNotification): string | null {
+    const cancel = n.actions?.find((a) => a.id === CANCEL_WAITING);
+    if (cancel === undefined) return null;
+    return `${cancel.label} the approval of ${n.id.replace(/^approval:/, '').split('@')[0]}`;
+  }
+
+  /** The entry's actions drawn as buttons under it: every one but the Cancel drawn as a round control; null when none. */
+  buttonsOf(n: AppNotification): AppNotification['actions'] | null {
+    const buttons = n.actions?.filter((a) => a.id !== CANCEL_WAITING) ?? [];
+    return buttons.length > 0 ? buttons : null;
   }
 
   /**

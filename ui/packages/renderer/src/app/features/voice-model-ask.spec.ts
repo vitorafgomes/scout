@@ -56,6 +56,8 @@ function makeBridge(options: BridgeOptions) {
     localGetTurns: vi.fn(async () => []),
     onGitHubVerdict: vi.fn(() => () => undefined),
     githubVerdictFor: vi.fn(async () => null),
+    onGitHubWaitingApproval: vi.fn(() => () => undefined),
+    githubWaitingApprovalFor: vi.fn(async () => null),
     localHide: vi.fn(async () => undefined),
     localAsk: vi.fn(async () => undefined),
     appOpenExternal: vi.fn(async () => undefined),

@@ -116,6 +116,10 @@ export const CHANNEL = {
   githubVerdictStatus: 'scout:github.verdictStatus',
   githubVerdictFor: 'scout:github.verdictFor',
   githubVerdict: 'scout:github.verdict',
+  githubApproveWhenChecksPass: 'scout:github.approveWhenChecksPass',
+  githubCancelWaitingApproval: 'scout:github.cancelWaitingApproval',
+  githubWaitingApprovalFor: 'scout:github.waitingApprovalFor',
+  githubWaitingApproval: 'scout:github.waitingApproval',
   youtubeSignIn: 'scout:youtube.signIn',
   youtubeStatus: 'scout:youtube.status',
   youtubeCancelSignIn: 'scout:youtube.cancelSignIn',
@@ -1365,6 +1369,26 @@ export interface GitHubVerdictProgress {
 /** A verdict's action with the pull request, commit and verdict it is for, as every window receives it. */
 export interface GitHubVerdictStatus extends GitHubVerdictProgress, GitHubVerdictKey {
   readonly verdict: GitHubVerdictRequest['verdict'];
+  /** Set when Scout gave this approval by itself once every check of the commit passed. */
+  readonly afterChecks?: true;
+}
+
+/**
+ * An approval the owner asked Scout to give once every check of the reviewed commit passed, as every window
+ * receives it: waiting while checks run, or ended with the reason it stopped.
+ */
+export interface GitHubWaitingApproval extends GitHubVerdictKey {
+  /** `waiting` while Scout follows the checks; `ended` once it stopped, for the reason in `reason`. */
+  readonly state: 'waiting' | 'ended';
+  /** How many checks were still running at the last read. */
+  readonly running: number;
+  /** Why it ended, null while waiting; `approved` once the approval was handed to the verdict. */
+  readonly reason:
+    null | 'check-failed' | 'new-commit' | 'timed-out' | 'cancelled' | 'closed' | 'approved';
+  /** The name of the check that failed, one line of at most 60 characters; null for any other reason. */
+  readonly detail: string | null;
+  /** When the owner clicked, in milliseconds since the epoch; the two hours count from here. */
+  readonly askedAt: number;
 }
 
 /** The YouTube connection as the renderer sees it; never carries a token, the key or the OAuth client. */
@@ -1965,10 +1989,15 @@ export type NotificationKind = 'running' | 'done' | 'failed' | 'paused' | 'githu
 /**
  * A button an entry offers: `whisper-download-base` asks main to download the base Whisper model,
  * `open-models-transcription` opens Models on its Transcription tab in the window, `open-approvals` opens Approvals
- * in the window, `review-pull-request` opens the chat and asks Scout to review the pull request the entry links to.
+ * in the window, `review-pull-request` opens the chat and asks Scout to review the pull request the entry links to,
+ * `cancel-waiting-approval` asks main to stop waiting for the checks of an approval and give nothing.
  */
 export type NotificationActionId =
-  'whisper-download-base' | 'open-models-transcription' | 'open-approvals' | 'review-pull-request';
+  | 'whisper-download-base'
+  | 'open-models-transcription'
+  | 'open-approvals'
+  | 'review-pull-request'
+  | 'cancel-waiting-approval';
 
 export interface NotificationAction {
   readonly id: NotificationActionId;
@@ -2274,6 +2303,10 @@ export interface ScoutBridge {
   githubVerdictStatus(req: GitHubVerdictAction): Promise<GitHubVerdictStatus>;
   githubVerdictFor(req: GitHubVerdictKey): Promise<GitHubVerdictStatus | null>;
   onGitHubVerdict(listener: (status: GitHubVerdictStatus) => void): () => void;
+  githubApproveWhenChecksPass(req: GitHubVerdictRequest): Promise<GitHubWaitingApproval>;
+  githubCancelWaitingApproval(req: GitHubVerdictKey): Promise<void>;
+  githubWaitingApprovalFor(req: GitHubVerdictKey): Promise<GitHubWaitingApproval | null>;
+  onGitHubWaitingApproval(listener: (status: GitHubWaitingApproval) => void): () => void;
   youtubeSignIn(): Promise<YouTubeStatus>;
   youtubeStatus(): Promise<YouTubeStatus>;
   youtubeCancelSignIn(): Promise<void>;
