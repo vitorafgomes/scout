@@ -1,9 +1,9 @@
 ---
 title: "Desktop prototype"
-version: "1.16"
+version: "1.17"
 date: 2026-11-07
 updated: 2026-11-15
-changes: "v1.16 (2026-11-15): a new artboard draws the templates of what is written on GitHub."
+changes: "v1.17 (2026-11-15): the Features and Main artboards draw the setting Merge after approving."
 page_type: convention
 status: active
 description: "The clickable prototype of Scout Desktop is kept in context/prototypes/desktop, one artboard per screen; every change to a screen, and every new screen, updates or adds its artboard in the same branch, before the code."
@@ -81,5 +81,7 @@ The owner, 2026-11-07, translated: "is there a way to save the prototypes in [th
 2026-11-12: the Main artboard draws, before the code, a review that found nothing as the Findings card state "Review: no findings": the tests chips, the target line, the line "No findings." and, under it, "What Scout says it read: ...", labelled as the model's report, no finding card, no Yes to all or Post row, and the Verdict group with Approve alone, Request changes not shown. It draws no count of files read, which Scout does not measure. Request changes hidden, the read sentence on that line only and Approve under today's rules are defaults waiting for the owner's approval of the state ([[pages/roadmap/followups]]).
 
 2026-11-15: a new artboard, GitHub notes, draws before the code and for the owner's approval 15 templates of what is written on GitHub around a review: the pull request description and two issues an author writes from templates a repository adopts, and the twelve texts the Scout bot posts. A View control shows each on its GitHub page and in Scout Desktop, from the same text. Design, not built.
+
+2026-11-15: the Features and Main artboards draw, before the code and for the owner's approval, the setting Merge after approving. Features: the GitHub panel's connected state gains the section "After an approval" with the switch, off by default, its help (squash, only on repositories of your own account, cannot be undone), the confirmation "Let Scout merge pull requests it approves?" (Turn on, Cancel) and the switch drawn disabled with its reason while GitHub's writes are not allowed, under the Preview states "GitHub panel: Merge after approving off", "asks first", "on" and "disabled, writes not allowed". Main: a Preview group "Merge after approving" beside "Approve when checks pass" draws the review card with the switch on: "Approve and merge" and "Approve and merge when the checks pass" with the line that it cannot be undone on your own repository, today's labels and "Scout only approves here" on another owner's, "Waiting to approve and merge" with Cancel, "Approved and merged" with the merge commit, and the two "Approved; not merged" outcomes (squash not allowed, GitHub refused the merge, with GitHub's reason); the bell draws the waiting entry with its Cancel and the three outcomes. The existing states are unchanged.
 
 Related: [[pages/services/desktop-ui]], [[pages/decisions/0047-the-docker-card]], [[pages/decisions/0046-ai-source-usage-on-the-cards]].

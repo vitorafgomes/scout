@@ -207,6 +207,13 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-for>
 <span>A design for the owner, not built: Scout approves only when every check of the reviewed commit passed. One click on Approve when the checks pass is your approval; Scout cancels it when a check fails, a new commit arrives or 2 hours pass.</span>
 </div>
+<div role="group" aria-labelledby="pv-merge" style="align-self: flex-start; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 10px; border: 1px dashed {{t.line}}; border-radius: 16px; font-size: 11px; color: {{t.muted}}">
+<span id="pv-merge">Merge after approving</span>
+<sc-for list="{{mgStates}}" as="ps" hint-placeholder-count="7">
+<button aria-pressed="{{ps.pressed}}" onClick="{{ps.pick}}" style="border: 0; border-radius: 10px; padding: 2px 9px; font-size: 11px; background: {{ps.bg}}; color: {{ps.fg}}">{{ps.label}}</button>
+</sc-for>
+<span>A design for the owner, not built: with Merge after approving on in the GitHub feature, your approval on the review card also merges the pull request with squash, on repositories of your own account only.</span>
+</div>
 <sc-if value="{{hasTurns}}" hint-placeholder-val="{{true}}">
 <div style="align-self: flex-end; max-width: 520px; background: {{t.accentStrong}}; color: #ffffff; padding: 10px 14px; border-radius: 14px 14px 4px 14px; line-height: 1.45">{{turnQuestion}}</div>
 <div style="display: flex; flex-direction: column; gap: 12px; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 16px">
@@ -280,20 +287,23 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <div role="group" aria-label="Verdict" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
 <span style="font-size: 12px; color: {{t.muted}}; margin-right: auto">Verdict on the reviewed commit</span>
 <sc-if value="{{awPlainApprove}}" hint-placeholder-val="{{true}}">
-<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve</button>
+<button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{awApproveLabel}}</button>
 </sc-if>
 <sc-if value="{{awOffersWait}}" hint-placeholder-val="{{false}}">
-<button type="button" aria-label="Approve acme/api#44 when its checks pass" onClick="{{awArm}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>Approve when the checks pass</button>
+<button type="button" aria-label="{{awWaitAria}}" onClick="{{awArm}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12l2.5 2.5 4.5-5"></path></svg>{{awWaitLabel}}</button>
 </sc-if>
 <sc-if value="{{cardDecides}}" hint-placeholder-val="{{true}}">
 <button style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"></path></svg>Request changes</button>
 </sc-if>
 </div>
+<sc-if value="{{awHasMergeLine}}" hint-placeholder-val="{{false}}">
+<p style="margin: 0; font-size: 12px; color: {{awMergeLineFg}}">{{awMergeLine}}</p>
+</sc-if>
 </sc-if>
 <sc-if value="{{awWaiting}}" hint-placeholder-val="{{false}}">
 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid {{t.line}}">
-<p role="status" style="margin: 0 auto 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg>Waiting for the checks: 2 still running. Scout approves when they pass.</p>
-<button type="button" aria-label="Cancel the approval of acme/api#44" onClick="{{awCancel}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
+<p role="status" style="margin: 0 auto 0 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: {{t.fg2}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2"></path></svg>{{awWaitingLine}}</p>
+<button type="button" aria-label="{{awCancelAria}}" onClick="{{awCancel}}" style="min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 6px; font-size: 12px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>Cancel</button>
 </div>
 </sc-if>
 <sc-if value="{{awHasAlert}}" hint-placeholder-val="{{false}}">
@@ -307,6 +317,9 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-if>
 <sc-if value="{{awApproved}}" hint-placeholder-val="{{false}}">
 <div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{t.okBg}}; color: {{t.ok}}"><strong>Approved on PR #44</strong><span style="font-size: 13px; color: {{t.fg2}}">Approved after the checks passed.</span><span style="font-size: 13px; color: {{t.fg2}}">Signed as Bot (scout[bot])</span><a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">See the review on GitHub<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a></div>
+</sc-if>
+<sc-if value="{{mgHasOutcome}}" hint-placeholder-val="{{false}}">
+<div role="status" style="display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; background: {{mgo.bg}}; color: {{mgo.fg}}"><strong>{{mgo.title}}</strong><span style="font-size: 13px; color: {{t.fg2}}">{{mgo.detail}}</span><span style="font-size: 13px; color: {{t.fg2}}">Signed as Bot (scout[bot])</span><a href="#" style="font-size: 13px; color: {{t.accent}}; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start">See the pull request on GitHub<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M8 7h9v9"></path></svg></a></div>
 </sc-if>
 <sc-if value="{{cardPosting}}" hint-placeholder-val="{{false}}">
 <p role="status" style="margin: 0; padding: 10px 12px; border-radius: 12px; background: {{t.surface2}}; font-size: 13px; color: {{t.fg2}}">{{cardPostingLine}}</p>
@@ -824,7 +837,7 @@ class Component extends DCLogic {
     const sentIds = card === 'auditNewBatch' ? findings.slice(0, 4).map((f) => f.id) : card === 'auditAllSent' ? findings.map((f) => f.id) : [];
     const unsent = findings.filter((f) => !sentIds.includes(f.id));
     const allSent = sentIds.length > 0 && unsent.every((f) => picks[f.id] === 'no');
-    const open = (card === 'review' || clean || card === 'audit' || card === 'auditNewBatch') && !allSent && aw !== 'awApproved';
+    const open = (card === 'review' || clean || card === 'audit' || card === 'auditNewBatch') && !allSent && !['awApproved', 'mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw);
     const sevTone = { Blocking: [t.errBg, t.err], Fix: [t.warnBg, t.warn], Suggestion: [t.surface2, t.fg2] };
     const pick = (id, how) => () => { if (open) this.setState({ picks: { ...picks, [id]: picks[id] === how ? undefined : how } }); };
     const chatFindings = findings.map((f) => {
@@ -914,6 +927,9 @@ class Component extends DCLogic {
   awState() {
     return (this.state.card || 'review') === 'review' ? this.state.aw || 'off' : 'off';
   }
+  mgReason() {
+    return 'At least 2 approving reviews are required by reviewers with write access.';
+  }
   awBell() {
     const failed = { id: 'w44', kind: 'failed', glyph: '!', tone: 'err', detail: '', when: 'now', progress: null, action: '', controls: [] };
     const entry = {
@@ -922,15 +938,20 @@ class Component extends DCLogic {
       awCheckFailed: { ...failed, title: 'Not approved: a check failed on acme/api#44', detail: 'lint did not pass' },
       awNewCommit: { ...failed, title: 'Not approved: acme/api#44 changed after the review' },
       awTimedOut: { ...failed, title: 'Not approved: the checks did not finish within 2 hours', detail: 'acme/api#44' },
+      mgWaiting: { ...failed, kind: 'running', glyph: '', path: 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2', tone: 'accent', title: 'Waiting to approve and merge acme/api#44', detail: '2 checks still running', indeterminate: true, controls: [{ label: 'Cancel the approval and merge of acme/api#44', path: 'M7 7h10v10H7z', act: () => this.setState({ aw: 'mgOwnPending' }) }] },
+      mgMerged: { ...failed, kind: 'done', glyph: '✓', tone: 'ok', title: 'Approved and merged acme/api#44', detail: 'Squash merge commit 9c41e07 · Signed as Bot (scout[bot])', action: 'Open on GitHub' },
+      mgNoSquash: { ...failed, tone: 'warn', title: 'Approved acme/api#44; not merged: this repository does not allow squash merges', action: 'Open on GitHub' },
+      mgRefused: { ...failed, tone: 'warn', title: 'Approved acme/api#44; not merged: GitHub refused the merge', detail: 'GitHub said: ' + this.mgReason(), action: 'Open on GitHub' },
     }[this.awState()];
     return entry ? [entry] : [];
   }
   awVals(t) {
     const aw = this.awState();
     const tones = { passed: [t.okBg, t.ok, 'M20 6L9 17l-5-5'], pending: [t.warnBg, t.warn, 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM12 7v5l3 2'], failed: [t.errBg, t.err, 'M6 6l12 12M18 6L6 18'] };
-    const marks = ['awApproved', 'awRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
+    const merges = ['mgOwnPending', 'mgWaiting'].includes(aw);
+    const marks = ['awApproved', 'awRefused', 'mgOwn', 'mgOther', 'mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw) ? ['passed', 'passed', 'passed'] : ['awCheckFailed', 'awFailedAtReview'].includes(aw) ? ['passed', 'passed', 'failed'] : ['passed', 'pending', 'pending'];
     const chip = (label, title, mark) => ({ label, title, bg: tones[mark][0], fg: tones[mark][1], icon: tones[mark][2] });
-    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.' }[aw] || '';
+    const checkLine = { awPending: '2 checks are still running. Scout approves only when every check passed.', mgOwnPending: '2 checks are still running. Scout approves only when every check passed.', awFailedAtReview: 'lint did not pass. Scout approves only when every check passed.' }[aw] || '';
     const alert = {
       awCheckFailed: 'Not approved: lint did not pass. Review it again once it is fixed.',
       awNewCommit: 'Not approved: a new commit arrived after the review. Review it again.',
@@ -939,7 +960,7 @@ class Component extends DCLogic {
     }[aw] || '';
     const states = [['off', 'Off'], ['awPending', 'Checks pending: Approve when the checks pass'], ['awWaiting', 'Waiting for the checks'], ['awApproved', 'Approved after the checks passed'], ['awCheckFailed', 'Not approved: a check failed'], ['awNewCommit', 'Not approved: a new commit'], ['awTimedOut', 'Not approved: waited 2 hours'], ['awFailedAtReview', 'Checks failed at review time'], ['awRefused', "Approval refused by GitHub's state"]];
     const drawn = { card: 'review', picks: {}, cardPreview: false, mention: 'off', mr: {}, bell: 'entries', bellTab: 'all', reply: 'done', conversation: 'turns' };
-    const inBell = ['awWaiting', 'awApproved', 'awCheckFailed', 'awNewCommit', 'awTimedOut'];
+    const inBell = ['awWaiting', 'awApproved', 'awCheckFailed', 'awNewCommit', 'awTimedOut', 'mgWaiting', 'mgMerged', 'mgNoSquash', 'mgRefused'];
     return {
       ...(aw === 'off' ? {} : { chatTestChips: [...['build', 'e2e', 'lint'].map((name, i) => chip(name + ' ' + marks[i], 'Details of ' + name, marks[i])), chip('tests passed in 41 s (dotnet test)', '', 'passed')] }),
       awStates: states.map(([id, label]) => ({
@@ -948,12 +969,28 @@ class Component extends DCLogic {
       })),
       awHasCheckLine: checkLine !== '',
       awCheckLine: checkLine,
-      awShowVerdict: aw !== 'awWaiting',
-      awPlainApprove: aw === 'off',
-      awOffersWait: ['awPending', 'awTimedOut', 'awRefused'].includes(aw),
-      awArm: () => this.setState({ aw: 'awWaiting', bellOpen: true, bellTab: 'all' }),
-      awWaiting: aw === 'awWaiting',
-      awCancel: () => this.setState({ aw: 'awPending' }),
+      awShowVerdict: !['awWaiting', 'mgWaiting'].includes(aw),
+      awPlainApprove: ['off', 'mgOwn', 'mgOther'].includes(aw),
+      awOffersWait: ['awPending', 'awTimedOut', 'awRefused', 'mgOwnPending'].includes(aw),
+      awArm: () => this.setState({ aw: merges ? 'mgWaiting' : 'awWaiting', bellOpen: true, bellTab: 'all' }),
+      awWaiting: ['awWaiting', 'mgWaiting'].includes(aw),
+      awCancel: () => this.setState({ aw: merges ? 'mgOwnPending' : 'awPending' }),
+      mgStates: [['mgOwn', 'On, your repository'], ['mgOwnPending', 'On, your repository, checks pending'], ['mgOther', "On, another owner's repository"], ['mgWaiting', 'Waiting to approve and merge'], ['mgMerged', 'Approved and merged'], ['mgNoSquash', 'Not merged: squash not allowed'], ['mgRefused', 'Not merged: GitHub refused']].map(([id, label]) => ({
+        label, pressed: aw === id ? 'true' : 'false', bg: aw === id ? t.surface2 : 'transparent', fg: aw === id ? t.fg : t.muted,
+        pick: () => this.setState({ ...drawn, aw: id, bellOpen: inBell.includes(id) }),
+      })),
+      awApproveLabel: aw === 'mgOwn' ? 'Approve and merge' : 'Approve',
+      awWaitLabel: merges ? 'Approve and merge when the checks pass' : 'Approve when the checks pass',
+      awWaitAria: merges ? 'Approve and merge acme/api#44 when its checks pass' : 'Approve acme/api#44 when its checks pass',
+      awHasMergeLine: ['mgOwn', 'mgOwnPending', 'mgOther'].includes(aw),
+      awMergeLine: aw === 'mgOther' ? 'Scout only approves here: merging is limited to your own repositories.' : 'Scout approves, then merges with squash. This cannot be undone.',
+      awMergeLineFg: aw === 'mgOther' ? t.fg2 : t.warn,
+      awWaitingLine: aw === 'mgWaiting' ? 'Waiting to approve and merge: 2 checks still running. Scout approves, then merges with squash, when they pass.' : 'Waiting for the checks: 2 still running. Scout approves when they pass.',
+      awCancelAria: aw === 'mgWaiting' ? 'Cancel the approval and merge of acme/api#44' : 'Cancel the approval of acme/api#44',
+      mgHasOutcome: ['mgMerged', 'mgNoSquash', 'mgRefused'].includes(aw),
+      mgo: aw === 'mgMerged' ? { bg: t.okBg, fg: t.ok, title: 'Approved and merged', detail: 'Squash merge commit 9c41e07 on PR #44.' }
+        : aw === 'mgNoSquash' ? { bg: t.warnBg, fg: t.warn, title: 'Approved; not merged: this repository does not allow squash merges', detail: 'The approval stays on PR #44. Scout merges with squash only.' }
+        : { bg: t.warnBg, fg: t.warn, title: 'Approved; not merged: GitHub refused the merge', detail: 'GitHub said: ' + this.mgReason() },
       awHasAlert: alert !== '',
       awAlert: alert,
       awApproved: aw === 'awApproved',
