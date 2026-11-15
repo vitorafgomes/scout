@@ -1,3 +1,5 @@
+## [2026-11-15] docs | Merge after approving, on the prototype
+The Features and Main artboards draw a setting of the GitHub feature, off by default: with it on, approving a pull request from the review card also merges it with squash, only on repositories of the owner's own account. Design for the owner's approval; nothing is built, and a merge needs a decision record before it is.
 ## [2026-11-15] docs | The templates of what is written on GitHub, on the prototype
 A new artboard, `context/prototypes/desktop/GitHubNotes.dc.html`, draws 15 templates: the pull request description and two issues an author writes, and the twelve texts the Scout bot posts around a review, each shown on its GitHub page and in Scout Desktop. Design for the owner's approval; nothing is built.
 ## [2026-11-15] chore | A pull request of documents only skips the build and the tests
