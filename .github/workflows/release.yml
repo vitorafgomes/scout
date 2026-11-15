@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       kind:
-        description: 'From main: release (vX.Y.Z, marked Latest) or prerelease (vX.Y.Z-beta.N, hidden from the site and the updater). Ignored when run from a tag.'
+        description: 'From main: release (vX.Y.Z, marked Latest) or prerelease (vX.Y.Z-beta.N, hidden from the site and the updater). Ignored when run from a tag: a tag with a suffix is a prerelease.'
         type: choice
         options: [release, prerelease]
         default: release
@@ -52,6 +52,7 @@ jobs:
               exit 1
             fi
             version="${GITHUB_REF_NAME#v}"
+            case "$version" in *-*) prerelease=true ;; esac
           elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF_NAME" = main ]; then
             case "$KIND" in
               release) args=(release); shape='^[0-9]+\.[0-9]+\.[0-9]+$' ;;
@@ -249,13 +250,13 @@ jobs:
           NOTES: ${{ needs.check.outputs.notes }}
         run: |
           ls -l release
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" release/* --clobber
           elif [ "$CREATE" = true ]; then
             printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
-            flags=()
-            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
             gh release create "$TAG" --target "$GITHUB_SHA" --title "Scout Desktop $TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" release/*
           else
-            gh release create "$TAG" --verify-tag --title "Scout Desktop $TAG" --generate-notes release/*
+            gh release create "$TAG" --verify-tag --title "Scout Desktop $TAG" --generate-notes "${flags[@]}" release/*
           fi

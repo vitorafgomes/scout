@@ -1,9 +1,9 @@
 ---
 title: "Release - cut a Scout Desktop release"
-version: "1.6"
+version: "1.7"
 date: 2026-11-08
-updated: 2026-11-14
-changes: "A prerelease is offered to desktops on the Beta channel. Earlier: The smoke test checks the launcher entry against the running app, and the verification checks the dock shows Scout's icon for the running window. Earlier: the Release workflow runs the CI and UI CI workflows before it packages.."
+updated: 2026-11-15
+changes: "A tag with a suffix publishes as a prerelease; a failed publish is rebuilt from the tag. Earlier: A prerelease is offered to desktops on the Beta channel. Earlier: The smoke test checks the launcher entry against the running app, and the verification checks the dock shows Scout's icon for the running window. Earlier: the Release workflow runs the CI and UI CI workflows before it packages.."
 page_type: runbook
 status: active
 description: "Preview the computed version, run the Release workflow from main as a release or a prerelease, and check the packages on the release page and the project site; a version tag pushed by hand still works."
@@ -80,7 +80,7 @@ Expected: `6 passed` in under a minute, among them the launcher entry: the AppIm
    Or on GitHub: Actions, Release, Run workflow, branch `main`, then pick the kind.
    Expected: a `Release` run on `main`. Its `check` job summary reads "Releasing v0.3.0 (release)" with the notes, the same as the preview. A wrong version is stopped by cancelling the run before `publish`: the tag and the release are created only by `publish`, on the commit the run started from, once every build leg is green, so a cancelled or failed run leaves no tag and no release behind.
 
-   A tag pushed by hand still releases as before, with generated notes and never marked Pre-release: `git tag v0.3.0 && git push origin v0.3.0`.
+   A tag pushed by hand still releases, with generated notes: `git tag v0.3.0 && git push origin v0.3.0`. A tag whose version has a suffix, such as `v0.3.0-beta.1`, is marked Pre-release; one without a suffix is not.
 
 2. **Watch the Release workflow.**
    ```bash
@@ -111,6 +111,7 @@ Expected: `6 passed` in under a minute, among them the launcher entry: the AppIm
 
 - **`check` fails** with "Tag vX is not a version": the tag is not shaped `v<major>.<minor>.<patch>[-suffix]`. Delete it (`git push origin :refs/tags/vX` and `git tag -d vX`) and push a well-formed tag.
 - **Started by hand from another branch:** `check` fails with "A release runs from a version tag, or by hand from main"; choose `main` (a new release) or the tag (a rebuild of that release) under "Use workflow from".
+- **The publish job failed after the tag exists:** do not re-run the failed job: a re-run starts again at `check`, which refuses because the tag exists. Run the workflow from the tag instead (`gh workflow run release.yml --ref vX`); it rebuilds and publishes that version, marked Pre-release when the version has a suffix.
 - **"The tag vX already exists":** the computed or given version was released already. Rebuild it by running the workflow from that tag, or pass another `version`.
 - **"Nothing has been committed since vX":** `main` holds nothing new since that release.
 - **"Version X does not fit a release":** a `version` with a suffix was given with `kind=release`, or one without a suffix with `kind=prerelease`.

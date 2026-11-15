@@ -1,3 +1,5 @@
+## [2026-11-15] fix | A release made from a tag with a suffix is a prerelease
+The release workflow marked a beta rebuilt from its tag as a full release, Latest; it now marks prerelease any tag whose version has a suffix, on the tag path as on the path from main. The runbook says how to rebuild after a failed publish.
 ## [2026-11-15] docs | Merge after approving, on the prototype
 The Features and Main artboards draw a setting of the GitHub feature, off by default: with it on, approving a pull request from the review card also merges it with squash, only on repositories of the owner's own account. Design for the owner's approval; nothing is built, and a merge needs a decision record before it is.
 ## [2026-11-15] docs | The templates of what is written on GitHub, on the prototype
