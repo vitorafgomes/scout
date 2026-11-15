@@ -640,7 +640,7 @@ public sealed class AuditWorkerTests : IDisposable
     }
 
     private static RepositoryAudits Owner(SqliteAuditStore store, string? origin = "local:session", RecordingNotifier? notifier = null) =>
-        new(store, new AuditSignal(), new AuditOptions(), new FakeSnapshots(), new FakeEnvironment(), () => Kernels.Audit(), () => origin, NullLogger<RepositoryAudits>.Instance, notifier);
+        new(store, new AuditSignal(), new AuditOptions(), new FakeSnapshots(), new FakeEnvironment(), () => Kernels.Audit(), () => origin, NullLogger<RepositoryAudits>.Instance, notifier is null ? null : () => notifier);
 
     private static async Task<string> PausedAfterOneAreaAsync(SqliteAuditStore store, string origin)
     {

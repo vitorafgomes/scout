@@ -36,7 +36,7 @@ public sealed class HostAuditTurnTests : IDisposable
 
     private string Database => Path.Combine(_folder, "audit.db");
 
-    private IHost AuditHost(ToolCallingModel model, AllowingGate gate, bool github = true, HttpMessageHandler? batchModel = null, string? dockerRuns = null) =>
+    private IHost AuditHost(ToolCallingModel model, AllowingGate gate, bool github = true, HttpMessageHandler? batchModel = null, string? dockerRuns = null, bool local = false) =>
         new HostBuilder()
             .ConfigureServices((_, services) =>
             {
@@ -54,6 +54,11 @@ public sealed class HostAuditTurnTests : IDisposable
                 if (github)
                 {
                     settings["Scout:Plugins:GitHub:Token"] = "github-dummy-not-real";
+                }
+
+                if (local)
+                {
+                    settings["Scout:Adapters:Local:Enabled"] = "true";
                 }
 
                 services.AddScoutHost(new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
@@ -203,6 +208,15 @@ public sealed class HostAuditTurnTests : IDisposable
         outcome.FilesRead.Count.ShouldBe(40);
         model.RequestSizes.Count.ShouldBe(42);
         model.RequestSizes.Max().ShouldBeLessThan(300_000);
+    }
+
+    [Fact]
+    public void With_GitHub_connected_and_the_desktops_local_chat_on_the_host_builds_its_kernel_and_its_chat_adapter()
+    {
+        using var host = AuditHost(new ToolCallingModel(), new AllowingGate(), local: true);
+
+        host.Services.GetRequiredService<Kernel>().Plugins.Select(p => p.Name).ShouldContain("GitHubActions");
+        host.Services.GetServices<IChatAdapter>().Select(a => a.Name).ShouldContain("Local");
     }
 
     [Fact]

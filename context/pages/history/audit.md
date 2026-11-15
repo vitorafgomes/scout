@@ -1,9 +1,9 @@
 ---
 title: "Audit - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-08
-updated: 2026-11-14
-changes: "v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
+updated: 2026-11-15
+changes: "v1.2 (2026-11-15): the notifier is resolved on use, so the worker starts with GitHub and the local chat. v1.1 (2026-11-14): every local area and a resume report, every heading counts the findings. v1.0: initial history note: the audit store behind IAuditJobStore, on Entity Framework Core"
 page_type: reference
 status: artefact
 description: "What changed in the audit job's project and when."
@@ -20,6 +20,12 @@ reliability: high
 # Audit - history
 
 > Dated changes to [[pages/services/audit]]; the service page states how it works now.
+
+## 2026-11-15 - The worker starts again with GitHub connected and the desktop's local chat
+
+- **Found:** since the resume line of 2026-11-14 the worker never reported ready when GitHub was connected and the desktop's local chat was on: the audit service asked for the notifier while it was being built, the notifier's local poster needs the local chat adapter, whose live translator needs the kernel, whose GitHub plugin needs the audit service again. The desktop killed the worker after 45 seconds and started it again, without end.
+- **What changed:** the audit service takes the notifier as a function and resolves it when a resume posts, as it already did the kernel (`src/Scout.Audit/AuditServiceCollectionExtensions.cs:62`).
+- **Tests:** `Scout.Host.Console.Tests`, a host with GitHub connected and the local chat on builds its kernel and its chat adapter (`tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:214`); without the change the test never ends.
 
 ## 2026-11-14 - Every local area reports, a resume reports, every heading counts the findings
 

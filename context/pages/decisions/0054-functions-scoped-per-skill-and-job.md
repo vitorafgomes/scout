@@ -71,7 +71,7 @@ Layering: Scout.Llm and Scout.Skills reference no other Scout assembly; only Sco
 - `tests/Scout.Llm.Tests/Guard/WriteGateCompositionTests.cs:55` the write gate still fires on the scoped kernel on both paths; on the Gemini, ChatGPT plan, Azure OpenAI, Mistral, Azure AI Inference, Hugging Face and Anthropic connectors an undeclared sibling function is absent from the request's tools (`tests/Scout.Llm.Tests/Guard/WriteGateProviderPathTests.cs:29`, `:62`, `:100`, `:134`, `:166`, `:200`, `tests/Scout.Llm.Tests/Providers/Anthropic/AnthropicProviderTests.cs:112`).
 - `tests/Scout.Conversation.Tests/Routing/LlmStreamingRouterFunctionScopeTests.cs:101` to `:353`: general set, selected skill, carry and its expiry (`:317`), markers, a write skill only from the message's own text (`:270`, `:283`, `:295`, `:305`), the lexical pick end to end; `tests/Scout.Host.Console.Tests/HostChatFunctionScopeTests.cs:75` the composed host on the Ollama connector.
 - `tests/Scout.Skills.Tests/LexicalSkillIndexTests.cs:39` and `:56`: the sample questions in both languages.
-- `tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:44` the six offered functions; `:59` no function choice when none of them exists; `:72` an undeclared call logged; `tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:163` the same on the Ollama connector, the write never run and the gate never asked.
+- `tests/Scout.Audit.Tests/AuditBatchRunnerTests.cs:44` the six offered functions; `:59` no function choice when none of them exists; `:72` an undeclared call logged; `tests/Scout.Host.Console.Tests/HostAuditTurnTests.cs:168` the same on the Ollama connector, the write never run and the gate never asked.
 - Invariant page: [[pages/invariants/no-executive-writes]].
 
 ## Related
