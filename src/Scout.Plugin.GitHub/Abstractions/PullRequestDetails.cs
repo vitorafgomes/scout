@@ -46,10 +46,12 @@ public sealed record PullRequestDetails(
 /// <param name="Patch">The unified diff, or null when GitHub omitted it (binary or too large).</param>
 public sealed record ChangedFile(string Path, string Status, int Additions, int Deletions, string? Patch);
 
-/// <summary>The head commit of a pull request and who opened it.</summary>
+/// <summary>The head commit of a pull request, who opened it and whether GitHub says it can be merged.</summary>
 /// <param name="Sha">The commit the pull request's branch points at.</param>
 /// <param name="AuthorLogin">Login of the author, or "unknown" when absent.</param>
-public sealed record PullRequestHead(string Sha, string AuthorLogin);
+/// <param name="Mergeable">GitHub's <c>mergeable</c>: false when the pull request conflicts with its base branch; null while GitHub has not computed it.</param>
+/// <param name="MergeableState">GitHub's <c>mergeable_state</c>, such as <c>clean</c>, <c>dirty</c> or <c>blocked</c>; null when absent.</param>
+public sealed record PullRequestHead(string Sha, string AuthorLogin, bool? Mergeable = null, string? MergeableState = null);
 
 /// <summary>A review given on a pull request.</summary>
 /// <param name="Id">GitHub's id of the review.</param>

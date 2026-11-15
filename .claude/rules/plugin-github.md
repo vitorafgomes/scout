@@ -23,6 +23,8 @@ Read one when your change touches what its title names.
 - [[pages/invariants/pluggable-boundaries|Adapters, LLM providers and plugins are swapped by configuration]]
 - [[pages/decisions/0019-github-app-device-flow|ADR 0019 - GitHub through a read-only GitHub App and the device flow]]
 - [[pages/decisions/0038-code-quality-assistant-on-the-write-gate|ADR 0038 - The code quality assistant: GitHub reads and writes on the write gate, CodeQA superseded by Knowledge]]
+- [[pages/decisions/0058-an-approval-needs-every-check-passed|ADR 0058 - Scout approves a pull request only when every check of the commit passed]] - an approval also needs a pull request without conflicts whose mergeability GitHub computed
+- [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run|ADR 0060 - A run that could not run its tests is not a failed run]] - the `unrunnable` field of `run_pull_request_tests` and of the review's tests
 - [[pages/conventions/testing|Testing]]
 
 ## What to read for a change

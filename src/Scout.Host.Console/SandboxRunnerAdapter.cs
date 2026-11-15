@@ -25,6 +25,10 @@ internal sealed class SandboxRunnerAdapter(DockerSandboxRunner runner, bool enab
         }
 
         var result = await runner.RunTestsAsync(new SandboxRequest(request.SnapshotRoot, request.StackHint, request.Command, request.Repository, request.PullRequest), ct).ConfigureAwait(false);
-        return new SandboxRunResult(result.Ran, result.Reason, result.Image, result.Command, result.ExitCode, result.DurationSeconds, result.Output, result.Note);
+        return ToPlugin(result);
     }
+
+    /// <summary>The sandbox's result as the plugin's, field by field.</summary>
+    internal static SandboxRunResult ToPlugin(SandboxResult result) =>
+        new(result.Ran, result.Reason, result.Image, result.Command, result.ExitCode, result.DurationSeconds, result.Output, result.Note, result.Unrunnable);
 }

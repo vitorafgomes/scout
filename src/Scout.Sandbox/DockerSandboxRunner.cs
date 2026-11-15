@@ -139,7 +139,8 @@ public sealed partial class DockerSandboxRunner
                 request.Repository, request.PullRequest, SandboxStacks.Label(stack.Name), stack.Image, command, "running", null, null, 0, testStarted, null)).ConfigureAwait(false);
             var exit = await RunAsync(container, runFolder, stack, command, network: false, offline: true, output, linked.Token).ConfigureAwait(false);
             container = null;
-            return result = new SandboxResult(true, exit is 126 or 127 ? $"The test command could not be started (exit {exit}: a command it names was not found or is not executable)." : null, stack.Image, command, exit, Seconds(started), Last(output, failed: exit != 0), note);
+            var unstarted = exit is 126 or 127;
+            return result = new SandboxResult(true, unstarted ? $"The test command could not be started (exit {exit}: a command it names was not found or is not executable)." : null, stack.Image, command, exit, Seconds(started), Last(output, failed: exit != 0), note, exit != 0 && !unstarted ? Unrunnable(output.ToString()) : null);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested && deadline.IsCancellationRequested)
         {
@@ -300,6 +301,71 @@ public sealed partial class DockerSandboxRunner
     private static bool IsMountRefused(string output) =>
         output.Contains("bind source path does not exist", StringComparison.Ordinal)
         || output.Contains("mounts denied", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly string[] NoDockerSignatures =
+    [
+        "DotNet.Testcontainers", "Docker.DotNet", "Cannot connect to the Docker daemon", "Docker is either not running or misconfigured", "docker.sock",
+    ];
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(Passed|Failed)!\s+-\s+Failed:\s+(\d{1,9}),\s+Passed:\s+(\d{1,9}),", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex AssemblySummary();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*Failed\s+\S")]
+    private static partial System.Text.RegularExpressions.Regex FailedTestStart();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(?:Passed|Failed)!")]
+    private static partial System.Text.RegularExpressions.Regex SummaryStart();
+
+    /// <summary>
+    /// The sentence that says the failed tests could not run for want of a Docker daemon, read from a failed run's
+    /// <c>dotnet test</c> output: only when the output holds at least one failed test's block (from its <c>Failed</c>
+    /// line to the next one or to a summary line) and every block names a missing Docker daemon, at least one assembly
+    /// failed, and every assembly that failed passed no test; null otherwise, so a real failure is never called unrunnable.
+    /// When the kept output holds fewer blocks than the failures counted, the sentence says how many it read.
+    /// </summary>
+    private static string? Unrunnable(string output)
+    {
+        var blocks = new List<bool>();
+        var inBlock = false;
+        foreach (var line in output.Split('\n'))
+        {
+            if (SummaryStart().IsMatch(line))
+            {
+                inBlock = false;
+            }
+            else if (FailedTestStart().IsMatch(line))
+            {
+                blocks.Add(NamesNoDocker(line));
+                inBlock = true;
+            }
+            else if (inBlock && NamesNoDocker(line))
+            {
+                blocks[^1] = true;
+            }
+        }
+
+        if (blocks.Count == 0 || blocks.Contains(false))
+        {
+            return null;
+        }
+
+        var failed = AssemblySummary().Matches(output)
+            .Where(summary => summary.Groups[1].Value == "Failed")
+            .Select(summary => (Failed: long.Parse(summary.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), Passed: long.Parse(summary.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture)))
+            .ToList();
+        if (failed.Count == 0 || failed.Any(assembly => assembly.Passed > 0))
+        {
+            return null;
+        }
+
+        var total = failed.Sum(assembly => assembly.Failed);
+        return blocks.Count < total
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{total} test(s) did not pass; the {blocks.Count} whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{total} test(s) could not run: they need a Docker daemon, which the container does not have.");
+    }
+
+    private static bool NamesNoDocker(string line) =>
+        NoDockerSignatures.Any(signature => line.Contains(signature, StringComparison.Ordinal));
 
     private static SandboxResult NotRun(string reason) => new(false, reason, null, null, null, 0, string.Empty);
 

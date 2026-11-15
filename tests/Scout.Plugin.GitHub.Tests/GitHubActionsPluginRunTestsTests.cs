@@ -134,6 +134,42 @@ public sealed class GitHubActionsPluginRunTestsTests : IDisposable
         _ran.ShouldNotBeNull().Command.ShouldBe("gradle --no-daemon --offline test");
     }
 
+    private const string NoDaemon = "122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.";
+
+    [Fact]
+    public async Task A_Run_Whose_Tests_Could_Not_Run_For_Want_Of_Docker_Says_So_In_The_Answer_And_The_Card_s_Tests()
+    {
+        _sandbox.RunTestsAsync(default!, default).ReturnsForAnyArgs(
+            new SandboxRunResult(true, null, "mcr.microsoft.com/dotnet/sdk@sha256:abc", "dotnet test", 1, 60, "Failed!  - Failed:   122, Passed:     0", null, NoDaemon));
+
+        var answer = JsonDocument.Parse(await Run()).RootElement;
+
+        answer.TryGetProperty("unrunnable", out var unrunnable).ShouldBeTrue("the answer carries the tests that could not run");
+        unrunnable.GetString().ShouldBe(NoDaemon);
+        answer.GetProperty("exitCode").GetInt32().ShouldBe(1);
+        answer.GetProperty("ran").GetBoolean().ShouldBeTrue();
+        var kept = _runs.Find("octocat", "hello", Head.Sha[..7]).ShouldNotBeNull();
+        kept.Unrunnable.ShouldBe(NoDaemon, "the card's tests carry the tests that could not run");
+        new ReviewFindings(null, "octocat/hello", 42, Head.Sha, "approve", null, null, [], Tests: kept).ToBlock()
+            .ShouldContain($"\"unrunnable\":\"{NoDaemon}\"", Case.Sensitive, "the scout-findings block's tests object carries unrunnable");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task A_Passing_Or_A_Really_Failed_Run_Carries_No_Unrunnable(int exitCode)
+    {
+        _sandbox.RunTestsAsync(default!, default).ReturnsForAnyArgs(new SandboxRunResult(true, null, "i", "dotnet test", exitCode, 1, "out", null));
+
+        var answer = JsonDocument.Parse(await Run()).RootElement;
+
+        answer.TryGetProperty("unrunnable", out _).ShouldBeFalse("unrunnable is written only when set");
+        answer.GetProperty("exitCode").GetInt32().ShouldBe(exitCode);
+        var kept = _runs.Find("octocat", "hello", Head.Sha[..7]).ShouldNotBeNull();
+        kept.Unrunnable.ShouldBeNull();
+        new ReviewFindings(null, "octocat/hello", 42, Head.Sha, "approve", null, null, [], Tests: kept).ToBlock().ShouldNotContain("unrunnable");
+    }
+
     [Fact]
     public async Task The_Output_Is_Cut_To_Its_Last_6500_Characters_In_The_Answer_And_Its_Last_4000_In_The_Kept_Run()
     {

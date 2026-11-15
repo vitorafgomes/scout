@@ -337,6 +337,151 @@ public sealed class DockerSandboxRunnerTests : IDisposable
         (await Run(new SandboxRequest(dotnet))).Note.ShouldBeNull();
     }
 
+    private const string NoDockerFailure =
+        "  Failed Shop.IntegrationTests.OrdersTests.Saves_an_order [1 ms]\n"
+        + "  Error Message:\n   System.ArgumentException : Docker is either not running or misconfigured.\n"
+        + "  Stack Trace:\n     at DotNet.Testcontainers.Builders.DockerEndpointAuthenticationProvider.IsAvailable()\n"
+        + "     at Docker.DotNet.SystemOperations.PingAsync(CancellationToken cancellationToken)\n";
+
+    private const string UnitTestsPassed = "Passed!  - Failed:     0, Passed:   634, Skipped:     0, Total:   634, Duration: 41 s - Shop.Tests.dll (net10.0)\n";
+
+    private const string IntegrationTestsFailed = "Failed!  - Failed:   122, Passed:     0, Skipped:     0, Total:   122, Duration: 3 s - Shop.IntegrationTests.dll (net10.0)\n";
+
+    private Task<SandboxResult> RunDotNetTests(string testOutput, int exit)
+    {
+        var dotnet = Directory.CreateDirectory(Path.Combine(_base, "dotnet")).FullName;
+        File.WriteAllText(Path.Combine(dotnet, "Shop.slnx"), "<Solution />");
+        _processes.Behaviour = (call, onOutput, _) =>
+        {
+            if (FakeProcessRunner.IsRun(call, "test"))
+            {
+                onOutput(testOutput);
+                return Task.FromResult(exit);
+            }
+
+            return Task.FromResult(0);
+        };
+
+        return Run(new SandboxRequest(dotnet));
+    }
+
+    [Fact]
+    public async Task A_run_whose_failed_tests_all_needed_a_docker_daemon_could_not_run_them_and_keeps_its_exit_code()
+    {
+        var result = await RunDotNetTests(UnitTestsPassed + string.Concat(Enumerable.Repeat(NoDockerFailure, 3)) + IntegrationTestsFailed, exit: 1);
+
+        result.Unrunnable.ShouldBe(
+            "122 test(s) did not pass; the 3 whose failure is in the kept output could not run: they need a Docker daemon, which the container does not have.",
+            "a run that could not run its tests for want of a Docker daemon is not a failed run, and the sentence never claims more failures were read than the kept output holds");
+        result.ExitCode.ShouldBe(1, "the exit code stays the real one");
+        result.Ran.ShouldBeTrue();
+        result.Reason.ShouldBeNull();
+        result.Command.ShouldBe("dotnet test 'Shop.slnx' --no-restore");
+    }
+
+    [Fact]
+    public async Task A_run_whose_every_counted_failure_is_in_the_kept_output_says_they_all_could_not_run()
+    {
+        const string TwoFailed = "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 1 s - Shop.IntegrationTests.dll (net10.0)\n";
+
+        var result = await RunDotNetTests(UnitTestsPassed + NoDockerFailure + NoDockerFailure + TwoFailed, exit: 1);
+
+        result.Unrunnable.ShouldBe("2 test(s) could not run: they need a Docker daemon, which the container does not have.", "when every failure counted is in the kept output, the sentence says they all could not run");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(126)]
+    [InlineData(127)]
+    public async Task Only_a_failed_run_that_started_its_tests_can_be_unrunnable(int exit)
+    {
+        var result = await RunDotNetTests(UnitTestsPassed + NoDockerFailure + IntegrationTestsFailed, exit);
+
+        result.Unrunnable.ShouldBeNull("only a failed run that started its tests can be unrunnable");
+        result.ExitCode.ShouldBe(exit);
+    }
+
+    [Fact]
+    public async Task A_run_where_an_assembly_that_failed_also_passed_tests_stays_a_failed_run()
+    {
+        const string RealFailure = "Failed!  - Failed:     3, Passed:    37, Skipped:     0, Total:    40, Duration: 2 s - Shop.Domain.Tests.dll (net10.0)\n";
+
+        var result = await RunDotNetTests(UnitTestsPassed + NoDockerFailure + IntegrationTestsFailed + RealFailure, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("a real failure is never hidden behind a missing Docker daemon");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    private const string AssertionFailure =
+        "  Failed Shop.Domain.Tests.TotalsTests.Adds_the_tax [1 ms]\n"
+        + "  Error Message:\n   Assert.Equal() Failure: Values differ\n"
+        + "  Stack Trace:\n     at Shop.Domain.Tests.TotalsTests.Adds_the_tax() in /work/src/tests/Shop.Domain.Tests/TotalsTests.cs:line 12\n";
+
+    private const string DomainTestsFailed = "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Shop.Domain.Tests.dll (net10.0)\n";
+
+    [Fact]
+    public async Task A_real_failure_next_to_tests_that_need_docker_is_never_called_unrunnable()
+    {
+        var result = await RunDotNetTests(NoDockerFailure + IntegrationTestsFailed + AssertionFailure + DomainTestsFailed, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("a real failure next to tests that need Docker is never called unrunnable");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_docker_signature_only_in_a_log_line_outside_the_failed_tests_does_not_make_a_real_failure_unrunnable()
+    {
+        const string LogLine = "[testcontainers.org 00:00:01.00] Docker.DotNet ping skipped: Cannot connect to the Docker daemon at unix:///var/run/docker.sock\n";
+
+        var result = await RunDotNetTests(LogLine + AssertionFailure + DomainTestsFailed, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("only the failed tests' own blocks show they needed a Docker daemon; a log line outside them does not");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_output_cut_before_any_failed_test_block_is_not_unrunnable()
+    {
+        const string CutOutput = "     at Docker.DotNet.SystemOperations.PingAsync(CancellationToken cancellationToken)\n";
+
+        var result = await RunDotNetTests(CutOutput + IntegrationTestsFailed, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("without a failed test's block nothing shows the failures needed a Docker daemon");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_log_line_after_the_summary_never_turns_a_real_failure_into_one_that_needed_docker()
+    {
+        const string LateLogLine = "[testcontainers.org 00:00:09.00] Docker.DotNet ping skipped: Cannot connect to the Docker daemon at unix:///var/run/docker.sock\n";
+
+        var result = await RunDotNetTests(AssertionFailure + DomainTestsFailed + LateLogLine, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("a log line after the summary never turns a real failure into one that needed Docker");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Without_a_summary_line_a_run_whose_failed_tests_needed_docker_stays_a_failed_run()
+    {
+        var result = await RunDotNetTests(NoDockerFailure + NoDockerFailure, exit: 1);
+
+        result.Unrunnable.ShouldBeNull("without a summary line nothing says how many tests failed, so the run stays a failed run");
+        result.ExitCode.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("  Failed Shop.Tests.Totals [1 ms]\n  Error Message:\n   Assert.Equal() Failure\nFailed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Shop.Tests.dll (net10.0)\n", 1)]
+    [InlineData(UnitTestsPassed, 0)]
+    [InlineData("error : Docker.DotNet could not be restored: Cannot connect to the Docker daemon at unix:///var/run/docker.sock\n", 1)]
+    public async Task A_run_without_the_docker_signature_a_passing_run_or_a_signature_outside_any_failed_test_has_nothing_unrunnable(string testOutput, int exit)
+    {
+        var result = await RunDotNetTests(testOutput, exit);
+
+        result.Unrunnable.ShouldBeNull("only a failed run whose every failing assembly needed a Docker daemon is unrunnable");
+        result.ExitCode.ShouldBe(exit);
+    }
+
     [Fact]
     public async Task The_result_carries_the_exit_code_and_how_long_the_run_took()
     {

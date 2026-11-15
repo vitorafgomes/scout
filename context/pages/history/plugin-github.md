@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.2"
+version: "1.3"
 date: 2026-11-10
 updated: 2026-11-15
-changes: "v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+changes: "v1.3 (2026-11-15): no approval over a conflict; unrunnable in the answer and the block. v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -18,6 +18,13 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+## 2026-11-15 - No approval over a conflict, and a run that could not run its tests says so
+
+- **Asked for:** the same review of a repository whose integration tests use Testcontainers reported those tests as failed, and the card offered Approve on a pull request that conflicted with its base branch.
+- **What it was:** `run_pull_request_tests` answered such a run as any failed run; an approval was refused only on a moved head, an author signing their own pull request or a check not passed.
+- **What it is:** the answer, the run kept for the head commit and the review block's `tests` object carry `unrunnable` when the sandbox set it, and the function's description tells the model that such a run did not fail ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]], [[pages/services/plugin-github/the-pull-request-s-checks-and-its-tests-in-a-con]]). `PullRequestHead` carries GitHub's `mergeable` and `mergeable_state`, read by the same `GET pulls/{n}`; an approval is refused on `mergeable` false or `mergeable_state` `dirty` ("The pull request has conflicts with its base branch; Scout approves only a pull request that can be merged.") and while `mergeable` is null ("GitHub has not said whether the pull request can be merged. If it is still open, approve again in a moment."), after the moved-head check and before the checks are read; requesting changes is not held back ([[pages/services/plugin-github/the-writes]], [[pages/decisions/0058-an-approval-needs-every-check-passed]]).
+- **Tests changed on purpose:** the fakes that serve the pull request to an approval now say it can be merged, or the approval would be refused as not yet computed: the verdict tests' default head (`Mergeable: true`), the two HTTP fakes of `GitHubBotIdentityTests`, and those of `GitHubActionExecutorTests` and `GitHubActionExecutorSecretsTests` (`"mergeable":true`).
 
 ## 2026-11-15 - An approval needs every check of the commit passed
 

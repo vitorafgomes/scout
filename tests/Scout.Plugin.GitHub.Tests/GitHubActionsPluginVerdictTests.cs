@@ -23,7 +23,7 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
         _reads.ListPullRequestFilesAsync("octocat", "hello", 42, Arg.Any<CancellationToken>())
             .Returns(new List<ChangedFile> { new("src/Checkout.cs", "modified", 2, 1, Patch) });
         _reads.GetPullRequestHeadAsync("octocat", "hello", 42, Arg.Any<CancellationToken>())
-            .Returns(new PullRequestHead("abc1234", "alice"));
+            .Returns(new PullRequestHead("abc1234", "alice", Mergeable: true));
         _reads.GetSignedInLoginAsync(Arg.Any<CancellationToken>()).Returns("octocat");
         _reads.ListReviewsAsync("octocat", "hello", 42, Arg.Any<CancellationToken>()).Returns(new List<PullRequestReview>());
         Checks();
@@ -172,6 +172,61 @@ public sealed class GitHubActionsPluginVerdictTests : IDisposable
 
         ex.Message.ShouldBe("GitHub request timed out. Try again later.");
         _handler.LastRequest.ShouldBeNull();
+    }
+
+    private void Head(bool? mergeable, string? mergeableState = null) =>
+        _reads.GetPullRequestHeadAsync("octocat", "hello", 42, Arg.Any<CancellationToken>())
+            .Returns(new PullRequestHead("abc1234", "alice", mergeable, mergeableState));
+
+    [Theory]
+    [InlineData(false, "dirty")]
+    [InlineData(false, null)]
+    [InlineData(true, "dirty")]
+    public async Task Approve_On_A_Pull_Request_With_Conflicts_Is_Refused_Before_Any_Write_And_Before_The_Checks_Are_Read(bool? mergeable, string? mergeableState)
+    {
+        Head(mergeable, mergeableState);
+
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", "abc1234", CancellationToken.None));
+
+        message.ShouldBe("The pull request has conflicts with its base branch; Scout approves only a pull request that can be merged.", "no approval over a conflict");
+        _handler.LastRequest.ShouldBeNull("nothing is written to GitHub");
+        await _reads.DidNotReceive().ListCheckRunsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Approve_While_GitHub_Has_Not_Said_Whether_The_Pull_Request_Can_Be_Merged_Is_Refused_Before_Any_Write()
+    {
+        Head(mergeable: null, "unknown");
+
+        var message = await Refused(() => Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", "abc1234", CancellationToken.None));
+
+        message.ShouldBe("GitHub has not said whether the pull request can be merged. If it is still open, approve again in a moment.", "no approval while GitHub has not said");
+        _handler.LastRequest.ShouldBeNull("nothing is written to GitHub");
+        await _reads.DidNotReceive().ListCheckRunsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Approve_On_A_Pull_Request_GitHub_Says_Can_Be_Merged_Is_Sent()
+    {
+        Head(mergeable: true, "clean");
+        _handler.EnqueueJson(HttpStatusCode.OK, """{"id":90,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-90"}""");
+
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", "abc1234", CancellationToken.None);
+
+        (await Sent()).GetProperty("event").GetString().ShouldBe("APPROVE", "a pull request that can be merged is approved");
+    }
+
+    [Theory]
+    [InlineData(false, "dirty")]
+    [InlineData(null, null)]
+    public async Task Request_Changes_On_A_Conflicted_Pull_Request_Or_One_GitHub_Has_Not_Judged_Is_Sent(bool? mergeable, string? mergeableState)
+    {
+        Head(mergeable, mergeableState);
+        _handler.EnqueueJson(HttpStatusCode.OK, """{"id":89,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-89"}""");
+
+        await Plugin().GivePullRequestVerdictAsync("octocat", "hello", 42, "request_changes", "Resolve the conflict.", "[]", "abc1234", CancellationToken.None);
+
+        (await Sent()).GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES", "requesting changes is not held back by a conflict");
     }
 
     [Fact]

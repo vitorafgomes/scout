@@ -25,6 +25,20 @@ public sealed class GitHubClientPullRequestHeadTests : IDisposable
     }
 
     [Fact]
+    public async Task Whether_The_Pull_Request_Can_Be_Merged_Is_Read_From_The_Same_Read_And_Null_When_Absent()
+    {
+        _handler.EnqueueJson(HttpStatusCode.OK, """{"number":42,"user":{"login":"alice"},"head":{"sha":"0123456789abcdef"},"mergeable":false,"mergeable_state":"dirty"}""");
+        _handler.EnqueueJson(HttpStatusCode.OK, """{"number":42,"user":{"login":"alice"},"head":{"sha":"0123456789abcdef"},"mergeable":null}""");
+
+        var conflicted = await Client().GetPullRequestHeadAsync("octocat", "hello", 42, CancellationToken.None);
+        var unknown = await Client().GetPullRequestHeadAsync("octocat", "hello", 42, CancellationToken.None);
+
+        conflicted.ShouldBe(new PullRequestHead("0123456789abcdef", "alice", false, "dirty"), "mergeable and mergeable_state are read from GitHub's answer");
+        unknown.ShouldBe(new PullRequestHead("0123456789abcdef", "alice", null, null), "both are null when GitHub has not said");
+        _handler.Requests.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task A_Pull_Request_That_Does_Not_Exist_Has_No_Head()
     {
         _handler.EnqueueJson(HttpStatusCode.NotFound, """{"message":"Not Found"}""");

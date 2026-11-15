@@ -90,6 +90,8 @@ internal sealed partial class GitHubActionsPlugin(
     internal const string HeadMoved = "The pull request changed since the review; review it again.";
     internal const string NoCommit = "The verdict needs the head commit the review read, at least 7 characters of its SHA.";
     internal const string ChecksNotPassed = "Scout approves only when every check of the commit passed:";
+    internal const string Conflicts = "The pull request has conflicts with its base branch; Scout approves only a pull request that can be merged.";
+    internal const string MergeabilityUnknown = "GitHub has not said whether the pull request can be merged. If it is still open, approve again in a moment.";
     internal const string ChecksNotAllRead = "The commit has more checks than Scout could read; it approves only when it has read every one.";
     internal const int MaxChecksNamed = 3;
     internal const int MaxCheckNameChars = 60;
@@ -187,7 +189,8 @@ internal sealed partial class GitHubActionsPlugin(
 
     /// <summary>
     /// Give the verdict on the pull request, refused before anything is sent when a value is wrong, the pull request moved
-    /// past <paramref name="commit"/>, or the identity that signs it opened the pull request.
+    /// past <paramref name="commit"/>, an approval meets a pull request that conflicts with its base branch or whose
+    /// mergeability GitHub has not computed, or the identity that signs it opened the pull request.
     /// </summary>
     internal async Task<(PostedReview Posted, string Answer, bool Already, string? Signer)> GiveVerdictAsync(
         string owner, string repo, int number, string? verdict, string? body, string? comments, string? commit, CancellationToken ct)
@@ -219,6 +222,16 @@ internal sealed partial class GitHubActionsPlugin(
         if (!head.Sha.StartsWith(reviewed, StringComparison.OrdinalIgnoreCase))
         {
             throw Refused(HeadMoved);
+        }
+
+        if (given == ReviewVerdict.Approve && (head.Mergeable == false || head.MergeableState == "dirty"))
+        {
+            throw Refused(Conflicts);
+        }
+
+        if (given == ReviewVerdict.Approve && head.Mergeable is null)
+        {
+            throw Refused(MergeabilityUnknown);
         }
 
         var signer = await SignerLoginAsync(GitHubWriteKind.Verdict, owner, repo, ct).ConfigureAwait(false)

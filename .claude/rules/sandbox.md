@@ -6,7 +6,7 @@ paths:
 
 # Sandbox
 
-Owns one operation, `DockerSandboxRunner.RunTestsAsync(SandboxRequest, CancellationToken)` (`src/Scout.Sandbox/DockerSandboxRunner.cs:74`): pick the stack from the snapshot's manifests, copy the snapshot into a fresh work folder, restore, test, record the run beside its log, and answer what happened; and the same detection on its own, `DockerSandboxRunner.Detect(string)` (`src/Scout.Sandbox/DockerSandboxRunner.cs:168`), which runs nothing and writes nothing. Does not own when a run happens, the `Local container` grant, the test command from the conventions profile or the CI workflow, the snapshot itself, or what the card shows ([[pages/services/plugin-github]], [[pages/services/desktop-quick-ask]]). It references no other Scout project and is not referenced by the GitHub plugin: [[pages/services/host-console]] adapts it to the plugin's `ISandboxRunner` seam.
+Owns one operation, `DockerSandboxRunner.RunTestsAsync(SandboxRequest, CancellationToken)` (`src/Scout.Sandbox/DockerSandboxRunner.cs:74`): pick the stack from the snapshot's manifests, copy the snapshot into a fresh work folder, restore, test, record the run beside its log, and answer what happened; and the same detection on its own, `DockerSandboxRunner.Detect(string)` (`src/Scout.Sandbox/DockerSandboxRunner.cs:169`), which runs nothing and writes nothing. Does not own when a run happens, the `Local container` grant, the test command from the conventions profile or the CI workflow, the snapshot itself, or what the card shows ([[pages/services/plugin-github]], [[pages/services/desktop-quick-ask]]). It references no other Scout project and is not referenced by the GitHub plugin: [[pages/services/host-console]] adapts it to the plugin's `ISandboxRunner` seam.
 
 ## Rules this project must keep
 
@@ -19,6 +19,7 @@ Owns one operation, `DockerSandboxRunner.RunTestsAsync(SandboxRequest, Cancellat
 Read one when your change touches what its title names.
 
 - [[pages/decisions/0043-the-verdict-on-a-pull-request|ADR 0043 - The verdict on a pull request, with the project's tests in an isolated container]] - the rules below are its decision; a change to a rule is a change to the ADR
+- [[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run|ADR 0060 - A run that could not run its tests is not a failed run]] - when a run's result says its tests could not run, never failed
 - [[pages/decisions/0032-per-feature-write-permissions|ADR 0032 - Features declare what they write, and the owner grants each one]] - the run is a write under Scout's data folder, behind the `Local container` row the GitHub plugin declares
 - [[pages/decisions/0039-repository-snapshot-under-the-data-folder|ADR 0039 - A repository snapshot under Scout's data folder, read locally and searched by the Knowledge index]] - the snapshot the run copies
 - [[pages/invariants/no-executive-writes|Scout performs descriptive writes only]]

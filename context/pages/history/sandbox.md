@@ -1,9 +1,9 @@
 ---
 title: "Sandbox - history"
-version: "1.2"
+version: "1.3"
 date: 2026-11-10
-updated: 2026-11-14
-changes: "v1.2 (2026-11-14): the record is written as running when the test command starts. v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
+updated: 2026-11-15
+changes: "v1.3 (2026-11-15): tests that could not run for want of a Docker daemon are not a failure. v1.2 (2026-11-14): the record is written as running when the test command starts. v1.1 (2026-11-14): the run's record names the command that ran. v1.0: initial history note: a test command that could not be started says so"
 page_type: reference
 status: artefact
 description: "What changed in Scout.Sandbox and when."
@@ -17,6 +17,13 @@ reliability: high
 # Sandbox - history
 
 > Dated changes to [[pages/services/sandbox]]; the service page states how it works now.
+
+## 2026-11-15 - Tests that could not run for want of a Docker daemon are not a failure
+
+- **Asked for:** a review of a repository whose integration tests use Testcontainers ran `dotnet test` over the whole solution in the container, which has no Docker daemon; every one of those tests failed on the daemon's ping, and the run read as "tests failed (exit 1)" though those tests never ran.
+- **What it was:** every test run that exited non-zero was a failed run.
+- **What it is:** `SandboxResult.Unrunnable` says how many tests could not run when the output holds failed-test blocks, every block names a missing Docker daemon and every assembly that failed passed no test; `ExitCode` stays the real one ([[pages/services/sandbox/public-contract]]). Tests that use Testcontainers are not left out: they run, fail fast and are reported this way. Leaving their projects out by `FullyQualifiedName!~<assembly name>` was built and taken out before it shipped: the match is a substring, and a pull request's author who controls the name could leave out every test and make the run pass ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]).
+- **Tests changed on purpose:** none; the new ones sit in `DockerSandboxRunnerTests` ([[pages/services/sandbox/testing-footprint]]).
 
 ## 2026-11-14 - The run's record is written while the tests run
 

@@ -266,6 +266,9 @@ internal sealed record ReviewCheck(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Conclusion,
     string Url);
 
-/// <summary>What the container run of the project's tests said, as the card shows it.</summary>
+/// <summary>
+/// What the container run of the project's tests said, as the card shows it; <c>unrunnable</c>, written only when set,
+/// says the tests that failed could not run for want of a Docker daemon.
+/// </summary>
 internal sealed record ReviewTests(
-    bool Ran, string? Reason, string? Image, string? Command, int? ExitCode, double? DurationSeconds, string? Output, string? Note);
+    bool Ran, string? Reason, string? Image, string? Command, int? ExitCode, double? DurationSeconds, string? Output, string? Note, string? Unrunnable = null);
