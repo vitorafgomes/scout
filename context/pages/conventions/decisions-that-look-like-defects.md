@@ -56,7 +56,7 @@ Not on this page: a limitation that is real and accepted for now. Those are in [
 
 **The record of a write is accepted even when the grant changed after the send.** The worker asks the gate before it sends, and an action asked before the current grant is refused there (`src/Scout.ControlPlane/WriteGate/WriteGateService.cs:126`). The record step only logs a write that already happened; refusing it would lose the log entry, which is the worse outcome ([[pages/invariants/no-executive-writes]]).
 
-**A verdict offered again after a restart is not sent twice.** Before sending, the plugin asks GitHub whether the same signer already gave that verdict on that head commit and returns the earlier review (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:229`). There is no in-memory "sent" set to lose.
+**A verdict offered again after a restart is not sent twice.** Before sending, the plugin asks GitHub whether the same signer already gave that verdict on that head commit and returns the earlier review (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:238`). There is no in-memory "sent" set to lose.
 
 **Queued payloads carry their values as strings.** Only the GitHub functions carry a payload, and the runner reads strings, numeric strings and the raw text of the comments list (`src/Scout.Plugin.GitHub/GitHubWriteRunner.cs:101`, `:145`). String values are the contract between the gate and the runner, not a loss of type.
 

@@ -89,6 +89,10 @@ internal sealed partial class GitHubActionsPlugin(
     internal const string BotLoginUnknown = "The Scout bot's login is unknown; give the verdict as yourself or recreate the bot.";
     internal const string HeadMoved = "The pull request changed since the review; review it again.";
     internal const string NoCommit = "The verdict needs the head commit the review read, at least 7 characters of its SHA.";
+    internal const string ChecksNotPassed = "Scout approves only when every check of the commit passed:";
+    internal const string ChecksNotAllRead = "The commit has more checks than Scout could read; it approves only when it has read every one.";
+    internal const int MaxChecksNamed = 3;
+    internal const int MaxCheckNameChars = 60;
     internal const string SelfApproval = "GitHub does not let the author approve their own pull request; request changes or comment instead.";
 
     internal const int MaxComments = 50;
@@ -224,6 +228,11 @@ internal sealed partial class GitHubActionsPlugin(
             throw Refused(SelfApproval);
         }
 
+        if (given == ReviewVerdict.Approve)
+        {
+            await RefuseUnlessEveryCheckPassedAsync(owner, repo, head.Sha, ct).ConfigureAwait(false);
+        }
+
         var (kept, dropped) = await AnchorOnTheDiffAsync(owner, repo, number, requested, summary, ct).ConfigureAwait(false);
         var what = $"{(given == ReviewVerdict.Approve ? "Approved" : "Requested changes on")} {owner}/{repo}#{number.ToString(CultureInfo.InvariantCulture)}";
         if (await GivenAlreadyAsync(owner, repo, number, given, head.Sha, signer, ct).ConfigureAwait(false) is { } earlier)
@@ -243,6 +252,63 @@ internal sealed partial class GitHubActionsPlugin(
         }
 
         return (posted, Posted(what, kept, dropped, posted) + Signed(GitHubWriteKind.Verdict, owner, repo), false, signer);
+    }
+
+    /// <summary>
+    /// Refuse an approval unless every check run and commit status at <paramref name="sha"/> passed: a check still
+    /// running, one that failed, was cancelled or timed out, and a check Scout could not read all refuse it: more check
+    /// runs than the page read, or a full page of statuses, which may hide more. A skipped or neutral check passes, and a
+    /// commit with no check at all may be approved. A read that fails sends nothing. A name in the answer is one line of
+    /// at most <see cref="MaxCheckNameChars"/> characters.
+    /// </summary>
+    private async Task RefuseUnlessEveryCheckPassedAsync(string owner, string repo, string sha, CancellationToken ct)
+    {
+        CheckRuns runs;
+        IReadOnlyList<PullRequestCheck> statuses;
+        try
+        {
+            runs = await reads.ListCheckRunsAsync(owner, repo, sha, ct).ConfigureAwait(false);
+            statuses = await reads.ListStatusesAsync(owner, repo, sha, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsHandledFailure(ex) && !ct.IsCancellationRequested)
+        {
+            throw Failed(ex, posted: false);
+        }
+
+        if (runs.Total > runs.Checks.Count || statuses.Count >= GitHubClient.FilesPage)
+        {
+            throw Refused(ChecksNotAllRead);
+        }
+
+        var checks = runs.Checks.Concat(statuses).ToList();
+        var running = checks.Where(c => c.Status != "completed").Select(c => c.Name).ToList();
+        var failed = checks.Where(c => c.Status == "completed" && c.Conclusion is not ("success" or "neutral" or "skipped")).Select(c => c.Name).ToList();
+        if (running.Count == 0 && failed.Count == 0)
+        {
+            return;
+        }
+
+        var parts = new List<string>();
+        if (running.Count > 0)
+        {
+            parts.Add($"{running.Count.ToString(CultureInfo.InvariantCulture)} still running ({Named(running)})");
+        }
+
+        if (failed.Count > 0)
+        {
+            parts.Add($"{failed.Count.ToString(CultureInfo.InvariantCulture)} did not pass ({Named(failed)})");
+        }
+
+        throw Refused($"{ChecksNotPassed} {string.Join(", ", parts)}.");
+    }
+
+    private static string Named(List<string> names) =>
+        string.Join(", ", names.Take(MaxChecksNamed).Select(OneLine)) + (names.Count > MaxChecksNamed ? ", ..." : string.Empty);
+
+    private static string OneLine(string name)
+    {
+        var flat = new string(name.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+        return flat.Length <= MaxCheckNameChars ? flat : flat[..MaxCheckNameChars] + "...";
     }
 
     /// <summary>

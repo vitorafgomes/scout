@@ -1,3 +1,5 @@
+## [2026-11-15] feat | An approval needs every check of the commit passed
+Before an approval Scout reads the head commit's check runs and statuses and refuses while one runs, did not pass or could not be read; requesting changes and commenting are not held back. Pages: ADR 0058 (new), plugin-github the writes, history/plugin-github.
 ## [2026-11-15] fix | An update that fails, and a refused verdict, say their own reason
 An updater error that is not of the connection is no longer called the network: the notice shows the error's code, or says Scout does not recognise the reason. A verdict refused because GitHub may not write shows the control plane's sentence, not a gRPC status. The control plane integration test waits 20 seconds for the socket. Pages: desktop-channels update notice, history/desktop-ui.
 ## [2026-11-15] feat | The owner's mention of the Scout bot starts the review by itself

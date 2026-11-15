@@ -40,6 +40,8 @@ public sealed class GitHubActionExecutorTests : IDisposable
         _github.On("GET", "repos/octocat/hello/pulls/42/files?per_page=100&page=1", HttpStatusCode.OK,
             JsonSerializer.Serialize(new[] { new { filename = "src/Checkout.cs", status = "modified", additions = 2, deletions = 1, patch = Patch } }));
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK, "[]");
+        _github.On("GET", $"repos/octocat/hello/commits/{Sha}/check-runs?per_page=100", HttpStatusCode.OK, "{\"total_count\":0,\"check_runs\":[]}");
+        _github.On("GET", $"repos/octocat/hello/commits/{Sha}/status?per_page=100", HttpStatusCode.OK, "{\"statuses\":[]}");
         _github.On("POST", "repos/octocat/hello/pulls/42/reviews", HttpStatusCode.OK, $$"""{"id":88,"html_url":"{{ReviewUrl}}"}""");
         _github.On("POST", "repos/octocat/hello/issues/42/comments", HttpStatusCode.Created, """{"id":5,"html_url":"https://github.com/octocat/hello/pull/42#issuecomment-5"}""");
     }
@@ -323,6 +325,20 @@ public sealed class GitHubActionExecutorTests : IDisposable
             .Outcome.ShouldBe("succeeded", "a verdict without a tests line records succeeded");
         JsonDocument.Parse(_github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldHaveSingleItem()).RootElement
             .GetProperty("event").GetString().ShouldBe("REQUEST_CHANGES");
+        _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_Approval_The_Owner_Approved_While_A_Check_Still_Runs_Is_Recorded_As_Refused_And_Nothing_Is_Posted()
+    {
+        _github.On("GET", $"repos/octocat/hello/commits/{Sha}/check-runs?per_page=100", HttpStatusCode.OK,
+            """{"total_count":2,"check_runs":[{"name":"build","status":"in_progress","conclusion":null,"html_url":"https://github.com/octocat/hello/runs/1"},{"name":"lint","status":"completed","conclusion":"success","html_url":"https://github.com/octocat/hello/runs/2"}]}""");
+        _gate.Claims.Enqueue(Verdict(CardPayload()));
+
+        await Executor().RunOnceAsync(CancellationToken.None);
+
+        _gate.Records.ShouldHaveSingleItem().ShouldBe(("Pull request verdicts", "octocat/hello#42", "failed: refused", "act-1", "Scout approves only when every check of the commit passed: 1 still running (build)."));
+        _github.Sent("POST", "repos/octocat/hello/pulls/42/reviews").ShouldBeEmpty();
         _github.Sent("POST", "repos/octocat/hello/issues/42/comments").ShouldBeEmpty();
     }
 
