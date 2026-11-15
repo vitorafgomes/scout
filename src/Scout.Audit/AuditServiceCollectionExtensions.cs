@@ -59,7 +59,7 @@ public static class AuditServiceCollectionExtensions
             () => sp.GetRequiredService<Kernel>(),
             () => ChatOrigin.Current,
             sp.GetRequiredService<ILogger<RepositoryAudits>>(),
-            sp.GetRequiredService<IOriginNotifier>()));
+            () => sp.GetRequiredService<IOriginNotifier>()));
         services.AddSingleton<IRepositoryAudits>(sp => sp.GetRequiredService<RepositoryAudits>());
         services.AddSingleton<IPullRequestReviews>(sp => sp.GetRequiredService<RepositoryAudits>());
         services.AddHostedService<AuditWorker>();

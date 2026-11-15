@@ -1,3 +1,5 @@
+## [2026-11-15] fix | The worker starts again with GitHub connected and the local chat on
+The audit service resolved the notifier while it was built, which closed a loop through the local chat adapter and the kernel; the worker never reported ready. The notifier is now resolved on use. Pages: history/audit.
 ## [2026-11-15] docs | Six owner decisions on artboard differences
 The Kubernetes warning shows only while nobody is allowed (new Preview state "Kubernetes panel: allowed users added"), every confirmation dialog is the theme's 40 px one, and the artboards draw the theme's info pair, notice, scrim, glyphs and monospace stack; Remove the bot keeps its question and the Docker detail line its fuller form. Pages: roadmap/prototype-migration, sixteen desktop artboards.
 ## [2026-11-14] feat | The verdict's record carries its tests line; GetVerdict answers who signed it; the bell shows both

@@ -53,8 +53,8 @@ public sealed record AuditControlAnswer(bool Applied, string Sentence);
 /// The <see cref="IRepositoryAudits"/> over the audit store: the snapshot is taken by invoking the GitHub plugin's
 /// <c>snapshot_repository</c> through the kernel, so it passes the write gate like any declared write, then found through
 /// <see cref="IAuditSnapshots"/> by the short commit its answer names; a review is checked against
-/// <see cref="IReviewEnvironment"/> before it starts. The kernel is resolved on use, because the plugin that calls this
-/// service is built into that kernel.
+/// <see cref="IReviewEnvironment"/> before it starts. The kernel and the notifier are resolved on use, because the plugin
+/// that calls this service is built into that kernel, and a chat adapter the notifier posts through may need that kernel.
 /// </summary>
 internal sealed partial class RepositoryAudits(
     IAuditJobStore store,
@@ -65,7 +65,7 @@ internal sealed partial class RepositoryAudits(
     Func<Kernel> kernel,
     Func<string?> origin,
     ILogger<RepositoryAudits> logger,
-    IOriginNotifier? notifier = null) : IRepositoryAudits
+    Func<IOriginNotifier>? notifier = null) : IRepositoryAudits
 {
     internal const string ActionsPlugin = "GitHubActions";
     internal const string SnapshotRepository = "snapshot_repository";
@@ -305,7 +305,7 @@ internal sealed partial class RepositoryAudits(
             var batches = await store.BatchesAsync(jobId, ct).ConfigureAwait(false);
             var findings = await store.FindingsAsync(jobId, ct).ConfigureAwait(false);
             var ended = batches.Count(b => b.Status is AuditStatus.Done or AuditStatus.NotCovered);
-            if (!await notifier.PostAsync(job.Origin!, AuditWorker.ResumedNotice(job, ended, batches.Count, findings.Count), ct).ConfigureAwait(false))
+            if (!await notifier().PostAsync(job.Origin!, AuditWorker.ResumedNotice(job, ended, batches.Count, findings.Count), ct).ConfigureAwait(false))
             {
                 logger.LogWarning("Audit {JobId} could not post its resume to the conversation it holds.", jobId);
             }
