@@ -16,6 +16,9 @@ const HTML_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/(pul
 const COMMENT_URL =
   /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(#(issuecomment-|discussion_r|pullrequestreview-)\d+)?$/;
 const MAX_COMMENT_PAGES = 10;
+/** How many pull requests one read asks GitHub about to settle the mentions that still offer Review it. */
+export const MAX_SETTLED_PULLS = 20;
+const PULL_URL = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/pull\/(\d+)/;
 const MAX_LINE_CHARS = 140;
 
 /** The owner's Scout bot as the poll needs it: its slug and the account its installation is on. */
@@ -37,6 +40,8 @@ export interface GitHubActivityDeps {
   /** The installed Scout bot whose mentions the bell watches, or null without one. */
   bot?(): Promise<GitHubBotMention | null>;
   record(entry: NotificationInput): void;
+  /** The mention entries the bell keeps that still offer Review it; the poll settles those whose pull request ended. */
+  reviewable?(): readonly NotificationInput[];
   /** Removes every GitHub entry; called when a connection change leaves GitHub disconnected. */
   clearEntries(): void;
   now(): number;
@@ -88,7 +93,7 @@ type Outcome =
       readonly body: unknown;
     }
   | { readonly kind: 'stop' }
-  | { readonly kind: 'retry'; readonly after: number };
+  | { readonly kind: 'retry'; readonly after: number; readonly answered?: true };
 
 /**
  * Searches the owner's GitHub activity every five minutes while GitHub is connected: the pull requests waiting for
@@ -240,6 +245,68 @@ export class GitHubActivityPoll {
     for (const entry of pass.found.values()) this.deps.record(entry);
     for (const entry of mentions) this.deps.record(entry);
     this.since = pass.startedAt;
+    return this.settle(pass.bot, account.token, generation);
+  }
+
+  /**
+   * Takes Review it off the mentions whose pull request no longer needs a review: merged, closed, or approved by the
+   * Scout bot at its head commit. It reads at most `MAX_SETTLED_PULLS` pull requests a read. A pull request GitHub
+   * answers an error for is left as it is and the next one is read; a rate limit, an unreachable GitHub or an
+   * unreadable answer ends the settling until the next read. It answers when the next read is due, null when the poll
+   * must stop.
+   */
+  private async settle(
+    bot: GitHubBotMention | null,
+    token: string,
+    generation: number,
+  ): Promise<number | null> {
+    const byPull = new Map<string, NotificationInput[]>();
+    for (const entry of this.deps.reviewable?.() ?? []) {
+      const pull = PULL_URL.exec(entry.url ?? '');
+      if (pull === null) continue;
+      const path = `/repos/${pull[1]}/pulls/${pull[2]}`;
+      byPull.set(path, [...(byPull.get(path) ?? []), entry]);
+    }
+    for (const [path, entries] of [...byPull].slice(0, MAX_SETTLED_PULLS)) {
+      const read = await this.get(`${API_URL}${path}`, token, 'pull request');
+      if (generation !== this.generation || read.kind === 'stop') return null;
+      if (read.kind === 'retry') {
+        if (read.answered === true) continue;
+        return read.after;
+      }
+      const pull = asRecord(read.body);
+      let detail: string | null = null;
+      if (pull['state'] === 'closed') {
+        detail =
+          pull['merged'] === true ? 'Merged. Nothing to review.' : 'Closed. Nothing to review.';
+      } else if (bot !== null) {
+        const reviews = await this.get(
+          `${API_URL}${path}/reviews?per_page=${PER_PAGE}`,
+          token,
+          'pull request',
+        );
+        if (generation !== this.generation || reviews.kind === 'stop') return null;
+        if (reviews.kind === 'retry') {
+          if (reviews.answered === true) continue;
+          return reviews.after;
+        }
+        const head = asRecord(pull['head'])['sha'];
+        const approved = (Array.isArray(reviews.body) ? (reviews.body as unknown[]) : []).some(
+          (raw) => {
+            const review = asRecord(raw);
+            return (
+              review['state'] === 'APPROVED' &&
+              review['commit_id'] === head &&
+              String(asRecord(review['user'])['login']).toLowerCase() ===
+                `${bot.slug}[bot]`.toLowerCase()
+            );
+          },
+        );
+        if (approved) detail = 'Approved by the Scout bot at this commit.';
+      }
+      if (detail === null) continue;
+      for (const { actions: _dropped, ...entry } of entries) this.deps.record({ ...entry, detail });
+    }
     return POLL_MS;
   }
 
@@ -300,7 +367,11 @@ export class GitHubActivityPoll {
     return this.get(`${SEARCH_URL}?${params.toString()}`, token, 'search');
   }
 
-  private async get(url: string, token: string, what: 'search' | 'comments'): Promise<Outcome> {
+  private async get(
+    url: string,
+    token: string,
+    what: 'search' | 'comments' | 'pull request',
+  ): Promise<Outcome> {
     const { logger } = this.deps;
     let response: Response;
     try {
@@ -340,7 +411,7 @@ export class GitHubActivityPoll {
         read: what,
         status: response.status,
       });
-      return { kind: 'retry', after: POLL_MS };
+      return { kind: 'retry', after: POLL_MS, answered: true };
     }
     let body: unknown;
     try {

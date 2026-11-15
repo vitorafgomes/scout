@@ -78,7 +78,7 @@ When it ships: a turn that queues ten comments on one pull request leaves one gr
   - The findings card (`review-findings.component.ts`): Open issues sends the chosen issues on `scout:github.openIssues` instead of `askAs` (`ui/packages/renderer/src/app/core/review-findings.component.ts:1222`); the footer reads "Open N issues on owner/repo" and "This sends them now. Nothing else to approve.", and while sending each chosen issue shows sending, sent with its link, or failed with the reason.
   - Then Approvals (`review.component.ts`): the same group on the Waiting tab, and in History a group's per-action outcomes under one header.
   - The artboards are already drawn; the screens follow them.
-  - Since phase 1 (2026-11-11): a line of the strip, or of a group on Approvals, opens to its full text by calling `GetActionText` with the action's id, since the list carries only a preview of 4,000 characters; and the `New issues` row's catalog text still says an issue is opened "when you ask for it in chat" (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:121`), which the findings card's click makes incomplete; reword it with the card.
+  - Since phase 1 (2026-11-11): a line of the strip, or of a group on Approvals, opens to its full text by calling `GetActionText` with the action's id, since the list carries only a preview of 4,000 characters; and the `New issues` row's catalog text still says an issue is opened "when you ask for it in chat" (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:122`), which the findings card's click makes incomplete; reword it with the card.
 - **Success criteria:** the desktop tests below are green and the strip matches its artboard.
 
 ## Tests that must exist

@@ -1,3 +1,5 @@
+## [2026-11-15] feat | The owner's mention of the Scout bot starts the review by itself
+Main asks the chat for the review when the owner mentions the bot on a pull request: once per mention, within an hour, one at a time and only while the chat is idle, shown under In progress while it runs; a mention whose pull request was merged, closed or approved by the bot loses Review it. Pages: ADR 0057 (new), ADR 0045 (dated line), desktop-github mentions and activity, history/desktop-ui, the desktop-github rules; line citations of the touched files re-pointed.
 ## [2026-11-15] fix | The worker starts again with GitHub connected and the local chat on
 The audit service resolved the notifier while it was built, which closed a loop through the local chat adapter and the kernel; the worker never reported ready. The notifier is now resolved on use. Pages: history/audit.
 ## [2026-11-15] docs | Six owner decisions on artboard differences

@@ -61,6 +61,7 @@ export const CATALOG: Readonly<
         [
           'Search your GitHub activity every five minutes for the bell: mentions, review requests and replies on your pull requests and issues',
           'When your Scout bot is installed, search the open pull requests on its account for a mention of the bot, and read the description, the comments, the review comments and the reviews of each pull request found, to confirm the mention before the bell shows it',
+          'Read the pull request of a mention the bell keeps, and its reviews while your Scout bot is installed, so a mention whose pull request was merged, closed or approved by the bot loses Review it',
           "When your Scout bot exists, read its GitHub App's own name and handle at start and whenever the GitHub card reads the bot, so a rename on GitHub is followed",
         ],
       ),

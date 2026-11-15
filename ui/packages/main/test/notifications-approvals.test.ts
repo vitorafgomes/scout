@@ -172,7 +172,7 @@ describe('main.ts wiring of the bell sources', () => {
       'unwatchWorkerHealth = watchWorkerHealth(workerSupervisor, notifications);',
     );
     expect(main).toContain(
-      "clearEntries: () => notifications.remove((n) => n.source === 'github'),",
+      "mentionReviews.clear();\n        notifications.remove((n) => n.source === 'github');",
     );
     expect(main).toContain('onTokenRefreshed: () => gitHubActivity?.tokenRefreshed(),');
     expect(main).toContain('pendingApprovals?.dispose();');

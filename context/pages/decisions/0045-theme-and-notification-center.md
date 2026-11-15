@@ -1,8 +1,8 @@
 ---
 title: "ADR 0045 - The desktop's theme switch and notification center"
-version: "1.6"
+version: "1.7"
 date: 2026-11-07
-changes: "v1.6 (2026-11-12) a read job entry turns unread again only on a state change or a note, not at each area's end; an audit running when Scout closed comes back in progress, only a test run as failed."
+changes: "v1.7 (2026-11-15) dated line: the owner's own fresh mention asks for the review by itself (ADR 0057)."
 page_type: adr
 status: accepted
 description: "Scout Desktop gets a light, dark or system theme chosen from a sun, moon and monitor switch in a new top bar, and a bell that collects what Scout does in the background, what it wrote on GitHub, and where the owner was mentioned or a review of Scout's got a comment, read from GitHub every five minutes."
@@ -70,11 +70,11 @@ The bell's other changes of the same review (opening a link or running an action
 
 ## Amendment v1.4 (2026-11-08): a mention of the Scout bot
 
-The owner, 2026-11-08 (translated): "the notifications must show that the bot was mentioned somewhere"; a team asks Scout for a review by mentioning the bot by its name in a pull request ([[pages/roadmap/future-improvements]], F21). GitHub's `mentions:` qualifier does not find an App's bot, and Scout's App is private, so its handle cannot be resolved through the public API; a phrase search does find it. Decision:
+The owner asked on 2026-11-08 that the bell show a mention of the bot; a team asks Scout for a review by mentioning the bot by its name in a pull request ([[pages/roadmap/future-improvements]], F21). GitHub's `mentions:` qualifier does not find an App's bot, and Scout's App is private, so its handle cannot be resolved through the public API; a phrase search does find it. Decision:
 
 - **The query.** While the owner's Scout bot is installed, a read adds one search, `"@<slug>" in:comments,body is:pr is:open` scoped to the account the installation is on (`user:<login>` or `org:<org>`), with the read's `updated:>=` window. It is one more search inside the same 20-a-minute budget and resume; the slug is the one the desktop keeps and re-reads from the App ([[pages/decisions/0044-scout-acts-on-github-as-its-own-app]], amended 2026-11-08), never a fixed name.
 - **Confirmation.** Phrase search is tokenised, so every candidate is confirmed before it becomes an entry: the pull request's body, its issue comments and review comments updated since the window, and its review summaries submitted in the window, read with the owner's token (read-only GETs that are not searches and do not count toward the 20). A text counts when it names `@<slug>` as a whole handle, in any case, and is not written by the bot itself. A comment read that fails is a failed search: nothing from that read is recorded and the window stays.
-- **The entry.** Kind `mention`, shown under All and GitHub: "@<author> mentioned @<slug> on <owner>/<repo>#<n>: <first line of the comment, trimmed>", a link to the comment, unread until opened, one entry per comment or review id (a new mention in another comment is a new entry; an edit updates the same entry and keeps its read flag), removed on Disconnect with the other GitHub entries. Its one action, Review it (`review-pull-request`), runs in the window: it asks the chat "Review the pull request <url>" and opens the chat, so the existing code-review flow prepares its cards; posting stays the approved write ADR 0043 and ADR 0032 already make it. The entry and the poll write nothing on GitHub.
+- **The entry.** Kind `mention`, shown under All and GitHub: "@<author> mentioned @<slug> on <owner>/<repo>#<n>: <first line of the comment, trimmed>", a link to the comment, unread until opened, one entry per comment or review id (a new mention in another comment is a new entry; an edit updates the same entry and keeps its read flag), removed on Disconnect with the other GitHub entries. Its one action, Review it (`review-pull-request`), runs in the window: it asks the chat "Review the pull request <url>" and opens the chat, so the code-review flow prepares its cards (since 2026-11-15 the owner's own fresh mention asks by itself, [[pages/decisions/0057-the-owners-mention-starts-the-review]]); posting stays the approved write ADR 0043 and ADR 0032 already make it. The entry and the poll write nothing on GitHub.
 - **Declared.** The GitHub feature's `Notifications` row (Read) names these reads: the mention search with the reads of the description, comments, review comments and reviews of each pull request found, and the read of the bot App's own name and handle ([[pages/decisions/0044-scout-acts-on-github-as-its-own-app]]).
 
 ## Amendment v1.5 (2026-11-11): Pause, Continue and Stop on a running job

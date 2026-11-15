@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   FIRST_LOOK_BACK_MS,
   GitHubActivityPoll,
+  MAX_SETTLED_PULLS,
   POLL_MS,
   QUERIES,
   SEARCH_URL,
@@ -51,7 +52,12 @@ function fiveOk(...first: unknown[][]): Response[] {
   return [0, 1, 2, 3, 4].map((i) => ok(first[i] ?? []));
 }
 
-function setup(replies: Reply[], connected = true) {
+function setup(
+  replies: Reply[],
+  connected = true,
+  reviewable: NotificationInput[] = [],
+  bot: { slug: string; account: string; accountType: 'user' | 'org' } | null = null,
+) {
   const sent: Sent[] = [];
   const recorded: NotificationInput[] = [];
   const account = { connected };
@@ -73,6 +79,8 @@ function setup(replies: Reply[], connected = true) {
     }) as unknown as typeof fetch,
     account: async () => (account.connected ? { token: TOKEN, login: LOGIN } : null),
     record: (entry) => recorded.push(entry),
+    reviewable: () => reviewable,
+    ...(bot === null ? {} : { bot: async () => bot }),
     clearEntries: () => {
       cleared += 1;
     },
@@ -93,6 +101,210 @@ function setup(replies: Reply[], connected = true) {
 async function settleMicrotasks(): Promise<void> {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function kept(id: string, url: string): NotificationInput {
+  return {
+    id,
+    kind: 'mention',
+    title: '@alice mentioned @scoutbot on acme/shop#20: @scoutbot review',
+    detail: 'Retry logic',
+    url,
+    actions: [{ id: 'review-pull-request', label: 'Review it' }],
+    source: 'github',
+  };
+}
+
+describe('a mention whose pull request no longer needs a review loses Review it', () => {
+  const MENTION = kept(
+    'mention:issue-comment:9001',
+    'https://github.com/acme/shop/pull/20#issuecomment-9001',
+  );
+  const { actions: _dropped, ...WITHOUT } = MENTION;
+  const BOT = { slug: 'scoutbot', account: 'acme', accountType: 'org' } as const;
+
+  it('reads the pull request of each kept mention once, and a merged one reads "Merged. Nothing to review." with no action', async () => {
+    const second = kept('mention:body:502', 'https://github.com/acme/shop/pull/20');
+    const { actions: _gone, ...secondWithout } = second;
+    const { poll, sent, recorded } = setup(
+      [...fiveOk(), json({ state: 'closed', merged: true })],
+      true,
+      [MENTION, second],
+    );
+
+    await poll.tick();
+
+    expect(sent.slice(5).map((s) => s.url)).toEqual([
+      'https://api.github.com/repos/acme/shop/pulls/20',
+    ]);
+    expect(recorded).toEqual([
+      { ...WITHOUT, detail: 'Merged. Nothing to review.' },
+      { ...secondWithout, detail: 'Merged. Nothing to review.' },
+    ]);
+  });
+
+  it('a pull request closed without a merge reads "Closed. Nothing to review."', async () => {
+    const { poll, recorded } = setup(
+      [...fiveOk(), json({ state: 'closed', merged: false })],
+      true,
+      [MENTION],
+    );
+
+    await poll.tick();
+
+    expect(recorded).toEqual([{ ...WITHOUT, detail: 'Closed. Nothing to review.' }]);
+  });
+
+  it('an open pull request the Scout bot approved at its head commit reads so; an approval at an older commit, by someone else or a comment keeps Review it', async () => {
+    const reviews = (list: unknown[]): Response[] => [
+      ...fiveOk(),
+      ok(),
+      json({ state: 'open', head: { sha: 'head1' } }),
+      json(list),
+    ];
+    const approvedAtHead = setup(
+      reviews([{ state: 'APPROVED', commit_id: 'head1', user: { login: 'ScoutBot[bot]' } }]),
+      true,
+      [MENTION],
+      BOT,
+    );
+    const others = setup(
+      reviews([
+        { state: 'APPROVED', commit_id: 'older', user: { login: 'scoutbot[bot]' } },
+        { state: 'APPROVED', commit_id: 'head1', user: { login: 'carol' } },
+        { state: 'COMMENTED', commit_id: 'head1', user: { login: 'scoutbot[bot]' } },
+      ]),
+      true,
+      [MENTION],
+      BOT,
+    );
+
+    await approvedAtHead.poll.tick();
+    await others.poll.tick();
+
+    expect(approvedAtHead.sent.slice(6).map((s) => s.url)).toEqual([
+      'https://api.github.com/repos/acme/shop/pulls/20',
+      'https://api.github.com/repos/acme/shop/pulls/20/reviews?per_page=100',
+    ]);
+    expect(approvedAtHead.recorded).toEqual([
+      { ...WITHOUT, detail: 'Approved by the Scout bot at this commit.' },
+    ]);
+    expect(others.recorded).toEqual([]);
+  });
+
+  it('an open pull request with no Scout bot keeps Review it and reads no reviews', async () => {
+    const { poll, sent, recorded } = setup(
+      [...fiveOk(), json({ state: 'open', head: { sha: 'head1' } })],
+      true,
+      [MENTION],
+    );
+
+    await poll.tick();
+
+    expect(sent.length).toBe(6);
+    expect(recorded).toEqual([]);
+  });
+
+  it.each([
+    ['a 502', status(502)],
+    ['a 404', status(404)],
+    ['a timeout', new DOMException('timed out', 'TimeoutError')],
+  ] as [string, Reply][])(
+    'the pull request read answers %s: the mention keeps Review it and the poll reads again in five minutes',
+    async (_name, failure) => {
+      const { poll, recorded, pending } = setup([...fiveOk(), failure], true, [MENTION]);
+
+      await poll.tick();
+
+      expect(recorded).toEqual([]);
+      expect(pending()).toEqual([POLL_MS]);
+    },
+  );
+
+  it.each([
+    ['a 502', status(502), [POLL_MS]],
+    ['a timeout', new DOMException('timed out', 'TimeoutError'), [POLL_MS]],
+    ['a 401', status(401), []],
+  ] as [string, Reply, number[]][])(
+    'the reviews read answers %s: the mention keeps Review it',
+    async (_name, failure, next) => {
+      const { poll, recorded, pending } = setup(
+        [...fiveOk(), ok(), json({ state: 'open', head: { sha: 'head1' } }), failure],
+        true,
+        [MENTION],
+        BOT,
+      );
+
+      await poll.tick();
+
+      expect(recorded).toEqual([]);
+      expect(pending()).toEqual(next);
+    },
+  );
+
+  it('a rate limit on the pull request read waits what GitHub asks and reads no other pull request', async () => {
+    const other = kept('mention:body:7', 'https://github.com/acme/shop/pull/21');
+    const { poll, sent, recorded, pending } = setup(
+      [...fiveOk(), status(429, { 'Retry-After': '900' })],
+      true,
+      [MENTION, other],
+    );
+
+    await poll.tick();
+
+    expect(sent.length).toBe(6);
+    expect(recorded).toEqual([]);
+    expect(pending()).toEqual([900_000]);
+  });
+
+  it('a pull request GitHub answers 404 for is left as it is, and the next one is still read', async () => {
+    const other = kept('mention:body:7', 'https://github.com/acme/shop/pull/21');
+    const { actions: _gone, ...otherWithout } = other;
+    const { poll, sent, recorded } = setup(
+      [...fiveOk(), status(404), json({ state: 'closed', merged: true })],
+      true,
+      [MENTION, other],
+    );
+
+    await poll.tick();
+
+    expect(sent.slice(5).map((s) => s.url)).toEqual([
+      'https://api.github.com/repos/acme/shop/pulls/20',
+      'https://api.github.com/repos/acme/shop/pulls/21',
+    ]);
+    expect(recorded).toEqual([{ ...otherWithout, detail: 'Merged. Nothing to review.' }]);
+  });
+
+  it('a 401 on the pull request read stops the poll, as on a search', async () => {
+    const { poll, recorded, pending } = setup([...fiveOk(), status(401)], true, [MENTION]);
+
+    await poll.tick();
+
+    expect(recorded).toEqual([]);
+    expect(pending()).toEqual([]);
+  });
+
+  it('reads at most 20 pull requests in one read', async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      kept(`mention:body:${i}`, `https://github.com/acme/shop/pull/${i + 1}`),
+    );
+    const { poll, sent } = setup(
+      [...fiveOk(), ...many.slice(0, 20).map(() => json({ state: 'open' }))],
+      true,
+      many,
+    );
+
+    await poll.tick();
+
+    expect(sent.length - 5).toBe(MAX_SETTLED_PULLS);
+  });
+});
 
 describe('GitHub activity poll', () => {
   it('searches review requests, mentions and the owner’s own pull requests and issues for the signed-in login, each naming is:pr or is:issue', async () => {

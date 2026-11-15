@@ -16,6 +16,7 @@ import { Router } from '@angular/router';
 import {
   jobControls,
   readIpcError,
+  reviewQuestion,
   type AppNotification,
   type JobControlAction,
   type NotificationActionId,
@@ -102,8 +103,6 @@ const IN_WINDOW: Readonly<Partial<Record<NotificationActionId, string>>> = {
   'open-approvals': '/review',
 };
 
-const PULL_REQUEST_URL =
-  /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?=$|#)/;
 const NO_PULL_REQUEST = 'Scout could not tell which pull request this entry is about.';
 
 const CLOCK_MS = 30_000;
@@ -827,15 +826,12 @@ export class NotificationBellComponent implements OnInit {
    * read; a question the chat refuses shows in the panel and leaves the entry unread.
    */
   private async reviewIt(id: string): Promise<void> {
-    const url = this.notifications().find((n) => n.id === id)?.url;
-    const pullRequest = url === undefined ? undefined : PULL_REQUEST_URL.exec(url)?.[0];
-    if (pullRequest === undefined) {
+    const question = reviewQuestion(this.notifications().find((n) => n.id === id)?.url);
+    if (question === null) {
       this.error.set(NO_PULL_REQUEST);
       return;
     }
-    const refusal = await this.injector
-      .get(LocalConversation)
-      .ask(`Review the pull request ${pullRequest}`);
+    const refusal = await this.injector.get(LocalConversation).ask(question);
     if (refusal !== null) {
       this.error.set(refusal);
       return;
