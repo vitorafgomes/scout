@@ -582,6 +582,36 @@ describe('an approval that waits for the checks', () => {
     expect(almostFull.given, '99 statuses are every status of the commit').toEqual([REQUEST]);
   });
 
+  it.each([
+    ['check runs without their list', { runs: json({ total_count: 0 }) }],
+    ['check runs without their count', { runs: json({ check_runs: [] }) }],
+    ['check runs whose list is not a list', { runs: json({ total_count: 0, check_runs: 'none' }) }],
+    [
+      'a check run that is not an object',
+      { runs: json({ total_count: 1, check_runs: ['build'] }) },
+    ],
+    [
+      'a check run without its status',
+      { runs: json({ total_count: 1, check_runs: [{ name: 'build' }] }) },
+    ],
+    ['statuses without their list', { statuses: json({ state: 'success' }) }],
+    ['a status without its state', { statuses: json({ statuses: [{ context: 'ci/status' }] }) }],
+    ['an empty object for both', { runs: json({}), statuses: json({}) }],
+    ['a pull request without its state', { pull: json({ head: { sha: HEAD } }) }],
+  ] as const)(
+    'an answer GitHub gives with 200 but not in its shape (%s) is unread: it keeps waiting and never approves',
+    async (_name, replies) => {
+      const t = setup();
+      Object.assign(t.github, replies);
+
+      t.waiting.start(REQUEST);
+      await t.tick();
+
+      expect(t.given, 'what Scout could not read never passes').toEqual([]);
+      expect(state(t)).toEqual({ state: 'waiting', reason: null });
+    },
+  );
+
   it('refuses the twenty-first', () => {
     const t = setup();
     for (let number = 1; number <= MAX_WAITING; number += 1) {

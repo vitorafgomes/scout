@@ -84,25 +84,37 @@ function listOf(value: unknown): Record<string, unknown>[] {
  * The commit's checks as the worker reads them: a check run not completed, or a status neither success, failure nor
  * error, is running; a completed run whose conclusion is not success, neutral or skipped, or a status failure or
  * error, failed; more runs than one page read, or a full page of 100 statuses, leaves checks unread, counted as
- * running.
+ * running. An answer that is not the shape GitHub documents, a list or a count missing or an item without its state,
+ * is unread too: what Scout could not read never passes.
  */
 function classify(runsBody: Record<string, unknown>, statusBody: Record<string, unknown>): Checks {
-  const runs = listOf(runsBody['check_runs']);
-  const statuses = listOf(statusBody['statuses']);
+  const rawRuns = runsBody['check_runs'];
+  const rawStatuses = statusBody['statuses'];
+  const total = runsBody['total_count'];
+  const runs = listOf(rawRuns);
+  const statuses = listOf(rawStatuses);
   const failed: string[] = [];
   let running = 0;
+  let malformed =
+    !Array.isArray(rawRuns) ||
+    !Array.isArray(rawStatuses) ||
+    typeof total !== 'number' ||
+    runs.length !== rawRuns.length ||
+    statuses.length !== rawStatuses.length;
   for (const run of runs) {
-    if (run['status'] !== 'completed') running += 1;
+    if (typeof run['status'] !== 'string') malformed = true;
+    else if (run['status'] !== 'completed') running += 1;
     else if (!PASSED.has(String(run['conclusion']))) failed.push(String(run['name']));
   }
   for (const status of statuses) {
     const state = status['state'];
-    if (state === 'failure' || state === 'error') failed.push(String(status['context']));
+    if (typeof state !== 'string') malformed = true;
+    else if (state === 'failure' || state === 'error') failed.push(String(status['context']));
     else if (state !== 'success') running += 1;
   }
   if (failed[0] !== undefined) return { kind: 'failed', name: oneLine(failed[0]) };
-  const total = runsBody['total_count'];
-  const unread = (typeof total === 'number' && total > runs.length) || statuses.length >= PER_PAGE;
+  const unread =
+    malformed || (typeof total === 'number' && total > runs.length) || statuses.length >= PER_PAGE;
   return running > 0 || unread ? { kind: 'running', running } : { kind: 'passed' };
 }
 
@@ -320,6 +332,7 @@ export class WaitingApprovals {
       this.end(key, 'closed');
       return null;
     }
+    if (pull.body['state'] !== 'open') return null;
     const head = (pull.body['head'] as Record<string, unknown> | null | undefined)?.['sha'];
     if (typeof head !== 'string' || !HEAD_SHA.test(head)) return null;
     if (!head.toLowerCase().startsWith(commit.toLowerCase())) {
