@@ -56,7 +56,9 @@ recommended.
 
 **Documentation lives in `context/`, in English, with no emojis.** Code carries a `<summary>` on a public type or
 member, and no comment that narrates inside a member or refers to a decision, a page or an issue.
-Identifiers and comments are in English.
+Identifiers and comments are in English. The forms under `.github/` (the pull request template and the issue
+templates) and the text Scout writes on GitHub may start a heading with a GitHub emoji shortcode such as
+`:clipboard:`; no file holds an emoji character.
 
 **Nothing is taken from another project,** whatever its licence. An idea from elsewhere is
 recorded in `context/` by what it does, and third-party files are listed in
