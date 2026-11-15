@@ -215,7 +215,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 </sc-if>
 <sc-if value="{{cf.full}}" hint-placeholder-val="{{true}}">
 <div style="display: flex; align-items: center; gap: 8px"><span style="padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: {{cf.sevBg}}; color: {{cf.sevFg}}">{{cf.severity}}</span><h3 style="margin: 0; font-size: 14px; font-weight: 600">{{cf.title}}</h3></div>
-<a href="#" style="align-self: flex-start; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.accent}}">{{cf.path}}</a>
+<a href="#" style="align-self: flex-start; font-size: 12px; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; color: {{t.accent}}">{{cf.path}}</a>
 <p style="margin: 0; font-size: 13px; color: {{t.fg2}}">{{cf.body}}</p>
 </sc-if>
 <sc-if value="{{cf.decidable}}" hint-placeholder-val="{{true}}">
@@ -336,7 +336,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #7aa2f7;outline-offset:2p
 <sc-for list="{{group.lines}}" as="ln" hint-placeholder-count="10">
 <li style="border-bottom: 1px solid {{t.line}}; padding: 6px 14px; display: flex; flex-direction: column; gap: 6px">
 <div style="display: flex; align-items: center; gap: 8px; min-height: 32px">
-<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.textId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px; text-align: left; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 14px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
+<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.textId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px; text-align: left; font-size: 13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 14px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 1px 7px; border-radius: 8px; font-size: 11px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
 <sc-if value="{{ln.notOpened}}" hint-placeholder-val="{{true}}">
 <span style="flex: 0 0 auto; font-size: 11px; color: {{t.muted}}">Not opened</span>
 </sc-if>

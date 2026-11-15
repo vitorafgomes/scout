@@ -194,7 +194,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <sc-for list="{{group.lines}}" as="ln" hint-placeholder-count="10">
 <li style="border-bottom: 1px solid {{t.line}}; padding: 6px 16px; display: flex; flex-direction: column; gap: 6px">
 <div style="display: flex; align-items: center; gap: 10px; min-height: 36px">
-<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.textId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 10px; text-align: left; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
+<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.textId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 10px; text-align: left; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
 <sc-if value="{{ln.notOpened}}" hint-placeholder-val="{{true}}">
 <span style="flex: 0 0 auto; font-size: 12px; color: {{t.muted}}">Not opened</span>
 </sc-if>
@@ -238,7 +238,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 <div style="display: flex; flex-direction: column; gap: 4px">
 <span style="font-weight: 600; font-size: 15px">{{a.action}}</span>
-<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.fg2}}">{{a.target}}</span></span>
+<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; color: {{t.fg2}}">{{a.target}}</span></span>
 </div>
 <p style="margin: 0; color: {{t.fg2}}; line-height: 1.45">{{a.summary}}</p>
 <sc-if value="{{a.decidable}}" hint-placeholder-val="{{true}}">
@@ -273,7 +273,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <sc-for list="{{group.lines}}" as="ln" hint-placeholder-count="10">
 <li style="border-bottom: 1px solid {{t.line}}; padding: 6px 16px; display: flex; flex-direction: column; gap: 6px">
 <div style="display: flex; align-items: center; gap: 10px; min-height: 36px">
-<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.historyTextId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 10px; text-align: left; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
+<button type="button" aria-expanded="{{ln.expanded}}" aria-controls="{{ln.historyTextId}}" onClick="{{ln.toggle}}" style="flex: 1 1 auto; min-width: 0; min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 10px; text-align: left; font-size: 14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: 0 0 16px"><path d="{{ln.chevron}}"></path></svg><span style="flex: 0 0 auto; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: {{t.surface2}}; color: {{t.fg2}}">{{ln.kind}}</span><span style="flex: 0 0 auto; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: {{t.fg2}}">{{ln.target}}</span><span style="flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ln.first}}</span></button>
 <sc-if value="{{ln.hasStatus}}" hint-placeholder-val="{{true}}">
 <span style="flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{ln.statusBg}}; color: {{ln.statusFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ln.statusIcon}}"></path></svg>{{ln.status}}</span>
 </sc-if>
@@ -300,7 +300,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 <div style="display: flex; flex-direction: column; gap: 4px">
 <span style="font-weight: 600; font-size: 15px">{{r.action}}</span>
-<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.fg2}}">{{r.target}}</span></span>
+<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; color: {{t.fg2}}">{{r.target}}</span></span>
 </div>
 </li>
 </sc-for>
@@ -323,7 +323,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 <div style="display: flex; flex-direction: column; gap: 4px">
 <span style="font-weight: 600; font-size: 15px">{{r.action}}</span>
-<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.fg2}}">{{r.target}}</span></span>
+<span style="font-size: 13px; color: {{t.muted}}">Target: <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; color: {{t.fg2}}">{{r.target}}</span></span>
 </div>
 </li>
 </sc-for>
@@ -342,7 +342,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}; white-space: nowrap; color: {{t.fg2}}">{{w.at}}</span>
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}">{{w.feature}}</span>
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}">{{w.action}}</span>
-<span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}; font-family: 'JetBrains Mono', ui-monospace, monospace; color: {{t.fg2}}; word-break: break-word">{{w.target}}</span>
+<span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; color: {{t.fg2}}; word-break: break-word">{{w.target}}</span>
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: {{w.chipBg}}; color: {{w.chipFg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{w.chipIcon}}"></path></svg>{{w.outcome}}</span></span>
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}; color: {{t.fg2}}">{{w.by}}</span>
 <span role="cell" style="padding: 10px 14px; border-bottom: 1px solid {{t.line}}; color: {{t.fg2}}; word-break: break-word">{{w.signedAs}}</span>
@@ -369,9 +369,9 @@ class Component extends DCLogic {
   }
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1f5fa8', infoBg: '#e3eefc', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', toastBg: '#18202e', toastFg: '#f5f7fb', toastAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.45)', danger: '#b3261e', codeBg: '#eef1f7' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#eef3ff', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', toastBg: '#2a3243', toastFg: '#f5f7fb', toastAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.4)', danger: '#b3261e', codeBg: '#eef1f7' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8ab8f0', infoBg: '#17263d', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', toastBg: '#e6e9f0', toastFg: '#131c2d', toastAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', danger: '#c5372c', codeBg: '#0b111c' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#1e2e45', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', toastBg: '#e6e9f0', toastFg: '#18202e', toastAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', danger: '#c5372c', codeBg: '#0b111c' };
   }
   shellVals(t, current) {
     const navDefs = [
