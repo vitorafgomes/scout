@@ -1,3 +1,5 @@
+## [2026-11-15] chore | A pull request of documents only skips the build and the tests
+CI's build job asks `tools/checks/docs-only.sh` whether a pull request changes documents only and then runs the self-tests and the checks on documents alone; CodeQL does not start on such a pull request. Pages: conventions/tooling.
 ## [2026-11-15] feat | Approve when the checks pass
 On a review card whose checks still run the owner approves once; the desktop keeps the approval, reads the checks every minute and gives it when they pass, and a failed check, a new commit, a closed pull request, two hours or Cancel end it. Pages: ADR 0059 (new), desktop-github verdict and public contract, desktop-channels, history/desktop-ui, the desktop-github rules; line citations re-pointed.
 ## [2026-11-15] feat | An approval needs every check of the commit passed
