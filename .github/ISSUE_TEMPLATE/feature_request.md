@@ -6,19 +6,87 @@ labels: enhancement
 assignees: ''
 ---
 
-## Problem
+## :clipboard: Checklist
 
-<!-- What problem would this feature solve? Who is affected? -->
+<!-- Tick what is true before opening the issue. -->
+- [ ] I searched the open issues and found no duplicate
+- [ ] Each request is one behaviour that can be checked
+- [ ] Each acceptance criterion names its request
 
-## Proposed solution
+## :gear: What kind of change is this?
 
-<!-- Describe what you would like to happen. -->
+<!-- Tick the main kind. -->
+- [ ] Feature
+- [ ] Improvement of something that exists
+- [ ] Documentation
+- [ ] Build or tooling
+- [ ] Other (describe)
 
-## Alternatives considered
+## :sparkles: What is needed, and who needs it
 
-<!-- Other approaches you thought about, and why you discarded them. -->
+<!-- One or two sentences. -->
 
-## Write check
+
+## :question: Why
+
+<!-- The problem today, then one fact per line. -->
+
+
+**Evidence:**
+
+-
+
+## :dart: What is asked
+
+<!-- One behaviour per line, numbered R1, R2 and so on. The pull request and the review cite these numbers. -->
+- **R1**
+
+## :white_check_mark: Acceptance criteria
+
+<!-- How anyone can check each request. -->
+- [ ] R1:
+
+## :no_entry_sign: Out of scope
+
+<!-- What this issue does not ask for. -->
+-
+
+## :round_pushpin: Where it probably lives
+
+<!-- A guess is welcome. -->
+- Files:
+- Module:
+- Documentation that describes it today:
+
+## :test_tube: Tests expected
+
+<!-- What a test must prove, and what a person checks by hand. -->
+**Automated:**
+
+-
+
+**By hand:**
+
+-
+
+## :books: Documentation expected
+
+<!-- "None" is an answer. -->
+- Pages to change:
+- Decision record:
+
+## :warning: Constraints and risk
+
+<!-- "Not touched" and "None" are answers. -->
+| Item | Answer |
+|---|---|
+| Public contract | |
+| Data | |
+| Settings | |
+| Security | |
+| Deadline | |
+
+### Write check
 
 Every write Scout makes is declared by its feature, granted by the owner in the
 desktop app, approved one action at a time when it cannot be undone, and
@@ -28,6 +96,7 @@ its own folders.
 - [ ] I listed every write this feature needs (none, a reversible write, or an irreversible action) and what it changes.
 - [ ] The feature does not need to write or edit code, or to write on the host outside Scout's own folders.
 
-## Additional context
+## :link: References
 
-<!-- Screenshots, links, references. -->
+<!-- Issues, pull requests and pages, each with why it matters. -->
+-
