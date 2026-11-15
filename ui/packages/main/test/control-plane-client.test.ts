@@ -14,6 +14,7 @@ import {
   ControlPlaneUnavailableError,
   ControlPlaneWriteConfirmationError,
   type FeatureDto,
+  type GitHubVerdictProgress,
   type OperatorProjectDto,
   type PendingActionDto,
   type WriteLogEntryDto,
@@ -380,6 +381,16 @@ const controlWriteWire = {
 
 const unknownControlWriteWire = { ...controlWriteWire, actionId: 'c2', controlStatus: 'halfway' };
 
+const verdictWires: Record<string, Record<string, unknown>> = {
+  'act-given': {
+    state: 'given',
+    url: 'https://github.com/acme/shop/pull/5#pullrequestreview-1',
+    signedAs: 'scout[bot]',
+    testsLine: 'notPosted',
+  },
+  'act-running': { state: 'running' },
+};
+
 async function startFeaturesServer(
   socketPath: string,
   calls: FeaturesCall[],
@@ -431,6 +442,17 @@ async function startFeaturesServer(
     ListWrites: handler('ListWrites', () => ({
       entries: [writeWire, unapprovedWriteWire, controlWriteWire, unknownControlWriteWire],
     })),
+    GetVerdict: (
+      call: grpc.ServerUnaryCall<{ actionId: string }, unknown>,
+      callback: grpc.sendUnaryData<unknown>,
+    ) => {
+      calls.push({
+        method: 'GetVerdict',
+        request: call.request,
+        token: call.metadata.get('x-scout-token'),
+      });
+      callback(null, verdictWires[call.request.actionId] ?? {});
+    },
     ControlJob: (
       call: grpc.ServerUnaryCall<Record<string, unknown>, unknown>,
       callback: grpc.sendUnaryData<unknown>,
@@ -709,6 +731,47 @@ describe('createControlPlaneClient features', () => {
       { method: 'ApproveAction', request: { id: 'act-1' } },
       { method: 'RejectAction', request: { id: 'act-1', reason: 'Wrong thumbnail' } },
       { method: 'ListWrites', request: { limit: 50 } },
+    ]);
+  });
+
+  it('getVerdict maps who signed a given verdict and its tests line, and an empty signed_as and tests_line as null', async () => {
+    if (process.platform === 'win32') {
+      expect(dialError()).toBeInstanceOf(ControlPlaneUnavailableError);
+      return;
+    }
+
+    const socketPath = tempSocketPath();
+    const calls: FeaturesCall[] = [];
+    server = await startFeaturesServer(socketPath, calls);
+    client = createControlPlaneClient({ socketPath, token: TOKEN, protoDir: PROTO_DIR });
+
+    const given = await client.getVerdict('act-given');
+    const running = await client.getVerdict('act-running');
+
+    expect(
+      [given, running],
+      'main maps signed_as and tests_line from GetVerdict, an empty one as null',
+    ).toEqual<GitHubVerdictProgress[]>([
+      {
+        actionId: 'act-given',
+        state: 'given',
+        url: 'https://github.com/acme/shop/pull/5#pullrequestreview-1',
+        reason: null,
+        signedAs: 'scout[bot]',
+        testsLine: 'notPosted',
+      },
+      {
+        actionId: 'act-running',
+        state: 'running',
+        url: null,
+        reason: null,
+        signedAs: null,
+        testsLine: null,
+      },
+    ]);
+    expect(calls.map(({ method, request }) => ({ method, request }))).toEqual([
+      { method: 'GetVerdict', request: { actionId: 'act-given' } },
+      { method: 'GetVerdict', request: { actionId: 'act-running' } },
     ]);
   });
 

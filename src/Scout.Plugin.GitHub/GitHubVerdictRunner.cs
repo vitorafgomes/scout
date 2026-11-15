@@ -19,7 +19,8 @@ public sealed record GivenVerdict(string Owner, string Repo, int Number, string 
 /// Runs a verdict the owner approved, from the payload queued with the action: the review card's shape
 /// (<c>comments</c> as an array, a <c>testsLine</c>) or the arguments of <c>give_pull_request_verdict</c>
 /// (<c>comments_json</c> as text). The checks and the post are the function's: a refusal before anything is sent, or a
-/// failure, is a <see cref="WriteFailedException"/>. The tests line is posted on its own, after the verdict was recorded.
+/// failure, is a <see cref="WriteFailedException"/>. The tests line is posted on its own, after the verdict was given and
+/// before it is recorded.
 /// </summary>
 public sealed class GitHubVerdictRunner
 {
@@ -58,13 +59,16 @@ public sealed class GitHubVerdictRunner
     /// </summary>
     /// <param name="verdict">The verdict GitHub took.</param>
     /// <param name="ct">Cancels the request.</param>
-    /// <returns>A task that completes when the line is posted, or at once when there is none.</returns>
-    public async Task PostTestsLineAsync(GivenVerdict verdict, CancellationToken ct)
+    /// <returns>
+    /// True when the line is on the pull request's conversation, posted now or found there already; false when the verdict
+    /// carried none.
+    /// </returns>
+    public async Task<bool> PostTestsLineAsync(GivenVerdict verdict, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(verdict);
         if (string.IsNullOrWhiteSpace(verdict.TestsLine))
         {
-            return;
+            return false;
         }
 
         if (verdict.AlreadyGiven)
@@ -73,11 +77,12 @@ public sealed class GitHubVerdictRunner
             if (latest.Any(c => (verdict.Signer is null || string.Equals(c.AuthorLogin, verdict.Signer, StringComparison.OrdinalIgnoreCase))
                 && c.Body.Contains(verdict.TestsLine, StringComparison.Ordinal)))
             {
-                return;
+                return true;
             }
         }
 
         await _writes.CommentOnIssueAsync(verdict.Owner, verdict.Repo, verdict.Number, verdict.TestsLine, GitHubWriteKind.Verdict, ct).ConfigureAwait(false);
+        return true;
     }
 
     private static Request? Read(string? payload)

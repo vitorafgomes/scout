@@ -1,9 +1,9 @@
 ---
 title: "Host.ControlPlane - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-09
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
+changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the control-plane host and when."
@@ -26,6 +26,12 @@ reliability: high
 # Host.ControlPlane - history
 
 > Dated changes to [[pages/services/host-control-plane]]; the service page states how it works now.
+
+## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
+
+- **Asked for:** the bell shows a given verdict's detail, "Signed as <account> · the tests line was posted as a comment", "... · the tests line was not posted", or just "Signed as <account>" when the verdict carried no tests line. The owner chose to keep the tests line's outcome in the verdict's own record, one approval and one log row ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14), over a row of its own.
+- **What changed:** `FeaturesGrpcService.GetVerdict` maps the verdict's `SignedAs` and `TestsLine` onto the two new fields.
+- **Tests:** `VerdictGrpcTests.GetVerdict_Answers_Who_Signed_A_Given_Verdict_And_Its_Tests_Line_And_Empty_Before_It_Is_Given`.
 
 ## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
 

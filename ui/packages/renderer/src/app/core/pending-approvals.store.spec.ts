@@ -66,6 +66,8 @@ describe('Approvals wording', () => {
     for (const [outcome, words] of [
       ['succeeded', 'Done'],
       ['succeeded: posted as review 41', 'Done: posted as review 41'],
+      ['succeeded, tests line posted as a comment', 'Done, tests line posted as a comment'],
+      ['succeeded, tests line not posted', 'Done, tests line not posted'],
       ['rejected', 'Rejected'],
       ['rejected: the title is not final', 'Rejected: the title is not final'],
       ['failed: the head commit changed', 'Failed: the head commit changed'],
@@ -78,7 +80,10 @@ describe('Approvals wording', () => {
       ],
     ] as const) {
       it(`"${outcome}" reads "${words}"`, () => {
-        expect(outcomeInWords(outcome)).toBe(words);
+        expect(
+          outcomeInWords(outcome),
+          `the write log reads "${words}" for the outcome "${outcome}"`,
+        ).toBe(words);
       });
     }
   });

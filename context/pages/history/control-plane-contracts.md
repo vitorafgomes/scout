@@ -1,14 +1,20 @@
 ---
 title: "Control plane contracts"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
+changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
+
+- **Asked for:** the bell shows a given verdict's detail, "Signed as <account> · the tests line was posted as a comment", "... · the tests line was not posted", or just "Signed as <account>" when the verdict carried no tests line. The owner chose to keep the tests line's outcome in the verdict's own record, one approval and one log row ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14), over a row of its own.
+- **What changed:** `GetVerdictResponse` gains `signed_as` (field 8) and `tests_line` (field 9), plain strings, empty until the verdict is given.
+- **Tests:** `VerdictGrpcTests.GetVerdict_Answers_Who_Signed_A_Given_Verdict_And_Its_Tests_Line_And_Empty_Before_It_Is_Given`.
 
 ## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
 

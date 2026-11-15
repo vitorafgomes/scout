@@ -1,14 +1,20 @@
 ---
 title: "Host console"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
 updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the package's assembly, save and confirmation times and the thumbnail description."
+changes: "v1.2 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: knowledge
 status: active
 description: "Version notes that were kept in page headers."
 source: ["context/pages/"]
 ---
+
+## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
+
+- **Asked for:** the bell shows a given verdict's detail, "Signed as <account> · the tests line was posted as a comment", "... · the tests line was not posted", or just "Signed as <account>" when the verdict carried no tests line. The owner chose to keep the tests line's outcome in the verdict's own record, one approval and one log row ([[pages/decisions/0043-the-verdict-on-a-pull-request]], amendment of 2026-11-14), over a row of its own.
+- **What changed:** `GitHubActionExecutor` gives the verdict, then posts its tests line, then records the action once, with the outcome `succeeded, tests line posted as a comment`, `succeeded, tests line not posted` (the post failed: logged as before, the verdict still given) or `succeeded` (no tests line). Before, it recorded `succeeded` and only then posted the line. A record the control plane refuses now comes after the line was posted. A worker stopping during the line still records the verdict GitHub took, as `succeeded, tests line not posted`, within `RecordGrace` (10 s), proven by `A_Worker_Stopping_While_The_Tests_Line_Posts_Still_Records_The_Verdict_GitHub_Took_As_Given`; the record of a given verdict always runs on that token of its own, so a stop during the record never drops it (`A_Worker_Stopping_While_A_Given_Verdict_Is_Recorded_Leaves_The_Record_Running_On_A_Token_Of_Its_Own`).
+- **Tests:** `GitHubActionExecutorTests` (`An_Approved_Verdict_Is_Sent_Pinned_To_The_Commit_Reviewed_Its_Tests_Line_Posted_Then_Recorded_Once_As_Posted_As_A_Comment`, `A_Tests_Line_GitHub_Refuses_Never_Fails_The_Verdict_Given_And_Records_It_As_Not_Posted` for a 403 and a 502, `A_Tests_Line_Post_That_Times_Out_Never_Fails_The_Verdict_Given_And_Records_It_As_Not_Posted`, `A_Verdict_The_Model_Asked_For_In_Chat_Runs_From_The_Function_s_Arguments_And_Without_A_Tests_Line_Records_Succeeded`, `A_Verdict_Found_Already_Given_Posts_Its_Tests_Line_Only_When_The_Signer_Has_Not_Posted_It_And_Either_Way_Records_It_As_Posted`, `A_Record_The_Control_Plane_Refuses_After_A_Revoke_Comes_After_The_Verdict_And_Its_Tests_Line_And_Is_Logged`), `GitHubActionExecutorSecretsTests`.
 
 ## 2026-11-14 - Assembly: when the package was assembled, saved and confirmed, and what its thumbnail shows
 

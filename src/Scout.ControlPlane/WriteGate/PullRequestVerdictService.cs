@@ -78,7 +78,13 @@ public sealed record PullRequestVerdictRequest(
 /// <param name="Number">The pull request number; 0 when the payload does not say.</param>
 /// <param name="Commit">The commit reviewed; empty when the payload does not say.</param>
 /// <param name="Verdict"><c>approve</c>, <c>request_changes</c> or <c>comment</c>; empty when the payload does not say.</param>
-public sealed record VerdictState(string State, string Url, string Reason, string Repository, int Number, string Commit, string Verdict);
+/// <param name="SignedAs">The login that signed the verdict once given, as the write log keeps it; empty otherwise or when unknown.</param>
+/// <param name="TestsLine">
+/// Once given, <c>posted</c> when its tests line is on the pull request's conversation, <c>notPosted</c> when posting it
+/// failed, <c>none</c> when the verdict carried none; empty otherwise.
+/// </param>
+public sealed record VerdictState(
+    string State, string Url, string Reason, string Repository, int Number, string Commit, string Verdict, string SignedAs = "", string TestsLine = "");
 
 /// <summary>Thrown when a write the owner asked for in the desktop cannot be queued because the feature holds no grant.</summary>
 /// <remarks>Build the exception with the sentence the desktop shows.</remarks>
@@ -116,6 +122,10 @@ public sealed partial class PullRequestVerdictService(IFeatureStateStore states,
         "GitHub's write permission changed after this verdict was given, so it will not be sent; give it again.";
 
     private const string NotRecorded = "The verdict ended without a result; check the pull request.";
+
+    private const string TestsLinePosted = "succeeded, tests line posted as a comment";
+
+    private const string TestsLineNotPosted = "succeeded, tests line not posted";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -207,7 +217,6 @@ public sealed partial class PullRequestVerdictService(IFeatureStateStore states,
 
     private async Task<VerdictState> StateOfAsync(PendingAction action, CancellationToken ct)
     {
-
         var (repository, number, commit, verdict) = Key(action.Payload);
         var grantedAt = (await _states.GetAsync(FeatureCatalog.GitHubId, ct).ConfigureAwait(false)).GrantedAt;
         var (state, url, reason) = action.Status switch
@@ -219,7 +228,19 @@ public sealed partial class PullRequestVerdictService(IFeatureStateStore states,
             _ when action.Outcome?.StartsWith("succeeded", StringComparison.Ordinal) == true => ("given", action.Result ?? string.Empty, string.Empty),
             _ => ("failed", string.Empty, action.Result ?? NotRecorded),
         };
-        return new VerdictState(state, url, reason, repository, number, commit, verdict);
+        if (state != "given")
+        {
+            return new VerdictState(state, url, reason, repository, number, commit, verdict);
+        }
+
+        var outcome = action.Outcome ?? string.Empty;
+        var testsLine = outcome.StartsWith(TestsLinePosted, StringComparison.Ordinal) ? "posted"
+            : outcome.StartsWith(TestsLineNotPosted, StringComparison.Ordinal) ? "notPosted"
+            : "none";
+        var signedAs = (await _writes.ListSinceAsync(action.RequestedAt, ct).ConfigureAwait(false))
+            .FirstOrDefault(e => WriteGateService.IsRecordOf(e, action))
+            ?.SignedAs;
+        return new VerdictState(state, url, reason, repository, number, commit, verdict, signedAs ?? string.Empty, testsLine);
     }
 
     /// <summary>

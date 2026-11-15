@@ -212,14 +212,17 @@ function makeBridge() {
       state: 'queued',
       url: null,
       reason: null,
+      signedAs: null,
+      testsLine: null,
     })),
     onGitHubVerdict: vi.fn((listener: (status: GitHubVerdictStatus) => void) => {
       verdictListeners.push(listener);
       return () => undefined;
     }),
-    verdict: (status: GitHubVerdictProgress) =>
-      verdictListeners.forEach((l) => l({ ...key, ...status })),
-    pushStatus: (status: GitHubVerdictStatus) => verdictListeners.forEach((l) => l(status)),
+    verdict: (status: Omit<GitHubVerdictProgress, 'signedAs' | 'testsLine'>) =>
+      verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...key, ...status })),
+    pushStatus: (status: Omit<GitHubVerdictStatus, 'signedAs' | 'testsLine'>) =>
+      verdictListeners.forEach((l) => l({ signedAs: null, testsLine: null, ...status })),
     appOpenExternal: vi.fn(async (_req: { url: string }): Promise<void> => undefined),
   };
 }
@@ -1579,6 +1582,8 @@ describe('review findings cards', () => {
       state: 'running',
       url: null,
       reason: null,
+      signedAs: null,
+      testsLine: null,
     });
     const fixture = await render(bridge, reviewed);
     const inProgress = {

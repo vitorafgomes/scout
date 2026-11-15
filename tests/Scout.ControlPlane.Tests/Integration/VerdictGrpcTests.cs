@@ -67,6 +67,31 @@ public sealed class VerdictGrpcTests
         (action.Action, action.Target, action.Summary).ShouldBe(("Pull request verdicts", "octocat/hello#42", "Approve octocat/hello#42"));
     }
 
+    [Theory]
+    [InlineData("succeeded, tests line posted as a comment", "posted")]
+    [InlineData("succeeded, tests line not posted", "notPosted")]
+    [InlineData("succeeded", "none")]
+    public async Task GetVerdict_Answers_Who_Signed_A_Given_Verdict_And_Its_Tests_Line_And_Empty_Before_It_Is_Given(
+        string outcome, string testsLine)
+    {
+        await using var host = await ControlPlaneTestHost.StartAsync();
+        using var desktopChannel = host.CreateChannel();
+        using var workerChannel = host.CreateWorkerChannel();
+        var features = new GrpcFeatures.FeaturesClient(desktopChannel);
+        var gate = new WorkerGate.WorkerGateClient(workerChannel);
+        await GrantAsync(features);
+        var given = await features.GiveVerdictAsync(Approve());
+        var queued = await features.GetVerdictAsync(new GetVerdictRequest { ActionId = given.ActionId });
+        await gate.NextApprovedActionAsync(new NextApprovedActionRequest { FeatureId = "github" });
+        await gate.RecordWriteAsync(new RecordWriteRequest(Record(given.ActionId, outcome, ReviewUrl)) { SignedAs = "scout-bot" });
+        var done = await features.GetVerdictAsync(new GetVerdictRequest { ActionId = given.ActionId });
+
+        (queued.SignedAs, queued.TestsLine)
+            .ShouldBe(("", ""), "a verdict not given yet answers signed_as and tests_line empty");
+        (done.State, done.SignedAs, done.TestsLine)
+            .ShouldBe(("given", "scout-bot", testsLine), "GetVerdict answers who signed the given verdict and its tests line");
+    }
+
     [Fact]
     public async Task A_Verdict_That_Failed_Reads_Failed_With_The_Reason()
     {

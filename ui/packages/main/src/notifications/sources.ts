@@ -1,5 +1,5 @@
 import type { GitHubVerdictStatus, NoticeRecordRequest, NotificationKind } from '@scout/shared';
-import { ISSUES_TARGET, issueLinks, type LocalTurn } from '@scout/shared';
+import { ISSUES_TARGET, issueLinks, signerInWords, type LocalTurn } from '@scout/shared';
 import type { NotificationInput } from './notification-store.js';
 
 const MAX_TITLE_CHARS = 200;
@@ -198,7 +198,25 @@ const VERDICT_LABELS: Readonly<Record<GitHubVerdictStatus['verdict'], readonly [
     comment: ['Comment', 'Commented'],
   };
 
-/** The entry of one verdict action, updated in place from queued to given, the verdict in its title, or failed. */
+const TESTS_LINE_WORDS: Readonly<Record<string, string>> = {
+  posted: 'the tests line was posted as a comment',
+  notPosted: 'the tests line was not posted',
+};
+
+/** Who signed a given verdict and what became of its tests line, each part left out when not known or not asked for. */
+function givenDetail(status: GitHubVerdictStatus): string {
+  const tests = TESTS_LINE_WORDS[status.testsLine ?? ''];
+  if (status.signedAs === null) {
+    return tests === undefined ? '' : tests.charAt(0).toUpperCase() + tests.slice(1);
+  }
+  const signer = `Signed as ${signerInWords(status.signedAs)}`;
+  return tests === undefined ? signer : `${signer} · ${tests}`;
+}
+
+/**
+ * The entry of one verdict action, updated in place from queued to given, the verdict in its title and who signed it
+ * with its tests line in its detail, or failed.
+ */
 export function verdictNotification(status: GitHubVerdictStatus): NotificationInput {
   const pr = `${status.repository}#${status.number}`;
   const [label, given] = VERDICT_LABELS[status.verdict];
@@ -209,7 +227,7 @@ export function verdictNotification(status: GitHubVerdictStatus): NotificationIn
         id,
         kind: 'done',
         title: `Verdict given: ${given} ${pr}`,
-        detail: '',
+        detail: givenDetail(status),
         ...(status.url === null ? {} : { url: status.url }),
         source: 'verdict',
       };

@@ -861,6 +861,12 @@ const VERDICT_STATES: readonly GitHubVerdictProgress['state'][] = [
   'failed',
 ];
 
+const TESTS_LINES: readonly NonNullable<GitHubVerdictProgress['testsLine']>[] = [
+  'posted',
+  'notPosted',
+  'none',
+];
+
 export function createControlPlaneClient(options: ControlPlaneClientOptions): ControlPlaneClient {
   const { socketPath, token, protoDir, deadlineMs = 10_000, platform = process.platform } = options;
 
@@ -1042,11 +1048,14 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
       return { actionId: response.actionId };
     },
     async getVerdict(actionId): Promise<GitHubVerdictProgress> {
-      const response = await call<{ state: string; url: string; reason: string }>(
-        features,
-        'GetVerdict',
-        { actionId },
-      );
+      const response = await call<{
+        state: string;
+        url: string;
+        reason: string;
+        signedAs: string;
+        testsLine: string;
+      }>(features, 'GetVerdict', { actionId });
+      const testsLine = response.testsLine as NonNullable<GitHubVerdictProgress['testsLine']>;
       return {
         actionId,
         state: VERDICT_STATES.includes(response.state as GitHubVerdictProgress['state'])
@@ -1054,6 +1063,8 @@ export function createControlPlaneClient(options: ControlPlaneClientOptions): Co
           : 'failed',
         url: response.url.length > 0 ? response.url : null,
         reason: response.reason.length > 0 ? response.reason : null,
+        signedAs: response.signedAs.length > 0 ? response.signedAs : null,
+        testsLine: TESTS_LINES.includes(testsLine) ? testsLine : null,
       };
     },
     async listWrites(limit): Promise<WriteLogEntryDto[]> {
