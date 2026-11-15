@@ -332,7 +332,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### No timeout test for a comment or a reply (2026-11-10)
 
-- **Gap:** a request that times out after it left is tested for an issue, a review and a verdict (`tests/Scout.Host.Console.Tests/GitHubActionExecutorTests.cs:230`, `:187`); `comment_on_pull_request`, `comment_on_issue` and `reply_to_review_comment` have a 502 test only, and `comment_on_issue` shares the pull request comment's route.
+- **Gap:** a request that times out after it left is tested for an issue, a review and a verdict (`tests/Scout.Host.Console.Tests/GitHubActionExecutorTests.cs:232`, `:189`); `comment_on_pull_request`, `comment_on_issue` and `reply_to_review_comment` have a 502 test only, and `comment_on_issue` shares the pull request comment's route.
 - **Unblocks with:** the timeout rows for the three, asserting the "may already be there" sentence.
 
 ### A GitHub action claimed and never handed to the worker is also recorded as not confirmed (2026-11-10)
@@ -347,7 +347,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A queued GitHub write is checked only after the owner approved it (2026-11-10)
 
-- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:393`, `:416`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
+- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:459`, `:482`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
 - **Unblocks with:** running the checks that need no network when the call is queued, and answering the model the refusal instead of queuing; the checks that read GitHub (the diff a review comment anchors to) stay at the send.
 
 ### A rejected action keeps its whole payload (2026-11-10)
@@ -367,7 +367,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The five GitHub write functions still carry a body that sends (2026-11-10)
 
-- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:499` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
+- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:565` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
 - **Unblocks with:** bodies that answer the queued sentence and send nothing, the senders staying internal to the runner.
 
 ### What is left of the review turn nothing builds (2026-11-10)

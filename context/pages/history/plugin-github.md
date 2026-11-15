@@ -1,9 +1,9 @@
 ---
 title: "Plugin.GitHub - history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-10
-updated: 2026-11-14
-changes: "v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-15
+changes: "v1.2 (2026-11-15): an approval needs every check of the commit passed. v1.1 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in the GitHub plugin and when."
@@ -18,6 +18,12 @@ reliability: high
 # Plugin.GitHub - history
 
 > Dated changes to [[pages/services/plugin-github]]; the service page states how it works now.
+
+## 2026-11-15 - An approval needs every check of the commit passed
+
+- **Asked for:** the owner's rule that the bot approve a pull request only when the pipeline has every item green, after a review card offered Approve while three checks were still running ([[pages/decisions/0058-an-approval-needs-every-check-passed]]).
+- **What changed:** before an approval `GiveVerdictAsync` reads the check runs and commit statuses at the head commit and refuses while one is queued, in progress or pending, completed with anything but success, neutral or skipped, or not read because the commit has more checks than one page; the sentence names how many and up to three of each. A commit with no check may be approved; a request for changes reads no check; a failed read sends nothing.
+- **Tests:** `Scout.Plugin.GitHub.Tests` 510 to 519, eight on the rule, its failing reads, a full page of statuses and a check name kept to one bounded line; `Scout.Host.Console.Tests` 355 to 356, an approval approved while a check runs is recorded as refused and nothing is posted; the fakes of the approving tests answer the two check reads.
 
 ## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
 

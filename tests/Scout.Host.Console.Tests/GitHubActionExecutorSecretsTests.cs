@@ -45,6 +45,8 @@ public sealed class GitHubActionExecutorSecretsTests : IDisposable
         _github.On("GET", "repos/octocat/hello/pulls/42", HttpStatusCode.OK, $$$"""{"number":42,"user":{"login":"alice"},"head":{"sha":"{{{Sha}}}"}}""");
         _github.On("GET", "repos/octocat/hello/pulls/42/files?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK, "[]");
+        _github.On("GET", $"repos/octocat/hello/commits/{Sha}/check-runs?per_page=100", HttpStatusCode.OK, "{\"total_count\":0,\"check_runs\":[]}");
+        _github.On("GET", $"repos/octocat/hello/commits/{Sha}/status?per_page=100", HttpStatusCode.OK, "{\"statuses\":[]}");
         _github.On("POST", "repos/octocat/hello/pulls/42/reviews", HttpStatusCode.OK, """{"id":88,"html_url":"https://github.com/octocat/hello/pull/42#pullrequestreview-88"}""");
         _github.On("POST", "repos/octocat/hello/issues/42/comments", HttpStatusCode.Forbidden, "");
     }

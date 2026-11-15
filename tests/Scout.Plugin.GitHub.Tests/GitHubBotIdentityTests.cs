@@ -34,6 +34,8 @@ public sealed class GitHubBotIdentityTests : IDisposable
             ("GET", "/user") => """{"login":"octocat"}""",
             ("GET", "/repos/octocat/hello/pulls/42/files?per_page=100&page=1") => "[]",
             ("GET", "/repos/octocat/hello/pulls/42/reviews?per_page=100&page=1") => "[]",
+            ("GET", _) when path.EndsWith("/check-runs?per_page=100", StringComparison.Ordinal) => "{\"total_count\":0,\"check_runs\":[]}",
+            ("GET", _) when path.EndsWith("/status?per_page=100", StringComparison.Ordinal) => "{\"statuses\":[]}",
             ("POST", "/repos/octocat/hello/pulls/42/reviews") or ("POST", "/repos/octocat/other/pulls/7/reviews") => """{"id":1,"html_url":"https://github.com/r/1"}""",
             ("POST", _) when path.EndsWith("/comments", StringComparison.Ordinal) => """{"id":2,"html_url":"https://github.com/c/2"}""",
             ("POST", _) when path.EndsWith("/issues", StringComparison.Ordinal) => """{"number":3,"html_url":"https://github.com/i/3"}""",
