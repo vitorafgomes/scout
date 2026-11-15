@@ -179,7 +179,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <button onClick="{{saveToken}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"></path></svg>Check again</button>
 </div>
 </sc-if>
-<sc-if value="{{tc.portalFailed}}" hint-placeholder-val="{{false}}"><span role="alert" style="font-size: 12px; color: {{t.err}}">The Developer Portal did not open. Open this address in any browser, then come back and check again: <span style="font-family: monospace; overflow-wrap: anywhere">https://discord.com/developers/applications/111222333/bot</span></span></sc-if>
+<sc-if value="{{tc.portalFailed}}" hint-placeholder-val="{{false}}"><span role="alert" style="font-size: 12px; color: {{t.err}}">The Developer Portal did not open. Open this address in any browser, then come back and check again: <span style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere">https://discord.com/developers/applications/111222333/bot</span></span></sc-if>
 </div>
 </div>
 </sc-for>
@@ -252,7 +252,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <sc-if value="{{launchFailed}}" hint-placeholder-val="{{false}}">
 <details open style="border-top: 1px solid {{t.line}}; padding-top: 12px">
 <summary style="cursor: pointer; color: {{t.fg2}}; font-size: 13px">Show details</summary>
-<sc-if value="{{launchRefused}}" hint-placeholder-val="{{false}}"><p style="margin: 10px 0 0; font-family: monospace; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; overflow-wrap: anywhere">Error invoking remote method 'scout:worker.start': Error: Error: worker/start-failed: the worker crashed before it was running</p></sc-if>
+<sc-if value="{{launchRefused}}" hint-placeholder-val="{{false}}"><p style="margin: 10px 0 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; overflow-wrap: anywhere">Error invoking remote method 'scout:worker.start': Error: Error: worker/start-failed: the worker crashed before it was running</p></sc-if>
 <pre style="margin: 10px 0 0; padding: 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}; font-size: 12px; line-height: 1.6; color: {{t.fg2}}; white-space: pre-wrap">{{launchLog}}</pre>
 </details>
 <div style="display: flex; flex-wrap: wrap; gap: 10px">
@@ -376,12 +376,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 
 <sc-if value="{{resetOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50">
-<div role="alertdialog" aria-modal="true" aria-labelledby="wz-reset-title" aria-describedby="wz-reset-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 440px; max-height: calc(100% - 32px); overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<div role="alertdialog" aria-modal="true" aria-labelledby="wz-reset-title" aria-describedby="wz-reset-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 440px; max-height: calc(100% - 32px); overflow-y: auto; box-sizing: border-box; background: {{t.surface}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}">
 <h2 id="wz-reset-title" style="margin: 0; font-size: 17px; font-weight: 600">Start over with another bot?</h2>
 <p id="wz-reset-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">The bot token is removed from the keyring and setup starts again from the first step. Scout stops unless Slack or this computer still use it. The bot stays in your Discord server until you remove it there.</p>
 <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
-<button autofocus onClick="{{closeReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
-<button onClick="{{confirmReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Start over</button>
+<button autofocus onClick="{{closeReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{confirmReset}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"></path></svg>Start over</button>
 </div>
 </div>
 </div>
@@ -410,9 +410,9 @@ class Component extends DCLogic {
   }
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.45)' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.4)' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(5,8,14,0.65)' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(0,0,0,0.6)' };
   }
   renderVals() {
     const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;

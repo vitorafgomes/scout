@@ -255,7 +255,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 <sc-if value="{{startOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 200px 16px 16px; z-index: 50">
-<div role="dialog" aria-modal="true" aria-labelledby="sx-title" aria-describedby="sx-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 500px; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<div role="dialog" aria-modal="true" aria-labelledby="sx-title" aria-describedby="sx-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 500px; box-sizing: border-box; background: {{t.surface}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}">
 <h2 id="sx-title" style="margin: 0; font-size: 17px; font-weight: 600">Start the title test?</h2>
 <p id="sx-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Starting it approves these changes on YouTube; each runs when its variant goes live.</p>
 <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45">
@@ -265,8 +265,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 </ol>
 <sc-if value="{{startRefused}}" hint-placeholder-val="{{false}}"><p role="alert" style="margin: 0; color: {{t.err}}">The video is not public yet.</p></sc-if>
 <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
-<button autofocus onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
-<button onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>Start experiment</button>
+<button autofocus onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>Start experiment</button>
 </div>
 </div>
 </div>
@@ -274,15 +274,15 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 <sc-if value="{{adoptOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 200px 16px 16px; z-index: 50">
-<div role="dialog" aria-modal="true" aria-labelledby="ad-title" aria-describedby="ad-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 480px; box-sizing: border-box; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 16px 40px {{t.shadow}}">
+<div role="dialog" aria-modal="true" aria-labelledby="ad-title" aria-describedby="ad-body" onKeyDown="{{dialogKey}}" style="width: 100%; max-width: 480px; box-sizing: border-box; background: {{t.surface}}; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}">
 <h2 id="ad-title" style="margin: 0; font-size: 17px; font-weight: 600">Adopt the winner?</h2>
 <p id="ad-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Scout changes the title on YouTube for good to "Docker volumes explained in 8 minutes".</p>
 <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.45">
 <li>Set the title to "Docker volumes explained in 8 minutes" <span style="color: {{t.muted}}; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 12px">videos.update</span></li>
 </ol>
 <div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
-<button autofocus onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}">Cancel</button>
-<button onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Adopt the winner</button>
+<button autofocus onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; font-weight: 500">Cancel</button>
+<button onClick="{{closeDialog}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.accentStrong}}; color: #ffffff; display: flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>Adopt the winner</button>
 </div>
 </div>
 </div>
@@ -295,9 +295,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 class Component extends DCLogic {
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#e6edfb', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.45)', media: '#d9dfeb', mediaFg: '#3f4a61' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#e6edfb', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', danger: '#b3261e', scrim: 'rgba(24,32,46,0.4)', media: '#d9dfeb', mediaFg: '#3f4a61' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#18264a', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(5,8,14,0.65)', media: '#22304a', mediaFg: '#c3cadb' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#18264a', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', danger: '#c5372c', scrim: 'rgba(0,0,0,0.6)', media: '#22304a', mediaFg: '#c3cadb' };
   }
   tone(t, tone) {
     if (tone === 'ok') return { bg: t.okBg, fg: t.ok, icon: 'M20 6L9 17l-5-5' };

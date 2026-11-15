@@ -228,7 +228,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <span style="color: {{t.muted}}; font-size: 13px">The page behind the dialog</span>
 <sc-if value="{{dialogOpen}}" hint-placeholder-val="{{true}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: center; justify-content: center; padding: 16px">
-<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
 <h3 id="dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">Disconnect OpenAI API?</h3>
 <p id="dlg-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">Scout deletes the stored API key from this computer. Answers stop using OpenAI until you connect it again with a key.</p>
 <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
@@ -260,9 +260,9 @@ class Component extends DCLogic {
   }
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1b5a8f', infoBg: '#e1eefa', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.40)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#eef3ff', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.4)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fc7f5', infoBg: '#14283d', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(5,8,14,0.60)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#1e2e45', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
   }
   renderVals() {
     const mode = this.state.theme === 'system' ? 'dark' : this.state.theme;

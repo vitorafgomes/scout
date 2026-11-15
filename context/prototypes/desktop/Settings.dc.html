@@ -568,14 +568,14 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 
 <sc-if value="{{chatDlgOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px 16px">
-<div role="dialog" aria-modal="true" aria-labelledby="chat-dlg-title" aria-describedby="chat-dlg-desc" onKeyDown="{{chatKey}}" style="width: 480px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-labelledby="chat-dlg-title" aria-describedby="chat-dlg-desc" onKeyDown="{{chatKey}}" style="width: 480px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
 <h2 id="chat-dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">{{chatDlg.title}}</h2>
 <p id="chat-dlg-desc" style="margin: 0; color: {{t.fg2}}; font-size: 13px; line-height: 1.5">{{chatDlg.desc}}</p>
 <sc-if value="{{chatDlg.hasSteps}}" hint-placeholder-val="{{true}}">
 <section aria-labelledby="dlg-steps" style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; background: {{t.bg}}; border: 1px solid {{t.line}}">
 <h3 id="dlg-steps" style="margin: 0; font-size: 13px; font-weight: 600">{{chatDlg.stepsTitle}}</h3>
 <sc-if value="{{chatDlg.isSlack}}" hint-placeholder-val="{{true}}">
-<button type="button" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Create the Slack app</button>
+<button type="button" style="align-self: flex-start; height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: inline-flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>Create the Slack app</button>
 </sc-if>
 <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: {{t.fg2}}; line-height: 1.45">
 <sc-for list="{{chatDlg.steps}}" as="st" hint-placeholder-count="4">
@@ -594,7 +594,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 <div style="display: flex; flex-direction: column; gap: 4px">
 <label for="{{f.id}}" style="font-size: 13px; font-weight: 500; color: {{t.fg}}">{{f.label}}</label>
 <div style="display: flex; gap: 8px">
-<input id="{{f.id}}" type="{{f.type}}" autocomplete="off" spellcheck="false" value="{{f.value}}" placeholder="{{f.placeholder}}" onChange="{{f.onInput}}" aria-invalid="{{f.invalid}}" aria-describedby="{{f.helpId}}" style="flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid {{f.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-family: ui-monospace, monospace; font-size: 13px">
+<input id="{{f.id}}" type="{{f.type}}" autocomplete="off" spellcheck="false" value="{{f.value}}" placeholder="{{f.placeholder}}" onChange="{{f.onInput}}" aria-invalid="{{f.invalid}}" aria-describedby="{{f.helpId}}" style="flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid {{f.border}}; background: {{t.bg}}; color: {{t.fg}}; font: inherit; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13px">
 <sc-if value="{{f.secret}}" hint-placeholder-val="{{true}}">
 <button type="button" aria-label="{{f.revealLabel}}" title="{{f.revealLabel}}" aria-pressed="{{f.revealed}}" onClick="{{toggleReveal}}" style="width: 40px; height: 40px; flex: 0 0 40px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg2}}; display: inline-flex; align-items: center; justify-content: center"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{f.revealIcon}}"></path></svg></button>
 </sc-if>
@@ -617,7 +617,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 
 <sc-if value="{{ver.confirm}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
-<div role="dialog" aria-modal="true" aria-labelledby="ver-title" aria-describedby="ver-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-labelledby="ver-title" aria-describedby="ver-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
 <h2 id="ver-title" style="margin: 0; font-size: 17px; font-weight: 600">Install Scout 0.8.0, an older version?</h2>
 <p id="ver-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">You are running 0.9.0. An older version may not read everything a newer one saved, such as a setting it does not know. Nothing is deleted, and you can update again from this card. Scout restarts once the download ends.</p>
 <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
@@ -630,7 +630,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 
 <sc-if value="{{confirmOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 140px 16px 16px">
-<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+<div role="dialog" aria-modal="true" aria-labelledby="dlg-title" aria-describedby="dlg-body" onKeyDown="{{confirmKey}}" style="width: 440px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
 <h2 id="dlg-title" style="margin: 0; font-size: 17px; font-weight: 600">{{discTitle}}</h2>
 <p id="dlg-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{discBody}}</p>
 <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; padding-top: 4px">
@@ -1061,9 +1061,9 @@ class Component extends DCLogic {
   }
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1b5a8f', infoBg: '#e1eefa', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.40)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', primary: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#eef3ff', neutral: '#4a5468', neutralBg: '#eceff5', danger: '#b3261e', inverseBg: '#2a3243', inverseFg: '#f5f7fb', inverseAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.4)', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fc7f5', infoBg: '#14283d', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(5,8,14,0.60)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', primary: '#3466e8', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#1e2e45', neutral: '#9aa3b6', neutralBg: '#1f2a3d', danger: '#c5372c', inverseBg: '#e6e9f0', inverseFg: '#18202e', inverseAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6' };
   }
   switchVals(t, on, toggle) {
     return { checked: on ? 'true' : 'false', justify: on ? 'flex-end' : 'flex-start', track: on ? t.primary : t.surface2, edge: on ? t.primary : t.line, thumb: on ? '#ffffff' : t.muted, toggle };

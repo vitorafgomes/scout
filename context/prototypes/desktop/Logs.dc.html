@@ -127,7 +127,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 <button onClick="{{togglePause}}" aria-pressed="{{pausedText}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{pauseIcon}}"></path></svg>{{pauseLabel}}</button>
 <button onClick="{{copyAll}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"></path></svg>Copy all</button>
-<button onClick="{{askClear}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg>Clear</button>
+<button onClick="{{askClear}}" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.err}}; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Clear</button>
 </div>
 
 <div role="group" aria-label="Preview state" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: {{t.muted}}">
@@ -159,7 +159,7 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 
 <sc-if value="{{hasLines}}" hint-placeholder-val="{{true}}">
-<div role="log" aria-live="off" aria-label="Worker log output" style="border: 1px solid {{t.line}}; border-radius: 14px; background: {{t.codeBg}}; padding: 8px 0; font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace; font-size: 12.5px; line-height: 1.55">
+<div role="log" aria-live="off" aria-label="Worker log output" style="border: 1px solid {{t.line}}; border-radius: 14px; background: {{t.codeBg}}; padding: 8px 0; font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.55">
 <sc-for list="{{lines}}" as="l" hint-placeholder-count="12">
 <div style="display: flex; flex-wrap: wrap; column-gap: 12px; padding: 3px 16px; background: {{l.rowBg}}">
 <span style="color: {{t.muted}}; font-variant-numeric: tabular-nums">{{l.ts}}</span>
@@ -186,12 +186,12 @@ button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #7aa2
 </div>
 <sc-if value="{{clearOpen}}" hint-placeholder-val="{{false}}">
 <div style="position: absolute; inset: 0; background: {{t.scrim}}; display: flex; align-items: flex-start; justify-content: center; padding: 120px 16px; z-index: 10">
-<div role="alertdialog" aria-modal="true" aria-labelledby="clear-title" aria-describedby="clear-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border: 1px solid {{t.line}}; border-radius: 14px; box-shadow: 0 16px 40px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div role="alertdialog" aria-modal="true" aria-labelledby="clear-title" aria-describedby="clear-body" style="width: 440px; max-width: 100%; background: {{t.surface}}; border-radius: 14px; box-shadow: 0 0 0 1px {{t.line}}, 0 20px 48px {{t.shadow}}; padding: 20px; display: flex; flex-direction: column; gap: 12px">
 <h2 id="clear-title" style="margin: 0; font-size: 17px; font-weight: 600; overflow-wrap: anywhere">Clear the log?</h2>
 <p id="clear-body" style="margin: 0; color: {{t.fg2}}; line-height: 1.5">{{clearBody}}</p>
 <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px">
-<button autofocus="autofocus" onClick="{{closeClear}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px">Cancel</button>
-<button onClick="{{confirmClear}}" style="height: 36px; padding: 0 16px; border-radius: 18px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"></path></svg>Clear</button>
+<button autofocus="autofocus" onClick="{{closeClear}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 1px solid {{t.line}}; background: transparent; color: {{t.fg}}; outline: 2px solid {{t.accent}}; outline-offset: 2px; font-weight: 500">Cancel</button>
+<button onClick="{{confirmClear}}" style="height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: {{t.danger}}; color: #ffffff; display: flex; align-items: center; gap: 8px; font-weight: 500"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"></path></svg>Clear</button>
 </div>
 </div>
 </div>
@@ -206,9 +206,9 @@ class Component extends DCLogic {
   }
   palette(mode) {
     if (mode === 'light') {
-      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#1f5fa8', infoBg: '#e3eefc', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', toastBg: '#18202e', toastFg: '#f5f7fb', toastAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.45)', danger: '#b3261e', codeBg: '#eef1f7' };
+      return { bg: '#f5f7fb', surface: '#ffffff', surface2: '#e8ecf4', line: '#d7dce7', fg: '#18202e', fg2: '#3f4a61', muted: '#5d677d', accent: '#2a56c6', accentStrong: '#2a56c6', ok: '#1d6b46', okBg: '#e2f3ea', warn: '#8a5d00', warnBg: '#fbf0d6', err: '#b3261e', errBg: '#fbe4e2', info: '#2a56c6', infoBg: '#eef3ff', unreadBg: '#eef3ff', shadow: 'rgba(24,32,46,0.14)', pressedBg: '#ffffff', pressedFg: '#18202e', idleFg: '#5d677d', navActive: '#e3eaff', toastBg: '#2a3243', toastFg: '#f5f7fb', toastAction: '#a9c1fa', scrim: 'rgba(24,32,46,0.4)', danger: '#b3261e', codeBg: '#eef1f7' };
     }
-    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8ab8f0', infoBg: '#17263d', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', toastBg: '#e6e9f0', toastFg: '#131c2d', toastAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', danger: '#c5372c', codeBg: '#0b111c' };
+    return { bg: '#0f1623', surface: '#131c2d', surface2: '#1a2436', line: '#253249', fg: '#e6e9f0', fg2: '#c3cadb', muted: '#9aa3b6', accent: '#8fb2f9', accentStrong: '#3b6ff2', ok: '#7ed6a6', okBg: '#16332a', warn: '#f0c25e', warnBg: '#33290f', err: '#f28b82', errBg: '#3a1c1b', info: '#8fb2f9', infoBg: '#1e2e45', unreadBg: '#17223a', shadow: 'rgba(0,0,0,0.45)', pressedBg: '#253249', pressedFg: '#e6e9f0', idleFg: '#9aa3b6', navActive: '#1d2a44', toastBg: '#e6e9f0', toastFg: '#18202e', toastAction: '#2a56c6', scrim: 'rgba(0,0,0,0.6)', danger: '#c5372c', codeBg: '#0b111c' };
   }
   shellVals(t, current) {
     const navDefs = [
@@ -419,9 +419,9 @@ class Component extends DCLogic {
     const stopped = p === 'stopped' || p === 'startfail';
     let empty = { isLink: false, text: '', icon: '', iconFg: t.muted, action: '', actionIcon: '', run: () => {}, bg: 'transparent', fg: t.fg, border: '1px solid ' + t.line };
     if (stopped) {
-      empty = { isLink: false, text: 'Scout is not running, so it writes nothing. Start it to see its log here.', icon: 'M6 6h12v12H6z', iconFg: t.muted, action: 'Start Scout', actionIcon: 'M7 5l12 7-12 7z', run: () => this.setState({ preview: 'live', cleared: false }), bg: t.accentStrong, fg: '#ffffff', border: '0' };
+      empty = { isLink: false, text: 'Scout is not running, so it writes nothing. Start it to see its log here.', icon: 'M6 6h12v12H6z', iconFg: t.muted, action: 'Start Scout', actionIcon: 'M8 5v14l11-7z', run: () => this.setState({ preview: 'live', cleared: false }), bg: t.accentStrong, fg: '#ffffff', border: '0' };
     } else if (source.length === 0) {
-      empty = { isLink: true, text: 'Scout is running and has not written anything yet. New lines appear here as it works.', icon: 'M4 6h16M4 12h16M4 18h10', iconFg: t.accent, action: 'Open Settings', actionIcon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3', run: () => {}, bg: 'transparent', fg: t.fg, border: '1px solid ' + t.line };
+      empty = { isLink: true, text: 'Scout is running and has not written anything yet. New lines appear here as it works.', icon: 'M4 6h16M4 12h16M4 18h10', iconFg: t.accent, action: 'Open Settings', actionIcon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1', run: () => {}, bg: 'transparent', fg: t.fg, border: '1px solid ' + t.line };
     } else if (visible.length === 0) {
       empty = { isLink: false, text: 'No line matches the search and the levels you chose. ' + source.length + ' lines are hidden.', icon: 'M3 5h18l-7 8v6l-4-2v-4z', iconFg: t.warn, action: 'Show every line', actionIcon: 'M6 6l12 12M18 6L6 18', run: () => this.setState({ query: '', off: {} }), bg: 'transparent', fg: t.fg, border: '1px solid ' + t.line };
     }
@@ -450,7 +450,7 @@ class Component extends DCLogic {
       errorAnnounce: errors > 0 ? errors + (errors === 1 ? ' error' : ' errors') + ' in this session' : '',
       pausedText: this.state.paused ? 'true' : 'false',
       pauseLabel: this.state.paused ? 'Resume' : 'Pause',
-      pauseIcon: this.state.paused ? 'M7 5l12 7-12 7z' : 'M8 5v14M16 5v14',
+      pauseIcon: this.state.paused ? 'M8 5v14l11-7z' : 'M8 5v14M16 5v14',
       togglePause: () => this.setState({ paused: !this.state.paused }),
       copyAll: () => { const n = (k) => k + (k === 1 ? ' line' : ' lines'); this.setState({ toast: lines.length === 0 ? 'Nothing to copy' : lines.length < source.length ? 'Copied ' + lines.length + ' of ' + n(source.length) : 'Copied ' + n(lines.length) }); },
       askClear: () => this.setState({ clearOpen: true }),
