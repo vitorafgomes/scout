@@ -107,7 +107,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The review card does not show the sandbox run's note (2026-11-12)
 
-- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:270`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1673`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:225`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
+- **Gap:** the run's note, which since issue 372 says which tests the .NET default left out ("Left out the tests marked Category=Docker, found in N file(s): the container has no Docker daemon."), reaches the GitHub plugin's `ReviewTests.Note` (`src/Scout.Plugin.GitHub/ReviewFindings.cs:273`), but the desktop's `ReviewTests` (`ui/packages/shared/src/ipc-contract.ts:1673`) has no `note`, its parser drops it (`ui/packages/renderer/src/app/core/review-findings.ts:225`) and the tests line never shows it, so the owner reading the card does not see what was left out ([[pages/services/sandbox]]).
 - **Blocker:** a UI change of its own (one change per version), artboard first.
 - **Unblocks with:** `note` on the TypeScript `ReviewTests`, its parser and the card's tests line, with the artboard updated and a spec row per state.
 
@@ -299,6 +299,30 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 - **Gap:** the review's tests line shows "Tests failed (exit N)" whenever `ran` is true and the exit is not 0, and never reads `reason` there (`ui/packages/renderer/src/app/core/review-findings.ts:100`). The worker already says when the tests never started: a failed restore answers `ran` true with "The restore exited with code N; the tests did not run.", and since 2026-11-10 a test command that exits 126 or 127 answers "The test command could not be started (exit N: ...)." ([[pages/services/sandbox]]). The model sees both in `run_pull_request_tests`' answer; the review card and the posted tests line do not (the Docker card already shows the run record's `reason` as written, `ui/packages/renderer/src/app/features/docker-card.component.ts:550`).
 - **Unblocks with:** `testsLine` reading "Tests could not be started: <reason>" when `ran` is true and `reason` is set, with rows for a restore failure, exits 126 and 127, an exit 1 without a reason and a pass; no contract change, the field is already in the block. Exit 2 from a line `sh` cannot parse stays "Tests failed".
 
+### The review card and the verdict's tests line call an unrunnable run failed (2026-11-15)
+
+- **Gap:** a run whose failed tests all needed a Docker daemon carries `unrunnable` in `run_pull_request_tests`' answer and in the review's `tests` object ([[pages/services/plugin-github/the-pull-request-s-checks-and-its-tests-in-a-con]]), but the desktop's parser does not read it, so the card and the tests line posted with a verdict still say "Tests failed (exit 1)" (`ui/packages/renderer/src/app/core/review-findings.ts:104`, used by `verdictTestsLine` at `:112`).
+- **Blocker:** a UI change of its own, artboard first.
+- **Unblocks with:** `unrunnable` on the TypeScript `ReviewTests`, its parser, the card's chip and `testsLine`, with a spec row per state.
+
+### A project that mixes passing tests with tests that need Docker is reported as failed (2026-11-15)
+
+- **Gap:** a run is unrunnable only when every assembly that failed passed no test and every failed test's block names a missing Docker daemon ([[pages/services/sandbox/public-contract]]), so a test project where some tests pass and others need a Docker daemon is reported as failed; and the rule reads VSTest's output of `dotnet test` only, its `Failed <test>` blocks and `Passed!`/`Failed!` summary lines (`src/Scout.Sandbox/DockerSandboxRunner.cs:314`, `:317`), so Node, Python, Go, Java and a .NET run on the Microsoft Testing Platform report such tests as failed.
+- **Blocker:** a per-test reading needs each runner's output read test by test; leaving tests out by a name from the snapshot was rejected, because a pull request's author controls that name ([[pages/decisions/0060-a-run-that-could-not-run-its-tests-is-not-a-failed-run]]).
+- **Unblocks with:** per runner, the failed tests counted from their own blocks, and the passing ones kept apart, each with a unit row.
+
+### A waiting approval retries a conflict refusal until its time limit (2026-11-15)
+
+- **Gap:** an approval the desktop keeps while the checks run is given again every minute ([[pages/decisions/0059-approve-when-the-checks-pass]]); since an approval over a conflict, or before GitHub computed mergeability, is refused ([[pages/decisions/0058-an-approval-needs-every-check-passed]]), a conflicted pull request is retried each minute until the two-hour limit, and the card shows no reason.
+- **Blocker:** a desktop change of its own, with the card that reads `unrunnable`.
+- **Unblocks with:** the waiting approval ending on the conflict refusal and showing its sentence, with a spec row.
+
+### A test host that crashes without a summary line is reported as failed (2026-11-15)
+
+- **Gap:** `Unrunnable` needs the `Passed!`/`Failed!` summary lines of `dotnet test` ([[pages/services/sandbox/public-contract]]); a test host that crashes before it prints them, for want of a Docker daemon or not, leaves the run failed. This is the safe side: a real failure is never hidden.
+- **Blocker:** none; a reading without the summary could not tell how many tests failed.
+- **Unblocks with:** a report of such a run on a real repository.
+
 ### Models keeps "Restart failed" after Scout restarted itself (2026-11-10)
 
 - **Gap:** when a restart asked from Models fails by readiness timeout, main answers `failed` and the screen shows the reason, "Restart Scout in Settings, Scout worker, to use <source>." and "Restart failed" on the row. The killed worker's exit then makes the supervisor schedule a start of its own (`ui/packages/main/src/worker/supervisor.ts:375`), and when that start works Scout is running again while the screen still says the restart failed. The same holds on AI Sources and every other card that shows a failed restart.
@@ -347,7 +371,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### A queued GitHub write is checked only after the owner approved it (2026-11-10)
 
-- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:459`, `:482`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
+- **Gap:** a call the gate queues never runs the function, so the function's own checks (names, the caps on a review, a comment or an issue; `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:472`, `:495`) run only when the executor sends the approved action. The owner can approve a card that is then recorded as failed for a reason known when it was asked.
 - **Unblocks with:** running the checks that need no network when the call is queued, and answering the model the refusal instead of queuing; the checks that read GitHub (the diff a review comment anchors to) stay at the send.
 
 ### A rejected action keeps its whole payload (2026-11-10)
@@ -367,7 +391,7 @@ The local-model flow has its own tracker, [[pages/roadmap/ollama-local-models]];
 
 ### The five GitHub write functions still carry a body that sends (2026-11-10)
 
-- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:565` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
+- **Gap:** every call to `submit_pull_request_review`, `create_issue`, the two comments and the reply is queued by the gate, so the function bodies that send and answer "Opened issue #N ...: URL" (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:578` and its four siblings) never run from a model call; only the internal senders the runner uses do. The bodies and their `<returns>` text describe a result no caller gets, and a catalog row turned back to `Write` by mistake would make a body send on the grant alone, which only the tests guard today ([[pages/decisions/0032-per-feature-write-permissions]]).
 - **Unblocks with:** bodies that answer the queued sentence and send nothing, the senders staying internal to the runner.
 
 ### What is left of the review turn nothing builds (2026-11-10)

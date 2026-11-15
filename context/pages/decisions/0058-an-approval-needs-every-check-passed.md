@@ -1,9 +1,9 @@
 ---
 title: "ADR 0058 - Scout approves a pull request only when every check of the commit passed"
-version: "1.0"
+version: "1.1"
 date: 2026-11-15
 updated: 2026-11-15
-changes: "v1.0: the decision as first written"
+changes: "v1.1 (2026-11-15): amendment: an approval also needs a pull request without conflicts whose mergeability GitHub computed. v1.0: the decision as first written"
 page_type: adr
 status: accepted
 description: "Before an approval is sent, Scout reads the check runs and commit statuses of the reviewed commit and refuses it while one is still running, did not pass or could not be read; requesting changes and commenting are not held back."
@@ -31,7 +31,7 @@ A review card offered Approve while three checks of the pull request were still 
 
 ## The decision
 
-- **The rule is in the function that sends the verdict.** `GiveVerdictAsync` (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:192`) is the one path of an approval, from the review card and from the model's function alike. For an approval it reads the check runs and the commit statuses at the head commit, after it has confirmed that the head is still the commit reviewed, and refuses before anything is written (`RefuseUnlessEveryCheckPassedAsync`, `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:264`).
+- **The rule is in the function that sends the verdict.** `GiveVerdictAsync` (`src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:195`) is the one path of an approval, from the review card and from the model's function alike. For an approval it reads the check runs and the commit statuses at the head commit, after it has confirmed that the head is still the commit reviewed, and refuses before anything is written (`RefuseUnlessEveryCheckPassedAsync`, `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:277`).
 - **What refuses.** A check that is queued or in progress, a status that is pending, and a completed check whose conclusion is anything but `success`, `neutral` or `skipped` (failure, cancelled, timed out, action required, stale). The answer names how many and up to three of each, a name as one line of at most 60 characters: "Scout approves only when every check of the commit passed: 1 still running (build), 1 did not pass (lint).".
 - **What passes.** Every check completed as `success`, `neutral` or `skipped`. A commit with no check at all may be approved: a repository without a pipeline has nothing to wait for.
 - **Not read is not passed.** When GitHub counts more check runs than the one page Scout reads, or answers a full page of 100 statuses, which may hide more, the approval is refused with "The commit has more checks than Scout could read; it approves only when it has read every one.". A read that fails or times out sends nothing and is reported as the failed read it is.
@@ -67,4 +67,6 @@ None new in kind: `GET repos/{o}/{r}/commits/{sha}/check-runs` and `GET repos/{o
 
 ## Amendments
 
-None yet.
+### 2026-11-15: an approval also needs a pull request GitHub can merge
+
+Extends the sentence "Before an approval is sent, Scout reads the check runs and commit statuses of the reviewed commit and refuses it while one is still running, did not pass or could not be read". Now also: "An approval is refused when GitHub says the pull request conflicts with its base branch (`mergeable` false or `mergeable_state` `dirty`) or has not computed `mergeable` yet; both come from the pull request read the verdict already makes, and the refusal comes before the checks are read." Requesting changes is not held back. Holds in `src/Scout.Plugin.GitHub/GitHubActionsPlugin.cs:229` and `:234`, [[pages/services/plugin-github/the-writes]], and `tests/Scout.Plugin.GitHub.Tests/GitHubActionsPluginVerdictTests.cs:185`, `:197`, `:209`, `:222`.

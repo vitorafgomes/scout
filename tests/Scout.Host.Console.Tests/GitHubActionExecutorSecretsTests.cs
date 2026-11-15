@@ -42,7 +42,7 @@ public sealed class GitHubActionExecutorSecretsTests : IDisposable
         }
 
         _provider = services.BuildServiceProvider();
-        _github.On("GET", "repos/octocat/hello/pulls/42", HttpStatusCode.OK, $$$"""{"number":42,"user":{"login":"alice"},"head":{"sha":"{{{Sha}}}"}}""");
+        _github.On("GET", "repos/octocat/hello/pulls/42", HttpStatusCode.OK, $$$"""{"number":42,"user":{"login":"alice"},"head":{"sha":"{{{Sha}}}"},"mergeable":true}""");
         _github.On("GET", "repos/octocat/hello/pulls/42/files?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _github.On("GET", "repos/octocat/hello/pulls/42/reviews?per_page=100&page=1", HttpStatusCode.OK, "[]");
         _github.On("GET", $"repos/octocat/hello/commits/{Sha}/check-runs?per_page=100", HttpStatusCode.OK, "{\"total_count\":0,\"check_runs\":[]}");

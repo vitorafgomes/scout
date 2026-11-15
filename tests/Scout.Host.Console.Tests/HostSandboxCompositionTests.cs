@@ -87,6 +87,17 @@ public sealed class HostSandboxCompositionTests : IDisposable
     }
 
     [Fact]
+    public void The_adapter_carries_every_field_of_the_result_and_the_tests_that_could_not_run_to_the_plugin()
+    {
+        const string CouldNotRun = "2 test(s) could not run: they need a Docker daemon, which the container does not have.";
+
+        var result = SandboxRunnerAdapter.ToPlugin(new Scout.Sandbox.SandboxResult(true, null, "mcr.microsoft.com/dotnet/sdk@sha256:abc", "dotnet test", 1, 12.5, "Failed!", "Ran on the .NET 10 SDK.", CouldNotRun));
+
+        result.Unrunnable.ShouldBe(CouldNotRun, "the host adapter carries the tests that could not run to the plugin");
+        result.ShouldBe(new SandboxRunResult(true, null, "mcr.microsoft.com/dotnet/sdk@sha256:abc", "dotnet test", 1, 12.5, "Failed!", "Ran on the .NET 10 SDK.", CouldNotRun));
+    }
+
+    [Fact]
     public async Task With_no_docker_reachable_the_runner_answers_that_nothing_ran_with_the_docker_sentence()
     {
         using var host = Host(github: true);

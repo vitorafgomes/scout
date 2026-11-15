@@ -35,7 +35,7 @@ public sealed class GitHubActionExecutorTests : IDisposable
         services.AddHttpClient("IGitHubWriteClient").ConfigurePrimaryHttpMessageHandler(() => _github);
         _provider = services.BuildServiceProvider();
         _gate.Steps = _github;
-        _github.On("GET", "repos/octocat/hello/pulls/42", HttpStatusCode.OK, $$$"""{"number":42,"user":{"login":"alice"},"head":{"ref":"feat/x","sha":"{{{Sha}}}"}}""");
+        _github.On("GET", "repos/octocat/hello/pulls/42", HttpStatusCode.OK, $$$"""{"number":42,"user":{"login":"alice"},"head":{"ref":"feat/x","sha":"{{{Sha}}}"},"mergeable":true}""");
         _github.On("GET", "user", HttpStatusCode.OK, """{"login":"octocat"}""");
         _github.On("GET", "repos/octocat/hello/pulls/42/files?per_page=100&page=1", HttpStatusCode.OK,
             JsonSerializer.Serialize(new[] { new { filename = "src/Checkout.cs", status = "modified", additions = 2, deletions = 1, patch = Patch } }));

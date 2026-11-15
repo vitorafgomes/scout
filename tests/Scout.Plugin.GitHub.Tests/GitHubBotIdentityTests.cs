@@ -30,7 +30,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
         var path = request.RequestUri!.PathAndQuery;
         var json = (request.Method.Method, path) switch
         {
-            ("GET", "/repos/octocat/hello/pulls/42") => $$$"""{"number":42,"user":{"login":"octocat"},"head":{"ref":"feat/x","sha":"{{{Sha}}}"}}""",
+            ("GET", "/repos/octocat/hello/pulls/42") => $$$"""{"number":42,"user":{"login":"octocat"},"head":{"ref":"feat/x","sha":"{{{Sha}}}"},"mergeable":true}""",
             ("GET", "/user") => """{"login":"octocat"}""",
             ("GET", "/repos/octocat/hello/pulls/42/files?per_page=100&page=1") => "[]",
             ("GET", "/repos/octocat/hello/pulls/42/reviews?per_page=100&page=1") => "[]",
@@ -115,7 +115,7 @@ public sealed class GitHubBotIdentityTests : IDisposable
 
         var ownersPullRequest = await plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None);
         _respond = r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath == "/repos/octocat/hello/pulls/42"
-            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$$"""{"number":42,"user":{"login":"scout-octocat[bot]"},"head":{"sha":"{{{Sha}}}"}}""") }
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent($$$"""{"number":42,"user":{"login":"scout-octocat[bot]"},"head":{"sha":"{{{Sha}}}"},"mergeable":true}""") }
             : Answer(r);
         var botsPullRequest = await Should.ThrowAsync<WriteFailedException>(() =>
             plugin.GivePullRequestVerdictAsync("octocat", "hello", 42, "approve", "Ready.", "[]", Sha, CancellationToken.None));

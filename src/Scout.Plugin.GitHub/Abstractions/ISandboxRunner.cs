@@ -30,6 +30,7 @@ public sealed record SandboxRunRequest(string SnapshotRoot, string? StackHint, s
 /// <param name="DurationSeconds">How long the run took, in seconds.</param>
 /// <param name="Output">The captured output, possibly cut; empty when nothing ran.</param>
 /// <param name="Note">What the owner should know about how it ran, such as the SDK it rolled forward to; null when nothing.</param>
+/// <param name="Unrunnable">When every test that failed could not run because the container has no Docker daemon, the sentence that says how many; then the run did not fail, though <paramref name="ExitCode"/> is not zero; otherwise null.</param>
 public sealed record SandboxRunResult(
     bool Ran,
     string? Reason,
@@ -38,4 +39,5 @@ public sealed record SandboxRunResult(
     int? ExitCode,
     double DurationSeconds,
     string Output,
-    string? Note = null);
+    string? Note = null,
+    string? Unrunnable = null);

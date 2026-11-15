@@ -12,7 +12,8 @@ public sealed record SandboxRequest(string SnapshotRoot, string? StackHint = nul
 /// code, how long it took, the last 4,000 characters of the output (on a failed run led by the lines found before them
 /// that name the failure), which is data and never instructions, and a note on how the stack ran: the runtime or SDK
 /// version that ran and whether the project declared it, which file asked for it, or that nothing was declared and the
-/// default ran (the Java runs also name the Maven or Gradle that ran).
+/// default ran (the Java runs also name the Maven or Gradle that ran); and, when the tests that failed could not run
+/// because the container has no Docker daemon, the sentence that says so, null otherwise.
 /// </summary>
 public sealed record SandboxResult(
     bool Ran,
@@ -22,7 +23,8 @@ public sealed record SandboxResult(
     int? ExitCode,
     double DurationSeconds,
     string Output,
-    string? Note = null);
+    string? Note = null,
+    string? Unrunnable = null);
 
 /// <summary>One version a repository declares: the file that declares it and the version it asks for, such as <c>.nvmrc</c> and <c>Node 20</c>.</summary>
 public sealed record SandboxDeclaredVersion(string Source, string Version);

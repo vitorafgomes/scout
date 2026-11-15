@@ -55,7 +55,7 @@ internal sealed partial class GitHubClient
     public async Task<PullRequestHead?> GetPullRequestHeadAsync(string owner, string repo, int number, CancellationToken ct)
     {
         var pr = await TryGetAsync<PullDetailsDto>($"repos/{owner}/{repo}/pulls/{number}", ct).ConfigureAwait(false);
-        return pr is null ? null : new PullRequestHead(pr.Head?.Sha ?? string.Empty, Login(pr.User));
+        return pr is null ? null : new PullRequestHead(pr.Head?.Sha ?? string.Empty, Login(pr.User), pr.Mergeable, pr.MergeableState);
     }
 
     public async Task<CheckRuns> ListCheckRunsAsync(string owner, string repo, string sha, CancellationToken ct)
@@ -371,7 +371,9 @@ internal sealed partial class GitHubClient
         [property: JsonPropertyName("additions")] int Additions,
         [property: JsonPropertyName("deletions")] int Deletions,
         [property: JsonPropertyName("changed_files")] int ChangedFiles,
-        [property: JsonPropertyName("html_url")] string? HtmlUrl);
+        [property: JsonPropertyName("html_url")] string? HtmlUrl,
+        [property: JsonPropertyName("mergeable")] bool? Mergeable = null,
+        [property: JsonPropertyName("mergeable_state")] string? MergeableState = null);
 
     private sealed record CheckRunsDto(
         [property: JsonPropertyName("total_count")] int TotalCount,
