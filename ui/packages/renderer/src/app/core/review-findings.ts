@@ -2,6 +2,7 @@ import {
   ISSUES_MARKER,
   type GitHubVerdictRequest,
   type ReviewCheck,
+  type ReviewCoverage,
   type ReviewFinding,
   type ReviewFindings,
   type ReviewTests,
@@ -35,9 +36,12 @@ export interface SelectedFinding {
 /**
  * The review or audit in a reply's single `scout-findings` block, validated, and the reply without the
  * block; null when there is no such block, more than one, or the block is not a valid review or audit.
+ * A review job's measured `coverage` and `notes` are kept only when `notice` says the block came in a worker
+ * notice, the way the job posts its card; in a reply they are dropped, since a model or a pull request's text could write them.
  */
 export function parseReviewFindings(
   reply: string,
+  notice = false,
 ): { review: ReviewFindings; markdown: string } | null {
   const blocks = [...reply.matchAll(BLOCK)];
   if (blocks.length !== 1) return null;
@@ -48,7 +52,7 @@ export function parseReviewFindings(
   } catch {
     return null;
   }
-  const review = toReview(data);
+  const review = toReview(data, notice);
   if (review === null) return null;
   const before = reply.slice(0, block.index).trimEnd();
   const after = reply.slice(block.index + block[0].length).trimStart();
@@ -161,10 +165,10 @@ export function issuesAsk(review: ReviewFindings, selected: readonly SelectedFin
   return `Open ${n} issue${n === 1 ? '' : 's'} on ${review.repository}${ISSUES_MARKER}${JSON.stringify(payload)}`;
 }
 
-function toReview(data: unknown): ReviewFindings | null {
+function toReview(data: unknown, notice: boolean): ReviewFindings | null {
   if (!isRecord(data)) return null;
   const { kind, repository, number, commit, verdict, read, known, findings } = data;
-  const { checks, tests, selfAuthored } = data;
+  const { checks, tests, selfAuthored, coverage, notes } = data;
   const audit = kind === 'audit';
   if (
     (kind !== undefined && kind !== 'review' && !audit) ||
@@ -198,6 +202,30 @@ function toReview(data: unknown): ReviewFindings | null {
     ...toChecks(checks),
     ...toTests(tests),
     ...(typeof selfAuthored === 'boolean' ? { selfAuthored } : {}),
+    ...(audit || !notice ? {} : toCoverage(coverage, notes)),
+  };
+}
+
+/**
+ * A review job's measured read line and Scout's notes: both kept only when the coverage is two whole counts, the files
+ * read at most the files changed, and the notes a short list of short lines; otherwise the block shows as before.
+ */
+function toCoverage(
+  coverage: unknown,
+  notes: unknown,
+): { coverage?: ReviewCoverage; notes?: readonly string[] } {
+  if (!isRecord(coverage)) return {};
+  const { read, of } = coverage;
+  if (
+    !Number.isInteger(read) ||
+    !Number.isInteger(of) ||
+    (read as number) < 0 ||
+    (read as number) > (of as number)
+  )
+    return {};
+  return {
+    coverage: { read: read as number, of: of as number },
+    ...(notes !== undefined && optionalNotes(notes) ? { notes: notes as string[] } : {}),
   };
 }
 

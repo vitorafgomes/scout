@@ -9,7 +9,8 @@ namespace Scout.Host.Console;
 /// Applies the owner's clicks in Scout Desktop on running jobs, each taken from the control plane once and settled once with
 /// its status (<c>applied</c>, <c>not applied</c> or <c>not confirmed</c>) and the sentence that says how it ended, which the
 /// control plane keeps in the write log as the owner's. An audit control goes to the audit library: pause, continue (only a
-/// paused audit, in the conversation it already holds; never a new audit) or stop. A test run control asks every run in
+/// paused audit, in the conversation it already holds; never a new audit) or stop. A review control goes to the audit
+/// library's reviews by its pull request number: pause, continue (only a paused review) or stop. A test run control asks every run in
 /// progress of that pull request to stop and waits for each to end: a run the stop cut short gets one notice in the
 /// conversation it was asked from, and a run that had already finished keeps its result. It asks every <see cref="Fast"/>
 /// while clicks arrive, and every <see cref="Slow"/> once none has arrived for <see cref="QuietWindow"/>, the control plane
@@ -23,7 +24,8 @@ internal sealed class JobControlPoller(
     ILogger<JobControlPoller> logger,
     Scout.Audit.IRepositoryAudits? audits = null,
     RunningTests? tests = null,
-    TimeProvider? time = null) : BackgroundService
+    TimeProvider? time = null,
+    Scout.Audit.IPullRequestReviews? reviews = null) : BackgroundService
 {
     internal static readonly TimeSpan Fast = TimeSpan.FromSeconds(2);
     internal static readonly TimeSpan Slow = GitHubActionExecutor.Interval;
@@ -43,6 +45,8 @@ internal sealed class JobControlPoller(
     internal const string NotConfirmed = "not confirmed";
 
     internal const string NoAudits = "Not applied: audits are not available in this Scout.";
+
+    internal const string NoReviews = "Not applied: reviews are not available in this Scout.";
 
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private DateTimeOffset? _lastControlAt;
@@ -167,6 +171,11 @@ internal sealed class JobControlPoller(
             case ("audit", "pause" or "continue" or "stop"):
                 var answer = await audits!.ControlAsync(control.Owner, control.Repo, control.Action, ct).ConfigureAwait(false);
                 return (answer.Applied ? Applied : NotApplied, answer.Sentence);
+            case ("review", "pause" or "continue" or "stop") when reviews is null:
+                return (NotApplied, NoReviews);
+            case ("review", "pause" or "continue" or "stop") when control.Number is { } pullRequest:
+                var reviewAnswer = await reviews!.ControlAsync(control.Owner, control.Repo, pullRequest, control.Action, ct).ConfigureAwait(false);
+                return (reviewAnswer.Applied ? Applied : NotApplied, reviewAnswer.Sentence);
             case ("tests", "stop") when control.Number is { } number:
                 return await StopTestsAsync(control, number, ct).ConfigureAwait(false);
             default:

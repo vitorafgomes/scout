@@ -68,11 +68,12 @@ export const CATALOG: Readonly<
       row(
         "Scout's data folder",
         'write',
-        'Keep conventions profiles, repository snapshots and audit jobs on this computer',
+        'Keep conventions profiles, repository snapshots, audit jobs and review jobs on this computer',
         [
           'Keep the conventions profile of a repository Scout audited, so later audits judge its code against its own rules',
           'Keep a snapshot of a repository at one commit, within a size cap (200 MB unless configured), so a review or an audit reads every file locally and the Knowledge index can search it',
           'Keep the audit job of a repository, its plan, progress and findings, when you ask for a whole-repository audit in chat; the audit reads the snapshot and pauses or stops when you ask',
+          'Keep the review job of a pull request too large for one turn, its plan, progress and findings, when a review in chat finds diffs left out; the review reads the snapshot at the head commit and posts one card in the chat, nothing on GitHub',
         ],
       ),
       row(

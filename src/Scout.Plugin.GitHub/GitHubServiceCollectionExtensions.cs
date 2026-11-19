@@ -126,7 +126,8 @@ public static class GitHubServiceCollectionExtensions
             sp.GetRequiredService<TestRuns>(),
             sp.GetService<IStackDetector>(),
             sp.GetService<ILogger<GitHubActionsPlugin>>(),
-            sp.GetRequiredService<RunningTests>()));
+            sp.GetRequiredService<RunningTests>(),
+            sp.GetService<IPullRequestReviews>()));
         services.AddSingleton(sp => KernelPluginFactory.CreateFromObject(
             sp.GetRequiredService<GitHubActionsPlugin>(), GitHubActionsPlugin.PluginName));
         services.AddSingleton(sp => new GitHubVerdictRunner(
@@ -151,6 +152,8 @@ public static class GitHubServiceCollectionExtensions
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "reference"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.StartAudit, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
+        services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.StartReview, GitHubActionsPlugin.FeatureId,
+            GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo", "number"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.StopAudit, GitHubActionsPlugin.FeatureId,
             GitHubActionsPlugin.DataFolderScope, summaryArguments: ["owner", "repo"]);
         services.AddWriteFunction(GitHubActionsPlugin.PluginName, GitHubActionsPlugin.PauseAudit, GitHubActionsPlugin.FeatureId,

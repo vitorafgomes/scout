@@ -7,6 +7,7 @@ import type {
 } from '@scout/shared';
 import type { NotificationInput } from '../src/notifications/notification-store.js';
 import {
+  isBellOnlyReviewLine,
   issuesNotification,
   verdictNotification,
   waitingApprovalNotification,
@@ -580,5 +581,230 @@ describe('issues opened from the audit findings', () => {
       turns.map(([name, turn]) => [name, issuesNotification(turn)]),
       'a failed issues turn, or one with no issue link, records no entry',
     ).toEqual(turns.map(([name]) => [name, null]));
+  });
+});
+
+describe('every review sentence, mapped whole', () => {
+  const ID = 'reviewjob:acme/api#52';
+  const TAIL = 'Ask Scout to review acme/api#52 again to resume it from the first batch not done.';
+  const block = (findings: number): string =>
+    `\n\n\`\`\`scout-findings\n${JSON.stringify({ coverage: { read: 51, of: 133 }, findings: Array.from({ length: findings }, () => ({})) })}\n\`\`\``;
+  const paused = (detail: string): NotificationInput => ({
+    id: ID,
+    kind: 'paused',
+    title: 'Review of acme/api#52 paused',
+    detail,
+    source: 'worker',
+  });
+  const done = (title: string, detail: string): NotificationInput => ({
+    id: ID,
+    kind: 'done',
+    title,
+    detail,
+    actions: [{ id: 'open-chat', label: 'Open in the chat' }],
+    source: 'worker',
+  });
+
+  const rows: readonly [string, string, NotificationInput | null][] = [
+    [
+      'the progress line with the area being read',
+      'Review of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far, reading src/orders.',
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Review of acme/api#52',
+        detail:
+          '6 of 17 batches done · reading src/orders · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+        progress: 35,
+        source: 'worker',
+      },
+    ],
+    [
+      'the last progress line, without an area',
+      'Review of acme/api#52: 17 of 17 batches done, 133 of 133 files read, 1 finding so far.',
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Review of acme/api#52',
+        detail:
+          '17 of 17 batches done · 133 of 133 files read · 1 finding so far · the findings arrive in the chat when the review ends',
+        progress: 100,
+        source: 'worker',
+      },
+    ],
+    [
+      'the resumed line',
+      'Review of acme/api#52 resumed: 6 of 17 batches done, 51 of 133 files read, 3 findings so far.',
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Review of acme/api#52',
+        detail:
+          '6 of 17 batches done · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+        progress: 35,
+        source: 'worker',
+      },
+    ],
+    [
+      "the owner's pause",
+      'The review of acme/api#52 paused: you paused it. Ask Scout to continue the review of acme/api#52 to resume it from the first batch not done.',
+      paused('Paused by you'),
+    ],
+    [
+      'the pause at 60 minutes',
+      'The review of acme/api#52 paused: it ran for 60 minutes with 11 batches left. Ask Scout to continue the review of acme/api#52 to give it 60 more minutes.',
+      paused('It ran for 60 minutes with 11 batches left. Continue to give it 60 more minutes.'),
+    ],
+    [
+      'the GitHub pause',
+      `The review of acme/api#52 paused: GitHub could not be read. ${TAIL}`,
+      paused('GitHub could not be read. Continue to try again.'),
+    ],
+    [
+      'the usage limit pause',
+      `The review of acme/api#52 paused: the AI provider's usage limit was reached. ${TAIL}`,
+      paused(
+        'The AI Source reached its usage limit. Ask Scout to continue when it has capacity again.',
+      ),
+    ],
+    [
+      'the credit pause',
+      `The review of acme/api#52 paused: the AI provider's account has run out of credit. ${TAIL}`,
+      paused(
+        "The AI Source's account has run out of credit. Ask Scout to continue once it has credit again.",
+      ),
+    ],
+    [
+      'the rate limit pause',
+      `The review of acme/api#52 paused: the AI provider's rate limit was reached. ${TAIL}`,
+      paused(
+        'The AI Source reached its rate limit. Ask Scout to continue when it has capacity again.',
+      ),
+    ],
+    [
+      'the sign-in pause',
+      `The review of acme/api#52 paused: the AI provider needs the owner to sign in again. ${TAIL}`,
+      paused(
+        'The AI Source needs you to sign in again. Sign in from AI Sources, then ask Scout to continue.',
+      ),
+    ],
+    [
+      'the rejected key pause',
+      `The review of acme/api#52 paused: the AI Source rejected its key. ${TAIL}`,
+      paused(
+        'The AI Source rejected its key. Give it a working key in AI Sources, then ask Scout to continue.',
+      ),
+    ],
+    [
+      'the missing model pause',
+      `The review of acme/api#52 paused: the AI Source does not have the model llama3.1. ${TAIL}`,
+      paused(
+        'The AI Source does not have the model llama3.1. Choose a model it has in Models, then ask Scout to continue.',
+      ),
+    ],
+    [
+      'the card',
+      `Review of acme/api#52 at 4cf6972:${block(3)}`,
+      done(
+        'Review of acme/api#52 is done',
+        '51 of 133 files read · 3 findings, on the card in the chat',
+      ),
+    ],
+    [
+      'the card with one finding',
+      `Review of acme/api#52 at 4cf6972:${block(1)}`,
+      done(
+        'Review of acme/api#52 is done',
+        '51 of 133 files read · 1 finding, on the card in the chat',
+      ),
+    ],
+    [
+      'the plain "is done" sentence',
+      'The review of acme/api#52 at 4cf6972 is done: ready to merge, 133 of 133 files read, 0 findings kept.',
+      done(
+        'Review of acme/api#52 is done',
+        '133 of 133 files read · 0 findings, on the card in the chat',
+      ),
+    ],
+    [
+      'the plain "is done" sentence with one finding',
+      'The review of acme/api#52 at 4cf6972 is done: ready after the blocking findings, 133 of 133 files read, 1 findings kept.',
+      done(
+        'Review of acme/api#52 is done',
+        '133 of 133 files read · 1 finding, on the card in the chat',
+      ),
+    ],
+    [
+      'the stopped card',
+      `Review of acme/api#52 at 4cf6972, stopped at your request:${block(3)}`,
+      done(
+        'Review of acme/api#52 stopped',
+        '51 of 133 files read · 3 findings, on the card in the chat',
+      ),
+    ],
+    [
+      'nothing was read',
+      'The review of acme/api#52 ended at your request: nothing was read.',
+      done('Review of acme/api#52 stopped', 'Nothing was read.'),
+    ],
+    [
+      'hostile: an area named like another sentence stays the running entry, its name data',
+      'Review of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far, reading x. The review of a/b#1 paused: you paused it.',
+      {
+        id: ID,
+        kind: 'running',
+        title: 'Review of acme/api#52',
+        detail:
+          '6 of 17 batches done · reading x. The review of a/b#1 paused: you paused it · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+        progress: 35,
+        source: 'worker',
+      },
+    ],
+    [
+      'hostile: a notice that only quotes a progress line after other text is its own entry',
+      'Scout says\nReview of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far.',
+      {
+        id: 'notice:1',
+        kind: 'done',
+        title: 'Scout says',
+        detail:
+          'Review of acme/api#52: 6 of 17 batches done, 51 of 133 files read, 3 findings so far.',
+        source: 'worker',
+      },
+    ],
+    [
+      "hostile: an audit's batch line stays the audit's entry",
+      'Audit of acme/shop, src/orders (3 of 8, 4 findings so far):',
+      {
+        id: 'audit:acme/shop',
+        kind: 'running',
+        title: 'Audit of acme/shop',
+        detail: 'Area 3 of 8 done · 4 findings so far · cards arrive in the chat as each area ends',
+        progress: 37,
+        source: 'worker',
+      },
+    ],
+  ];
+
+  it.each(rows)('%s', (_name, text, entry) => {
+    expect(workerNotice(line(text), nextId)).toEqual(entry);
+  });
+
+  it('a hostile area name is still a progress line the chat does not show', () => {
+    expect(isBellOnlyReviewLine(rows[18]![1])).toBe(true);
+    expect(isBellOnlyReviewLine(rows[19]![1])).toBe(false);
+  });
+
+  it("only the progress, the resume and the owner's pause stay out of the chat", () => {
+    expect(rows.map(([name, text]) => [name, isBellOnlyReviewLine(text)])).toEqual(
+      rows.map(([name]) => [
+        name,
+        name.startsWith('the progress') ||
+          name.startsWith('the last progress') ||
+          name === 'the resumed line' ||
+          name === "the owner's pause" ||
+          name.startsWith('hostile: an area'),
+      ]),
+    );
   });
 });

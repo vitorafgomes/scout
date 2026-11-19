@@ -20,10 +20,11 @@ internal static class AuditKind
 
 /// <summary>
 /// One job of one repository at one commit, the chat it was started from, whether it is running, paused, stopped or done,
-/// why it paused, its kind, and the pull request a review is of.
+/// why it paused, its kind, the pull request a review is of, and when it was started, in UTC by the store's clock.
 /// </summary>
 internal sealed record AuditJob(
-    string Id, string Owner, string Repo, string Commit, string? Origin, string Status, string? PausedReason = null, string Kind = AuditKind.Audit, int? PullRequest = null);
+    string Id, string Owner, string Repo, string Commit, string? Origin, string Status, string? PausedReason = null, string Kind = AuditKind.Audit, int? PullRequest = null,
+    DateTime? Started = null);
 
 /// <summary>
 /// One batch of a job: its order, its area and files, whether it is pending, done or not covered, the files the model read,
@@ -71,6 +72,9 @@ internal interface IAuditJobStore
     /// <summary>The job's first pending batch, null when none is, and how many batches the job has.</summary>
     Task<(AuditBatch? Next, int Count)> NextBatchAsync(string jobId, CancellationToken ct);
 
+    /// <summary>The job's first <paramref name="count"/> pending batches in their order, each a distinct batch; empty when none is pending.</summary>
+    Task<IReadOnlyList<AuditBatch>> PendingBatchesAsync(string jobId, int count, CancellationToken ct);
+
     /// <summary>The job's findings in the order they were added.</summary>
     Task<IReadOnlyList<AuditFinding>> FindingsAsync(string jobId, CancellationToken ct);
 
@@ -104,4 +108,15 @@ internal interface IAuditJobStore
 
     /// <summary>Mark a running job done; false, and nothing written, when the job is no longer running, as after a pause or a stop.</summary>
     Task<bool> FinishAsync(string jobId, CancellationToken ct);
+
+    /// <summary>The checks a review ran before it started, as they were kept with it; null for an audit or a job with none kept.</summary>
+    Task<ReviewPreflight?> PreflightAsync(string jobId, CancellationToken ct);
+
+    /// <summary>
+    /// The clock time during which any of the job's batches ran since it last resumed, batches that ran at once counted
+    /// once, each from its start to its end; a batch not begun, or begun and
+    /// not ended, as one a pause or a stop left, adds nothing, so a job's paused time never counts, and a resume starts the
+    /// count again.
+    /// </summary>
+    Task<TimeSpan> RunningTimeAsync(string jobId, CancellationToken ct);
 }

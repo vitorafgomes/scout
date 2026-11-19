@@ -43,6 +43,7 @@ const ACTIONS = new Set<NotificationActionId>([
   'open-models-transcription',
   'open-approvals',
   'review-pull-request',
+  'open-chat',
 ]);
 export const CLOSED_BEFORE_DONE = 'Scout closed before this finished.';
 const MAX_NOTICE_CHARS = 1_000;
@@ -90,7 +91,8 @@ export class NotificationStore {
       });
     }
     const saved = parsed.entries.map(({ control: _control, ...n }): AppNotification => {
-      if (n.kind !== 'running' || n.id.startsWith('audit:')) return n;
+      if (n.kind !== 'running' || n.id.startsWith('audit:') || n.id.startsWith('reviewjob:'))
+        return n;
       const { progress: _progress, ...rest } = n;
       return { ...rest, kind: 'failed', detail: CLOSED_BEFORE_DONE };
     });
@@ -186,7 +188,11 @@ function sameContent(a: AppNotification, b: AppNotification): boolean {
 }
 
 function sameActivity(existing: AppNotification, next: NotificationInput): boolean {
-  if (existing.id.startsWith('audit:') || existing.id.startsWith('tests:')) {
+  if (
+    existing.id.startsWith('audit:') ||
+    existing.id.startsWith('tests:') ||
+    existing.id.startsWith('reviewjob:')
+  ) {
     return existing.kind === next.kind && (next.note === undefined || next.note === existing.note);
   }
   return (

@@ -1,9 +1,9 @@
 ---
 title: "ControlPlane - history"
-version: "1.3"
+version: "1.5"
 date: 2026-11-09
-updated: 2026-11-14
-changes: "v1.3 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
+updated: 2026-11-19
+changes: "v1.5 (2026-11-19): the owner controls a review job. v1.4 (2026-11-17): the GitHub feature declares the review job. v1.3 (2026-11-14): the verdict's record carries its tests line, and GetVerdict answers who signed it."
 page_type: reference
 status: artefact
 description: "What changed in Scout.ControlPlane and when; the service page states how it works now."
@@ -32,6 +32,17 @@ reliability: high
 # ControlPlane - history
 
 > Dated changes to [[pages/services/control-plane]]; the service page states how it works now.
+
+## 2026-11-19 - The owner controls a review job
+
+- **Asked for:** pause, continue and stop on a review job from the bell of Scout Desktop ([[pages/decisions/0062-the-review-job-runs-to-its-end-in-parallel-from-the-bell]]).
+- **What changed:** the kind `review` names a review job by owner, repo and pull request number (`src/Scout.ControlPlane/Controls/OwnerControl.cs:13`). A review control without a number above zero is refused with its reason and nothing is queued (`src/Scout.ControlPlane/Controls/OwnerControlService.cs:243`). Its record in the write log is the owner's, on its pull request. No new call: the desktop's existing `ControlJob` and the worker gate carry it.
+- **Tests:** `tests/Scout.ControlPlane.Tests/Controls/OwnerControlServiceTests.cs:54`, `:73`, `:91`.
+
+## 2026-11-17 - The GitHub feature declares the review job
+
+- **What changed:** the `Scout's data folder` row of the `github` feature gains the sentence of the review job of a pull request too large for one turn, and its summary names review jobs beside audit jobs (`src/Scout.ControlPlane/Features/FeatureCatalog.cs:92`, `:98`).
+- **Tests:** `tests/Scout.ControlPlane.Tests/Features/FeatureCatalogTests.cs:368`.
 
 ## 2026-11-14 - The verdict's record carries its tests line; GetVerdict answers who signed it
 

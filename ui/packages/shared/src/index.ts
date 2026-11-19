@@ -276,6 +276,7 @@ export {
   type ReviewFinding,
   type ReviewFindings,
   type ReviewCheck,
+  type ReviewCoverage,
   type ReviewTests,
   type LocalShortcut,
   type LocalSuspendShortcutRequest,

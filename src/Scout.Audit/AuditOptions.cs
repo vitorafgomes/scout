@@ -23,4 +23,13 @@ public sealed class AuditOptions
 
     /// <summary>How long one batch turn may take before it is abandoned as not answered in time.</summary>
     public TimeSpan TurnTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How many batches of a pull request review run at once, 1 to 8; 4 unless configured, and 1 when the configured AI
+    /// provider is the local Ollama and the key is not set, so a local model is not sent several turns together.
+    /// </summary>
+    public int ReviewParallelBatches { get; set; } = DefaultReviewParallelBatches;
+
+    /// <summary>The batches of a review that run at once when the key is not set and the provider is not the local one.</summary>
+    public const int DefaultReviewParallelBatches = 4;
 }

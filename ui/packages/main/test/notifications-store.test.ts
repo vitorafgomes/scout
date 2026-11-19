@@ -570,6 +570,30 @@ describe('NotificationStore: a saved list it cannot fully read', () => {
     expect(writes).toEqual([]);
   });
 
+  it('a running review job, which the worker resumes, loads back in progress with its counts, its unanswered click dropped', async () => {
+    const saved = [
+      {
+        ...entry('reviewjob:acme/api#52', {
+          kind: 'running',
+          title: 'Review of acme/api#52',
+          detail:
+            '6 of 17 batches done · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+          progress: 35,
+          control: { action: 'pause', phase: 'waiting' },
+        }),
+        at: 10,
+        read: true,
+      },
+    ];
+    const { store } = setup(JSON.stringify(saved));
+
+    await store.load();
+
+    expect(store.list().map((n) => [n.id, n.kind, n.progress, n.control])).toEqual([
+      ['reviewjob:acme/api#52', 'running', 35, undefined],
+    ]);
+  });
+
   it('an entry saved as running loads back as failed because Scout closed before it finished', async () => {
     const saved = [
       { ...entry('voice-no-model:1', { kind: 'running', progress: 40 }), at: 10, read: false },

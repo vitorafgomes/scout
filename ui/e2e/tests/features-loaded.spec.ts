@@ -114,7 +114,7 @@ for (const panel of [
       [
         "Scout's data folder",
         'Write',
-        'Keep conventions profiles, repository snapshots and audit jobs on this computer',
+        'Keep conventions profiles, repository snapshots, audit jobs and review jobs on this computer',
       ],
       [
         'Scout bot on GitHub (optional)',

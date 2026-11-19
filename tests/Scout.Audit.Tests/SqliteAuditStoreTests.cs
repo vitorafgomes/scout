@@ -410,4 +410,91 @@ public sealed class SqliteAuditStoreTests : IDisposable
         var (next, count) = await store.NextBatchAsync(job, CancellationToken.None);
         (next?.Area, count).ShouldBe(("src/Orders", 2), "the batch kept not covered is never the next one to run");
     }
+
+    [Fact]
+    public async Task A_job_carries_the_time_it_was_started_by_the_stores_clock_and_a_review_its_kept_checks()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.Parse("2026-11-13T21:30:00+00:00", CultureInfo.InvariantCulture));
+        var store = new SqliteAuditStore(Path.Combine(_folder.Path, "data", "audit.db"), clock);
+        var checks = new ReviewPreflight([new(PreflightName.DockerRuns, PreflightOutcome.Warning, "Docker runs are off; tests will not run.")]);
+        var review = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, checks, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        var audit = await store.CreateJobAsync("acme", "shop", null, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
+
+        var started = (await store.JobAsync(review, CancellationToken.None))!.Started.ShouldNotBeNull();
+        (started, started.Kind).ShouldBe((new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc), DateTimeKind.Utc));
+        (await store.RunningJobsAsync(CancellationToken.None)).Select(j => j.Started).ShouldBe(
+            [new DateTime(2026, 11, 13, 21, 30, 0, DateTimeKind.Utc), new DateTime(2026, 11, 13, 21, 35, 0, DateTimeKind.Utc)]);
+        (await store.PreflightAsync(review, CancellationToken.None)).ShouldNotBeNull().Checks.ShouldBe(checks.Checks);
+        (await store.PreflightAsync(audit, CancellationToken.None)).ShouldBeNull("an audit keeps no checks");
+    }
+
+    [Fact]
+    public async Task A_jobs_running_time_is_its_batches_from_start_to_end_and_never_a_pause()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.Parse("2026-11-17T09:00:00+00:00", CultureInfo.InvariantCulture));
+        var store = new SqliteAuditStore(Path.Combine(_folder.Path, "data", "audit.db"), clock);
+        var job = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
+        await store.BeginBatchAsync(job, 1, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(10));
+        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.BeginBatchAsync(job, 2, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        await store.PauseAsync(job, "the AI provider's usage limit was reached", CancellationToken.None);
+        clock.Advance(TimeSpan.FromHours(2));
+        await store.ResumeAsync(job, null, CancellationToken.None);
+        await store.BeginBatchAsync(job, 2, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(7));
+        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
+
+        (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(7), "a job's running time is its batches' turns since it resumed, never the time it was paused");
+    }
+
+    [Fact]
+    public async Task A_resumed_jobs_running_time_counts_from_the_resume()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.Parse("2026-11-19T09:00:00+00:00", CultureInfo.InvariantCulture));
+        var store = new SqliteAuditStore(Path.Combine(_folder.Path, "data", "audit.db"), clock);
+        var job = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
+        await store.BeginBatchAsync(job, 1, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(60));
+        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.PauseAsync(job, "it ran for 60 minutes", CancellationToken.None);
+        clock.Advance(TimeSpan.FromHours(1));
+        await store.ResumeAsync(job, null, CancellationToken.None);
+        await store.BeginBatchAsync(job, 2, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(7));
+        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
+
+        (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(7), "a resume starts the running time again: only the batches begun since count");
+    }
+
+    [Fact]
+    public async Task A_file_migrated_before_the_resume_time_existed_counts_every_batch()
+    {
+        await FileAtTheFirstMigrationAsync(Path.Combine(_folder.Path, "data", "audit.db"));
+        var store = Store();
+
+        (await store.RunningTimeAsync("old1", CancellationToken.None)).ShouldBe(TimeSpan.Zero, "a job kept before the resume time existed reads, and counts every ended batch");
+        await store.ResumeAsync("old1", null, CancellationToken.None);
+        (await store.JobAsync("old1", CancellationToken.None)).ShouldNotBeNull().Status.ShouldBe(AuditStatus.Running);
+    }
+
+    [Fact]
+    public async Task Batches_that_ran_at_once_count_once_in_the_running_time()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.Parse("2026-11-19T09:00:00+00:00", CultureInfo.InvariantCulture));
+        var store = new SqliteAuditStore(Path.Combine(_folder.Path, "data", "audit.db"), clock);
+        var job = await store.CreateJobAsync("acme", "shop", 12, "abc1234def", "local:session", ThreeBatches, null, CancellationToken.None);
+        await store.BeginBatchAsync(job, 1, CancellationToken.None);
+        await store.BeginBatchAsync(job, 2, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(10));
+        await store.CompleteBatchAsync(job, 1, [], [], CancellationToken.None);
+        await store.BeginBatchAsync(job, 3, CancellationToken.None);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        await store.CompleteBatchAsync(job, 2, [], [], CancellationToken.None);
+        await store.CompleteBatchAsync(job, 3, [], [], CancellationToken.None);
+
+        (await store.RunningTimeAsync(job, CancellationToken.None)).ShouldBe(TimeSpan.FromMinutes(15), "batches that ran at once count once: the clock time during which any of them ran");
+    }
 }

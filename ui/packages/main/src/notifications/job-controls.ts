@@ -15,7 +15,7 @@ import type { ControlPlaneClient, JobControlRequest } from '../control-plane/cli
 import { guardChannels, senderCheck, type SenderHooks } from '../ipc/sender-check.js';
 import type { Logger } from '../util/logger.js';
 import type { NotificationInput, NotificationStore } from './notification-store.js';
-import { PAUSED_BY_YOU, testsId } from './sources.js';
+import { ON_THE_CARD, OPEN_IN_THE_CHAT, PAUSED_BY_YOU, testsId } from './sources.js';
 
 export type JobControlClient = Pick<ControlPlaneClient, 'controlJob' | 'listWrites'>;
 
@@ -70,6 +70,9 @@ const AUDIT_ID = new RegExp(`^audit:(${NAME})/(${NAME})$`);
 const TESTS_ID = new RegExp(`^tests:(${NAME})/(${NAME})#(\\d+)$`);
 const AREA = /^Area (\d+) of (\d+) done · (\d+ findings? so far)/;
 const STOP_COUNTS = /(\d+) of (\d+) areas done, \d+ not covered, (\d+) findings/;
+const REVIEW_ID = new RegExp(`^reviewjob:(${NAME})/(${NAME})#(\\d+)$`);
+const BATCHES =
+  /^(\d+) of (\d+) batches done · (?:reading .+? · )?(\d+) of (\d+) files read · (\d+ findings? so far)/;
 
 /** The bell's pause, continue and stop of the jobs it shows, and the entries of the test runs a local turn starts. */
 export interface JobControls {
@@ -98,6 +101,12 @@ export interface JobControls {
 function targetOf(id: string, action: JobControlAction): JobControlRequest | null {
   const audit = AUDIT_ID.exec(id);
   if (audit !== null) return { kind: 'audit', owner: audit[1]!, repo: audit[2]!, action };
+  const review = REVIEW_ID.exec(id);
+  if (review !== null) {
+    const number = Number(review[3]);
+    if (!Number.isSafeInteger(number) || number < 1) return null;
+    return { kind: 'review', owner: review[1]!, repo: review[2]!, number, action };
+  }
   const tests = TESTS_ID.exec(id);
   if (tests === null || action !== 'stop') return null;
   const number = Number(tests[3]);
@@ -114,7 +123,7 @@ export function elapsed(ms: number): string {
 }
 
 function isJob(id: string): boolean {
-  return id.startsWith('audit:') || id.startsWith('tests:');
+  return id.startsWith('audit:') || id.startsWith('tests:') || id.startsWith('reviewjob:');
 }
 
 function parse(json: string): Record<string, unknown> {
@@ -204,6 +213,22 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
   function awaitNotice(id: string, outcome: string, until: number): void {
     const n = entry(id);
     if (n?.control?.phase !== 'waiting') return;
+    if (n.kind === 'paused' && n.control.action === 'stop' && n.id.startsWith('reviewjob:')) {
+      const batches = BATCHES.exec(n.detail.replace(`${PAUSED_BY_YOU} · `, ''));
+      const { read, control: _control, note: _note, progress: _progress, ...rest } = n;
+      store.record({
+        ...rest,
+        kind: 'done',
+        title: `Review of ${n.id.slice('reviewjob:'.length)} stopped`,
+        actions: [OPEN_IN_THE_CHAT],
+        detail:
+          batches === null
+            ? outcome
+            : `${batches[1]} of ${batches[2]} batches · ${batches[3]} of ${batches[4]} files read · ${(batches[5] ?? '').replace(' so far', '')}, ${ON_THE_CARD}`,
+      });
+      if (read) store.markRead([n.id]);
+      return;
+    }
     if (n.kind === 'paused' && n.control.action === 'stop') {
       const counts = STOP_COUNTS.exec(outcome);
       const { read, control: _control, note: _note, progress: _progress, ...rest } = n;
@@ -275,17 +300,32 @@ export function createJobControls(deps: JobControlsDeps): JobControls {
     follow(id, answer.controlId, deps.now() + RECORD_WAIT_MS);
   }
 
-  function notice(input: NotificationInput): void {
-    const previous = entry(input.id);
-    if (previous === undefined || !isJob(input.id)) {
-      store.record(input);
+  function notice(next: NotificationInput): void {
+    const previous = entry(next.id);
+    if (previous === undefined || !isJob(next.id)) {
+      store.record(next);
       return;
     }
+    const input =
+      next.id.startsWith('reviewjob:') &&
+      next.kind === 'done' &&
+      next.title.endsWith(' is done') &&
+      previous.control?.action === 'stop'
+        ? { ...next, title: `${next.title.slice(0, -' is done'.length)} stopped` }
+        : next;
     const area = AREA.exec(previous.detail);
+    const batches = BATCHES.exec(previous.detail.replace(`${PAUSED_BY_YOU} · `, ''));
     const detail =
       input.kind === 'paused' && input.detail === PAUSED_BY_YOU && area !== null
         ? `${PAUSED_BY_YOU} · area ${area[1]} of ${area[2]} done · ${area[3]}`
-        : input.detail;
+        : input.kind === 'paused' && input.detail === PAUSED_BY_YOU && batches !== null
+          ? `${PAUSED_BY_YOU} · ${batches[1]} of ${batches[2]} batches done · ${batches[3]} of ${batches[4]} files read · ${batches[5]}`
+          : input.kind === 'done' &&
+              input.title.endsWith(' stopped') &&
+              input.detail.endsWith(ON_THE_CARD) &&
+              batches !== null
+            ? `${batches[1]} of ${batches[2]} batches · ${input.detail}`
+            : input.detail;
     if (input.kind === 'paused' && previous.control?.action === 'stop') {
       store.record({ ...input, detail, control: previous.control });
     } else if (previous.kind !== 'running' || input.kind !== 'running') {

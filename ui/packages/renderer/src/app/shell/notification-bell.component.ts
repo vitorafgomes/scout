@@ -71,7 +71,7 @@ const OWN_ICONS: Readonly<Partial<Record<NotificationKind, string>>> = {
 };
 
 const PAUSED_BY_YOU = 'Paused by you';
-const JOB_NAME = /^(?:Audit of|Tests for) (\S+)/;
+const JOB_NAME = /^(?:Audit of|Tests for|Review of) (\S+)/;
 
 const ACTION_ICONS: Readonly<Record<NotificationActionId, string>> = {
   'whisper-download-base': 'M12 3v12M7 10l5 5 5-5M5 21h14',
@@ -79,6 +79,7 @@ const ACTION_ICONS: Readonly<Record<NotificationActionId, string>> = {
   'open-approvals': 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',
   'review-pull-request': 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
   'cancel-waiting-approval': STOP_PATH,
+  'open-chat': 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 };
 
 const CANCEL_WAITING: NotificationActionId = 'cancel-waiting-approval';
@@ -101,9 +102,16 @@ const AUDIT_WAITING: Readonly<Record<JobControlAction, string>> = {
   stop: 'Stopping after this area',
 };
 
+const REVIEW_WAITING: Readonly<Record<JobControlAction, string>> = {
+  pause: 'Pausing after this batch',
+  continue: 'Continuing',
+  stop: 'Stopping after this batch',
+};
+
 const IN_WINDOW: Readonly<Partial<Record<NotificationActionId, string>>> = {
   'open-models-transcription': '/llm?tab=transcription',
   'open-approvals': '/review',
+  'open-chat': '/chat',
 };
 
 const NO_PULL_REQUEST = 'Scout could not tell which pull request this entry is about.';
@@ -736,9 +744,9 @@ export class NotificationBellComponent implements OnInit {
    */
   controlLabel(n: AppNotification, action: JobControlAction): string {
     const tests = n.id.startsWith('tests:');
-    const name =
-      JOB_NAME.exec(n.title)?.[1] ?? n.id.slice(tests ? 'tests:'.length : 'audit:'.length);
-    return `${CONTROL_VERBS[action]} ${tests ? 'the tests for' : 'the audit of'} ${name}`;
+    const review = n.id.startsWith('reviewjob:');
+    const name = JOB_NAME.exec(n.title)?.[1] ?? n.id.slice(n.id.indexOf(':') + 1);
+    return `${CONTROL_VERBS[action]} ${tests ? 'the tests for' : review ? 'the review of' : 'the audit of'} ${name}`;
   }
 
   /** The name of the round Cancel on an approval waiting for its checks, as "Cancel the approval of acme/api#44"; null on any other entry. */
@@ -761,18 +769,25 @@ export class NotificationBellComponent implements OnInit {
   waitingText(n: AppNotification): string {
     const action = n.control?.action ?? 'stop';
     if (n.id.startsWith('tests:') || (n.kind === 'paused' && action === 'stop')) return 'Stopping';
-    return AUDIT_WAITING[action];
+    return (n.id.startsWith('reviewjob:') ? REVIEW_WAITING : AUDIT_WAITING)[action];
   }
 
   /**
-   * The entry's icon as the artboard draws it: "A" for an audit and "T" for a test run, on the warn pair when the owner
+   * The entry's icon as the artboard draws it: "A" for an audit, "R" for a review job until it is done, and "T" for a test run, on the warn pair when the owner
    * paused it, muted once he stopped it, "!" on the error pair for an audit the AI Source paused; "@" for a mention, "C"
    * for new activity, "I" for issues opened, a tick for any other done entry and "!" for a failed one; any other entry
    * keeps its own drawing.
    */
   iconOf(n: AppNotification): EntryIcon {
     const tone = KIND_TONES[n.kind];
-    const letter = n.id.startsWith('audit:') ? 'A' : n.id.startsWith('tests:') ? 'T' : null;
+    const ended = n.kind === 'done' && !n.title.endsWith(' stopped');
+    const letter = n.id.startsWith('audit:')
+      ? 'A'
+      : n.id.startsWith('tests:')
+        ? 'T'
+        : n.id.startsWith('reviewjob:') && !ended
+          ? 'R'
+          : null;
     if (letter !== null) {
       if (n.kind === 'paused' && !n.detail.startsWith(PAUSED_BY_YOU)) {
         return { tone: 'err', glyph: '!', path: null };

@@ -277,7 +277,7 @@ public sealed class BundledSkillsTests
     }
 
     [Theory]
-    [InlineData("code-review", "GitHubActions.submit_pull_request_review", "GitHubActions.give_pull_request_verdict", "GitHubActions.comment_on_pull_request", "GitHubActions.reply_to_review_comment", "GitHubActions.run_pull_request_tests", "GitHubActions.snapshot_repository")]
+    [InlineData("code-review", "GitHubActions.submit_pull_request_review", "GitHubActions.give_pull_request_verdict", "GitHubActions.comment_on_pull_request", "GitHubActions.reply_to_review_comment", "GitHubActions.run_pull_request_tests", "GitHubActions.snapshot_repository", "GitHubActions.start_pull_request_review")]
     [InlineData("code-audit", "GitHubActions.snapshot_repository", "GitHubActions.remember_project_conventions", "GitHubActions.create_issue", "GitHubActions.start_repository_audit", "GitHubActions.stop_repository_audit", "GitHubActions.pause_repository_audit")]
     [InlineData("project-improvements", "GitHubActions.snapshot_repository", "GitHubActions.create_issue")]
     [InlineData("github-issues", "GitHubActions.create_issue", "GitHubActions.comment_on_issue")]
@@ -399,6 +399,19 @@ public sealed class BundledSkillsTests
 
         review.Functions.Intersect(IssueOrAuditWrites).ShouldBeEmpty("a code review must always add comments on the pull request and never open issues");
         PullRequestWrites.ShouldBeSubsetOf(review.Functions);
+    }
+
+    [Fact]
+    public void Code_review_starts_a_review_job_when_a_diff_is_left_out()
+    {
+        var review = Bundled().Single(s => s.Name == "code-review");
+
+        review.Functions.ShouldContain("GitHubActions.start_pull_request_review", "a review declares the start of its job");
+        review.Functions.ShouldContain("GitHubActions.get_pull_request_review_status", "a review declares the read of its job's status");
+        review.Body.ShouldContain(
+            "When `get_pull_request` says any diff was left out, call `start_pull_request_review(owner, repo, number)` once, relay its answer and end the turn",
+            customMessage: "the skill starts the review job when get_pull_request left a diff out");
+        review.Body.ShouldContain("When it answers that writes are not allowed, say so once and review file by file as above.", customMessage: "a refused start falls back to reading file by file");
     }
 
     [Fact]

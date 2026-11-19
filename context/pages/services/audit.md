@@ -2,6 +2,7 @@
 title: "Audit"
 version: "1.18"
 date: 2026-11-11
+updated: 2026-11-18
 changes: "v1.18 (2026-11-13) the checks before a review, first part (a done review at the same commit blocks; the size never past 60 minutes): a review start answers ReviewStart with its checks, size, Docker runs, head, another review and grants, each ok, a warning or a block, kept once on the job's new."
 page_type: service
 status: active
@@ -28,11 +29,13 @@ Read the page your change touches, not all of them.
 
 | Page | Read when a change touches | Characters |
 |---|---|---|
-| [[pages/services/audit/public-contract\|Public contract]] | Public contract | 5897 |
-| [[pages/services/audit/how-it-works-mermaid\|How it works: mermaid]] | mermaid; Start; Review start; Checks before a review | 11293 |
+| [[pages/services/audit/public-contract\|Public contract]] | Public contract | 8338 |
+| [[pages/services/audit/how-it-works-mermaid\|How it works: mermaid]] | mermaid; Start; Review start; Checks before a review | 11994 |
 | [[pages/services/audit/how-it-works-plan\|How it works: Plan]] | Plan; Rows; Merge | 7984 |
 | [[pages/services/audit/how-it-works-batch-turn\|How it works: Batch turn]] | Batch turn; Worker | 11154 |
-| [[pages/services/audit/how-it-works-pause\|How it works: Pause]] | Pause; Continue from Scout Desktop; Stop and status | 4625 |
+| [[pages/services/audit/how-it-works-review-job\|How it works: Review job]] | Review batch turn; Review run; Review card | 11222 |
+| [[pages/services/audit/how-it-works-pause\|How it works: Pause]] | Pause; Continue from Scout Desktop; Stop and status | 7368 |
 | [[pages/services/audit/invariants-it-preserves\|Invariants it preserves]] | Invariants it preserves | 2759 |
-| [[pages/services/audit/tests\|Tests]] | Tests | 9456 |
-| [[pages/services/audit/open-items\|Open items]] | Open items | 2425 |
+| [[pages/services/audit/tests\|Tests]] | Tests | 8607 |
+| [[pages/services/audit/tests-review-job\|Tests: Review job]] | Tests of the review job | 5769 |
+| [[pages/services/audit/open-items\|Open items]] | Open items | 3822 |

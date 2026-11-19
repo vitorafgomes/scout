@@ -8,6 +8,9 @@ public static class OwnerControlKinds
 
     /// <summary>A pull request's test run in a container, named by owner, repo and pull request number.</summary>
     public const string Tests = "tests";
+
+    /// <summary>The review of a pull request run as a job in batches, named by owner, repo and pull request number.</summary>
+    public const string Review = "review";
 }
 
 /// <summary>What an owner control asks for.</summary>
@@ -55,6 +58,6 @@ public sealed record OwnerControl(
     DateTimeOffset? TakenAt = null,
     DateTimeOffset? SettledAt = null)
 {
-    /// <summary>The job the control names: <c>owner/repo</c> for an audit, <c>owner/repo#number</c> for a test run.</summary>
+    /// <summary>The job the control names: <c>owner/repo</c> for an audit, <c>owner/repo#number</c> for a test run or a review.</summary>
     public string Target => Number is { } number ? $"{Owner}/{Repo}#{number}" : $"{Owner}/{Repo}";
 }

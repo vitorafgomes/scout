@@ -610,6 +610,67 @@ describe('NotificationBellComponent: the actions an entry offers', () => {
     expect(el(fixture, 'badge')).toBeNull();
   });
 
+  it.each([
+    [
+      'stopped',
+      'Review of acme/api#52 stopped',
+      '6 of 17 batches · 51 of 133 files read · 3 findings, on the card in the chat',
+    ],
+    [
+      'done',
+      'Review of acme/api#52 is done',
+      '133 of 133 files read · 6 findings, on the card in the chat',
+    ],
+  ])(
+    'Open in the chat on a %s review job shows its label and opens the chat here',
+    async (_state, title, detail) => {
+      const bridge = makeBridge([
+        note('reviewjob:acme/api#52', {
+          kind: 'done',
+          title,
+          detail,
+          actions: [{ id: 'open-chat', label: 'Open in the chat' }],
+        }),
+      ]);
+      const fixture = await render(bridge);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+      await click(fixture, 'bell');
+
+      expect(el(fixture, 'entry-action-open-chat')?.textContent?.trim()).toBe('Open in the chat');
+      await click(fixture, 'entry-action-open-chat');
+
+      expect(
+        navigate.mock.calls.map(([url]) => String(url)),
+        'Open in the chat opens the chat in this window',
+      ).toEqual(['/chat']);
+      expect(bridge.notificationsAct).not.toHaveBeenCalled();
+    },
+  );
+
+  it('a review job is under In progress while running and paused, and under Done once stopped or done', async () => {
+    const fixture = await render(
+      makeBridge([
+        note('reviewjob:acme/api#1', { kind: 'running', title: 'Review of acme/api#1' }),
+        note('reviewjob:acme/api#2', {
+          kind: 'paused',
+          title: 'Review of acme/api#2 paused',
+          detail: 'Paused by you',
+        }),
+        note('reviewjob:acme/api#3', { kind: 'done', title: 'Review of acme/api#3 stopped' }),
+        note('reviewjob:acme/api#4', { kind: 'done', title: 'Review of acme/api#4 is done' }),
+      ]),
+    );
+    await click(fixture, 'bell');
+
+    await click(fixture, 'filter-running');
+    const running = all(fixture, 'entry').map((e) => drawn(e).title);
+    await click(fixture, 'filter-done');
+    const ended = all(fixture, 'entry').map((e) => drawn(e).title);
+
+    expect(running).toEqual(['Review of acme/api#1', 'Review of acme/api#2 paused']);
+    expect(ended).toEqual(['Review of acme/api#3 stopped', 'Review of acme/api#4 is done']);
+  });
+
   it('an action main runs marks the entry read; one main refuses leaves it unread', async () => {
     const accepted = makeBridge([voice()]);
     const refused = makeBridge([voice()]);
@@ -1174,7 +1235,130 @@ const NONE: Pick<Drawn, 'path' | 'bar' | 'controls' | 'inactive' | 'status' | 'n
 const AUDIT_CONTROLS = ['Pause the audit of acme/shop', 'Stop the audit of acme/shop'];
 const PAUSED_CONTROLS = ['Continue the audit of acme/shop', 'Stop the audit of acme/shop'];
 
+const RUNNING_REVIEW = note('reviewjob:acme/api#52', {
+  kind: 'running',
+  title: 'Review of acme/api#52',
+  detail:
+    '6 of 17 batches done · reading tests/orders · 51 of 133 files read · 3 findings so far · the findings arrive in the chat when the review ends',
+  progress: 35,
+});
+const PAUSED_REVIEW = note('reviewjob:acme/api#52', {
+  kind: 'paused',
+  title: 'Review of acme/api#52 paused',
+  detail: 'Paused by you · 6 of 17 batches done · 51 of 133 files read · 3 findings so far',
+});
+const REVIEW_CONTROLS = ['Pause the review of acme/api#52', 'Stop the review of acme/api#52'];
+const PAUSED_REVIEW_CONTROLS = [
+  'Continue the review of acme/api#52',
+  'Stop the review of acme/api#52',
+];
+const RUNNING_REVIEW_DETAIL = RUNNING_REVIEW.detail;
+
 const STATES: readonly [string, AppNotification, Drawn][] = [
+  [
+    'artboard, review job: running, with Pause and Stop',
+    RUNNING_REVIEW,
+    {
+      ...NONE,
+      glyph: 'R',
+      tone: 'accent',
+      title: 'Review of acme/api#52',
+      detail: RUNNING_REVIEW_DETAIL,
+      when: 'now',
+      bar: '35',
+      controls: REVIEW_CONTROLS,
+    },
+  ],
+  [
+    'artboard, review job: stopping after this batch',
+    { ...RUNNING_REVIEW, control: { action: 'stop', phase: 'waiting' } },
+    {
+      ...NONE,
+      glyph: 'R',
+      tone: 'accent',
+      title: 'Review of acme/api#52',
+      detail: RUNNING_REVIEW_DETAIL,
+      when: null,
+      bar: '35',
+      status: 'Stopping after this batch',
+    },
+  ],
+  [
+    'app only, review job: pausing after this batch',
+    { ...RUNNING_REVIEW, control: { action: 'pause', phase: 'waiting' } },
+    {
+      ...NONE,
+      glyph: 'R',
+      tone: 'accent',
+      title: 'Review of acme/api#52',
+      detail: RUNNING_REVIEW_DETAIL,
+      when: null,
+      bar: '35',
+      status: 'Pausing after this batch',
+    },
+  ],
+  [
+    'artboard, review job: paused by you, with Continue and Stop',
+    PAUSED_REVIEW,
+    {
+      ...NONE,
+      glyph: 'R',
+      tone: 'warn',
+      title: 'Review of acme/api#52 paused',
+      detail: 'Paused by you · 6 of 17 batches done · 51 of 133 files read · 3 findings so far',
+      when: 'now',
+      controls: PAUSED_REVIEW_CONTROLS,
+    },
+  ],
+  [
+    'app only, review job: paused at 60 minutes',
+    note('reviewjob:acme/api#52', {
+      kind: 'paused',
+      title: 'Review of acme/api#52 paused',
+      detail: 'It ran for 60 minutes with 11 batches left. Continue to give it 60 more minutes.',
+    }),
+    {
+      ...NONE,
+      glyph: '!',
+      tone: 'err',
+      title: 'Review of acme/api#52 paused',
+      detail: 'It ran for 60 minutes with 11 batches left. Continue to give it 60 more minutes.',
+      when: 'now',
+      controls: PAUSED_REVIEW_CONTROLS,
+    },
+  ],
+  [
+    'artboard, review job: stopped',
+    note('reviewjob:acme/api#52', {
+      kind: 'done',
+      title: 'Review of acme/api#52 stopped',
+      detail: '6 of 17 batches · 51 of 133 files read · 3 findings, on the card in the chat',
+    }),
+    {
+      ...NONE,
+      glyph: 'R',
+      tone: 'muted',
+      title: 'Review of acme/api#52 stopped',
+      detail: '6 of 17 batches · 51 of 133 files read · 3 findings, on the card in the chat',
+      when: 'now',
+    },
+  ],
+  [
+    'artboard, review job: done',
+    note('reviewjob:acme/api#52', {
+      kind: 'done',
+      title: 'Review of acme/api#52 is done',
+      detail: '133 of 133 files read · 6 findings, on the card in the chat',
+    }),
+    {
+      ...NONE,
+      glyph: '✓',
+      tone: 'ok',
+      title: 'Review of acme/api#52 is done',
+      detail: '133 of 133 files read · 6 findings, on the card in the chat',
+      when: 'now',
+    },
+  ],
   [
     'artboard: a running audit',
     { ...RUNNING_AUDIT, at: NOW - 3 * 60_000 },

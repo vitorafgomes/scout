@@ -40,7 +40,8 @@ internal sealed partial class GitHubActionsPlugin(
     TestRuns? testRuns = null,
     IStackDetector? stacks = null,
     ILogger<GitHubActionsPlugin>? logger = null,
-    RunningTests? running = null)
+    RunningTests? running = null,
+    IPullRequestReviews? reviews = null)
 {
     internal const string PluginName = "GitHubActions";
     internal const string SubmitReview = "submit_pull_request_review";

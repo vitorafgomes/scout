@@ -1,8 +1,9 @@
 ---
 title: "Skills - history"
-version: "1.0"
+version: "1.1"
 date: 2026-10-22
-changes: "Initial history note: a failed skill index build is retried instead of cached"
+updated: 2026-11-17
+changes: "v1.1 (2026-11-17): code-review starts a review job when a diff is left out. Initial history note: a failed skill index build is retried instead of cached"
 page_type: reference
 status: artefact
 description: "What changed in the Skills project and when."
@@ -19,6 +20,12 @@ reliability: high
 # Skills - history
 
 > Dated changes to [[pages/services/skills]]; the service page states how it works now.
+
+## 2026-11-17 - code-review starts a review job when a diff is left out
+
+- **What it was:** a pull request too large to read in full was reviewed file by file in one turn.
+- **What changed:** `code-review` declares `start_pull_request_review` and `get_pull_request_review_status`; when `get_pull_request` says any diff was left out, the skill starts the job once, relays its answer and ends the turn, and reviews file by file only when writes are not allowed (`src/Scout.Skills/skills/code-review.md:21`).
+- **Tests:** `tests/Scout.Skills.Tests/BundledSkillsTests.cs:405`; the start joins code-review's writes in the test of the skills that act.
 
 ## 2026-11-11 - A missing embedding model is said once, by name, without a stack
 

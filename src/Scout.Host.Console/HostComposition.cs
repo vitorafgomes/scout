@@ -99,6 +99,8 @@ internal static class HostComposition
             services.AddSingleton<IAuditSnapshots, AuditSnapshotsAdapter>();
             services.AddSingleton<IReviewEnvironment>(new ReviewEnvironmentAdapter(sandboxEnabled));
             services.AddSingleton<Scout.Plugin.GitHub.Abstractions.IRepositoryAudits, RepositoryAuditsAdapter>();
+            services.AddSingleton<Scout.Plugin.GitHub.Abstractions.IPullRequestReviews, PullRequestReviewsAdapter>();
+            services.AddSingleton<IReviewPullRequests, ReviewPullRequestsAdapter>();
         }
 
         if (gateOpen)

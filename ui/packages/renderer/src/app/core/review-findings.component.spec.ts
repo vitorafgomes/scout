@@ -2031,6 +2031,66 @@ const CARD_STATES: readonly CardStateRow[] = [
   },
 ];
 
+describe("review findings cards: a review job's measured read line and notes", () => {
+  beforeEach(() => TestBed.resetTestingModule());
+
+  it('a review job block shows the files read Scout counted and each note as its own line, under the heading', async () => {
+    const fixture = await render(makeBridge(), {
+      ...review,
+      read: 'the model says it read everything',
+      coverage: { read: 51, of: 133 },
+      notes: [
+        '82 files not read: the review was stopped.',
+        'Docker runs are off; tests will not run.',
+      ],
+    });
+
+    expect(text(el(fixture, 'coverage-read'))).toBe('51 of 133 files read');
+    expect(all(fixture, 'coverage-note').map((n) => text(n))).toEqual([
+      '82 files not read: the review was stopped.',
+      'Docker runs are off; tests will not run.',
+    ]);
+  });
+
+  it('a clean review job block shows the measured line, never what the model says it read', async () => {
+    const fixture = await render(makeBridge(), {
+      ...review,
+      findings: [],
+      read: '6 of 6 files read',
+      coverage: { read: 6, of: 6 },
+    });
+
+    expect(text(el(fixture, 'coverage-read'))).toBe('6 of 6 files read');
+    expect(
+      all(fixture, 'clean-read'),
+      'with a measured line, the card never shows what the model says it read',
+    ).toHaveLength(0);
+  });
+
+  it('a block without coverage renders as before: no measured line, no notes', async () => {
+    const fixture = await render(makeBridge(), {
+      ...review,
+      findings: [],
+      read: '6 of 6 files read',
+    });
+
+    expect(all(fixture, 'coverage')).toHaveLength(0);
+    expect(text(el(fixture, 'clean-read'))).toBe('What Scout says it read: 6 of 6 files read');
+  });
+
+  it('a note that carries markup is shown as text, never as HTML', async () => {
+    const fixture = await render(makeBridge(), {
+      ...review,
+      coverage: { read: 1, of: 2 },
+      notes: ['<img src=x onerror=alert(1)> not read'],
+    });
+
+    const note = el(fixture, 'coverage-note')!;
+    expect(note.textContent?.trim()).toBe('<img src=x onerror=alert(1)> not read');
+    expect(note.querySelector('img')).toBeNull();
+  });
+});
+
 describe('review findings cards: approve when the checks pass, as the artboard draws each state', () => {
   beforeEach(() => TestBed.resetTestingModule());
 

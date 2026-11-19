@@ -408,7 +408,7 @@ export function findingsCards(turns: readonly LocalTurn[]): ReadonlyMap<string, 
         open.delete(key);
       }
     }
-    const review = parseReviewFindings(turn.reply)?.review;
+    const review = parseReviewFindings(turn.reply, turn.notice === true)?.review;
     if (review === undefined) continue;
     if (review.kind !== 'audit') {
       shown.set(turn.id, { anchor: turn.id, review });
